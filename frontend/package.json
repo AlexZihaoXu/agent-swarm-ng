@@ -1,0 +1,37 @@
+{
+  "name": "@agent-swarm/frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "api:generate": "openapi-typescript ../backend/openapi.json -o src/api/schema.d.ts",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.2.4",
+    "@tanstack/react-query": "^5.90.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "openapi-fetch": "^0.15.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router": "^7.9.0",
+    "tailwind-merge": "^3.3.1",
+    "workbox-window": "^7.4.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "openapi-typescript": "^7.10.0",
+    "tailwindcss": "^4.1.0",
+    "vite": "^7.1.0",
+    "vite-plugin-pwa": "^1.1.0"
+  }
+}

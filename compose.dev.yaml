@@ -1,0 +1,22 @@
+services:
+  backend:
+    build:
+      target: development
+    environment:
+      NODE_ENV: development
+    restart: "no"
+    volumes:
+      - ./backend/src:/app/backend/src
+  frontend:
+    build:
+      target: development
+    environment:
+      API_PROXY_TARGET: http://backend:3000
+    ports: !override
+      - "127.0.0.1:5173:5173"
+    volumes: !override
+      - ./frontend/src:/app/frontend/src
+      - ./frontend/public:/app/frontend/public
+      - ./frontend/index.html:/app/frontend/index.html
+      - ./frontend/vite.config.ts:/app/frontend/vite.config.ts
+    restart: "no"

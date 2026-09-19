@@ -1,0 +1,29 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bun install --frozen-lockfile
+      - run: bun run api:check
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run build
+      - run: bun x playwright install --with-deps chromium
+        working-directory: frontend
+      - run: bun run test:e2e
+      - run: docker compose config --quiet
+      - run: docker compose -f compose.yaml -f compose.dev.yaml config --quiet

@@ -1,0 +1,15 @@
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy backend:3000
+	}
+
+	handle {
+		root * /srv
+		@updates path /sw.js /index.html /manifest.webmanifest
+		header @updates Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}

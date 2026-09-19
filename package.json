@@ -1,0 +1,20 @@
+{
+  "name": "agent-swarm-v2",
+  "private": true,
+  "packageManager": "bun@1.3.6",
+  "workspaces": ["frontend", "backend"],
+  "scripts": {
+    "dev:frontend": "bun run --cwd frontend dev",
+    "dev:backend": "bun run --cwd backend dev",
+    "api:generate": "bun run --cwd backend openapi && bun run --cwd frontend api:generate",
+    "api:check": "bun run api:generate && git diff --exit-code -- backend/openapi.json frontend/src/api/schema.d.ts",
+    "typecheck": "bun run --cwd backend typecheck && bun run --cwd frontend typecheck",
+    "test": "vitest run",
+    "test:e2e": "bun run --cwd frontend test:e2e",
+    "build": "bun run --cwd frontend build"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
