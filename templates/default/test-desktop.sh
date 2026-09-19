@@ -1,6 +1,6 @@
 #!/bin/sh
 # GNOME compositor smoke test, not a complete session or streaming test.
-# Run with --init --tmpfs /run --shm-size=256m.
+# Run with --user root --init --tmpfs /run --shm-size=256m.
 # The disposable container starts as root; the desktop itself runs as ubuntu.
 set -eu
 mkdir -p /run/dbus

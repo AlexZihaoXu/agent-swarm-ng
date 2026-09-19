@@ -4,7 +4,8 @@ set -eu
 
 for package in ubuntu-session gnome-shell gnome-control-center gnome-terminal nautilus \
     gnome-shell-extension-ubuntu-dock gnome-shell-extension-appindicator \
-    yaru-theme-gtk yaru-theme-icon fonts-ubuntu dbus-x11; do
+    yaru-theme-gtk yaru-theme-icon fonts-ubuntu dbus-x11 ubuntu-settings \
+    ubuntu-wallpapers-noble librsvg2-common gir1.2-dbusmenu-gtk3-0.4; do
     test "$(dpkg-query -W -f='${Status}' "$package")" = 'install ok installed'
 done
 
@@ -16,6 +17,20 @@ if [ -n "$unwanted" ]; then
     printf 'Unexpected bundled applications:\n%s\n' "$unwanted" >&2
     exit 1
 fi
+
+# Check Ubuntu's effective visual defaults, not just package presence.
+export XDG_CURRENT_DESKTOP=ubuntu:GNOME GSETTINGS_BACKEND=memory
+test "$(gsettings get org.gnome.desktop.interface icon-theme)" = "'Yaru'"
+for key in picture-uri picture-uri-dark; do
+    uri=$(gsettings get org.gnome.desktop.background "$key" | tr -d "'")
+    case "$uri" in
+        file://*) test -r "${uri#file://}" ;;
+        *) echo "Expected a local Ubuntu wallpaper for $key, got $uri" >&2; exit 1 ;;
+    esac
+done
+
+# GNOME Terminal refuses to start under the plain C/ASCII locale.
+test "$(locale charmap)" = 'UTF-8'
 
 gnome-shell --version
 printf 'Ubuntu GNOME package checks passed. Desktop session startup is a separate check.\n'

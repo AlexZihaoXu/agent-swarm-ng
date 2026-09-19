@@ -74,18 +74,21 @@ agent-swarm-v2/
 ├── templates/
 │   └── default/
 │       ├── template.yaml
+│       ├── compose.yaml
 │       └── Dockerfile
 └── docs/
 ```
 
 - **`frontend/`** — management dashboard and embedded desktop viewer.
 - **`backend/`** — API, template loading, Docker lifecycle operations, and desktop-access coordination.
-- **`templates/default/`** — Ubuntu GNOME package foundation for one image with optional desktop and streaming processes. The image builds and package checks pass; session startup, streaming, and the template schema are not implemented.
+- **`templates/default/`** — Ubuntu GNOME workspace image, standalone Compose configuration, and smoke tests. Production desktop startup, streaming, and the platform template schema remain unimplemented.
 - **`docs/`** — design and setup notes, added as needed.
 
-Compose runs the platform; the backend creates environment containers dynamically. Keep tests beside their code where supported. Add no shared packages or separate services without a concrete need.
+Root Compose files run the platform; dynamic environment creation by the backend is still pending. `templates/default/compose.yaml` provides a standalone workspace with persistent home and workspace volumes. Keep tests beside their code where supported. Add no shared packages or separate services without a concrete need.
 
-The default image will use **Ubuntu 24.04 LTS with minimal Ubuntu GNOME**, retaining Ubuntu’s appearance—not substituting XFCE. Include desktop/session essentials, terminal, file manager, and settings; exclude office apps, games, email clients, media apps, and other bundled extras. Avoid the full `ubuntu-desktop` installation. The image build and package checks pass. GNOME session and streaming compatibility still require validation.
+The default image uses **Ubuntu 24.04 LTS with Ubuntu GNOME**, retaining Ubuntu’s appearance—not substituting XFCE. Preserve the standard Ubuntu appearance: visual defaults, wallpapers, Yaru themes/icons, fonts, and icon-rendering support are essentials—not bloat. Include desktop/session essentials, terminal, file manager, and settings; exclude office apps, games, email clients, media apps, and other bundled extras. Avoid the full `ubuntu-desktop` installation. The image and GNOME compositor are smoke-tested; complete session management and production streaming still need implementation and validation.
+
+The workspace includes Chrome, VS Code, Git/curl, build tools, Node.js/npm, Bun, Python/uv, and tmux. Separate named volumes retain `/home/ubuntu` and `/workspace` across container replacement; deletion of their data is explicit. tmux preserves sessions across client disconnections, not container restarts. See [workspace setup and checks](docs/development.md#workspace-tools-and-persistence).
 
 Desktop resolution is fixed at **1920×1080**; do not resize it automatically to match the browser viewport. Desktop streaming should prefer direct connections and use TURN as a relay fallback. Hardware-encoded 120 fps is a validation target, not a guarantee.
 
@@ -130,7 +133,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 
 ## Project status
 
-The initial scaffold includes a dashboard, health API, generated API types, PWA configuration, tests, and Compose files. Container management, desktop streaming, authentication, and persistence are not implemented.
+The initial scaffold includes a dashboard, health API, generated API types, PWA configuration, tests, and Compose files. Dashboard container management, desktop streaming, authentication, and platform metadata persistence are not implemented. Standalone workspace data persistence is configured through named volumes.
 
 Validate Bun compatibility with Docker libraries and long-lived connections, plus AMD hardware encoding and streaming performance, before relying on them.
 

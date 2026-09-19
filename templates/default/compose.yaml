@@ -1,0 +1,18 @@
+# Standalone workspace foundation; not wired into the platform dashboard yet.
+# Use a distinct Compose project name for each environment.
+services:
+  workspace:
+    image: agent-swarm-default:dev
+    build:
+      context: .
+    platform: linux/amd64
+    init: true
+    security_opt:
+      - seccomp=./security/chromium-seccomp.json
+      - no-new-privileges:true
+    volumes:
+      - home:/home/ubuntu
+      - workspace:/workspace
+volumes:
+  home:
+  workspace:
