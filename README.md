@@ -44,7 +44,7 @@ Agents handle their own tasks, tools, deployment workflows, and credentials afte
 
 ## Stack
 
-- **Frontend:** TypeScript, React + Vite, shadcn/ui + Tailwind CSS, React Router, and TanStack Query.
+- **Frontend:** TypeScript, React + Vite, shadcn/ui + Tailwind CSS, React Router, and TanStack Query. Kibo UI is configured as an on-demand component registry.
 - **Backend:** TypeScript, Bun + Fastify.
 - **API contract:** TypeBox + `@fastify/swagger`; generated client types with `openapi-typescript` and requests through `openapi-fetch`.
 - **PWA:** `vite-plugin-pwa`.

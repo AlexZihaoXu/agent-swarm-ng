@@ -9,6 +9,9 @@
     "baseColor": "slate",
     "cssVariables": true
   },
+  "registries": {
+    "@kibo": "https://www.kibo-ui.com/r/{name}.json"
+  },
   "aliases": {
     "components": "@/components",
     "utils": "@/lib/utils",
