@@ -80,12 +80,14 @@ agent-swarm-v2/
 
 - **`frontend/`** — management dashboard and embedded desktop viewer.
 - **`backend/`** — API, template loading, Docker lifecycle operations, and desktop-access coordination.
-- **`templates/default/`** — placeholder for one image with optional desktop and streaming processes. Desktop packages and the template schema are not implemented.
+- **`templates/default/`** — Ubuntu GNOME package foundation for one image with optional desktop and streaming processes. The image builds and package checks pass; session startup, streaming, and the template schema are not implemented.
 - **`docs/`** — design and setup notes, added as needed.
 
 Compose runs the platform; the backend creates environment containers dynamically. Keep tests beside their code where supported. Add no shared packages or separate services without a concrete need.
 
-Desktop streaming should prefer direct connections and use TURN as a relay fallback. Hardware-encoded 120 fps is a validation target, not a guarantee.
+The default image will use **Ubuntu 24.04 LTS with minimal Ubuntu GNOME**, retaining Ubuntu’s appearance—not substituting XFCE. Include desktop/session essentials, terminal, file manager, and settings; exclude office apps, games, email clients, media apps, and other bundled extras. Avoid the full `ubuntu-desktop` installation. The image build and package checks pass. GNOME session and streaming compatibility still require validation.
+
+Desktop resolution is fixed at **1920×1080**; do not resize it automatically to match the browser viewport. Desktop streaming should prefer direct connections and use TURN as a relay fallback. Hardware-encoded 120 fps is a validation target, not a guarantee.
 
 ## Progressive web app
 

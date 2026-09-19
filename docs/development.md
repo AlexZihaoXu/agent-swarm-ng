@@ -53,4 +53,27 @@ Caddy serves the built frontend and proxies `/api` in production. Local HTTPS us
 
 Ports bind to loopback by default. `.env.example` documents the settings; authentication is not implemented, so **do not expose this scaffold publicly**. Public-domain HTTPS configuration and access control must be completed before external deployment.
 
-The backend has no Docker socket mount or container-management endpoints yet. `templates/default/` is a nonfunctional template definition plus a minimal image placeholder—not a desktop-ready environment. Compose does not build or start it.
+The backend has no Docker socket mount or container-management endpoints yet. `templates/default/` contains a placeholder template definition and an Ubuntu GNOME package foundation—not a desktop-ready environment. Compose does not build or start it.
+
+## Default environment image
+
+The image uses Ubuntu 24.04 and explicitly installs the Ubuntu GNOME session, Ubuntu Dock, app indicators, Yaru themes, Ubuntu fonts, terminal, file manager, settings, and D-Bus support. `--no-install-recommends` avoids pulling in the full desktop application bundle. Required transitive dependencies still install; do not remove GNOME dependencies merely because their names resemble optional apps.
+
+No office suite, games, email client, or media player is explicitly installed. The final package inventory needs inspection after building. Package references: [Ubuntu session](https://packages.ubuntu.com/noble/ubuntu-session) and [GNOME settings](https://packages.ubuntu.com/noble/gnome-control-center).
+
+Once Docker is running:
+
+```sh
+docker build -t agent-swarm-default:dev templates/default
+# Verify desktop essentials and absence of common bundled applications:
+docker run --rm -i agent-swarm-default:dev sh < templates/default/test-packages.sh
+# Test a non-root GNOME compositor at the fixed 1920x1080 resolution:
+# MSYS_NO_PATHCONV prevents Git Bash from rewriting /run on Windows.
+MSYS_NO_PATHCONV=1 docker run --rm --init --tmpfs /run --shm-size=256m -i agent-swarm-default:dev sh < templates/default/test-desktop.sh
+# Inspect the full installed package inventory:
+docker run --rm agent-swarm-default:dev dpkg-query -W
+```
+
+The image currently idles without starting GNOME. The compositor test uses a non-root user, software rendering, and D-Bus readiness checks. Mount a fresh `/run` tmpfs: package installation leaves systemd seat directories in the image, which otherwise cause GNOME to expect a running systemd-logind service.
+
+Desktop resolution is fixed at 1920x1080, independent of browser viewport size. The test does not establish hardware encoding, 120 fps, streaming, or a complete desktop session. Optional-service warnings remain (including calendar, screencast, input-method, and authentication services). Production session startup and the desktop toggle are not implemented.
