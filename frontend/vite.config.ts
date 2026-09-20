@@ -12,8 +12,8 @@ export default defineConfig({
       short_name: 'Agent Swarm',
       start_url: '/',
       display: 'standalone',
-      theme_color: '#ffffff',
-      background_color: '#ffffff',
+      theme_color: '#151515',
+      background_color: '#242424',
       icons: [
         { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
         { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
