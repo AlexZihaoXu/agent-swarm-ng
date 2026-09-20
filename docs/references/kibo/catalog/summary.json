@@ -1,0 +1,11 @@
+{
+  "patterns": 1101,
+  "families": 53,
+  "collections": 209,
+  "componentDocumentationPages": 41,
+  "blockDocumentationPages": 28,
+  "generalDocumentationPages": 10,
+  "exampleFiles": 168,
+  "shadcnUiFiles": 62,
+  "packagesBlocksPresent": false
+}

@@ -1,0 +1,206 @@
+{
+  "patterns-01": [
+    "accordion",
+    "alert",
+    "alert-dialog"
+  ],
+  "patterns-02": [
+    "aspect-ratio",
+    "avatar",
+    "badge"
+  ],
+  "patterns-03": [
+    "breadcrumb",
+    "button",
+    "button-group"
+  ],
+  "patterns-04": [
+    "calendar",
+    "card",
+    "carousel"
+  ],
+  "patterns-05": [
+    "chart",
+    "checkbox",
+    "collapsible"
+  ],
+  "patterns-06": [
+    "combobox",
+    "command",
+    "context-menu"
+  ],
+  "patterns-07": [
+    "data-table",
+    "date-picker",
+    "dialog"
+  ],
+  "patterns-08": [
+    "drawer",
+    "dropdown-menu",
+    "empty"
+  ],
+  "patterns-09": [
+    "field",
+    "form",
+    "hover-card"
+  ],
+  "patterns-10": [
+    "input",
+    "input-group",
+    "input-otp"
+  ],
+  "patterns-11": [
+    "item",
+    "kbd",
+    "label"
+  ],
+  "patterns-12": [
+    "menubar",
+    "navigation-menu",
+    "pagination"
+  ],
+  "patterns-13": [
+    "popover",
+    "progress",
+    "radio-group"
+  ],
+  "patterns-14": [
+    "scroll-area",
+    "separator",
+    "sheet"
+  ],
+  "patterns-15": [
+    "skeleton",
+    "slider",
+    "sonner"
+  ],
+  "patterns-16": [
+    "spinner",
+    "switch",
+    "table"
+  ],
+  "patterns-17": [
+    "tabs",
+    "textarea",
+    "toggle-group"
+  ],
+  "patterns-18": [
+    "toggle",
+    "tooltip"
+  ],
+  "components-01": [
+    "announcement",
+    "avatar-stack",
+    "banner",
+    "calendar",
+    "choicebox"
+  ],
+  "components-02": [
+    "code-block",
+    "color-picker",
+    "combobox",
+    "comparison",
+    "contribution-graph"
+  ],
+  "components-03": [
+    "credit-card",
+    "cursor",
+    "deck",
+    "dialog-stack",
+    "dropzone"
+  ],
+  "components-04": [
+    "editor",
+    "gantt",
+    "glimpse",
+    "image-crop",
+    "image-zoom"
+  ],
+  "components-05": [
+    "kanban",
+    "list",
+    "marquee",
+    "mini-calendar",
+    "pill"
+  ],
+  "components-06": [
+    "qr-code",
+    "rating",
+    "reel",
+    "relative-time",
+    "sandbox"
+  ],
+  "components-07": [
+    "snippet",
+    "spinner",
+    "status",
+    "stories",
+    "table"
+  ],
+  "components-08": [
+    "tags",
+    "theme-switcher",
+    "ticker",
+    "tree",
+    "typography"
+  ],
+  "components-09": [
+    "video-player"
+  ],
+  "blocks-01": [
+    "about",
+    "awards",
+    "blog",
+    "blogpost"
+  ],
+  "blocks-02": [
+    "careers",
+    "case-studies",
+    "case-study",
+    "changelog"
+  ],
+  "blocks-03": [
+    "code-example",
+    "codebase",
+    "collaborative-canvas",
+    "community"
+  ],
+  "blocks-04": [
+    "compare",
+    "compliance",
+    "contact",
+    "cta"
+  ],
+  "blocks-05": [
+    "download",
+    "experience",
+    "faq",
+    "feature"
+  ],
+  "blocks-06": [
+    "footer",
+    "form",
+    "hero",
+    "pricing"
+  ],
+  "blocks-07": [
+    "roadmap",
+    "stats",
+    "team",
+    "testimonial"
+  ],
+  "docs-01": [
+    "benefits",
+    "community",
+    "how-to-contribute",
+    "index",
+    "mcp"
+  ],
+  "docs-02": [
+    "new-components",
+    "philosophy",
+    "setup",
+    "troubleshooting",
+    "usage"
+  ]
+}

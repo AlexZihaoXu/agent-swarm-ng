@@ -1,0 +1,74 @@
+---
+title: Code Block
+description: Provides syntax highlighting, line numbers, and copy to clipboard functionality for code blocks.
+icon: Braces
+dependencies:
+  - https://lucide.dev/
+  - https://simpleicons.org/
+  - https://shiki.matsu.io/
+installer: code-block
+---
+
+## Features
+
+- Syntax highlighting
+- Line numbers
+- Copy to clipboard
+- Support for filenames
+- Highlighted lines and words
+- Focused line
+- Diff
+- Language detection
+- Theme support
+- Customizable styles
+
+## Examples
+
+### No header
+
+<Preview path="code-block-headless" />
+
+### Highlighted lines
+
+<Preview path="code-block-highlight-line" />
+
+### Highlighted words
+
+<Preview path="code-block-highlight-word" />
+
+### Diff
+
+<Preview path="code-block-diff" />
+
+### Focus
+
+<Preview path="code-block-focus" />
+
+### Hidden line numbers
+
+<Preview path="code-block-numberless" />
+
+### No syntax highlighting
+
+<Preview path="code-block-no-highlighting" />
+
+### Custom Theme
+
+<Preview path="code-block-theme" />
+
+## Notes
+
+### React Server Component
+
+You can use the RSC version of the Code Block component by importing the `CodeBlockContent` component from `code-block/server` i.e.
+
+```tsx
+import {
+  CodeBlock,
+  CodeBlockHeader,
+  // ... the rest of the components
+  CodeBlockBody,
+  // CodeBlockContent,
+} from '@/components/kibo-ui/code-block';
+import { CodeBlockContent } from '@/components/kibo-ui/code-block/server';
+```

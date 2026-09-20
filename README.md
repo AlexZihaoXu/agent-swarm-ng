@@ -82,7 +82,7 @@ agent-swarm-v2/
 - **`frontend/`** — management dashboard and embedded desktop viewer.
 - **`backend/`** — API, template loading, Docker lifecycle operations, and desktop-access coordination.
 - **`templates/default/`** — Ubuntu GNOME workspace image, standalone Compose configuration, and smoke tests. Production desktop startup, streaming, and the platform template schema remain unimplemented.
-- **`docs/`** — design and setup notes, added as needed.
+- **`docs/`** — design and setup notes, added as needed. The [local Kibo reference entry guide](docs/references/kibo/README.md) provides pinned source, searchable indexes, and adaptation notes.
 
 Root Compose files run the platform; dynamic environment creation by the backend is still pending. `templates/default/compose.yaml` provides a standalone workspace with persistent home and workspace volumes. Keep tests beside their code where supported. Add no shared packages or separate services without a concrete need.
 

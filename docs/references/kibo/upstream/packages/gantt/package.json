@@ -1,0 +1,25 @@
+{
+  "name": "@repo/gantt",
+  "description": "The Gantt chart is a powerful tool for visualizing project schedules and tracking the progress of tasks. It provides a clear, hierarchical view of tasks, allowing you to easily identify manage project timelines.",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/modifiers": "^9.0.0",
+    "@repo/shadcn-ui": "workspace:*",
+    "@uidotdev/usehooks": "^2.4.1",
+    "date-fns": "^4.1.0",
+    "jotai": "^2.15.0",
+    "lodash.throttle": "^4.1.1",
+    "lucide-react": "^0.545.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/lodash.throttle": "^4.1.9",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  }
+}

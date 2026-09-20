@@ -1,0 +1,21 @@
+# popover patterns
+
+Generated from `upstream/packages/patterns/popover/`.
+
+| ID | Title from source | Collection | Local exact source | Website preview |
+| --- | --- | --- | --- | --- |
+| popover-standard-1 | Simple Text Popover | standard | [packages/patterns/popover/standard/popover-standard-1.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-1.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-1) |
+| popover-standard-10 | Popover with Footer | standard | [packages/patterns/popover/standard/popover-standard-10.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-10.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-10) |
+| popover-standard-11 | Popover with Steps | standard | [packages/patterns/popover/standard/popover-standard-11.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-11.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-11) |
+| popover-standard-12 | Notifications Popover | standard | [packages/patterns/popover/standard/popover-standard-12.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-12.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-12) |
+| popover-standard-13 | Filter Popover | standard | [packages/patterns/popover/standard/popover-standard-13.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-13.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-13) |
+| popover-standard-14 | Share Popover | standard | [packages/patterns/popover/standard/popover-standard-14.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-14.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-14) |
+| popover-standard-15 | Feedback Popover | standard | [packages/patterns/popover/standard/popover-standard-15.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-15.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-15) |
+| popover-standard-2 | Popover with Heading | standard | [packages/patterns/popover/standard/popover-standard-2.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-2.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-2) |
+| popover-standard-3 | Popover with Actions | standard | [packages/patterns/popover/standard/popover-standard-3.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-3.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-3) |
+| popover-standard-4 | Popover with Form | standard | [packages/patterns/popover/standard/popover-standard-4.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-4.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-4) |
+| popover-standard-5 | Info Icon Popover | standard | [packages/patterns/popover/standard/popover-standard-5.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-5.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-5) |
+| popover-standard-6 | Popover with List | standard | [packages/patterns/popover/standard/popover-standard-6.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-6.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-6) |
+| popover-standard-7 | User Profile Popover | standard | [packages/patterns/popover/standard/popover-standard-7.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-7.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-7) |
+| popover-standard-8 | Popover with Divider | standard | [packages/patterns/popover/standard/popover-standard-8.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-8.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-8) |
+| popover-standard-9 | Compact Popover | standard | [packages/patterns/popover/standard/popover-standard-9.tsx](../../upstream/packages/patterns/popover/standard/popover-standard-9.tsx) | [preview](https://www.kibo-ui.com/patterns/popover/standard/popover-standard-9) |

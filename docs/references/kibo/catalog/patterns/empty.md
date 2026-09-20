@@ -1,0 +1,28 @@
+# empty patterns
+
+Generated from `upstream/packages/patterns/empty/`.
+
+| ID | Title from source | Collection | Local exact source | Website preview |
+| --- | --- | --- | --- | --- |
+| empty-actions-1 | Empty with Single Action | actions | [packages/patterns/empty/actions/empty-actions-1.tsx](../../upstream/packages/patterns/empty/actions/empty-actions-1.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/actions/empty-actions-1) |
+| empty-actions-2 | Empty with Multiple Actions | actions | [packages/patterns/empty/actions/empty-actions-2.tsx](../../upstream/packages/patterns/empty/actions/empty-actions-2.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/actions/empty-actions-2) |
+| empty-actions-3 | Empty with Link Action | actions | [packages/patterns/empty/actions/empty-actions-3.tsx](../../upstream/packages/patterns/empty/actions/empty-actions-3.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/actions/empty-actions-3) |
+| empty-actions-4 | Empty with Input Action | actions | [packages/patterns/empty/actions/empty-actions-4.tsx](../../upstream/packages/patterns/empty/actions/empty-actions-4.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/actions/empty-actions-4) |
+| empty-actions-5 | Empty with Stacked Actions | actions | [packages/patterns/empty/actions/empty-actions-5.tsx](../../upstream/packages/patterns/empty/actions/empty-actions-5.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/actions/empty-actions-5) |
+| empty-data-1 | Empty Table | data | [packages/patterns/empty/data/empty-data-1.tsx](../../upstream/packages/patterns/empty/data/empty-data-1.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/data/empty-data-1) |
+| empty-data-2 | Empty Chart | data | [packages/patterns/empty/data/empty-data-2.tsx](../../upstream/packages/patterns/empty/data/empty-data-2.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/data/empty-data-2) |
+| empty-data-3 | No Notifications | data | [packages/patterns/empty/data/empty-data-3.tsx](../../upstream/packages/patterns/empty/data/empty-data-3.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/data/empty-data-3) |
+| empty-data-4 | No Messages | data | [packages/patterns/empty/data/empty-data-4.tsx](../../upstream/packages/patterns/empty/data/empty-data-4.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/data/empty-data-4) |
+| empty-data-5 | No Files | data | [packages/patterns/empty/data/empty-data-5.tsx](../../upstream/packages/patterns/empty/data/empty-data-5.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/data/empty-data-5) |
+| empty-search-1 | No Search Results | search | [packages/patterns/empty/search/empty-search-1.tsx](../../upstream/packages/patterns/empty/search/empty-search-1.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/search/empty-search-1) |
+| empty-search-2 | No Filter Results | search | [packages/patterns/empty/search/empty-search-2.tsx](../../upstream/packages/patterns/empty/search/empty-search-2.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/search/empty-search-2) |
+| empty-search-3 | No Matches Found | search | [packages/patterns/empty/search/empty-search-3.tsx](../../upstream/packages/patterns/empty/search/empty-search-3.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/search/empty-search-3) |
+| empty-search-4 | Try Different Keywords | search | [packages/patterns/empty/search/empty-search-4.tsx](../../upstream/packages/patterns/empty/search/empty-search-4.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/search/empty-search-4) |
+| empty-search-5 | Clear Filters Suggestion | search | [packages/patterns/empty/search/empty-search-5.tsx](../../upstream/packages/patterns/empty/search/empty-search-5.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/search/empty-search-5) |
+| empty-standard-1 | Simple Empty State | standard | [packages/patterns/empty/standard/empty-standard-1.tsx](../../upstream/packages/patterns/empty/standard/empty-standard-1.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/standard/empty-standard-1) |
+| empty-standard-2 | Empty with Description | standard | [packages/patterns/empty/standard/empty-standard-2.tsx](../../upstream/packages/patterns/empty/standard/empty-standard-2.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/standard/empty-standard-2) |
+| empty-standard-3 | Empty with Long Description | standard | [packages/patterns/empty/standard/empty-standard-3.tsx](../../upstream/packages/patterns/empty/standard/empty-standard-3.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/standard/empty-standard-3) |
+| empty-standard-4 | Empty with Large Icon | standard | [packages/patterns/empty/standard/empty-standard-4.tsx](../../upstream/packages/patterns/empty/standard/empty-standard-4.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/standard/empty-standard-4) |
+| empty-standard-5 | Empty with Multiple Paragraphs | standard | [packages/patterns/empty/standard/empty-standard-5.tsx](../../upstream/packages/patterns/empty/standard/empty-standard-5.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/standard/empty-standard-5) |
+| empty-standard-6 | Empty without Icon | standard | [packages/patterns/empty/standard/empty-standard-6.tsx](../../upstream/packages/patterns/empty/standard/empty-standard-6.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/standard/empty-standard-6) |
+| empty-standard-7 | Empty with Link in Description | standard | [packages/patterns/empty/standard/empty-standard-7.tsx](../../upstream/packages/patterns/empty/standard/empty-standard-7.tsx) | [preview](https://www.kibo-ui.com/patterns/empty/standard/empty-standard-7) |

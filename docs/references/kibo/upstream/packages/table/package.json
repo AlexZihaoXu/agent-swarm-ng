@@ -1,0 +1,20 @@
+{
+  "name": "@repo/table",
+  "description": "Table views are used to display data in a tabular format. They are useful for displaying large amounts of data in a structured way.",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@repo/shadcn-ui": "workspace:*",
+    "@tanstack/react-table": "^8.21.3",
+    "jotai": "^2.15.0",
+    "lucide-react": "^0.545.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  }
+}

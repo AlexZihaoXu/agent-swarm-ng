@@ -1,0 +1,23 @@
+# dialog patterns
+
+Generated from `upstream/packages/patterns/dialog/`.
+
+| ID | Title from source | Collection | Local exact source | Website preview |
+| --- | --- | --- | --- | --- |
+| dialog-standard-1 | Standard | standard | [packages/patterns/dialog/standard/dialog-standard-1.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-1.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-1) |
+| dialog-standard-10 | Signup Form | standard | [packages/patterns/dialog/standard/dialog-standard-10.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-10.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-10) |
+| dialog-standard-11 | Signin Form | standard | [packages/patterns/dialog/standard/dialog-standard-11.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-11.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-11) |
+| dialog-standard-12 | Invite Team Members | standard | [packages/patterns/dialog/standard/dialog-standard-12.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-12.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-12) |
+| dialog-standard-13 | Card Details | standard | [packages/patterns/dialog/standard/dialog-standard-13.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-13.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-13) |
+| dialog-standard-14 | Checkout | standard | [packages/patterns/dialog/standard/dialog-standard-14.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-14.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-14) |
+| dialog-standard-15 | Plan Selection | standard | [packages/patterns/dialog/standard/dialog-standard-15.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-15.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-15) |
+| dialog-standard-16 | Edit Profile | standard | [packages/patterns/dialog/standard/dialog-standard-16.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-16.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-16) |
+| dialog-standard-17 | Onboarding | standard | [packages/patterns/dialog/standard/dialog-standard-17.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-17.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-17) |
+| dialog-standard-2 | Scrollable | standard | [packages/patterns/dialog/standard/dialog-standard-2.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-2.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-2) |
+| dialog-standard-3 | Scrollable with Sticky Header | standard | [packages/patterns/dialog/standard/dialog-standard-3.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-3.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-3) |
+| dialog-standard-4 | Terms and Conditions | standard | [packages/patterns/dialog/standard/dialog-standard-4.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-4.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-4) |
+| dialog-standard-5 | Delete Confirmation | standard | [packages/patterns/dialog/standard/dialog-standard-5.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-5.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-5) |
+| dialog-standard-6 | Newsletter | standard | [packages/patterns/dialog/standard/dialog-standard-6.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-6.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-6) |
+| dialog-standard-7 | Feedback | standard | [packages/patterns/dialog/standard/dialog-standard-7.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-7.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-7) |
+| dialog-standard-8 | Rating | standard | [packages/patterns/dialog/standard/dialog-standard-8.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-8.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-8) |
+| dialog-standard-9 | OTP Code | standard | [packages/patterns/dialog/standard/dialog-standard-9.tsx](../../upstream/packages/patterns/dialog/standard/dialog-standard-9.tsx) | [preview](https://www.kibo-ui.com/patterns/dialog/standard/dialog-standard-9) |

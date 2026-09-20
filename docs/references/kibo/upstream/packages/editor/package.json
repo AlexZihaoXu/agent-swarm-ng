@@ -1,0 +1,35 @@
+{
+  "name": "@repo/editor",
+  "description": "The Editor component is a powerful and flexible text editor that allows you to create and edit rich text content.",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@floating-ui/dom": "^1.7.4",
+    "@repo/shadcn-ui": "workspace:*",
+    "@tiptap/core": "^3.6.6",
+    "@tiptap/extension-code-block-lowlight": "^3.6.6",
+    "@tiptap/extension-list": "^3.6.6",
+    "@tiptap/extension-subscript": "^3.6.6",
+    "@tiptap/extension-superscript": "^3.6.6",
+    "@tiptap/extension-table": "^3.6.6",
+    "@tiptap/extension-text-style": "^3.6.6",
+    "@tiptap/extension-typography": "^3.6.6",
+    "@tiptap/extensions": "^3.6.6",
+    "@tiptap/pm": "^3.6.6",
+    "@tiptap/react": "^3.6.6",
+    "@tiptap/starter-kit": "^3.6.6",
+    "@tiptap/suggestion": "^3.6.6",
+    "fuse.js": "^7.1.0",
+    "lowlight": "^3.3.0",
+    "lucide-react": "^0.545.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tippy.js": "^6.3.7"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  }
+}

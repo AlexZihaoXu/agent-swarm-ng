@@ -1,0 +1,20 @@
+{
+  "name": "@repo/calendar",
+  "description": "The calendar view displays features on a grid calendar. Specifically it shows the end date of each feature, and groups features by day.",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@repo/shadcn-ui": "workspace:*",
+    "date-fns": "^4.1.0",
+    "jotai": "^2.15.0",
+    "lucide-react": "^0.545.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  }
+}
