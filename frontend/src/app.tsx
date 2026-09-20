@@ -18,23 +18,11 @@ export function App() {
   const { needRefresh: [needRefresh, setNeedRefresh], updateServiceWorker } = useRegisterSW();
 
   return (
-    <main className="mx-auto max-w-4xl space-y-8 px-6 py-16">
-      <header>
-        <p className="text-sm text-muted-foreground">Platform scaffold</p>
-        <h1 className="mt-2 text-3xl font-semibold">Agent Swarm v2</h1>
-        <p className="mt-3 text-muted-foreground">Containerized environments, managed from one dashboard.</p>
-      </header>
-      <section aria-label="Platform status" className="rounded-lg border border-border p-6">
-        <h2 className="text-lg font-medium">Platform status</h2>
-        <p role="status" className="my-4">
-          {health.isPending ? 'Connecting…' : health.isError ? 'Disconnected — backend unavailable. Management requires a connection.' : 'Backend connected'}
-        </p>
-        <Button variant="outline" disabled={health.isFetching} onClick={() => void health.refetch()}>Check connection</Button>
-      </section>
-      <section>
-        <h2 className="text-lg font-medium">Environments</h2>
-        <p className="mt-2 text-muted-foreground">Container management and optional desktop streaming are not implemented yet.</p>
-      </section>
+    <main className="mx-auto max-w-4xl space-y-2 px-6 py-8">
+      <h1 className="text-xl font-semibold">Agent Swarm v2</h1>
+      <p role="status" className="text-sm text-muted-foreground">
+        {health.isPending ? 'Connecting…' : health.isError ? 'Disconnected — backend unavailable' : 'Backend connected'}
+      </p>
       {needRefresh && (
         <aside aria-label="Application update" className="space-y-3 rounded-lg border border-border p-4">
           <p>An update is ready. Reload when it won’t interrupt your work.</p>
