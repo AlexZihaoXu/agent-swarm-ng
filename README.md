@@ -4,7 +4,9 @@
 ![Language: TypeScript](https://img.shields.io/badge/language-TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Deployment: Docker Compose](https://img.shields.io/badge/deployment-Docker_Compose-2496ED?logo=docker&logoColor=white)
 
-A lean platform for creating, modifying, and deleting **containerized environments** from our own template, with an optional browser-accessible desktop. Agent integration, including pi, is deferred.
+A platform for **persistent agents** with long-term memory and shared awareness across communication channels. Agents use explicitly granted capabilities to access shared, containerized **computers**; they are not bound to a computer or limited to coding.
+
+**Today:** a minimal frontend, health API, and standalone Ubuntu GNOME workspace foundation. The swarm runtime is not implemented. Read the [swarm vision](docs/vision.md) for agreed concepts and deliberately open questions.
 
 ## Getting started
 
@@ -19,28 +21,17 @@ bun run dev:frontend
 
 Open http://localhost:5173. See [development instructions](docs/development.md) for tests, API generation, and Docker setup.
 
-## Overview
+## Vision and scope
 
-Think **Portainer for agent environments**: simple lifecycle management, whether an agent is needed for a quick experiment or ongoing autonomous work.
+- **Agents:** persistent, human-like identities with long-term memory, independent of any one session or computer. Pi is the intended harness; product agents start with zero tools, then receive capabilities explicitly.
+- **Channels:** platform chat by default, with external channels such as Discord or WhatsApp envisaged. One agent shares awareness across channels rather than becoming a separate agent per app.
+- **Communication and access:** group chats let agents coordinate; permissions and groups govern resource access.
+- **Computers:** assignable containerized environments, potentially shared by multiple agents, with desktop and console/tmux capabilities.
+- **Configurable autonomy:** the person setting up the system chooses access and coordination policies and accepts their risks. Agents exercise judgment within those boundaries; the platform enforces the selected rules.
 
-“Hiring an agent” captures the experience of bringing one online—not a requirement for HR features, roles, or assignment workflows.
+The [vision document](docs/vision.md) distinguishes agreed direction from unresolved design and implementation options. Human-like interaction does not imply human-level discretion or require an endlessly running model conversation.
 
-## Longer-term use cases
-
-- **Quick experiments:** spin up a temporary environment, try a model with a prompt, and discard it afterward.
-- **Long-running work:** keep agents working independently or together over time—for example, developing and maintaining an application.
-
-These are use cases, not commitments to additional features.
-
-## Scope
-
-The initial scope is a dashboard for template-based environment creation, modification, and deletion. Start with one template whose desktop and streaming processes can be enabled or disabled; whether this toggle works only at creation or also at runtime remains open.
-
-Pi integration and communication between agents belong to the longer-term direction, not the initial implementation.
-
-Agents handle their own tasks, tools, deployment workflows, and credentials after setup—including through external channels such as Discord or WhatsApp.
-
-**Autonomy is intentional.** Agents are intended to work with broad permissions, rather than seek approval at every step. Exact infrastructure access boundaries remain undecided.
+Existing environment work is a foundation for computers, not the full product definition. Agent runtime, memory, channels, permissions, assignments, and computer-control policies remain unimplemented. The next milestone and implementation order require explicit agreement; this vision does not authorize building them all at once.
 
 ## Stack
 
@@ -79,10 +70,10 @@ agent-swarm-v2/
 └── docs/
 ```
 
-- **`frontend/`** — management dashboard and embedded desktop viewer.
-- **`backend/`** — API, template loading, Docker lifecycle operations, and desktop-access coordination.
+- **`frontend/`** — minimal app-name/connection-status page and PWA setup; management UI and embedded desktop viewer are not implemented.
+- **`backend/`** — health API and OpenAPI scaffold; resource management and agent integration are not implemented.
 - **`templates/default/`** — Ubuntu GNOME workspace image, standalone Compose configuration, and smoke tests. Production desktop startup, streaming, and the platform template schema remain unimplemented.
-- **`docs/`** — design and setup notes, added as needed. The [local Kibo reference entry guide](docs/references/kibo/README.md) provides pinned source, searchable indexes, and adaptation notes.
+- **`docs/`** — [swarm vision](docs/vision.md), development instructions, and reference material. The [local Kibo reference entry guide](docs/references/kibo/README.md) provides pinned source, searchable indexes, and adaptation notes.
 
 Root Compose files run the platform; dynamic environment creation by the backend is still pending. `templates/default/compose.yaml` provides a standalone workspace with persistent home and workspace volumes. Keep tests beside their code where supported. Add no shared packages or separate services without a concrete need.
 
@@ -133,7 +124,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 
 ## Project status
 
-The initial scaffold includes a dashboard, health API, generated API types, PWA configuration, tests, and Compose files. Dashboard container management, desktop streaming, authentication, and platform metadata persistence are not implemented. Standalone workspace data persistence is configured through named volumes.
+The scaffold includes a minimal frontend, health API, generated API types, PWA configuration, tests, and Compose files. Agent identities/runtime, long-term memory, chat/channels, permission groups, computer assignments/control, dashboard container management, desktop streaming, authentication, and platform metadata persistence are not implemented. Standalone workspace data persistence is configured through named volumes; it is not agent memory.
 
 Validate Bun compatibility with Docker libraries and long-lived connections, plus AMD hardware encoding and streaming performance, before relying on them.
 
