@@ -1,16 +1,17 @@
-import type { ReactNode, Ref } from 'react';
+import type { CSSProperties, ReactNode, Ref } from 'react';
 import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area';
 import { cn } from '@/lib/utils';
 
 // Follows Kibo's scroll-area/layout/scroll-area-layout-3 composition.
-export function ScrollArea({ children, className, viewportRef, label }: {
+export function ScrollArea({ children, className, style, viewportRef, label }: {
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
   viewportRef?: Ref<HTMLDivElement>;
   label: string;
 }) {
   return (
-    <ScrollAreaPrimitive.Root type="scroll" scrollHideDelay={700} className={cn('relative overflow-hidden', className)}>
+    <ScrollAreaPrimitive.Root type="scroll" scrollHideDelay={700} style={style} className={cn('relative overflow-hidden', className)}>
       <ScrollAreaPrimitive.Viewport ref={viewportRef} role="region" aria-label={label} tabIndex={0} className="size-full outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring">
         {children}
       </ScrollAreaPrimitive.Viewport>

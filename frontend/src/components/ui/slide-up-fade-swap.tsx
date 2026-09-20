@@ -2,16 +2,17 @@ import { useLayoutEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
 /** Swaps a single line of text: old text exits upward, then new text enters from below. */
-export function SlideUpFadeSwap({ text, className }: { text: string; className?: string }) {
-  const initialText = useRef(text);
+export function SlideUpFadeSwap({ text, prefix = '', className }: { text: string; prefix?: string; className?: string }) {
+  const initial = useRef({ text, prefix });
   const labelRef = useRef<HTMLSpanElement>(null);
 
   useLayoutEffect(() => {
     const label = labelRef.current;
-    if (!label || label.textContent === text) return;
+    if (!label || (label.textContent === text && label.dataset.prefix === prefix)) return;
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       label.textContent = text;
+      label.dataset.prefix = prefix;
       return;
     }
 
@@ -24,6 +25,7 @@ export function SlideUpFadeSwap({ text, className }: { text: string; className?:
     void animation.finished.then(() => {
       if (cancelled) return;
       label.textContent = text;
+      label.dataset.prefix = prefix;
       animation.cancel();
       animation = label.animate([
         { opacity: 0, transform: 'translateY(8px)' },
@@ -37,13 +39,13 @@ export function SlideUpFadeSwap({ text, className }: { text: string; className?:
       cancelled = true;
       animation.cancel();
     };
-  }, [text]);
+  }, [text, prefix]);
 
   return (
     <span className={cn('inline-block min-w-0 overflow-hidden align-top', className)}>
-      <span className="sr-only">{text}</span>
+      <span className="sr-only">{prefix}{text}</span>
       {/* Only the visual text is animation-owned; accessible text updates immediately. */}
-      <span ref={labelRef} aria-hidden="true" data-slot="swap-text" className="block truncate">{initialText.current}</span>
+      <span ref={labelRef} aria-hidden="true" data-slot="swap-text" data-prefix={initial.current.prefix} className="block truncate before:font-medium before:content-[attr(data-prefix)]">{initial.current.text}</span>
     </span>
   );
 }

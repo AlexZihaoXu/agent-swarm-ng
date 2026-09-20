@@ -129,10 +129,13 @@ test('sidebar preview and time use the shared swap, and sent history staggers on
   const row = page.getByRole('button', { name: 'Open conversation with Avery' });
   const labels = row.locator('[data-slot="swap-text"]');
   await expect(labels).toHaveCount(2);
+  await expect(labels.nth(1)).toHaveAttribute('data-prefix', '');
   await page.getByLabel('Message Avery').fill('Updated preview');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(labels.nth(0)).toHaveText('12:34 PM');
   await expect(labels.nth(1)).toHaveText('Updated preview');
+  await expect(labels.nth(1)).toHaveAttribute('data-prefix', 'You: ');
+  expect(await labels.nth(1).evaluate(element => getComputedStyle(element, '::before').fontWeight)).toBe('500');
   await page.getByRole('button', { name: 'Open conversation with Morgan' }).click();
   await row.click();
   const sentBubble = page.getByRole('list', { name: 'Messages' }).locator('li > p').last();
@@ -263,13 +266,13 @@ test('navigation is centered with a moving indicator and pointer cursors', async
   await expect(indicator).toHaveCSS('transition-property', 'none');
 });
 
-test('preferences is a placeholder with keyboard-accessible tabs', async ({ page }) => {
+test('preferences is reachable with keyboard-accessible tabs', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('tab', { name: 'Agents', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'Preferences' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('heading', { name: 'Preferences' })).toBeVisible();
-  await expect(page.getByText('Settings will live here.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'API endpoints' })).toBeVisible();
   await page.getByRole('tab', { name: 'Agents', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Avery', exact: true })).toBeVisible();
 });

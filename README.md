@@ -6,7 +6,7 @@
 
 A platform for **persistent agents** with long-term memory and shared awareness across communication channels. Agents use explicitly granted capabilities to access shared, containerized **computers**; they are not bound to a computer or limited to coding.
 
-**Today:** a minimal frontend, health API, and standalone Ubuntu GNOME workspace foundation. The swarm runtime is not implemented. Read the [swarm vision](docs/vision.md) for agreed concepts and deliberately open questions.
+**Today:** a chat UI preview, endpoint connection testing, and standalone Ubuntu GNOME workspace foundation. The swarm runtime is not implemented. Read the [swarm vision](docs/vision.md) for agreed concepts and deliberately open questions.
 
 ## Getting started
 
@@ -70,8 +70,8 @@ agent-swarm-v2/
 └── docs/
 ```
 
-- **`frontend/`** — Agents/chat preview with local simulated sending, Preferences placeholder, and PWA setup. Drafts and sent messages stay in memory per agent and reset on refresh; no backend delivery or AI replies. Real messaging, management controls, and the desktop viewer are not implemented.
-- **`backend/`** — health API and OpenAPI scaffold; resource management and agent integration are not implemented.
+- **`frontend/`** — Agents/chat preview with local simulated sending, endpoint Preferences, and PWA setup. Chats, endpoint details, and keys stay in memory until refresh; no backend message delivery or AI replies. Real messaging, management controls, and the desktop viewer are not implemented.
+- **`backend/`** — health API, OpenAPI contract, and an OpenAI-compatible `/models` connection test; resource management and agent integration are not implemented.
 - **`templates/default/`** — Ubuntu GNOME workspace image, standalone Compose configuration, and smoke tests. Production desktop startup, streaming, and the platform template schema remain unimplemented.
 - **`docs/`** — [swarm vision](docs/vision.md), development instructions, and reference material. The [local Kibo reference entry guide](docs/references/kibo/README.md) provides pinned source, searchable indexes, and adaptation notes.
 
@@ -124,7 +124,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 
 ## Project status
 
-The scaffold includes a minimal frontend, health API, generated API types, PWA configuration, tests, and Compose files. Agent identities/runtime, long-term memory, chat/channels, permission groups, computer assignments/control, dashboard container management, desktop streaming, authentication, and platform metadata persistence are not implemented. Standalone workspace data persistence is configured through named volumes; it is not agent memory.
+The scaffold includes a chat UI preview, health API, endpoint connection testing, generated API types, PWA configuration, tests, and Compose files. Agent identities/runtime, long-term memory, chat/channels, permission groups, computer assignments/control, dashboard container management, desktop streaming, authentication, and platform metadata persistence are not implemented. Standalone workspace data persistence is configured through named volumes; it is not agent memory.
 
 Validate Bun compatibility with Docker libraries and long-lived connections, plus AMD hardware encoding and streaming performance, before relying on them.
 

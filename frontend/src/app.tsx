@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { previewAgents, type PreviewMessage } from '@/preview-data';
 import { SlideUpFadeSwap } from '@/components/ui/slide-up-fade-swap';
 import { ConversationMessages } from '@/components/conversation-messages';
+import { Preferences } from '@/components/preferences';
 
 function Avatar({ initials, small = false }: { initials: string; small?: boolean }) {
   return (
@@ -112,7 +113,9 @@ export function App() {
             <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
               {visibleAgents.length === 0 && <p role="status" className="px-2 py-4 text-xs text-muted-foreground">No agents found.</p>}
               <ul className="space-y-0.5">
-                {visibleAgents.map(item => (
+                {visibleAgents.map(item => {
+                  const lastMessage = conversations[item.id].at(-1);
+                  return (
                   <li key={item.id}>
                     <button
                       type="button"
@@ -128,13 +131,14 @@ export function App() {
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-sm font-medium">{item.name}</span>
-                          <SlideUpFadeSwap className="shrink-0 text-[11px] text-muted-foreground" text={conversations[item.id].at(-1)?.time ?? item.time} />
+                          <SlideUpFadeSwap className="shrink-0 text-[11px] text-muted-foreground" text={lastMessage?.time ?? item.time} />
                         </span>
-                        <SlideUpFadeSwap className="mt-0.5 block text-xs text-muted-foreground" text={conversations[item.id].at(-1)?.text ?? ''} />
+                        <SlideUpFadeSwap className="mt-0.5 block text-xs text-muted-foreground" prefix={lastMessage?.author === 'user' ? 'You: ' : ''} text={lastMessage?.text ?? ''} />
                       </span>
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </div>
             <div className="flex shrink-0 items-center gap-2.5 px-4 py-3">
@@ -187,9 +191,8 @@ export function App() {
           </section>
         </Tabs.Content>
 
-        <Tabs.Content value="preferences" className="min-h-0 flex-1 overflow-y-auto px-6 py-10 outline-none sm:px-10">
-          <h2 className="text-lg font-semibold">Preferences</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Settings will live here.</p>
+        <Tabs.Content value="preferences" forceMount className="min-h-0 flex-1 overflow-y-auto outline-none data-[state=inactive]:hidden">
+          <Preferences />
         </Tabs.Content>
       </Tabs.Root>
 

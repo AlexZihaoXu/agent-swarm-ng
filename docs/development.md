@@ -33,7 +33,15 @@ export PLAYWRIGHT_BROWSERS_PATH="$PWD/.cache/ms-playwright"
 bun run test:e2e
 ```
 
-Playwright starts its own backend and frontend; stop existing instances on ports 3000 and 5173 first. Browser tests cover the connected dashboard and backend failure state. PWA installation, offline caching, and updates still need production-browser validation.
+Playwright starts its own backend and frontend; stop existing instances on ports 3000 and 5173 first. Browser tests cover the chat preview, transitions, local sending, and endpoint Preferences (with mocked provider results). PWA installation, offline caching, and updates still need production-browser validation.
+
+## Endpoint connection tests
+
+In **Preferences → API endpoints**, add a name, base URL (including an API prefix such as `/v1`), and optional API key. **Test connection** makes a backend `GET <base URL>/models`, using Bearer authentication when a key is provided. It lists model IDs only; it does not send an inference request or configure an agent.
+
+Endpoint details and keys live in browser memory, survive switching tabs, and clear on refresh. They are not saved to browser storage or a backend database. Keys travel to the backend and the explicitly chosen endpoint; use HTTPS for remote providers. Localhost addresses refer to the **backend's** network namespace, including when it runs in Docker.
+
+The test has a 10-second timeout, rejects redirects and URLs containing credentials/query parameters/fragments, bounds responses to 1 MiB and 1,000 model entries, and does not return raw provider errors. Local/private endpoints are intentionally supported, so this unauthenticated route can reach the backend's network: keep the platform loopback-only and do not expose it publicly. Authentication and network-access policy are prerequisites for external deployment.
 
 ## Docker Compose
 
