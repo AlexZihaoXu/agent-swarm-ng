@@ -1,3 +1,5 @@
+export type PreviewMessage = { id: string; author: 'agent' | 'user'; text: string; time?: string };
+
 // Static UI fixtures only. These are not agents, persisted chats, or backend activity.
 export const previewAgents = [
   {

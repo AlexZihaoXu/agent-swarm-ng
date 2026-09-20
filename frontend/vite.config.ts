@@ -29,6 +29,8 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // Avoid transforming partially written files during local edits.
+    watch: { awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 25 } },
     proxy: { '/api': { target: process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:3000' } },
   },
 });

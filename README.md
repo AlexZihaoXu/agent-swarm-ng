@@ -70,7 +70,7 @@ agent-swarm-v2/
 └── docs/
 ```
 
-- **`frontend/`** — static Agents/chat layout preview, Preferences placeholder, and PWA setup. Sample conversations are local fixtures; real messaging, management controls, and the desktop viewer are not implemented.
+- **`frontend/`** — Agents/chat preview with local simulated sending, Preferences placeholder, and PWA setup. Drafts and sent messages stay in memory per agent and reset on refresh; no backend delivery or AI replies. Real messaging, management controls, and the desktop viewer are not implemented.
 - **`backend/`** — health API and OpenAPI scaffold; resource management and agent integration are not implemented.
 - **`templates/default/`** — Ubuntu GNOME workspace image, standalone Compose configuration, and smoke tests. Production desktop startup, streaming, and the platform template schema remain unimplemented.
 - **`docs/`** — [swarm vision](docs/vision.md), development instructions, and reference material. The [local Kibo reference entry guide](docs/references/kibo/README.md) provides pinned source, searchable indexes, and adaptation notes.
