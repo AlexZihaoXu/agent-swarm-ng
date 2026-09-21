@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentPanel } from '@/components/agent-panel';
 import { AgentAvatar, AgentName } from '@/components/chat-identity';
 import { cn } from '@/lib/utils';
-import { useChat } from '@/use-chat';
+import { useChat, type ChatAgent } from '@/use-chat';
 import { SlideUpFadeSwap } from '@/components/ui/slide-up-fade-swap';
 import { renderMessagePreview } from '@/components/message-markdown';
 import { ConversationMessages } from '@/components/conversation-messages';
@@ -28,11 +28,13 @@ function Avatar({ initials, small = false, typing = false, ready = false }: { in
   );
 }
 
+const emptyAgent: ChatAgent = { id: '', name: '', initials: '', time: '', channelId: '' };
+
 export function App() {
-  const { agents, conversations, drafts, busy, typing, activity, addAgent, send, stop, setDraft,
+  const { agents, conversations, drafts, busy, typing, activity, addAgent, deleteAgent, send, stop, setDraft,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
   } = useChat();
-  const [selectedId, setSelectedId] = useState<string>(agents[0].id);
+  const [selectedId, setSelectedId] = useState<string>(agents[0]?.id ?? '');
   const [mobileConversation, setMobileConversation] = useState(false);
   const [activeTab, setActiveTab] = useState('agents');
   const [search, setSearch] = useState('');
@@ -41,10 +43,10 @@ export function App() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingSend = useRef<string | null>(null);
   const visibleAgents = agents.filter(item => item.name.toLowerCase().includes(search.trim().toLowerCase()));
-  const agent = agents.find(item => item.id === selectedId) ?? agents[0];
+  const agent = agents.find(item => item.id === selectedId) ?? agents[0] ?? emptyAgent;
   const { needRefresh: [needRefresh, setNeedRefresh], updateServiceWorker } = useRegisterSW();
   const draft = drafts[agent.channelId] ?? '';
-  const messages = conversations[agent.channelId];
+  const messages = conversations[agent.channelId] ?? [];
   const previousConversation = useRef({ id: agent.id, count: messages.length, first: messages[0]?.id, last: messages.at(-1)?.id, height: 0 });
 
   useEffect(() => { void loadHistory(agent); }, [agent.id]);
@@ -103,7 +105,13 @@ export function App() {
         </header>
 
         <Tabs.Content value="agents" className="min-h-0 flex-1 outline-none data-[state=active]:flex">
-          <AgentPanel onCreated={real => { addAgent(real); setSelectedId(real.id); setSearch(''); setMobileConversation(true); }} className={cn(
+          <AgentPanel agents={agents} onDelete={async (target, confirmation) => {
+            await deleteAgent(target, confirmation);
+            if (agent.id === target.id) {
+              setSelectedId(agents.find(item => item.id !== target.id)?.id ?? '');
+              setActivityOpen(false); setMobileConversation(false);
+            }
+          }} onCreated={real => { addAgent(real); setSelectedId(real.id); setSearch(''); setMobileConversation(true); }} className={cn(
             'min-h-0 w-full shrink-0 flex-col border-border bg-sidebar sm:flex sm:w-72 sm:border-r',
             mobileConversation ? 'hidden' : 'flex',
           )}>
@@ -115,20 +123,21 @@ export function App() {
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
-              {visibleAgents.length === 0 && <p role="status" className="px-2 py-4 text-xs text-muted-foreground">No agents found.</p>}
+              {visibleAgents.length === 0 && !agentsLoading && !agentsFailed && <p role="status" className="px-2 py-4 text-xs text-muted-foreground">{search.trim() ? 'No agents found.' : 'No agents yet. Right-click here to create one.'}</p>}
               <ul className="space-y-0.5">
                 {visibleAgents.map(item => {
-                  const lastMessage = conversations[item.channelId].at(-1);
+                  const lastMessage = conversations[item.channelId]?.at(-1);
                   return (
                   <li key={item.id}>
                     <button
                       type="button"
+                      data-agent-id={item.id}
                       aria-label={`Open conversation with ${item.name}`}
-                      aria-current={item.id === selectedId ? 'true' : undefined}
+                      aria-current={item.id === agent.id ? 'true' : undefined}
                       onClick={() => { setSelectedId(item.id); setMobileConversation(true); }}
                       className={cn(
                         'flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-                        item.id === selectedId ? 'bg-foreground/10' : 'hover:bg-foreground/5',
+                        item.id === agent.id ? 'bg-foreground/10' : 'hover:bg-foreground/5',
                       )}
                     >
                       <Avatar initials={item.initials} ready={Boolean(item.real)} typing={typing[item.channelId]} />
@@ -152,7 +161,7 @@ export function App() {
             </div>
           </AgentPanel>
 
-          <section aria-label={`Conversation with ${agent.name}`} className={cn(
+          {agents.length > 0 ? <section aria-label={`Conversation with ${agent.name}`} className={cn(
             'min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none sm:flex',
             activityOpen && 'lg:mr-96',
             mobileConversation ? 'flex' : 'hidden',
@@ -168,7 +177,7 @@ export function App() {
 
             <ScrollArea key={agent.id} viewportRef={scrollRef} label="Chat history" className="min-h-0 flex-1">
               {(historyLoading[agent.channelId] || historyFailed[agent.channelId] || historyCursor[agent.channelId] != null) && <div className="px-5 pt-3 text-center"><Button variant="outline" size="sm" disabled={historyLoading[agent.channelId] || busy[agent.channelId]} onClick={() => void loadHistory(agent, Boolean(historyReady[agent.channelId]))}>{historyLoading[agent.channelId] ? 'Loading messages…' : historyFailed[agent.channelId] ? 'Retry loading messages' : 'Load earlier messages'}</Button></div>}
-              <ConversationMessages messages={messages} time={agent.time} agentName={agent.name} />
+              {historyReady[agent.channelId] && <ConversationMessages messages={messages} time={agent.time} agentName={agent.name} />}
             </ScrollArea>
 
             <div className="shrink-0 px-4 pb-3 pt-2 sm:px-5">
@@ -206,7 +215,7 @@ export function App() {
                 </form>
               </div>
             </div>
-          </section>
+          </section> : <section aria-label="No agent selected" className="hidden min-w-0 flex-1 items-center justify-center p-6 text-sm text-muted-foreground sm:flex">Select or create an agent to start chatting.</section>}
         </Tabs.Content>
 
         <Tabs.Content value="settings" forceMount className="min-h-0 flex-1 overflow-y-auto outline-none data-[state=inactive]:hidden">

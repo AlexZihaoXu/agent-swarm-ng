@@ -72,6 +72,23 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
     return agentView(await database.createAgent({ ...input, name: input.name.trim() }));
   });
 
+  app.delete<{ Params: { id: string }; Body: { confirmation: string } }>('/api/agents/:id', {
+    schema: { operationId: 'deleteChatAgent', params: Type.Object({ id: Type.String({ minLength: 1, maxLength: 100 }) }), body: Type.Object({ confirmation: Type.String({ minLength: 1, maxLength: 80 }) }, { additionalProperties: false }), response: { 200: Type.Object({ deleted: Type.Boolean() }), 400: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 503: ErrorResponse } },
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const id = request.params.id;
+    if (active.has(id)) return reply.code(409).send({ message: 'The agent is responding. Stop it and wait for the turn to finish before deleting.' });
+    active.add(id);
+    try {
+      const agent = await database.findAgent(id);
+      if (!agent) return reply.code(404).send({ message: 'Agent not found.' });
+      if (request.body.confirmation !== agent.name) return reply.code(400).send({ message: 'Type the exact agent name to confirm deletion.' });
+      if (!await database.deleteAgent(id, request.body.confirmation)) return reply.code(404).send({ message: 'Agent not found.' });
+      return { deleted: true };
+    } catch { return reply.code(503).send({ message: 'Could not delete the agent. Try again.' }); }
+    finally { active.delete(id); }
+  });
+
   app.post<{ Body: Static<typeof ChatBody> }>('/api/chat', {
     bodyLimit: 131072,
     schema: { operationId: 'sendChannelMessage', body: ChatBody, response: { 200: Type.String({ description: 'NDJSON user_message acknowledgments, channel_message publications, typing, operator-only activity, error, and done events. Only saved channel publications are agent chat messages.' }), 400: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 503: ErrorResponse } },

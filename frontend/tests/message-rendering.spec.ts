@@ -2,9 +2,11 @@ import { expect, test, type Page } from './fixtures';
 
 async function send(page: Page, text: string) {
   await page.goto('/');
-  await page.getByLabel('Message [demo] Avery').fill(text);
+  await page.getByLabel('Message Avery').fill(text);
   await page.getByRole('button', { name: 'Send message' }).click();
-  return page.getByRole('list', { name: 'Messages' }).locator(':scope > li').last();
+  const messages = page.getByRole('list', { name: 'Messages' }).locator(':scope > li');
+  await expect(messages).toHaveCount(4);
+  return messages.last();
 }
 
 test('renders Markdown formatting, lists, quotes, tables, and chat line breaks', async ({ page }) => {
@@ -24,7 +26,7 @@ test('renders Markdown formatting, lists, quotes, tables, and chat line breaks',
 
 test('agent cards render compact Markdown without exposing spoilers or nesting controls', async ({ page }) => {
   await send(page, '**Bold preview** *italic* ~~removed~~ `inline` [Link](https://example.com) ||CARD SECRET||\n\n```cpp\nint main() {}\n```\n\n- [x] Done');
-  const row = page.getByRole('button', { name: 'Open conversation with [demo] Avery' });
+  const row = page.getByRole('button', { name: 'Open conversation with Avery' });
   const preview = row.locator('[data-slot="swap-text"]').last();
   await expect(preview.locator('strong')).toHaveText('Bold preview');
   await expect(preview.locator('em')).toHaveText('italic');
@@ -37,7 +39,7 @@ test('agent cards render compact Markdown without exposing spoilers or nesting c
   await expect(preview).toHaveCSS('text-overflow', 'ellipsis');
   await expect(preview).toHaveAttribute('data-prefix', 'You: ');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.getByLabel('Message [demo] Avery').fill('**Updated** preview');
+  await page.getByLabel('Message Avery').fill('**Updated** preview');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(preview.locator('strong')).toHaveText('Updated');
   await expect(preview).not.toContainText('Bold preview');
@@ -81,9 +83,9 @@ test('does not execute HTML, dangerous links, or automatically fetch remote imag
 test('long code and tables scroll inside the message on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Open conversation with [demo] Avery' }).click();
+  await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
   const text = '```text\n' + 'long-code-'.repeat(80) + '\n```\n\n| First | Second |\n| --- | --- |\n| ' + 'long-cell-'.repeat(60) + ' | Value |';
-  await page.getByLabel('Message [demo] Avery').fill(text);
+  await page.getByLabel('Message Avery').fill(text);
   await page.getByRole('button', { name: 'Send message' }).click();
   const pre = page.getByRole('list', { name: 'Messages' }).locator('pre');
   await expect(pre).toBeVisible();

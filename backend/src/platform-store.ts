@@ -24,6 +24,11 @@ export class PlatformStore {
     await this.initialize();
     return this.withLatestMessage(await this.client.agent.create({ data: { ...input, channels: { create: { kind: 'platform-chat' } } }, include: agentSelection }));
   }
+  async deleteAgent(id: string, name: string) {
+    await this.initialize();
+    // Foreign keys cascade to the agent's channels and messages in the same statement.
+    return (await this.client.agent.deleteMany({ where: { id, name } })).count > 0;
+  }
   async listAgents(after?: number, limit = 100) {
     await this.initialize();
     const rows = await this.client.agent.findMany({ where: after ? { sequence: { gt: after } } : {}, orderBy: { sequence: 'asc' }, take: limit + 1, include: agentSelection });

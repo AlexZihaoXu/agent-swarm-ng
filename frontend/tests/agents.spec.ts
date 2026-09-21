@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import { sampleAgents } from './sample-agents';
 
 const real = { id: 'real-agent', name: 'Real agent', endpointId: 'saved-endpoint', model: 'test-model', thinkingLevel: 'off', channelId: 'platform-channel', createdAt: Date.now(), lastMessage: null };
 
@@ -6,7 +7,7 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/model-endpoints', route => route.fulfill({ json: [{ id: 'saved-endpoint', name: 'Test endpoint', baseUrl: 'http://test.invalid/v1', hasApiKey: true }] }));
   await page.route('**/api/model-endpoints/test', route => route.fulfill({ json: { models: ['test-model', 'gpt-5'] } }));
   await page.route('**/api/agents/model-capabilities?*', route => route.fulfill({ json: route.request().url().includes('gpt-5') ? { thinkingLevels: ['off', 'low', 'medium', 'high'], reasoning: true } : { thinkingLevels: ['off'], reasoning: false } }));
-  const saved: typeof real[] = [];
+  const saved: typeof real[] = sampleAgents.map(agent => ({ ...agent, lastMessage: null }));
   await page.route('**/api/agents', route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: { agents: saved, nextCursor: null } });
     const created = { ...real, ...route.request().postDataJSON() }; saved.push(created);
@@ -54,7 +55,7 @@ test('restores a saved agent and published messages after refresh without storin
   await expect(page.getByRole('heading', { name: real.name, exact: true })).toBeVisible();
   await expect(page.getByTestId('chat-avatar').locator('[data-slot="online-indicator"]')).toBeVisible();
   await expect(page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-slot="online-indicator"]')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Open conversation with [demo] Avery' }).locator('[data-slot="online-indicator"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open conversation with Avery' }).locator('[data-slot="online-indicator"]')).toHaveCount(1);
   await page.getByLabel(`Message ${real.name}`).fill('Hello');
   await page.getByRole('button', { name: 'Send message' }).click();
   const messages = page.getByRole('list', { name: 'Messages' });
@@ -65,7 +66,7 @@ test('restores a saved agent and published messages after refresh without storin
   await expect(preview).toHaveAttribute('data-prefix', '');
   await expect(messages).not.toContainText('PRIVATE');
   await expect(messages).not.toContainText('WRONG CHANNEL');
-  await expect(page.getByRole('button', { name: 'Open conversation with [demo] Avery' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open conversation with Avery' })).toBeVisible();
   expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain('Published response');
   await page.reload();
   await page.getByRole('button', { name: `Open conversation with ${real.name}` }).click();
@@ -127,7 +128,7 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(page.getByRole('status').locator('.typing-dot').first()).toHaveCSS('animation-name', 'none');
   await expect(page.getByRole('list', { name: 'Messages' }).locator('li')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Open conversation with [demo] Avery' }).click();
+  await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
   await expect(page.getByText('Real agent is typing…')).not.toBeVisible();
   await page.getByRole('button', { name: `Open conversation with ${real.name}` }).click();
   await expect(page.getByRole('status')).toHaveText('Real agent is typing…');
@@ -184,8 +185,8 @@ test('operator activity streams separately, accumulates while closed, and stays 
   const chat = page.getByRole('list', { name: 'Messages' });
   await expect(chat).not.toContainText('PRIVATE');
   await expect(chat).not.toContainText('Draft message');
-  await page.getByRole('button', { name: 'Open conversation with [demo] Avery' }).click();
-  await expect(panel).toContainText('Demo agents have no runtime activity.');
+  await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
+  await expect(panel).toContainText('New activity will appear here when this agent runs.');
   await expect(panel).not.toContainText('PRIVATE');
   await page.getByRole('button', { name: `Open conversation with ${real.name}` }).click();
   await expect(panel).toContainText('PRIVATE thought continued');
@@ -201,7 +202,7 @@ test('operator activity streams separately, accumulates while closed, and stays 
 test('activity panel fits mobile and closes accessibly', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Open conversation with [demo] Avery' }).click();
+  await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
   const trigger = page.getByRole('button', { name: 'Agent activity', exact: true });
   await trigger.click();
   await expect(page.getByRole('dialog', { name: 'Agent activity' })).toBeVisible();

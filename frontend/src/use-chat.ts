@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
 import type { components, paths } from '@/api/schema';
-import { previewAgents, type PreviewMessage } from '@/preview-data';
+import type { ChatMessage } from '@/chat-types';
 
 export type ActivityEntry = components['schemas']['AgentActivityEntry'];
 const activityKinds = new Set(['system', 'user', 'assistant', 'thinking', 'tool_call', 'tool_result', 'reminder', 'channel', 'status', 'error']);
@@ -9,26 +9,29 @@ const activityKinds = new Set(['system', 'user', 'assistant', 'thinking', 'tool_
 export type RealAgent = paths['/api/agents']['post']['responses'][200]['content']['application/json'];
 export type ChatAgent = { id: string; name: string; initials: string; time: string; channelId: string; real?: RealAgent };
 type SavedMessage = paths['/api/channels/{channelId}/messages']['get']['responses'][200]['content']['application/json']['messages'][number];
-const asMessage = (message: SavedMessage): PreviewMessage => ({ id: message.id, author: message.role === 'user' ? 'user' : 'agent', text: message.text, time: clock(message.timestamp) });
+const asMessage = (message: SavedMessage): ChatMessage => ({ id: message.id, author: message.role === 'user' ? 'user' : 'agent', text: message.text, time: clock(message.timestamp) });
 const asAgent = (real: RealAgent): ChatAgent => ({ id: real.id, name: real.name, initials: real.name.slice(0, 2).toUpperCase(), time: clock(real.lastMessage?.timestamp ?? real.createdAt), channelId: real.channelId, real });
 const clock = (timestamp = Date.now()) => new Date(timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s+/g, ' ');
 
+function withoutKey<T>(record: Record<string, T>, key: string) {
+  const next = { ...record }; delete next[key]; return next;
+}
+
 export function useChat() {
-  const [agents, setAgents] = useState<ChatAgent[]>(() => previewAgents.map(agent => ({ ...agent, channelId: agent.id })));
-  const [conversations, setConversations] = useState<Record<string, PreviewMessage[]>>(() =>
-    Object.fromEntries(previewAgents.map(agent => [agent.id, agent.messages.map((message, index) => ({ ...message, id: `${agent.id}-${index}` }))])),
-  );
+  const [agents, setAgents] = useState<ChatAgent[]>([]);
+  const [conversations, setConversations] = useState<Record<string, ChatMessage[]>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [typing, setTyping] = useState<Record<string, boolean>>({});
   const [activity, setActivity] = useState<Record<string, ActivityEntry[]>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const removedAgents = useRef(new Set<string>());
   const requests = useRef(new Map<string, AbortController>());
-  const pendingMessages = useRef(new Map<string, PreviewMessage>());
+  const pendingMessages = useRef(new Map<string, ChatMessage>());
   const agentRequest = useRef<AbortController | null>(null);
   const historyRequests = useRef(new Map<string, AbortController>());
   const loadedHistory = useRef(new Set<string>());
-  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [agentsLoading, setAgentsLoading] = useState(true);
   const [agentsFailed, setAgentsFailed] = useState(false);
   const [agentsCursor, setAgentsCursor] = useState<number | null>(null);
   const [historyReady, setHistoryReady] = useState<Record<string, boolean>>({});
@@ -44,12 +47,13 @@ export function useChat() {
       const { data, error } = await api.GET('/api/agents', { params: { query: { after } }, signal: controller.signal });
       if (controller.signal.aborted) return;
       if (error || !data) throw new Error('Could not load agents');
+      const incoming = data.agents.filter(real => !removedAgents.current.has(real.id));
       setConversations(current => {
         const next = { ...current };
-        for (const real of data.agents) if (!(real.channelId in next)) next[real.channelId] = real.lastMessage ? [asMessage(real.lastMessage)] : [];
+        for (const real of incoming) if (!(real.channelId in next)) next[real.channelId] = real.lastMessage ? [asMessage(real.lastMessage)] : [];
         return next;
       });
-      setAgents(current => [...current, ...data.agents.filter(real => !current.some(item => item.id === real.id)).map(asAgent)]);
+      setAgents(current => [...current, ...incoming.filter(real => !current.some(item => item.id === real.id)).map(asAgent)]);
       setAgentsCursor(data.nextCursor);
     } catch { if (!controller.signal.aborted) setAgentsFailed(true); }
     finally { if (agentRequest.current === controller) { agentRequest.current = null; setAgentsLoading(false); } }
@@ -97,7 +101,30 @@ export function useChat() {
     return agent;
   }
 
+  async function deleteAgent(agent: ChatAgent, confirmation: string) {
+    if (confirmation !== agent.name) throw new Error('Type the exact agent name to confirm deletion.');
+    const { error, response } = await api.DELETE('/api/agents/{id}', { params: { path: { id: agent.id } }, body: { confirmation } });
+    if (!response.ok && response.status !== 404) throw new Error(error?.message ?? 'Could not delete the agent. Try again.');
+    const channel = agent.channelId;
+    removedAgents.current.add(agent.id);
+    requests.current.get(channel)?.abort(); requests.current.delete(channel);
+    historyRequests.current.get(channel)?.abort(); historyRequests.current.delete(channel);
+    pendingMessages.current.delete(channel); loadedHistory.current.delete(channel);
+    setAgents(current => current.filter(item => item.id !== agent.id));
+    setConversations(current => withoutKey(current, channel));
+    setDrafts(current => withoutKey(current, channel));
+    setBusy(current => withoutKey(current, channel));
+    setTyping(current => withoutKey(current, channel));
+    setErrors(current => withoutKey(current, channel));
+    setActivity(current => withoutKey(current, agent.id));
+    setHistoryReady(current => withoutKey(current, channel));
+    setHistoryLoading(current => withoutKey(current, channel));
+    setHistoryFailed(current => withoutKey(current, channel));
+    setHistoryCursor(current => withoutKey(current, channel));
+  }
+
   function recordActivity(agentId: string, entry: ActivityEntry, append = false) {
+    if (removedAgents.current.has(agentId)) return;
     setActivity(current => {
       const entries = current[agentId] ?? [];
       const index = entries.findIndex(item => item.id === entry.id);
@@ -110,7 +137,7 @@ export function useChat() {
     recordActivity(agent.id, { id: crypto.randomUUID(), runId: 'client', channelId: agent.channelId, kind: 'error', label: 'Request error', text, timestamp: Date.now() });
   }
 
-  async function receive(agent: ChatAgent, message: PreviewMessage, controller: AbortController) {
+  async function receive(agent: ChatAgent, message: ChatMessage, controller: AbortController) {
     const channelId = agent.channelId;
     let accepted = false;
     try {
@@ -129,7 +156,7 @@ export function useChat() {
       try {
         while (!controller.signal.aborted) {
           const { value, done } = await reader.read();
-          if (done) break;
+          if (done || controller.signal.aborted) break;
           buffer += decoder.decode(value, { stream: true });
           if (buffer.length > 256000) throw new Error('Oversized channel event');
           let boundary: number;
@@ -147,7 +174,7 @@ export function useChat() {
               setTyping(current => ({ ...current, [channelId]: event.active }));
             } else if ((event.type === 'channel_message' || event.type === 'user_message') && event.channelId === channelId && typeof event.text === 'string' && typeof event.id === 'string') {
               if (event.type === 'user_message' && event.id === message.id) { accepted = true; pendingMessages.current.delete(channelId); }
-              const published: PreviewMessage = { id: event.id, author: event.type === 'user_message' ? 'user' : 'agent', text: event.text, time: clock(event.timestamp) };
+              const published: ChatMessage = { id: event.id, author: event.type === 'user_message' ? 'user' : 'agent', text: event.text, time: clock(event.timestamp) };
               setConversations(current => {
                 const messages = current[channelId] ?? [];
                 return { ...current, [channelId]: messages.some(item => item.id === published.id) ? messages.map(item => item.id === published.id ? published : item) : [...messages, published] };
@@ -172,7 +199,7 @@ export function useChat() {
         controller.abort();
       }
     } finally {
-      if (!accepted) setDrafts(current => current[channelId] ? current : { ...current, [channelId]: message.text });
+      if (!accepted && !removedAgents.current.has(agent.id)) setDrafts(current => current[channelId] ? current : { ...current, [channelId]: message.text });
       if (requests.current.get(channelId) === controller) {
         requests.current.delete(channelId);
         setBusy(current => ({ ...current, [channelId]: false }));
@@ -183,20 +210,17 @@ export function useChat() {
 
   function send(agent: ChatAgent, text: string) {
     text = text.trim();
-    if (!text || requests.current.has(agent.channelId) || historyRequests.current.has(agent.channelId) || (agent.real && !loadedHistory.current.has(agent.channelId))) return;
+    if (!agent.real || !text || requests.current.has(agent.channelId) || historyRequests.current.has(agent.channelId) || !loadedHistory.current.has(agent.channelId)) return;
     const pending = pendingMessages.current.get(agent.channelId);
-    const message: PreviewMessage = pending?.text === text ? pending : { id: crypto.randomUUID(), author: 'user', text, time: clock() };
-    if (agent.real) pendingMessages.current.set(agent.channelId, message);
-    else setConversations(current => ({ ...current, [agent.channelId]: [...current[agent.channelId], message] }));
+    const message: ChatMessage = pending?.text === text ? pending : { id: crypto.randomUUID(), author: 'user', text, time: clock() };
+    pendingMessages.current.set(agent.channelId, message);
     setDrafts(current => ({ ...current, [agent.channelId]: '' }));
     setErrors(current => ({ ...current, [agent.channelId]: '' }));
     setTyping(current => ({ ...current, [agent.channelId]: false }));
-    if (agent.real) {
-      const controller = new AbortController();
-      requests.current.set(agent.channelId, controller);
-      setBusy(current => ({ ...current, [agent.channelId]: true }));
-      void receive(agent, message, controller);
-    }
+    const controller = new AbortController();
+    requests.current.set(agent.channelId, controller);
+    setBusy(current => ({ ...current, [agent.channelId]: true }));
+    void receive(agent, message, controller);
     return message.id;
   }
 
@@ -208,7 +232,7 @@ export function useChat() {
     if (agent) recordActivity(agent.id, { id: crypto.randomUUID(), runId: 'client', channelId, kind: 'status', label: 'Stopped', text: 'Response stopped by the user.', timestamp: Date.now() });
   }
 
-  return { agents, conversations, drafts, busy, typing, activity, errors, addAgent, send, stop,
+  return { agents, conversations, drafts, busy, typing, activity, errors, addAgent, deleteAgent, send, stop,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
     setDraft: (channelId: string, text: string) => setDrafts(current => ({ ...current, [channelId]: text })) };
 }

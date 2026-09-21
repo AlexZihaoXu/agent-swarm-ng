@@ -6,7 +6,7 @@
 
 A platform for **persistent agents** with long-term memory and shared awareness across communication channels. Agents use explicitly granted capabilities to access shared, containerized **computers**; they are not bound to a computer or limited to coding.
 
-**Today:** Pi-backed agents with durable identities and published chat history in Prisma + SQLite, labeled demos, saved endpoint preferences, and a standalone Ubuntu GNOME workspace foundation. Long-term agent memory and the full swarm runtime are not implemented. Read the [swarm vision](docs/vision.md) for agreed concepts and deliberately open questions.
+**Today:** Pi-backed agents with durable identities and published chat history in Prisma + SQLite, saved endpoint preferences, and a standalone Ubuntu GNOME workspace foundation. Long-term agent memory and the full swarm runtime are not implemented. Read the [swarm vision](docs/vision.md) for agreed concepts and deliberately open questions.
 
 ## Getting started
 
@@ -70,7 +70,7 @@ agent-swarm-v2/
 └── docs/
 ```
 
-- **`frontend/`** — labeled demo chats, saved real-agent creation/chat with paginated history, Settings with API endpoints and ChatGPT subscription sign-in, and PWA setup. Drafts and internal activity clear on refresh; only explicitly published agent messages enter chat.
+- **`frontend/`** — saved agent creation/chat with paginated history, Settings with API endpoints and ChatGPT subscription sign-in, and PWA setup. Drafts and internal activity clear on refresh; only explicitly published agent messages enter chat.
 - **`backend/`** — Pi SDK chat with channel-bound `send_message` acknowledgments/results and Pi Web Access search/fetch tools, Prisma/SQLite migrations and history, endpoint preferences, and an OpenAPI contract. No agent file/shell/computer access or internal-session persistence. See [chat and storage](docs/development.md#pi-agents-and-channels).
 - **`templates/default/`** — Ubuntu GNOME workspace image, standalone Compose configuration, and smoke tests. Production desktop startup, streaming, and the platform template schema remain unimplemented.
 - **`docs/`** — [swarm vision](docs/vision.md), development instructions, and reference material. The [local Kibo reference entry guide](docs/references/kibo/README.md) provides pinned source, searchable indexes, and adaptation notes.
@@ -124,7 +124,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 
 ## Project status
 
-The platform includes persisted agent identities and chat history, demo chats, endpoint preferences, generated API types, tests, and Compose files. Long-term memory, external channels, permission groups, computer assignments/control, dashboard container management, desktop streaming, and platform user authentication remain unimplemented. Pi sessions and operator traces are ephemeral. Platform and standalone workspace data use separate persistent storage; neither is the future long-term memory system.
+The platform includes persisted agent identities and chat history, endpoint preferences, generated API types, tests, and Compose files. Long-term memory, external channels, permission groups, computer assignments/control, dashboard container management, desktop streaming, and platform user authentication remain unimplemented. Pi sessions and operator traces are ephemeral. Platform and standalone workspace data use separate persistent storage; neither is the future long-term memory system.
 
 Validate Bun compatibility with Docker libraries and long-lived connections, plus AMD hardware encoding and streaming performance, before relying on them.
 

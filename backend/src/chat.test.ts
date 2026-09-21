@@ -67,6 +67,26 @@ const eventsFrom = (body: string) => body.trim().split('\n').filter(Boolean).map
 const channelEvents = (body: string) => eventsFrom(body).filter(event => event.type !== 'activity' && event.type !== 'user_message');
 
 describe('Pi chat and platform channel boundary', () => {
+  it('requires exact confirmation and deletes only the chosen agent and its history', async () => {
+    behavior = 'tool';
+    const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
+    const app = await testApp(database);
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const other = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      await app.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent) });
+      const url = `/api/agents/${agent.id}`;
+      expect((await app.inject({ method: 'DELETE', url, payload: {} })).statusCode).toBe(400);
+      expect((await app.inject({ method: 'DELETE', url, payload: { confirmation: `${agent.name} ` } })).statusCode).toBe(400);
+      expect((await app.inject(`/api/channels/${agent.channelId}/messages`)).json().messages).toHaveLength(2);
+      expect((await app.inject({ method: 'DELETE', url, payload: { confirmation: agent.name } })).statusCode).toBe(200);
+      expect((await app.inject(`/api/channels/${agent.channelId}/messages`)).statusCode).toBe(404);
+      expect(await database.client.message.count({ where: { channelId: agent.channelId } })).toBe(0);
+      expect((await app.inject('/api/agents')).json().agents.map((row: { id: string }) => row.id)).toEqual([other.id]);
+      expect((await app.inject('/api/model-endpoints')).json()).toHaveLength(1);
+      expect((await app.inject({ method: 'DELETE', url, payload: { confirmation: agent.name } })).statusCode).toBe(404);
+    } finally { await app.close(); }
+  });
   it('creates subscription agents only when connected and rejects sends after disconnect', async () => {
     const model = getModels('openai-codex')[0];
     const codex = new CodexProvider();
@@ -193,6 +213,7 @@ describe('Pi chat and platform channel boundary', () => {
       const address = await app.listen({ host: '127.0.0.1', port: 0 });
       const response = await fetch(`${address}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(chatPayload(agent)), signal: controller.signal });
       expect((await app.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent, 'Concurrent message') })).statusCode).toBe(409);
+      expect((await app.inject({ method: 'DELETE', url: `/api/agents/${agent.id}`, payload: { confirmation: agent.name } })).statusCode).toBe(409);
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = '';

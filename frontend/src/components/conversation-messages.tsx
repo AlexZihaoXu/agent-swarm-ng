@@ -1,10 +1,10 @@
 import { useRef } from 'react';
 import { MessageMarkdown } from '@/components/message-markdown';
 import { cn } from '@/lib/utils';
-import type { PreviewMessage } from '@/preview-data';
+import type { ChatMessage } from '@/chat-types';
 
 export function ConversationMessages({ messages, time, agentName }: {
-  messages: PreviewMessage[];
+  messages: ChatMessage[];
   time: string;
   agentName: string;
 }) {

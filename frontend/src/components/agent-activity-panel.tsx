@@ -49,7 +49,7 @@ export function AgentActivityPanel({ agent, entries, open, onOpenChange }: {
             follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40;
           }}>
             <div className="space-y-3 p-4">
-              {entries.length === 0 && <p className="py-6 text-xs leading-relaxed text-muted-foreground">{agent.real ? 'New activity will appear here when this agent runs. Previously discarded traces cannot be recovered.' : 'Demo agents have no runtime activity.'}</p>}
+              {entries.length === 0 && <p className="py-6 text-xs leading-relaxed text-muted-foreground">New activity will appear here when this agent runs. Previously discarded traces cannot be recovered.</p>}
               {entries.map(entry => (
                 <details key={entry.id} open={entry.kind !== 'system'} data-activity-kind={entry.kind} className="rounded-lg border border-border bg-background p-3">
                   <summary className="text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring">

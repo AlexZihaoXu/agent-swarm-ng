@@ -1,11 +1,12 @@
 import { expect, test } from './fixtures';
+import { sampleAgents } from './sample-agents';
 
 const agent = { id: 'saved-agent', channelId: 'saved-channel', name: 'Saved agent', endpointId: 'endpoint', model: 'test-model', thinkingLevel: 'off', createdAt: 1000 };
 const messages = Array.from({ length: 120 }, (_, i) => ({ id: `saved-${i + 1}`, sequence: i + 1, channelId: agent.channelId, role: i % 2 ? 'assistant' : 'user', text: `Saved message ${i + 1}\nA second line for scroll anchoring.`, timestamp: 1000 + i }));
 
 test('restores paginated history and preserves the reading position when older messages load', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.route(/\/api\/agents(?:\?.*)?$/, route => route.fulfill({ json: { agents: [{ ...agent, lastMessage: messages.at(-1) }], nextCursor: null } }));
+  await page.route(/\/api\/agents(?:\?.*)?$/, route => route.fulfill({ json: { agents: [...sampleAgents, { ...agent, lastMessage: messages.at(-1) }], nextCursor: null } }));
   const cursors: number[] = [];
   await page.route('**/api/channels/saved-channel/messages*', route => {
     const before = Number(new URL(route.request().url()).searchParams.get('before') || 121);
@@ -31,7 +32,7 @@ test('restores paginated history and preserves the reading position when older m
   await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
   expect(cursors).toEqual([121, 71, 21]);
   await expect(row).toContainText('Saved message 120');
-  await page.getByRole('button', { name: 'Open conversation with [demo] Avery' }).click();
+  await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
   await row.click();
   await expect(history.locator('[data-message-id="saved-120"]')).toHaveCSS('animation-delay', '0.6s');
 });
