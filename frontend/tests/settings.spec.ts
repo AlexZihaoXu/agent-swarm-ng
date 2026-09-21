@@ -1,13 +1,13 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.beforeEach(async ({ page }) => {
-  // Never load or modify the developer's actual saved endpoint preferences.
+  // Never load or modify the developer's actual saved endpoint settings.
   await page.route('**/api/model-endpoints', route => route.fulfill({ json: [] }));
 });
 
 async function openEndpoint(page: import('@playwright/test').Page) {
   await page.goto('/');
-  await page.getByRole('tab', { name: 'Preferences' }).click();
+  await page.getByRole('tab', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Add endpoint', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill('Local model server');
   await page.getByLabel('Base URL', { exact: true }).fill('http://localhost:11434/v1');
@@ -23,16 +23,16 @@ test('unsaved endpoint form tests models and clears on refresh', async ({ page }
   await expect(key).toHaveAttribute('type', 'password');
   await key.fill('test-only-key');
   await page.getByRole('button', { name: 'Test connection' }).click();
-  await expect(page.getByRole('status')).toContainText('Connected');
-  await expect(page.getByRole('status')).toContainText('2 models');
+  await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toContainText('Connected');
+  await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toContainText('2 models');
   await page.getByText('View models', { exact: true }).click();
   await expect(page.getByText('local-chat', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Agents', exact: true }).click();
-  await page.getByRole('tab', { name: 'Preferences' }).click();
+  await page.getByRole('tab', { name: 'Settings' }).click();
   await expect(key).toHaveValue('test-only-key');
   expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain('test-only-key');
   await page.reload();
-  await page.getByRole('tab', { name: 'Preferences' }).click();
+  await page.getByRole('tab', { name: 'Settings' }).click();
   await expect(page.getByText('No endpoints yet')).toBeVisible();
 });
 
@@ -49,10 +49,10 @@ test('saving restores endpoint metadata after refresh without exposing its key',
   await openEndpoint(page);
   await page.getByLabel('API key', { exact: true }).fill('saved-test-key');
   await page.getByRole('button', { name: 'Save endpoint' }).click();
-  await expect(page.getByRole('status')).toHaveText('Saved locally.');
+  await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toHaveText('Saved locally.');
   await expect(page.getByLabel('API key', { exact: true })).toHaveValue('');
   await page.reload();
-  await page.getByRole('tab', { name: 'Preferences' }).click();
+  await page.getByRole('tab', { name: 'Settings' }).click();
   await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Local model server');
   await expect(page.getByLabel('API key', { exact: true })).toHaveAttribute('placeholder', 'Saved key — enter to replace');
   await page.route('**/api/model-endpoints/test', async route => {
@@ -60,7 +60,7 @@ test('saving restores endpoint metadata after refresh without exposing its key',
     await route.fulfill({ json: { models: ['example'] } });
   });
   await page.getByRole('button', { name: 'Test connection' }).click();
-  await expect(page.getByRole('status')).toContainText('Connected');
+  await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toContainText('Connected');
 });
 
 test('endpoint testing reports errors and config changes clear the result', async ({ page }) => {
@@ -87,6 +87,6 @@ test('endpoint test shows loading and supports a small viewport', async ({ page 
   await expect(page.getByRole('button', { name: 'Testing…' })).toBeDisabled();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   release();
-  await expect(page.getByRole('status')).toContainText('Connected');
-  await expect(page.getByRole('status')).toContainText('0 models');
+  await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toContainText('Connected');
+  await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toContainText('0 models');
 });

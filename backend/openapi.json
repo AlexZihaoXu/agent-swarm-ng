@@ -424,6 +424,15 @@
             "in": "query",
             "name": "model",
             "required": true
+          },
+          {
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "endpointId",
+            "required": false
           }
         ],
         "responses": {
@@ -499,6 +508,198 @@
       }
     },
     "/api/agents": {
+      "get": {
+        "operationId": "listAgents",
+        "parameters": [
+          {
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "after",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "agents",
+                    "nextCursor"
+                  ],
+                  "properties": {
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "required": [
+                          "name",
+                          "endpointId",
+                          "model",
+                          "thinkingLevel",
+                          "id",
+                          "channelId",
+                          "createdAt",
+                          "lastMessage"
+                        ],
+                        "properties": {
+                          "name": {
+                            "minLength": 1,
+                            "maxLength": 80,
+                            "type": "string"
+                          },
+                          "endpointId": {
+                            "minLength": 1,
+                            "maxLength": 100,
+                            "type": "string"
+                          },
+                          "model": {
+                            "minLength": 1,
+                            "maxLength": 512,
+                            "type": "string"
+                          },
+                          "thinkingLevel": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "off"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "minimal"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "low"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "medium"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "high"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "xhigh"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "max"
+                                ]
+                              }
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "channelId": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "lastMessage": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "sequence",
+                                  "channelId",
+                                  "role",
+                                  "text",
+                                  "timestamp"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "sequence": {
+                                    "type": "integer"
+                                  },
+                                  "channelId": {
+                                    "type": "string"
+                                  },
+                                  "role": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "user"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "assistant"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  },
+                                  "timestamp": {
+                                    "type": "number"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "operationId": "createChatAgent",
         "requestBody": {
@@ -596,7 +797,8 @@
                     "thinkingLevel",
                     "id",
                     "channelId",
-                    "token"
+                    "createdAt",
+                    "lastMessage"
                   ],
                   "properties": {
                     "name": {
@@ -666,9 +868,59 @@
                     "channelId": {
                       "type": "string"
                     },
-                    "token": {
-                      "pattern": "^[a-f0-9]{64}$",
-                      "type": "string"
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "lastMessage": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "sequence",
+                            "channelId",
+                            "role",
+                            "text",
+                            "timestamp"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "sequence": {
+                              "type": "integer"
+                            },
+                            "channelId": {
+                              "type": "string"
+                            },
+                            "role": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "user"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "assistant"
+                                  ]
+                                }
+                              ]
+                            },
+                            "text": {
+                              "type": "string"
+                            },
+                            "timestamp": {
+                              "type": "number"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   }
                 }
@@ -714,6 +966,135 @@
         }
       }
     },
+    "/api/channels/{channelId}/messages": {
+      "get": {
+        "operationId": "listChannelMessages",
+        "parameters": [
+          {
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "channelId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "messages",
+                    "nextCursor"
+                  ],
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "sequence",
+                          "channelId",
+                          "role",
+                          "text",
+                          "timestamp"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "sequence": {
+                            "type": "integer"
+                          },
+                          "channelId": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "user"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "assistant"
+                                ]
+                              }
+                            ]
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "timestamp": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/chat": {
       "post": {
         "operationId": "sendChannelMessage",
@@ -725,130 +1106,19 @@
                 "additionalProperties": false,
                 "type": "object",
                 "required": [
-                  "agent",
-                  "history",
+                  "agentId",
+                  "clientMessageId",
                   "message"
                 ],
                 "properties": {
-                  "agent": {
-                    "additionalProperties": false,
-                    "type": "object",
-                    "required": [
-                      "name",
-                      "endpointId",
-                      "model",
-                      "thinkingLevel",
-                      "id",
-                      "channelId",
-                      "token"
-                    ],
-                    "properties": {
-                      "name": {
-                        "minLength": 1,
-                        "maxLength": 80,
-                        "type": "string"
-                      },
-                      "endpointId": {
-                        "minLength": 1,
-                        "maxLength": 100,
-                        "type": "string"
-                      },
-                      "model": {
-                        "minLength": 1,
-                        "maxLength": 512,
-                        "type": "string"
-                      },
-                      "thinkingLevel": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "enum": [
-                              "off"
-                            ]
-                          },
-                          {
-                            "type": "string",
-                            "enum": [
-                              "minimal"
-                            ]
-                          },
-                          {
-                            "type": "string",
-                            "enum": [
-                              "low"
-                            ]
-                          },
-                          {
-                            "type": "string",
-                            "enum": [
-                              "medium"
-                            ]
-                          },
-                          {
-                            "type": "string",
-                            "enum": [
-                              "high"
-                            ]
-                          },
-                          {
-                            "type": "string",
-                            "enum": [
-                              "xhigh"
-                            ]
-                          },
-                          {
-                            "type": "string",
-                            "enum": [
-                              "max"
-                            ]
-                          }
-                        ]
-                      },
-                      "id": {
-                        "type": "string"
-                      },
-                      "channelId": {
-                        "type": "string"
-                      },
-                      "token": {
-                        "pattern": "^[a-f0-9]{64}$",
-                        "type": "string"
-                      }
-                    }
+                  "agentId": {
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "type": "string"
                   },
-                  "history": {
-                    "maxItems": 100,
-                    "type": "array",
-                    "items": {
-                      "additionalProperties": false,
-                      "type": "object",
-                      "required": [
-                        "role",
-                        "text"
-                      ],
-                      "properties": {
-                        "role": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "enum": [
-                                "user"
-                              ]
-                            },
-                            {
-                              "type": "string",
-                              "enum": [
-                                "assistant"
-                              ]
-                            }
-                          ]
-                        },
-                        "text": {
-                          "maxLength": 20000,
-                          "type": "string"
-                        }
-                      }
-                    }
+                  "clientMessageId": {
+                    "format": "uuid",
+                    "type": "string"
                   },
                   "message": {
                     "minLength": 1,
@@ -862,11 +1132,11 @@
         },
         "responses": {
           "200": {
-            "description": "NDJSON channel-message, typing, operator-only activity, error, and done events. Only channel-message events belong in chat.",
+            "description": "NDJSON user_message acknowledgments, channel_message publications, typing, operator-only activity, error, and done events. Only saved channel publications are agent chat messages.",
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "NDJSON channel-message, typing, operator-only activity, error, and done events. Only channel-message events belong in chat.",
+                  "description": "NDJSON user_message acknowledgments, channel_message publications, typing, operator-only activity, error, and done events. Only saved channel publications are agent chat messages.",
                   "type": "string"
                 }
               }
@@ -884,6 +1154,144 @@
                   "properties": {
                     "message": {
                       "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/providers/openai-codex": {
+      "get": {
+        "operationId": "getCodexProvider",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "connected",
+                    "models",
+                    "login"
+                  ],
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "login": {
+                      "type": "object",
+                      "required": [
+                        "state"
+                      ],
+                      "properties": {
+                        "state": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "idle"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "starting"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "waiting"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "connected"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "error"
+                              ]
+                            }
+                          ]
+                        },
+                        "userCode": {
+                          "type": "string"
+                        },
+                        "verificationUri": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
                     }
                   }
                 }
@@ -908,7 +1316,357 @@
               }
             }
           },
-          "404": {
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "disconnectCodexProvider",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "connected",
+                    "models",
+                    "login"
+                  ],
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "login": {
+                      "type": "object",
+                      "required": [
+                        "state"
+                      ],
+                      "properties": {
+                        "state": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "idle"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "starting"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "waiting"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "connected"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "error"
+                              ]
+                            }
+                          ]
+                        },
+                        "userCode": {
+                          "type": "string"
+                        },
+                        "verificationUri": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/providers/openai-codex/login": {
+      "post": {
+        "operationId": "connectCodexProvider",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "connected",
+                    "models",
+                    "login"
+                  ],
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "login": {
+                      "type": "object",
+                      "required": [
+                        "state"
+                      ],
+                      "properties": {
+                        "state": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "idle"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "starting"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "waiting"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "connected"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "error"
+                              ]
+                            }
+                          ]
+                        },
+                        "userCode": {
+                          "type": "string"
+                        },
+                        "verificationUri": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "cancelCodexLogin",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "connected",
+                    "models",
+                    "login"
+                  ],
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "login": {
+                      "type": "object",
+                      "required": [
+                        "state"
+                      ],
+                      "properties": {
+                        "state": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "idle"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "starting"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "waiting"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "connected"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "error"
+                              ]
+                            }
+                          ]
+                        },
+                        "userCode": {
+                          "type": "string"
+                        },
+                        "verificationUri": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
             "description": "Default Response",
             "content": {
               "application/json": {

@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  runtime  = "bun"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum ThinkingLevel {
+  off
+  minimal
+  low
+  medium
+  high
+  xhigh
+  max
+}
+
+enum MessageRole {
+  user
+  assistant
+}
+
+model Agent {
+  sequence      Int       @id @default(autoincrement())
+  id            String    @unique @default(uuid())
+  name          String
+  endpointId    String
+  model         String
+  thinkingLevel ThinkingLevel
+  createdAt     DateTime  @default(now())
+  channels      Channel[]
+}
+
+model Channel {
+  id        String    @id @default(uuid())
+  agentId   String
+  kind      String    @default("platform-chat")
+  agent     Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@index([agentId])
+}
+
+model Message {
+  sequence  Int      @id @default(autoincrement())
+  id        String   @unique @default(uuid())
+  channelId String
+  role      MessageRole
+  text      String
+  createdAt DateTime @default(now())
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, sequence])
+}

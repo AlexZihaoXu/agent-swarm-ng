@@ -6,7 +6,7 @@
 
 A platform for **persistent agents** with long-term memory and shared awareness across communication channels. Agents use explicitly granted capabilities to access shared, containerized **computers**; they are not bound to a computer or limited to coding.
 
-**Today:** temporary Pi-backed chat agents alongside labeled demos, saved endpoint preferences, and a standalone Ubuntu GNOME workspace foundation. The full persistent swarm runtime is not implemented. Read the [swarm vision](docs/vision.md) for agreed concepts and deliberately open questions.
+**Today:** Pi-backed agents with durable identities and published chat history in Prisma + SQLite, labeled demos, saved endpoint preferences, and a standalone Ubuntu GNOME workspace foundation. Long-term agent memory and the full swarm runtime are not implemented. Read the [swarm vision](docs/vision.md) for agreed concepts and deliberately open questions.
 
 ## Getting started
 
@@ -31,7 +31,7 @@ Open http://localhost:5173. See [development instructions](docs/development.md) 
 
 The [vision document](docs/vision.md) distinguishes agreed direction from unresolved design and implementation options. Human-like interaction does not imply human-level discretion or require an endlessly running model conversation.
 
-Existing environment work is a foundation for computers, not the full product definition. The current Pi runtime supports temporary platform-chat channels only; long-term memory, external channels, permissions, assignments, and computer-control policies remain unimplemented. The next milestone and implementation order require explicit agreement; this vision does not authorize building them all at once.
+Existing environment work is a foundation for computers, not the full product definition. The current Pi runtime supports saved platform-chat history with in-memory model sessions only; long-term memory, external channels, permissions, assignments, and computer-control policies remain unimplemented. The next milestone and implementation order require explicit agreement; this vision does not authorize building them all at once.
 
 ## Stack
 
@@ -40,11 +40,11 @@ Existing environment work is a foundation for computers, not the full product de
 - **API contract:** TypeBox + `@fastify/swagger`; generated client types with `openapi-typescript` and requests through `openapi-fetch`.
 - **PWA:** `vite-plugin-pwa`.
 - **Docker integration:** `dockerode`, pending Bun compatibility validation.
-- **Testing:** Vitest for unit/integration tests; Playwright for essential browser workflows.
+- **Testing:** Vitest for unit/integration tests; Playwright for essential browser workflows. On the Windows development host, follow the [browser launch safety rules](docs/development.md#windows-browser-launch-safety) to avoid account lockout.
 - **Deployment:** Docker Compose with development overrides; Caddy for production HTTPS and reverse proxying.
 - **Desktop streaming candidates:** Selkies/WebRTC with AMD hardware encoding; coturn for optional relay fallback. Compatibility and performance need validation.
 
-SQLite is the candidate if platform metadata requires persistence; no ORM or additional client state library is selected.
+Prisma + SQLite stores agents, channels, and published chat history. This single-backend setup uses WAL, indexed cursor pagination, and bounded model context; durable chat is not long-term agent memory.
 
 ## Project structure
 
@@ -70,8 +70,8 @@ agent-swarm-v2/
 └── docs/
 ```
 
-- **`frontend/`** — labeled demo chats, temporary real-agent creation/chat, endpoint Preferences, and PWA setup. Agents and chats clear on refresh; only explicitly published channel messages appear.
-- **`backend/`** — Pi SDK chat with one restricted `send_message` tool, saved endpoint preferences, connection testing, and an OpenAPI contract. No agent file/shell/computer access or session persistence. See [chat setup](docs/development.md#temporary-pi-agents-and-channels).
+- **`frontend/`** — labeled demo chats, saved real-agent creation/chat with paginated history, Settings with API endpoints and ChatGPT subscription sign-in, and PWA setup. Drafts and internal activity clear on refresh; only explicitly published agent messages enter chat.
+- **`backend/`** — Pi SDK chat with channel-bound `send_message` acknowledgments/results and Pi Web Access search/fetch tools, Prisma/SQLite migrations and history, endpoint preferences, and an OpenAPI contract. No agent file/shell/computer access or internal-session persistence. See [chat and storage](docs/development.md#pi-agents-and-channels).
 - **`templates/default/`** — Ubuntu GNOME workspace image, standalone Compose configuration, and smoke tests. Production desktop startup, streaming, and the platform template schema remain unimplemented.
 - **`docs/`** — [swarm vision](docs/vision.md), development instructions, and reference material. The [local Kibo reference entry guide](docs/references/kibo/README.md) provides pinned source, searchable indexes, and adaptation notes.
 
@@ -124,7 +124,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 
 ## Project status
 
-The scaffold includes demo and temporary Pi-backed chats, endpoint preferences and connection testing, generated API types, PWA configuration, tests, and Compose files. Persistent agent identities, long-term memory, external channels, permission groups, computer assignments/control, dashboard container management, desktop streaming, and authentication are not implemented. Endpoint preferences are stored locally; agent conversations and Pi sessions are not. Standalone workspace data persistence is configured through named volumes; it is not agent memory.
+The platform includes persisted agent identities and chat history, demo chats, endpoint preferences, generated API types, tests, and Compose files. Long-term memory, external channels, permission groups, computer assignments/control, dashboard container management, desktop streaming, and platform user authentication remain unimplemented. Pi sessions and operator traces are ephemeral. Platform and standalone workspace data use separate persistent storage; neither is the future long-term memory system.
 
 Validate Bun compatibility with Docker libraries and long-lived connections, plus AMD hardware encoding and streaming performance, before relying on them.
 

@@ -68,15 +68,34 @@ const components: Components = {
   span: ({ node, ...props }) => node?.properties['dataSpoiler'] ? <Spoiler>{props.children}</Spoiler> : <span {...props} />,
 };
 
-export const MessageMarkdown = memo(function MessageMarkdown({ text }: { text: string }) {
-  return <div className="message-markdown">
+function InlineBlock({ children }: { children?: ReactNode }) { return <span>{children}{' '}</span>; }
+function InlineHeading({ children }: { children?: ReactNode }) { return <strong>{children}{' '}</strong>; }
+
+// Cards are buttons: flatten blocks and omit nested controls, navigation, and spoiler contents.
+const previewComponents: Components = {
+  p: InlineBlock, pre: InlineBlock, blockquote: InlineBlock, section: InlineBlock,
+  ul: InlineBlock, ol: InlineBlock, li: InlineBlock,
+  table: InlineBlock, thead: InlineBlock, tbody: InlineBlock, tr: InlineBlock, th: InlineBlock, td: InlineBlock,
+  h1: InlineHeading, h2: InlineHeading, h3: InlineHeading, h4: InlineHeading, h5: InlineHeading, h6: InlineHeading,
+  a: ({ children }) => <span>{children}</span>,
+  img: ({ alt }) => <span>[Image{alt ? `: ${alt}` : ''}]</span>,
+  br: () => <>{' '}</>, hr: () => <span> — </span>,
+  input: ({ checked }) => <span>{checked ? '☑ ' : '☐ '}</span>,
+  span: ({ node, children }) => <span>{node?.properties['dataSpoiler'] ? '[Spoiler]' : children}</span>,
+};
+
+export function renderMessagePreview(text: string) { return <MessageMarkdown text={text} preview />; }
+
+export const MessageMarkdown = memo(function MessageMarkdown({ text, preview = false }: { text: string; preview?: boolean }) {
+  const Wrapper = preview ? 'span' : 'div';
+  return <Wrapper className={preview ? 'message-preview' : 'message-markdown'}>
     <Markdown skipHtml urlTransform={safeUrl} remarkPlugins={[remarkGfm, remarkBreaks, remarkSpoiler]}
       remarkRehypeOptions={{ handlers: { spoiler: (state, node) => ({
         type: 'element', tagName: 'span', properties: { dataSpoiler: true },
         children: 'children' in node ? state.all(node) : [],
       }) } }}
-      rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]} components={components}>
+      rehypePlugins={preview ? [] : [[rehypeHighlight, { detect: false, ignoreMissing: true }]]} components={preview ? previewComponents : components}>
       {text}
     </Markdown>
-  </div>;
+  </Wrapper>;
 });

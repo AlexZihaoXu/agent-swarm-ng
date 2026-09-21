@@ -9,7 +9,7 @@
     "api:generate": "bun run --cwd backend openapi && bun run --cwd frontend api:generate",
     "api:check": "bun run api:generate && git diff --exit-code -- backend/openapi.json frontend/src/api/schema.d.ts",
     "typecheck": "bun run --cwd backend typecheck && bun run --cwd frontend typecheck",
-    "test": "vitest run",
+    "test": "bun run --cwd backend db:generate && bun backend/scripts/test.ts",
     "test:e2e": "bun run --cwd frontend test:e2e",
     "build": "bun run --cwd frontend build"
   },

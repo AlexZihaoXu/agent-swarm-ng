@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Button } from '@/components/ui/button';
@@ -8,8 +8,9 @@ import { AgentAvatar, AgentName } from '@/components/chat-identity';
 import { cn } from '@/lib/utils';
 import { useChat } from '@/use-chat';
 import { SlideUpFadeSwap } from '@/components/ui/slide-up-fade-swap';
+import { renderMessagePreview } from '@/components/message-markdown';
 import { ConversationMessages } from '@/components/conversation-messages';
-import { Preferences } from '@/components/preferences';
+import { Settings } from '@/components/settings';
 import { AvatarFace, PresenceIndicator, TypingDots } from '@/components/typing-indicator';
 import { AgentActivityPanel } from '@/components/agent-activity-panel';
 
@@ -28,7 +29,9 @@ function Avatar({ initials, small = false, typing = false, ready = false }: { in
 }
 
 export function App() {
-  const { agents, conversations, drafts, busy, typing, activity, addAgent, send, stop, setDraft } = useChat();
+  const { agents, conversations, drafts, busy, typing, activity, addAgent, send, stop, setDraft,
+    agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
+  } = useChat();
   const [selectedId, setSelectedId] = useState<string>(agents[0].id);
   const [mobileConversation, setMobileConversation] = useState(false);
   const [activeTab, setActiveTab] = useState('agents');
@@ -42,7 +45,9 @@ export function App() {
   const { needRefresh: [needRefresh, setNeedRefresh], updateServiceWorker } = useRegisterSW();
   const draft = drafts[agent.channelId] ?? '';
   const messages = conversations[agent.channelId];
-  const previousConversation = useRef({ id: agent.id, count: messages.length });
+  const previousConversation = useRef({ id: agent.id, count: messages.length, first: messages[0]?.id, last: messages.at(-1)?.id, height: 0 });
+
+  useEffect(() => { void loadHistory(agent); }, [agent.id]);
 
   useLayoutEffect(() => {
     const input = inputRef.current;
@@ -54,9 +59,12 @@ export function App() {
   useLayoutEffect(() => {
     const scroller = scrollRef.current;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const addedMessage = previousConversation.current.id === agent.id && messages.length > previousConversation.current.count;
-    previousConversation.current = { id: agent.id, count: messages.length };
-    scroller?.scrollTo({ top: scroller.scrollHeight, behavior: addedMessage && !reducedMotion ? 'smooth' : 'instant' });
+    const previous = previousConversation.current;
+    const addedMessage = previous.id === agent.id && messages.length > previous.count;
+    const prepended = addedMessage && previous.first && previous.first !== messages[0]?.id && previous.last === messages.at(-1)?.id;
+    if (scroller && prepended) scroller.scrollTop += scroller.scrollHeight - previous.height;
+    else scroller?.scrollTo({ top: scroller.scrollHeight, behavior: addedMessage && !reducedMotion ? 'smooth' : 'instant' });
+    previousConversation.current = { id: agent.id, count: messages.length, first: messages[0]?.id, last: messages.at(-1)?.id, height: scroller?.scrollHeight ?? 0 };
 
     const sentId = pendingSend.current;
     pendingSend.current = null;
@@ -85,8 +93,8 @@ export function App() {
         <header className="relative flex h-14 shrink-0 items-center justify-center border-b border-border bg-sidebar px-4">
           {/* Basic Tabs composition: Kibo tabs/standard/tabs-standard-1. */}
           <Tabs.List aria-label="Main navigation" className="relative isolate grid h-9 w-56 grid-cols-2 items-center rounded-lg bg-muted p-1">
-            <span aria-hidden="true" data-testid="tab-indicator" className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-md bg-background shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none" style={{ transform: activeTab === 'preferences' ? 'translateX(100%)' : 'translateX(0)' }} />
-            {['Agents', 'Preferences'].map(label => (
+            <span aria-hidden="true" data-testid="tab-indicator" className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-md bg-background shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none" style={{ transform: activeTab === 'settings' ? 'translateX(100%)' : 'translateX(0)' }} />
+            {['Agents', 'Settings'].map(label => (
               <Tabs.Trigger key={label} value={label.toLowerCase()} className="relative z-10 rounded-md px-3 py-1 text-sm font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:text-foreground">
                 {label}
               </Tabs.Trigger>
@@ -129,13 +137,14 @@ export function App() {
                           <span className="truncate text-sm font-medium">{item.name}</span>
                           <SlideUpFadeSwap className="shrink-0 text-[11px] text-muted-foreground" text={lastMessage?.time ?? item.time} />
                         </span>
-                        <SlideUpFadeSwap className="mt-0.5 block text-xs text-muted-foreground" prefix={lastMessage?.author === 'user' ? 'You: ' : ''} text={lastMessage?.text ?? ''} />
+                        <SlideUpFadeSwap renderText={renderMessagePreview} className="mt-0.5 block text-xs text-muted-foreground" prefix={lastMessage?.author === 'user' ? 'You: ' : ''} text={lastMessage?.text ?? ''} />
                       </span>
                     </button>
                   </li>
                   );
                 })}
               </ul>
+              {(agentsLoading || agentsFailed || agentsCursor !== null) && <Button variant="outline" size="sm" className="mt-3 w-full" disabled={agentsLoading} onClick={() => void loadAgents(agentsCursor ?? undefined)}>{agentsLoading ? 'Loading agents…' : agentsFailed ? 'Retry loading agents' : 'Load more agents'}</Button>}
             </div>
             <div className="flex shrink-0 items-center gap-2.5 px-4 py-3">
               <Avatar initials="YO" small />
@@ -158,6 +167,7 @@ export function App() {
             </header>
 
             <ScrollArea key={agent.id} viewportRef={scrollRef} label="Chat history" className="min-h-0 flex-1">
+              {(historyLoading[agent.channelId] || historyFailed[agent.channelId] || historyCursor[agent.channelId] != null) && <div className="px-5 pt-3 text-center"><Button variant="outline" size="sm" disabled={historyLoading[agent.channelId] || busy[agent.channelId]} onClick={() => void loadHistory(agent, Boolean(historyReady[agent.channelId]))}>{historyLoading[agent.channelId] ? 'Loading messages…' : historyFailed[agent.channelId] ? 'Retry loading messages' : 'Load earlier messages'}</Button></div>}
               <ConversationMessages messages={messages} time={agent.time} agentName={agent.name} />
             </ScrollArea>
 
@@ -189,7 +199,7 @@ export function App() {
                   {busy[agent.channelId] ? (
                     <Button type="button" size="sm" aria-label="Stop response" className="size-7 shrink-0 rounded-full p-0" onClick={() => stop(agent.channelId)}><span aria-hidden="true" className="size-2.5 rounded-sm bg-current" /></Button>
                   ) : (
-                    <Button type="submit" size="sm" disabled={!draft.trim()} aria-label="Send message" className="size-7 shrink-0 rounded-full p-0">
+                    <Button type="submit" size="sm" disabled={!draft.trim() || historyLoading[agent.channelId] || (Boolean(agent.real) && !historyReady[agent.channelId])} aria-label="Send message" className="size-7 shrink-0 rounded-full p-0">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-4"><path d="M12 19V5m-6 6 6-6 6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     </Button>
                   )}
@@ -199,8 +209,8 @@ export function App() {
           </section>
         </Tabs.Content>
 
-        <Tabs.Content value="preferences" forceMount className="min-h-0 flex-1 overflow-y-auto outline-none data-[state=inactive]:hidden">
-          <Preferences />
+        <Tabs.Content value="settings" forceMount className="min-h-0 flex-1 overflow-y-auto outline-none data-[state=inactive]:hidden">
+          <Settings />
         </Tabs.Content>
       </Tabs.Root>
 

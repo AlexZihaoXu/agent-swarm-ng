@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 async function send(page: Page, text: string) {
   await page.goto('/');
@@ -20,6 +20,27 @@ test('renders Markdown formatting, lists, quotes, tables, and chat line breaks',
   await expect(message.getByRole('checkbox')).toBeDisabled();
   await expect(message.getByRole('table')).toContainText('Value');
   await expect(message.getByRole('link', { name: 'Example' })).toHaveAttribute('rel', 'noopener noreferrer');
+});
+
+test('agent cards render compact Markdown without exposing spoilers or nesting controls', async ({ page }) => {
+  await send(page, '**Bold preview** *italic* ~~removed~~ `inline` [Link](https://example.com) ||CARD SECRET||\n\n```cpp\nint main() {}\n```\n\n- [x] Done');
+  const row = page.getByRole('button', { name: 'Open conversation with [demo] Avery' });
+  const preview = row.locator('[data-slot="swap-text"]').last();
+  await expect(preview.locator('strong')).toHaveText('Bold preview');
+  await expect(preview.locator('em')).toHaveText('italic');
+  await expect(preview.locator('del')).toHaveText('removed');
+  await expect(preview.locator('code').first()).toHaveText('inline');
+  await expect(preview).toContainText('[Spoiler]');
+  await expect(row).not.toContainText('CARD SECRET');
+  await expect(preview).not.toContainText('**');
+  await expect(row.locator('a, button, input, pre, p, div, table')).toHaveCount(0);
+  await expect(preview).toHaveCSS('text-overflow', 'ellipsis');
+  await expect(preview).toHaveAttribute('data-prefix', 'You: ');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.getByLabel('Message [demo] Avery').fill('**Updated** preview');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(preview.locator('strong')).toHaveText('Updated');
+  await expect(preview).not.toContainText('Bold preview');
 });
 
 test('highlights fenced code, preserves whitespace, and copies code without Markdown', async ({ page, context }) => {

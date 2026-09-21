@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { CodexConnection } from '@/components/codex-connection';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -118,7 +119,7 @@ function EndpointCard({ endpoint, onSaved, onRemove }: { endpoint: Endpoint; onS
   );
 }
 
-export function Preferences() {
+export function Settings() {
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -147,9 +148,10 @@ export function Preferences() {
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8 sm:py-10">
       <header className="mb-8">
-        <h2 className="text-xl font-semibold">Preferences</h2>
+        <h2 className="text-xl font-semibold">Settings</h2>
         <p className="mt-2 text-sm text-muted-foreground">Manage your model connections.</p>
       </header>
+      <CodexConnection />
       <section aria-labelledby="endpoints-title">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
           <div>

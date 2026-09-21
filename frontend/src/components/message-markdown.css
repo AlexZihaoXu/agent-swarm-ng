@@ -1,3 +1,7 @@
+.message-preview { white-space: nowrap; }
+.message-preview strong { font-weight: 650; }
+.message-preview code { border-radius: 3px; background: rgb(0 0 0 / 15%); padding: 0.1em 0.2em; font-size: 0.9em; }
+
 .message-markdown { min-width: 0; white-space: normal; }
 .message-markdown > * + * { margin-top: 0.65rem; }
 .message-markdown :is(h1, h2, h3, h4, h5, h6) { font-weight: 650; line-height: 1.35; margin-bottom: 0.4rem; }

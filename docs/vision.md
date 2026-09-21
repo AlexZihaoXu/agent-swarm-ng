@@ -49,8 +49,8 @@ The platform enforces whichever coordination policy is selected. Agents negotiat
 
 ## Implementation boundary
 
-The application now has a temporary, backend-hosted Pi chat slice: real agents can publish to their own platform-chat channel using one explicitly granted tool. Default tools and resource discovery are disabled. Agents and conversations remain ephemeral; only endpoint preferences are saved. This is not the long-lived agent/memory system described above. External channels, long-term memory, permissions, and computer assignment/control remain unimplemented.
+The application has a backend-hosted Pi chat slice: real agents publish to their own platform-chat channel using an explicitly granted tool and can research public pages through Pi Web Access. Default coding tools and resource discovery are disabled. Prisma + SQLite saves agent identities, channels, and published history; endpoint preferences are also saved. Model sessions, drafts, and internal activity remain ephemeral. Durable chat is not the long-term agent/memory system described above. External channels, long-term memory, permissions, and computer assignment/control remain unimplemented.
 
-Memory mechanics, message concurrency, permission/lock details, runtime placement, and external integrations remain open. No particular queue, database, lock mechanism, or delivery roadmap has been selected. Resolve these when the relevant work is scoped—not by expanding this vision into a speculative architecture.
+Memory mechanics, message concurrency, permission/lock details, runtime placement, and external integrations remain open. Prisma + SQLite is selected for the current single-backend platform records, with one active turn per agent. Future swarm queues, coordination locks, and distributed delivery remain undecided. Resolve these when the relevant work is scoped—not by expanding this vision into a speculative architecture.
 
 Preserve the core separation: **agents have continuity, channels provide communication, computers provide capabilities, and permissions govern access.**

@@ -1,6 +1,10 @@
 import { buildApp } from './app';
+import { PlatformStore } from './platform-store';
 
-const app = await buildApp();
+process.umask(0o077);
+const database = new PlatformStore();
+await database.initialize();
+const app = await buildApp({ database });
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     void app.close().catch((error) => {

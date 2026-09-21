@@ -1,12 +1,18 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
-const real = { id: 'real-agent', name: 'Real agent', endpointId: 'saved-endpoint', model: 'test-model', thinkingLevel: 'off', channelId: 'platform-channel', token: 'a'.repeat(64) };
+const real = { id: 'real-agent', name: 'Real agent', endpointId: 'saved-endpoint', model: 'test-model', thinkingLevel: 'off', channelId: 'platform-channel', createdAt: Date.now(), lastMessage: null };
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/model-endpoints', route => route.fulfill({ json: [{ id: 'saved-endpoint', name: 'Test endpoint', baseUrl: 'http://test.invalid/v1', hasApiKey: true }] }));
   await page.route('**/api/model-endpoints/test', route => route.fulfill({ json: { models: ['test-model', 'gpt-5'] } }));
   await page.route('**/api/agents/model-capabilities?*', route => route.fulfill({ json: route.request().url().includes('gpt-5') ? { thinkingLevels: ['off', 'low', 'medium', 'high'], reasoning: true } : { thinkingLevels: ['off'], reasoning: false } }));
-  await page.route('**/api/agents', route => route.fulfill({ json: { ...real, ...route.request().postDataJSON() } }));
+  const saved: typeof real[] = [];
+  await page.route('**/api/agents', route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { agents: saved, nextCursor: null } });
+    const created = { ...real, ...route.request().postDataJSON() }; saved.push(created);
+    return route.fulfill({ json: created });
+  });
+  await page.route('**/api/channels/*/messages*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));
 });
 
 async function configure(page: Page, model = 'test-model') {
@@ -21,16 +27,24 @@ async function configure(page: Page, model = 'test-model') {
   await expect(page.getByRole('listbox', { includeHidden: true })).toHaveCount(0);
 }
 
-test('creates a temporary agent and displays only messages published to its channel', async ({ page }) => {
+test('restores a saved agent and published messages after refresh without storing them in the browser', async ({ page }) => {
+  let savedMessages: object[] = [];
+  await page.route('**/api/channels/*/messages*', route => route.fulfill({ json: { messages: savedMessages, nextCursor: null } }));
   await page.route('**/api/chat', async route => {
     const body = route.request().postDataJSON();
-    expect(body.agent.channelId).toBe(real.channelId);
+    expect(body.agentId).toBe(real.id);
+    expect(body).not.toHaveProperty('history');
+    savedMessages = [
+      { id: body.clientMessageId, sequence: 1, role: 'user', channelId: real.channelId, text: body.message, timestamp: Date.now() },
+      { id: 'published', sequence: 2, role: 'assistant', channelId: real.channelId, text: '**Published** response', timestamp: Date.now() },
+    ];
     expect(body).not.toHaveProperty('apiKey');
     await route.fulfill({ contentType: 'application/x-ndjson', body: [
+      { type: 'user_message', ...savedMessages[0] },
       { type: 'thinking', text: 'PRIVATE THINKING' },
       { type: 'text_delta', text: 'PRIVATE DIRECT OUTPUT' },
       { type: 'channel_message', channelId: 'wrong-channel', id: 'wrong', text: 'WRONG CHANNEL', timestamp: Date.now() },
-      { type: 'channel_message', channelId: real.channelId, id: 'published', text: 'Published response', timestamp: Date.now() },
+      { type: 'channel_message', channelId: real.channelId, id: 'published', text: '**Published** response', timestamp: Date.now() },
       { type: 'done' },
     ].map(event => JSON.stringify(event)).join('\n') + '\n' });
   });
@@ -46,29 +60,36 @@ test('creates a temporary agent and displays only messages published to its chan
   const messages = page.getByRole('list', { name: 'Messages' });
   await expect(messages.locator('li')).toHaveCount(2);
   await expect(messages).toContainText('Published response');
+  const preview = page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-slot="swap-text"]').last();
+  await expect(preview.locator('strong')).toHaveText('Published');
+  await expect(preview).toHaveAttribute('data-prefix', '');
   await expect(messages).not.toContainText('PRIVATE');
   await expect(messages).not.toContainText('WRONG CHANNEL');
   await expect(page.getByRole('button', { name: 'Open conversation with [demo] Avery' })).toBeVisible();
-  expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain(real.token);
+  expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain('Published response');
   await page.reload();
-  await expect(page.getByRole('button', { name: `Open conversation with ${real.name}` })).toHaveCount(0);
+  await page.getByRole('button', { name: `Open conversation with ${real.name}` }).click();
+  await expect(page.getByRole('list', { name: 'Messages' }).locator(':scope > li')).toHaveCount(2);
+  await expect(page.getByRole('list', { name: 'Messages' })).toContainText('Published response');
 });
 
 async function installChannelStream(page: Page) {
-  await page.addInitScript(() => {
+  await page.addInitScript(channelId => {
     const original = window.fetch.bind(window);
     const scope = window as unknown as { emitChannelEvent: (event: object) => void; finishChannel: () => void };
     window.fetch = (input, init) => {
       const url = input instanceof Request ? input.url : String(input);
       if (!url.endsWith('/api/chat')) return original(input, init);
       const signal = input instanceof Request ? input.signal : init?.signal;
-      return Promise.resolve(new Response(new ReadableStream({ start(controller) {
+      return Promise.resolve(new Response(new ReadableStream({ async start(controller) {
         scope.emitChannelEvent = event => controller.enqueue(new TextEncoder().encode(JSON.stringify(event) + '\n'));
         scope.finishChannel = () => controller.close();
         signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')), { once: true });
+        const body = input instanceof Request ? await input.clone().json() : JSON.parse(String(init?.body));
+        scope.emitChannelEvent({ type: 'user_message', channelId, id: body.clientMessageId, text: body.message, timestamp: Date.now() });
       } }), { headers: { 'Content-Type': 'application/x-ndjson' } }));
     };
-  });
+  }, real.channelId);
 }
 
 async function emitChannel(page: Page, event: object) {
@@ -243,8 +264,38 @@ test('allows supported thinking levels in creation', async ({ page }) => {
   expect((await request).postDataJSON()).toMatchObject({ model: 'gpt-5', thinkingLevel: 'medium' });
 });
 
+test('unsaved sends retain their draft and message ID until the backend acknowledges persistence', async ({ page }) => {
+  const ids: string[] = [];
+  await page.route('**/api/chat', route => {
+    const body = route.request().postDataJSON(); ids.push(body.clientMessageId);
+    if (ids.length === 1) return route.fulfill({ status: 503, json: { message: 'Storage unavailable' } });
+    return route.fulfill({ contentType: 'application/x-ndjson', body: [
+      { type: 'user_message', channelId: real.channelId, id: body.clientMessageId, text: body.message, timestamp: Date.now() },
+      { type: 'done' },
+    ].map(event => JSON.stringify(event)).join('\n') + '\n' });
+  });
+  await configure(page);
+  await page.getByRole('button', { name: 'Create agent', exact: true }).click();
+  const input = page.getByLabel(`Message ${real.name}`);
+  await input.fill('Save me');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(input).toHaveValue('Save me');
+  await expect(page.getByRole('list', { name: 'Messages' }).locator(':scope > li')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(page.getByRole('list', { name: 'Messages' }).locator(':scope > li')).toHaveCount(1);
+  await expect(input).toHaveValue('');
+  expect(ids).toHaveLength(2);
+  expect(ids[1]).toBe(ids[0]);
+});
+
 test('model failures do not become chat bubbles or diagnostic footer text', async ({ page }) => {
-  await page.route('**/api/chat', route => route.fulfill({ contentType: 'application/x-ndjson', body: JSON.stringify({ type: 'error', message: 'Agent did not publish a channel message.' }) + '\n' + JSON.stringify({ type: 'done' }) + '\n' }));
+  await page.route('**/api/chat', route => {
+    const body = route.request().postDataJSON();
+    return route.fulfill({ contentType: 'application/x-ndjson', body: [
+      { type: 'user_message', channelId: real.channelId, id: body.clientMessageId, text: body.message, timestamp: Date.now() },
+      { type: 'error', message: 'Agent did not publish a channel message.' }, { type: 'done' },
+    ].map(event => JSON.stringify(event)).join('\n') + '\n' });
+  });
   await configure(page);
   await page.getByRole('button', { name: 'Create agent', exact: true }).click();
   await page.getByLabel(`Message ${real.name}`).fill('Hello');

@@ -25,7 +25,7 @@ bun run build
 
 API generation does not require a running server. Commit both `backend/openapi.json` and `frontend/src/api/schema.d.ts` when the contract changes. CI checks generated files for drift.
 
-For browser tests (Git Bash/Linux):
+For browser tests (Git Bash/Linux), read the [Windows launch precautions](#windows-browser-launch-safety) first when running on the Windows host:
 
 ```sh
 export PLAYWRIGHT_BROWSERS_PATH="$PWD/.cache/ms-playwright"
@@ -33,11 +33,30 @@ export PLAYWRIGHT_BROWSERS_PATH="$PWD/.cache/ms-playwright"
 bun run test:e2e
 ```
 
-Playwright starts its own backend and frontend; stop existing instances on ports 3000 and 5173 first. Browser tests cover the chat preview, transitions, local sending, and endpoint Preferences (with mocked provider results). PWA installation, offline caching, and updates still need production-browser validation.
+Playwright starts its own backend and frontend; stop existing instances on ports 3000 and 5173 first. Browser tests cover rendering, transitions, saved-history restoration/pagination, and Settings with mocked API/provider and ChatGPT device-login results. PWA installation, offline caching, and updates still need production-browser validation.
+
+### Windows browser launch safety
+
+The owner's security investigation reproduced one Windows failed logon (Event 4625, status `0xC000006A`) from the top-level Chrome process during a single run of `.cache/check-codex-settings.mjs`. The reported cause is Chromium's empty-password account probe through `LogonUser()` at startup, not a website sign-in or an attack. Child processes did not produce additional failed logons in that capture. Treat this as a finding for this Windows host, not a guarantee about every browser/version.
+
+The reported local policy locks the account after **10 failed attempts within 10 minutes**. A running desktop session can continue while the account is locked, hiding the problem until the next sign-in.
+
+- Launch one dedicated automation browser and reuse it for the batch. Use new contexts/pages for clean test state, not repeated browser launches; never reuse the user's personal profile. Keep any automation control endpoint local-only.
+- Serialize all Windows browser work, including other agents/scripts. For Playwright, use `bun run --cwd frontend test:e2e --workers=1 --retries=0`. This reduces launches but does not guarantee one: failures can replace workers and launch another browser. Do not run repeated suites or retry loops without checking headroom.
+- Budget conservatively: stay below eight new launches per rolling ten minutes, accounting for existing failed logons and other browser users. Check the local counter before a browser-heavy batch (read-only PowerShell, for this host):
+
+  ```powershell
+  ([ADSI]"WinNT://./Alex,user").BadPasswordAttempts
+  ```
+
+  If the counter is unavailable, elevated, or near the threshold, stop and coordinate with the owner rather than guessing. The investigation reported a reset after ten quiet minutes; recheck instead of assuming elapsed time cleared it.
+- Changing `channel: 'chrome'` to bundled Chromium is **not** a verified workaround because the probe may be shared. Do not alter Windows credentials or lockout policy to make tests pass. Prefer non-browser checks while launch headroom is uncertain.
+
+These are operating rules; the current scripts/configuration do not enforce a shared launch budget automatically.
 
 ## Endpoint connection tests
 
-In **Preferences → API endpoints**, add a name, base URL (including an API prefix such as `/v1`), and optional API key. **Test connection** makes a backend `GET <base URL>/models`, using Bearer authentication when a key is provided. It lists model IDs only; it does not send an inference request or configure an agent.
+In **Settings → API endpoints**, add a name, base URL (including an API prefix such as `/v1`), and optional API key. **Test connection** makes a backend `GET <base URL>/models`, using Bearer authentication when a key is provided. It lists model IDs only; it does not send an inference request or configure an agent.
 
 Use **Save endpoint** to persist its name, URL, and key on the backend. Local development stores these in Git-ignored `.local/endpoints.json`; Docker uses the `platform_data` volume at `/app/.local`. The file contains plaintext keys with restrictive file permissions where supported; this is not an encrypted vault, and Windows access depends on the containing folder's ACL. Do not share or back up the file casually. It is excluded from Docker build contexts. The API returns only a `hasApiKey` flag, never the saved key. A blank replacement preserves a saved key; **Clear saved key** followed by Save removes it. Changing the URL clears the old key unless a replacement is supplied.
 
@@ -45,23 +64,58 @@ Unsaved edits still disappear on refresh. Keys are not stored in browser storage
 
 The test has a 10-second timeout, rejects redirects and URLs containing credentials/query parameters/fragments, bounds responses to 1 MiB and 1,000 model entries, and does not return raw provider errors. Local/private endpoints are intentionally supported, so this unauthenticated route can reach the backend's network: keep the platform loopback-only and do not expose it publicly. Authentication and network-access policy are prerequisites for external deployment.
 
-## Temporary Pi agents and channels
+## ChatGPT subscription connection
 
-Keep existing `[demo]` agents for the simulated UI. To create a real agent, right-click the agent panel, select **Create new agent**, name it, choose a saved endpoint/model, and select a supported thinking level. Listing models uses the endpoint's `/models`; it does not guarantee Chat Completions or tool-calling support.
+In **Settings → OpenAI Codex**, choose **Connect ChatGPT**, open the OpenAI sign-in link, and enter the displayed one-time code. Enable **device code login** in ChatGPT's security settings if required. Settings polls until login completes; you can cancel or disconnect there. Login expires after 15 minutes. This device flow works with both the local backend and Docker without forwarding an OAuth callback port.
 
-The backend uses pinned Pi SDK 0.85.1 with OpenAI-compatible Chat Completions. It disables default tools and supplies an empty resource loader: no extensions, skills, prompt expansion, context files, global settings, or inherited credentials. Model catalogs, settings, and sessions are in memory; no Pi session, auth, or model-store files are created. API keys are passed literally, never through Pi's command/environment configuration syntax.
+Once connected, select **OpenAI Codex (ChatGPT)** in the new-agent form, then a model and thinking level. Pi's native `openai-codex` OAuth provider and Codex Responses transport use the subscription—not the separately billed OpenAI API endpoint. Model names come from Pi's bundled catalog; actual account access and usage limits are enforced by OpenAI. Agents share the account's allowance. There is no automatic paid-API fallback. Existing local-model agents are unchanged.
 
-The one explicitly granted custom tool is **`send_message`**, bound to the agent's platform-chat **Channel**. The backend rejects other channel IDs. Only tool-published messages enter the chat channel. Thinking and direct assistant output are sent as separately tagged operator activity, never interpreted as conversation messages. A separate channel-scoped typing status starts when streamed tool metadata identifies `send_message`, before its arguments finish. It exposes no draft arguments and clears on publication, tool failure, completion, or cancellation. If a turn finishes normally without a publication, the backend sends one private reminder that direct output is invisible and a channel tool is needed; the agent may ignore it when silence is intentional. There is no reminder loop, and failed or cancelled turns are not nudged. Neither reminders nor raw output become chat messages; technical diagnostics are not printed beneath the composer. There are no computer, file-reading, shell, or browsing tools.
+Tokens are held only by the backend in ignored `.local/openai-auth.json` (alongside the configured SQLite file), with Pi's locked token refresh and restrictive file permissions where supported. The UI gets connection metadata and a temporary device code, never access/refresh tokens. Disconnect removes the local credential; already running requests may finish. This is provider sign-in, not platform-user authentication: keep the dashboard loopback-only. Pi provides this third-party integration; it is not a promise of a stable public subscription API. See [OpenAI authentication](https://developers.openai.com/codex/auth).
 
-The chat header's **Agent activity** button opens a right-side operator inspector. It accumulates agent-scoped activity even while closed: system prompts, user messages, provider-exposed thinking/direct output, streamed tool arguments/results, private reminders, channel publications, and completion/errors. The panel does not change what is delivered to chat. Credentials and transport headers are not exposed as event fields; known saved-key values are redacted from activity text. Traces remain in browser memory only and clear on refresh. Previously discarded activity cannot be reconstructed, and hidden reasoning not exposed by the provider cannot be shown. Only the platform-chat channel exists currently; activity records retain their source channel IDs.
+## Pi agents and channels
 
-Published chat messages render Markdown using `react-markdown`: headings, emphasis, strikethrough, lists, quotes, links, tables, task lists, inline/fenced code, and Discord-style spoiler markers. Code blocks include syntax highlighting and a copy button; unsupported languages remain plain text. Single line breaks are preserved. Raw HTML is disabled, links are restricted to safe protocols, and remote images appear as links rather than automatically loading third-party resources. The stored message text and composer are unchanged; this is rendering only, not a complete Discord syntax implementation.
+Create an agent from the agent panel's context menu, then choose a saved endpoint or connected ChatGPT provider, model, and supported thinking level. Real agents and published history survive refresh and backend restart. `[demo]` agents remain simulated and ephemeral. Previously browser-only chats are not imported automatically.
 
-Agents, drafts, and published transcripts live in browser memory. For each turn, the backend constructs a fresh in-memory Pi session from the delivered transcript, runs it, and disposes it. The model does not receive private reasoning from previous turns; the operator inspector can retain its trace for the current browser session. Signed temporary descriptors become invalid on backend restart; refreshing the page loses the agent. Disconnect/Stop cancels inference, with a two-minute upper bound. This temporary approach is not the future long-term memory architecture.
+Pi SDK 0.85.1 uses OpenAI-compatible Chat Completions for API endpoints or native Codex Responses for the connected ChatGPT subscription, with explicitly granted **`send_message`**, bound to the current platform-chat channel, and four web tools from **[Pi Web Access](https://github.com/nicobailon/pi-web-access) 0.30.0**: `web_search`, `source_check`, `fetch_content`, and `get_search_content`. Default coding tools, resource discovery, skills, prompt expansion, global settings, and inherited credentials remain disabled. Endpoint keys are literal values, never Pi's command/environment configuration syntax.
 
-Thinking controls use Pi's known OpenAI model metadata and standard `reasoning_effort`; unsupported/unknown models are grayed out. A proxy still needs to honor that parameter. Gray does not imply that a server cannot reason internally. Compatibility was tested against a local streaming OpenAI-compatible fixture (including tools and reasoning effort), plus a live user-authorized Qwen endpoint for actual channel-tool delivery. Other provider families/APIs are not claimed to work.
+Web search uses keyless Exa MCP; queries go to Exa and public-page fetches contact their target websites. A dedicated Bun subprocess per turn keeps the extension's global configuration/result caches separate. It receives a minimal environment and generated configuration, not developer Pi settings, browser cookies, or endpoint credentials. Only public HTTP(S) readable/raw fetches are granted; the extension's private-network/redirect protections remain enabled. Local files, repository cloning, interactive browser workflows, extra model calls, and caller-supplied auth/proxies are disabled. Result IDs are turn-local; temporary files under `.local/web-turns` are removed on normal cleanup (a backend crash may leave leftovers). This is process/configuration isolation, not an OS sandbox. Agents still have no computer, shell, or interactive browser access.
 
-Endpoint preferences are the only persistence exception. No chat transcript or model trace is intentionally written to application storage; external providers may retain requests according to their own policies. Keep the unauthenticated development platform loopback-only.
+Incoming user context includes the server-owned channel ID. The system prompt asks agents to reply promptly through `send_message`: acknowledge longer tasks before research with `final:false`, continue working, then publish the result with `final:true` (the default, which ends the turn). Simple questions should receive a direct answer without an extra acknowledgment. This guides model behavior; it does not guarantee response latency.
+
+Only successful channel-tool publications become agent chat messages, and the database commit precedes tool success and browser delivery. User messages are saved before inference and appear as sent after the save acknowledgment; inference failure does not erase an accepted message. Unacknowledged sends retain their draft and reuse the same ID on retry. After an uncertain connection failure, reload history before sending a replacement. Message IDs reject duplicate submissions, and a single backend process allows one active turn per agent. Disconnect/Stop cancels inference, with a two-minute upper bound; interrupted turns are not automatically resumed or replayed after restart.
+
+Each turn creates a fresh in-memory Pi session from server-owned published history, limited to the most recent 100 messages and 80,000 combined history/input characters. Older messages remain available for display. This is bounded context, not summarization or long-term memory; private reasoning/tool context is not replayed. A normally completed silent turn receives at most one private channel reminder and may remain silent intentionally. Raw output is never a chat fallback.
+
+**Agent activity** is a separate, browser-memory-only inspector for provider-exposed thinking/output, tools, reminders, publications, and errors. It collects new activity while closed but cannot recover discarded traces or hidden provider reasoning. Typing starts when streamed metadata identifies `send_message`; draft arguments stay out of the channel. Green avatar dots indicate readiness, not monitored endpoint uptime.
+
+Chat and compact card previews share Markdown parsing, including formatting, lists, quotes, tables, code, and spoilers. Chat code blocks have highlighting/copy controls; previews remain non-interactive and hide spoilers. Raw HTML is disabled, unsafe link protocols are rejected, and remote images are links rather than automatic third-party requests. Stored text and the composer are unchanged; this is not a complete Discord syntax implementation.
+
+Thinking-level controls use Pi's known OpenAI model metadata and standard `reasoning_effort`; unknown support is disabled rather than guessed. Listing `/models` does not guarantee tool-calling compatibility. Local OpenAI-compatible fixtures and a user-authorized Qwen endpoint have been tested; other provider families are not claimed to work.
+
+## Platform storage
+
+- **Prisma 7.9.1 + SQLite:** identities, channels, and user/tool-published messages in ignored `.local/platform.db`. Bun uses the libSQL adapter; no separate database service is needed.
+- **Provider credentials:** API endpoint keys remain in `.local/endpoints.json`; ChatGPT OAuth credentials use `.local/openai-auth.json`. Neither is copied into chat records or returned by the API.
+- **Ephemeral:** drafts, typing, operator activity, and Pi sessions. No JSONL sessions are written. External providers may retain inference requests according to their policies.
+- **Docker:** both backend targets run as `bun` and use `platform_data` at `/app/.local`. Replacing a container preserves data; deleting the volume is destructive.
+
+Backend startup applies committed migrations with `prisma migrate deploy`; development also generates the client. `bun run api:generate`, `bun run typecheck`, and `bun run test` generate it as needed. Generated client files, database files, and WAL/SHM files are not committed. Unit tests use isolated databases and remove them after workers exit, including on Windows.
+
+```sh
+bun run --cwd backend db:generate
+bun run --cwd backend db:deploy
+# For an intentional schema change, from backend/:
+bun node_modules/prisma/build/index.js migrate dev --name describe_change
+bun run db:generate
+```
+
+`DATABASE_URL` optionally overrides the local SQLite file. Relative paths resolve from the backend working directory; use container paths under `/app/.local` for Compose. Do not use a network share or multiple backend processes with this implementation.
+
+WAL mode, a five-second busy timeout, foreign keys, and the `(channelId, sequence)` index support short writes and cursor pagination. Messages load 50 at a time (API maximum 100); agent lists load up to 100 at a time. Card previews use indexed latest-message lookups, never full conversation loads. SQLite still serializes writers; Prisma does not remove that limit or make a future Postgres/data migration automatic.
+
+Storage is plaintext, not an encrypted vault. Restrictive permissions are used where supported; Windows access depends on folder ACLs. For a simple consistent backup, stop the backend and copy the entire `.local` directory or snapshot `platform_data`, including any WAL files and endpoint preferences. Do not copy only the main database while it is running. Protect backups as sensitive data.
+
+Authentication and multi-host coordination remain unimplemented. Keep this single-backend platform loopback-only; persistent IDs are not authorization tokens.
 
 ## Docker Compose
 
@@ -75,7 +129,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 docker compose up --build -d
 ```
 
-Development bind-mounts source for hot reload. Rebuild after dependency changes. File watching through Docker Desktop bind mounts may need platform-specific tuning.
+Development bind-mounts source and Prisma files. Generate the client after schema changes; rebuild images after dependency changes and before production deployment. File watching through Docker Desktop bind mounts may need platform-specific tuning.
 
 Caddy serves the built frontend and proxies `/api` in production. Local HTTPS uses Caddy’s local CA, which your browser will not trust automatically. Trust its certificate explicitly for local PWA testing, or use localhost development without HTTPS. Do not bypass certificate errors as a production setup.
 

@@ -1,9 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('preview follows the agents and chat layout', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(36, 36, 36)');
-  await expect(page.getByRole('tab')).toHaveText(['Agents', 'Preferences']);
+  await expect(page.getByRole('tab')).toHaveText(['Agents', 'Settings']);
   await expect(page.getByRole('tab', { name: 'Agents', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('heading', { name: '[demo] Avery', exact: true })).toBeVisible();
   await expect(page.getByText('Your account', { exact: true })).toBeVisible();
@@ -257,22 +257,22 @@ test('navigation is centered with a moving indicator and pointer cursors', async
   const box = await tabs.boundingBox();
   const width = await page.evaluate(() => window.innerWidth);
   expect(Math.abs(box!.x + box!.width / 2 - width / 2)).toBeLessThan(2);
-  await expect(page.getByRole('tab', { name: 'Preferences' })).toHaveCSS('cursor', 'pointer');
+  await expect(page.getByRole('tab', { name: 'Settings' })).toHaveCSS('cursor', 'pointer');
   await expect(page.getByRole('button', { name: 'Open conversation with [demo] Morgan' })).toHaveCSS('cursor', 'pointer');
   await expect(indicator).toHaveCSS('transition-property', /\btransform\b/);
   const initial = await indicator.boundingBox();
-  await page.getByRole('tab', { name: 'Preferences' }).click();
+  await page.getByRole('tab', { name: 'Settings' }).click();
   await expect.poll(async () => (await indicator.boundingBox())!.x).toBeGreaterThan(initial!.x + 50);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(indicator).toHaveCSS('transition-property', 'none');
 });
 
-test('preferences is reachable with keyboard-accessible tabs', async ({ page }) => {
+test('settings is reachable with keyboard-accessible tabs', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('tab', { name: 'Agents', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Preferences' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('heading', { name: 'Preferences' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Settings' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'API endpoints' })).toBeVisible();
   await page.getByRole('tab', { name: 'Agents', exact: true }).click();
   await expect(page.getByRole('heading', { name: '[demo] Avery', exact: true })).toBeVisible();

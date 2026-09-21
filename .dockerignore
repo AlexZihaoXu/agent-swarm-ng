@@ -3,6 +3,12 @@
 .git
 .cache
 .local
+**/.cache
+backend/src/generated
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/*.db-journal
 .env
 .env.*
 **/test-results

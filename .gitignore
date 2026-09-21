@@ -6,6 +6,11 @@ dist/
 coverage/
 .cache/
 .local/
+backend/src/generated/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
 playwright-report/
 test-results/
 *.log

@@ -7,6 +7,8 @@ services:
     restart: "no"
     volumes:
       - ./backend/src:/app/backend/src
+      - ./backend/prisma:/app/backend/prisma
+      - ./backend/prisma.config.ts:/app/backend/prisma.config.ts
   frontend:
     build:
       target: development

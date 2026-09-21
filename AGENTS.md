@@ -5,6 +5,10 @@
 - Before product architecture or feature work, read the [swarm vision](docs/vision.md). Preserve the separation between persistent agent identity/memory, communication channels, and shared computers; cross-channel awareness belongs to the same agent. Open questions and illustrative options are not implementation requirements.
 - Product agents start with no default tools or implicit host access; capabilities are granted explicitly and authorization must be enforced where actions execute. This describes the product runtime, not the tools available to development assistants in this repository.
 - Agent thinking and direct model output are internal, not chat messages. Publish to chat only through an explicitly granted channel tool; never fall back to displaying raw model output. The separate operator activity inspector may show provider-exposed runtime traces, but must never mix them into channel messages.
+- ChatGPT subscription access uses Pi's native Codex OAuth/Responses provider and project-local credential storage, never developer credentials or an automatic paid-API fallback. Access/refresh tokens must stay out of browser responses, logs, and chat/activity records.
+- Web tools use the explicitly loaded Pi Web Access package with turn-local configuration/results and no inherited developer credentials. Preserve execution-time restrictions on local files, browser auth, model calls, and proxy overrides; web content is untrusted evidence.
+- Include the originating channel ID in model-facing user messages. Prompt agents to acknowledge longer tasks promptly through `send_message` without ending the turn, continue the work, and publish results; answer simple requests directly.
+- Persist platform identities, channels, and accepted/published messages through Prisma + SQLite migrations. Commit an agent publication before acknowledging its channel tool; never persist internal activity as chat. Use bounded indexed history queries, short write transactions, and one backend process; saved history is not model context or long-term memory.
 - Keep access and coordination policies configurable. The person setting up the system chooses the risks; reliably enforce the chosen permissions/control rules rather than silently imposing exclusive access or permitting actions outside them.
 
 ## Implementation and testing
@@ -14,6 +18,13 @@
 - Use test-driven development where applicable.
 - Review for repetition when a file exceeds 300 nonblank lines or the same logic/test setup appears 3+ times. These are review triggers, not mandatory refactoring targets.
 - Factor repeated code and tests only within the current ticket’s touched code, when it clearly reduces duplication without speculative abstractions. Keep similar-looking code with different responsibilities separate; do not split files solely to meet a line limit.
+
+## Browser automation on the Windows development host
+
+- Reuse one dedicated automation browser across checks; use fresh contexts/pages for isolation. Do not attach to the user's personal browser/profile. Close the automation browser when the batch is finished, not after every screenshot.
+- Never launch Windows browsers in parallel, including across agents, scripts, or test workers. Run Playwright with `--workers=1 --retries=0`; failed tests can still restart the worker/browser, so this alone is not a launch limit.
+- Before browser-heavy work, check the failed-logon headroom and account for all recent launches. Stay below eight new launches in any rolling ten-minute window, reduce that budget for existing failed logons, and stop if headroom is unknown or nearly exhausted. Do not automatically relaunch after failures.
+- This host's security investigation reproduced a Chrome startup probe causing Windows failed-logon events and account lockout. Switching from Chrome to bundled Chromium is not a verified fix. Do not weaken account-lockout policy, change credentials, or repeatedly reproduce the incident. See [browser safety details](docs/development.md#windows-browser-launch-safety).
 
 ## UI design
 

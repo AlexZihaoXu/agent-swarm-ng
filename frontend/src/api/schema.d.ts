@@ -91,9 +91,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["listAgents"];
         put?: never;
         post: operations["createChatAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/channels/{channelId}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listChannelMessages"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -111,6 +127,38 @@ export interface paths {
         put?: never;
         post: operations["sendChannelMessage"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/providers/openai-codex": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCodexProvider"];
+        put?: never;
+        post?: never;
+        delete: operations["disconnectCodexProvider"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/providers/openai-codex/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["connectCodexProvider"];
+        delete: operations["cancelCodexLogin"];
         options?: never;
         head?: never;
         patch?: never;
@@ -322,6 +370,7 @@ export interface operations {
         parameters: {
             query: {
                 model: string;
+                endpointId?: string;
             };
             header?: never;
             path?: never;
@@ -338,6 +387,48 @@ export interface operations {
                     "application/json": {
                         thinkingLevels: ("off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max")[];
                         reasoning: boolean;
+                    };
+                };
+            };
+        };
+    };
+    listAgents: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        agents: {
+                            name: string;
+                            endpointId: string;
+                            model: string;
+                            thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+                            id: string;
+                            channelId: string;
+                            createdAt: number;
+                            lastMessage: {
+                                id: string;
+                                sequence: number;
+                                channelId: string;
+                                role: "user" | "assistant";
+                                text: string;
+                                timestamp: number;
+                            } | null;
+                        }[];
+                        nextCursor: number | null;
                     };
                 };
             };
@@ -374,7 +465,15 @@ export interface operations {
                         thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
                         id: string;
                         channelId: string;
-                        token: string;
+                        createdAt: number;
+                        lastMessage: {
+                            id: string;
+                            sequence: number;
+                            channelId: string;
+                            role: "user" | "assistant";
+                            text: string;
+                            timestamp: number;
+                        } | null;
                     };
                 };
             };
@@ -402,6 +501,52 @@ export interface operations {
             };
         };
     };
+    listChannelMessages: {
+        parameters: {
+            query?: {
+                before?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                channelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        messages: {
+                            id: string;
+                            sequence: number;
+                            channelId: string;
+                            role: "user" | "assistant";
+                            text: string;
+                            timestamp: number;
+                        }[];
+                        nextCursor: number | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
     sendChannelMessage: {
         parameters: {
             query?: never;
@@ -412,25 +557,15 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    agent: {
-                        name: string;
-                        endpointId: string;
-                        model: string;
-                        thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-                        id: string;
-                        channelId: string;
-                        token: string;
-                    };
-                    history: {
-                        role: "user" | "assistant";
-                        text: string;
-                    }[];
+                    agentId: string;
+                    /** Format: uuid */
+                    clientMessageId: string;
                     message: string;
                 };
             };
         };
         responses: {
-            /** @description NDJSON channel-message, typing, operator-only activity, error, and done events. Only channel-message events belong in chat. */
+            /** @description NDJSON user_message acknowledgments, channel_message publications, typing, operator-only activity, error, and done events. Only saved channel publications are agent chat messages. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -451,6 +586,68 @@ export interface operations {
                 };
             };
             /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getCodexProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        connected: boolean;
+                        models: string[];
+                        login: {
+                            state: "idle" | "starting" | "waiting" | "connected" | "error";
+                            userCode?: string;
+                            verificationUri?: string;
+                            message?: string;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -462,7 +659,153 @@ export interface operations {
                 };
             };
             /** @description Default Response */
-            404: {
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    disconnectCodexProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        connected: boolean;
+                        models: string[];
+                        login: {
+                            state: "idle" | "starting" | "waiting" | "connected" | "error";
+                            userCode?: string;
+                            verificationUri?: string;
+                            message?: string;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    connectCodexProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        connected: boolean;
+                        models: string[];
+                        login: {
+                            state: "idle" | "starting" | "waiting" | "connected" | "error";
+                            userCode?: string;
+                            verificationUri?: string;
+                            message?: string;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    cancelCodexLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        connected: boolean;
+                        models: string[];
+                        login: {
+                            state: "idle" | "starting" | "waiting" | "connected" | "error";
+                            userCode?: string;
+                            verificationUri?: string;
+                            message?: string;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

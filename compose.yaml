@@ -8,6 +8,7 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: "3000"
+      DATABASE_URL: ${DATABASE_URL:-file:/app/.local/platform.db}
     init: true
     volumes:
       - platform_data:/app/.local
