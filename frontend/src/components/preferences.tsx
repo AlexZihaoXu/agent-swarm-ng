@@ -4,17 +4,21 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 type TestResult =
-  | { state: 'idle' | 'testing' }
+  | { state: 'idle' | 'testing' | 'saved' }
   | { state: 'success'; models: string[] }
   | { state: 'error'; message: string };
 
 const inputClass = 'h-10 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50';
 
-function EndpointCard({ onRemove }: { onRemove: () => void }) {
+type Endpoint = { id: string; name: string; baseUrl: string; hasApiKey: boolean; saved: boolean };
+
+function EndpointCard({ endpoint, onSaved, onRemove }: { endpoint: Endpoint; onSaved: (value: Endpoint) => void; onRemove: () => void }) {
   const id = useId();
-  const [name, setName] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
+  const [name, setName] = useState(endpoint.name);
+  const [baseUrl, setBaseUrl] = useState(endpoint.baseUrl);
   const [apiKey, setApiKey] = useState('');
+  const [keyChanged, setKeyChanged] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<TestResult>({ state: 'idle' });
   const request = useRef<AbortController | null>(null);
   const testing = result.state === 'testing';
@@ -28,7 +32,7 @@ function EndpointCard({ onRemove }: { onRemove: () => void }) {
     setResult({ state: 'testing' });
     try {
       const { data, error } = await api.POST('/api/model-endpoints/test', {
-        body: { baseUrl: baseUrl.trim(), ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}) },
+        body: { baseUrl: baseUrl.trim(), ...(keyChanged || !endpoint.saved ? { apiKey: apiKey.trim() } : { endpointId: endpoint.id }) },
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]),
       });
       if (controller.signal.aborted) return;
@@ -39,6 +43,22 @@ function EndpointCard({ onRemove }: { onRemove: () => void }) {
     } finally {
       if (request.current === controller) request.current = null;
     }
+  }
+
+  async function saveEndpoint() {
+    setSaving(true);
+    try {
+      const { data, error } = await api.POST('/api/model-endpoints', {
+        body: { id: endpoint.id, name: name.trim(), baseUrl: baseUrl.trim(), ...(keyChanged || !endpoint.saved ? { apiKey: apiKey.trim() } : {}) },
+      });
+      if (error || !data) { setResult({ state: 'error', message: error?.message ?? 'Could not save endpoint.' }); return; }
+      onSaved({ ...data, saved: true });
+      setBaseUrl(data.baseUrl);
+      setApiKey('');
+      setKeyChanged(false);
+      setResult({ state: 'saved' });
+    } catch { setResult({ state: 'error', message: 'Could not save endpoint. Check the backend connection.' }); }
+    finally { setSaving(false); }
   }
 
   return (
@@ -54,7 +74,7 @@ function EndpointCard({ onRemove }: { onRemove: () => void }) {
       </div>
       {/* Labeled field-group composition: Kibo field/basic-inputs/field-basic-inputs-4. */}
       <form onSubmit={event => { event.preventDefault(); void testConnection(); }}>
-        <fieldset disabled={testing} className="space-y-4">
+        <fieldset disabled={testing || saving} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor={`${id}-name`} className="block text-sm font-medium">Name</label>
             <input id={`${id}-name`} value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Local server" autoComplete="off" className={inputClass} />
@@ -66,14 +86,17 @@ function EndpointCard({ onRemove }: { onRemove: () => void }) {
           </div>
           <div className="space-y-2">
             <label htmlFor={`${id}-key`} className="block text-sm font-medium">API key</label>
-            <input id={`${id}-key`} type="password" value={apiKey} onChange={event => { setApiKey(event.target.value); setResult({ state: 'idle' }); }} placeholder="Optional for local servers" autoComplete="new-password" spellCheck={false} className={inputClass} />
+            <input id={`${id}-key`} type="password" value={apiKey} onChange={event => { setApiKey(event.target.value); setKeyChanged(true); setResult({ state: 'idle' }); }} placeholder={endpoint.hasApiKey && !keyChanged ? 'Saved key — enter to replace' : 'Optional for local servers'} autoComplete="new-password" spellCheck={false} className={inputClass} />
           </div>
+          {endpoint.hasApiKey && !keyChanged && <button type="button" className="rounded text-xs text-muted-foreground underline underline-offset-4" onClick={() => { setKeyChanged(true); setApiKey(''); setResult({ state: 'idle' }); }}>Clear saved key</button>}
           <div className="flex flex-wrap items-center gap-3 pt-1">
+            <Button type="button" size="sm" disabled={testing || saving || !name.trim() || !baseUrl.trim()} onClick={() => void saveEndpoint()}>{saving ? 'Saving…' : 'Save endpoint'}</Button>
             <Button type="submit" variant="outline" size="sm" disabled={testing || !baseUrl.trim()}>{testing ? 'Testing…' : 'Test connection'}</Button>
             <span className="text-xs text-muted-foreground">Lists models only. No inference request.</span>
           </div>
         </fieldset>
       </form>
+      {result.state === 'saved' && <p role="status" className="mt-4 text-sm text-muted-foreground">Saved locally.</p>}
       {result.state === 'testing' && <p role="status" className="mt-4 text-sm text-muted-foreground">Requesting model list…</p>}
       {result.state === 'error' && <p role="alert" className="mt-4 text-sm leading-relaxed"><span className="font-medium">Connection failed. </span>{result.message}</p>}
       {result.state === 'success' && (
@@ -96,7 +119,30 @@ function EndpointCard({ onRemove }: { onRemove: () => void }) {
 }
 
 export function Preferences() {
-  const [endpoints, setEndpoints] = useState<string[]>([]);
+  const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void api.GET('/api/model-endpoints', { signal: controller.signal }).then(({ data, error: failure }) => {
+      if (controller.signal.aborted) return;
+      if (failure || !data) setError('Could not load saved endpoints.');
+      else setEndpoints(data.map(endpoint => ({ ...endpoint, saved: true })));
+    }).catch(() => { if (!controller.signal.aborted) setError('Could not load saved endpoints.'); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, []);
+
+  async function removeEndpoint(endpoint: Endpoint) {
+    if (endpoint.saved) {
+      try {
+        const { response } = await api.DELETE('/api/model-endpoints/{id}', { params: { path: { id: endpoint.id } } });
+        if (!response.ok) throw new Error();
+      } catch { setError('Could not remove the saved endpoint.'); return; }
+    }
+    setEndpoints(current => current.filter(item => item.id !== endpoint.id));
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8 sm:py-10">
@@ -110,20 +156,22 @@ export function Preferences() {
             <h3 id="endpoints-title" className="text-sm font-semibold">API endpoints</h3>
             <p className="mt-1 text-xs text-muted-foreground">Connect an OpenAI-compatible provider or local server.</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setEndpoints(current => [...current, crypto.randomUUID()])}>
+          <Button variant="outline" size="sm" disabled={loading} onClick={() => setEndpoints(current => [...current, { id: crypto.randomUUID(), name: '', baseUrl: '', hasApiKey: false, saved: false }])}>
             <span aria-hidden="true" className="mr-2 text-lg leading-none">+</span>Add endpoint
           </Button>
         </div>
         <div className="space-y-4">
-          {endpoints.length === 0 && (
+          {error && <p role="alert" className="text-sm">{error}</p>}
+          {loading && <p role="status" className="text-sm text-muted-foreground">Loading endpoints…</p>}
+          {!loading && endpoints.length === 0 && (
             <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center">
               <p className="text-sm font-medium">No endpoints yet</p>
               <p className="mt-2 text-xs text-muted-foreground">Add a connection to check its available models.</p>
             </div>
           )}
-          {endpoints.map(id => <EndpointCard key={id} onRemove={() => setEndpoints(current => current.filter(item => item !== id))} />)}
+          {endpoints.map(endpoint => <EndpointCard key={endpoint.id} endpoint={endpoint} onSaved={saved => setEndpoints(current => current.map(item => item.id === saved.id ? saved : item))} onRemove={() => void removeEndpoint(endpoint)} />)}
         </div>
-        <p className="mt-5 text-xs leading-relaxed text-muted-foreground">Endpoint details and keys stay in memory until refresh. Keys are sent only to the backend and the endpoint you test. Use HTTPS for remote providers.</p>
+        <p className="mt-5 text-xs leading-relaxed text-muted-foreground">Save endpoints to keep them after restart. Keys are stored on the backend, never in browser storage. Changing a saved URL clears its key unless you enter a replacement. Use HTTPS for remote providers.</p>
       </section>
     </div>
   );

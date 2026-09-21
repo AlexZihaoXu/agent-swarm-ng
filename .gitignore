@@ -5,6 +5,7 @@ dist/
 !.env.example
 coverage/
 .cache/
+.local/
 playwright-report/
 test-results/
 *.log

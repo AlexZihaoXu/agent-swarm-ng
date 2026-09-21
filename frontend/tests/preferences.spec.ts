@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  // Never load or modify the developer's actual saved endpoint preferences.
+  await page.route('**/api/model-endpoints', route => route.fulfill({ json: [] }));
+});
+
 async function openEndpoint(page: import('@playwright/test').Page) {
   await page.goto('/');
   await page.getByRole('tab', { name: 'Preferences' }).click();
@@ -8,7 +13,7 @@ async function openEndpoint(page: import('@playwright/test').Page) {
   await page.getByLabel('Base URL', { exact: true }).fill('http://localhost:11434/v1');
 }
 
-test('endpoint form tests models and keeps credentials only in memory', async ({ page }) => {
+test('unsaved endpoint form tests models and clears on refresh', async ({ page }) => {
   await page.route('**/api/model-endpoints/test', async route => {
     expect(route.request().postDataJSON()).toEqual({ baseUrl: 'http://localhost:11434/v1', apiKey: 'test-only-key' });
     await route.fulfill({ json: { models: ['local-chat', 'local-code'] } });
@@ -29,6 +34,33 @@ test('endpoint form tests models and keeps credentials only in memory', async ({
   await page.reload();
   await page.getByRole('tab', { name: 'Preferences' }).click();
   await expect(page.getByText('No endpoints yet')).toBeVisible();
+});
+
+test('saving restores endpoint metadata after refresh without exposing its key', async ({ page }) => {
+  let saved: { id: string; name: string; baseUrl: string; hasApiKey: boolean } | undefined;
+  await page.route('**/api/model-endpoints', async route => {
+    if (route.request().method() === 'POST') {
+      const { id, name, baseUrl, apiKey } = route.request().postDataJSON();
+      expect(apiKey).toBe('saved-test-key');
+      saved = { id, name, baseUrl, hasApiKey: true };
+      await route.fulfill({ json: saved });
+    } else await route.fulfill({ json: saved ? [saved] : [] });
+  });
+  await openEndpoint(page);
+  await page.getByLabel('API key', { exact: true }).fill('saved-test-key');
+  await page.getByRole('button', { name: 'Save endpoint' }).click();
+  await expect(page.getByRole('status')).toHaveText('Saved locally.');
+  await expect(page.getByLabel('API key', { exact: true })).toHaveValue('');
+  await page.reload();
+  await page.getByRole('tab', { name: 'Preferences' }).click();
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Local model server');
+  await expect(page.getByLabel('API key', { exact: true })).toHaveAttribute('placeholder', 'Saved key — enter to replace');
+  await page.route('**/api/model-endpoints/test', async route => {
+    expect(route.request().postDataJSON()).toEqual({ endpointId: saved!.id, baseUrl: saved!.baseUrl });
+    await route.fulfill({ json: { models: ['example'] } });
+  });
+  await page.getByRole('button', { name: 'Test connection' }).click();
+  await expect(page.getByRole('status')).toContainText('Connected');
 });
 
 test('endpoint testing reports errors and config changes clear the result', async ({ page }) => {

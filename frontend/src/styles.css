@@ -56,11 +56,28 @@
   to { transform: translateY(0) scale(1); }
 }
 
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.35; }
+  30% { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: no-preference) {
+  .typing-dot { animation: typing-dot 1s ease-in-out infinite; }
+
   .message-enter {
     animation: message-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both,
       fade-in 300ms ease-out both;
   }
+}
+
+@keyframes activity-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes activity-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
 }
 
 @keyframes dialog-in {

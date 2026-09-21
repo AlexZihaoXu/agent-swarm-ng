@@ -2,6 +2,7 @@
 **/dist
 .git
 .cache
+.local
 .env
 .env.*
 **/test-results

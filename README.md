@@ -6,7 +6,7 @@
 
 A platform for **persistent agents** with long-term memory and shared awareness across communication channels. Agents use explicitly granted capabilities to access shared, containerized **computers**; they are not bound to a computer or limited to coding.
 
-**Today:** a chat UI preview, endpoint connection testing, and standalone Ubuntu GNOME workspace foundation. The swarm runtime is not implemented. Read the [swarm vision](docs/vision.md) for agreed concepts and deliberately open questions.
+**Today:** temporary Pi-backed chat agents alongside labeled demos, saved endpoint preferences, and a standalone Ubuntu GNOME workspace foundation. The full persistent swarm runtime is not implemented. Read the [swarm vision](docs/vision.md) for agreed concepts and deliberately open questions.
 
 ## Getting started
 
@@ -31,7 +31,7 @@ Open http://localhost:5173. See [development instructions](docs/development.md) 
 
 The [vision document](docs/vision.md) distinguishes agreed direction from unresolved design and implementation options. Human-like interaction does not imply human-level discretion or require an endlessly running model conversation.
 
-Existing environment work is a foundation for computers, not the full product definition. Agent runtime, memory, channels, permissions, assignments, and computer-control policies remain unimplemented. The next milestone and implementation order require explicit agreement; this vision does not authorize building them all at once.
+Existing environment work is a foundation for computers, not the full product definition. The current Pi runtime supports temporary platform-chat channels only; long-term memory, external channels, permissions, assignments, and computer-control policies remain unimplemented. The next milestone and implementation order require explicit agreement; this vision does not authorize building them all at once.
 
 ## Stack
 
@@ -70,8 +70,8 @@ agent-swarm-v2/
 └── docs/
 ```
 
-- **`frontend/`** — Agents/chat preview with local simulated sending, endpoint Preferences, and PWA setup. Chats, endpoint details, and keys stay in memory until refresh; no backend message delivery or AI replies. Real messaging, management controls, and the desktop viewer are not implemented.
-- **`backend/`** — health API, OpenAPI contract, and an OpenAI-compatible `/models` connection test; resource management and agent integration are not implemented.
+- **`frontend/`** — labeled demo chats, temporary real-agent creation/chat, endpoint Preferences, and PWA setup. Agents and chats clear on refresh; only explicitly published channel messages appear.
+- **`backend/`** — Pi SDK chat with one restricted `send_message` tool, saved endpoint preferences, connection testing, and an OpenAPI contract. No agent file/shell/computer access or session persistence. See [chat setup](docs/development.md#temporary-pi-agents-and-channels).
 - **`templates/default/`** — Ubuntu GNOME workspace image, standalone Compose configuration, and smoke tests. Production desktop startup, streaming, and the platform template schema remain unimplemented.
 - **`docs/`** — [swarm vision](docs/vision.md), development instructions, and reference material. The [local Kibo reference entry guide](docs/references/kibo/README.md) provides pinned source, searchable indexes, and adaptation notes.
 
@@ -124,7 +124,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 
 ## Project status
 
-The scaffold includes a chat UI preview, health API, endpoint connection testing, generated API types, PWA configuration, tests, and Compose files. Agent identities/runtime, long-term memory, chat/channels, permission groups, computer assignments/control, dashboard container management, desktop streaming, authentication, and platform metadata persistence are not implemented. Standalone workspace data persistence is configured through named volumes; it is not agent memory.
+The scaffold includes demo and temporary Pi-backed chats, endpoint preferences and connection testing, generated API types, PWA configuration, tests, and Compose files. Persistent agent identities, long-term memory, external channels, permission groups, computer assignments/control, dashboard container management, desktop streaming, and authentication are not implemented. Endpoint preferences are stored locally; agent conversations and Pi sessions are not. Standalone workspace data persistence is configured through named volumes; it is not agent memory.
 
 Validate Bun compatibility with Docker libraries and long-lived connections, plus AMD hardware encoding and streaming performance, before relying on them.
 

@@ -5,7 +5,104 @@
     "version": "0.1.0"
   },
   "components": {
-    "schemas": {}
+    "schemas": {
+      "AgentActivityEntry": {
+        "type": "object",
+        "required": [
+          "id",
+          "runId",
+          "channelId",
+          "kind",
+          "label",
+          "text",
+          "timestamp"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "channelId": {
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "system"
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "user"
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "assistant"
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "thinking"
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "tool_call"
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "tool_result"
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "reminder"
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "channel"
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "status"
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "error"
+                ]
+              }
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "number"
+          }
+        }
+      }
+    }
   },
   "paths": {
     "/api/health": {
@@ -27,6 +124,173 @@
                       "enum": [
                         "ok"
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/model-endpoints": {
+      "get": {
+        "operationId": "listModelEndpoints",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "name",
+                      "baseUrl",
+                      "hasApiKey"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "baseUrl": {
+                        "type": "string"
+                      },
+                      "hasApiKey": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "saveModelEndpoint",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "id",
+                  "name",
+                  "baseUrl"
+                ],
+                "properties": {
+                  "id": {
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "pattern": "^[a-zA-Z0-9-]+$",
+                    "type": "string"
+                  },
+                  "name": {
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "type": "string"
+                  },
+                  "baseUrl": {
+                    "minLength": 1,
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "apiKey": {
+                    "maxLength": 4096,
+                    "pattern": "^[^\\r\\n]*$",
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name",
+                    "baseUrl",
+                    "hasApiKey"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "baseUrl": {
+                      "type": "string"
+                    },
+                    "hasApiKey": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/model-endpoints/{id}": {
+      "delete": {
+        "operationId": "removeModelEndpoint",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "removed"
+                  ],
+                  "properties": {
+                    "removed": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -58,6 +322,10 @@
                   "apiKey": {
                     "maxLength": 4096,
                     "pattern": "^[^\\r\\n]*$",
+                    "type": "string"
+                  },
+                  "endpointId": {
+                    "maxLength": 100,
                     "type": "string"
                   }
                 }
@@ -124,6 +392,541 @@
             }
           },
           "504": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/model-capabilities": {
+      "get": {
+        "operationId": "getAgentModelCapabilities",
+        "parameters": [
+          {
+            "schema": {
+              "maxLength": 512,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "model",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "thinkingLevels",
+                    "reasoning"
+                  ],
+                  "properties": {
+                    "thinkingLevels": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "off"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "minimal"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "low"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "medium"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "high"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "xhigh"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "max"
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    "reasoning": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents": {
+      "post": {
+        "operationId": "createChatAgent",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "name",
+                  "endpointId",
+                  "model",
+                  "thinkingLevel"
+                ],
+                "properties": {
+                  "name": {
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "type": "string"
+                  },
+                  "endpointId": {
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "type": "string"
+                  },
+                  "model": {
+                    "minLength": 1,
+                    "maxLength": 512,
+                    "type": "string"
+                  },
+                  "thinkingLevel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "off"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "minimal"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "low"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "medium"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "xhigh"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "max"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "endpointId",
+                    "model",
+                    "thinkingLevel",
+                    "id",
+                    "channelId",
+                    "token"
+                  ],
+                  "properties": {
+                    "name": {
+                      "minLength": 1,
+                      "maxLength": 80,
+                      "type": "string"
+                    },
+                    "endpointId": {
+                      "minLength": 1,
+                      "maxLength": 100,
+                      "type": "string"
+                    },
+                    "model": {
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "type": "string"
+                    },
+                    "thinkingLevel": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "off"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "minimal"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "low"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "medium"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "high"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "xhigh"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "max"
+                          ]
+                        }
+                      ]
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "channelId": {
+                      "type": "string"
+                    },
+                    "token": {
+                      "pattern": "^[a-f0-9]{64}$",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat": {
+      "post": {
+        "operationId": "sendChannelMessage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "agent",
+                  "history",
+                  "message"
+                ],
+                "properties": {
+                  "agent": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "endpointId",
+                      "model",
+                      "thinkingLevel",
+                      "id",
+                      "channelId",
+                      "token"
+                    ],
+                    "properties": {
+                      "name": {
+                        "minLength": 1,
+                        "maxLength": 80,
+                        "type": "string"
+                      },
+                      "endpointId": {
+                        "minLength": 1,
+                        "maxLength": 100,
+                        "type": "string"
+                      },
+                      "model": {
+                        "minLength": 1,
+                        "maxLength": 512,
+                        "type": "string"
+                      },
+                      "thinkingLevel": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "off"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "minimal"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "low"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "medium"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "high"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "xhigh"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "max"
+                            ]
+                          }
+                        ]
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "channelId": {
+                        "type": "string"
+                      },
+                      "token": {
+                        "pattern": "^[a-f0-9]{64}$",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "history": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "role",
+                        "text"
+                      ],
+                      "properties": {
+                        "role": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "user"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "assistant"
+                              ]
+                            }
+                          ]
+                        },
+                        "text": {
+                          "maxLength": 20000,
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "message": {
+                    "minLength": 1,
+                    "maxLength": 20000,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "NDJSON channel-message, typing, operator-only activity, error, and done events. Only channel-message events belong in chat.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "NDJSON channel-message, typing, operator-only activity, error, and done events. Only channel-message events belong in chat.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
             "description": "Default Response",
             "content": {
               "application/json": {

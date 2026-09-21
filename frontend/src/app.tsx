@@ -6,39 +6,42 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentPanel } from '@/components/agent-panel';
 import { AgentAvatar, AgentName } from '@/components/chat-identity';
 import { cn } from '@/lib/utils';
-import { previewAgents, type PreviewMessage } from '@/preview-data';
+import { useChat } from '@/use-chat';
 import { SlideUpFadeSwap } from '@/components/ui/slide-up-fade-swap';
 import { ConversationMessages } from '@/components/conversation-messages';
 import { Preferences } from '@/components/preferences';
+import { AvatarFace, PresenceIndicator, TypingDots } from '@/components/typing-indicator';
+import { AgentActivityPanel } from '@/components/agent-activity-panel';
 
-function Avatar({ initials, small = false }: { initials: string; small?: boolean }) {
+function Avatar({ initials, small = false, typing = false, ready = false }: { initials: string; small?: boolean; typing?: boolean; ready?: boolean }) {
   return (
     <span aria-hidden="true" className={cn(
-      'flex shrink-0 items-center justify-center rounded-full bg-foreground/10 font-medium text-foreground/75',
+      'relative shrink-0 font-medium text-foreground/75',
       small ? 'size-7 text-[11px]' : 'size-8 text-xs',
     )}>
-      {initials}
+      <AvatarFace avatarSize={small ? 28 : 32} ready={ready} typing={typing} size="md">
+        <span className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/10">{initials}</span>
+      </AvatarFace>
+      <PresenceIndicator ready={ready} typing={typing} size="md" />
     </span>
   );
 }
 
 export function App() {
-  const [selectedId, setSelectedId] = useState<string>(previewAgents[0].id);
+  const { agents, conversations, drafts, busy, typing, activity, addAgent, send, stop, setDraft } = useChat();
+  const [selectedId, setSelectedId] = useState<string>(agents[0].id);
   const [mobileConversation, setMobileConversation] = useState(false);
   const [activeTab, setActiveTab] = useState('agents');
   const [search, setSearch] = useState('');
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [conversations, setConversations] = useState<Record<string, PreviewMessage[]>>(() =>
-    Object.fromEntries(previewAgents.map(item => [item.id, item.messages.map((message, index) => ({ ...message, id: `${item.id}-${index}` }))])),
-  );
+  const [activityOpen, setActivityOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingSend = useRef<string | null>(null);
-  const visibleAgents = previewAgents.filter(item => item.name.toLowerCase().includes(search.trim().toLowerCase()));
-  const agent = previewAgents.find(item => item.id === selectedId) ?? previewAgents[0];
+  const visibleAgents = agents.filter(item => item.name.toLowerCase().includes(search.trim().toLowerCase()));
+  const agent = agents.find(item => item.id === selectedId) ?? agents[0];
   const { needRefresh: [needRefresh, setNeedRefresh], updateServiceWorker } = useRegisterSW();
-  const draft = drafts[agent.id] ?? '';
-  const messages = conversations[agent.id];
+  const draft = drafts[agent.channelId] ?? '';
+  const messages = conversations[agent.channelId];
   const previousConversation = useRef({ id: agent.id, count: messages.length });
 
   useLayoutEffect(() => {
@@ -46,7 +49,7 @@ export function App() {
     if (!input) return;
     input.style.height = 'auto';
     input.style.height = `${Math.min(input.scrollHeight, 128)}px`;
-  }, [draft, agent.id, activeTab, mobileConversation]);
+  }, [draft, agent.id, activeTab, mobileConversation, activityOpen]);
 
   useLayoutEffect(() => {
     const scroller = scrollRef.current;
@@ -69,15 +72,9 @@ export function App() {
   }, [agent.id, messages.length, activeTab, mobileConversation]);
 
   function sendMessage() {
-    const text = draft.trim();
-    if (!text) return;
-    const message: PreviewMessage = {
-      id: crypto.randomUUID(), author: 'user', text,
-      time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s+/g, ' '),
-    };
-    pendingSend.current = message.id;
-    setConversations(current => ({ ...current, [agent.id]: [...current[agent.id], message] }));
-    setDrafts(current => ({ ...current, [agent.id]: '' }));
+    const messageId = send(agent, draft);
+    if (!messageId) return;
+    pendingSend.current = messageId;
     inputRef.current?.focus();
   }
 
@@ -95,11 +92,10 @@ export function App() {
               </Tabs.Trigger>
             ))}
           </Tabs.List>
-          <span className="absolute right-4 hidden text-xs text-muted-foreground sm:block">UI preview</span>
         </header>
 
         <Tabs.Content value="agents" className="min-h-0 flex-1 outline-none data-[state=active]:flex">
-          <AgentPanel className={cn(
+          <AgentPanel onCreated={real => { addAgent(real); setSelectedId(real.id); setSearch(''); setMobileConversation(true); }} className={cn(
             'min-h-0 w-full shrink-0 flex-col border-border bg-sidebar sm:flex sm:w-72 sm:border-r',
             mobileConversation ? 'hidden' : 'flex',
           )}>
@@ -114,7 +110,7 @@ export function App() {
               {visibleAgents.length === 0 && <p role="status" className="px-2 py-4 text-xs text-muted-foreground">No agents found.</p>}
               <ul className="space-y-0.5">
                 {visibleAgents.map(item => {
-                  const lastMessage = conversations[item.id].at(-1);
+                  const lastMessage = conversations[item.channelId].at(-1);
                   return (
                   <li key={item.id}>
                     <button
@@ -127,7 +123,7 @@ export function App() {
                         item.id === selectedId ? 'bg-foreground/10' : 'hover:bg-foreground/5',
                       )}
                     >
-                      <Avatar initials={item.initials} />
+                      <Avatar initials={item.initials} ready={Boolean(item.real)} typing={typing[item.channelId]} />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-sm font-medium">{item.name}</span>
@@ -148,15 +144,17 @@ export function App() {
           </AgentPanel>
 
           <section aria-label={`Conversation with ${agent.name}`} className={cn(
-            'min-h-0 min-w-0 flex-1 flex-col sm:flex',
+            'min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none sm:flex',
+            activityOpen && 'lg:mr-96',
             mobileConversation ? 'flex' : 'hidden',
           )}>
             <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4">
               <Button variant="outline" size="sm" className="px-2 sm:hidden" aria-label="Back to agents" onClick={() => setMobileConversation(false)}>
                 <span aria-hidden="true">←</span>
               </Button>
-              <AgentAvatar initials={agent.initials} />
+              <AgentAvatar initials={agent.initials} ready={Boolean(agent.real)} typing={typing[agent.channelId]} />
               <AgentName name={agent.name} />
+              <AgentActivityPanel agent={agent} entries={activity[agent.id] ?? []} open={activityOpen} onOpenChange={setActivityOpen} />
             </header>
 
             <ScrollArea key={agent.id} viewportRef={scrollRef} label="Chat history" className="min-h-0 flex-1">
@@ -165,27 +163,37 @@ export function App() {
 
             <div className="shrink-0 px-4 pb-3 pt-2 sm:px-5">
               <div className="w-full">
+                <div className="mb-1 flex h-5 min-w-0 items-center px-2">
+                  {busy[agent.channelId] && (
+                    <p role="status" className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                      {typing[agent.channelId] ? <><TypingDots /><span className="truncate"><strong className="font-medium text-foreground">{agent.name}</strong> is typing…</span></> : 'Agent is working…'}
+                    </p>
+                  )}
+                </div>
                 <form aria-label="Message composer" onSubmit={event => { event.preventDefault(); sendMessage(); }} className="flex items-end gap-2 rounded-3xl border border-foreground/20 bg-transparent p-2 focus-within:ring-1 focus-within:ring-ring">
                   <button type="button" disabled aria-label="Add attachment" title="Attachments aren’t available in this preview" className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-4"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
                   </button>
                   <textarea
                     key={agent.id} ref={inputRef} rows={1} value={draft}
-                    onChange={event => setDrafts(current => ({ ...current, [agent.id]: event.target.value }))}
+                    onChange={event => setDraft(agent.channelId, event.target.value)}
                     onKeyDown={event => {
                       if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
                         event.preventDefault();
                         sendMessage();
                       }
                     }}
-                    aria-label={`Message ${agent.name}`} aria-describedby="preview-notice" placeholder={`Message ${agent.name}…`}
+                    aria-label={`Message ${agent.name}`} placeholder={`Message ${agent.name}…`}
                     className="max-h-32 min-h-7 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1 text-sm leading-5 outline-none placeholder:text-muted-foreground"
                   />
-                  <Button type="submit" size="sm" disabled={!draft.trim()} aria-label="Send message" className="size-7 shrink-0 rounded-full p-0">
-                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-4"><path d="M12 19V5m-6 6 6-6 6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  </Button>
+                  {busy[agent.channelId] ? (
+                    <Button type="button" size="sm" aria-label="Stop response" className="size-7 shrink-0 rounded-full p-0" onClick={() => stop(agent.channelId)}><span aria-hidden="true" className="size-2.5 rounded-sm bg-current" /></Button>
+                  ) : (
+                    <Button type="submit" size="sm" disabled={!draft.trim()} aria-label="Send message" className="size-7 shrink-0 rounded-full p-0">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-4"><path d="M12 19V5m-6 6 6-6 6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </Button>
+                  )}
                 </form>
-                <p id="preview-notice" className="mt-1.5 text-center text-[11px] text-muted-foreground">Local preview — messages reset on refresh.</p>
               </div>
             </div>
           </section>

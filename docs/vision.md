@@ -22,6 +22,8 @@ By default, an agent lives in the platform's chat interface. External channels m
 
 Context is intended to be shared immediately across channels, like a person communicating through several social apps. It should not be deliberately isolated into channel-specific memories. How simultaneous messages and in-progress responses receive new context remains to be designed.
 
+A channel is also a publication boundary. Thinking traces and direct assistant output remain internal to the agent; an agent explicitly calls a channel tool to send a visible conversation message. A separate operator activity inspector may expose those runtime traces for observation, without publishing them to a channel. The platform must not treat raw model output as a chat message or expose it as a fallback. Granting this communication tool does not grant file, shell, or computer access.
+
 Shared awareness is not automatic broadcasting. The agent decides what to disclose to each audience. The person configuring it accepts the risk of mistakes; mandatory per-message human approval or per-channel memory silos are not the intended model. Any configured access restrictions still apply.
 
 ## Groups and permissions
@@ -47,7 +49,7 @@ The platform enforces whichever coordination policy is selected. Agents negotiat
 
 ## Implementation boundary
 
-The existing application and workspace are foundations; agent runtime, memory, channels, permissions, and computer assignment/control are not implemented yet.
+The application now has a temporary, backend-hosted Pi chat slice: real agents can publish to their own platform-chat channel using one explicitly granted tool. Default tools and resource discovery are disabled. Agents and conversations remain ephemeral; only endpoint preferences are saved. This is not the long-lived agent/memory system described above. External channels, long-term memory, permissions, and computer assignment/control remain unimplemented.
 
 Memory mechanics, message concurrency, permission/lock details, runtime placement, and external integrations remain open. No particular queue, database, lock mechanism, or delivery roadmap has been selected. Resolve these when the relevant work is scoped—not by expanding this vision into a speculative architecture.
 

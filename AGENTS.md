@@ -4,6 +4,7 @@
 
 - Before product architecture or feature work, read the [swarm vision](docs/vision.md). Preserve the separation between persistent agent identity/memory, communication channels, and shared computers; cross-channel awareness belongs to the same agent. Open questions and illustrative options are not implementation requirements.
 - Product agents start with no default tools or implicit host access; capabilities are granted explicitly and authorization must be enforced where actions execute. This describes the product runtime, not the tools available to development assistants in this repository.
+- Agent thinking and direct model output are internal, not chat messages. Publish to chat only through an explicitly granted channel tool; never fall back to displaying raw model output. The separate operator activity inspector may show provider-exposed runtime traces, but must never mix them into channel messages.
 - Keep access and coordination policies configurable. The person setting up the system chooses the risks; reliably enforce the chosen permissions/control rules rather than silently imposing exclusive access or permitting actions outside them.
 
 ## Implementation and testing

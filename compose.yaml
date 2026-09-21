@@ -9,6 +9,8 @@ services:
       HOST: 0.0.0.0
       PORT: "3000"
     init: true
+    volumes:
+      - platform_data:/app/.local
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "bun", "-e", "const r = await fetch('http://127.0.0.1:3000/api/health'); process.exit(r.ok ? 0 : 1)"]
@@ -33,5 +35,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 volumes:
+  platform_data:
   caddy_data:
   caddy_config:

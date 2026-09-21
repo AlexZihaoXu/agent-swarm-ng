@@ -1,10 +1,11 @@
 import { useRef, useState, type ReactNode } from 'react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Button } from '@/components/ui/button';
+import { CreateAgentForm } from '@/components/create-agent-form';
+import type { RealAgent } from '@/use-chat';
 
 // Compositions: Kibo context-menu/standard/context-menu-standard-1 and dialog/standard/dialog-standard-1.
-export function AgentPanel({ children, className }: { children: ReactNode; className: string }) {
+export function AgentPanel({ children, className, onCreated }: { children: ReactNode; className: string; onCreated: (agent: RealAgent) => void }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const panelRef = useRef<HTMLElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -50,7 +51,7 @@ export function AgentPanel({ children, className }: { children: ReactNode; class
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 motion-safe:data-[state=open]:animate-[fade-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[fade-out_120ms_ease-in]" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-6 shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]"
+          className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-h-[90dvh] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]"
           onCloseAutoFocus={event => {
             event.preventDefault();
             const target = returnFocus.current;
@@ -58,13 +59,7 @@ export function AgentPanel({ children, className }: { children: ReactNode; class
             else panelRef.current?.focus();
           }}
         >
-          <Dialog.Title className="text-lg font-semibold">Create new agent</Dialog.Title>
-          <Dialog.Description className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Agent creation will be available here. Nothing is created in this preview.
-          </Dialog.Description>
-          <div className="mt-6 flex justify-end">
-            <Dialog.Close asChild><Button variant="outline" size="sm">Close</Button></Dialog.Close>
-          </div>
+          <CreateAgentForm onCreated={agent => { onCreated(agent); setDialogOpen(false); }} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
