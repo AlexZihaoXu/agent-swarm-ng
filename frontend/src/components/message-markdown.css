@@ -1,0 +1,25 @@
+.message-markdown { min-width: 0; white-space: normal; }
+.message-markdown > * + * { margin-top: 0.65rem; }
+.message-markdown :is(h1, h2, h3, h4, h5, h6) { font-weight: 650; line-height: 1.35; margin-bottom: 0.4rem; }
+.message-markdown h1 { font-size: 1.3em; }
+.message-markdown h2 { font-size: 1.2em; }
+.message-markdown h3 { font-size: 1.1em; }
+.message-markdown strong { font-weight: 650; }
+.message-markdown a { text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.message-markdown a:hover { opacity: 0.8; }
+.message-markdown :is(ul, ol) { padding-left: 1.5rem; }
+.message-markdown ul { list-style: disc; }
+.message-markdown ol { list-style: decimal; }
+.message-markdown li + li { margin-top: 0.2rem; }
+.message-markdown li > :is(ul, ol, p) { margin-top: 0.3rem; }
+.message-markdown blockquote { border-left: 3px solid currentColor; padding-left: 0.75rem; opacity: 0.85; }
+.message-markdown hr { margin-block: 0.75rem; opacity: 0.3; }
+.message-markdown :not(pre) > code { border-radius: 4px; background: rgb(0 0 0 / 15%); padding: 0.1em 0.3em; font-size: 0.9em; white-space: pre-wrap; }
+.message-markdown .contains-task-list { list-style: none; padding-left: 0; }
+.message-markdown .task-list-item input { margin-right: 0.4rem; }
+.message-code pre { white-space: pre; overflow-wrap: normal; }
+.message-code pre code { display: block; min-width: max-content; padding: 0; background: transparent; }
+.message-table { max-width: 100%; overflow-x: auto; outline-offset: 2px; }
+.message-table table { border-collapse: collapse; font-size: 0.9em; }
+.message-table :is(th, td) { border: 1px solid currentColor; padding: 0.35rem 0.6rem; text-align: left; overflow-wrap: normal; }
+.message-table th { font-weight: 650; background: rgb(0 0 0 / 8%); }
