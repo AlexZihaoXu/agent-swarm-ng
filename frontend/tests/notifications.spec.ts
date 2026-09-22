@@ -9,7 +9,7 @@ test('plays the formatted clip only for a new incoming agent message', async ({ 
     const message = { type: 'channel_message', channelId: 'avery', id: 'new-reply', text: 'Reply', timestamp: Date.now() };
     return route.fulfill({ contentType: 'application/x-ndjson', body: [
       { type: 'user_message', channelId: 'avery', id: body.clientMessageId, text: body.message, timestamp: Date.now() },
-      { type: 'typing', channelId: 'avery', active: true },
+      { type: 'typing', channelId: 'avery', active: true, targets: ['avery'] },
       { ...message, channelId: 'wrong-channel' },
       { ...message, id: 'avery-0', text: 'Replayed history' },
       ...(publish ? [message, message] : []),

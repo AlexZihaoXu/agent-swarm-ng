@@ -5,23 +5,25 @@ import { createWebTools } from './web-tools';
 import type { RunContext } from './agent-runs';
 import { evaluateInterruption } from './interruption-triage';
 import { formatContextUsage } from './context-usage';
+import { createPublicationTyping } from './publication-typing';
+
+export type InboxHooks = {
+  prepare?: (messages: ChannelMessage[]) => Promise<ChannelMessage[]>;
+  complete?: (messages: ChannelMessage[], failed: boolean) => Promise<void>;
+};
 
 export async function runChat({ runId, signal, emit, inbox }: RunContext, config: ChatConfiguration, history: ChannelMessage[], message: ChannelMessage,
-  publish: (text: string) => Promise<object>, accessKey: string, subscriptionRuntime?: ModelRuntime, historyTools: ToolDefinition[] = []) {
+  publish: (text: string) => Promise<object>, accessKey: string, subscriptionRuntime?: ModelRuntime, historyTools: ToolDefinition[] = [], hooks: InboxHooks = {}) {
   const { channel } = config;
-  inbox.add(message);
+  inbox.prepend(message);
   const activity = createActivityRecorder(channel.agentId, channel.id, accessKey, emit, runId);
-  const pendingSends = new Set<string>();
-  let typing = false, published = 0, finalPublished = false;
+  const publicationTyping = createPublicationTyping(channel.agentId, emit);
+  let published = 0, finalPublished = false;
   let web: Awaited<ReturnType<typeof createWebTools>> | undefined;
   let session: Awaited<ReturnType<typeof createChatSession>> | undefined;
   let unsubscribe = () => {};
   const abort = () => { void session?.abort(); };
-  const updateTyping = () => {
-    const next = pendingSends.size > 0;
-    if (next !== typing) { typing = next; emit({ type: 'typing', active: next }); }
-  };
-  const clearTyping = () => { pendingSends.clear(); updateTyping(); };
+  const clearTyping = publicationTyping.clear;
   try {
     signal.throwIfAborted();
     web = await createWebTools();
@@ -30,7 +32,7 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
       signal.throwIfAborted();
       // Publication belongs to the channel, not any connected browser.
       const saved = await publish(text);
-      pendingSends.delete(toolCallId); updateTyping(); published++;
+      publicationTyping.published(toolCallId); published++;
       if (final) finalPublished = true;
       activity.record('channel', 'Channel publication', text);
       emit({ type: 'channel_message', ...saved });
@@ -48,23 +50,20 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
       }
       else activity.onEvent(event);
       if (event.type === 'message_end') reportContext();
-      if (event.type === 'message_update') {
-        const update = event.assistantMessageEvent;
-        if (update.type === 'toolcall_start' || update.type === 'toolcall_delta' || update.type === 'toolcall_end') {
-          const tool = update.type === 'toolcall_end' ? update.toolCall : update.partial.content[update.contentIndex];
-          if (tool?.type === 'toolCall' && tool.name === 'send_message') { pendingSends.add(tool.id); updateTyping(); }
-        }
-      } else if (event.type === 'tool_execution_end' && event.toolName === 'send_message') { pendingSends.delete(event.toolCallId); updateTyping(); }
+      publicationTyping.onEvent(event);
     });
     const main = session;
     const lastAssistant = () => [...main.messages].reverse().find(item => item.role === 'assistant');
     while (inbox.hasPending() && !signal.aborted) {
       const batch = await inbox.take(signal);
+      if (hooks.prepare) batch.messages = await hooks.prepare(batch.messages);
+      if (!batch.messages.length) continue;
+      const peerOnly = batch.messages.every(item => item.source);
       published = 0; finalPublished = false;
       if (batch.note) await main.sendCustomMessage({ customType: 'interruption-decision', display: false, content: batch.note }, { triggerTurn: false });
       const interrupted = await inbox.during(async () => {
         await main.prompt(batch.messages.map(item => channelInput(channel.id, item.text, item)).join('\n\n'), { expandPromptTemplates: false });
-        if (!finalPublished && !signal.aborted && !main.isStreaming && lastAssistant()?.stopReason === 'stop') {
+        if (!peerOnly && !finalPublished && !signal.aborted && !main.isStreaming && lastAssistant()?.stopReason === 'stop') {
           clearTyping();
           await main.sendCustomMessage({
             customType: 'channel-delivery-reminder', display: false,
@@ -80,10 +79,11 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
         return decision;
       }, async () => { await main.abort(); }, signal);
       clearTyping(); reportContext();
-      if (!interrupted && (signal.aborted || ['error', 'aborted'].includes(lastAssistant()?.stopReason ?? '') || (!published && lastAssistant()?.stopReason !== 'stop'))) emit({ type: 'error', message: 'The agent could not finish its response. It may have been stopped, timed out, or encountered a model error.' });
-      const missingFinal = !interrupted && published > 0 && !finalPublished && !signal.aborted && lastAssistant()?.stopReason === 'stop';
+      if (!interrupted && (signal.aborted || ['error', 'aborted'].includes(lastAssistant()?.stopReason ?? '') || (!peerOnly && !published && lastAssistant()?.stopReason !== 'stop'))) emit({ type: 'error', message: 'The agent could not finish its response. It may have been stopped, timed out, or encountered a model error.' });
+      await hooks.complete?.(batch.messages, signal.aborted || ['error', 'aborted'].includes(lastAssistant()?.stopReason ?? ''));
+      const missingFinal = !peerOnly && !interrupted && published > 0 && !finalPublished && !signal.aborted && lastAssistant()?.stopReason === 'stop';
       if (missingFinal) emit({ type: 'error', message: 'The agent acknowledged the request but did not deliver a final reply.' });
-      activity.record('status', signal.aborted ? 'Stopped' : interrupted ? 'Interrupted for new messages' : missingFinal ? 'Final reply missing' : 'Turn complete', published ? `${published} channel message(s) published.` : 'No channel message published.');
+      activity.record('status', signal.aborted ? 'Stopped' : interrupted ? 'Interrupted for new messages' : missingFinal ? 'Final reply missing' : 'Turn complete', peerOnly ? 'Agent-thread inputs processed.' : published ? `${published} channel message(s) published.` : 'No channel message published.');
     }
     inbox.close();
   } catch {

@@ -33,6 +33,56 @@ model Agent {
   thinkingLevel ThinkingLevel
   createdAt     DateTime  @default(now())
   channels      Channel[]
+  dmAllowed     DmGrant[]   @relation("DmSenderGrant")
+  dmAllowedBy   DmGrant[]   @relation("DmRecipientGrant")
+  dmSent        DmMessage[] @relation("DmSender")
+  dmReceived    DmMessage[] @relation("DmRecipient")
+  dmChains      DmChain[]
+}
+
+model DmGrant {
+  senderId    String
+  recipientId String
+  sender      Agent @relation("DmSenderGrant", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient   Agent @relation("DmRecipientGrant", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@id([senderId, recipientId])
+  @@index([recipientId])
+}
+
+model DmChain {
+  id          String @id
+  rootAgentId String?
+  rootAgent   Agent? @relation(fields: [rootAgentId], references: [id], onDelete: SetNull)
+  remaining   Int @default(8)
+  cancelled   Boolean @default(false)
+  createdAt   DateTime @default(now())
+  messages    DmMessage[]
+
+  @@index([rootAgentId])
+}
+
+model DmMessage {
+  sequence       Int @id @default(autoincrement())
+  id             String @unique @default(uuid())
+  conversationId String
+  senderId       String
+  recipientId    String
+  sender         Agent @relation("DmSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient      Agent @relation("DmRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  text           String
+  chainId        String
+  chain          DmChain @relation(fields: [chainId], references: [id], onDelete: Restrict)
+  deliveryKey    String @unique
+  status         String @default("queued")
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId, sequence])
+  @@index([recipientId, status, sequence])
+  @@index([recipientId, sequence])
+  @@index([status, sequence])
+  @@index([senderId])
+  @@index([chainId])
 }
 
 model Channel {

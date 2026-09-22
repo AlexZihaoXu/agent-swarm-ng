@@ -23,7 +23,7 @@ export function DeleteAgentForm({ agent, onDelete, onDone, onBusyChange }: {
     <form onSubmit={event => { event.preventDefault(); void remove(); }}>
       <Dialog.Title className="text-lg font-semibold">Delete agent</Dialog.Title>
       <Dialog.Description className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        This permanently deletes the agent and its chat history. This cannot be undone. Shared provider connections are kept.
+        This permanently deletes the agent, its private chat, DM conversations, and DM permissions. Related peer work is stopped. This cannot be undone. Other agents and shared provider connections are kept.
       </Dialog.Description>
       <p id={`${id}-help`} className="mt-5 break-words text-sm">Type <strong className="select-text">{agent.name}</strong> exactly to confirm.</p>
       <label htmlFor={id} className="mt-4 block text-sm font-medium">Confirm agent name</label>

@@ -12,8 +12,8 @@ const activityKinds = new Set(['system', 'user', 'assistant', 'thinking', 'tool_
 export type RealAgent = paths['/api/agents']['post']['responses'][200]['content']['application/json'];
 export type ChatAgent = { id: string; name: string; initials: string; time: string; channelId: string; avatar?: AvatarAppearance; real?: RealAgent };
 type SavedMessage = paths['/api/channels/{channelId}/messages']['get']['responses'][200]['content']['application/json']['messages'][number];
-type Run = { runId: string; agentId: string; channelId: string; clientMessageId: string; typing?: boolean };
-const asMessage = (message: SavedMessage): ChatMessage => ({ id: message.id, sequence: message.sequence, author: message.role === 'user' ? 'user' : 'agent', text: message.text, time: clock(message.timestamp) });
+type Run = { runId: string; agentId: string; channelId: string; clientMessageId: string; typing?: boolean; typingTargets?: string[] };
+const asMessage = (message: SavedMessage): ChatMessage => ({ id: message.id, sequence: message.sequence, author: message.role === 'user' ? 'user' : 'agent', text: message.text, timestamp: message.timestamp, time: clock(message.timestamp) });
 const asAgent = (real: RealAgent): ChatAgent => ({ avatar: real.avatar ?? defaultAvatar(real.id), id: real.id, name: real.name, initials: real.name.slice(0, 2).toUpperCase(), time: clock(real.lastMessage?.timestamp ?? real.createdAt), channelId: real.channelId, real });
 const clock = (timestamp = Date.now()) => new Date(timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s+/g, ' ');
 function withoutKey<T>(record: Record<string, T>, key: string) { const next = { ...record }; delete next[key]; return next; }
@@ -31,6 +31,7 @@ export function useChat() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [typing, setTyping] = useState<Record<string, boolean>>({});
+  const [typingTargets, setTypingTargets] = useState<Record<string, string[]>>({});
   const [activity, setActivity] = useState<Record<string, ActivityEntry[]>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const notification = useRef<ReturnType<typeof createNotificationSound> | null>(null);
@@ -39,6 +40,9 @@ export function useChat() {
   const completedRuns = useRef(new Set<string>());
   const knownMessages = useRef(new Set<string>());
   const activeRuns = useRef(new Map<string, Run>());
+  const peerRuns = useRef(new Map<string, Run>());
+  const [peerBusy, setPeerBusy] = useState<Record<string, boolean>>({});
+  const refreshPeerBusy = () => setPeerBusy(Object.fromEntries([...peerRuns.current.values()].map(run => [run.agentId, true])));
   const requests = useRef(new Map<string, AbortController>());
   const pendingMessages = useRef(new Map<string, ChatMessage>());
   const agentRequest = useRef<AbortController | null>(null);
@@ -154,9 +158,10 @@ export function useChat() {
     historyRequests.current.get(channel)?.abort(); historyRequests.current.delete(channel);
     pendingMessages.current.delete(channel); loadedHistory.current.delete(channel);
     setAgents(current => current.filter(item => item.id !== agent.id));
+    window.dispatchEvent(new Event('swarm-dm-updated'));
     setConversations(current => withoutKey(current, channel));
     setDrafts(current => withoutKey(current, channel));
-    setBusy(current => withoutKey(current, channel)); setTyping(current => withoutKey(current, channel));
+    setBusy(current => withoutKey(current, channel)); setTyping(current => withoutKey(current, channel)); setTypingTargets(current => withoutKey(current, channel));
     setErrors(current => withoutKey(current, channel)); setActivity(current => withoutKey(current, agent.id));
     setHistoryReady(current => withoutKey(current, channel)); setHistoryLoading(current => withoutKey(current, channel));
     setHistoryFailed(current => withoutKey(current, channel)); setHistoryCursor(current => withoutKey(current, channel));
@@ -179,11 +184,15 @@ export function useChat() {
     if (event.type === 'heartbeat') return;
     if (event.type === 'snapshot' && Array.isArray(event.runs)) {
       const runs = event.runs.filter((run: Run) => run && !removedAgents.current.has(run.agentId) && !completedRuns.current.has(run.runId) && ['agentId', 'channelId', 'runId', 'clientMessageId'].every(key => typeof (run as Record<string, unknown>)[key] === 'string')) as Run[];
-      activeRuns.current = new Map(runs.map(run => [run.channelId, run]));
+      const peers = runs.filter(run => run.channelId.startsWith('dm:'));
+      peerRuns.current = new Map(peers.map(run => [run.runId, run])); refreshPeerBusy();
+      activeRuns.current = new Map(runs.filter(run => !run.channelId.startsWith('dm:')).map(run => [run.channelId, run]));
+      window.dispatchEvent(new Event('swarm-dm-updated'));
       for (const run of runs) acknowledge(run.channelId, run.clientMessageId);
       const pending = [...requests.current.keys()].filter(channel => pendingMessages.current.has(channel));
       setBusy(Object.fromEntries([...pending.map(channel => [channel, true]), ...runs.map(run => [run.channelId, true])]));
       setTyping(Object.fromEntries(runs.map(run => [run.channelId, run.typing === true])));
+      setTypingTargets(Object.fromEntries(runs.map(run => [run.channelId, Array.isArray(run.typingTargets) ? run.typingTargets.filter(id => typeof id === 'string') : []])));
       void loadAgents(undefined, true);
       for (const agent of agents) if (loadedHistory.current.has(agent.channelId) || historyRequests.current.has(agent.channelId) || historyLoading[agent.channelId] || historyFailed[agent.channelId]) void loadHistory(agent, false, true);
       return;
@@ -191,20 +200,33 @@ export function useChat() {
     if (typeof event.eventId === 'string' && remember(seenEvents.current, event.eventId)) return;
     const channel = event.channelId ?? event.entry?.channelId;
     if (typeof channel !== 'string' || removedAgents.current.has(event.agentId)) return;
+    if (event.type === 'dm_updated') { window.dispatchEvent(new CustomEvent('swarm-dm-updated', { detail: event.conversationId })); return; }
+    if (channel.startsWith('dm:')) {
+      if ((event.type === 'run_queued' || event.type === 'run_started') && ['runId', 'agentId', 'clientMessageId'].every(key => typeof event[key] === 'string') && !completedRuns.current.has(event.runId)) peerRuns.current.set(event.runId, event as Run);
+      if (event.type === 'done') { remember(completedRuns.current, event.runId); peerRuns.current.delete(event.runId); }
+      if (event.type === 'activity' && event.entry?.channelId === channel && ['id', 'runId', 'channelId', 'label', 'text'].every(key => typeof event.entry[key] === 'string') && activityKinds.has(event.entry.kind) && Number.isFinite(event.entry.timestamp)) recordActivity(event.agentId, event.entry as ActivityEntry, event.append === true);
+      if (['run_queued', 'run_started', 'done'].includes(event.type)) refreshPeerBusy();
+      return;
+    }
     const agent = agents.find(item => item.channelId === channel);
     if (agent && typeof event.agentId === 'string' && event.agentId !== agent.id) return;
     const active = activeRuns.current.get(channel);
+    if (event.type === 'typing' && completedRuns.current.has(event.runId)) return;
     if (event.type === 'done' && typeof event.runId === 'string') remember(completedRuns.current, event.runId);
     if (event.runId && active && active.runId !== event.runId && ['typing', 'error', 'done'].includes(event.type)) return;
-    if (event.type === 'run_started' && ['runId', 'agentId', 'clientMessageId'].every(key => typeof event[key] === 'string')) {
+    if ((event.type === 'run_started' || event.type === 'run_queued') && ['runId', 'agentId', 'clientMessageId'].every(key => typeof event[key] === 'string')) {
       if (completedRuns.current.has(event.runId) || active?.runId === event.runId) return;
       activeRuns.current.set(channel, event as Run);
       setBusy(current => ({ ...current, [channel]: true }));
-      setTyping(current => ({ ...current, [channel]: false }));
+      setTyping(current => ({ ...current, [channel]: event.typing === true }));
+      setTypingTargets(current => ({ ...current, [channel]: Array.isArray(event.typingTargets) ? event.typingTargets.filter((id: unknown) => typeof id === 'string') : [] }));
     } else if (event.type === 'activity' && agent && agent.id === event.agentId) {
       const entry = event.entry;
       if (entry && entry.channelId === channel && ['id', 'runId', 'channelId', 'label', 'text'].every(key => typeof entry[key] === 'string') && activityKinds.has(entry.kind) && Number.isFinite(entry.timestamp)) recordActivity(agent.id, entry as ActivityEntry, event.append === true);
-    } else if (event.type === 'typing' && typeof event.active === 'boolean') setTyping(current => ({ ...current, [channel]: event.active }));
+    } else if (event.type === 'typing' && typeof event.active === 'boolean') {
+      setTyping(current => ({ ...current, [channel]: event.active }));
+      setTypingTargets(current => ({ ...current, [channel]: Array.isArray(event.targets) ? event.targets.filter((id: unknown) => typeof id === 'string') : [] }));
+    }
     else if ((event.type === 'channel_message' || event.type === 'user_message') && typeof event.text === 'string' && typeof event.id === 'string') {
       if (event.type === 'user_message') {
         acknowledge(channel, event.id);
@@ -212,7 +234,7 @@ export function useChat() {
       }
       const duplicate = remember(knownMessages.current, `${channel}:${event.id}`);
       if (event.type === 'channel_message' && !duplicate) void notification.current?.play();
-      const published: ChatMessage = { id: event.id, sequence: event.sequence, author: event.type === 'user_message' ? 'user' : 'agent', text: event.text, time: clock(event.timestamp) };
+      const published: ChatMessage = { id: event.id, sequence: event.sequence, author: event.type === 'user_message' ? 'user' : 'agent', text: event.text, timestamp: event.timestamp ?? Date.now(), time: clock(event.timestamp) };
       setConversations(current => {
         const messages = current[channel] ?? [];
         return { ...current, [channel]: messages.some(item => item.id === published.id) ? messages.map(item => item.id === published.id ? published : item) : ordered([...messages, published]) };
@@ -272,27 +294,33 @@ export function useChat() {
     void receive(agent, message, controller);
     return message.id;
   }
-  async function editAvatar(agent: ChatAgent, avatar: AvatarAppearance) {
-    const { data, error } = await api.PATCH('/api/agents/{id}/avatar', { params: { path: { id: agent.id } }, body: { avatar } });
-    if (!data || error) throw new Error(error?.message ?? 'Could not save the avatar.');
-    setAgents(current => current.map(item => item.id === agent.id ? { ...item, avatar: data.avatar, real: item.real ? { ...item.real, avatar: data.avatar } : undefined } : item));
+  async function editAvatar(agent: ChatAgent, avatar: AvatarAppearance, allowedDmAgentIds: string[]) {
+    const { data, error } = await api.PATCH('/api/agents/{id}/settings', { params: { path: { id: agent.id } }, body: { avatar, allowedDmAgentIds } });
+    if (!data?.avatar || error) throw new Error(error?.message ?? 'Could not save agent settings.');
+    const savedAvatar = data.avatar;
+    setAgents(current => current.map(item => item.id === agent.id ? { ...item, avatar: savedAvatar, real: item.real ? { ...item.real, avatar: savedAvatar } : undefined } : item));
   }
   async function stop(channelId: string) {
     const agent = agents.find(item => item.channelId === channelId);
-    const clientMessageId = activeRuns.current.get(channelId)?.clientMessageId ?? pendingMessages.current.get(channelId)?.id;
+    const peer = [...peerRuns.current.values()].find(run => run.agentId === agent?.id);
+    const clientMessageId = activeRuns.current.get(channelId)?.clientMessageId ?? (requests.current.has(channelId) ? pendingMessages.current.get(channelId)?.id : undefined) ?? peer?.clientMessageId;
     if (!agent || !clientMessageId) return;
     try {
       const { response } = await api.POST('/api/agents/{id}/stop', { params: { path: { id: agent.id } }, body: { clientMessageId } });
       if (!response.ok) throw new Error('Stop failed');
+      if (peer?.clientMessageId === clientMessageId) { peerRuns.current.delete(peer.runId); refreshPeerBusy(); return; }
       const current = activeRuns.current.get(channelId);
       if (current && current.clientMessageId !== clientMessageId) return;
+      if (current) remember(completedRuns.current, current.runId);
       activeRuns.current.delete(channelId);
       requests.current.get(channelId)?.abort(); requests.current.delete(channelId);
       setBusy(value => ({ ...value, [channelId]: false })); setTyping(value => ({ ...value, [channelId]: false }));
       recordActivity(agent.id, { id: crypto.randomUUID(), runId: 'client', channelId, kind: 'status', label: 'Stopped', text: 'Response stopped by the user.', timestamp: Date.now() });
     } catch { recordError(agent, 'Could not stop the backend run. Check the connection and try again.'); }
   }
-  return { agents, conversations, drafts, busy, typing, activity, errors, addAgent, deleteAgent, editAvatar, send, stop, eventsConnected,
+  const visibleBusy = { ...busy };
+  for (const agent of agents) if (peerBusy[agent.id]) visibleBusy[agent.channelId] = true;
+  return { agents, conversations, drafts, busy: visibleBusy, typing, typingTargets, activity, errors, addAgent, deleteAgent, editAvatar, send, stop, eventsConnected,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
     setDraft: (channelId: string, text: string) => setDrafts(current => ({ ...current, [channelId]: text })) };
 }

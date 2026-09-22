@@ -16,12 +16,13 @@ function AvatarSample({ value, state, size, animated, look }: { value: AvatarApp
   </span>;
 }
 
-export function AgentAvatarPreview({ name, value, onChange, disabled = false }: {
-  name: string; value: AvatarAppearance; onChange: (avatar: AvatarAppearance) => void; disabled?: boolean;
+export function AgentAvatarPreview({ name, value, onChange, disabled = false, collapsible = true }: {
+  name: string; value: AvatarAppearance; onChange: (avatar: AvatarAppearance) => void; disabled?: boolean; collapsible?: boolean;
 }) {
   const id = useId();
   const [state, setState] = useState<AvatarState>('idle');
-  const [expanded, setExpanded] = useState(true);
+  const [disclosed, setExpanded] = useState(true);
+  const expanded = !collapsible || disclosed;
   const [direction, setDirection] = useState('natural');
   const look = lookDirections.find(item => item.value === direction)?.gaze;
   const label = avatarShapes.find(item => item.id === value.shape)!.label;
@@ -29,11 +30,11 @@ export function AgentAvatarPreview({ name, value, onChange, disabled = false }: 
   const colors = avatarColors.map(item => ({ value: String(item.value), label: String(item.label) }));
   if (!colors.some(item => item.value === value.color)) colors.push({ value: value.color, label: `Custom (${value.color})` });
   return <section className="rounded-lg border border-border bg-sidebar/30 p-3">
-    <button type="button" aria-expanded={expanded} aria-controls={`${id}-content`} onClick={() => setExpanded(open => !open)} className="flex w-full cursor-pointer items-center gap-1 rounded-sm text-left text-sm font-medium outline-none transition-colors hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none">
+    {collapsible && <button type="button" aria-expanded={expanded} aria-controls={`${id}-content`} onClick={() => setExpanded(open => !open)} className="flex w-full cursor-pointer items-center gap-1 rounded-sm text-left text-sm font-medium outline-none transition-colors hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none">
       <svg aria-hidden="true" viewBox="0 0 12 12" className={`size-3 transition-transform duration-200 motion-reduce:transition-none ${expanded ? 'rotate-90' : ''}`} fill="currentColor"><path d="m4 2 5 4-5 4z" /></svg>Avatar
-    </button>
+    </button>}
     <div id={`${id}-content`} data-slot="avatar-disclosure" aria-hidden={!expanded} inert={!expanded} className={`grid transition-[grid-template-rows,opacity] duration-240 ease-out motion-reduce:transition-none ${expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-    <div className="min-h-0 overflow-hidden"><div className="mt-3 space-y-3">
+    <div className="min-h-0 overflow-hidden"><div className={`${collapsible ? 'mt-3 ' : ''}space-y-3`}>
       <div role="img" aria-label={`${label} avatar, ${stateLabel.toLowerCase()} state`} data-testid="agent-avatar-preview" className="flex items-center gap-4 rounded-lg bg-background px-3 py-2">
         <AvatarSample value={value} state={state} size={80} animated={expanded && !disabled} look={look} />
         <div className="min-w-0 flex-1">

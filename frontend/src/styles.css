@@ -41,6 +41,15 @@
   }
 }
 
+@keyframes settings-forward {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes settings-back {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }

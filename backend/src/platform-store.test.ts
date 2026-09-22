@@ -68,6 +68,11 @@ describe('Prisma SQLite platform records', () => {
       expect(await store.client.message.count()).toBe(110);
       const saved = await store.appendMessage(channelId, 'user', 'Once');
       await expect(store.appendMessage(channelId, 'user', 'Twice', saved.id)).rejects.toThrow();
+      await store.appendMessage(channelId, 'user', 'Queued follow-up');
+      await store.appendMessage(channelId, 'assistant', 'Preceding turn finished');
+      const queuedContext = await store.context(channelId, saved.id, saved.sequence);
+      expect(queuedContext.at(-1)?.text).toBe('Preceding turn finished');
+      expect(queuedContext.some(message => message.text === 'Once' || message.text === 'Queued follow-up')).toBe(false);
     } finally { await store.close(); }
   });
 });

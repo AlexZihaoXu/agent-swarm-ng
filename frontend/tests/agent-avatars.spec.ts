@@ -165,11 +165,11 @@ test('existing agents can edit and persist appearance without changing their cha
   await page.emulateMedia({ reducedMotion: 'reduce' }); await page.goto('/');
   const card = page.getByRole('button', { name: 'Open conversation with Avery' });
   const beforeMessages = await page.getByRole('list', { name: 'Messages' }).innerText();
-  await card.click({ button: 'right' }); await page.getByRole('menuitem', { name: 'Edit avatar', exact: true }).click();
+  await card.click({ button: 'right' }); await page.getByRole('menuitem', { name: 'Edit agent', exact: true }).click();
   await page.getByRole('button', { name: 'Preview Triangle', exact: true }).click();
   await select(page, 'Avatar color', 'Apricot'); await select(page, 'Eye shape', 'Circles');
   const seed = await previewArt(page).getAttribute('data-avatar-seed');
-  await page.getByRole('button', { name: 'Save avatar', exact: true }).click();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const header = page.getByTestId('chat-avatar').locator('[data-avatar="current"] svg');
   await expect(header).toHaveAttribute('data-avatar-shape', 'triangle');
@@ -179,10 +179,10 @@ test('existing agents can edit and persist appearance without changing their cha
   await page.reload();
   await expect(header).toHaveAttribute('data-avatar-shape', 'triangle');
   await expect(header.locator('path').first()).toHaveAttribute('fill', '#f7ad51');
-  await card.click({ button: 'right' }); await page.getByRole('menuitem', { name: 'Edit avatar', exact: true }).click();
+  await card.click({ button: 'right' }); await page.getByRole('menuitem', { name: 'Edit agent', exact: true }).click();
   await page.getByRole('button', { name: 'Randomize', exact: true }).click();
-  await page.route('**/api/agents/avery/avatar', route => route.fulfill({ status: 503, json: { message: 'Save failed' } }));
-  await page.getByRole('button', { name: 'Save avatar', exact: true }).click();
+  await page.route('**/api/agents/avery/settings', route => route.request().method() === 'PATCH' ? route.fulfill({ status: 503, json: { message: 'Save failed' } }) : route.fallback());
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText('Save failed');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(header).toHaveAttribute('data-avatar-seed', seed!);
@@ -213,7 +213,7 @@ test('mobile preview is scrollable without horizontal overflow and unsaved chang
   await page.setViewportSize({ width: 360, height: 780 }); await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/'); const card = page.getByRole('button', { name: 'Open conversation with Avery' });
   const original = defaultAvatar('avery');
-  await card.click({ button: 'right' }); await page.getByRole('menuitem', { name: 'Edit avatar', exact: true }).click();
+  await card.click({ button: 'right' }); await page.getByRole('menuitem', { name: 'Edit agent', exact: true }).click();
   await page.getByRole('button', { name: 'Preview Triangle', exact: true }).click(); await select(page, 'Eye shape', 'Circles');
   const dialog = page.getByRole('dialog'); expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.getByRole('region', { name: 'Agent editor', exact: true }).evaluate(element => { element.scrollTop = 0; });

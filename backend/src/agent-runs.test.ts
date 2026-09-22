@@ -10,14 +10,14 @@ describe('backend-owned agent runs', () => {
     const events: object[] = [];
     const detach = runs.subscribe(event => events.push(event));
     const run = runs.start(identity, async ({ emit, signal }) => {
-      emit({ type: 'typing', active: true });
+      emit({ type: 'typing', active: true, targets: ['dm:agent:peer'] });
       await gate;
       expect(signal.aborted).toBe(false);
       emit({ type: 'channel_message', text: 'Finished offline' });
     });
     await Promise.resolve();
     detach();
-    expect(runs.snapshot()).toEqual([{ ...identity, runId: run.runId, typing: true }]);
+    expect(runs.snapshot()).toEqual([{ ...identity, runId: run.runId, typing: true, typingTargets: ['dm:agent:peer'] }]);
     expect(() => runs.start(identity, async () => {})).toThrow();
     const resumed: object[] = [];
     runs.subscribe(event => resumed.push(event));
@@ -34,7 +34,7 @@ describe('backend-owned agent runs', () => {
     });
     await Promise.resolve();
     const revision = runs.stopVersion(identity.agentId);
-    const joined = runs.offer(identity.agentId, { role: 'user', text: 'task' }, { type: 'user_message', text: 'task' });
+    const joined = runs.offer(identity.agentId, { role: 'user', text: 'task' }, { type: 'user_message', text: 'task', channelId: identity.channelId });
     expect(joined?.runId).toBe(run.runId);
     expect(joined?.clientMessageId).toBe(identity.clientMessageId);
     expect(await runs.stop(identity.agentId, 'stale')).toBe(false);
@@ -44,6 +44,35 @@ describe('backend-owned agent runs', () => {
     expect(inference).not.toHaveBeenCalled();
     expect(runs.offer(identity.agentId, { role: 'user', text: 'late' }, {})).toBeUndefined();
     expect(run.inbox.add({ role: 'user', text: 'late' })).toBe(false);
+  });
+
+  it('queues distinct conversations without leaking messages between their inboxes', async () => {
+    const runs = new AgentRuns(); let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const human = runs.start(identity, async () => gate);
+    let received: string[] = [];
+    const dm = runs.enqueue({ ...identity, channelId: 'dm:a:b', clientMessageId: 'dm-message' }, async ({ inbox, signal }) => {
+      inbox.prepend({ role: 'user', text: 'original DM' });
+      received = (await inbox.take(signal)).messages.map(message => message.text);
+    });
+    await Promise.resolve();
+    expect(runs.snapshot().find(run => run.runId === dm.runId)?.queued).toBe(true);
+    expect(runs.offer(identity.agentId, { role: 'user', text: 'wrong channel' }, { channelId: 'other' })).toBeUndefined();
+    expect(runs.offer(identity.agentId, { role: 'user', text: 'follow-up DM' }, { channelId: 'dm:a:b' })?.runId).toBe(dm.runId);
+    release(); await human.finished; await dm.finished;
+    expect(received).toEqual(['original DM', 'follow-up DM']);
+    expect(runs.snapshot()).toEqual([]);
+  });
+
+  it('stops queued conversation work without waiting for another active conversation', async () => {
+    const runs = new AgentRuns(); let release!: () => void;
+    const active = runs.start(identity, async () => new Promise<void>(resolve => { release = resolve; }));
+    await Promise.resolve(); const work = vi.fn(async () => {});
+    const queued = runs.enqueue({ ...identity, channelId: 'dm:a:b', clientMessageId: 'queued' }, work);
+    expect(await runs.stop(identity.agentId, 'queued')).toBe(true);
+    await queued.finished; expect(work).not.toHaveBeenCalled(); expect(runs.has(identity.agentId)).toBe(true);
+    expect(runs.stopVersion(identity.agentId)).toBe(0);
+    release(); await active.finished; await runs.shutdown();
   });
 
   it('honors an explicitly configured deadline without requiring a dashboard', async () => {

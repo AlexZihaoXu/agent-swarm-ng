@@ -19,7 +19,14 @@ export class MessageInbox {
     this.wake?.(); this.triage?.abort(); this.changed?.();
     return true;
   }
+  prepend(message: ChannelMessage) {
+    if (!this.pending.length) return this.add(message);
+    if (this.closed) return false;
+    this.pending.unshift(message); this.revision++; this.wake?.();
+    return true;
+  }
   hasPending() { return this.pending.length > 0; }
+  pendingIds() { return this.pending.map(message => message.id).filter((id): id is string => Boolean(id)); }
   close() { this.closed = true; this.triage?.abort(); this.wake?.(); }
   async take(signal: AbortSignal) {
     while (!this.closed && Date.now() - this.receivedAt < this.debounceMs) {

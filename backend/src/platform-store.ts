@@ -35,9 +35,9 @@ export class PlatformStore {
     // Foreign keys cascade to the agent's channels and messages in the same statement.
     return (await this.client.agent.deleteMany({ where: { id, name } })).count > 0;
   }
-  async listAgents(after?: number, limit = 100) {
+  async listAgents(after?: number, limit = 100, search?: string) {
     await this.initialize();
-    const rows = await this.client.agent.findMany({ where: after ? { sequence: { gt: after } } : {}, orderBy: { sequence: 'asc' }, take: limit + 1, include: agentSelection });
+    const rows = await this.client.agent.findMany({ where: { ...(after ? { sequence: { gt: after } } : {}), ...(search?.trim() ? { name: { contains: search.trim() } } : {}) }, orderBy: { sequence: 'asc' }, take: limit + 1, include: agentSelection });
     const more = rows.length > limit;
     const agents = rows.slice(0, limit);
     return { agents: await Promise.all(agents.map(agent => this.withLatestMessage(agent))), nextCursor: more ? agents.at(-1)!.sequence : null };
@@ -74,8 +74,10 @@ export class PlatformStore {
     await this.initialize();
     return this.client.message.findUnique({ where: { id } });
   }
-  async context(channelId: string, excludeMessageId?: string) {
-    const { messages } = await this.messages(channelId, undefined, excludeMessageId ? 9 : 8);
+  async context(channelId: string, excludeMessageId?: string, pendingAfterSequence?: number) {
+    await this.initialize();
+    const messages = pendingAfterSequence === undefined ? (await this.messages(channelId, undefined, excludeMessageId ? 9 : 8)).messages
+      : (await this.client.message.findMany({ where: { channelId, OR: [{ role: 'assistant' }, { sequence: { lt: pendingAfterSequence } }] }, orderBy: { sequence: 'desc' }, take: 8 })).reverse();
     return messages.filter(message => message.id !== excludeMessageId).slice(-8).map(message => ({
       id: message.id, sequence: message.sequence, role: message.role, timestamp: message.createdAt.getTime(),
       ...messageText(message.text),

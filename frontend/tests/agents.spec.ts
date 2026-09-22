@@ -123,9 +123,9 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const dotBox = (await working.boundingBox())!;
   await expect(avatar.locator('[data-slot="avatar-face"]')).not.toHaveCSS('mask-image', 'none');
-  await emitChannel(page, { type: 'typing', channelId: 'wrong-channel', active: true });
+  await emitChannel(page, { type: 'typing', channelId: 'wrong-channel', active: true, targets: ['wrong-channel'] });
   await expect(page.getByRole('status')).toHaveText('Agent is working…');
-  await emitChannel(page, { type: 'typing', channelId: real.channelId, active: true });
+  await emitChannel(page, { type: 'typing', channelId: real.channelId, active: true, targets: [real.channelId] });
   await expect(page.getByRole('status')).toHaveText('Real agent is typing…');
   await expect(page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-slot="typing-badge"]')).toBeVisible();
   const badge = page.getByTestId('chat-avatar').locator('[data-slot="typing-badge"]');
@@ -168,7 +168,7 @@ for (const ending of ['error', 'stop'] as const) {
     await page.getByRole('button', { name: 'Create agent', exact: true }).click();
     await page.getByLabel(`Message ${real.name}`).fill('Hello');
     await page.getByRole('button', { name: 'Send message' }).click();
-    await emitChannel(page, { type: 'typing', channelId: real.channelId, active: true });
+    await emitChannel(page, { type: 'typing', channelId: real.channelId, active: true, targets: [real.channelId] });
     await expect(page.getByRole('status')).toHaveText('Real agent is typing…');
     if (ending === 'stop') await page.getByRole('button', { name: 'Stop response' }).click();
     else {

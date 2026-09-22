@@ -4,12 +4,12 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CreateAgentForm } from '@/components/create-agent-form';
 import { DeleteAgentForm } from '@/components/delete-agent-form';
-import { EditAgentAvatarForm } from '@/components/edit-agent-avatar-form';
+import { EditAgentForm } from '@/components/edit-agent-form';
 import type { AvatarAppearance } from '@/lib/agent-avatar';
 import type { ChatAgent, RealAgent } from '@/use-chat';
 
 // Compositions: Kibo context-menu/standard/context-menu-standard-1 and dialog/standard/dialog-standard-1.
-export function AgentPanel({ children, className, agents, onCreated, onDelete, onEditAvatar }: { children: ReactNode; className: string; agents: ChatAgent[]; onCreated: (agent: RealAgent) => void; onDelete: (agent: ChatAgent, confirmation: string) => Promise<void>; onEditAvatar: (agent: ChatAgent, avatar: AvatarAppearance) => Promise<void> }) {
+export function AgentPanel({ children, className, agents, onCreated, onDelete, onEditAvatar }: { children: ReactNode; className: string; agents: ChatAgent[]; onCreated: (agent: RealAgent) => void; onDelete: (agent: ChatAgent, confirmation: string) => Promise<void>; onEditAvatar: (agent: ChatAgent, avatar: AvatarAppearance, allowedDmAgentIds: string[]) => Promise<void> }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [contextAgent, setContextAgent] = useState<ChatAgent | null>(null);
   const [deletingAgent, setDeletingAgent] = useState<ChatAgent | null>(null);
@@ -57,7 +57,7 @@ export function AgentPanel({ children, className, agents, onCreated, onDelete, o
             </ContextMenu.Item>
             {contextAgent && <ContextMenu.Item onSelect={() => { setDeletingAgent(null); setEditingAgent(contextAgent); setDialogOpen(true); }} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted">
               <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="size-4"><path d="m15 5 4 4M5 15 16 4a2.8 2.8 0 0 1 4 4L9 19l-5 1z" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              Edit avatar
+              Edit agent
             </ContextMenu.Item>}
             {contextAgent && <ContextMenu.Item onSelect={() => { setEditingAgent(null); setDeletingAgent(contextAgent); setDialogOpen(true); }} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-red-400 outline-none data-[highlighted]:bg-muted">
               <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="size-4 shrink-0"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6m4-6v6" /></svg>
@@ -78,12 +78,11 @@ export function AgentPanel({ children, className, agents, onCreated, onDelete, o
             else panelRef.current?.focus();
           }}
         >
-          <ScrollArea label="Agent editor" viewportTabIndex={-1} viewportClassName="max-h-[calc(90dvh-1rem)] [&>div]:!block"><div className="p-4">
+          {editingAgent ? <EditAgentForm key={editingAgent.id} agent={editingAgent} onSave={onEditAvatar} onDone={() => setDialogOpen(false)} onBusyChange={setDeleting} /> : <ScrollArea label="Agent editor" viewportTabIndex={-1} viewportClassName="max-h-[calc(90dvh-1rem)] [&>div]:!block"><div className="p-4">
           {deletingAgent
             ? <DeleteAgentForm key={deletingAgent.id} agent={deletingAgent} onDelete={onDelete} onBusyChange={setDeleting} onDone={() => setDialogOpen(false)} />
-            : editingAgent ? <EditAgentAvatarForm key={editingAgent.id} agent={editingAgent} onSave={onEditAvatar} onDone={() => setDialogOpen(false)} onBusyChange={setDeleting} />
             : <CreateAgentForm onCreated={agent => { onCreated(agent); setDialogOpen(false); }} /> }
-          </div></ScrollArea>
+          </div></ScrollArea>}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

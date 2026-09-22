@@ -1,0 +1,139 @@
+import type { AgentRuns, RunContext } from './agent-runs';
+import type { PlatformStore } from './platform-store';
+import type { EndpointStore } from './endpoint-store';
+import type { CodexProvider } from './codex-provider';
+import { SwarmStore } from './swarm-store';
+import { createDmTools, type DmReceipt } from './dm-tools';
+import { resolveChatConnection } from './chat-connection';
+import type { AgentMessageSource, ChannelMessage } from './chat-runtime';
+import { runChat } from './chat-runner';
+import { createChatHistoryTools } from './chat-history-tools';
+import { messageText } from './message-text';
+
+type Job = { senderId: string; rootAgentId: string; chainId: string; run: ReturnType<AgentRuns['enqueue']>; cleanup: Promise<void> };
+/** Publishes once, then admits a source-labelled message to the recipient's normal inbox. */
+export class DmBroker {
+  readonly store: SwarmStore;
+  private starting?: Promise<void>;
+  private closing = false;
+  private jobs = new Map<string, Job>();
+  private cancelling = new Map<string, Promise<void>>();
+  private deleting = new Set<string>();
+  private linked = new WeakSet<AbortSignal>();
+  constructor(private database: PlatformStore, private endpoints: EndpointStore, private codex: CodexProvider, private runs: AgentRuns) { this.store = new SwarmStore(database); }
+  ready() { return this.starting ??= this.store.cancelInterruptedDeliveries(); }
+  async send(senderId: string, recipientId: string, text: string, callId: string, context: RunContext, inheritedChain?: string): Promise<DmReceipt> {
+    context.signal.throwIfAborted();
+    if (this.closing || this.deleting.has(senderId) || this.deleting.has(recipientId)) throw new Error('DM delivery is unavailable.');
+    await this.ready(); context.signal.throwIfAborted();
+    const chainId = inheritedChain ?? context.runId;
+    if (!inheritedChain) {
+      if (!this.linked.has(context.signal)) {
+        this.linked.add(context.signal);
+        context.signal.addEventListener('abort', () => { void this.cancelChain(chainId).catch(() => {}); }, { once: true });
+      }
+      await this.store.beginChain(senderId, chainId);
+    }
+    context.signal.throwIfAborted();
+    const { message, duplicate } = await this.store.send({ senderId, recipientId, text, chainId, deliveryKey: `${context.runId}:${callId}` });
+    if (duplicate) return { id: message.id, conversationId: message.conversationId, status: message.status, duplicate };
+    let status = message.status;
+    try {
+      const chain = await this.database.client.dmChain.findUnique({ where: { id: chainId } });
+      if (this.closing || context.signal.aborted || this.deleting.has(senderId) || this.deleting.has(recipientId) || !chain?.rootAgentId || chain.cancelled) {
+        status = 'cancelled'; await this.store.finish(message.id, recipientId, 'cancelled');
+      } else {
+        const recipient = await this.database.findAgent(recipientId);
+        if (!recipient) throw new Error('Recipient no longer exists.');
+        const incoming = await this.store.message(recipientId, senderId, message.id);
+        const input: ChannelMessage = { role: 'user', text, id: message.id, timestamp: message.createdAt.getTime(), source: { agentId: senderId, name: incoming.sender.name, channelId: message.conversationId, chainId, messageId: message.id } };
+        const channelId = recipient.channels[0].id;
+        const run = this.runs.offer(recipientId, input, { type: 'dm_updated', channelId, conversationId: message.conversationId }) ?? this.runs.enqueue({ agentId: recipientId, channelId, clientMessageId: message.id, inputSource: 'agent' }, ctx => this.runInbox(recipientId, input, ctx), { queueTimeoutMs: 300000, executionTimeoutMs: 90000 });
+        const cleanup = run.finished.then(async () => {
+          await this.store.finish(message.id, recipientId, run.controller.signal.aborted ? 'cancelled' : 'failed');
+          run.emit({ type: 'dm_updated', conversationId: message.conversationId });
+        }).catch(() => {}).finally(() => { this.jobs.delete(message.id); });
+        this.jobs.set(message.id, { senderId, rootAgentId: chain.rootAgentId, chainId, run, cleanup });
+      }
+    } catch {
+      status = 'failed'; await this.store.finish(message.id, recipientId, 'failed');
+    }
+    context.emit({ type: 'dm_updated', conversationId: message.conversationId });
+    return { id: message.id, conversationId: message.conversationId, status, duplicate: false };
+  }
+  async runInbox(agentId: string, incoming: ChannelMessage, context: RunContext) {
+    const agent = await this.database.findAgent(agentId);
+    if (!agent) throw new Error('Agent no longer exists.');
+    const channel = { id: agent.channels[0].id, kind: 'platform-chat' as const, agentId };
+    const connection = await resolveChatConnection(agent.endpointId, this.endpoints, this.codex, context.signal);
+    const human = await this.database.context(channel.id, incoming.source ? undefined : incoming.id, incoming.source ? undefined : incoming.sequence);
+    const peerHistory = await this.database.client.dmMessage.findMany({ where: { OR: [{ senderId: agentId }, { recipientId: agentId, status: { notIn: ['queued', 'running'] } }] }, orderBy: { sequence: 'desc' }, take: 8, include: { sender: { select: { name: true } }, recipient: { select: { name: true } } } });
+    const threads = new Map<string, AgentMessageSource>();
+    const peers: ChannelMessage[] = peerHistory.reverse().map(message => {
+      const source = { agentId: message.senderId, name: message.sender.name, channelId: message.conversationId, chainId: message.chainId, messageId: message.id };
+      if (message.recipientId === agentId) threads.set(message.conversationId, source);
+      const preview = messageText(message.text);
+      return { id: message.id, role: message.senderId === agentId ? 'assistant' : 'user', text: message.senderId === agentId ? `[Sent to Agent: ${message.recipient.name} in ${message.conversationId}]
+${preview.text}` : preview.text, timestamp: message.createdAt.getTime(), ...(message.recipientId === agentId ? { source } : {}) };
+    });
+    const pending = new Set([incoming.id, ...context.inbox.pendingIds()]);
+    const history = [...human, ...peers].filter(message => !pending.has(message.id)).sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)).slice(-8);
+    let humanBatch = !incoming.source;
+    let inherited = incoming.source?.chainId;
+    let sources: AgentMessageSource[] = incoming.source ? [incoming.source] : [];
+    const chainFor = (recipientId: string) => humanBatch ? undefined : sources.find(source => source.agentId === recipientId)?.chainId ?? inherited;
+    const peerTools = createDmTools(this.store, agentId, (recipientId, text, callId) => this.send(agentId, recipientId, text, callId, context, chainFor(recipientId)));
+    await runChat(context, {
+      name: agent.name, model: agent.model, thinkingLevel: agent.thinkingLevel, baseUrl: connection.baseUrl, apiKey: connection.apiKey, channel,
+      publishPeer: async (channelId, text, callId) => {
+        const source = threads.get(channelId);
+        if (!source) throw new Error('Unknown agent thread. Use send_dm for a new allowed contact.');
+        return JSON.stringify(await this.send(agentId, source.agentId, text, callId, context, chainFor(source.agentId)));
+      },
+    }, history, incoming, async text => {
+      if (!humanBatch) throw new Error('This input is from an agent. Reply to its agent thread, not the private human channel.');
+      const message = await this.database.appendMessage(channel.id, 'assistant', text);
+      return { id: message.id, sequence: message.sequence, channelId: channel.id, role: message.role, text, timestamp: message.createdAt.getTime() };
+    }, connection.accessKey, connection.subscriptionRuntime, [...createChatHistoryTools(this.database, channel, agent.name), ...peerTools], {
+      prepare: async messages => {
+        const admitted: ChannelMessage[] = [];
+        for (const message of messages) {
+          if (!message.source || await this.store.claim(message.source.messageId, agentId)) admitted.push(message);
+        }
+        humanBatch = admitted.some(message => !message.source);
+        sources = admitted.flatMap(message => message.source ? [message.source] : []);
+        inherited = sources[0]?.chainId;
+        for (const source of sources) threads.set(source.channelId, source);
+        return admitted;
+      },
+      complete: async (messages, failed) => {
+        for (const message of messages) if (message.source) {
+          await this.store.finish(message.source.messageId, agentId, context.signal.aborted ? 'cancelled' : failed ? 'failed' : 'completed');
+          context.emit({ type: 'dm_updated', conversationId: message.source.channelId });
+        }
+      },
+    });
+  }
+  cancelChain(chainId: string) {
+    const existing = this.cancelling.get(chainId); if (existing) return existing;
+    const cancellation = this.store.cancelChain(chainId).finally(() => {
+      for (const job of this.jobs.values()) if (job.chainId === chainId && !job.run.humanOwned) job.run.controller.abort();
+    });
+    this.cancelling.set(chainId, cancellation);
+    void cancellation.finally(() => { this.cancelling.delete(chainId); }).catch(() => {});
+    return cancellation;
+  }
+  async stopChainForRun(runId: string) {
+    const job = [...this.jobs.values()].find(item => item.run.runId === runId);
+    await this.cancelChain(job?.chainId ?? runId);
+  }
+  async beforeDelete(agentId: string) {
+    this.deleting.add(agentId);
+    const related = [...this.jobs.values()].filter(job => job.senderId === agentId || job.rootAgentId === agentId || job.run.agentId === agentId);
+    await Promise.all([...new Set(related.map(job => job.chainId))].map(id => this.cancelChain(id)));
+    await Promise.all(related.filter(job => !job.run.humanOwned).map(job => job.cleanup));
+  }
+  afterDelete(agentId: string) { this.deleting.delete(agentId); }
+  close() { this.closing = true; }
+  async settled() { await this.starting; await Promise.all([...this.jobs.values()].map(job => job.cleanup)); await Promise.all(this.cancelling.values()); }
+}

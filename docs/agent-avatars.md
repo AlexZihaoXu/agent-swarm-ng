@@ -2,7 +2,7 @@
 
 ## Appearance and editing
 
-Create an agent with the **Avatar** controls, or right-click an existing agent and choose **Edit avatar**. The same editor shows a large preview and an actual sidebar-size sample. Both samples use the real `AvatarFace` mask/cutout and `PresenceIndicator`, including the green idle dot, same-size aqua working pulse, and typing pill. The large sample is a proportional enlargement of the sidebar composition. The Avatar disclosure animates its height/opacity and chevron; collapsed controls are inert and hidden from assistive technology. Editor dialogs use the existing slim ScrollArea with inset spacing from the rounded modal edge, rather than a native scrollbar flush against it.
+Create an agent with the **Avatar** controls, or right-click an existing agent and choose **Edit agent → Avatar**. The same editor shows a large preview and an actual sidebar-size sample. Both samples use the real `AvatarFace` mask/cutout and `PresenceIndicator`, including the green idle dot, same-size aqua working pulse, and typing pill. The large sample is a proportional enlargement of the sidebar composition. During creation, the Avatar disclosure animates its height/opacity and chevron; collapsed controls are inert and hidden from assistive technology. The Edit agent modal uses a fixed Avatar tab without a redundant disclosure; its Settings tab configures [agent communication](agent-communication.md). Editor dialogs use the existing slim ScrollArea with inset spacing from the rounded modal edge, rather than a native scrollbar flush against it.
 
 - Eight original SVG silhouettes: pebble, squircle, gumdrop, rounded triangle, bean, pear, capsule, and soft diamond.
 - Six named palette colors, plus display support for a saved custom hex color.
@@ -29,7 +29,7 @@ An additive nullable `Agent.avatar` TEXT column holds validated appearance JSON.
 
 Reviewed pinned Kibo source and rendered previews for Simple Select, Button with Text, the existing dialog/context-menu compositions, and avatar badge placement. Those patterns provide controls/framing, not expressive artwork; the SVG family is original, following the custom illustration approach discussed with the owner.
 
-Implementation lives in `frontend/src/lib/agent-avatar.ts`, `avatar-motion.ts`, `avatar-perspective.ts`, `components/agent-avatar-art.tsx`, `agent-avatar-preview.tsx`, and `edit-agent-avatar-form.tsx`; backend validation lives in `backend/src/agent-avatar.ts`.
+Implementation lives in `frontend/src/lib/agent-avatar.ts`, `avatar-motion.ts`, `avatar-perspective.ts`, `components/agent-avatar-art.tsx`, `agent-avatar-preview.tsx`, and `edit-agent-form.tsx`; backend validation lives in `backend/src/agent-avatar.ts`.
 
 ## Validation
 

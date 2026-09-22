@@ -15,7 +15,7 @@ type RequestBody = { tools?: { function: { name: string } }[]; messages: { role:
 let server: Server;
 let baseUrl: string;
 let folder: string;
-let behavior: 'tool' | 'raw' | 'wrong-channel' | 'after-reminder' | 'http-error' | 'publication-error' | 'research' | 'ack-raw' | 'ack-silent' | 'history' | 'triage-interrupt' | 'multipart' = 'tool';
+let behavior: 'tool' | 'raw' | 'wrong-channel' | 'after-reminder' | 'http-error' | 'publication-error' | 'research' | 'ack-raw' | 'ack-silent' | 'history' | 'triage-interrupt' | 'multipart' | 'dm-typing' = 'tool';
 let captured: RequestBody[] = [];
 let authorization: string | undefined;
 let argumentGate: Promise<void> | undefined;
@@ -34,7 +34,7 @@ beforeAll(async () => {
     const hasTool = body.messages.some(message => message.role === 'tool');
     const reminded = JSON.stringify(body.messages).includes('Automatic channel reminder:');
     const acknowledgmentCase = behavior === 'ack-raw' || behavior === 'ack-silent';
-    const shouldPublish = acknowledgmentCase ? !hasTool || (behavior === 'ack-raw' && reminded) : behavior !== 'raw' && !(behavior === 'publication-error' && hasTool) && (behavior !== 'after-reminder' || reminded);
+    const shouldPublish = behavior === 'dm-typing' ? !hasTool : acknowledgmentCase ? !hasTool || (behavior === 'ack-raw' && reminded) : behavior !== 'raw' && !(behavior === 'publication-error' && hasTool) && (behavior !== 'after-reminder' || reminded);
     if (request.url !== '/v1/chat/completions') { response.writeHead(404).end(); return; }
     const system = body.messages.find(message => message.role === 'system')?.content;
     const channelId = (typeof system === 'string' ? system : '').match(/channel is ([\w-]+)\./)?.[1];
@@ -59,9 +59,14 @@ beforeAll(async () => {
       const args = step === 1 ? { responseId: 'missing' } : { channelId, text: step === 0 ? 'On it' : 'Research complete', final: step > 0 };
       chunk({ tool_calls: [{ index: 0, id: `step-${step}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
     } else if (shouldPublish) {
-      chunk({ tool_calls: [{ index: 0, id: 'call-test', type: 'function', function: { name: 'send_message', arguments: '' } }] });
-      if (argumentGate && !(behavior === 'triage-interrupt' && JSON.stringify(body.messages).includes('Corrected request'))) await argumentGate;
-      chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify({ channelId: behavior === 'wrong-channel' ? 'other-channel' : channelId, text: acknowledgmentCase ? (hasTool ? 'Recovered result' : 'On it') : 'Published hello', ...(acknowledgmentCase ? { final: hasTool } : {}) }) } }] });
+      chunk({ tool_calls: [{ index: 0, id: 'call-test', type: 'function', function: { name: behavior === 'dm-typing' ? 'send_dm' : 'send_message', arguments: '' } }] });
+      const args = JSON.stringify({ ...(behavior === 'dm-typing' ? { recipientId: 'unavailable-peer' } : { channelId: behavior === 'wrong-channel' ? 'other-channel' : channelId }), text: acknowledgmentCase ? (hasTool ? 'Recovered result' : 'On it') : 'Published hello', ...(acknowledgmentCase ? { final: hasTool } : {}) });
+      if (argumentGate && !(behavior === 'triage-interrupt' && JSON.stringify(body.messages).includes('Corrected request'))) {
+        const split = args.indexOf('"text":"') + 9;
+        chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(0, split) } }] });
+        await argumentGate;
+        chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(split) } }] });
+      } else chunk({ tool_calls: [{ index: 0, function: { arguments: args } }] });
     }
     chunk({}, shouldPublish ? 'tool_calls' : 'stop');
     response.end('data: [DONE]\n\n');
@@ -95,9 +100,9 @@ async function* streamed(response: Response) {
     }
   } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
-const channelEvents = (body: string) => eventsFrom(body).filter(event => !['activity', 'user_message', 'run_started', 'heartbeat'].includes(event.type)).map(event => {
+const channelEvents = (body: string) => eventsFrom(body).filter(event => !['activity', 'user_message', 'run_queued', 'run_started', 'heartbeat'].includes(event.type)).map(event => {
   if (event.type === 'done') return { type: 'done' };
-  const { eventId, runId, agentId, ...publication } = event;
+  const { eventId, runId, agentId, targets, ...publication } = event;
   return publication;
 });
 
@@ -389,8 +394,8 @@ describe('Pi chat and platform channel boundary', () => {
     } finally { await app.close(); }
   }, 15000);
 
-  it('emits typing before the model has finished generating tool arguments', async () => {
-    behavior = 'tool';
+  it.each(['tool', 'dm-typing'] as const)('emits destination-scoped typing while message content streams (%s)', async mode => {
+    behavior = mode;
     let release!: () => void;
     argumentGate = new Promise<void>(resolve => { release = resolve; });
     const app = await testApp();
@@ -416,13 +421,14 @@ describe('Pi chat and platform channel boundary', () => {
           if (event.type === 'typing') typing = event;
         }
       }
-      expect(typing).toMatchObject({ type: 'typing', channelId: agent.channelId, active: true, runId: expect.any(String), eventId: expect.any(String) });
+      expect(typing).toMatchObject({ type: 'typing', channelId: agent.channelId, active: true, targets: [mode === 'dm-typing' ? `dm:${[agent.id, 'unavailable-peer'].sort().join(':')}` : agent.channelId], runId: expect.any(String), eventId: expect.any(String) });
       release();
       let rest = buffer;
       while (true) { const { value, done } = await reader.read(); if (done) break; rest += decoder.decode(value, { stream: true }); }
       reader.releaseLock();
       expect(rest).toContain('"active":false');
-      expect(rest).toContain('Published hello');
+      if (mode === 'tool') expect(rest).toContain('Published hello');
+      else expect(eventsFrom(rest).some(event => event.type === 'channel_message')).toBe(false);
       expect(JSON.stringify(channelEvents(rest))).not.toContain('PRIVATE');
     } finally { clearTimeout(timeout); controller.abort(); release(); argumentGate = undefined; await app.close(); }
   });

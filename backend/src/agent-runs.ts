@@ -1,14 +1,16 @@
 import { MessageInbox } from './message-inbox';
+import { AgentWorkQueue, type WorkTicket } from './agent-work-queue';
 import type { ChannelMessage } from './chat-runtime';
-export type RunIdentity = { agentId: string; channelId: string; clientMessageId: string };
-export type RunState = RunIdentity & { runId: string; typing: boolean };
+export type RunIdentity = { agentId: string; channelId: string; clientMessageId: string; inputSource?: 'agent' };
+export type RunState = RunIdentity & { runId: string; typing: boolean; typingTargets?: string[]; queued?: boolean };
 export type RunEvent = Record<string, unknown> & { type: string; eventId: string; runId: string; agentId: string; channelId: string };
 export type RunContext = { runId: string; signal: AbortSignal; emit: (event: object) => void; inbox: MessageInbox };
-type Run = RunState & { controller: AbortController; finished: Promise<void>; inbox: MessageInbox; emit?: (event: object) => void };
+type Run = RunState & { humanOwned: boolean; controller: AbortController; finished: Promise<void>; inbox: MessageInbox; emit: (event: object) => void; ticket?: WorkTicket };
 
-/** One backend process owns work; stream listeners are disposable observers. */
+/** One execution slot per agent; separate conversations keep separate runs/inboxes. */
 export class AgentRuns {
-  private active = new Map<string, Run>();
+  private runs = new Map<string, Run>();
+  private queue = new AgentWorkQueue();
   private listeners = new Set<(event: RunEvent) => void>();
   private closing = false;
   private stops = new Map<string, number>();
@@ -16,60 +18,80 @@ export class AgentRuns {
   constructor(private timeoutMs = Number(process.env.AGENT_RUN_TIMEOUT_MS ?? 0)) {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 0 || timeoutMs > 2147483647) throw new Error('Invalid AGENT_RUN_TIMEOUT_MS');
   }
-  has(agentId: string) { return this.active.has(agentId); }
+  has(agentId: string) { return [...this.runs.values()].some(run => run.agentId === agentId); }
   offer(agentId: string, message: ChannelMessage, event: object) {
-    const run = this.active.get(agentId);
-    if (!run || run.controller.signal.aborted || !run.inbox.add(message)) return undefined;
-    run.emit?.(event);
-    return run;
+    const channelId = (event as { channelId?: string }).channelId;
+    // Never offer a human message to a peer-DM session for the same agent.
+    const run = [...this.runs.values()].reverse().find(item => item.agentId === agentId && item.channelId === channelId && !item.controller.signal.aborted && item.inbox.add(message));
+    if (!run) return undefined;
+    if (!message.source) run.humanOwned = true;
+    run.emit(event); return run;
   }
-  async settled(agentId: string) { const run = this.active.get(agentId); await run?.finished; return run?.controller.signal.aborted ?? false; }
+  async settled(agentId: string) {
+    const runs = [...this.runs.values()].filter(run => run.agentId === agentId);
+    await Promise.all(runs.map(run => run.finished));
+    return runs.some(run => run.controller.signal.aborted);
+  }
   snapshot(): RunState[] {
-    return [...this.active.values()].map(({ agentId, channelId, clientMessageId, runId, typing }) => ({ agentId, channelId, clientMessageId, runId, typing }));
+    return [...this.runs.values()].map(({ agentId, channelId, clientMessageId, runId, typing, typingTargets, queued }) => ({ agentId, channelId, clientMessageId, runId, typing, ...(typingTargets ? { typingTargets } : {}), ...(queued ? { queued: true } : {}) }));
   }
   subscribe(listener: (event: RunEvent) => void) {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
   }
   start(identity: RunIdentity, work: (context: RunContext) => Promise<void>) {
-    if (this.closing || this.has(identity.agentId)) throw new Error('Agent is unavailable');
-    const run: Run = { ...identity, runId: crypto.randomUUID(), typing: false, controller: new AbortController(), finished: Promise.resolve(), inbox: new MessageInbox() };
-    this.active.set(identity.agentId, run);
+    if (this.has(identity.agentId)) throw new Error('Agent is unavailable');
+    return this.enqueue(identity, work);
+  }
+  enqueue(identity: RunIdentity, work: (context: RunContext) => Promise<void>, options: { queueTimeoutMs?: number; executionTimeoutMs?: number } = {}) {
+    if (this.closing) throw new Error('Agent is unavailable');
+    const run: Run = { ...identity, humanOwned: identity.inputSource !== 'agent', runId: crypto.randomUUID(), typing: false, queued: true, controller: new AbortController(), finished: Promise.resolve(), inbox: new MessageInbox(), emit: () => {} };
     let sequence = 0;
-    const emit = (data: object) => {
+    run.emit = data => {
       const event = { ...data, agentId: run.agentId, channelId: run.channelId, runId: run.runId, eventId: `${run.runId}:${++sequence}` } as RunEvent;
-      if (event.type === 'typing') run.typing = event.active === true;
+      if (event.type === 'typing') {
+        run.typing = event.active === true;
+        run.typingTargets = Array.isArray(event.targets) ? event.targets.filter((value): value is string => typeof value === 'string') : undefined;
+      }
       for (const listener of this.listeners) {
         try { listener(event); } catch { this.listeners.delete(listener); }
       }
     };
-    run.emit = emit;
-    const timer = this.timeoutMs ? setTimeout(() => run.controller.abort(), this.timeoutMs) : undefined;
-    run.finished = Promise.resolve().then(async () => {
-      emit({ type: 'run_started', clientMessageId: run.clientMessageId });
-      await work({ runId: run.runId, signal: run.controller.signal, emit, inbox: run.inbox });
-    }).catch(() => {
-      emit({ type: 'error', message: run.controller.signal.aborted ? 'The agent was stopped.' : 'The agent run failed.' });
-    }).finally(() => {
-      run.inbox.close();
-      clearTimeout(timer);
-      this.active.delete(run.agentId);
-      emit({ type: 'done', stopped: run.controller.signal.aborted });
-    });
-    return run;
+    this.runs.set(run.runId, run);
+    let detach = () => {};
+    try {
+      run.ticket = this.queue.submit(run.agentId, run.runId, async signal => {
+        run.queued = false;
+        run.emit({ type: 'run_started', clientMessageId: run.clientMessageId });
+        await work({ runId: run.runId, signal, emit: run.emit, inbox: run.inbox });
+      }, { ...options, executionTimeoutMs: options.executionTimeoutMs ?? this.timeoutMs });
+      run.emit({ type: 'run_queued', clientMessageId: run.clientMessageId, queued: true });
+      const abortTicket = () => run.ticket!.cancel();
+      const abortRun = () => run.controller.abort();
+      run.controller.signal.addEventListener('abort', abortTicket);
+      run.ticket.signal.addEventListener('abort', abortRun);
+      detach = () => { run.controller.signal.removeEventListener('abort', abortTicket); run.ticket!.signal.removeEventListener('abort', abortRun); };
+      run.finished = run.ticket.finished.then(state => {
+        if (state === 'failed') run.emit({ type: 'error', message: 'The agent run failed.' });
+        else if (state === 'cancelled') run.emit({ type: 'error', message: 'The agent was stopped or its deadline elapsed.' });
+      }).finally(() => {
+        detach(); run.inbox.close(); this.runs.delete(run.runId);
+        run.emit({ type: 'done', stopped: run.controller.signal.aborted });
+      });
+      return run;
+    } catch (error) { this.runs.delete(run.runId); run.inbox.close(); throw error; }
   }
   async stop(agentId: string, clientMessageId: string) {
-    const run = this.active.get(agentId);
-    if (!run || run.clientMessageId !== clientMessageId) return false;
-    this.stops.set(agentId, this.stopVersion(agentId) + 1);
-    run.controller.abort();
-    await run.finished;
-    return true;
+    const run = [...this.runs.values()].find(item => item.agentId === agentId && item.clientMessageId === clientMessageId);
+    if (!run) return false;
+    // Peer Stop must not invalidate a concurrent private-human admission.
+    if (run.humanOwned && !run.channelId.startsWith('dm:')) this.stops.set(agentId, this.stopVersion(agentId) + 1);
+    run.controller.abort(); await run.finished; return true;
   }
   async shutdown() {
     this.closing = true;
-    const runs = [...this.active.values()];
-    for (const run of runs) run.controller.abort();
+    const runs = [...this.runs.values()];
+    await this.queue.shutdown();
     await Promise.all(runs.map(run => run.finished));
   }
 }

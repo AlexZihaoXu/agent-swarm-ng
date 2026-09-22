@@ -44,6 +44,27 @@ export const test = base.extend({
     await page.route(/\/api\/agents(?:\?.*)?$/, route => route.request().method() === 'GET'
       ? route.fulfill({ json: { agents, nextCursor: null } })
       : route.fulfill({ status: 501, json: { message: 'Configure an agent-creation mock for this test.' } }));
+    const grants = new Map<string, string[]>();
+    await page.route('**/api/agents/*/settings', route => {
+      const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/')[3]);
+      const agent = agents.find(item => item.id === id);
+      if (!agent) return route.fulfill({ status: 404, json: { message: 'Agent not found.' } });
+      if (route.request().method() === 'PATCH') {
+        const { avatar, allowedDmAgentIds } = route.request().postDataJSON();
+        if (avatar) Object.assign(agent, { avatar });
+        if (allowedDmAgentIds) {
+          for (const peer of agents) if (peer.id !== id) {
+            const current = (grants.get(peer.id) ?? []).filter(other => other !== id);
+            grants.set(peer.id, allowedDmAgentIds.includes(peer.id) ? [...current, id] : current);
+          }
+          grants.set(id, allowedDmAgentIds);
+        }
+      }
+      return route.fulfill({ json: { avatar: 'avatar' in agent ? agent.avatar : null, allowedDmAgents: agents.filter(peer => (grants.get(id) ?? []).includes(peer.id)).map(({ id, name }) => ({ id, name })) } });
+    });
+    await page.route('**/api/agents/*/dm-peers*', route => route.fulfill({ json: { peers: [], nextCursor: null } }));
+    await page.route('**/api/agents/*/dm-inbox*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));
+    await page.route('**/api/agents/*/dms/*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));
     await page.route('**/api/agents/*/avatar', route => {
       const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/')[3]);
       const agent = agents.find(item => item.id === id);

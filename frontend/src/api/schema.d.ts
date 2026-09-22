@@ -68,6 +68,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{id}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAgentSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateAgentSettings"];
+        trace?: never;
+    };
+    "/api/agents/{id}/dm-peers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentDmConversations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/dm-inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listReceivedAgentMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/dms/{peerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentDirectMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -430,6 +494,313 @@ export interface operations {
             };
         };
     };
+    getAgentSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        avatar: {
+                            shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                            color: string;
+                            eyeStyle?: "pill" | "round";
+                            seed: number;
+                        } | null;
+                        allowedDmAgents: {
+                            id: string;
+                            name: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    updateAgentSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    avatar?: {
+                        shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                        color: string;
+                        eyeStyle?: "pill" | "round";
+                        seed: number;
+                    };
+                    allowedDmAgentIds?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        avatar: {
+                            shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                            color: string;
+                            eyeStyle?: "pill" | "round";
+                            seed: number;
+                        } | null;
+                        allowedDmAgents: {
+                            id: string;
+                            name: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    listAgentDmConversations: {
+        parameters: {
+            query?: {
+                after?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        peers: {
+                            id: string;
+                            name: string;
+                            avatar: {
+                                shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                color: string;
+                                eyeStyle?: "pill" | "round";
+                                seed: number;
+                            } | null;
+                            channelId: string;
+                        }[];
+                        nextCursor: number | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    listReceivedAgentMessages: {
+        parameters: {
+            query?: {
+                before?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        messages: {
+                            id: string;
+                            sequence: number;
+                            conversationId: string;
+                            senderId: string;
+                            senderName: string;
+                            senderAvatar: {
+                                shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                color: string;
+                                eyeStyle?: "pill" | "round";
+                                seed: number;
+                            } | null;
+                            preview: string;
+                            status: string;
+                            timestamp: number;
+                        }[];
+                        nextCursor: number | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    listAgentDirectMessages: {
+        parameters: {
+            query?: {
+                before?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+                peerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        messages: {
+                            id: string;
+                            sequence: number;
+                            conversationId: string;
+                            senderId: string;
+                            recipientId: string;
+                            senderName: string;
+                            recipientName: string;
+                            text: string;
+                            status: string;
+                            timestamp: number;
+                        }[];
+                        nextCursor: number | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
     observeAgentRuns: {
         parameters: {
             query?: never;
@@ -510,6 +881,7 @@ export interface operations {
     listAgents: {
         parameters: {
             query?: {
+                search?: string;
                 after?: number;
                 limit?: number;
             };
@@ -868,6 +1240,8 @@ export interface operations {
                             /** @description Original request owning this run and its Stop target; may differ from a newly accepted follow-up message ID. */
                             clientMessageId: string;
                             typing: boolean;
+                            typingTargets?: string[];
+                            queued?: boolean;
                         };
                         message: {
                             id: string;

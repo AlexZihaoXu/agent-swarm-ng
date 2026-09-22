@@ -9,12 +9,20 @@ import { cn } from '@/lib/utils';
 import { useChat, type ChatAgent } from '@/use-chat';
 import { SlideUpFadeSwap } from '@/components/ui/slide-up-fade-swap';
 import { renderMessagePreview } from '@/components/message-markdown';
+import { useDmConversations } from '@/use-dm-conversations';
+import { useDmInbox } from '@/use-dm-inbox';
+import { AgentExchangeIcon } from '@/components/agent-exchange-icon';
+import { AgentDmTranscript } from '@/components/agent-dm-transcript';
+import { Select } from '@/components/ui/select';
 import { ConversationMessages } from '@/components/conversation-messages';
+import { isTypingInConversation } from '@/lib/conversation-typing';
+import { conversationTimeline } from '@/lib/conversation-timeline';
 import { Settings } from '@/components/settings';
-import { AvatarFace, PresenceIndicator, TypingDots } from '@/components/typing-indicator';
+import { AgentTypingStatus } from '@/components/agent-typing-status';
+import { AvatarFace, PresenceIndicator } from '@/components/typing-indicator';
 import { AgentActivityPanel } from '@/components/agent-activity-panel';
 import { AgentAvatarArt } from '@/components/agent-avatar-art';
-import type { AvatarAppearance } from '@/lib/agent-avatar';
+import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 
 function Avatar({ initials, avatar, small = false, typing = false, ready = false, working = false }: { initials: string; avatar?: AvatarAppearance; small?: boolean; typing?: boolean; ready?: boolean; working?: boolean }) {
   return (
@@ -33,7 +41,7 @@ function Avatar({ initials, avatar, small = false, typing = false, ready = false
 const emptyAgent: ChatAgent = { id: '', name: '', initials: '', time: '', channelId: '' };
 
 export function App() {
-  const { agents, conversations, drafts, busy, typing, activity, addAgent, deleteAgent, editAvatar, send, stop, setDraft, eventsConnected,
+  const { agents, conversations, drafts, busy, typing, typingTargets, activity, addAgent, deleteAgent, editAvatar, send, stop, setDraft, eventsConnected,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
   } = useChat();
   const [selectedId, setSelectedId] = useState<string>(agents[0]?.id ?? '');
@@ -46,10 +54,29 @@ export function App() {
   const pendingSend = useRef<string | null>(null);
   const visibleAgents = agents.filter(item => item.name.toLowerCase().includes(search.trim().toLowerCase()));
   const agent = agents.find(item => item.id === selectedId) ?? agents[0] ?? emptyAgent;
+  const inbox = useDmInbox(agent.id);
+  const dmConversations = useDmConversations(agent.id);
+  const [conversation, setConversation] = useState<{ owner: string; peer: string; selected?: { id: string; name: string; avatar?: AvatarAppearance | null; channelId?: string } }>({ owner: '', peer: 'you' });
+  const conversationPeer = conversation.owner === agent.id ? conversation.peer : 'you';
+  const chooseConversation = (peer: string) => setConversation({ owner: agent.id, peer, selected: peers.find(item => item.id === peer) });
+  // Keep an already-open conversation visible if a refresh returns only the first page.
+  const selectedPeer = conversation.owner === agent.id && dmConversations.cursor !== null ? conversation.selected : undefined;
+  const peers = [...new Map([...(selectedPeer ? [selectedPeer] : []), ...inbox.messages.map(message => ({ id: message.senderId, name: message.senderName, avatar: message.senderAvatar, channelId: undefined as string | undefined })), ...dmConversations.peers].filter(peer => peer.id !== agent.id).map(peer => [peer.id, peer])).values()].map(peer => agents.find(item => item.id === peer.id) ?? peer);
+  const peer = peers.find(item => item.id === conversationPeer);
+  const peerRecord = agents.find(item => item.id === conversationPeer);
+  const peerChannel = peerRecord?.channelId ?? peer?.channelId ?? '';
+  useEffect(() => {
+    if (conversationPeer !== 'you' && !peer && !dmConversations.busy && !dmConversations.failed) chooseConversation('you');
+  }, [agent.id, conversationPeer, peer, dmConversations.busy, dmConversations.failed]);
+  const typingIn = (channelId: string, destination: string) => isTypingInConversation(typing[channelId], typingTargets[channelId], destination, eventsConnected);
+  const visibleChannel = conversationPeer === 'you' ? agent.channelId : `dm:${[agent.id, conversationPeer].sort().join(':')}`;
+  const selfTyping = typingIn(agent.channelId, visibleChannel);
+  const peerTyping = typingIn(peerChannel, visibleChannel);
   const { needRefresh: [needRefresh, setNeedRefresh], updateServiceWorker } = useRegisterSW();
   const draft = drafts[agent.channelId] ?? '';
   const messages = conversations[agent.channelId] ?? [];
-  const previousConversation = useRef({ id: agent.id, count: messages.length, first: messages[0]?.id, last: messages.at(-1)?.id, height: 0 });
+  const timeline = conversationTimeline(messages, inbox.messages);
+  const previousConversation = useRef({ id: agent.id, count: timeline.length, first: timeline[0]?.id, last: timeline.at(-1)?.id, height: 0 });
 
   useEffect(() => { void loadHistory(agent); }, [agent.id]);
 
@@ -58,17 +85,18 @@ export function App() {
     if (!input) return;
     input.style.height = 'auto';
     input.style.height = `${Math.min(input.scrollHeight, 128)}px`;
-  }, [draft, agent.id, activeTab, mobileConversation, activityOpen]);
+  }, [draft, agent.id, activeTab, mobileConversation, activityOpen, conversationPeer]);
 
   useLayoutEffect(() => {
+    if (conversationPeer !== 'you') return;
     const scroller = scrollRef.current;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const previous = previousConversation.current;
-    const addedMessage = previous.id === agent.id && messages.length > previous.count;
-    const prepended = addedMessage && previous.first && previous.first !== messages[0]?.id && previous.last === messages.at(-1)?.id;
+    const addedMessage = previous.id === agent.id && timeline.length > previous.count;
+    const prepended = addedMessage && previous.first && previous.first !== timeline[0]?.id && previous.last === timeline.at(-1)?.id;
     if (scroller && prepended) scroller.scrollTop += scroller.scrollHeight - previous.height;
     else scroller?.scrollTo({ top: scroller.scrollHeight, behavior: addedMessage && !reducedMotion ? 'smooth' : 'instant' });
-    previousConversation.current = { id: agent.id, count: messages.length, first: messages[0]?.id, last: messages.at(-1)?.id, height: scroller?.scrollHeight ?? 0 };
+    previousConversation.current = { id: agent.id, count: timeline.length, first: timeline[0]?.id, last: timeline.at(-1)?.id, height: scroller?.scrollHeight ?? 0 };
 
     const sentId = pendingSend.current;
     pendingSend.current = null;
@@ -81,9 +109,10 @@ export function App() {
       { opacity: 0, transform: `translateY(${rise}px) scale(0.45)` },
       { opacity: 1, transform: 'translateY(0) scale(1)' },
     ], { duration: 360, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
-  }, [agent.id, messages.length, activeTab, mobileConversation]);
+  }, [agent.id, timeline.length, activeTab, mobileConversation, conversationPeer]);
 
   function sendMessage() {
+    if (conversationPeer !== 'you') return;
     const messageId = send(agent, draft);
     if (!messageId) return;
     pendingSend.current = messageId;
@@ -142,7 +171,7 @@ export function App() {
                         item.id === agent.id ? 'bg-foreground/10' : 'hover:bg-foreground/5',
                       )}
                     >
-                      <Avatar initials={item.initials} avatar={item.avatar} ready={Boolean(item.real)} typing={typing[item.channelId]} working={busy[item.channelId]} />
+                      <Avatar initials={item.initials} avatar={item.avatar} ready={Boolean(item.real)} typing={typingIn(item.channelId, item.channelId)} working={busy[item.channelId]} />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-sm font-medium">{item.name}</span>
@@ -168,28 +197,33 @@ export function App() {
             activityOpen && 'lg:mr-96',
             mobileConversation ? 'flex' : 'hidden',
           )}>
-            <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4">
+            <header className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border px-4 py-1.5">
               <Button variant="outline" size="sm" className="px-2 sm:hidden" aria-label="Back to agents" onClick={() => setMobileConversation(false)}>
                 <span aria-hidden="true">←</span>
               </Button>
-              <AgentAvatar initials={agent.initials} avatar={agent.avatar} ready={Boolean(agent.real)} typing={typing[agent.channelId]} working={busy[agent.channelId]} />
-              <AgentName name={agent.name} />
+              <AgentAvatar initials={agent.initials} avatar={agent.avatar} ready={Boolean(agent.real)} typing={selfTyping} working={busy[agent.channelId]} />
+              <div className="flex min-w-0 flex-[1_1_9rem] items-center gap-2">
+                <AgentName name={agent.name} />
+                {conversationPeer !== 'you' && peer && <><AgentExchangeIcon /><AgentAvatar initials={peer.name.slice(0, 2).toUpperCase()} avatar={peer.avatar ?? defaultAvatar(peer.id)} ready={Boolean(peer)} working={busy[peerChannel]} typing={peerTyping} /><span className="min-w-0 truncate text-sm font-semibold" title={peer.name}>{peer.name}</span></>}
+              </div>
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+              <div className="flex items-center gap-2"><label htmlFor="agent-dm-conversation" className="whitespace-nowrap text-xs text-muted-foreground">Chat with</label><div className="w-36"><Select id="agent-dm-conversation" value={conversationPeer} onValueChange={value => { if (value === 'load-more') void dmConversations.load(dmConversations.failed ? undefined : dmConversations.cursor ?? undefined); else chooseConversation(value); }} options={[{ value: 'you', label: 'You' }, ...peers.map(peer => ({ value: peer.id, label: peer.name === 'You' ? 'You (agent)' : peer.name, icon: <AgentAvatarArt {...(peer.avatar ?? defaultAvatar(peer.id))} size={20} /> })), ...(dmConversations.cursor !== null || dmConversations.failed ? [{ value: 'load-more', label: dmConversations.busy ? 'Loading conversations…' : dmConversations.failed ? 'Retry conversations' : 'More conversations…' }] : [])]} triggerClassName="!h-7 !rounded-md !px-2 !text-xs" /></div></div>
               <AgentActivityPanel agent={agent} entries={activity[agent.id] ?? []} open={activityOpen} onOpenChange={setActivityOpen} />
+              </div>
             </header>
 
-            <ScrollArea key={agent.id} viewportRef={scrollRef} label="Chat history" className="min-h-0 flex-1">
+            <ScrollArea key={`${agent.id}:${conversationPeer}`} viewportRef={scrollRef} label="Chat history" className="min-h-0 flex-1">
+              {conversationPeer === 'you' ? <>
               {(historyLoading[agent.channelId] || historyFailed[agent.channelId] || historyCursor[agent.channelId] != null) && <div className="px-5 pt-3 text-center"><Button variant="outline" size="sm" disabled={historyLoading[agent.channelId] || busy[agent.channelId]} onClick={() => void loadHistory(agent, Boolean(historyReady[agent.channelId]))}>{historyLoading[agent.channelId] ? 'Loading messages…' : historyFailed[agent.channelId] ? 'Retry loading messages' : 'Load earlier messages'}</Button></div>}
-              {historyReady[agent.channelId] && <ConversationMessages messages={messages} time={agent.time} agentName={agent.name} />}
+              {(inbox.failed || inbox.cursor !== null) && <div className="px-5 pt-3 text-center"><Button variant="outline" size="sm" disabled={inbox.busy} onClick={() => void inbox.load(inbox.failed ? undefined : inbox.cursor ?? undefined)}>{inbox.failed ? 'Retry agent messages' : 'Earlier agent messages'}</Button></div>}
+              {historyReady[agent.channelId] && <ConversationMessages messages={messages} time={agent.time} agentName={agent.name} notices={inbox.messages} onViewDm={notice => chooseConversation(notice.senderId)} />}
+              </> : peer ? <AgentDmTranscript key={`${agent.id}:${peer.id}`} agentId={agent.id} peerId={peer.id} bubbleView={{ agentName: agent.name, peerName: peer.name, agentAvatar: agent.avatar ?? defaultAvatar(agent.id), peerAvatar: peer.avatar ?? defaultAvatar(peer.id), viewport: scrollRef }} /> : <p className="p-5 text-sm text-muted-foreground">This agent is no longer available.</p>}
             </ScrollArea>
 
-            <div className="shrink-0 px-4 pb-3 pt-2 sm:px-5">
+            {conversationPeer === 'you' ? <div className="shrink-0 px-4 pb-3 pt-2 sm:px-5">
               <div className="w-full">
                 <div className="mb-1 flex h-5 min-w-0 items-center px-2">
-                  {busy[agent.channelId] && (
-                    <p role="status" className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                      {typing[agent.channelId] ? <><TypingDots /><span className="truncate"><strong className="font-medium text-foreground">{agent.name}</strong> is typing…</span></> : eventsConnected ? 'Agent is working…' : 'Agent is working · reconnecting…'}
-                    </p>
-                  )}
+                  <AgentTypingStatus name={agent.name} typing={selfTyping} working={busy[agent.channelId]} connected={eventsConnected} />
                 </div>
                 <form aria-label="Message composer" onSubmit={event => { event.preventDefault(); sendMessage(); }} className="flex items-end gap-2 rounded-3xl border border-foreground/20 bg-transparent p-2 focus-within:ring-1 focus-within:ring-ring">
                   <button type="button" disabled aria-label="Add attachment" title="Attachments aren’t available in this preview" className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
@@ -217,7 +251,9 @@ export function App() {
                   )}
                 </form>
               </div>
-            </div>
+            </div> : <div aria-label="Agent conversation status" className="shrink-0 border-t border-border px-5 py-3">
+              {selfTyping || peerTyping ? <div className="flex min-h-5 items-center gap-3"><div className="flex min-w-0 flex-1"><AgentTypingStatus name={agent.name} typing={selfTyping} /></div><div className="flex min-w-0 flex-1 justify-end"><AgentTypingStatus name={peer?.name ?? 'Agent'} typing={peerTyping} /></div></div> : <p className="text-center text-xs text-muted-foreground">Agent-to-agent conversation · messages are sent by the agents</p>}
+            </div>}
           </section> : <section aria-label="No agent selected" className="hidden min-w-0 flex-1 items-center justify-center p-6 text-sm text-muted-foreground sm:flex">Select or create an agent to start chatting.</section>}
         </Tabs.Content>
 
