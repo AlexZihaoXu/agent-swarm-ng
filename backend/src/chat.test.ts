@@ -15,7 +15,7 @@ type RequestBody = { tools?: { function: { name: string } }[]; messages: { role:
 let server: Server;
 let baseUrl: string;
 let folder: string;
-let behavior: 'tool' | 'raw' | 'wrong-channel' | 'after-reminder' | 'http-error' | 'publication-error' | 'research' | 'ack-raw' | 'ack-silent' | 'history' = 'tool';
+let behavior: 'tool' | 'raw' | 'wrong-channel' | 'after-reminder' | 'http-error' | 'publication-error' | 'research' | 'ack-raw' | 'ack-silent' | 'history' | 'triage-interrupt' | 'multipart' = 'tool';
 let captured: RequestBody[] = [];
 let authorization: string | undefined;
 let argumentGate: Promise<void> | undefined;
@@ -41,7 +41,14 @@ beforeAll(async () => {
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
     const chunk = (delta: object, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: 'test', object: 'chat.completion.chunk', created: 1, model: body.model, choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     chunk({ role: 'assistant', reasoning_content: 'PRIVATE THINKING', content: 'PRIVATE DIRECT OUTPUT' });
-    if (behavior === 'history') {
+    if (body.tools?.some(tool => tool.function.name === 'triage_decision')) {
+      chunk({ tool_calls: [{ index: 0, id: `triage-${captured.length}`, type: 'function', function: { name: 'triage_decision', arguments: JSON.stringify({ action: behavior === 'triage-interrupt' ? 'interrupt' : 'queue', reason: 'Consider the new request.' }) } }] });
+      chunk({}, 'tool_calls'); response.end('data: [DONE]\n\n'); return;
+    }
+    if (behavior === 'multipart') {
+      const step = body.messages.filter(message => message.role === 'tool').length;
+      chunk({ tool_calls: [{ index: 0, id: `part-${step}`, type: 'function', function: { name: 'send_message', arguments: JSON.stringify({ channelId, text: ['Main takeaway', 'CAD pricing and sources', 'Trade-offs and recommendation'][step], final: step === 2 }) } }] });
+    } else if (behavior === 'history') {
       const step = body.messages.filter(message => message.role === 'tool').length;
       const name = step === 1 ? 'search_messages' : step === 2 ? 'read_messages' : 'send_message';
       const args = step === 1 ? { query: 'nickname' } : step === 2 ? { messageId: historyAnchorId, limit: 3 } : { channelId, text: step === 0 ? 'On it' : 'The nickname is Aurora', final: step > 0 };
@@ -53,7 +60,7 @@ beforeAll(async () => {
       chunk({ tool_calls: [{ index: 0, id: `step-${step}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
     } else if (shouldPublish) {
       chunk({ tool_calls: [{ index: 0, id: 'call-test', type: 'function', function: { name: 'send_message', arguments: '' } }] });
-      if (argumentGate) await argumentGate;
+      if (argumentGate && !(behavior === 'triage-interrupt' && JSON.stringify(body.messages).includes('Corrected request'))) await argumentGate;
       chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify({ channelId: behavior === 'wrong-channel' ? 'other-channel' : channelId, text: acknowledgmentCase ? (hasTool ? 'Recovered result' : 'On it') : 'Published hello', ...(acknowledgmentCase ? { final: hasTool } : {}) }) } }] });
     }
     chunk({}, shouldPublish ? 'tool_calls' : 'stop');
@@ -95,6 +102,66 @@ const channelEvents = (body: string) => eventsFrom(body).filter(event => !['acti
 });
 
 describe('Pi chat and platform channel boundary', () => {
+  it('publishes answer parts sequentially and reports estimated context only to activity', async () => {
+    behavior = 'multipart'; captured = []; const app = await testApp();
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const response = await app.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent, 'Compare these options in detail') });
+      const events = eventsFrom(response.body);
+      expect(events.filter(e => e.type === 'channel_message').map(e => e.text)).toEqual(['Main takeaway', 'CAD pricing and sources', 'Trade-offs and recommendation']);
+      expect(captured).toHaveLength(3);
+      const prompt = JSON.stringify(captured[0].messages);
+      expect(prompt).toContain('Chat-sized replies'); expect(prompt).toContain('Send parts sequentially');
+      const usage = events.filter(e => e.type === 'activity' && e.entry.label === 'Context usage');
+      expect(usage.length).toBeGreaterThan(1);
+      expect(new Set(usage.map(e => e.entry.id)).size).toBe(1);
+      expect(usage.at(-1).entry.text).toMatch(/≈ [\d,]+ \/ 32,768 tokens · [\d.]+%/);
+      expect(usage.at(-1).entry.text).toContain('not cumulative billing');
+      expect(events.some(e => e.type === 'error')).toBe(false);
+    } finally { await app.close(); }
+  }, 10000);
+
+  it('coalesces rapid saved messages into one inference after the quiet period', async () => {
+    behavior = 'tool'; captured = []; const app = await testApp();
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const send = (text: string) => app.inject({ method: 'POST', url: '/api/chat', headers: { prefer: 'respond-async' }, payload: chatPayload(agent, text) });
+      const first = await send('hi'); const second = await send('please do the task');
+      expect(first.statusCode).toBe(202); expect(second.statusCode).toBe(202);
+      expect(second.json().run.runId).toBe(first.json().run.runId);
+      expect(captured).toHaveLength(0);
+      await vi.waitFor(async () => expect((await app.inject(`/api/channels/${agent.channelId}/messages`)).json().messages.filter((m: any) => m.role === 'assistant')).toHaveLength(1), { timeout: 8000 });
+      expect(captured).toHaveLength(1);
+      expect(JSON.stringify(captured[0].messages)).toContain('please do the task');
+      expect(JSON.stringify(captured[0].messages)).toContain('hi');
+    } finally { await app.close(); }
+  }, 12000);
+
+  it('forks full context with only a decision tool, interrupts generation and continues the main session', async () => {
+    behavior = 'triage-interrupt'; captured = [];
+    let release!: () => void; argumentGate = new Promise<void>(resolve => { release = resolve; });
+    const app = await testApp();
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const input = chatPayload(agent, 'Original request');
+      const first = await app.inject({ method: 'POST', url: '/api/chat', headers: { prefer: 'respond-async' }, payload: input });
+      await vi.waitFor(() => expect(captured).toHaveLength(1), { timeout: 8000 });
+      const next = await app.inject({ method: 'POST', url: '/api/chat', headers: { prefer: 'respond-async' }, payload: chatPayload(agent, 'Corrected request') });
+      expect(next.statusCode).toBe(202); expect(next.json().run.clientMessageId).toBe(input.clientMessageId);
+      expect(next.json().run.runId).toBe(first.json().run.runId);
+      await vi.waitFor(async () => expect((await app.inject(`/api/channels/${agent.channelId}/messages`)).json().messages.filter((m: any) => m.role === 'assistant')).toHaveLength(1), { timeout: 8000 });
+      const fork = captured.find(body => body.tools?.some(tool => tool.function.name === 'triage_decision'))!;
+      expect(fork.tools?.map(tool => tool.function.name)).toEqual(['triage_decision']);
+      expect(JSON.stringify(fork.messages)).toContain('Original request');
+      expect(JSON.stringify(fork.messages)).toContain('PRIVATE DIRECT OUTPUT');
+      const continued = captured.at(-1)!;
+      expect(JSON.stringify(continued.messages)).toContain('Interruption triage: interrupt');
+      expect(JSON.stringify(continued.messages)).toContain('Corrected request');
+      expect(continued.tools?.some(tool => tool.function.name === 'send_message')).toBe(true);
+      expect(captured).toHaveLength(3);
+    } finally { release(); argumentGate = undefined; await app.close(); }
+  }, 15000);
+
   it('grants history tools and retrieves older context after a prompt acknowledgment', async () => {
     behavior = 'history'; captured = [];
     const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
@@ -333,7 +400,7 @@ describe('Pi chat and platform channel boundary', () => {
       const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
       const address = await app.listen({ host: '127.0.0.1', port: 0 });
       const response = await fetch(`${address}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(chatPayload(agent)), signal: controller.signal });
-      expect((await app.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent, 'Concurrent message') })).statusCode).toBe(409);
+      expect((await app.inject({ method: 'POST', url: '/api/chat', headers: { prefer: 'respond-async' }, payload: chatPayload(agent, 'Concurrent message') })).statusCode).toBe(202);
       expect((await app.inject({ method: 'DELETE', url: `/api/agents/${agent.id}`, payload: { confirmation: agent.name } })).statusCode).toBe(409);
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();

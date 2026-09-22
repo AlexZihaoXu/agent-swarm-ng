@@ -56,6 +56,10 @@ describe('Prisma SQLite platform records', () => {
       const recent = await store.context(channelId);
       expect(recent).toHaveLength(8);
       expect(recent[0]).toMatchObject({ id: expect.any(String), sequence: expect.any(Number), timestamp: expect.any(Number), text: '97' });
+      const beforeIncoming = await store.context(channelId, recent.at(-1)!.id);
+      expect(beforeIncoming).toHaveLength(8);
+      expect(beforeIncoming[0].text).toBe('96');
+      expect(beforeIncoming.at(-1)!.text).toBe('103');
       for (let i = 0; i < 5; i++) await store.appendMessage(channelId, 'assistant', 'x'.repeat(20000));
       const previews = await store.context(channelId);
       expect(previews).toHaveLength(8);

@@ -71,7 +71,7 @@ agent-swarm-v2/
 ```
 
 - **`frontend/`** — saved agent creation/chat with paginated history, Settings with API endpoints and ChatGPT subscription sign-in, and PWA setup. The dashboard reconnects to backend-owned runs after refresh; drafts and old internal activity clear. Only explicitly published agent messages enter chat.
-- **`backend/`** — Pi SDK chat with channel-bound publication/history tools and Pi Web Access search/fetch tools, Prisma/SQLite migrations and history, endpoint preferences, and an OpenAPI contract. No agent file/shell/computer access or internal-session persistence. See [chat and storage](docs/development.md#pi-agents-and-channels).
+- **`backend/`** — Pi SDK chat with channel-bound publication/history tools and Pi Web Access search/fetch tools, Prisma/SQLite migrations and history, endpoint preferences, and an OpenAPI contract. No agent file/shell/computer access or internal-session persistence. Includes 1.5-second message debounce and temporary-fork interruption triage for follow-ups. See [chat and storage](docs/development.md#pi-agents-and-channels) and [interruption assumptions](docs/message-interruption.md).
 - **`templates/default/`** — Ubuntu GNOME workspace image, standalone Compose configuration, and smoke tests. Production desktop startup, streaming, and the platform template schema remain unimplemented.
 - **`docs/`** — [swarm vision](docs/vision.md), development instructions, and reference material. The [local Kibo reference entry guide](docs/references/kibo/README.md) provides pinned source, searchable indexes, and adaptation notes.
 

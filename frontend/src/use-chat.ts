@@ -174,7 +174,7 @@ export function useChat() {
     recordActivity(agent.id, { id: crypto.randomUUID(), runId: 'client', channelId: agent.channelId, kind: 'error', label: 'Request error', text, timestamp: Date.now() });
   }
 
-  function applyEvent(event: Record<string, any>, observer?: AbortController) {
+  function applyEvent(event: Record<string, any>) {
     if (event.type === 'heartbeat') return;
     if (event.type === 'snapshot' && Array.isArray(event.runs)) {
       const runs = event.runs.filter((run: Run) => run && !removedAgents.current.has(run.agentId) && !completedRuns.current.has(run.runId) && ['agentId', 'channelId', 'runId', 'clientMessageId'].every(key => typeof (run as Record<string, unknown>)[key] === 'string')) as Run[];
@@ -222,8 +222,7 @@ export function useChat() {
     } else if (event.type === 'done') {
       activeRuns.current.delete(channel);
       setBusy(current => ({ ...current, [channel]: false })); setTyping(current => ({ ...current, [channel]: false }));
-      const monitor = requests.current.get(channel);
-      requests.current.delete(channel); if (monitor !== observer) monitor?.abort();
+      // A follow-up POST may still be saving when this run finishes. Do not abort it.
     }
   }
   const eventsConnected = useRunEvents(applyEvent);
@@ -236,7 +235,7 @@ export function useChat() {
       if (error || !data) { recordError(agent, error?.message ?? 'Could not start the channel response.'); return; }
       if (response.status === 202) {
         const result = await new Response(data).json();
-        if (result.run?.agentId !== agent.id || result.run?.channelId !== channel || result.run?.clientMessageId !== message.id || typeof result.run?.runId !== 'string' || result.message?.id !== message.id || result.message?.channelId !== channel) throw new Error('Invalid save acknowledgment');
+        if (result.run?.agentId !== agent.id || result.run?.channelId !== channel || typeof result.run?.clientMessageId !== 'string' || typeof result.run?.runId !== 'string' || result.message?.id !== message.id || result.message?.channelId !== channel) throw new Error('Invalid save acknowledgment');
         accepted = true;
         applyEvent({ type: 'run_started', ...result.run });
         applyEvent({ type: 'user_message', ...result.message, agentId: agent.id, runId: result.run.runId });
@@ -246,7 +245,7 @@ export function useChat() {
         if ((event.channelId && event.channelId !== channel) || (event.agentId && event.agentId !== agent.id)) return;
         if (event.type === 'user_message' && event.id === message.id) accepted = true;
         if (event.type === 'done') completed = true;
-        applyEvent({ ...event, agentId: event.agentId ?? agent.id, channelId: event.channelId ?? channel }, controller);
+        applyEvent({ ...event, agentId: event.agentId ?? agent.id, channelId: event.channelId ?? channel });
       });
       if (!completed && !controller.signal.aborted) throw new Error('Observer disconnected');
     } catch {
@@ -262,7 +261,7 @@ export function useChat() {
   }
   function send(agent: ChatAgent, text: string) {
     text = text.trim();
-    if (!agent.real || !text || activeRuns.current.has(agent.channelId) || requests.current.has(agent.channelId) || historyRequests.current.has(agent.channelId) || !loadedHistory.current.has(agent.channelId)) return;
+    if (!agent.real || !text || requests.current.has(agent.channelId) || historyRequests.current.has(agent.channelId) || !loadedHistory.current.has(agent.channelId)) return;
     const pending = pendingMessages.current.get(agent.channelId);
     const message: ChatMessage = pending?.text === text ? pending : { id: crypto.randomUUID(), author: 'user', text, time: clock() };
     pendingMessages.current.set(agent.channelId, message);

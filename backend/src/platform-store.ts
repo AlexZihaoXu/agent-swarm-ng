@@ -69,9 +69,9 @@ export class PlatformStore {
     await this.initialize();
     return this.client.message.findUnique({ where: { id } });
   }
-  async context(channelId: string) {
-    const { messages } = await this.messages(channelId, undefined, 8);
-    return messages.map(message => ({
+  async context(channelId: string, excludeMessageId?: string) {
+    const { messages } = await this.messages(channelId, undefined, excludeMessageId ? 9 : 8);
+    return messages.filter(message => message.id !== excludeMessageId).slice(-8).map(message => ({
       id: message.id, sequence: message.sequence, role: message.role, timestamp: message.createdAt.getTime(),
       ...messageText(message.text),
     }));

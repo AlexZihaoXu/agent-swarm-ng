@@ -205,9 +205,10 @@ export function App() {
                     aria-label={`Message ${agent.name}`} placeholder={`Message ${agent.name}…`}
                     className="max-h-32 min-h-7 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1 text-sm leading-5 outline-none placeholder:text-muted-foreground"
                   />
-                  {busy[agent.channelId] ? (
+                  {busy[agent.channelId] && (
                     <Button type="button" size="sm" aria-label="Stop response" className="size-7 shrink-0 rounded-full p-0" onClick={() => stop(agent.channelId)}><span aria-hidden="true" className="size-2.5 rounded-sm bg-current" /></Button>
-                  ) : (
+                  )}
+                  {(!busy[agent.channelId] || draft.trim()) && (
                     <Button type="submit" size="sm" disabled={!draft.trim() || historyLoading[agent.channelId] || (Boolean(agent.real) && !historyReady[agent.channelId])} aria-label="Send message" className="size-7 shrink-0 rounded-full p-0">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-4"><path d="M12 19V5m-6 6 6-6 6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     </Button>

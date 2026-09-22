@@ -25,6 +25,27 @@ describe('backend-owned agent runs', () => {
     expect(resumed).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'channel_message', text: 'Finished offline' }), expect.objectContaining({ type: 'done', runId: run.runId })]));
     expect(runs.snapshot()).toEqual([]);
   });
+  it('accepts messages into the same run and changes the admission epoch on explicit Stop', async () => {
+    const runs = new AgentRuns(); const inference = vi.fn();
+    const run = runs.start(identity, async ({ inbox, signal }) => {
+      inbox.add({ role: 'user', text: 'hi' });
+      await inbox.take(signal);
+      inference();
+    });
+    await Promise.resolve();
+    const revision = runs.stopVersion(identity.agentId);
+    const joined = runs.offer(identity.agentId, { role: 'user', text: 'task' }, { type: 'user_message', text: 'task' });
+    expect(joined?.runId).toBe(run.runId);
+    expect(joined?.clientMessageId).toBe(identity.clientMessageId);
+    expect(await runs.stop(identity.agentId, 'stale')).toBe(false);
+    expect(runs.stopVersion(identity.agentId)).toBe(revision);
+    expect(await runs.stop(identity.agentId, identity.clientMessageId)).toBe(true);
+    expect(runs.stopVersion(identity.agentId)).toBe(revision + 1);
+    expect(inference).not.toHaveBeenCalled();
+    expect(runs.offer(identity.agentId, { role: 'user', text: 'late' }, {})).toBeUndefined();
+    expect(run.inbox.add({ role: 'user', text: 'late' })).toBe(false);
+  });
+
   it('honors an explicitly configured deadline without requiring a dashboard', async () => {
     vi.useFakeTimers();
     try {

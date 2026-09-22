@@ -4,7 +4,7 @@ import type { AgentRuns, RunEvent } from './agent-runs';
 /** Slow/disconnected observers are dropped without affecting agent execution. */
 export function createRunStreams(runs: AgentRuns) {
   const connections = new Set<FastifyReply>();
-  function attach(reply: FastifyReply, runId?: string) {
+  function attach(reply: FastifyReply, runId?: string, initialEvent?: object) {
     if (reply.raw.destroyed) return;
     reply.hijack();
     reply.raw.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store, no-transform', 'X-Accel-Buffering': 'no' });
@@ -21,6 +21,7 @@ export function createRunStreams(runs: AgentRuns) {
     connections.add(reply);
     const heartbeat = setInterval(() => write({ type: 'heartbeat' }), 15000);
     reply.raw.once('close', () => { clearInterval(heartbeat); unsubscribe(); connections.delete(reply); });
+    if (initialEvent) write(initialEvent);
     if (!runId) write({ type: 'snapshot', runs: runs.snapshot() });
   }
   return { attach, close: () => { for (const reply of connections) reply.raw.end(); } };

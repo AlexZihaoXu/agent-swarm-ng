@@ -738,7 +738,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Legacy NDJSON observer stream. Prefer: respond-async returns 202 immediately; observe /api/events instead. Accepted work survives disconnects. */
+            /** @description Legacy NDJSON observer stream. Prefer: respond-async returns 202 immediately; observe /api/events instead. Accepted work survives disconnects. Messages arriving during a run are coalesced or triaged for interruption; the returned run retains its original Stop target. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -758,6 +758,7 @@ export interface operations {
                             runId: string;
                             agentId: string;
                             channelId: string;
+                            /** @description Original request owning this run and its Stop target; may differ from a newly accepted follow-up message ID. */
                             clientMessageId: string;
                             typing: boolean;
                         };

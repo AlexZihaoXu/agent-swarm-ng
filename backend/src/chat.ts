@@ -24,7 +24,7 @@ const Agent = Type.Object({
   ...Selection.properties, id: Type.String(), channelId: Type.String(), createdAt: Type.Number(), lastMessage: Type.Union([Message, Type.Null()]),
 }, { additionalProperties: false });
 const ErrorResponse = Type.Object({ message: Type.String() });
-const RunState = Type.Object({ runId: Type.String(), agentId: Type.String(), channelId: Type.String(), clientMessageId: Type.String(), typing: Type.Boolean() });
+const RunState = Type.Object({ runId: Type.String(), agentId: Type.String(), channelId: Type.String(), clientMessageId: Type.String({ description: 'Original request owning this run and its Stop target; may differ from a newly accepted follow-up message ID.' }), typing: Type.Boolean() });
 const ChatBody = Type.Object({
   agentId: Type.String({ minLength: 1, maxLength: 100 }),
   clientMessageId: Type.String({ format: 'uuid' }), message: Type.String({ minLength: 1, maxLength: 20000 }),
@@ -119,13 +119,14 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
 
   app.post<{ Body: Static<typeof ChatBody> }>('/api/chat', {
     bodyLimit: 131072,
-    schema: { operationId: 'sendChannelMessage', body: ChatBody, response: { 200: Type.String({ description: 'Legacy NDJSON observer stream. Prefer: respond-async returns 202 immediately; observe /api/events instead. Accepted work survives disconnects.' }), 202: Type.Object({ run: RunState, message: Message }), 400: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 503: ErrorResponse } },
+    schema: { operationId: 'sendChannelMessage', body: ChatBody, response: { 200: Type.String({ description: 'Legacy NDJSON observer stream. Prefer: respond-async returns 202 immediately; observe /api/events instead. Accepted work survives disconnects. Messages arriving during a run are coalesced or triaged for interruption; the returned run retains its original Stop target.' }), 202: Type.Object({ run: RunState, message: Message }), 400: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 503: ErrorResponse } },
   }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const { agentId, clientMessageId, message } = request.body;
+    const stopVersion = runs.stopVersion(agentId);
     if (!message.trim()) return reply.code(400).send({ message: 'Message is empty.' });
     if (closing) return reply.code(503).send({ message: 'The backend is shutting down.' });
-    if (active.has(agentId) || runs.has(agentId)) return reply.code(409).send({ message: 'This agent is already responding. Try again when it finishes.' });
+    if (active.has(agentId)) return reply.code(409).send({ message: 'Another message is being saved. Try again shortly.' });
     active.add(agentId);
     const controller = new AbortController();
     let finishPreparation!: () => void;
@@ -142,22 +143,33 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
       const subscriptionRuntime = subscription ? await codex.runtime() : undefined;
       const accessKey = subscriptionRuntime ? (await subscriptionRuntime.getAuth('openai-codex', { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) }))?.auth.apiKey : endpoint.apiKey;
       if (subscription && !accessKey) return reply.code(400).send({ message: 'Reconnect OpenAI Codex in Settings.' });
-      const history = await database.context(agent.channelId);
       controller.signal.throwIfAborted();
       const userMessage = await database.appendMessage(agent.channelId, 'user', message, clientMessageId);
       const channel = { id: agent.channelId, kind: 'platform-chat' as const, agentId: agent.id };
-      const run = runs.start({ agentId, channelId: agent.channelId, clientMessageId }, async context => {
-        context.emit({ type: 'user_message', ...messageView(userMessage) });
-        await runChat(context, {
-          name: agent.name, model: agent.model, thinkingLevel: agent.thinkingLevel,
-          baseUrl: endpoint.baseUrl, apiKey: endpoint.apiKey,
-          channel,
-        }, history, { role: 'user', text: message, id: userMessage.id, sequence: userMessage.sequence, timestamp: userMessage.createdAt.getTime() }, async text => messageView(await database.appendMessage(agent.channelId, 'assistant', text)), accessKey ?? '', subscriptionRuntime, createChatHistoryTools(database, channel, agent.name));
-      });
+      const incoming = { role: 'user' as const, text: message, id: userMessage.id, sequence: userMessage.sequence, timestamp: userMessage.createdAt.getTime() };
+      if (stopVersion !== runs.stopVersion(agentId)) return reply.code(409).send({ message: 'The run was stopped while your message was being saved. Reload history before continuing.' });
+      let run = runs.offer(agentId, incoming, { type: 'user_message', ...messageView(userMessage) });
+      const joined = Boolean(run);
+      if (!run) {
+        if (await runs.settled(agentId)) return reply.code(409).send({ message: 'The run was stopped. Your message was saved; send a new request to resume.' });
+        controller.signal.throwIfAborted();
+        if (stopVersion !== runs.stopVersion(agentId)) return reply.code(409).send({ message: 'The run was stopped. Your message was saved.' });
+        if (closing) return reply.code(503).send({ message: 'The backend is shutting down. Your message was saved.' });
+        // Refresh after prior work settles, including its final publication but not this incoming message.
+        const history = await database.context(agent.channelId, userMessage.id);
+        controller.signal.throwIfAborted();
+        run = runs.start({ agentId, channelId: agent.channelId, clientMessageId }, async context => {
+          context.emit({ type: 'user_message', ...messageView(userMessage) });
+          await runChat(context, {
+            name: agent.name, model: agent.model, thinkingLevel: agent.thinkingLevel,
+            baseUrl: endpoint.baseUrl, apiKey: endpoint.apiKey, channel,
+          }, history, incoming, async text => messageView(await database.appendMessage(agent.channelId, 'assistant', text)), accessKey ?? '', subscriptionRuntime, createChatHistoryTools(database, channel, agent.name));
+        });
+      }
       if (controller.signal.aborted) run.controller.abort();
       if (reply.raw.destroyed) { reply.hijack(); return; }
-      if (request.headers.prefer === 'respond-async') return reply.code(202).header('Preference-Applied', 'respond-async').send({ run: { agentId, channelId: agent.channelId, clientMessageId, runId: run.runId, typing: false }, message: messageView(userMessage) });
-      streams.attach(reply, run.runId);
+      if (request.headers.prefer === 'respond-async') return reply.code(202).header('Preference-Applied', 'respond-async').send({ run: { agentId, channelId: agent.channelId, clientMessageId: run.clientMessageId, runId: run.runId, typing: run.typing }, message: messageView(userMessage) });
+      streams.attach(reply, run.runId, joined ? { type: 'user_message', ...messageView(userMessage), agentId, runId: run.runId, eventId: `${run.runId}:accepted:${userMessage.id}` } : undefined);
       return reply;
     } catch (error) {
       if (controller.signal.aborted) return reply.code(409).send({ message: 'The request was stopped before the agent started.' });

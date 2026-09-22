@@ -1337,11 +1337,11 @@
         },
         "responses": {
           "200": {
-            "description": "Legacy NDJSON observer stream. Prefer: respond-async returns 202 immediately; observe /api/events instead. Accepted work survives disconnects.",
+            "description": "Legacy NDJSON observer stream. Prefer: respond-async returns 202 immediately; observe /api/events instead. Accepted work survives disconnects. Messages arriving during a run are coalesced or triaged for interruption; the returned run retains its original Stop target.",
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "Legacy NDJSON observer stream. Prefer: respond-async returns 202 immediately; observe /api/events instead. Accepted work survives disconnects.",
+                  "description": "Legacy NDJSON observer stream. Prefer: respond-async returns 202 immediately; observe /api/events instead. Accepted work survives disconnects. Messages arriving during a run are coalesced or triaged for interruption; the returned run retains its original Stop target.",
                   "type": "string"
                 }
               }
@@ -1378,6 +1378,7 @@
                           "type": "string"
                         },
                         "clientMessageId": {
+                          "description": "Original request owning this run and its Stop target; may differ from a newly accepted follow-up message ID.",
                           "type": "string"
                         },
                         "typing": {

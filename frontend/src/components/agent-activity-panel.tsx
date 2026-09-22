@@ -8,6 +8,7 @@ export function AgentActivityPanel({ agent, entries, open, onOpenChange }: {
   agent: ChatAgent; entries: ActivityEntry[]; open: boolean; onOpenChange: (open: boolean) => void;
 }) {
   const [wide, setWide] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+  const contextUsage = [...entries].reverse().find(entry => entry.kind === 'status' && entry.label === 'Context usage');
   const viewport = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   useEffect(() => {
@@ -43,6 +44,10 @@ export function AgentActivityPanel({ agent, entries, open, onOpenChange }: {
             </div>
             <Dialog.Description className="mt-1 text-xs text-muted-foreground">{agent.name} · live runtime history</Dialog.Description>
             <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">Operator view, not channel messages. Memory only; reasoning appears only when provided by the endpoint.</p>
+            <div className="mt-2 text-xs text-muted-foreground" title={contextUsage?.text}>
+              <p className="text-[11px]">Main context · latest estimate</p>
+              <p aria-label="Context usage" className="tabular-nums">{contextUsage?.text.split('\n')[0] ?? 'Waiting for a runtime update'}</p>
+            </div>
           </header>
           <ScrollArea label="Agent activity history" viewportRef={viewport} className="min-h-0 flex-1" onScroll={event => {
             const element = event.currentTarget;

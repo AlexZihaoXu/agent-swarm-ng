@@ -11,8 +11,8 @@ async function setup(page: Page) {
   await page.route('**/api/chat', async route => {
     starts++;
     const body = route.request().postDataJSON();
-    run = { ...run, clientMessageId: body.clientMessageId };
-    const message = { id: body.clientMessageId, channelId: agent.channelId, sequence: 1, role: 'user', text: body.message, timestamp: Date.now() };
+    if (!run.clientMessageId) run = { ...run, clientMessageId: body.clientMessageId };
+    const message = { id: body.clientMessageId, channelId: agent.channelId, sequence: messages.length + 1, role: 'user', text: body.message, timestamp: Date.now() };
     messages.push(message);
     await page.addInitScript(value => { Object.assign(window, { agentRunSnapshot: [value] }); }, run);
     await page.evaluate(value => { Object.assign(window, { agentRunSnapshot: [value] }); }, run);
@@ -31,6 +31,34 @@ async function setup(page: Page) {
   await expect(page.getByRole('list', { name: 'Messages' })).toContainText('Keep working');
   return { messages, counts: () => ({ starts, stops }), run: () => run };
 }
+
+test('accepts follow-ups while working and keeps Stop targeted at the original run', async ({ page }) => {
+  const backend = await setup(page); const original = backend.run().clientMessageId;
+  const input = page.getByLabel('Message Background agent');
+  await input.fill('Correction: use the new requirements');
+  await expect(page.getByRole('button', { name: 'Stop response' })).toBeVisible();
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(page.getByRole('list', { name: 'Messages' })).toContainText('Correction: use the new requirements');
+  await input.fill('Another detail'); await input.press('Enter');
+  await expect(page.getByRole('list', { name: 'Messages' })).toContainText('Another detail');
+  expect(backend.run().clientMessageId).toBe(original);
+  await page.getByRole('button', { name: 'Stop response' }).click();
+  expect(backend.counts()).toEqual({ starts: 3, stops: 1 });
+});
+
+test('shows the latest context estimate in activity without adding chat messages', async ({ page }) => {
+  const backend = await setup(page);
+  await page.getByRole('button', { name: 'Agent activity', exact: true }).click();
+  const usage = page.getByLabel('Context usage', { exact: true });
+  await expect(usage).toHaveText('Waiting for a runtime update');
+  const entry = { id: `${backend.run().runId}:context-usage`, runId: backend.run().runId, channelId: agent.channelId, kind: 'status', label: 'Context usage', timestamp: Date.now(), text: '≈ 8,192 / 32,768 tokens · 25.0%\nMain session estimate · configured context limit, not cumulative billing.' };
+  await emit(page, { ...backend.run(), type: 'activity', eventId: 'context-1', entry });
+  await expect(usage).toHaveText('≈ 8,192 / 32,768 tokens · 25.0%');
+  await emit(page, { ...backend.run(), type: 'activity', eventId: 'context-2', entry: { ...entry, text: '≈ 16,384 / 32,768 tokens · 50.0%\nMain session estimate.' } });
+  await expect(usage).toHaveText('≈ 16,384 / 32,768 tokens · 50.0%');
+  await expect(page.locator('details').filter({ hasText: 'Context usage' })).toHaveCount(1);
+  await expect(page.getByRole('list', { name: 'Messages' }).locator(':scope > li')).toHaveCount(1);
+});
 
 test('refresh reconnects to the existing run, receives its result once, and does not stop it', async ({ page }) => {
   const backend = await setup(page);
