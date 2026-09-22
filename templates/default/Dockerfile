@@ -59,6 +59,11 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 COPY --from=oven/bun:1.3.6 /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=ghcr.io/astral-sh/uv:0.9.18 /uv /uvx /usr/local/bin/
 
+# Required for message reactions and Ubuntu's emoji rendering. Preserve cached desktop/tool layers.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends fonts-noto-color-emoji \
+    && rm -rf /var/lib/apt/lists/*
+
 # Docker initializes fresh named volumes from these image directories.
 # Do not declare anonymous VOLUMEs or overwrite existing user files at startup.
 RUN chown ubuntu:ubuntu /workspace

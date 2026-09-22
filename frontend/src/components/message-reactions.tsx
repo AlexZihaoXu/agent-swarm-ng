@@ -22,6 +22,9 @@ export function useMessageReactions(channelId: string | undefined, ids: string[]
     },
   });
 }
+export function ReactionLoadError({ failed, retry }: { failed: boolean; retry: () => void }) {
+  return failed ? <p role="alert" className="px-3 py-2 text-xs text-muted-foreground">Could not load reactions. <Button type="button" size="sm" variant="outline" onClick={retry}>Retry reactions</Button></p> : null;
+}
 // Existing Kibo Button and Simple Select compositions; no extra picker dependency or demo counts.
 export function MessageReactions({ channelId, messageId, reactions = [] }: { channelId: string; messageId: string; reactions?: ReactionMap[string] }) {
   const client = useQueryClient();

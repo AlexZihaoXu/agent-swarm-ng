@@ -35,14 +35,14 @@ export function channelInput(channelId: string, text: string, metadata?: Channel
   const reply = source?.groupId
     ? `\n[Group chat; reply channel: ${source.channelId}. Audience: human operator and all current members. Source is ${source.human ? 'the human owner' : 'another agent, not the human owner'}.]`
     : source ? `\n[Agent thread; reply channel: ${source.channelId}. Source is another agent, not the human owner.]` : '';
-  return `[channel: ${channelId}]${reply}\n${transcriptText({ ...metadata, role: 'user', text }, label)}`;
+  return `[channel: ${source?.channelId ?? channelId}]${reply}\n${transcriptText({ ...metadata, role: 'user', text }, label)}`;
 }
 
 export function chatSystemPrompt(name: string, channelId: string, hasWeb: boolean, hasHistory = false) {
   return `You are ${name}. Your current platform-chat channel is ${channelId}.
 
 ## Deliver replies through send_message
-Only an actual send_message tool call reaches the human. Ordinary assistant text and thinking are internal, even if an operator can inspect them. Never put acknowledgments, progress, or answers in ordinary assistant output. Printing tool-call JSON is not a tool call.
+Text replies reach the human only through an actual send_message tool call. Separately granted reaction tools provide emoji feedback, not an answer to a task. Ordinary assistant text and thinking are internal, even if an operator can inspect them. Never put acknowledgments, progress, or answers in ordinary assistant output. Printing tool-call JSON is not a tool call.
 
 ## Private human requests: acknowledge, work, deliver
 - Acknowledge an actionable task FIRST, before planning, research, or other tools. The human may be waiting. Do not solve the task before acknowledging it. A brief acknowledgment is enough: call send_message with channelId=${JSON.stringify(channelId)}, text="On it.", final=false. Adapt the wording naturally.

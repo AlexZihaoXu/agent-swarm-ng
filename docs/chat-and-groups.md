@@ -1,6 +1,6 @@
 # Chat tab and group conversations
 
-Status: implemented; final browser/runtime verification in progress on `feat/chat-and-groups`, based on `cd24c34` (agent communication merged into main). Nothing pushed.
+Status: implemented and validated. Feature merge: `a846572`, based on `cd24c34` (agent communication). Follow-up findings and validation are recorded in the [feature consistency review](feature-consistency-review.md). Nothing pushed.
 
 ## Agreed behavior
 
@@ -40,10 +40,10 @@ This is prompt guidance, not a guarantee of model judgment. Access checks and pu
 
 Read the swarm vision and Kibo entry guide. Inspected exact sources and the previously captured rendered previews for `scroll-area-layout-3`, `tabs-standard-1`, `checkbox-standard-8`, and `dialog-standard-1`. The original avatar/name/time composition fits; five-minute grouping and hover/focus gutter behavior are application adaptations requested in the supplied screenshots. Reuse the current composer rather than adding demo dependencies.
 
-Windows browser automation remains paused after a failed-logon counter reading of 10. No additional Windows browser was launched. A dedicated nonroot Linux/Docker browser is being used instead, with the repository's Chromium seccomp profile, no-new-privileges, enabled Chromium sandbox, one worker, no retries and stop-on-first-failure. Chrome reports namespace, PID/network namespace and Seccomp-BPF sandboxes active; Yama ptrace protection is unavailable. No personal profile, developer model credentials, or paid inference is used.
+Windows browser automation remains paused after a failed-logon counter reading of 10. No additional Windows browser was launched. A dedicated nonroot Linux/Docker browser was used instead, with the repository's Chromium seccomp profile, no-new-privileges, enabled Chromium sandbox, one worker, no retries and stop-on-first-failure. Chrome reports namespace, PID/network namespace and Seccomp-BPF sandboxes active; Yama ptrace protection is unavailable. No personal profile, developer model credentials, or paid inference is used.
 
 Implemented in order: persistence/authorization → shared inbox/tools/routes → Chat tab and group creation/history → reactions. The full backend path is connected and exercised with mock inference.
 
-Current checks: API generation and full typechecks passed; 124 unit/integration tests across 29 files and the production build passed (`proc_148`). Later search-snippet/dedup refinements and final Docker/browser results are pending confirmation. The build retains the existing large-bundle warning.
+Final checks: generated API drift check, full typechecks, 126 unit/integration tests across 30 files, and production build passed (`proc_160`); all 72 application browser tests passed in sandboxed nonroot Linux (`proc_163`). Native Bun/production Docker verified group delivery, private-context isolation, persisted reactions, and restart cancellation without replay (`proc_154`). Later search-snippet/dedup regressions passed. The build retains the existing large-bundle warning.
 
 Tool contracts: `list_chats` reports the current audience and appropriate read/send tools; `read_group_messages` supports bounded chronological paging and message expansion; `search_group_messages` returns literal, match-centered snippets; `read_reactions` and `react_to_message` bind identity and recheck access. Group messages are published with `send_message` to `group:<id>`. Only actual human-authored inputs authorize private-human publication; agent-only batches cannot publish or react there.

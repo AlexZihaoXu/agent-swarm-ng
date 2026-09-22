@@ -4,7 +4,7 @@ import { MessageMarkdown } from '@/components/message-markdown';
 import { defaultAvatar } from '@/lib/agent-avatar';
 import { continuesGroup } from '@/lib/group-message-layout';
 import { cn } from '@/lib/utils';
-import { MessageReactions, useMessageReactions } from '@/components/message-reactions';
+import { MessageReactions, useMessageReactions, ReactionLoadError } from '@/components/message-reactions';
 import type { GroupChat, GroupMessage } from '@/use-groups';
 
 const clock = (timestamp: number) => new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -13,6 +13,7 @@ export function GroupMessages({ messages, members }: { messages: GroupMessage[];
   const channelId = messages.length ? `group:${messages[0].groupId}` : undefined;
   const reactions = useMessageReactions(channelId, messages.map(message => message.id));
   return <ol aria-label="Messages" aria-live="polite" aria-relevant="additions" className="py-3">
+    {reactions.isError && <li><ReactionLoadError failed retry={() => void reactions.refetch()} /></li>}
     {messages.map((message, index) => {
       const previous = messages[index - 1];
       const continued = continuesGroup(previous, message);

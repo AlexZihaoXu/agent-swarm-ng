@@ -43,6 +43,7 @@ export function GroupConversation({ groupId, mobile, onBack, draft, onDraft, typ
       const { data, error } = await api.POST('/api/groups/{id}/messages', { params: { path: { id: groupId } }, body: { message: text, clientMessageId: submission.current!.id } });
       if (!data || error) throw new Error(error?.message ?? 'Could not confirm delivery. Reload history before retrying.');
       client.setQueryData<GroupPage>(['group-messages', groupId], old => ({ messages: mergeGroupMessages(old?.messages ?? [], [data.message]), nextCursor: old?.nextCursor ?? null }));
+      void client.invalidateQueries({ queryKey: ['groups'] });
       if (draftRef.current.trim() === text) onDraft('');
       submission.current = null; nearBottom.current = true;
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not send the message.'); }

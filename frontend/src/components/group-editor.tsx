@@ -54,7 +54,7 @@ export function GroupEditor({ group, children, onSaved }: { group?: GroupChat; c
             <legend className="mb-2 text-sm font-medium">Agents <span className="text-muted-foreground">({selected.size}/16)</span></legend>
             <input aria-label="Search group members" type="search" value={search} maxLength={80} onChange={event => setSearch(event.target.value)} placeholder="Search agents" className="h-8 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
             <div className="max-h-56 space-y-3 overflow-y-auto py-1">
-              {agents.map(agent => <label key={agent.id} className="flex cursor-pointer items-center gap-2 text-sm">
+              {agents.map(agent => <label key={agent.id} className="flex cursor-pointer items-center gap-2 text-sm has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
                 <input type="checkbox" checked={selected.has(agent.id)} disabled={!selected.has(agent.id) && selected.size >= 16} onChange={event => setSelected(current => { const next = new Set(current); if (event.target.checked) next.add(agent.id); else next.delete(agent.id); return next; })} className="size-4 accent-primary" />
                 <AgentAvatar initials={agent.name.slice(0, 2)} avatar={agent.avatar ?? defaultAvatar(agent.id)} />
                 <span className="truncate">{agent.name}</span>

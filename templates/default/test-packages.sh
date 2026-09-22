@@ -4,7 +4,7 @@ set -eu
 
 for package in ubuntu-session gnome-shell gnome-control-center gnome-terminal nautilus \
     gnome-shell-extension-ubuntu-dock gnome-shell-extension-appindicator \
-    yaru-theme-gtk yaru-theme-icon fonts-ubuntu dbus-x11 ubuntu-settings \
+    yaru-theme-gtk yaru-theme-icon fonts-ubuntu fonts-noto-color-emoji dbus-x11 ubuntu-settings \
     ubuntu-wallpapers-noble librsvg2-common gir1.2-dbusmenu-gtk3-0.4; do
     test "$(dpkg-query -W -f='${Status}' "$package")" = 'install ok installed'
 done
@@ -32,5 +32,6 @@ done
 # GNOME Terminal refuses to start under the plain C/ASCII locale.
 test "$(locale charmap)" = 'UTF-8'
 
+fc-match -f '%{family}' emoji | grep -q 'Noto Color Emoji'
 gnome-shell --version
 printf 'Ubuntu GNOME package checks passed. Desktop session startup is a separate check.\n'

@@ -4,7 +4,7 @@ import { defaultAvatar } from '../src/lib/agent-avatar';
 test('saved agents follow the agents and chat layout', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(36, 36, 36)');
-  await expect(page.getByRole('tab')).toHaveText(['Agents', 'Settings']);
+  await expect(page.getByRole('tab')).toHaveText(['Agents', 'Chat', 'Settings']);
   await expect(page.getByRole('tab', { name: 'Agents', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('heading', { name: 'Avery', exact: true })).toBeVisible();
   await expect(page.getByText('Your account', { exact: true })).toBeVisible();
@@ -77,7 +77,7 @@ test('chat identity switches without animation for reduced motion', async ({ pag
 
 test('messages enter in order with overlapping timing and respect reduced motion', async ({ page }) => {
   await page.goto('/');
-  const messages = page.getByRole('list', { name: 'Messages' }).locator('li > [data-message-id]');
+  const messages = page.getByRole('list', { name: 'Messages' }).locator('[data-message-id]');
   await expect(messages).toHaveCount(3);
   await expect(messages.first()).toHaveCSS('animation-name', 'message-in, fade-in');
   const timing = await messages.evaluateAll(elements => elements.map(element => {
@@ -104,7 +104,7 @@ test('composer sends through the API with Enter or the button and rejects blank 
   await page.goto('/');
   const input = page.getByLabel('Message Avery');
   const send = page.getByRole('button', { name: 'Send message' });
-  const messages = page.getByRole('list', { name: 'Messages' }).locator('li > [data-message-id]');
+  const messages = page.getByRole('list', { name: 'Messages' }).locator('[data-message-id]');
   await input.fill('   ');
   await expect(send).toBeDisabled();
   await input.press('Enter');
@@ -140,7 +140,7 @@ test('sidebar preview and time use the shared swap, and sent history staggers on
   expect(await labels.nth(1).evaluate(element => getComputedStyle(element, '::before').fontWeight)).toBe('500');
   await page.getByRole('button', { name: 'Open conversation with Morgan' }).click();
   await row.click();
-  const sentBubble = page.getByRole('list', { name: 'Messages' }).locator('li > [data-message-id]').last();
+  const sentBubble = page.getByRole('list', { name: 'Messages' }).locator('[data-message-id]').last();
   await expect(sentBubble).toHaveCSS('animation-name', 'message-in, fade-in');
   await expect(sentBubble).toHaveCSS('animation-delay', '0.3s');
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -166,7 +166,7 @@ test('drafts and sent messages stay with their agent, with multiline input', asy
   await expect(avery).toHaveValue('First line\na');
   await avery.press('Enter');
   await expect(page.getByRole('list', { name: 'Messages' })).not.toContainText('Only for Morgan');
-  await expect(page.getByRole('list', { name: 'Messages' }).locator('li > [data-message-id]').last()).toHaveCSS('white-space', 'pre-wrap');
+  await expect(page.getByRole('list', { name: 'Messages' }).locator('[data-message-id]').last()).toHaveCSS('white-space', 'pre-wrap');
   await page.getByRole('button', { name: 'Open conversation with Morgan' }).click();
   await expect(page.getByRole('list', { name: 'Messages' })).toContainText('Only for Morgan');
 });

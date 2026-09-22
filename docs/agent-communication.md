@@ -60,10 +60,12 @@ The operator API remains a trusted local-admin surface, not multi-user authoriza
 
 ## Verification
 
-- Final release checks passed: full typechecks, 109 unit/integration tests across 22 files, production build, and whitespace checks, including the timeline-order regression test.
+Current integrated checks: 126 unit/integration tests and all 72 application browser tests passed; see the [feature consistency review](feature-consistency-review.md). The records below describe earlier milestones.
+
+- Prior release checks passed: full typechecks, 109 unit/integration tests across 22 files, production build, and whitespace checks, including the timeline-order regression test.
 - Mock-provider tests cover normal source-labelled inbox processing, human/peer coalescing, mutual revocation, eight-message loops, deduplication, origin deletion, and no implicit transfer of the sender’s private history.
 - Nonroot Bun/Docker smoke passed for human send → normal source-labelled recipient inbox → peer reply, mutual grants, persistence and restart cancellation without replay. No developer model credentials or paid inference were used.
 - Prior release: all 67 browser tests passed for main-view switching, avatars, no You avatar, draft preservation, selected-agent-left alignment, sender tints and remote status indicators. Desktop/mobile previews were inspected. The timeline clock regression has a dedicated unit test.
 - Current typing revision: streamed `send_message`/`send_dm` integration, destination tracking, overlapping publications, completion/failure cleanup and reconnect snapshot tests passed. Additional UI coverage checks per-conversation filtering, the footer, dot animation/reduced motion, and stale-event rejection.
-- **Windows browser launches remain paused:** the bad-password counter read 10. No further Windows browser was launched. New verification is being performed separately in a dedicated nonroot Linux/Docker browser with namespace and Seccomp-BPF sandboxes enabled. See the current results in [Chat and groups](chat-and-groups.md); earlier browser results alone do not verify the later typing/icon/history-filter revisions.
+- **Windows browser launches remain paused:** the bad-password counter read 10. No further Windows browser was launched. Current verification passed separately in a dedicated nonroot Linux/Docker browser with namespace and Seccomp-BPF sandboxes enabled. See the current results in [Chat and groups](chat-and-groups.md); earlier browser results alone do not verify the later typing/icon/history-filter revisions.
 - Browser launches are serialized, use one worker/no retries/stop-on-first-failure, and check Windows bad-password headroom before each launch.

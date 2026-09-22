@@ -1,6 +1,19 @@
 import { test, expect } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
+test('reaction loading failures are visible and retry without losing conversation text', async ({ page }) => {
+  let failing = true;
+  await page.route('**/api/chats/*/reactions*', route => failing
+    ? route.fulfill({ status: 503, json: { message: 'Temporary failure' } })
+    : route.fulfill({ json: { messages: new URL(route.request().url()).searchParams.getAll('ids').map(id => ({ id, reactions: [] })) } }));
+  await page.goto('/');
+  await expect(page.getByText('Could not load reactions.', { exact: false })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('list', { name: 'Messages', exact: true })).toBeVisible();
+  failing = false;
+  await page.getByRole('button', { name: 'Retry reactions', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Retry reactions', exact: true })).toHaveCount(0);
+});
+
 for (const mobile of [false, true]) test(`Chat groups preserve Agents, group timestamps and persist reactions${mobile ? ' on mobile' : ''}`, async ({ page }) => {
   if (mobile) await page.setViewportSize({ width: 390, height: 844 });
   const stamp = new Date(2026, 8, 24, 13).getTime();
@@ -23,7 +36,7 @@ for (const mobile of [false, true]) test(`Chat groups preserve Agents, group tim
     if (route.request().method() === 'POST') {
       const body = route.request().postDataJSON();
       const message = { id: body.clientMessageId, sequence: messages.length + 1, groupId: 'team', role: 'user', authorId: null, authorName: 'You', authorAvatar: null, text: body.message, timestamp: stamp + 12 * 60000 };
-      messages.push(message); return route.fulfill({ status: 202, json: { message, duplicate: false } });
+      messages.push(message); group.lastMessage = message; return route.fulfill({ status: 202, json: { message, duplicate: false } });
     }
     return route.fulfill({ json: { messages, nextCursor: null } });
   });
@@ -62,6 +75,9 @@ for (const mobile of [false, true]) test(`Chat groups preserve Agents, group tim
   const human = await page.getByText('Human message', { exact: true }).boundingBox();
   const agent = await page.getByText('First finding', { exact: true }).boundingBox();
   expect(human!.x).toBeGreaterThan(agent!.x);
+  if (mobile) await page.getByRole('button', { name: 'Back to chats' }).click();
+  await expect(page.getByRole('button', { name: 'Open group chat Research', exact: true })).toContainText('Human message');
+  if (mobile) await page.getByRole('button', { name: 'Open group chat Research', exact: true }).click();
   expect(grants).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath(`chat-group-${mobile ? 'mobile' : 'desktop'}.png`), fullPage: true });
