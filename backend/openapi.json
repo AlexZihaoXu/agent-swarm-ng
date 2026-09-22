@@ -412,6 +412,81 @@
         }
       }
     },
+    "/api/events": {
+      "get": {
+        "operationId": "observeAgentRuns",
+        "responses": {
+          "200": {
+            "description": "NDJSON active-run snapshot followed by live run/message/typing/activity events and heartbeats. Disconnecting never cancels work. Recover missed publications from channel history.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "NDJSON active-run snapshot followed by live run/message/typing/activity events and heartbeats. Disconnecting never cancels work. Recover missed publications from channel history.",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/stop": {
+      "post": {
+        "operationId": "stopAgentRun",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "clientMessageId"
+                ],
+                "properties": {
+                  "clientMessageId": {
+                    "format": "uuid",
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "stopped"
+                  ],
+                  "properties": {
+                    "stopped": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agents/model-capabilities": {
       "get": {
         "operationId": "getAgentModelCapabilities",
@@ -1262,12 +1337,99 @@
         },
         "responses": {
           "200": {
-            "description": "NDJSON user_message acknowledgments, channel_message publications, typing, operator-only activity, error, and done events. Only saved channel publications are agent chat messages.",
+            "description": "Legacy NDJSON observer stream. Prefer: respond-async returns 202 immediately; observe /api/events instead. Accepted work survives disconnects.",
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "NDJSON user_message acknowledgments, channel_message publications, typing, operator-only activity, error, and done events. Only saved channel publications are agent chat messages.",
+                  "description": "Legacy NDJSON observer stream. Prefer: respond-async returns 202 immediately; observe /api/events instead. Accepted work survives disconnects.",
                   "type": "string"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "run",
+                    "message"
+                  ],
+                  "properties": {
+                    "run": {
+                      "type": "object",
+                      "required": [
+                        "runId",
+                        "agentId",
+                        "channelId",
+                        "clientMessageId",
+                        "typing"
+                      ],
+                      "properties": {
+                        "runId": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "channelId": {
+                          "type": "string"
+                        },
+                        "clientMessageId": {
+                          "type": "string"
+                        },
+                        "typing": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "sequence",
+                        "channelId",
+                        "role",
+                        "text",
+                        "timestamp"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "sequence": {
+                          "type": "integer"
+                        },
+                        "channelId": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "user"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "assistant"
+                              ]
+                            }
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }

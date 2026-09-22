@@ -1,6 +1,7 @@
 import { PrismaClient, type Prisma } from './generated/prisma/client';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { databaseUrl } from './database-location';
+import { messageText } from './message-text';
 
 const agentSelection = { channels: { where: { kind: 'platform-chat' }, take: 1 } };
 type StoredAgent = Prisma.AgentGetPayload<{ include: typeof agentSelection }>;
@@ -68,15 +69,11 @@ export class PlatformStore {
     await this.initialize();
     return this.client.message.findUnique({ where: { id } });
   }
-  async context(channelId: string, currentMessageLength: number) {
-    const { messages } = await this.messages(channelId, undefined, 100);
-    let remaining = 80000 - currentMessageLength;
-    const selected = [];
-    for (const message of [...messages].reverse()) {
-      if (message.text.length > remaining) break;
-      selected.unshift({ role: message.role, text: message.text });
-      remaining -= message.text.length;
-    }
-    return selected;
+  async context(channelId: string) {
+    const { messages } = await this.messages(channelId, undefined, 8);
+    return messages.map(message => ({
+      id: message.id, sequence: message.sequence, role: message.role, timestamp: message.createdAt.getTime(),
+      ...messageText(message.text),
+    }));
   }
 }

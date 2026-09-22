@@ -5,6 +5,40 @@ export { expect, type Page } from '@playwright/test';
 // All sample agents live behind test-only API mocks, never in the application.
 export const test = base.extend({
   page: async ({ page }, use) => {
+    // Exercise notification wiring without playing sounds on the developer's speakers.
+    await page.addInitScript(() => {
+      const stats = { starts: 0, decodes: 0 };
+      class SilentAudioContext {
+        state = 'suspended'; destination = {};
+        async resume() { this.state = 'running'; }
+        async close() { this.state = 'closed'; }
+        async decodeAudioData(bytes: ArrayBuffer) { if (!bytes.byteLength) throw new Error('Empty audio'); stats.decodes++; return {}; }
+        createGain() { return { gain: { value: 1 }, connect() {} }; }
+        createBufferSource() { return { buffer: null, onended: null, connect() {}, disconnect() {}, stop() {}, start() { stats.starts++; } }; }
+      }
+      Object.assign(window, { AudioContext: SilentAudioContext, notificationAudio: stats });
+      const scope = window as unknown as { agentRunSnapshot?: object[]; emitAgentEvent: (event: object) => void; disconnectAgentEvents: () => void };
+      const original = window.fetch.bind(window);
+      let current: ReadableStreamDefaultController<Uint8Array> | undefined;
+      scope.emitAgentEvent = event => current?.enqueue(new TextEncoder().encode(`${JSON.stringify(event)}\n`));
+      scope.disconnectAgentEvents = () => { current?.close(); current = undefined; };
+      window.fetch = (input, init) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (new URL(url, location.href).pathname !== '/api/events') return original(input, init);
+        const signal = input instanceof Request ? input.signal : init?.signal;
+        let streamController: ReadableStreamDefaultController<Uint8Array>;
+        let closed = false;
+        const abort = () => { if (!closed) { closed = true; streamController.error(new DOMException('Aborted', 'AbortError')); } };
+        return Promise.resolve(new Response(new ReadableStream({
+          start(controller) {
+            current = controller; streamController = controller;
+            controller.enqueue(new TextEncoder().encode(`${JSON.stringify({ type: 'snapshot', runs: scope.agentRunSnapshot ?? [] })}\n`));
+            signal?.addEventListener('abort', abort, { once: true });
+          },
+          cancel() { closed = true; signal?.removeEventListener('abort', abort); if (current === streamController) current = undefined; },
+        }), { headers: { 'Content-Type': 'application/x-ndjson' } }));
+      };
+    });
     let agents = structuredClone(sampleAgents);
     const history = structuredClone(sampleHistory);
     await page.route(/\/api\/agents(?:\?.*)?$/, route => route.request().method() === 'GET'
@@ -32,6 +66,7 @@ export const test = base.extend({
       messages.push(message); agent.lastMessage = message;
       return route.fulfill({ contentType: 'application/x-ndjson', body: `${JSON.stringify({ type: 'user_message', ...message })}\n${JSON.stringify({ type: 'done' })}\n` });
     });
+    await page.route('**/api/agents/*/stop', route => route.fulfill({ json: { stopped: true } }));
     await page.route('**/api/model-endpoints', route => route.fulfill({ json: [] }));
     await page.route(/\/api\/providers\/openai-codex(?:\/login)?$/, route => route.fulfill({ json: { connected: false, models: [], login: { state: 'idle' } } }));
     await use(page);

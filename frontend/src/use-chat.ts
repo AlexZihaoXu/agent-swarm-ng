@@ -1,21 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
+import { consumeEvents } from '@/api/events';
 import type { components, paths } from '@/api/schema';
 import type { ChatMessage } from '@/chat-types';
+import { createNotificationSound } from '@/lib/notification-sound';
+import { useRunEvents } from '@/use-run-events';
 
 export type ActivityEntry = components['schemas']['AgentActivityEntry'];
 const activityKinds = new Set(['system', 'user', 'assistant', 'thinking', 'tool_call', 'tool_result', 'reminder', 'channel', 'status', 'error']);
-
 export type RealAgent = paths['/api/agents']['post']['responses'][200]['content']['application/json'];
 export type ChatAgent = { id: string; name: string; initials: string; time: string; channelId: string; real?: RealAgent };
 type SavedMessage = paths['/api/channels/{channelId}/messages']['get']['responses'][200]['content']['application/json']['messages'][number];
-const asMessage = (message: SavedMessage): ChatMessage => ({ id: message.id, author: message.role === 'user' ? 'user' : 'agent', text: message.text, time: clock(message.timestamp) });
+type Run = { runId: string; agentId: string; channelId: string; clientMessageId: string; typing?: boolean };
+const asMessage = (message: SavedMessage): ChatMessage => ({ id: message.id, sequence: message.sequence, author: message.role === 'user' ? 'user' : 'agent', text: message.text, time: clock(message.timestamp) });
 const asAgent = (real: RealAgent): ChatAgent => ({ id: real.id, name: real.name, initials: real.name.slice(0, 2).toUpperCase(), time: clock(real.lastMessage?.timestamp ?? real.createdAt), channelId: real.channelId, real });
 const clock = (timestamp = Date.now()) => new Date(timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s+/g, ' ');
-
-function withoutKey<T>(record: Record<string, T>, key: string) {
-  const next = { ...record }; delete next[key]; return next;
+function withoutKey<T>(record: Record<string, T>, key: string) { const next = { ...record }; delete next[key]; return next; }
+function remember(set: Set<string>, key: string) {
+  if (set.has(key)) return true;
+  set.add(key);
+  if (set.size > 10000) set.delete(set.values().next().value!);
+  return false;
 }
+const ordered = (messages: ChatMessage[]) => messages.sort((a, b) => (a.sequence ?? Infinity) - (b.sequence ?? Infinity));
 
 export function useChat() {
   const [agents, setAgents] = useState<ChatAgent[]>([]);
@@ -25,7 +32,12 @@ export function useChat() {
   const [typing, setTyping] = useState<Record<string, boolean>>({});
   const [activity, setActivity] = useState<Record<string, ActivityEntry[]>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const notification = useRef<ReturnType<typeof createNotificationSound> | null>(null);
   const removedAgents = useRef(new Set<string>());
+  const seenEvents = useRef(new Set<string>());
+  const completedRuns = useRef(new Set<string>());
+  const knownMessages = useRef(new Set<string>());
+  const activeRuns = useRef(new Map<string, Run>());
   const requests = useRef(new Map<string, AbortController>());
   const pendingMessages = useRef(new Map<string, ChatMessage>());
   const agentRequest = useRef<AbortController | null>(null);
@@ -39,7 +51,14 @@ export function useChat() {
   const [historyFailed, setHistoryFailed] = useState<Record<string, boolean>>({});
   const [historyCursor, setHistoryCursor] = useState<Record<string, number | null>>({});
 
-  async function loadAgents(after?: number) {
+  function acknowledge(channel: string, id: string) {
+    const pending = pendingMessages.current.get(channel);
+    if (pending?.id !== id) return;
+    pendingMessages.current.delete(channel);
+    setDrafts(current => current[channel] === pending.text ? { ...current, [channel]: '' } : current);
+  }
+
+  async function loadAgents(after?: number, refresh = false) {
     if (agentRequest.current && !agentRequest.current.signal.aborted) return;
     const controller = new AbortController(); agentRequest.current = controller;
     setAgentsLoading(true); setAgentsFailed(false);
@@ -48,20 +67,28 @@ export function useChat() {
       if (controller.signal.aborted) return;
       if (error || !data) throw new Error('Could not load agents');
       const incoming = data.agents.filter(real => !removedAgents.current.has(real.id));
+      for (const real of incoming) if (real.lastMessage) remember(knownMessages.current, `${real.channelId}:${real.lastMessage.id}`);
       setConversations(current => {
         const next = { ...current };
-        for (const real of incoming) if (!(real.channelId in next)) next[real.channelId] = real.lastMessage ? [asMessage(real.lastMessage)] : [];
+        for (const real of incoming) {
+          const last = real.lastMessage ? asMessage(real.lastMessage) : undefined;
+          if (!(real.channelId in next)) next[real.channelId] = last ? [last] : [];
+          else if (!loadedHistory.current.has(real.channelId) && last && (last.sequence ?? 0) > (next[real.channelId].at(-1)?.sequence ?? 0)) next[real.channelId] = [last];
+        }
         return next;
       });
-      setAgents(current => [...current, ...incoming.filter(real => !current.some(item => item.id === real.id)).map(asAgent)]);
-      setAgentsCursor(data.nextCursor);
+      setAgents(current => [...current.map(agent => { const updated = incoming.find(item => item.id === agent.id); return updated ? asAgent(updated) : agent; }), ...incoming.filter(real => !current.some(item => item.id === real.id)).map(asAgent)]);
+      if (!refresh || agents.length === 0) setAgentsCursor(data.nextCursor);
     } catch { if (!controller.signal.aborted) setAgentsFailed(true); }
     finally { if (agentRequest.current === controller) { agentRequest.current = null; setAgentsLoading(false); } }
   }
 
-  async function loadHistory(agent: ChatAgent, older = false) {
+  async function loadHistory(agent: ChatAgent, older = false, refresh = false) {
     const channel = agent.channelId;
-    if (!agent.real || historyRequests.current.has(channel) || (!older && loadedHistory.current.has(channel)) || (older && !historyCursor[channel])) return;
+    if (!agent.real || removedAgents.current.has(agent.id)) return;
+    if (refresh) { historyRequests.current.get(channel)?.abort(); historyRequests.current.delete(channel); }
+    if (historyRequests.current.has(channel) || (!refresh && !older && loadedHistory.current.has(channel)) || (older && !historyCursor[channel])) return;
+    const before = new Set((conversations[channel] ?? []).map(message => message.id));
     const controller = new AbortController(); historyRequests.current.set(channel, controller);
     setHistoryLoading(current => ({ ...current, [channel]: true }));
     setHistoryFailed(current => ({ ...current, [channel]: false }));
@@ -69,10 +96,17 @@ export function useChat() {
       const { data, error } = await api.GET('/api/channels/{channelId}/messages', { params: { path: { channelId: channel }, query: { before: older ? historyCursor[channel]! : undefined } }, signal: controller.signal });
       if (controller.signal.aborted) return;
       if (error || !data) throw new Error('Could not load messages');
+      for (const message of data.messages) {
+        remember(knownMessages.current, `${channel}:${message.id}`);
+        if (message.role === 'user') acknowledge(channel, message.id);
+      }
       setConversations(current => {
         const existing = current[channel] ?? [];
         const messages = data.messages.map(asMessage);
-        return { ...current, [channel]: older ? [...messages.filter(item => !existing.some(row => row.id === item.id)), ...existing] : messages };
+        const ids = new Set(messages.map(message => message.id));
+        const newest = data.messages.at(-1)?.sequence ?? 0;
+        const live = existing.filter(item => !before.has(item.id) && !ids.has(item.id) && (item.sequence === undefined || item.sequence > newest));
+        return { ...current, [channel]: older ? [...messages.filter(item => !existing.some(row => row.id === item.id)), ...existing] : ordered([...messages, ...live]) };
       });
       loadedHistory.current.add(channel);
       setHistoryReady(current => ({ ...current, [channel]: true }));
@@ -82,14 +116,23 @@ export function useChat() {
   }
 
   useEffect(() => {
+    const sound = createNotificationSound(); notification.current = sound;
+    const unlockSound = () => { void sound.unlock(); };
+    window.addEventListener('pointerdown', unlockSound, true);
+    window.addEventListener('keydown', unlockSound, true);
     void loadAgents();
-    const abortAll = () => {
+    const abortObservers = () => {
       agentRequest.current?.abort();
       for (const controller of [...requests.current.values(), ...historyRequests.current.values()]) controller.abort();
       requests.current.clear(); historyRequests.current.clear();
     };
-    window.addEventListener('pagehide', abortAll);
-    return () => { window.removeEventListener('pagehide', abortAll); abortAll(); };
+    window.addEventListener('pagehide', abortObservers);
+    return () => {
+      window.removeEventListener('pagehide', abortObservers); abortObservers();
+      window.removeEventListener('pointerdown', unlockSound, true);
+      window.removeEventListener('keydown', unlockSound, true);
+      sound.dispose(); notification.current = null;
+    };
   }, []);
 
   function addAgent(real: RealAgent) {
@@ -100,29 +143,23 @@ export function useChat() {
     setAgents(current => current.some(item => item.id === agent.id) ? current : [...current, agent]);
     return agent;
   }
-
   async function deleteAgent(agent: ChatAgent, confirmation: string) {
     if (confirmation !== agent.name) throw new Error('Type the exact agent name to confirm deletion.');
     const { error, response } = await api.DELETE('/api/agents/{id}', { params: { path: { id: agent.id } }, body: { confirmation } });
     if (!response.ok && response.status !== 404) throw new Error(error?.message ?? 'Could not delete the agent. Try again.');
     const channel = agent.channelId;
-    removedAgents.current.add(agent.id);
+    removedAgents.current.add(agent.id); activeRuns.current.delete(channel);
     requests.current.get(channel)?.abort(); requests.current.delete(channel);
     historyRequests.current.get(channel)?.abort(); historyRequests.current.delete(channel);
     pendingMessages.current.delete(channel); loadedHistory.current.delete(channel);
     setAgents(current => current.filter(item => item.id !== agent.id));
     setConversations(current => withoutKey(current, channel));
     setDrafts(current => withoutKey(current, channel));
-    setBusy(current => withoutKey(current, channel));
-    setTyping(current => withoutKey(current, channel));
-    setErrors(current => withoutKey(current, channel));
-    setActivity(current => withoutKey(current, agent.id));
-    setHistoryReady(current => withoutKey(current, channel));
-    setHistoryLoading(current => withoutKey(current, channel));
-    setHistoryFailed(current => withoutKey(current, channel));
-    setHistoryCursor(current => withoutKey(current, channel));
+    setBusy(current => withoutKey(current, channel)); setTyping(current => withoutKey(current, channel));
+    setErrors(current => withoutKey(current, channel)); setActivity(current => withoutKey(current, agent.id));
+    setHistoryReady(current => withoutKey(current, channel)); setHistoryLoading(current => withoutKey(current, channel));
+    setHistoryFailed(current => withoutKey(current, channel)); setHistoryCursor(current => withoutKey(current, channel));
   }
-
   function recordActivity(agentId: string, entry: ActivityEntry, append = false) {
     if (removedAgents.current.has(agentId)) return;
     setActivity(current => {
@@ -132,107 +169,125 @@ export function useChat() {
       return { ...current, [agentId]: entries.map((item, i) => i === index ? { ...entry, timestamp: item.timestamp, text: append ? item.text + entry.text : entry.text } : item) };
     });
   }
-
   function recordError(agent: ChatAgent, text: string) {
+    setErrors(current => ({ ...current, [agent.channelId]: text }));
     recordActivity(agent.id, { id: crypto.randomUUID(), runId: 'client', channelId: agent.channelId, kind: 'error', label: 'Request error', text, timestamp: Date.now() });
   }
 
-  async function receive(agent: ChatAgent, message: ChatMessage, controller: AbortController) {
-    const channelId = agent.channelId;
-    let accepted = false;
-    try {
-      const { data, error } = await api.POST('/api/chat', {
-        body: { agentId: agent.id, clientMessageId: message.id, message: message.text },
-        parseAs: 'stream' as const, signal: controller.signal,
+  function applyEvent(event: Record<string, any>, observer?: AbortController) {
+    if (event.type === 'heartbeat') return;
+    if (event.type === 'snapshot' && Array.isArray(event.runs)) {
+      const runs = event.runs.filter((run: Run) => run && !removedAgents.current.has(run.agentId) && !completedRuns.current.has(run.runId) && ['agentId', 'channelId', 'runId', 'clientMessageId'].every(key => typeof (run as Record<string, unknown>)[key] === 'string')) as Run[];
+      activeRuns.current = new Map(runs.map(run => [run.channelId, run]));
+      for (const run of runs) acknowledge(run.channelId, run.clientMessageId);
+      const pending = [...requests.current.keys()].filter(channel => pendingMessages.current.has(channel));
+      setBusy(Object.fromEntries([...pending.map(channel => [channel, true]), ...runs.map(run => [run.channelId, true])]));
+      setTyping(Object.fromEntries(runs.map(run => [run.channelId, run.typing === true])));
+      void loadAgents(undefined, true);
+      for (const agent of agents) if (loadedHistory.current.has(agent.channelId) || historyRequests.current.has(agent.channelId) || historyLoading[agent.channelId] || historyFailed[agent.channelId]) void loadHistory(agent, false, true);
+      return;
+    }
+    if (typeof event.eventId === 'string' && remember(seenEvents.current, event.eventId)) return;
+    const channel = event.channelId ?? event.entry?.channelId;
+    if (typeof channel !== 'string' || removedAgents.current.has(event.agentId)) return;
+    const agent = agents.find(item => item.channelId === channel);
+    if (agent && typeof event.agentId === 'string' && event.agentId !== agent.id) return;
+    const active = activeRuns.current.get(channel);
+    if (event.type === 'done' && typeof event.runId === 'string') remember(completedRuns.current, event.runId);
+    if (event.runId && active && active.runId !== event.runId && ['typing', 'error', 'done'].includes(event.type)) return;
+    if (event.type === 'run_started' && ['runId', 'agentId', 'clientMessageId'].every(key => typeof event[key] === 'string')) {
+      if (completedRuns.current.has(event.runId) || active?.runId === event.runId) return;
+      activeRuns.current.set(channel, event as Run);
+      setBusy(current => ({ ...current, [channel]: true }));
+      setTyping(current => ({ ...current, [channel]: false }));
+    } else if (event.type === 'activity' && agent && agent.id === event.agentId) {
+      const entry = event.entry;
+      if (entry && entry.channelId === channel && ['id', 'runId', 'channelId', 'label', 'text'].every(key => typeof entry[key] === 'string') && activityKinds.has(entry.kind) && Number.isFinite(entry.timestamp)) recordActivity(agent.id, entry as ActivityEntry, event.append === true);
+    } else if (event.type === 'typing' && typeof event.active === 'boolean') setTyping(current => ({ ...current, [channel]: event.active }));
+    else if ((event.type === 'channel_message' || event.type === 'user_message') && typeof event.text === 'string' && typeof event.id === 'string') {
+      if (event.type === 'user_message') {
+        acknowledge(channel, event.id);
+        if (!active && !completedRuns.current.has(event.runId)) activeRuns.current.set(channel, { agentId: event.agentId, channelId: channel, runId: event.runId ?? event.id, clientMessageId: event.id });
+      }
+      const duplicate = remember(knownMessages.current, `${channel}:${event.id}`);
+      if (event.type === 'channel_message' && !duplicate) void notification.current?.play();
+      const published: ChatMessage = { id: event.id, sequence: event.sequence, author: event.type === 'user_message' ? 'user' : 'agent', text: event.text, time: clock(event.timestamp) };
+      setConversations(current => {
+        const messages = current[channel] ?? [];
+        return { ...current, [channel]: messages.some(item => item.id === published.id) ? messages.map(item => item.id === published.id ? published : item) : ordered([...messages, published]) };
       });
-      if (error || !data) {
-        const text = error?.message ?? 'Could not start the channel response.';
-        setErrors(current => ({ ...current, [channelId]: text })); recordError(agent, text); return;
+    } else if (event.type === 'error' && typeof event.message === 'string') {
+      setTyping(current => ({ ...current, [channel]: false }));
+      if (agent) recordError(agent, event.message);
+    } else if (event.type === 'done') {
+      activeRuns.current.delete(channel);
+      setBusy(current => ({ ...current, [channel]: false })); setTyping(current => ({ ...current, [channel]: false }));
+      const monitor = requests.current.get(channel);
+      requests.current.delete(channel); if (monitor !== observer) monitor?.abort();
+    }
+  }
+  const eventsConnected = useRunEvents(applyEvent);
+
+  async function receive(agent: ChatAgent, message: ChatMessage, controller: AbortController) {
+    const channel = agent.channelId;
+    let accepted = false, completed = false;
+    try {
+      const { data, error, response } = await api.POST('/api/chat', { headers: { Prefer: 'respond-async' }, body: { agentId: agent.id, clientMessageId: message.id, message: message.text }, parseAs: 'stream', signal: controller.signal });
+      if (error || !data) { recordError(agent, error?.message ?? 'Could not start the channel response.'); return; }
+      if (response.status === 202) {
+        const result = await new Response(data).json();
+        if (result.run?.agentId !== agent.id || result.run?.channelId !== channel || result.run?.clientMessageId !== message.id || typeof result.run?.runId !== 'string' || result.message?.id !== message.id || result.message?.channelId !== channel) throw new Error('Invalid save acknowledgment');
+        accepted = true;
+        applyEvent({ type: 'run_started', ...result.run });
+        applyEvent({ type: 'user_message', ...result.message, agentId: agent.id, runId: result.run.runId });
+        return;
       }
-      const reader = data.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let completed = false;
-      try {
-        while (!controller.signal.aborted) {
-          const { value, done } = await reader.read();
-          if (done || controller.signal.aborted) break;
-          buffer += decoder.decode(value, { stream: true });
-          if (buffer.length > 256000) throw new Error('Oversized channel event');
-          let boundary: number;
-          while ((boundary = buffer.indexOf('\n')) !== -1) {
-            const line = buffer.slice(0, boundary);
-            buffer = buffer.slice(boundary + 1);
-            if (!line.trim()) continue;
-            const event = JSON.parse(line);
-            if (event.type === 'activity' && event.agentId === agent.id) {
-              const entry = event.entry;
-              if (entry && ['id', 'runId', 'channelId', 'label', 'text'].every(key => typeof entry[key] === 'string') && activityKinds.has(entry.kind) && Number.isFinite(entry.timestamp)) {
-                recordActivity(agent.id, entry as ActivityEntry, event.append === true);
-              }
-            } else if (event.type === 'typing' && event.channelId === channelId && typeof event.active === 'boolean') {
-              setTyping(current => ({ ...current, [channelId]: event.active }));
-            } else if ((event.type === 'channel_message' || event.type === 'user_message') && event.channelId === channelId && typeof event.text === 'string' && typeof event.id === 'string') {
-              if (event.type === 'user_message' && event.id === message.id) { accepted = true; pendingMessages.current.delete(channelId); }
-              const published: ChatMessage = { id: event.id, author: event.type === 'user_message' ? 'user' : 'agent', text: event.text, time: clock(event.timestamp) };
-              setConversations(current => {
-                const messages = current[channelId] ?? [];
-                return { ...current, [channelId]: messages.some(item => item.id === published.id) ? messages.map(item => item.id === published.id ? published : item) : [...messages, published] };
-              });
-            } else if (event.type === 'error' && typeof event.message === 'string') {
-              setTyping(current => ({ ...current, [channelId]: false }));
-              setErrors(current => ({ ...current, [channelId]: event.message }));
-              recordError(agent, event.message);
-            } else if (event.type === 'done') {
-              completed = true;
-              setTyping(current => ({ ...current, [channelId]: false }));
-            }
-            // Unrouted model output is never interpreted as a channel message.
-          }
-        }
-        if (!completed && !controller.signal.aborted) throw new Error('Channel disconnected');
-      } finally { reader.releaseLock(); }
+      await consumeEvents(data, controller.signal, event => {
+        if ((event.channelId && event.channelId !== channel) || (event.agentId && event.agentId !== agent.id)) return;
+        if (event.type === 'user_message' && event.id === message.id) accepted = true;
+        if (event.type === 'done') completed = true;
+        applyEvent({ ...event, agentId: event.agentId ?? agent.id, channelId: event.channelId ?? channel }, controller);
+      });
+      if (!completed && !controller.signal.aborted) throw new Error('Observer disconnected');
     } catch {
-      if (!controller.signal.aborted) {
-        const text = 'Connection interrupted. Check the backend and endpoint, then try again.';
-        setErrors(current => ({ ...current, [channelId]: text })); recordError(agent, text);
-        controller.abort();
-      }
+      if (!controller.signal.aborted) recordError(agent, 'Connection interrupted. Accepted work continues on the backend; reconnecting will restore published history.');
     } finally {
-      if (!accepted && !removedAgents.current.has(agent.id)) setDrafts(current => current[channelId] ? current : { ...current, [channelId]: message.text });
-      if (requests.current.get(channelId) === controller) {
-        requests.current.delete(channelId);
-        setBusy(current => ({ ...current, [channelId]: false }));
-        setTyping(current => ({ ...current, [channelId]: false }));
+      const stillPending = pendingMessages.current.get(channel)?.id === message.id;
+      if (!accepted && stillPending && !removedAgents.current.has(agent.id)) setDrafts(current => current[channel] ? current : { ...current, [channel]: message.text });
+      if (requests.current.get(channel) === controller) {
+        requests.current.delete(channel);
+        if (!accepted && stillPending && !activeRuns.current.has(channel)) { setBusy(current => ({ ...current, [channel]: false })); setTyping(current => ({ ...current, [channel]: false })); }
       }
     }
   }
-
   function send(agent: ChatAgent, text: string) {
     text = text.trim();
-    if (!agent.real || !text || requests.current.has(agent.channelId) || historyRequests.current.has(agent.channelId) || !loadedHistory.current.has(agent.channelId)) return;
+    if (!agent.real || !text || activeRuns.current.has(agent.channelId) || requests.current.has(agent.channelId) || historyRequests.current.has(agent.channelId) || !loadedHistory.current.has(agent.channelId)) return;
     const pending = pendingMessages.current.get(agent.channelId);
     const message: ChatMessage = pending?.text === text ? pending : { id: crypto.randomUUID(), author: 'user', text, time: clock() };
     pendingMessages.current.set(agent.channelId, message);
-    setDrafts(current => ({ ...current, [agent.channelId]: '' }));
-    setErrors(current => ({ ...current, [agent.channelId]: '' }));
-    setTyping(current => ({ ...current, [agent.channelId]: false }));
-    const controller = new AbortController();
-    requests.current.set(agent.channelId, controller);
+    setDrafts(current => ({ ...current, [agent.channelId]: '' })); setErrors(current => ({ ...current, [agent.channelId]: '' })); setTyping(current => ({ ...current, [agent.channelId]: false }));
+    const controller = new AbortController(); requests.current.set(agent.channelId, controller);
     setBusy(current => ({ ...current, [agent.channelId]: true }));
     void receive(agent, message, controller);
     return message.id;
   }
-
-  function stop(channelId: string) {
-    requests.current.get(channelId)?.abort();
-    setTyping(current => ({ ...current, [channelId]: false }));
-    setErrors(current => ({ ...current, [channelId]: 'Response stopped.' }));
+  async function stop(channelId: string) {
     const agent = agents.find(item => item.channelId === channelId);
-    if (agent) recordActivity(agent.id, { id: crypto.randomUUID(), runId: 'client', channelId, kind: 'status', label: 'Stopped', text: 'Response stopped by the user.', timestamp: Date.now() });
+    const clientMessageId = activeRuns.current.get(channelId)?.clientMessageId ?? pendingMessages.current.get(channelId)?.id;
+    if (!agent || !clientMessageId) return;
+    try {
+      const { response } = await api.POST('/api/agents/{id}/stop', { params: { path: { id: agent.id } }, body: { clientMessageId } });
+      if (!response.ok) throw new Error('Stop failed');
+      const current = activeRuns.current.get(channelId);
+      if (current && current.clientMessageId !== clientMessageId) return;
+      activeRuns.current.delete(channelId);
+      requests.current.get(channelId)?.abort(); requests.current.delete(channelId);
+      setBusy(value => ({ ...value, [channelId]: false })); setTyping(value => ({ ...value, [channelId]: false }));
+      recordActivity(agent.id, { id: crypto.randomUUID(), runId: 'client', channelId, kind: 'status', label: 'Stopped', text: 'Response stopped by the user.', timestamp: Date.now() });
+    } catch { recordError(agent, 'Could not stop the backend run. Check the connection and try again.'); }
   }
-
-  return { agents, conversations, drafts, busy, typing, activity, errors, addAgent, deleteAgent, send, stop,
+  return { agents, conversations, drafts, busy, typing, activity, errors, addAgent, deleteAgent, send, stop, eventsConnected,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
     setDraft: (channelId: string, text: string) => setDrafts(current => ({ ...current, [channelId]: text })) };
 }

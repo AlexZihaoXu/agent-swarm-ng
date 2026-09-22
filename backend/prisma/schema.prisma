@@ -54,4 +54,5 @@ model Message {
   channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@index([channelId, sequence])
+  @@index([channelId, createdAt, sequence])
 }

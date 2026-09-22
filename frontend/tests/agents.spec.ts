@@ -105,7 +105,26 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(page.getByRole('status')).toHaveText('Agent is working…');
   const avatar = page.getByTestId('chat-avatar');
-  const dotBox = (await avatar.locator('[data-slot="online-indicator"]').boundingBox())!;
+  const working = avatar.locator('[data-slot="online-indicator"]');
+  await expect(working).toHaveAttribute('data-state', 'working');
+  await expect(page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-state="working"]')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open conversation with Avery' }).locator('[data-slot="online-indicator"]')).toHaveAttribute('data-state', 'ready');
+  const shape = working.locator('path');
+  await expect(shape).toHaveCSS('fill', 'rgb(45, 212, 191)');
+  await expect(working.locator('svg')).toHaveAttribute('data-animated', 'true');
+  const firstContour = await shape.getAttribute('d');
+  await expect.poll(() => shape.getAttribute('d')).not.toBe(firstContour);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(working.locator('svg')).toHaveAttribute('data-animated', 'false');
+  const frozen = await shape.evaluate(async element => {
+    const before = element.getAttribute('d');
+    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    return { before, after: element.getAttribute('d') };
+  });
+  expect(frozen.after).toBe(frozen.before);
+  await page.screenshot({ path: '../.cache/aqua-working-status.png' });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const dotBox = (await working.boundingBox())!;
   await expect(avatar.locator('[data-slot="avatar-face"]')).not.toHaveCSS('mask-image', 'none');
   await emitChannel(page, { type: 'typing', channelId: 'wrong-channel', active: true });
   await expect(page.getByRole('status')).toHaveText('Agent is working…');
@@ -114,7 +133,7 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await expect(page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-slot="typing-badge"]')).toBeVisible();
   const badge = page.getByTestId('chat-avatar').locator('[data-slot="typing-badge"]');
   await expect(badge).toBeVisible();
-  await expect(badge).toHaveCSS('background-color', 'rgb(35, 165, 90)');
+  await expect(badge).toHaveCSS('background-color', 'rgb(45, 212, 191)');
   await expect(badge).toHaveCSS('width', '20px');
   await expect(badge).toHaveCSS('height', '10px');
   await expect(badge).toHaveCSS('box-shadow', 'none');
@@ -138,6 +157,9 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await emitChannel(page, { type: 'done' });
   await page.evaluate(() => (window as unknown as { finishChannel: () => void }).finishChannel());
   await expect(page.getByRole('status')).not.toBeVisible();
+  await expect(avatar.locator('[data-slot="online-indicator"]')).toHaveAttribute('data-state', 'ready');
+  await expect(avatar.locator('.presence-droplet')).toHaveAttribute('data-animated', 'false');
+  await expect(avatar.locator('.presence-shape')).toHaveCSS('fill', 'rgb(35, 165, 90)');
   await expect(page.getByRole('list', { name: 'Messages' }).locator('li')).toHaveCount(2);
 });
 
@@ -160,6 +182,8 @@ for (const ending of ['error', 'stop'] as const) {
     await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
     await expect(page.locator('[data-slot="typing-badge"]')).toHaveCount(0);
     await expect(page.getByTestId('chat-avatar').locator('[data-slot="online-indicator"]')).toBeVisible();
+    await expect(page.getByTestId('chat-avatar').locator('.presence-shape')).toHaveCSS('fill', 'rgb(35, 165, 90)');
+    await expect(page.getByTestId('chat-avatar').locator('.presence-droplet')).toHaveAttribute('data-animated', 'false');
   });
 }
 

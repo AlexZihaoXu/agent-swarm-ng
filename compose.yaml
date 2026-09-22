@@ -9,6 +9,7 @@ services:
       HOST: 0.0.0.0
       PORT: "3000"
       DATABASE_URL: ${DATABASE_URL:-file:/app/.local/platform.db}
+      AGENT_RUN_TIMEOUT_MS: ${AGENT_RUN_TIMEOUT_MS:-0}
     init: true
     volumes:
       - platform_data:/app/.local

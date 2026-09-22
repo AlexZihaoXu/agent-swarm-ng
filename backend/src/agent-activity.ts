@@ -11,8 +11,7 @@ export const ActivityEntrySchema = Type.Object({
 type ActivityEntry = Static<typeof ActivityEntrySchema>;
 
 /** Operator-only activity. Never converted into a channel publication or written to disk. */
-export function createActivityRecorder(agentId: string, channelId: string, apiKey: string, emit: (event: object) => void) {
-  const runId = randomUUID();
+export function createActivityRecorder(agentId: string, channelId: string, apiKey: string, emit: (event: object) => void, runId: string = randomUUID()) {
   let assistant = 0;
   const calls = new Map<string, string>();
   const redact = (text: string) => apiKey ? text.replaceAll(apiKey, '[redacted]') : text;

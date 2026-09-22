@@ -15,10 +15,11 @@ type RequestBody = { tools?: { function: { name: string } }[]; messages: { role:
 let server: Server;
 let baseUrl: string;
 let folder: string;
-let behavior: 'tool' | 'raw' | 'wrong-channel' | 'after-reminder' | 'http-error' | 'publication-error' | 'research' = 'tool';
+let behavior: 'tool' | 'raw' | 'wrong-channel' | 'after-reminder' | 'http-error' | 'publication-error' | 'research' | 'ack-raw' | 'ack-silent' | 'history' = 'tool';
 let captured: RequestBody[] = [];
 let authorization: string | undefined;
 let argumentGate: Promise<void> | undefined;
+let historyAnchorId = '';
 
 beforeAll(async () => {
   await mkdir('.cache', { recursive: true });
@@ -30,14 +31,22 @@ beforeAll(async () => {
     captured.push(body);
     authorization = request.headers.authorization;
     if (behavior === 'http-error') { response.writeHead(500).end('PRIVATE PROVIDER ERROR !literal-key-$NOT_AN_ENV_LOOKUP'); return; }
-    const shouldPublish = behavior !== 'raw' && !(behavior === 'publication-error' && body.messages.some(message => message.role === 'tool')) && (behavior !== 'after-reminder' || JSON.stringify(body.messages).includes('Automatic channel reminder:'));
+    const hasTool = body.messages.some(message => message.role === 'tool');
+    const reminded = JSON.stringify(body.messages).includes('Automatic channel reminder:');
+    const acknowledgmentCase = behavior === 'ack-raw' || behavior === 'ack-silent';
+    const shouldPublish = acknowledgmentCase ? !hasTool || (behavior === 'ack-raw' && reminded) : behavior !== 'raw' && !(behavior === 'publication-error' && hasTool) && (behavior !== 'after-reminder' || reminded);
     if (request.url !== '/v1/chat/completions') { response.writeHead(404).end(); return; }
     const system = body.messages.find(message => message.role === 'system')?.content;
     const channelId = (typeof system === 'string' ? system : '').match(/channel is ([\w-]+)\./)?.[1];
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
     const chunk = (delta: object, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: 'test', object: 'chat.completion.chunk', created: 1, model: body.model, choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     chunk({ role: 'assistant', reasoning_content: 'PRIVATE THINKING', content: 'PRIVATE DIRECT OUTPUT' });
-    if (behavior === 'research') {
+    if (behavior === 'history') {
+      const step = body.messages.filter(message => message.role === 'tool').length;
+      const name = step === 1 ? 'search_messages' : step === 2 ? 'read_messages' : 'send_message';
+      const args = step === 1 ? { query: 'nickname' } : step === 2 ? { messageId: historyAnchorId, limit: 3 } : { channelId, text: step === 0 ? 'On it' : 'The nickname is Aurora', final: step > 0 };
+      chunk({ tool_calls: [{ index: 0, id: `history-${step}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
+    } else if (behavior === 'research') {
       const step = body.messages.filter(message => message.role === 'tool').length;
       const name = step === 1 ? 'get_search_content' : 'send_message';
       const args = step === 1 ? { responseId: 'missing' } : { channelId, text: step === 0 ? 'On it' : 'Research complete', final: step > 0 };
@@ -45,7 +54,7 @@ beforeAll(async () => {
     } else if (shouldPublish) {
       chunk({ tool_calls: [{ index: 0, id: 'call-test', type: 'function', function: { name: 'send_message', arguments: '' } }] });
       if (argumentGate) await argumentGate;
-      chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify({ channelId: behavior === 'wrong-channel' ? 'other-channel' : channelId, text: 'Published hello' }) } }] });
+      chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify({ channelId: behavior === 'wrong-channel' ? 'other-channel' : channelId, text: acknowledgmentCase ? (hasTool ? 'Recovered result' : 'On it') : 'Published hello', ...(acknowledgmentCase ? { final: hasTool } : {}) }) } }] });
     }
     chunk({}, shouldPublish ? 'tool_calls' : 'stop');
     response.end('data: [DONE]\n\n');
@@ -64,9 +73,121 @@ async function testApp(database?: PlatformStore, codex?: CodexProvider) {
 const chatPayload = (agent: { id: string }, message = 'Hello') => ({ agentId: agent.id, clientMessageId: crypto.randomUUID(), message });
 const configuration = { name: 'Chat test', endpointId: 'endpoint', model: 'test-model', thinkingLevel: 'off' };
 const eventsFrom = (body: string) => body.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
-const channelEvents = (body: string) => eventsFrom(body).filter(event => event.type !== 'activity' && event.type !== 'user_message');
+async function* streamed(response: Response) {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder(); let buffer = '';
+  try {
+    while (true) {
+      const { value, done } = await reader.read(); if (done) return;
+      buffer += decoder.decode(value, { stream: true });
+      let boundary: number;
+      while ((boundary = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, boundary); buffer = buffer.slice(boundary + 1);
+        if (line.trim()) yield JSON.parse(line);
+      }
+    }
+  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+}
+const channelEvents = (body: string) => eventsFrom(body).filter(event => !['activity', 'user_message', 'run_started', 'heartbeat'].includes(event.type)).map(event => {
+  if (event.type === 'done') return { type: 'done' };
+  const { eventId, runId, agentId, ...publication } = event;
+  return publication;
+});
 
 describe('Pi chat and platform channel boundary', () => {
+  it('grants history tools and retrieves older context after a prompt acknowledgment', async () => {
+    behavior = 'history'; captured = [];
+    const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
+    const app = await testApp(database);
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      historyAnchorId = (await database.appendMessage(agent.channelId, 'user', 'The project nickname is Aurora.')).id;
+      for (let index = 0; index < 12; index++) await database.appendMessage(agent.channelId, 'assistant', `Later message ${index}`);
+      const response = await app.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent, 'Find the older project reference.') });
+      expect(captured).toHaveLength(4);
+      expect(captured[0].tools?.map(tool => tool.function.name)).toEqual(expect.arrayContaining(['read_messages', 'search_messages', 'send_message']));
+      expect(JSON.stringify(captured[0].messages)).not.toContain('Aurora');
+      expect(JSON.stringify(captured[2].messages)).toContain('Aurora');
+      expect(JSON.stringify(captured[3].messages)).toContain(historyAnchorId);
+      expect(eventsFrom(response.body).filter(event => event.type === 'channel_message').map(event => event.text)).toEqual(['On it', 'The nickname is Aurora']);
+    } finally { await app.close(); }
+  });
+  for (const recovery of [true, false]) it(`reminds once after an acknowledgment followed by plain output (recovery: ${recovery})`, async () => {
+    behavior = recovery ? 'ack-raw' : 'ack-silent'; captured = [];
+    const app = await testApp();
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const response = await app.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent, 'Research this task') });
+      const events = eventsFrom(response.body);
+      expect(captured).toHaveLength(3);
+      expect(events.filter(event => event.type === 'activity' && event.entry.kind === 'reminder')).toHaveLength(1);
+      expect(events.filter(event => event.type === 'channel_message').map(event => event.text)).toEqual(recovery ? ['On it', 'Recovered result'] : ['On it']);
+      expect(JSON.stringify(channelEvents(response.body))).not.toContain('PRIVATE');
+      expect(events.some(event => event.type === 'error')).toBe(!recovery);
+    } finally { await app.close(); }
+  });
+  it('continues after its caller disconnects and can be observed again without restarting inference', async () => {
+    behavior = 'tool'; captured = [];
+    let release!: () => void;
+    argumentGate = new Promise<void>(resolve => { release = resolve; });
+    const app = await testApp();
+    const controller = new AbortController();
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const address = await app.listen({ host: '127.0.0.1', port: 0 });
+      const input = chatPayload(agent);
+      const response = await fetch(`${address}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
+      for await (const event of streamed(response)) { if (event.type === 'typing' && event.active) break; }
+      const observer = streamed(await fetch(`${address}/api/events`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) }));
+      const snapshot = (await observer.next()).value;
+      expect(snapshot).toMatchObject({ type: 'snapshot', runs: [expect.objectContaining({ agentId: agent.id, channelId: agent.channelId, clientMessageId: input.clientMessageId, typing: true })] });
+      release();
+      const observed = [];
+      for await (const event of observer) { observed.push(event); if (event.type === 'done') break; }
+      expect(observed.some(event => event.type === 'channel_message' && event.text === 'Published hello')).toBe(true);
+      expect((await app.inject(`/api/channels/${agent.channelId}/messages`)).json().messages.map((row: { text: string }) => row.text)).toEqual(['Hello', 'Published hello']);
+      expect(captured).toHaveLength(1);
+    } finally { controller.abort(); release(); argumentGate = undefined; await app.close(); }
+  }, 20000);
+
+  it('persists the result even when no dashboard is connected at completion', async () => {
+    behavior = 'tool'; captured = [];
+    let release!: () => void;
+    argumentGate = new Promise<void>(resolve => { release = resolve; });
+    const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
+    const app = await testApp(database);
+    const controller = new AbortController();
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const address = await app.listen({ host: '127.0.0.1', port: 0 });
+      const input = chatPayload(agent);
+      const response = await fetch(`${address}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json', Prefer: 'respond-async' }, body: JSON.stringify(input), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
+      expect(response.status).toBe(202);
+      expect(await response.json()).toMatchObject({ run: { agentId: agent.id, clientMessageId: input.clientMessageId }, message: { id: input.clientMessageId, text: 'Hello' } });
+      release();
+      await vi.waitFor(async () => expect((await database.messages(agent.channelId)).messages.map(row => row.text)).toEqual(['Hello', 'Published hello']), { timeout: 5000 });
+      expect(captured).toHaveLength(1);
+    } finally { controller.abort(); release(); argumentGate = undefined; await app.close(); }
+  }, 20000);
+
+  it('stops a backend-owned run explicitly and rejects a stale stop target', async () => {
+    behavior = 'tool';
+    let release!: () => void;
+    argumentGate = new Promise<void>(resolve => { release = resolve; });
+    const app = await testApp();
+    const controller = new AbortController();
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const address = await app.listen({ host: '127.0.0.1', port: 0 });
+      const input = chatPayload(agent);
+      const response = await fetch(`${address}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
+      for await (const event of streamed(response)) { if (event.type === 'typing' && event.active) break; }
+      const url = `/api/agents/${agent.id}/stop`;
+      expect((await app.inject({ method: 'POST', url, payload: { clientMessageId: crypto.randomUUID() } })).json()).toEqual({ stopped: false });
+      expect((await app.inject({ method: 'POST', url, payload: { clientMessageId: input.clientMessageId } })).json()).toEqual({ stopped: true });
+      expect((await app.inject(`/api/channels/${agent.channelId}/messages`)).json().messages.map((row: { role: string }) => row.role)).toEqual(['user']);
+    } finally { controller.abort(); release(); argumentGate = undefined; await app.close(); }
+  }, 20000);
   it('requires exact confirmation and deletes only the chosen agent and its history', async () => {
     behavior = 'tool';
     const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
@@ -178,7 +299,7 @@ describe('Pi chat and platform channel boundary', () => {
       expect(events[0]).toEqual({ type: 'typing', channelId: agent.channelId, active: true });
       expect(events[1]).toEqual({ type: 'typing', channelId: agent.channelId, active: false });
       expect(events[2].channelId).toBe(agent.channelId);
-      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.headers['cache-control']).toContain('no-store');
     } finally { await app.close(); }
   });
 
@@ -228,7 +349,7 @@ describe('Pi chat and platform channel boundary', () => {
           if (event.type === 'typing') typing = event;
         }
       }
-      expect(typing).toEqual({ type: 'typing', channelId: agent.channelId, active: true });
+      expect(typing).toMatchObject({ type: 'typing', channelId: agent.channelId, active: true, runId: expect.any(String), eventId: expect.any(String) });
       release();
       let rest = buffer;
       while (true) { const { value, done } = await reader.read(); if (done) break; rest += decoder.decode(value, { stream: true }); }
@@ -247,7 +368,7 @@ describe('Pi chat and platform channel boundary', () => {
       const response = await app.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent) });
       expect(captured).toHaveLength(2);
       expect(JSON.stringify(captured[1].messages)).toContain('Automatic channel reminder:');
-      expect(JSON.stringify(captured[1].messages)).toContain('If silence was intentional, ignore this reminder');
+      expect(JSON.stringify(captured[1].messages)).toContain('If no reply was appropriate or the user requested silence, remain silent.');
       expect(channelEvents(response.body)).toEqual([{ type: 'done' }]);
       expect(eventsFrom(response.body).some(event => event.type === 'activity' && event.entry.kind === 'reminder')).toBe(true);
     } finally { await app.close(); }

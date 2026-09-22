@@ -14,16 +14,16 @@ import { Settings } from '@/components/settings';
 import { AvatarFace, PresenceIndicator, TypingDots } from '@/components/typing-indicator';
 import { AgentActivityPanel } from '@/components/agent-activity-panel';
 
-function Avatar({ initials, small = false, typing = false, ready = false }: { initials: string; small?: boolean; typing?: boolean; ready?: boolean }) {
+function Avatar({ initials, small = false, typing = false, ready = false, working = false }: { initials: string; small?: boolean; typing?: boolean; ready?: boolean; working?: boolean }) {
   return (
     <span aria-hidden="true" className={cn(
       'relative shrink-0 font-medium text-foreground/75',
       small ? 'size-7 text-[11px]' : 'size-8 text-xs',
     )}>
-      <AvatarFace avatarSize={small ? 28 : 32} ready={ready} typing={typing} size="md">
+      <AvatarFace avatarSize={small ? 28 : 32} ready={ready} typing={typing} working={working} size="md">
         <span className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/10">{initials}</span>
       </AvatarFace>
-      <PresenceIndicator ready={ready} typing={typing} size="md" />
+      <PresenceIndicator ready={ready} typing={typing} working={working} size="md" />
     </span>
   );
 }
@@ -31,7 +31,7 @@ function Avatar({ initials, small = false, typing = false, ready = false }: { in
 const emptyAgent: ChatAgent = { id: '', name: '', initials: '', time: '', channelId: '' };
 
 export function App() {
-  const { agents, conversations, drafts, busy, typing, activity, addAgent, deleteAgent, send, stop, setDraft,
+  const { agents, conversations, drafts, busy, typing, activity, addAgent, deleteAgent, send, stop, setDraft, eventsConnected,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
   } = useChat();
   const [selectedId, setSelectedId] = useState<string>(agents[0]?.id ?? '');
@@ -140,7 +140,7 @@ export function App() {
                         item.id === agent.id ? 'bg-foreground/10' : 'hover:bg-foreground/5',
                       )}
                     >
-                      <Avatar initials={item.initials} ready={Boolean(item.real)} typing={typing[item.channelId]} />
+                      <Avatar initials={item.initials} ready={Boolean(item.real)} typing={typing[item.channelId]} working={busy[item.channelId]} />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-sm font-medium">{item.name}</span>
@@ -170,7 +170,7 @@ export function App() {
               <Button variant="outline" size="sm" className="px-2 sm:hidden" aria-label="Back to agents" onClick={() => setMobileConversation(false)}>
                 <span aria-hidden="true">←</span>
               </Button>
-              <AgentAvatar initials={agent.initials} ready={Boolean(agent.real)} typing={typing[agent.channelId]} />
+              <AgentAvatar initials={agent.initials} ready={Boolean(agent.real)} typing={typing[agent.channelId]} working={busy[agent.channelId]} />
               <AgentName name={agent.name} />
               <AgentActivityPanel agent={agent} entries={activity[agent.id] ?? []} open={activityOpen} onOpenChange={setActivityOpen} />
             </header>
@@ -185,7 +185,7 @@ export function App() {
                 <div className="mb-1 flex h-5 min-w-0 items-center px-2">
                   {busy[agent.channelId] && (
                     <p role="status" className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                      {typing[agent.channelId] ? <><TypingDots /><span className="truncate"><strong className="font-medium text-foreground">{agent.name}</strong> is typing…</span></> : 'Agent is working…'}
+                      {typing[agent.channelId] ? <><TypingDots /><span className="truncate"><strong className="font-medium text-foreground">{agent.name}</strong> is typing…</span></> : eventsConnected ? 'Agent is working…' : 'Agent is working · reconnecting…'}
                     </p>
                   )}
                 </div>

@@ -53,9 +53,14 @@ describe('Prisma SQLite platform records', () => {
     try {
       const agent = await store.createAgent(config); const channelId = agent.channels[0].id;
       for (let i = 0; i < 105; i++) await store.appendMessage(channelId, 'user', String(i));
-      expect(await store.context(channelId, 5)).toHaveLength(100);
+      const recent = await store.context(channelId);
+      expect(recent).toHaveLength(8);
+      expect(recent[0]).toMatchObject({ id: expect.any(String), sequence: expect.any(Number), timestamp: expect.any(Number), text: '97' });
       for (let i = 0; i < 5; i++) await store.appendMessage(channelId, 'assistant', 'x'.repeat(20000));
-      expect(await store.context(channelId, 20000)).toHaveLength(3);
+      const previews = await store.context(channelId);
+      expect(previews).toHaveLength(8);
+      expect(previews.every(message => message.text.length <= 1000)).toBe(true);
+      expect(previews.at(-1)).toMatchObject({ nextOffset: 1000, totalCharacters: 20000 });
       expect(await store.client.message.count()).toBe(110);
       const saved = await store.appendMessage(channelId, 'user', 'Once');
       await expect(store.appendMessage(channelId, 'user', 'Twice', saved.id)).rejects.toThrow();
