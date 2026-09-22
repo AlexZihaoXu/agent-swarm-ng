@@ -695,6 +695,103 @@
                               }
                             ]
                           },
+                          "avatar": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "type": "object",
+                                "required": [
+                                  "shape",
+                                  "color",
+                                  "seed"
+                                ],
+                                "properties": {
+                                  "shape": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "pebble"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "squircle"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "gumdrop"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "triangle"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "bean"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "pear"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "capsule"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "diamond"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "color": {
+                                    "minLength": 7,
+                                    "maxLength": 7,
+                                    "pattern": "^#[0-9a-fA-F]{6}$",
+                                    "type": "string"
+                                  },
+                                  "eyeStyle": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "pill"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "round"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "seed": {
+                                    "minimum": 0,
+                                    "maximum": 2147483647,
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "id": {
                             "type": "string"
                           },
@@ -851,6 +948,96 @@
                         ]
                       }
                     ]
+                  },
+                  "avatar": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "shape",
+                      "color",
+                      "seed"
+                    ],
+                    "properties": {
+                      "shape": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "pebble"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "squircle"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "gumdrop"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "triangle"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "bean"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "pear"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "capsule"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "diamond"
+                            ]
+                          }
+                        ]
+                      },
+                      "color": {
+                        "minLength": 7,
+                        "maxLength": 7,
+                        "pattern": "^#[0-9a-fA-F]{6}$",
+                        "type": "string"
+                      },
+                      "eyeStyle": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "pill"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "round"
+                            ]
+                          }
+                        ]
+                      },
+                      "seed": {
+                        "minimum": 0,
+                        "maximum": 2147483647,
+                        "type": "integer"
+                      }
+                    }
                   }
                 }
               }
@@ -934,6 +1121,103 @@
                           "enum": [
                             "max"
                           ]
+                        }
+                      ]
+                    },
+                    "avatar": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "shape",
+                            "color",
+                            "seed"
+                          ],
+                          "properties": {
+                            "shape": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "pebble"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "squircle"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "gumdrop"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "triangle"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "bean"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "pear"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "capsule"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "diamond"
+                                  ]
+                                }
+                              ]
+                            },
+                            "color": {
+                              "minLength": 7,
+                              "maxLength": 7,
+                              "pattern": "^#[0-9a-fA-F]{6}$",
+                              "type": "string"
+                            },
+                            "eyeStyle": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "pill"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "round"
+                                  ]
+                                }
+                              ]
+                            },
+                            "seed": {
+                              "minimum": 0,
+                              "maximum": 2147483647,
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
                         }
                       ]
                     },
@@ -1150,6 +1434,290 @@
             }
           },
           "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/avatar": {
+      "patch": {
+        "operationId": "updateAgentAvatar",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "avatar"
+                ],
+                "properties": {
+                  "avatar": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "shape",
+                      "color",
+                      "seed"
+                    ],
+                    "properties": {
+                      "shape": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "pebble"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "squircle"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "gumdrop"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "triangle"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "bean"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "pear"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "capsule"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "diamond"
+                            ]
+                          }
+                        ]
+                      },
+                      "color": {
+                        "minLength": 7,
+                        "maxLength": 7,
+                        "pattern": "^#[0-9a-fA-F]{6}$",
+                        "type": "string"
+                      },
+                      "eyeStyle": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "pill"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "round"
+                            ]
+                          }
+                        ]
+                      },
+                      "seed": {
+                        "minimum": 0,
+                        "maximum": 2147483647,
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "avatar"
+                  ],
+                  "properties": {
+                    "avatar": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "shape",
+                        "color",
+                        "seed"
+                      ],
+                      "properties": {
+                        "shape": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "pebble"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "squircle"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "gumdrop"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "triangle"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "bean"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "pear"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "capsule"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "diamond"
+                              ]
+                            }
+                          ]
+                        },
+                        "color": {
+                          "minLength": 7,
+                          "maxLength": 7,
+                          "pattern": "^#[0-9a-fA-F]{6}$",
+                          "type": "string"
+                        },
+                        "eyeStyle": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "pill"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "round"
+                              ]
+                            }
+                          ]
+                        },
+                        "seed": {
+                          "minimum": 0,
+                          "maximum": 2147483647,
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
             "description": "Default Response",
             "content": {
               "application/json": {

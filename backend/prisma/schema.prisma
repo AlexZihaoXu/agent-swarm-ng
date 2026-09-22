@@ -27,6 +27,7 @@ model Agent {
   sequence      Int       @id @default(autoincrement())
   id            String    @unique @default(uuid())
   name          String
+  avatar        String?
   endpointId    String
   model         String
   thinkingLevel ThinkingLevel

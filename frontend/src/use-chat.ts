@@ -5,15 +5,16 @@ import type { components, paths } from '@/api/schema';
 import type { ChatMessage } from '@/chat-types';
 import { createNotificationSound } from '@/lib/notification-sound';
 import { useRunEvents } from '@/use-run-events';
+import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 
 export type ActivityEntry = components['schemas']['AgentActivityEntry'];
 const activityKinds = new Set(['system', 'user', 'assistant', 'thinking', 'tool_call', 'tool_result', 'reminder', 'channel', 'status', 'error']);
 export type RealAgent = paths['/api/agents']['post']['responses'][200]['content']['application/json'];
-export type ChatAgent = { id: string; name: string; initials: string; time: string; channelId: string; real?: RealAgent };
+export type ChatAgent = { id: string; name: string; initials: string; time: string; channelId: string; avatar?: AvatarAppearance; real?: RealAgent };
 type SavedMessage = paths['/api/channels/{channelId}/messages']['get']['responses'][200]['content']['application/json']['messages'][number];
 type Run = { runId: string; agentId: string; channelId: string; clientMessageId: string; typing?: boolean };
 const asMessage = (message: SavedMessage): ChatMessage => ({ id: message.id, sequence: message.sequence, author: message.role === 'user' ? 'user' : 'agent', text: message.text, time: clock(message.timestamp) });
-const asAgent = (real: RealAgent): ChatAgent => ({ id: real.id, name: real.name, initials: real.name.slice(0, 2).toUpperCase(), time: clock(real.lastMessage?.timestamp ?? real.createdAt), channelId: real.channelId, real });
+const asAgent = (real: RealAgent): ChatAgent => ({ avatar: real.avatar ?? defaultAvatar(real.id), id: real.id, name: real.name, initials: real.name.slice(0, 2).toUpperCase(), time: clock(real.lastMessage?.timestamp ?? real.createdAt), channelId: real.channelId, real });
 const clock = (timestamp = Date.now()) => new Date(timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s+/g, ' ');
 function withoutKey<T>(record: Record<string, T>, key: string) { const next = { ...record }; delete next[key]; return next; }
 function remember(set: Set<string>, key: string) {
@@ -271,6 +272,11 @@ export function useChat() {
     void receive(agent, message, controller);
     return message.id;
   }
+  async function editAvatar(agent: ChatAgent, avatar: AvatarAppearance) {
+    const { data, error } = await api.PATCH('/api/agents/{id}/avatar', { params: { path: { id: agent.id } }, body: { avatar } });
+    if (!data || error) throw new Error(error?.message ?? 'Could not save the avatar.');
+    setAgents(current => current.map(item => item.id === agent.id ? { ...item, avatar: data.avatar, real: item.real ? { ...item.real, avatar: data.avatar } : undefined } : item));
+  }
   async function stop(channelId: string) {
     const agent = agents.find(item => item.channelId === channelId);
     const clientMessageId = activeRuns.current.get(channelId)?.clientMessageId ?? pendingMessages.current.get(channelId)?.id;
@@ -286,7 +292,7 @@ export function useChat() {
       recordActivity(agent.id, { id: crypto.randomUUID(), runId: 'client', channelId, kind: 'status', label: 'Stopped', text: 'Response stopped by the user.', timestamp: Date.now() });
     } catch { recordError(agent, 'Could not stop the backend run. Check the connection and try again.'); }
   }
-  return { agents, conversations, drafts, busy, typing, activity, errors, addAgent, deleteAgent, send, stop, eventsConnected,
+  return { agents, conversations, drafts, busy, typing, activity, errors, addAgent, deleteAgent, editAvatar, send, stop, eventsConnected,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
     setDraft: (channelId: string, text: string) => setDrafts(current => ({ ...current, [channelId]: text })) };
 }

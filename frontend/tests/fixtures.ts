@@ -44,6 +44,13 @@ export const test = base.extend({
     await page.route(/\/api\/agents(?:\?.*)?$/, route => route.request().method() === 'GET'
       ? route.fulfill({ json: { agents, nextCursor: null } })
       : route.fulfill({ status: 501, json: { message: 'Configure an agent-creation mock for this test.' } }));
+    await page.route('**/api/agents/*/avatar', route => {
+      const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/')[3]);
+      const agent = agents.find(item => item.id === id);
+      if (!agent) return route.fulfill({ status: 404, json: { message: 'Agent not found.' } });
+      const { avatar } = route.request().postDataJSON(); Object.assign(agent, { avatar });
+      return route.fulfill({ json: { avatar } });
+    });
     await page.route(/\/api\/agents\/[^/?]+$/, route => {
       if (route.request().method() !== 'DELETE') return route.fallback();
       const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/').at(-1)!);

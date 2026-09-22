@@ -61,7 +61,13 @@
   30% { opacity: 1; }
 }
 
+@keyframes presence-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: no-preference) {
+  .presence-pulse { animation: presence-pulse 1.6s ease-in-out infinite; }
   .typing-dot { animation: typing-dot 1s ease-in-out infinite; }
 
   .message-enter {

@@ -148,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateAgentAvatar"];
+        trace?: never;
+    };
     "/api/agents/{id}": {
         parameters: {
             query?: never;
@@ -515,6 +531,12 @@ export interface operations {
                             endpointId: string;
                             model: string;
                             thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+                            avatar?: {
+                                shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                color: string;
+                                eyeStyle?: "pill" | "round";
+                                seed: number;
+                            } | null;
                             id: string;
                             channelId: string;
                             createdAt: number;
@@ -547,6 +569,12 @@ export interface operations {
                     endpointId: string;
                     model: string;
                     thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+                    avatar?: {
+                        shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                        color: string;
+                        eyeStyle?: "pill" | "round";
+                        seed: number;
+                    };
                 };
             };
         };
@@ -562,6 +590,12 @@ export interface operations {
                         endpointId: string;
                         model: string;
                         thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+                        avatar?: {
+                            shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                            color: string;
+                            eyeStyle?: "pill" | "round";
+                            seed: number;
+                        } | null;
                         id: string;
                         channelId: string;
                         createdAt: number;
@@ -635,6 +669,79 @@ export interface operations {
             };
             /** @description Default Response */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    updateAgentAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    avatar: {
+                        shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                        color: string;
+                        eyeStyle?: "pill" | "round";
+                        seed: number;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        avatar: {
+                            shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                            color: string;
+                            eyeStyle?: "pill" | "round";
+                            seed: number;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

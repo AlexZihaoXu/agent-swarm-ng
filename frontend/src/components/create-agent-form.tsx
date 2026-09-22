@@ -3,6 +3,8 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
+import { AgentAvatarPreview } from '@/components/agent-avatar-preview';
+import { randomizeAvatar } from '@/lib/agent-avatar';
 import type { RealAgent } from '@/use-chat';
 
 const fieldClass = 'h-10 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40';
@@ -12,6 +14,7 @@ const codexConnection = 'provider:openai-codex';
 export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) => void }) {
   const id = useId();
   const [name, setName] = useState('');
+  const [avatar, setAvatar] = useState(() => randomizeAvatar());
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [endpointId, setEndpointId] = useState('');
   const [models, setModels] = useState<string[]>([]);
@@ -73,7 +76,7 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
     const controller = new AbortController();
     creation.current = controller;
     try {
-      const { data, error } = await api.POST('/api/agents', { body: { name: name.trim(), endpointId, model, thinkingLevel: thinking }, signal: controller.signal });
+      const { data, error } = await api.POST('/api/agents', { body: { name: name.trim(), endpointId, model, thinkingLevel: thinking, avatar }, signal: controller.signal });
       if (controller.signal.aborted) return;
       if (error || !data) setError(error?.message ?? 'Could not create agent.');
       else onCreated(data);
@@ -87,6 +90,7 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
       <Dialog.Description className="mt-2 text-sm leading-relaxed text-muted-foreground">A Pi agent with saved platform-chat history. No computer, file, or command access.</Dialog.Description>
       <fieldset disabled={creating} className="mt-5 min-w-0 space-y-4">
         <div className="space-y-2"><label htmlFor={`${id}-name`} className="block text-sm font-medium">Agent name</label><input id={`${id}-name`} required maxLength={80} value={name} onChange={event => setName(event.target.value)} className={fieldClass} autoComplete="off" placeholder="Name your agent" /></div>
+        <AgentAvatarPreview name={name} value={avatar} onChange={setAvatar} disabled={creating} />
         <div className="space-y-2"><label htmlFor={`${id}-endpoint`} className="block text-sm font-medium">Endpoint</label>
           <Select id={`${id}-endpoint`} required disabled={creating || endpoints.length === 0} value={endpointId} onValueChange={setEndpointId} placeholder="Select a model connection" options={endpoints.map(endpoint => ({ value: endpoint.id, label: endpoint.name }))} />
           {!loading && endpoints.length === 0 && <p className="text-xs text-muted-foreground">Connect ChatGPT or save an API endpoint in Settings first.</p>}

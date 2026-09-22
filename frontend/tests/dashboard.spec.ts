@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { defaultAvatar } from '../src/lib/agent-avatar';
 
 test('saved agents follow the agents and chat layout', async ({ page }) => {
   await page.goto('/');
@@ -54,12 +55,12 @@ test('chat identity animates and settles on the latest selected agent', async ({
   const nextName = page.getByRole('heading', { name: 'Morgan', exact: true }).locator('[data-slot="swap-text"]');
   await expect(nextName).toHaveText('Morgan');
   const avatar = page.getByTestId('chat-avatar');
-  await expect(avatar.locator('[data-avatar="current"]')).toHaveText('MO');
+  await expect(avatar.locator('[data-avatar="current"] svg')).toHaveAttribute('data-avatar-seed', String(defaultAvatar('morgan').seed));
   await expect(avatar.locator('[data-avatar="previous"]')).toHaveCSS('opacity', '0');
   await page.getByRole('button', { name: 'Open conversation with Riley' }).click();
   await page.getByRole('button', { name: 'Open conversation with Quinn' }).click();
   await expect(page.getByRole('heading', { name: 'Quinn', exact: true }).locator('[data-slot="swap-text"]')).toHaveText('Quinn');
-  await expect(avatar.locator('[data-avatar="current"]')).toHaveText('QU');
+  await expect(avatar.locator('[data-avatar="current"] svg')).toHaveAttribute('data-avatar-seed', String(defaultAvatar('quinn').seed));
   await expect(avatar.locator('[data-avatar="previous"]')).toHaveCSS('opacity', '0');
 });
 

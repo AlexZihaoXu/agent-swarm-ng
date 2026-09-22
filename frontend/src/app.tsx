@@ -13,15 +13,17 @@ import { ConversationMessages } from '@/components/conversation-messages';
 import { Settings } from '@/components/settings';
 import { AvatarFace, PresenceIndicator, TypingDots } from '@/components/typing-indicator';
 import { AgentActivityPanel } from '@/components/agent-activity-panel';
+import { AgentAvatarArt } from '@/components/agent-avatar-art';
+import type { AvatarAppearance } from '@/lib/agent-avatar';
 
-function Avatar({ initials, small = false, typing = false, ready = false, working = false }: { initials: string; small?: boolean; typing?: boolean; ready?: boolean; working?: boolean }) {
+function Avatar({ initials, avatar, small = false, typing = false, ready = false, working = false }: { initials: string; avatar?: AvatarAppearance; small?: boolean; typing?: boolean; ready?: boolean; working?: boolean }) {
   return (
     <span aria-hidden="true" className={cn(
       'relative shrink-0 font-medium text-foreground/75',
       small ? 'size-7 text-[11px]' : 'size-8 text-xs',
     )}>
       <AvatarFace avatarSize={small ? 28 : 32} ready={ready} typing={typing} working={working} size="md">
-        <span className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/10">{initials}</span>
+        {avatar ? <AgentAvatarArt {...avatar} size={small ? 28 : 32} state={typing ? 'typing' : working ? 'working' : 'idle'} animated /> : <span className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/10">{initials}</span>}
       </AvatarFace>
       <PresenceIndicator ready={ready} typing={typing} working={working} size="md" />
     </span>
@@ -31,7 +33,7 @@ function Avatar({ initials, small = false, typing = false, ready = false, workin
 const emptyAgent: ChatAgent = { id: '', name: '', initials: '', time: '', channelId: '' };
 
 export function App() {
-  const { agents, conversations, drafts, busy, typing, activity, addAgent, deleteAgent, send, stop, setDraft, eventsConnected,
+  const { agents, conversations, drafts, busy, typing, activity, addAgent, deleteAgent, editAvatar, send, stop, setDraft, eventsConnected,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
   } = useChat();
   const [selectedId, setSelectedId] = useState<string>(agents[0]?.id ?? '');
@@ -105,7 +107,7 @@ export function App() {
         </header>
 
         <Tabs.Content value="agents" className="min-h-0 flex-1 outline-none data-[state=active]:flex">
-          <AgentPanel agents={agents} onDelete={async (target, confirmation) => {
+          <AgentPanel agents={agents} onEditAvatar={editAvatar} onDelete={async (target, confirmation) => {
             await deleteAgent(target, confirmation);
             if (agent.id === target.id) {
               setSelectedId(agents.find(item => item.id !== target.id)?.id ?? '');
@@ -140,7 +142,7 @@ export function App() {
                         item.id === agent.id ? 'bg-foreground/10' : 'hover:bg-foreground/5',
                       )}
                     >
-                      <Avatar initials={item.initials} ready={Boolean(item.real)} typing={typing[item.channelId]} working={busy[item.channelId]} />
+                      <Avatar initials={item.initials} avatar={item.avatar} ready={Boolean(item.real)} typing={typing[item.channelId]} working={busy[item.channelId]} />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-sm font-medium">{item.name}</span>
@@ -170,7 +172,7 @@ export function App() {
               <Button variant="outline" size="sm" className="px-2 sm:hidden" aria-label="Back to agents" onClick={() => setMobileConversation(false)}>
                 <span aria-hidden="true">←</span>
               </Button>
-              <AgentAvatar initials={agent.initials} ready={Boolean(agent.real)} typing={typing[agent.channelId]} working={busy[agent.channelId]} />
+              <AgentAvatar initials={agent.initials} avatar={agent.avatar} ready={Boolean(agent.real)} typing={typing[agent.channelId]} working={busy[agent.channelId]} />
               <AgentName name={agent.name} />
               <AgentActivityPanel agent={agent} entries={activity[agent.id] ?? []} open={activityOpen} onOpenChange={setActivityOpen} />
             </header>

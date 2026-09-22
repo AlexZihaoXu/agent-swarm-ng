@@ -1,6 +1,5 @@
-import { useId, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { LiquidPresence } from '@/components/liquid-presence';
 
 export function TypingDots({ compact = false, className }: { compact?: boolean; className?: string }) {
   return (
@@ -11,10 +10,10 @@ export function TypingDots({ compact = false, className }: { compact?: boolean; 
 }
 
 type IndicatorSize = 'sm' | 'md';
-function indicatorDimensions(size: IndicatorSize, typing: boolean, working = false) {
+function indicatorDimensions(size: IndicatorSize, typing: boolean) {
   return size === 'md'
-    ? { width: typing ? 24 : working ? 12 : 10, height: typing || working ? 12 : 10 }
-    : { width: typing ? 20 : working ? 10 : 8, height: typing || working ? 10 : 8 };
+    ? { width: typing ? 24 : 10, height: typing ? 12 : 10 }
+    : { width: typing ? 20 : 8, height: typing ? 10 : 8 };
 }
 
 // Subtract the indicator's silhouette from the avatar, revealing any parent background.
@@ -22,7 +21,7 @@ export function AvatarFace({ children, avatarSize, ready = false, typing = false
   children: ReactNode; avatarSize: number; ready?: boolean; typing?: boolean; working?: boolean; size?: IndicatorSize;
 }) {
   const id = useId();
-  const { width, height } = indicatorDimensions(size, typing, working);
+  const { width, height } = indicatorDimensions(size, typing);
   const center = avatarSize - 4;
   const visible = ready || typing || working;
   return <>
@@ -36,18 +35,26 @@ export function AvatarFace({ children, avatarSize, ready = false, typing = false
   </>;
 }
 
-// Kibo avatar-standard-4 placement; working morphs the dot, while typing takes priority as a pill.
+// Kibo avatar-standard-4 placement; a fixed-size working dot pulses in opacity. Typing remains a pill.
 // Ready is a prototype UI state, not an endpoint-health or presence probe.
 export function PresenceIndicator({ ready = false, typing = false, working = false, size = 'sm', className }: { ready?: boolean; typing?: boolean; working?: boolean; size?: IndicatorSize; className?: string }) {
+  const dot = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const element = dot.current;
+    if (!element || !working || typing) return;
+    const update = () => { element.style.animationPlayState = document.hidden ? 'paused' : 'running'; };
+    update(); document.addEventListener('visibilitychange', update);
+    return () => document.removeEventListener('visibilitychange', update);
+  }, [working, typing]);
   if (!ready && !typing && !working) return null;
   const state = typing ? 'typing' : working ? 'working' : 'ready';
   return (
-    <span aria-hidden="true" data-slot={typing ? 'typing-badge' : 'online-indicator'} data-state={state} title={typing ? 'Typing' : working ? 'Working' : 'Ready to chat'} style={indicatorDimensions(size, typing, working)} className={cn(
+    <span aria-hidden="true" data-slot={typing ? 'typing-badge' : 'online-indicator'} data-state={state} title={typing ? 'Typing' : working ? 'Working' : 'Ready to chat'} style={indicatorDimensions(size, typing)} className={cn(
       'absolute bottom-1 right-1 z-10 translate-x-1/2 translate-y-1/2 flex items-center justify-center transition-[width,height,color,background-color] duration-220 motion-reduce:transition-none',
       typing ? 'overflow-hidden rounded-full bg-[#2dd4bf] text-[#134e4a]' : working ? 'text-[#2dd4bf]' : 'text-[#23a55a]',
       className,
     )}>
-      {typing ? <TypingDots compact className={size === 'md' ? 'scale-125' : undefined} /> : <LiquidPresence working={working} />}
+      {typing ? <TypingDots compact className={size === 'md' ? 'scale-125' : undefined} /> : <span ref={dot} className={cn('presence-dot size-full rounded-full bg-current', working && 'presence-pulse')} />}
     </span>
   );
 }

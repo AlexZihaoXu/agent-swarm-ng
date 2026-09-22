@@ -109,19 +109,16 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await expect(working).toHaveAttribute('data-state', 'working');
   await expect(page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-state="working"]')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open conversation with Avery' }).locator('[data-slot="online-indicator"]')).toHaveAttribute('data-state', 'ready');
-  const shape = working.locator('path');
-  await expect(shape).toHaveCSS('fill', 'rgb(45, 212, 191)');
-  await expect(working.locator('svg')).toHaveAttribute('data-animated', 'true');
-  const firstContour = await shape.getAttribute('d');
-  await expect.poll(() => shape.getAttribute('d')).not.toBe(firstContour);
+  const dot = working.locator('.presence-dot');
+  await expect(dot).toHaveCSS('background-color', 'rgb(45, 212, 191)');
+  await expect(dot).toHaveCSS('animation-name', 'presence-pulse');
+  await expect(working).toHaveCSS('width', '8px');
+  await expect(working).toHaveCSS('height', '8px');
+  const firstOpacity = await dot.evaluate(element => getComputedStyle(element).opacity);
+  await expect.poll(() => dot.evaluate(element => getComputedStyle(element).opacity)).not.toBe(firstOpacity);
+  await expect(working).toHaveCSS('width', '8px');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(working.locator('svg')).toHaveAttribute('data-animated', 'false');
-  const frozen = await shape.evaluate(async element => {
-    const before = element.getAttribute('d');
-    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    return { before, after: element.getAttribute('d') };
-  });
-  expect(frozen.after).toBe(frozen.before);
+  await expect(dot).toHaveCSS('animation-name', 'none');
   await page.screenshot({ path: '../.cache/aqua-working-status.png' });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const dotBox = (await working.boundingBox())!;
@@ -158,8 +155,9 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await page.evaluate(() => (window as unknown as { finishChannel: () => void }).finishChannel());
   await expect(page.getByRole('status')).not.toBeVisible();
   await expect(avatar.locator('[data-slot="online-indicator"]')).toHaveAttribute('data-state', 'ready');
-  await expect(avatar.locator('.presence-droplet')).toHaveAttribute('data-animated', 'false');
-  await expect(avatar.locator('.presence-shape')).toHaveCSS('fill', 'rgb(35, 165, 90)');
+  await expect(avatar.locator('.presence-dot')).toHaveCSS('animation-name', 'none');
+  await expect(avatar.locator('.presence-dot')).toHaveCSS('background-color', 'rgb(35, 165, 90)');
+  await expect(avatar.locator('[data-slot="online-indicator"]')).toHaveCSS('width', '8px');
   await expect(page.getByRole('list', { name: 'Messages' }).locator('li')).toHaveCount(2);
 });
 
@@ -182,8 +180,8 @@ for (const ending of ['error', 'stop'] as const) {
     await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
     await expect(page.locator('[data-slot="typing-badge"]')).toHaveCount(0);
     await expect(page.getByTestId('chat-avatar').locator('[data-slot="online-indicator"]')).toBeVisible();
-    await expect(page.getByTestId('chat-avatar').locator('.presence-shape')).toHaveCSS('fill', 'rgb(35, 165, 90)');
-    await expect(page.getByTestId('chat-avatar').locator('.presence-droplet')).toHaveAttribute('data-animated', 'false');
+    await expect(page.getByTestId('chat-avatar').locator('.presence-dot')).toHaveCSS('background-color', 'rgb(35, 165, 90)');
+    await expect(page.getByTestId('chat-avatar').locator('.presence-dot')).toHaveCSS('animation-name', 'none');
   });
 }
 

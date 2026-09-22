@@ -9,11 +9,12 @@ import { AgentRuns } from './agent-runs';
 import { createRunStreams } from './run-streams';
 import { runChat } from './chat-runner';
 import { createChatHistoryTools } from './chat-history-tools';
+import { AvatarSchema, type AgentAvatar } from './agent-avatar';
 
 const Thinking = Type.Union(Object.values(ThinkingLevel).map(value => Type.Literal(value)));
 const Selection = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 80 }), endpointId: Type.String({ minLength: 1, maxLength: 100 }),
-  model: Type.String({ minLength: 1, maxLength: 512 }), thinkingLevel: Thinking,
+  model: Type.String({ minLength: 1, maxLength: 512 }), thinkingLevel: Thinking, avatar: Type.Optional(AvatarSchema),
 }, { additionalProperties: false });
 const Message = Type.Object({
   id: Type.String(), sequence: Type.Integer(), channelId: Type.String(),
@@ -21,7 +22,7 @@ const Message = Type.Object({
 });
 const Cursor = Type.Union([Type.Integer(), Type.Null()]);
 const Agent = Type.Object({
-  ...Selection.properties, id: Type.String(), channelId: Type.String(), createdAt: Type.Number(), lastMessage: Type.Union([Message, Type.Null()]),
+  ...Selection.properties, avatar: Type.Optional(Type.Union([AvatarSchema, Type.Null()])), id: Type.String(), channelId: Type.String(), createdAt: Type.Number(), lastMessage: Type.Union([Message, Type.Null()]),
 }, { additionalProperties: false });
 const ErrorResponse = Type.Object({ message: Type.String() });
 const RunState = Type.Object({ runId: Type.String(), agentId: Type.String(), channelId: Type.String(), clientMessageId: Type.String({ description: 'Original request owning this run and its Stop target; may differ from a newly accepted follow-up message ID.' }), typing: Type.Boolean() });
@@ -34,7 +35,7 @@ const messageView = (message: { id: string; sequence: number; channelId: string;
 });
 function agentView(agent: NonNullable<Awaited<ReturnType<PlatformStore['findAgent']>>>) {
   const channel = agent.channels[0];
-  return { id: agent.id, createdAt: agent.createdAt.getTime(), name: agent.name, endpointId: agent.endpointId, model: agent.model, thinkingLevel: agent.thinkingLevel, channelId: channel.id, lastMessage: channel.messages[0] ? messageView(channel.messages[0]) : null };
+  return { id: agent.id, avatar: agent.avatar ? JSON.parse(agent.avatar) as AgentAvatar : null, createdAt: agent.createdAt.getTime(), name: agent.name, endpointId: agent.endpointId, model: agent.model, thinkingLevel: agent.thinkingLevel, channelId: channel.id, lastMessage: channel.messages[0] ? messageView(channel.messages[0]) : null };
 }
 
 export function registerChat(app: FastifyInstance, store = new EndpointStore(), database = new PlatformStore(), codex = new CodexProvider()) {
@@ -98,6 +99,21 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
       } catch { return reply.code(400).send({ message: 'Could not read the OpenAI connection. Reconnect in Settings.' }); }
     } else if (!(await store.read()).some(endpoint => endpoint.id === input.endpointId)) return reply.code(404).send({ message: 'Save the endpoint in Settings first.' });
     return agentView(await database.createAgent({ ...input, name: input.name.trim() }));
+  });
+
+  app.patch<{ Params: { id: string }; Body: { avatar: AgentAvatar } }>('/api/agents/:id/avatar', {
+    schema: { operationId: 'updateAgentAvatar', params: Type.Object({ id: Type.String({ minLength: 1, maxLength: 100 }) }), body: Type.Object({ avatar: AvatarSchema }, { additionalProperties: false }), response: { 200: Type.Object({ avatar: AvatarSchema }), 404: ErrorResponse, 409: ErrorResponse, 503: ErrorResponse } },
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const id = request.params.id;
+    if (closing) return reply.code(503).send({ message: 'The backend is shutting down.' });
+    if (active.has(id)) return reply.code(409).send({ message: 'The agent is being updated. Try again shortly.' });
+    active.add(id);
+    try {
+      if (!await database.updateAvatar(id, request.body.avatar)) return reply.code(404).send({ message: 'Agent not found.' });
+      return { avatar: { ...request.body.avatar, color: request.body.avatar.color.toLowerCase() } };
+    } catch { return reply.code(503).send({ message: 'Could not save the avatar. Try again.' }); }
+    finally { active.delete(id); }
   });
 
   app.delete<{ Params: { id: string }; Body: { confirmation: string } }>('/api/agents/:id', {

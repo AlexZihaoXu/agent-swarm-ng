@@ -2,10 +2,11 @@ import { PrismaClient, type Prisma } from './generated/prisma/client';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { databaseUrl } from './database-location';
 import { messageText } from './message-text';
+import { encodeAvatar, type AgentAvatar } from './agent-avatar';
 
 const agentSelection = { channels: { where: { kind: 'platform-chat' }, take: 1 } };
 type StoredAgent = Prisma.AgentGetPayload<{ include: typeof agentSelection }>;
-type AgentInput = Pick<Prisma.AgentCreateInput, 'name' | 'endpointId' | 'model' | 'thinkingLevel'>;
+type AgentInput = Pick<Prisma.AgentCreateInput, 'name' | 'endpointId' | 'model' | 'thinkingLevel'> & { avatar?: AgentAvatar };
 
 export class PlatformStore {
   readonly client: PrismaClient;
@@ -23,7 +24,11 @@ export class PlatformStore {
 
   async createAgent(input: AgentInput) {
     await this.initialize();
-    return this.withLatestMessage(await this.client.agent.create({ data: { ...input, channels: { create: { kind: 'platform-chat' } } }, include: agentSelection }));
+    return this.withLatestMessage(await this.client.agent.create({ data: { ...input, avatar: input.avatar ? encodeAvatar(input.avatar) : undefined, channels: { create: { kind: 'platform-chat' } } }, include: agentSelection }));
+  }
+  async updateAvatar(id: string, avatar: AgentAvatar) {
+    await this.initialize();
+    return (await this.client.agent.updateMany({ where: { id }, data: { avatar: encodeAvatar(avatar) } })).count > 0;
   }
   async deleteAgent(id: string, name: string) {
     await this.initialize();
