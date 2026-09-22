@@ -85,6 +85,8 @@ export const test = base.extend({
       const channel = decodeURIComponent(new URL(route.request().url()).pathname.split('/')[3]);
       return route.fulfill({ json: { messages: history[channel] ?? [], nextCursor: null } });
     });
+    await page.route(/\/api\/groups(?:\?.*)?$/, route => route.request().method() === 'GET' ? route.fulfill({ json: { groups: [], nextCursor: null } }) : route.fulfill({ status: 501, json: { message: 'Configure a group-creation mock for this test.' } }));
+    await page.route('**/api/chats/*/reactions*', route => route.fulfill({ json: { messages: new URL(route.request().url()).searchParams.getAll('ids').map(id => ({ id, reactions: [] })) } }));
     await page.route('**/api/chat', async route => {
       const body = route.request().postDataJSON();
       const agent = agents.find(item => item.id === body.agentId);

@@ -281,13 +281,16 @@ describe('Pi chat and platform channel boundary', () => {
     } finally { await app.close(); }
   });
   it('creates subscription agents only when connected and rejects sends after disconnect', async () => {
-    const model = getModels('openai-codex')[0];
+    const model = { ...getModels('openai-codex')[0], id: 'new-codex-model', thinkingLevelMap: { off: null, max: 'max' } };
     const codex = new CodexProvider();
+    vi.spyOn(codex, 'runtime').mockResolvedValue({ getModel: (_provider: string, id: string) => id === model.id ? model : undefined } as unknown as Awaited<ReturnType<CodexProvider['runtime']>>);
     const status = vi.spyOn(codex, 'status').mockResolvedValue({ connected: true, models: [model.id], login: { state: 'connected' } });
     const app = await testApp(undefined, codex);
     try {
       const capabilities = (await app.inject(`/api/agents/model-capabilities?model=${encodeURIComponent(model.id)}&endpointId=${encodeURIComponent(CODEX_CONNECTION)}`)).json();
-      const input = { ...configuration, endpointId: CODEX_CONNECTION, model: model.id, thinkingLevel: capabilities.thinkingLevels[0] };
+      expect(capabilities.thinkingLevels).toContain('max');
+      expect(capabilities.thinkingLevels).not.toContain('off');
+      const input = { ...configuration, endpointId: CODEX_CONNECTION, model: model.id, thinkingLevel: 'max' };
       const created = await app.inject({ method: 'POST', url: '/api/agents', payload: input });
       expect(created.statusCode).toBe(200);
       expect(created.json().endpointId).toBe(CODEX_CONNECTION);

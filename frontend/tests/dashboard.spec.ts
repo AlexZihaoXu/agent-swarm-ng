@@ -272,6 +272,8 @@ test('settings is reachable with keyboard-accessible tabs', async ({ page }) => 
   await page.goto('/');
   await page.getByRole('tab', { name: 'Agents', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Chat', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'Settings' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'API endpoints' })).toBeVisible();

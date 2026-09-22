@@ -14,7 +14,7 @@ export type ChatAgent = { id: string; name: string; initials: string; time: stri
 type SavedMessage = paths['/api/channels/{channelId}/messages']['get']['responses'][200]['content']['application/json']['messages'][number];
 type Run = { runId: string; agentId: string; channelId: string; clientMessageId: string; typing?: boolean; typingTargets?: string[] };
 const asMessage = (message: SavedMessage): ChatMessage => ({ id: message.id, sequence: message.sequence, author: message.role === 'user' ? 'user' : 'agent', text: message.text, timestamp: message.timestamp, time: clock(message.timestamp) });
-const asAgent = (real: RealAgent): ChatAgent => ({ avatar: real.avatar ?? defaultAvatar(real.id), id: real.id, name: real.name, initials: real.name.slice(0, 2).toUpperCase(), time: clock(real.lastMessage?.timestamp ?? real.createdAt), channelId: real.channelId, real });
+export const asAgent = (real: RealAgent): ChatAgent => ({ avatar: real.avatar ?? defaultAvatar(real.id), id: real.id, name: real.name, initials: real.name.slice(0, 2).toUpperCase(), time: clock(real.lastMessage?.timestamp ?? real.createdAt), channelId: real.channelId, real });
 const clock = (timestamp = Date.now()) => new Date(timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s+/g, ' ');
 function withoutKey<T>(record: Record<string, T>, key: string) { const next = { ...record }; delete next[key]; return next; }
 function remember(set: Set<string>, key: string) {
@@ -140,10 +140,12 @@ export function useChat() {
     };
   }, []);
 
-  function addAgent(real: RealAgent) {
+  function addAgent(real: RealAgent, fresh = true) {
     const agent = asAgent(real);
-    loadedHistory.current.add(real.channelId);
-    setHistoryReady(current => ({ ...current, [real.channelId]: true }));
+    if (fresh) {
+      loadedHistory.current.add(real.channelId);
+      setHistoryReady(current => ({ ...current, [real.channelId]: true }));
+    }
     setConversations(current => ({ ...current, [real.channelId]: current[real.channelId] ?? [] }));
     setAgents(current => current.some(item => item.id === agent.id) ? current : [...current, agent]);
     return agent;
@@ -188,6 +190,7 @@ export function useChat() {
       peerRuns.current = new Map(peers.map(run => [run.runId, run])); refreshPeerBusy();
       activeRuns.current = new Map(runs.filter(run => !run.channelId.startsWith('dm:')).map(run => [run.channelId, run]));
       window.dispatchEvent(new Event('swarm-dm-updated'));
+      window.dispatchEvent(new Event('swarm-groups-reconnected'));
       for (const run of runs) acknowledge(run.channelId, run.clientMessageId);
       const pending = [...requests.current.keys()].filter(channel => pendingMessages.current.has(channel));
       setBusy(Object.fromEntries([...pending.map(channel => [channel, true]), ...runs.map(run => [run.channelId, true])]));
@@ -198,6 +201,14 @@ export function useChat() {
       return;
     }
     if (typeof event.eventId === 'string' && remember(seenEvents.current, event.eventId)) return;
+    if (event.type === 'reactions_updated' && typeof event.channelId === 'string') {
+      window.dispatchEvent(new CustomEvent('swarm-reactions-updated', { detail: event.channelId })); return;
+    }
+    if (event.type === 'group_updated' && typeof event.groupId === 'string') {
+      window.dispatchEvent(new CustomEvent('swarm-groups-updated', { detail: { groupId: event.groupId, message: event.message } }));
+      if (event.publication && event.message?.role === 'assistant' && typeof event.message.id === 'string' && !remember(knownMessages.current, `group:${event.groupId}:${event.message.id}`)) notification.current?.play();
+      return;
+    }
     const channel = event.channelId ?? event.entry?.channelId;
     if (typeof channel !== 'string' || removedAgents.current.has(event.agentId)) return;
     if (event.type === 'dm_updated') { window.dispatchEvent(new CustomEvent('swarm-dm-updated', { detail: event.conversationId })); return; }

@@ -16,6 +16,7 @@ function fixture() {
   const runtime = {
     listCredentials: async () => connected ? [{ providerId: 'openai-codex', type: 'oauth' }] : [],
     getModels: () => [{ id: 'test-codex' }],
+    refresh: vi.fn(async () => ({ aborted: false, errors: new Map() })),
     login: vi.fn(async (_provider, _type, value: AuthInteraction) => {
       interaction = value;
       expect(await value.prompt({ type: 'select', message: 'Method', options: [{ id: 'device_code', label: 'Device' }] })).toBe('device_code');
@@ -31,6 +32,33 @@ function fixture() {
 }
 
 describe('ChatGPT subscription connection', () => {
+  it('refreshes and deduplicates the catalog, validates new model capabilities, and retains models on refresh failure', async () => {
+    let models = [{ id: 'bundled-model', reasoning: false, thinkingLevelMap: {} }];
+    let fail = false;
+    const runtime = {
+      listCredentials: async () => [{ providerId: 'openai-codex', type: 'oauth' }],
+      getModels: () => models,
+      getModel: (_provider: string, id: string) => models.find(model => model.id === id),
+      refresh: vi.fn(async () => {
+        if (fail) throw new Error('PRIVATE TOKEN provider failure');
+        models = [{ id: 'new-codex-model', reasoning: true, thinkingLevelMap: { off: null, max: 'max' } }];
+        return { aborted: false, errors: new Map() };
+      }),
+    };
+    const codex = new CodexProvider(async () => runtime as unknown as ModelRuntime);
+    const statuses = await Promise.all([codex.status(), codex.status()]);
+    expect(statuses[0].models).toEqual(['new-codex-model']);
+    expect(runtime.refresh).toHaveBeenCalledTimes(1);
+    expect(runtime.refresh.mock.calls[0]).toEqual([expect.objectContaining({ providers: ['openai-codex'], allowNetwork: true, force: true, signal: expect.any(AbortSignal) })]);
+    const capabilities = await codex.capabilities('new-codex-model');
+    expect(capabilities.thinkingLevels).toContain('max');
+    expect(capabilities.thinkingLevels).not.toContain('off');
+    expect(await codex.capabilities('unknown')).toEqual({ thinkingLevels: [], reasoning: false });
+    fail = true;
+    await codex.refreshModels(true);
+    expect((await codex.status()).models).toEqual(['new-codex-model']);
+    expect(JSON.stringify(await codex.status())).not.toContain('PRIVATE');
+  });
   it('uses the native Codex Responses transport while retaining channel-only publication', async () => {
     const runtime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsStore: new InMemoryModelsStore(), modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
     const model = runtime.getModels('openai-codex')[0];
@@ -47,7 +75,9 @@ describe('ChatGPT subscription connection', () => {
     const authPath = join(directory, 'auth.json');
     await writeFile(authPath, JSON.stringify({ 'openai-codex': { type: 'oauth', access: 'PRIVATE ACCESS', refresh: 'PRIVATE REFRESH', expires: 0 } }));
     try {
-      const codex = new CodexProvider(() => ModelRuntime.create({ authPath, modelsPath: null, modelsStore: new InMemoryModelsStore(), allowModelNetwork: false, refreshOnCreate: false }));
+      const runtime = await ModelRuntime.create({ authPath, modelsPath: null, modelsStore: new InMemoryModelsStore(), allowModelNetwork: false, refreshOnCreate: false });
+      vi.spyOn(runtime, 'refresh').mockResolvedValue({ aborted: false, errors: new Map() });
+      const codex = new CodexProvider(async () => runtime);
       const status = await codex.status();
       expect(status.connected).toBe(true);
       expect(status.models.length).toBeGreaterThan(0);

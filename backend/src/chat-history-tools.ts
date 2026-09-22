@@ -3,7 +3,7 @@ import { Type } from '@earendil-works/pi-ai';
 import type { PlatformStore } from './platform-store';
 import type { Channel } from './chat-runtime';
 import { ChannelHistory } from './channel-history';
-import { messageText } from './message-text';
+import { messageText, messageMatch } from './message-text';
 
 type Row = Awaited<ReturnType<PlatformStore['appendMessage']>>;
 function integer(value: number | undefined, fallback: number, min: number, max: number) {
@@ -76,13 +76,7 @@ export function createChatHistoryTools(store: PlatformStore, channel: Channel, n
         await authorize(args.channelId, signal);
         const page = await history.search(args.query, { limit, before: args.before, author: args.author, since, until });
         signal?.throwIfAborted();
-        const fold = (text: string) => text.replace(/[A-Z]/g, letter => letter.toLowerCase());
-        const matches = page.messages.map(row => {
-          const matchOffset = fold(row.text).indexOf(fold(args.query));
-          let offset = Math.max(0, matchOffset - 80);
-          if (row.text.charCodeAt(offset) >= 0xdc00 && row.text.charCodeAt(offset) <= 0xdfff && row.text.charCodeAt(offset - 1) >= 0xd800 && row.text.charCodeAt(offset - 1) <= 0xdbff) offset--;
-          return { ...position(row), author: author(row), matchOffset, snippet: messageText(row.text, offset, 320) };
-        });
+        const matches = page.messages.map(row => ({ ...position(row), author: author(row), ...messageMatch(row.text, args.query) }));
         return result({ channelId: channel.id, query: args.query, order: 'newest-first', matches, nextCursor: page.nextCursor });
       },
     }),

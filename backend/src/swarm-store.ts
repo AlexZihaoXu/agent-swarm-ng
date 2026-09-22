@@ -1,5 +1,6 @@
 import type { PlatformStore } from './platform-store';
 import { encodeAvatar, type AgentAvatar } from './agent-avatar';
+import { liveChainWhere } from './communication-policy';
 
 export const DM_CHAIN_LIMIT = 8;
 export const DM_TEXT_LIMIT = 8000;
@@ -61,7 +62,7 @@ export class SwarmStore {
       }
       if (!await tx.dmGrant.findUnique({ where: { senderId_recipientId: { senderId, recipientId } } })) throw new SwarmError('denied', 'This agent is not allowed to DM that recipient.');
       if (await tx.dmMessage.count({ where: { recipientId, status: { in: pending } } }) >= 8 || await tx.dmMessage.count({ where: { status: { in: pending } } }) >= 64) throw new SwarmError('limit', 'The DM delivery queue is full.');
-      const budget = await tx.dmChain.updateMany({ where: { id: chainId, cancelled: false, rootAgentId: { not: null }, remaining: { gt: 0 } }, data: { remaining: { decrement: 1 } } });
+      const budget = await tx.dmChain.updateMany({ where: { ...liveChainWhere, id: chainId, remaining: { gt: 0 } }, data: { remaining: { decrement: 1 } } });
       if (!budget.count) throw new SwarmError('limit', 'The communication chain stopped or reached its message limit.');
       const message = await tx.dmMessage.create({ data: { senderId, recipientId, chainId, deliveryKey, text, conversationId: dmConversationId(senderId, recipientId) } });
       return { message, duplicate: false };
@@ -108,7 +109,7 @@ export class SwarmStore {
   }
   async claim(id: string, recipientId: string) {
     await this.store.initialize();
-    const result = await this.store.client.dmMessage.updateMany({ where: { id, recipientId, status: 'queued', chain: { cancelled: false, rootAgentId: { not: null } } }, data: { status: 'running' } });
+    const result = await this.store.client.dmMessage.updateMany({ where: { id, recipientId, status: 'queued', chain: liveChainWhere }, data: { status: 'running' } });
     if (!result.count) return null;
     return this.store.client.dmMessage.findFirst({ where: { id, recipientId, status: 'running' }, include: { sender: { select: { id: true, name: true } } } });
   }
@@ -121,6 +122,7 @@ export class SwarmStore {
     await this.store.client.$transaction([
       this.store.client.dmChain.updateMany({ where: { id: chainId }, data: { cancelled: true } }),
       this.store.client.dmMessage.updateMany({ where: { chainId, status: { in: pending } }, data: { status: 'cancelled' } }),
+      this.store.client.groupDelivery.updateMany({ where: { message: { chainId }, status: { in: pending } }, data: { status: 'cancelled' } }),
     ]);
   }
   /** Call once at actual worker startup, never during OpenAPI generation/app construction. */
@@ -129,6 +131,7 @@ export class SwarmStore {
     await this.store.client.$transaction([
       this.store.client.dmChain.updateMany({ where: { cancelled: false }, data: { cancelled: true } }),
       this.store.client.dmMessage.updateMany({ where: { status: { in: pending } }, data: { status: 'cancelled' } }),
+      this.store.client.groupDelivery.updateMany({ where: { status: { in: pending } }, data: { status: 'cancelled' } }),
     ]);
   }
 }

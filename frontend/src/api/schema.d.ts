@@ -132,6 +132,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listGroups"];
+        put?: never;
+        post: operations["createGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getGroup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateGroup"];
+        trace?: never;
+    };
+    "/api/groups/{id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listGroupMessages"];
+        put?: never;
+        post: operations["sendGroupMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chats/{channelId}/reactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["readMessageReactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chats/{channelId}/messages/{messageId}/reaction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setMessageReaction"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -790,6 +870,725 @@ export interface operations {
             };
             /** @description Default Response */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    listGroups: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        groups: {
+                            id: string;
+                            name: string;
+                            createdAt: number;
+                            members: {
+                                id: string;
+                                name: string;
+                                avatar: {
+                                    shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                    color: string;
+                                    eyeStyle?: "pill" | "round";
+                                    seed: number;
+                                } | null;
+                                channelId: string;
+                            }[];
+                            lastMessage: {
+                                id: string;
+                                sequence: number;
+                                groupId: string;
+                                role: "user" | "assistant";
+                                authorId: string | null;
+                                authorName: string;
+                                authorAvatar: {
+                                    shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                    color: string;
+                                    eyeStyle?: "pill" | "round";
+                                    seed: number;
+                                } | null;
+                                text: string;
+                                timestamp: number;
+                            } | null;
+                        }[];
+                        nextCursor: number | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    createGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    agentIds: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        name: string;
+                        createdAt: number;
+                        members: {
+                            id: string;
+                            name: string;
+                            avatar: {
+                                shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                color: string;
+                                eyeStyle?: "pill" | "round";
+                                seed: number;
+                            } | null;
+                            channelId: string;
+                        }[];
+                        lastMessage: {
+                            id: string;
+                            sequence: number;
+                            groupId: string;
+                            role: "user" | "assistant";
+                            authorId: string | null;
+                            authorName: string;
+                            authorAvatar: {
+                                shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                color: string;
+                                eyeStyle?: "pill" | "round";
+                                seed: number;
+                            } | null;
+                            text: string;
+                            timestamp: number;
+                        } | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        name: string;
+                        createdAt: number;
+                        members: {
+                            id: string;
+                            name: string;
+                            avatar: {
+                                shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                color: string;
+                                eyeStyle?: "pill" | "round";
+                                seed: number;
+                            } | null;
+                            channelId: string;
+                        }[];
+                        lastMessage: {
+                            id: string;
+                            sequence: number;
+                            groupId: string;
+                            role: "user" | "assistant";
+                            authorId: string | null;
+                            authorName: string;
+                            authorAvatar: {
+                                shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                color: string;
+                                eyeStyle?: "pill" | "round";
+                                seed: number;
+                            } | null;
+                            text: string;
+                            timestamp: number;
+                        } | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    updateGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    agentIds: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        name: string;
+                        createdAt: number;
+                        members: {
+                            id: string;
+                            name: string;
+                            avatar: {
+                                shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                color: string;
+                                eyeStyle?: "pill" | "round";
+                                seed: number;
+                            } | null;
+                            channelId: string;
+                        }[];
+                        lastMessage: {
+                            id: string;
+                            sequence: number;
+                            groupId: string;
+                            role: "user" | "assistant";
+                            authorId: string | null;
+                            authorName: string;
+                            authorAvatar: {
+                                shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                color: string;
+                                eyeStyle?: "pill" | "round";
+                                seed: number;
+                            } | null;
+                            text: string;
+                            timestamp: number;
+                        } | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    listGroupMessages: {
+        parameters: {
+            query?: {
+                before?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        messages: {
+                            id: string;
+                            sequence: number;
+                            groupId: string;
+                            role: "user" | "assistant";
+                            authorId: string | null;
+                            authorName: string;
+                            authorAvatar: {
+                                shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                color: string;
+                                eyeStyle?: "pill" | "round";
+                                seed: number;
+                            } | null;
+                            text: string;
+                            timestamp: number;
+                        }[];
+                        nextCursor: number | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    sendGroupMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    message: string;
+                    /** Format: uuid */
+                    clientMessageId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: {
+                            id: string;
+                            sequence: number;
+                            groupId: string;
+                            role: "user" | "assistant";
+                            authorId: string | null;
+                            authorName: string;
+                            authorAvatar: {
+                                shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                color: string;
+                                eyeStyle?: "pill" | "round";
+                                seed: number;
+                            } | null;
+                            text: string;
+                            timestamp: number;
+                        };
+                        duplicate: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    readMessageReactions: {
+        parameters: {
+            query: {
+                ids: string[];
+            };
+            header?: never;
+            path: {
+                channelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        messages: {
+                            id: string;
+                            reactions: {
+                                emoji: string;
+                                count: number;
+                                mine: boolean;
+                            }[];
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    setMessageReaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    emoji: "👍" | "❤️" | "😂" | "🎉" | "👀" | "✅" | "🤔" | "🔥";
+                    active: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        reactions: {
+                            emoji: string;
+                            count: number;
+                            mine: boolean;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

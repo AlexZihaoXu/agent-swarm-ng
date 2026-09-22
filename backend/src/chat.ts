@@ -11,6 +11,8 @@ import { AvatarSchema, type AgentAvatar } from './agent-avatar';
 import { resolveChatConnection, ConnectionError } from './chat-connection';
 import { DmBroker } from './dm-broker';
 import { registerSwarmRoutes } from './swarm-routes';
+import { registerGroupRoutes } from './group-routes';
+import { registerReactionRoutes } from './reaction-routes';
 
 const Thinking = Type.Union(Object.values(ThinkingLevel).map(value => Type.Literal(value)));
 const Selection = Type.Object({
@@ -48,6 +50,8 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
   const preparing = new Map<string, { clientMessageId: string; controller: AbortController; finished: Promise<void> }>();
   let closing = false;
   registerSwarmRoutes(app, broker.store, database, active, () => closing);
+  registerGroupRoutes(app, broker, groupId => runs.announce(groupId), () => closing);
+  registerReactionRoutes(app, broker.reactions, (channelId, messageId) => runs.reactionsChanged(channelId, messageId), () => closing);
   app.addHook('preClose', async () => {
     closing = true; broker.close();
     for (const item of preparing.values()) item.controller.abort();
@@ -76,7 +80,7 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
   });
   app.get<{ Querystring: { model: string; endpointId?: string } }>('/api/agents/model-capabilities', {
     schema: { operationId: 'getAgentModelCapabilities', querystring: Type.Object({ model: Type.String({ maxLength: 512 }), endpointId: Type.Optional(Type.String({ maxLength: 100 })) }), response: { 200: Type.Object({ thinkingLevels: Type.Array(Thinking), reasoning: Type.Boolean() }) } },
-  }, async request => modelCapabilities(request.query.model, request.query.endpointId === CODEX_CONNECTION ? 'openai-codex' : 'openai'));
+  }, async request => request.query.endpointId === CODEX_CONNECTION ? codex.capabilities(request.query.model) : modelCapabilities(request.query.model));
 
   app.get<{ Querystring: { after?: number; limit?: number; search?: string } }>('/api/agents', {
     schema: { operationId: 'listAgents', querystring: Type.Object({ search: Type.Optional(Type.String({ maxLength: 80 })), after: Type.Optional(Type.Integer({ minimum: 1 })), limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })) }), response: { 200: Type.Object({ agents: Type.Array(Agent), nextCursor: Cursor }) } },
@@ -98,7 +102,8 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
   }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const input = request.body;
-    if (!input.name.trim() || !modelCapabilities(input.model, input.endpointId === CODEX_CONNECTION ? 'openai-codex' : 'openai').thinkingLevels.includes(input.thinkingLevel)) return reply.code(400).send({ message: 'Choose a name and a supported thinking level.' });
+    const capabilities = input.endpointId === CODEX_CONNECTION ? await codex.capabilities(input.model) : modelCapabilities(input.model);
+    if (!input.name.trim() || !capabilities.thinkingLevels.includes(input.thinkingLevel)) return reply.code(400).send({ message: 'Choose a name and a supported thinking level.' });
     if (input.endpointId === CODEX_CONNECTION) {
       try {
         const status = await codex.status();
@@ -136,6 +141,7 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
       if (request.body.confirmation !== agent.name) return reply.code(400).send({ message: 'Type the exact agent name to confirm deletion.' });
       await broker.beforeDelete(id);
       if (!await database.deleteAgent(id, request.body.confirmation)) return reply.code(404).send({ message: 'Agent not found.' });
+      runs.announce(''); // Agent deletion can change membership in several groups.
       return { deleted: true };
     } catch { return reply.code(503).send({ message: 'Could not delete the agent. Try again.' }); }
     finally { active.delete(id); broker.afterDelete(id); }

@@ -1,6 +1,6 @@
 # Agent conversations and threads
 
-Agent conversations and source-labelled agent threads are implemented. Group chats are a separate feature.
+Agent conversations and source-labelled agent threads are implemented. Member-authorized [group chats and the Chat tab](chat-and-groups.md) build on this same inbox/runtime without creating DM grants.
 
 ## App UI
 
@@ -44,7 +44,7 @@ New runs load bounded recent human and agent-thread context belonging to the rec
 - `send_dm`: server-bound sender and chain, with live transactional permission checks.
 - `read_dm_messages`: this agent’s history with one peer; latest 20 by default, maximum 40, chronological with older-page cursors. Previews are at most 1,000 characters each / 20,000 total; message-ID/offset expansion returns up to 6,000 characters.
 
-Each server-owned automated chain permits **eight published DMs**, including replies and fan-out, at most **8,000 characters each**. Source-labelled batches inherit their chains; the model cannot supply or reset the counter. New human-owned work can initiate its own chain. Duplicate tool keys return the prior receipt without republishing, charging twice, or waking another worker.
+Agent-rooted chains permit **eight generated group/DM publications**, including replies and fan-out. Human-originated group chains permit 32 and share that budget with any DM branches; changing channels does not reset it. DMs remain at most **8,000 characters each**. Source-labelled batches inherit their chains; the model cannot supply or reset the counter. New human-owned work can initiate its own chain. Duplicate tool keys return the prior receipt without republishing, charging twice, or waking another worker.
 
 Storage caps unfinished deliveries at eight per recipient / 64 globally. The executor additionally caps all admitted work at 16 jobs per agent / 128 globally. Cancellation retains the execution slot until cleanup finishes. Published effects cannot be undone, and uncertain sends are never automatically retried.
 
@@ -65,5 +65,5 @@ The operator API remains a trusted local-admin surface, not multi-user authoriza
 - Nonroot Bun/Docker smoke passed for human send → normal source-labelled recipient inbox → peer reply, mutual grants, persistence and restart cancellation without replay. No developer model credentials or paid inference were used.
 - Prior release: all 67 browser tests passed for main-view switching, avatars, no You avatar, draft preservation, selected-agent-left alignment, sender tints and remote status indicators. Desktop/mobile previews were inspected. The timeline clock regression has a dedicated unit test.
 - Current typing revision: streamed `send_message`/`send_dm` integration, destination tracking, overlapping publications, completion/failure cleanup and reconnect snapshot tests passed. Additional UI coverage checks per-conversation filtering, the footer, dot animation/reduced motion, and stale-event rejection.
-- **Browser verification for the typing/icon revision is blocked:** the Windows bad-password counter read 10 before any new launch. No browser was launched after that reading. Only non-browser checks continue; do not treat earlier browser results as verification of this revision. The later selector-history filter has store tests for incoming/outgoing history, uniqueness, paging and retained history after revocation; its new browser coverage is also not yet run.
+- **Windows browser launches remain paused:** the bad-password counter read 10. No further Windows browser was launched. New verification is being performed separately in a dedicated nonroot Linux/Docker browser with namespace and Seccomp-BPF sandboxes enabled. See the current results in [Chat and groups](chat-and-groups.md); earlier browser results alone do not verify the later typing/icon/history-filter revisions.
 - Browser launches are serialized, use one worker/no retries/stop-on-first-failure, and check Windows bad-password headroom before each launch.

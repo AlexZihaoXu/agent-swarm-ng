@@ -23,6 +23,10 @@ import { AvatarFace, PresenceIndicator } from '@/components/typing-indicator';
 import { AgentActivityPanel } from '@/components/agent-activity-panel';
 import { AgentAvatarArt } from '@/components/agent-avatar-art';
 import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
+import { ChatPanel } from '@/components/chat-panel';
+import { GroupConversation } from '@/components/group-conversation';
+import { ChatComposer } from '@/components/chat-composer';
+import { useGroupEvents } from '@/use-groups';
 
 function Avatar({ initials, avatar, small = false, typing = false, ready = false, working = false }: { initials: string; avatar?: AvatarAppearance; small?: boolean; typing?: boolean; ready?: boolean; working?: boolean }) {
   return (
@@ -47,6 +51,8 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string>(agents[0]?.id ?? '');
   const [mobileConversation, setMobileConversation] = useState(false);
   const [activeTab, setActiveTab] = useState('agents');
+  const [selectedGroup, setSelectedGroup] = useState('');
+  useGroupEvents();
   const [search, setSearch] = useState('');
   const [activityOpen, setActivityOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -57,7 +63,7 @@ export function App() {
   const inbox = useDmInbox(agent.id);
   const dmConversations = useDmConversations(agent.id);
   const [conversation, setConversation] = useState<{ owner: string; peer: string; selected?: { id: string; name: string; avatar?: AvatarAppearance | null; channelId?: string } }>({ owner: '', peer: 'you' });
-  const conversationPeer = conversation.owner === agent.id ? conversation.peer : 'you';
+  const conversationPeer = activeTab !== 'chat' && conversation.owner === agent.id ? conversation.peer : 'you';
   const chooseConversation = (peer: string) => setConversation({ owner: agent.id, peer, selected: peers.find(item => item.id === peer) });
   // Keep an already-open conversation visible if a refresh returns only the first page.
   const selectedPeer = conversation.owner === agent.id && dmConversations.cursor !== null ? conversation.selected : undefined;
@@ -125,9 +131,9 @@ export function App() {
       <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
         <header className="relative flex h-14 shrink-0 items-center justify-center border-b border-border bg-sidebar px-4">
           {/* Basic Tabs composition: Kibo tabs/standard/tabs-standard-1. */}
-          <Tabs.List aria-label="Main navigation" className="relative isolate grid h-9 w-56 grid-cols-2 items-center rounded-lg bg-muted p-1">
-            <span aria-hidden="true" data-testid="tab-indicator" className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-md bg-background shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none" style={{ transform: activeTab === 'settings' ? 'translateX(100%)' : 'translateX(0)' }} />
-            {['Agents', 'Settings'].map(label => (
+          <Tabs.List aria-label="Main navigation" className="relative isolate grid h-9 w-72 grid-cols-3 items-center rounded-lg bg-muted p-1">
+            <span aria-hidden="true" data-testid="tab-indicator" className="pointer-events-none absolute inset-y-1 left-1 w-[calc((100%-8px)/3)] rounded-md bg-background shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none" style={{ transform: `translateX(${['agents', 'chat', 'settings'].indexOf(activeTab) * 100}%)` }} />
+            {['Agents', 'Chat', 'Settings'].map(label => (
               <Tabs.Trigger key={label} value={label.toLowerCase()} className="relative z-10 rounded-md px-3 py-1 text-sm font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:text-foreground">
                 {label}
               </Tabs.Trigger>
@@ -135,8 +141,8 @@ export function App() {
           </Tabs.List>
         </header>
 
-        <Tabs.Content value="agents" className="min-h-0 flex-1 outline-none data-[state=active]:flex">
-          <AgentPanel agents={agents} onEditAvatar={editAvatar} onDelete={async (target, confirmation) => {
+        <Tabs.Content value={activeTab === 'chat' ? 'chat' : 'agents'} className="min-h-0 flex-1 outline-none data-[state=active]:flex">
+          {activeTab === 'chat' ? <ChatPanel agents={agents} conversations={conversations} busy={busy} typingIn={typingIn} selectedAgent={agent.id} selectedGroup={selectedGroup} mobile={mobileConversation} agentsLoading={agentsLoading} agentsFailed={agentsFailed} agentsCursor={agentsCursor} loadAgents={loadAgents} onAgent={(id, real) => { if (real && !agents.some(agent => agent.id === id)) addAgent(real, false); setSelectedId(id); setSelectedGroup(''); setMobileConversation(true); }} onGroup={group => { setSelectedGroup(group.id); setMobileConversation(true); setActivityOpen(false); }} /> : <AgentPanel agents={agents} onEditAvatar={editAvatar} onDelete={async (target, confirmation) => {
             await deleteAgent(target, confirmation);
             if (agent.id === target.id) {
               setSelectedId(agents.find(item => item.id !== target.id)?.id ?? '');
@@ -190,15 +196,15 @@ export function App() {
               <Avatar initials="YO" small />
               <span className="text-sm font-medium">Your account</span>
             </div>
-          </AgentPanel>
+          </AgentPanel>}
 
-          {agents.length > 0 ? <section aria-label={`Conversation with ${agent.name}`} className={cn(
+          {activeTab === 'chat' && selectedGroup ? <GroupConversation key={selectedGroup} groupId={selectedGroup} mobile={mobileConversation} onBack={() => setMobileConversation(false)} draft={drafts[`group:${selectedGroup}`] ?? ''} onDraft={text => setDraft(`group:${selectedGroup}`, text)} typingIn={typingIn} /> : agents.length > 0 ? <section aria-label={`Conversation with ${agent.name}`} className={cn(
             'min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none sm:flex',
             activityOpen && 'lg:mr-96',
             mobileConversation ? 'flex' : 'hidden',
           )}>
             <header className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border px-4 py-1.5">
-              <Button variant="outline" size="sm" className="px-2 sm:hidden" aria-label="Back to agents" onClick={() => setMobileConversation(false)}>
+              <Button variant="outline" size="sm" className="px-2 sm:hidden" aria-label={activeTab === 'chat' ? 'Back to chats' : 'Back to agents'} onClick={() => setMobileConversation(false)}>
                 <span aria-hidden="true">←</span>
               </Button>
               <AgentAvatar initials={agent.initials} avatar={agent.avatar} ready={Boolean(agent.real)} typing={selfTyping} working={busy[agent.channelId]} />
@@ -207,7 +213,7 @@ export function App() {
                 {conversationPeer !== 'you' && peer && <><AgentExchangeIcon /><AgentAvatar initials={peer.name.slice(0, 2).toUpperCase()} avatar={peer.avatar ?? defaultAvatar(peer.id)} ready={Boolean(peer)} working={busy[peerChannel]} typing={peerTyping} /><span className="min-w-0 truncate text-sm font-semibold" title={peer.name}>{peer.name}</span></>}
               </div>
               <div className="ml-auto flex shrink-0 items-center gap-2">
-              <div className="flex items-center gap-2"><label htmlFor="agent-dm-conversation" className="whitespace-nowrap text-xs text-muted-foreground">Chat with</label><div className="w-36"><Select id="agent-dm-conversation" value={conversationPeer} onValueChange={value => { if (value === 'load-more') void dmConversations.load(dmConversations.failed ? undefined : dmConversations.cursor ?? undefined); else chooseConversation(value); }} options={[{ value: 'you', label: 'You' }, ...peers.map(peer => ({ value: peer.id, label: peer.name === 'You' ? 'You (agent)' : peer.name, icon: <AgentAvatarArt {...(peer.avatar ?? defaultAvatar(peer.id))} size={20} /> })), ...(dmConversations.cursor !== null || dmConversations.failed ? [{ value: 'load-more', label: dmConversations.busy ? 'Loading conversations…' : dmConversations.failed ? 'Retry conversations' : 'More conversations…' }] : [])]} triggerClassName="!h-7 !rounded-md !px-2 !text-xs" /></div></div>
+              {activeTab !== 'chat' && <div className="flex items-center gap-2"><label htmlFor="agent-dm-conversation" className="whitespace-nowrap text-xs text-muted-foreground">Chat with</label><div className="w-36"><Select id="agent-dm-conversation" value={conversationPeer} onValueChange={value => { if (value === 'load-more') void dmConversations.load(dmConversations.failed ? undefined : dmConversations.cursor ?? undefined); else chooseConversation(value); }} options={[{ value: 'you', label: 'You' }, ...peers.map(peer => ({ value: peer.id, label: peer.name === 'You' ? 'You (agent)' : peer.name, icon: <AgentAvatarArt {...(peer.avatar ?? defaultAvatar(peer.id))} size={20} /> })), ...(dmConversations.cursor !== null || dmConversations.failed ? [{ value: 'load-more', label: dmConversations.busy ? 'Loading conversations…' : dmConversations.failed ? 'Retry conversations' : 'More conversations…' }] : [])]} triggerClassName="!h-7 !rounded-md !px-2 !text-xs" /></div></div>}
               <AgentActivityPanel agent={agent} entries={activity[agent.id] ?? []} open={activityOpen} onOpenChange={setActivityOpen} />
               </div>
             </header>
@@ -216,7 +222,7 @@ export function App() {
               {conversationPeer === 'you' ? <>
               {(historyLoading[agent.channelId] || historyFailed[agent.channelId] || historyCursor[agent.channelId] != null) && <div className="px-5 pt-3 text-center"><Button variant="outline" size="sm" disabled={historyLoading[agent.channelId] || busy[agent.channelId]} onClick={() => void loadHistory(agent, Boolean(historyReady[agent.channelId]))}>{historyLoading[agent.channelId] ? 'Loading messages…' : historyFailed[agent.channelId] ? 'Retry loading messages' : 'Load earlier messages'}</Button></div>}
               {(inbox.failed || inbox.cursor !== null) && <div className="px-5 pt-3 text-center"><Button variant="outline" size="sm" disabled={inbox.busy} onClick={() => void inbox.load(inbox.failed ? undefined : inbox.cursor ?? undefined)}>{inbox.failed ? 'Retry agent messages' : 'Earlier agent messages'}</Button></div>}
-              {historyReady[agent.channelId] && <ConversationMessages messages={messages} time={agent.time} agentName={agent.name} notices={inbox.messages} onViewDm={notice => chooseConversation(notice.senderId)} />}
+              {historyReady[agent.channelId] && <ConversationMessages reactionChannel={agent.channelId} messages={messages} time={agent.time} agentName={agent.name} notices={inbox.messages} onViewDm={notice => { chooseConversation(notice.senderId); setActiveTab('agents'); }} />}
               </> : peer ? <AgentDmTranscript key={`${agent.id}:${peer.id}`} agentId={agent.id} peerId={peer.id} bubbleView={{ agentName: agent.name, peerName: peer.name, agentAvatar: agent.avatar ?? defaultAvatar(agent.id), peerAvatar: peer.avatar ?? defaultAvatar(peer.id), viewport: scrollRef }} /> : <p className="p-5 text-sm text-muted-foreground">This agent is no longer available.</p>}
             </ScrollArea>
 
@@ -225,31 +231,7 @@ export function App() {
                 <div className="mb-1 flex h-5 min-w-0 items-center px-2">
                   <AgentTypingStatus name={agent.name} typing={selfTyping} working={busy[agent.channelId]} connected={eventsConnected} />
                 </div>
-                <form aria-label="Message composer" onSubmit={event => { event.preventDefault(); sendMessage(); }} className="flex items-end gap-2 rounded-3xl border border-foreground/20 bg-transparent p-2 focus-within:ring-1 focus-within:ring-ring">
-                  <button type="button" disabled aria-label="Add attachment" title="Attachments aren’t available in this preview" className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-4"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
-                  </button>
-                  <textarea
-                    key={agent.id} ref={inputRef} rows={1} value={draft}
-                    onChange={event => setDraft(agent.channelId, event.target.value)}
-                    onKeyDown={event => {
-                      if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
-                        event.preventDefault();
-                        sendMessage();
-                      }
-                    }}
-                    aria-label={`Message ${agent.name}`} placeholder={`Message ${agent.name}…`}
-                    className="max-h-32 min-h-7 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1 text-sm leading-5 outline-none placeholder:text-muted-foreground"
-                  />
-                  {busy[agent.channelId] && (
-                    <Button type="button" size="sm" aria-label="Stop response" className="size-7 shrink-0 rounded-full p-0" onClick={() => stop(agent.channelId)}><span aria-hidden="true" className="size-2.5 rounded-sm bg-current" /></Button>
-                  )}
-                  {(!busy[agent.channelId] || draft.trim()) && (
-                    <Button type="submit" size="sm" disabled={!draft.trim() || historyLoading[agent.channelId] || (Boolean(agent.real) && !historyReady[agent.channelId])} aria-label="Send message" className="size-7 shrink-0 rounded-full p-0">
-                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-4"><path d="M12 19V5m-6 6 6-6 6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                    </Button>
-                  )}
-                </form>
+                <ChatComposer key={agent.id} name={agent.name} draft={draft} onChange={text => setDraft(agent.channelId, text)} onSend={sendMessage} busy={busy[agent.channelId]} onStop={() => stop(agent.channelId)} disabled={historyLoading[agent.channelId] || (Boolean(agent.real) && !historyReady[agent.channelId])} inputRef={inputRef} />
               </div>
             </div> : <div aria-label="Agent conversation status" className="shrink-0 border-t border-border px-5 py-3">
               {selfTyping || peerTyping ? <div className="flex min-h-5 items-center gap-3"><div className="flex min-w-0 flex-1"><AgentTypingStatus name={agent.name} typing={selfTyping} /></div><div className="flex min-w-0 flex-1 justify-end"><AgentTypingStatus name={peer?.name ?? 'Agent'} typing={peerTyping} /></div></div> : <p className="text-center text-xs text-muted-foreground">Agent-to-agent conversation · messages are sent by the agents</p>}

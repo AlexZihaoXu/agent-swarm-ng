@@ -1,3 +1,11 @@
+export function messageMatch(text: string, query: string) {
+  const fold = (value: string) => value.replace(/[A-Z]/g, letter => letter.toLowerCase());
+  const matchOffset = fold(text).indexOf(fold(query));
+  let offset = Math.max(0, matchOffset - 80);
+  if (text.charCodeAt(offset) >= 0xdc00 && text.charCodeAt(offset) <= 0xdfff && text.charCodeAt(offset - 1) >= 0xd800 && text.charCodeAt(offset - 1) <= 0xdbff) offset--;
+  return { matchOffset, snippet: messageText(text, offset, 320) };
+}
+
 /** Offsets are returned by the tool; keep UTF-16 surrogate pairs intact at slice boundaries. */
 export function messageText(text: string, offset = 0, limit = 1000) {
   if (!Number.isSafeInteger(offset) || offset < 0 || offset > text.length) throw new Error('Message offset is out of range.');

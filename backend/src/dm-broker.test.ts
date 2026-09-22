@@ -19,14 +19,15 @@ async function fixture(loop = false, gate?: Promise<void>) {
     const lastInput = JSON.stringify(body.messages.filter(message => message.role === 'user').at(-1));
     const triage = body.tools?.some(tool => tool.function.name === 'triage_decision');
     const dm = !triage && lastInput.includes('[Agent thread; reply channel:');
-    if (dm) await gate;
+    const group = !triage && lastInput.includes('[Group chat; reply channel:');
+    if (dm || group) await gate;
     if (response.destroyed) return;
     const incoming = JSON.stringify(body.messages.filter(message => message.role === 'user').at(-1));
     const hasTool = body.messages.some(message => message.role === 'tool');
-    const publish = !dm || !hasTool && (loop || incoming.includes('question'));
-    const channelId = dm ? lastInput.match(/reply channel: ([^.]+)\./)?.[1] : system.match(/(?:current channel is|channel is) ([^.]+)\./)?.[1];
+    const publish = group ? !hasTool && lastInput.includes('Source is the human owner') : !dm || !hasTool && (loop || incoming.includes('question'));
+    const channelId = dm || group ? lastInput.match(/reply channel: ([^.]+)\./)?.[1] : system.match(/(?:current channel is|channel is) ([^.]+)\./)?.[1];
     const name = triage ? 'triage_decision' : !dm && incoming.includes('ask-peer') && !hasTool ? 'send_dm' : 'send_message';
-    const args = triage ? { action: 'queue', reason: 'Finish the current input first.' } : name === 'send_dm' ? { recipientId: peerTarget, text: 'question' } : { channelId, text: dm ? 'answer' : 'Human reply', final: true };
+    const args = triage ? { action: 'queue', reason: 'Finish the current input first.' } : name === 'send_dm' ? { recipientId: peerTarget, text: 'question' } : { channelId, text: group ? `Group answer by ${system.startsWith('You are A.') ? 'A' : 'B'}` : dm ? 'answer' : 'Human reply', final: true };
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
     const chunk = (delta: object, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: 'test', object: 'chat.completion.chunk', created: 1, model: body.model, choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     chunk({ role: 'assistant' });
@@ -52,6 +53,62 @@ async function fixture(loop = false, gate?: Promise<void>) {
   };
   return { captured, database, endpoints, codex, a, b, runs, broker, idle, close };
 }
+it('delivers human and agent group messages through the normal inbox without DM grants or private-context transfer', async () => {
+  const f = await fixture();
+  try {
+    await f.broker.store.updateSettings(f.a.id, { allowedDmAgentIds: [] });
+    await f.database.appendMessage(f.a.channels[0].id, 'user', 'PRIVATE HUMAN A');
+    await f.database.appendMessage(f.b.channels[0].id, 'user', 'PRIVATE HUMAN B');
+    const group = await f.broker.groups.create('Shared research', [f.a.id, f.b.id]);
+    await f.broker.sendHumanGroup(group.id, 'Contribute your findings', crypto.randomUUID());
+    await f.idle();
+    const messages = (await f.broker.groups.history(group.id)).messages;
+    expect(messages).toHaveLength(3);
+    expect(messages.map(message => message.text)).toEqual(expect.arrayContaining(['Contribute your findings', 'Group answer by A', 'Group answer by B']));
+    expect(await f.database.client.dmGrant.count()).toBe(0);
+    expect(await f.database.client.dmMessage.count()).toBe(0);
+    expect(await f.database.client.message.count()).toBe(2);
+    const a = f.captured.find(body => String(body.messages[0]?.content).startsWith('You are A.'))!;
+    const b = f.captured.find(body => String(body.messages[0]?.content).startsWith('You are B.'))!;
+    expect(JSON.stringify(a)).toContain('PRIVATE HUMAN A'); expect(JSON.stringify(a)).not.toContain('PRIVATE HUMAN B');
+    expect(JSON.stringify(b)).toContain('PRIVATE HUMAN B'); expect(JSON.stringify(b)).not.toContain('PRIVATE HUMAN A');
+    expect(a.tools?.map(tool => tool.function.name)).toEqual(expect.arrayContaining(['list_chats', 'read_group_messages', 'search_group_messages']));
+    expect(String(a.messages[0]?.content)).toContain('focused assignment');
+    expect(JSON.stringify(a.messages)).toContain('Source is the human owner');
+    const captured = f.captured.length;
+    const restarted = new DmBroker(f.database, f.endpoints, f.codex, f.runs);
+    await restarted.ready(); await f.idle();
+    expect(f.captured).toHaveLength(captured);
+    expect((await f.broker.groups.history(group.id)).messages).toHaveLength(3);
+  } finally { await f.close(); }
+}, 30000);
+
+it('exposes operator group creation, membership editing and human publication without DM side effects', async () => {
+  const f = await fixture();
+  const app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+  try {
+    await f.broker.store.updateSettings(f.a.id, { allowedDmAgentIds: [] });
+    const created = await app.inject({ method: 'POST', url: '/api/groups', payload: { name: 'Research', agentIds: [f.a.id, f.b.id] } });
+    expect(created.statusCode).toBe(200);
+    const group = created.json();
+    expect(group.members).toHaveLength(2);
+    expect((await app.inject('/api/groups')).json().groups[0].id).toBe(group.id);
+    const changed = await app.inject({ method: 'PATCH', url: `/api/groups/${group.id}`, payload: { name: 'Focused team', agentIds: [f.b.id] } });
+    expect(changed.statusCode).toBe(200); expect(changed.json().members).toHaveLength(1);
+    const posted = await app.inject({ method: 'POST', url: `/api/groups/${group.id}/messages`, payload: { message: 'A shared question', clientMessageId: crypto.randomUUID() } });
+    expect(posted.statusCode).toBe(202);
+    expect(posted.json().message).toMatchObject({ role: 'user', authorId: null });
+    const messageId = posted.json().message.id;
+    const reactionPath = `/api/chats/group:${group.id}/messages/${messageId}/reaction`;
+    const reacted = await app.inject({ method: 'PUT', url: reactionPath, payload: { emoji: '👍', active: true } });
+    expect(reacted.statusCode).toBe(200); expect(reacted.json().reactions).toEqual([{ emoji: '👍', count: 1, mine: true }]);
+    expect((await app.inject(`/api/chats/group:${group.id}/reactions?ids=${messageId}`)).json().messages[0].reactions).toEqual(reacted.json().reactions);
+    expect(await f.database.client.messageReaction.findFirst()).toMatchObject({ actorKey: 'human', agentId: null });
+    await vi.waitFor(async () => expect((await app.inject(`/api/groups/${group.id}/messages`)).json().messages).toHaveLength(2), { timeout: 15000 });
+    expect(await f.database.client.dmGrant.count()).toBe(0);
+  } finally { await app.close(); await f.close(false); }
+}, 20000);
+
 it('delivers source-labelled agent threads through the normal inbox and queues unrelated busy work', async () => {
   const f = await fixture(); let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });

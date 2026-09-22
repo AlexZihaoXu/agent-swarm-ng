@@ -24,7 +24,7 @@ export class AgentRuns {
     // Never offer a human message to a peer-DM session for the same agent.
     const run = [...this.runs.values()].reverse().find(item => item.agentId === agentId && item.channelId === channelId && !item.controller.signal.aborted && item.inbox.add(message));
     if (!run) return undefined;
-    if (!message.source) run.humanOwned = true;
+    if (!message.source || message.source.human) run.humanOwned = true;
     run.emit(event); return run;
   }
   async settled(agentId: string) {
@@ -38,6 +38,18 @@ export class AgentRuns {
   subscribe(listener: (event: RunEvent) => void) {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
+  }
+  announce(groupId: string, message?: object, publication = false) {
+    const event: RunEvent = { type: 'group_updated', groupId, message, publication, eventId: crypto.randomUUID(), runId: 'platform', agentId: 'human', channelId: `group:${groupId}` };
+    this.broadcast(event);
+  }
+  reactionsChanged(channelId: string, messageId: string) {
+    this.broadcast({ type: 'reactions_updated', messageId, eventId: crypto.randomUUID(), runId: 'platform', agentId: 'human', channelId });
+  }
+  private broadcast(event: RunEvent) {
+    for (const listener of this.listeners) {
+      try { listener(event); } catch { this.listeners.delete(listener); }
+    }
   }
   start(identity: RunIdentity, work: (context: RunContext) => Promise<void>) {
     if (this.has(identity.agentId)) throw new Error('Agent is unavailable');
@@ -53,9 +65,7 @@ export class AgentRuns {
         run.typing = event.active === true;
         run.typingTargets = Array.isArray(event.targets) ? event.targets.filter((value): value is string => typeof value === 'string') : undefined;
       }
-      for (const listener of this.listeners) {
-        try { listener(event); } catch { this.listeners.delete(listener); }
-      }
+      this.broadcast(event);
     };
     this.runs.set(run.runId, run);
     let detach = () => {};

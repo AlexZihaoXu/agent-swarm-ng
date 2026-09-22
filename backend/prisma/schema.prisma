@@ -24,57 +24,64 @@ enum MessageRole {
 }
 
 model Agent {
-  sequence      Int       @id @default(autoincrement())
-  id            String    @unique @default(uuid())
-  name          String
-  avatar        String?
-  endpointId    String
-  model         String
-  thinkingLevel ThinkingLevel
-  createdAt     DateTime  @default(now())
-  channels      Channel[]
-  dmAllowed     DmGrant[]   @relation("DmSenderGrant")
-  dmAllowedBy   DmGrant[]   @relation("DmRecipientGrant")
-  dmSent        DmMessage[] @relation("DmSender")
-  dmReceived    DmMessage[] @relation("DmRecipient")
-  dmChains      DmChain[]
+  sequence         Int               @id @default(autoincrement())
+  id               String            @unique @default(uuid())
+  name             String
+  avatar           String?
+  endpointId       String
+  model            String
+  thinkingLevel    ThinkingLevel
+  createdAt        DateTime          @default(now())
+  channels         Channel[]
+  dmAllowed        DmGrant[]         @relation("DmSenderGrant")
+  dmAllowedBy      DmGrant[]         @relation("DmRecipientGrant")
+  dmSent           DmMessage[]       @relation("DmSender")
+  dmReceived       DmMessage[]       @relation("DmRecipient")
+  dmChains         DmChain[]
+  groupMemberships GroupMember[]
+  reactions        MessageReaction[]
 }
 
 model DmGrant {
   senderId    String
   recipientId String
-  sender      Agent @relation("DmSenderGrant", fields: [senderId], references: [id], onDelete: Cascade)
-  recipient   Agent @relation("DmRecipientGrant", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender      Agent  @relation("DmSenderGrant", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient   Agent  @relation("DmRecipientGrant", fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@id([senderId, recipientId])
   @@index([recipientId])
 }
 
 model DmChain {
-  id          String @id
-  rootAgentId String?
-  rootAgent   Agent? @relation(fields: [rootAgentId], references: [id], onDelete: SetNull)
-  remaining   Int @default(8)
-  cancelled   Boolean @default(false)
-  createdAt   DateTime @default(now())
-  messages    DmMessage[]
+  id            String         @id
+  rootAgentId   String?
+  origin        String         @default("agent")
+  rootGroupId   String?
+  rootGroup     GroupChat?     @relation(fields: [rootGroupId], references: [id], onDelete: SetNull)
+  rootAgent     Agent?         @relation(fields: [rootAgentId], references: [id], onDelete: SetNull)
+  remaining     Int            @default(8)
+  cancelled     Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  messages      DmMessage[]
+  groupMessages GroupMessage[]
 
   @@index([rootAgentId])
+  @@index([rootGroupId])
 }
 
 model DmMessage {
-  sequence       Int @id @default(autoincrement())
-  id             String @unique @default(uuid())
+  sequence       Int      @id @default(autoincrement())
+  id             String   @unique @default(uuid())
   conversationId String
   senderId       String
   recipientId    String
-  sender         Agent @relation("DmSender", fields: [senderId], references: [id], onDelete: Cascade)
-  recipient      Agent @relation("DmRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender         Agent    @relation("DmSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient      Agent    @relation("DmRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
   text           String
   chainId        String
-  chain          DmChain @relation(fields: [chainId], references: [id], onDelete: Restrict)
-  deliveryKey    String @unique
-  status         String @default("queued")
+  chain          DmChain  @relation(fields: [chainId], references: [id], onDelete: Restrict)
+  deliveryKey    String   @unique
+  status         String   @default("queued")
   createdAt      DateTime @default(now())
 
   @@index([conversationId, sequence])
@@ -85,24 +92,99 @@ model DmMessage {
   @@index([chainId])
 }
 
-model Channel {
-  id        String    @id @default(uuid())
+model GroupChat {
+  sequence  Int            @id @default(autoincrement())
+  id        String         @unique @default(uuid())
+  name      String
+  createdAt DateTime       @default(now())
+  members   GroupMember[]
+  messages  GroupMessage[]
+  chains    DmChain[]
+}
+
+model GroupMember {
+  groupId    String
+  agentId    String
+  group      GroupChat       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  agent      Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  deliveries GroupDelivery[]
+
+  @@id([groupId, agentId])
+  @@index([agentId, groupId])
+}
+
+model GroupMessage {
+  sequence      Int               @id @default(autoincrement())
+  id            String            @unique @default(uuid())
+  groupId       String
+  group         GroupChat         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  role          MessageRole
+  // Immutable author snapshots keep shared history meaningful after agent deletion.
+  authorId      String?
+  authorName    String
+  authorAvatar  String?
+  text          String
+  chainId       String
+  chain         DmChain           @relation(fields: [chainId], references: [id], onDelete: Restrict)
+  submissionKey String            @unique
+  createdAt     DateTime          @default(now())
+  deliveries    GroupDelivery[]
+  reactions     MessageReaction[]
+
+  @@unique([id, groupId])
+  @@index([groupId, sequence])
+  @@index([chainId])
+}
+
+model GroupDelivery {
+  messageId String
+  groupId   String
   agentId   String
-  kind      String    @default("platform-chat")
-  agent     Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  messages  Message[]
+  status    String       @default("queued")
+  message   GroupMessage @relation(fields: [messageId, groupId], references: [id, groupId], onDelete: Cascade)
+  member    GroupMember  @relation(fields: [groupId, agentId], references: [groupId, agentId], onDelete: Cascade)
+
+  @@id([messageId, agentId])
+  @@index([agentId, status])
+  @@index([groupId, agentId])
+  @@index([status])
+}
+
+model MessageReaction {
+  id             String        @id @default(uuid())
+  messageId      String?
+  groupMessageId String?
+  actorKey       String
+  agentId        String?
+  emoji          String
+  message        Message?      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  groupMessage   GroupMessage? @relation(fields: [groupMessageId], references: [id], onDelete: Cascade)
+  agent          Agent?        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, actorKey, emoji])
+  @@unique([groupMessageId, actorKey, emoji])
+  @@index([agentId])
+}
+
+model Channel {
+  id       String    @id @default(uuid())
+  agentId  String
+  kind     String    @default("platform-chat")
+  agent    Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  messages Message[]
 
   @@index([agentId])
 }
 
 model Message {
-  sequence  Int      @id @default(autoincrement())
-  id        String   @unique @default(uuid())
+  sequence  Int               @id @default(autoincrement())
+  id        String            @unique @default(uuid())
   channelId String
   role      MessageRole
   text      String
-  createdAt DateTime @default(now())
-  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  createdAt DateTime          @default(now())
+  channel   Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  reactions MessageReaction[]
 
   @@index([channelId, sequence])
   @@index([channelId, createdAt, sequence])
