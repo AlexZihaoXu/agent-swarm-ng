@@ -41,8 +41,8 @@ export function ConversationMessages({ messages, time, agentName, notices = [], 
               <span className={senderStyles ? 'mb-1 block text-[11px] font-medium opacity-80' : 'sr-only'}>{message.author === 'user' ? counterpartName : agentName}{senderStyles ? '' : ': '}</span>
               <MessageMarkdown text={message.text} />
             </div>;
-          return <li key={message.id} className={cn('group flex', message.author === 'user' && 'justify-end')}>
-            {reactionChannel ? <div className={cn('relative min-w-0 max-w-[85%] sm:max-w-[75%]', message.author === 'user' && 'flex flex-col items-end')}>
+          return <li key={message.id} tabIndex={reactionChannel ? 0 : undefined} className={cn('group relative flex outline-none focus-visible:bg-foreground/[0.045]', message.author === 'user' && 'justify-end')}>
+            {reactionChannel ? <div className={cn('min-w-0 max-w-[85%] sm:max-w-[75%]', message.author === 'user' && 'flex flex-col items-end')}>
               {bubble}
               {message.sequence !== undefined && <MessageReactions channelId={reactionChannel} messageId={message.id} reactions={reactions.data?.[message.id]} />}
             </div> : bubble}

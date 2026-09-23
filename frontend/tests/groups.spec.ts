@@ -66,7 +66,7 @@ for (const mobile of [false, true]) test(`Chat groups preserve Agents, group tim
   const detail = page.locator('[data-message-id="group-1"]');
   await detail.focus();
   await expect(detail.locator('time').first()).toHaveCSS('opacity', '1');
-  await detail.getByRole('combobox', { name: 'React to message' }).click();
+  await detail.getByRole('combobox', { name: 'Add Reaction' }).click();
   await page.getByRole('option', { name: 'Thumbs up', exact: true }).click();
   await expect(detail.getByRole('button', { name: 'Thumbs up: 1 reaction', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByLabel('Message Research').fill('Human message');

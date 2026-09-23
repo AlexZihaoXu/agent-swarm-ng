@@ -11,6 +11,14 @@ Status: implemented and validated. Feature merge: `a846572`, based on `cd24c34` 
 - Group only consecutive messages from the same author when the timestamp gap is nonnegative and at most five minutes; author changes, longer gaps, and date boundaries start a new author/time block. Hover/focus highlights a message row and reveals its time in the left gutter. Keep controls available on touch and keyboard, not hover-only.
 - Persisted emoji reactions are implemented for human DMs and groups, where the operator is a participant. Agent-to-agent DM inspection does not let the operator join or impersonate a peer through reactions. Eight supported reactions use explicit, idempotent add/remove actions; there are no simulated counts.
 
+## Reaction toolbar
+
+The Discord-style contextual toolbar contains only up to three recently used emoji shortcuts and an **Add Reaction** smiley; no edit, reply, or more-actions controls. It adapts the inspected Kibo `button-group-patterns-2` source/rendered preview to the operator's screenshots and retains the existing accessible reaction picker.
+
+Recent choices start empty and update only after a successful reaction addition. They are deduplicated, most-recent-first, and stored as at most three supported emoji values in the browser's `swarm.recent-reactions` preference. This stores no messages, transcripts, agent identities or credentials. Failed requests/removals do not invent or reorder recent choices; blocked storage falls back to the current page's query cache. Message-row hover or keyboard/touch focus reveals the toolbar, and an open picker keeps it visible. Recent shortcut buttons retain focus while requests are pending, while duplicate actions remain blocked.
+
+Toolbar revision verification: 18 frontend unit tests, frontend typecheck/production build, and all 73 application browser tests passed (`proc_168`) in sandboxed nonroot Linux. Desktop/mobile previews were inspected; no Windows browser was launched.
+
 ## Tools and communication guidance
 
 Expose explicit discovery, bounded history/search, publication and reaction tools. `list_chats` must tell an agent which chats it can actually access and the available audience/members. Every read, expansion, search, send and reaction validates its channel/membership at execution time; the model cannot choose another sender identity.
