@@ -33,19 +33,19 @@ export function ConversationMessages({ messages, time, agentName, notices = [], 
           if (item.kind === 'dm') return <li key={`dm:${item.notice.id}`} className="flex"><AgentDmNotice notice={item.notice} onOpen={() => onViewDm?.(item.notice)} /></li>;
           const message = item.message;
           const senderColor = senderStyles?.[message.author].color;
-          const bubble = <div data-message-id={message.id} style={{ animationDelay: `${index >= entranceStart && index < entranceCount.current ? (index - entranceStart + 1) * 75 : 0}ms`, ...(senderColor ? agentBubbleStyle(senderColor) : {}) }} className={cn(
-              'message-enter min-w-0 origin-top whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-5 [overflow-wrap:anywhere]',
+          const bubble = <div data-message-id={message.id} tabIndex={reactionChannel && message.sequence !== undefined ? 0 : undefined} style={{ animationDelay: `${index >= entranceStart && index < entranceCount.current ? (index - entranceStart + 1) * 75 : 0}ms`, ...(senderColor ? agentBubbleStyle(senderColor) : {}) }} className={cn(
+              'message-enter message-context-target min-w-0 origin-top whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-5 [overflow-wrap:anywhere]',
               message.author === 'user' ? 'bg-primary text-primary-foreground' : 'bg-foreground/[0.07]',
-              reactionChannel ? 'max-w-full' : 'max-w-[85%] sm:max-w-[75%]',
+              reactionChannel ? 'max-w-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring' : 'max-w-[85%] sm:max-w-[75%]',
             )}>
               <span className={senderStyles ? 'mb-1 block text-[11px] font-medium opacity-80' : 'sr-only'}>{message.author === 'user' ? counterpartName : agentName}{senderStyles ? '' : ': '}</span>
               <MessageMarkdown text={message.text} />
             </div>;
-          return <li key={message.id} tabIndex={reactionChannel ? 0 : undefined} className={cn('group relative flex outline-none focus-visible:bg-foreground/[0.045]', message.author === 'user' && 'justify-end')}>
-            {reactionChannel ? <div className={cn('min-w-0 max-w-[85%] sm:max-w-[75%]', message.author === 'user' && 'flex flex-col items-end')}>
-              {bubble}
-              {message.sequence !== undefined && <MessageReactions channelId={reactionChannel} messageId={message.id} reactions={reactions.data?.[message.id]} />}
-            </div> : bubble}
+          const content = reactionChannel && message.sequence !== undefined
+            ? <MessageReactions channelId={reactionChannel} messageId={message.id} reactions={reactions.data?.[message.id]}>{bubble}</MessageReactions>
+            : bubble;
+          return <li key={message.id} className={cn('relative flex', message.author === 'user' && 'justify-end')}>
+            {reactionChannel ? <div className={cn('min-w-0 max-w-[85%] sm:max-w-[75%]', message.author === 'user' && 'flex flex-col items-end')}>{content}</div> : content}
           </li>;
         })}
       </ol>

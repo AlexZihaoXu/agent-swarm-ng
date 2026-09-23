@@ -78,6 +78,8 @@ Create an agent from the agent panel's context menu, then choose a saved endpoin
 
 Pi SDK 0.85.1 uses OpenAI-compatible Chat Completions for API endpoints or native Codex Responses for the connected ChatGPT subscription, with explicitly granted **`send_message`**, **`read_messages`**, and **`search_messages`**, bound to the current platform-chat channel, plus four web tools from **[Pi Web Access](https://github.com/nicobailon/pi-web-access) 0.30.0**: `web_search`, `source_check`, `fetch_content`, and `get_search_content`. Default coding tools, resource discovery, skills, prompt expansion, global settings, and inherited credentials remain disabled. Endpoint keys are literal values, never Pi's command/environment configuration syntax.
 
+Agent communication grants also include `search_emojis` (bounded local emoji name/keyword search plus the agent's four saved recent choices), `read_reactions`, and `react_to_message`. A new human-added reaction is offered to a bounded, decision-only branch before any normal agent turn; see [reaction delivery and picker behavior](chat-and-groups.md#reaction-context-menu). These grants do not add shell, computer, or operator administration access.
+
 Web search uses keyless Exa MCP; queries go to Exa and public-page fetches contact their target websites. A dedicated Bun subprocess per turn keeps the extension's global configuration/result caches separate. It receives a minimal environment and generated configuration, not developer Pi settings, browser cookies, or endpoint credentials. Only public HTTP(S) readable/raw fetches are granted; the extension's private-network/redirect protections remain enabled. Local files, repository cloning, interactive browser workflows, extra model calls, and caller-supplied auth/proxies are disabled. Result IDs are turn-local; temporary files under `.local/web-turns` are removed on normal cleanup (a backend crash may leave leftovers). This is process/configuration isolation, not an OS sandbox. Agents still have no computer, shell, or interactive browser access.
 
 Right-click an agent and choose **Delete agent**. The confirmation dialog requires its exact name (case and whitespace included); the backend checks it again. Deleting an agent permanently removes its channels and chat messages, but not shared provider connections. An active turn blocks deletion: stop it and wait before retrying. Local drafts, activity, and cached history are cleared when deletion succeeds.
@@ -120,7 +122,7 @@ Thinking-level controls use Pi's known OpenAI model metadata and standard `reaso
 
 ## Platform storage
 
-- **Prisma 7.9.1 + SQLite:** identities, channels, and user/tool-published messages in ignored `.local/platform.db`. Bun uses the libSQL adapter; no separate database service is needed.
+- **Prisma 7.9.1 + SQLite:** identities, channels, user/tool-published messages, reactions, and agent-specific recent emoji choices in ignored `.local/platform.db`. Bun uses the libSQL adapter; no separate database service is needed.
 - **Provider credentials:** API endpoint keys remain in `.local/endpoints.json`; ChatGPT OAuth credentials use `.local/openai-auth.json`. Neither is copied into chat records or returned by the API.
 - **Ephemeral:** drafts, typing, operator activity, and Pi sessions. No JSONL sessions are written. External providers may retain inference requests according to their policies.
 - **Docker:** both backend targets run as `bun` and use `platform_data` at `/app/.local`. Replacing a container preserves data; deleting the volume is destructive.

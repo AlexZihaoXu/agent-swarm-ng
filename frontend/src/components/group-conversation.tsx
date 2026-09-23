@@ -9,6 +9,7 @@ import { GroupMessages } from '@/components/group-messages';
 import { AgentTypingStatus } from '@/components/agent-typing-status';
 import { mergeGroupMessages, useGroupMessages, type GroupPage } from '@/use-groups';
 import { cn } from '@/lib/utils';
+import { randomUuid } from '@/lib/random-uuid';
 
 export function GroupConversation({ groupId, mobile, onBack, draft, onDraft, typingIn }: { groupId: string; mobile: boolean; onBack: () => void; draft: string; onDraft: (text: string) => void; typingIn: (channelId: string, destination: string) => boolean }) {
   const client = useQueryClient();
@@ -38,7 +39,7 @@ export function GroupConversation({ groupId, mobile, onBack, draft, onDraft, typ
     const text = draft.trim();
     if (sending || !text) return;
     setSending(true); setError('');
-    if (submission.current?.text !== text) submission.current = { id: crypto.randomUUID(), text };
+    if (submission.current?.text !== text) submission.current = { id: randomUuid(), text };
     try {
       const { data, error } = await api.POST('/api/groups/{id}/messages', { params: { path: { id: groupId } }, body: { message: text, clientMessageId: submission.current!.id } });
       if (!data || error) throw new Error(error?.message ?? 'Could not confirm delivery. Reload history before retrying.');

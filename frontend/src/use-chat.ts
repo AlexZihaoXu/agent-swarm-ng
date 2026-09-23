@@ -6,6 +6,7 @@ import type { ChatMessage } from '@/chat-types';
 import { createNotificationSound } from '@/lib/notification-sound';
 import { useRunEvents } from '@/use-run-events';
 import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
+import { randomUuid } from '@/lib/random-uuid';
 
 export type ActivityEntry = components['schemas']['AgentActivityEntry'];
 const activityKinds = new Set(['system', 'user', 'assistant', 'thinking', 'tool_call', 'tool_result', 'reminder', 'channel', 'status', 'error']);
@@ -179,7 +180,7 @@ export function useChat() {
   }
   function recordError(agent: ChatAgent, text: string) {
     setErrors(current => ({ ...current, [agent.channelId]: text }));
-    recordActivity(agent.id, { id: crypto.randomUUID(), runId: 'client', channelId: agent.channelId, kind: 'error', label: 'Request error', text, timestamp: Date.now() });
+    recordActivity(agent.id, { id: randomUuid(), runId: 'client', channelId: agent.channelId, kind: 'error', label: 'Request error', text, timestamp: Date.now() });
   }
 
   function applyEvent(event: Record<string, any>) {
@@ -297,7 +298,7 @@ export function useChat() {
     text = text.trim();
     if (!agent.real || !text || requests.current.has(agent.channelId) || historyRequests.current.has(agent.channelId) || !loadedHistory.current.has(agent.channelId)) return;
     const pending = pendingMessages.current.get(agent.channelId);
-    const message: ChatMessage = pending?.text === text ? pending : { id: crypto.randomUUID(), author: 'user', text, time: clock() };
+    const message: ChatMessage = pending?.text === text ? pending : { id: randomUuid(), author: 'user', text, time: clock() };
     pendingMessages.current.set(agent.channelId, message);
     setDrafts(current => ({ ...current, [agent.channelId]: '' })); setErrors(current => ({ ...current, [agent.channelId]: '' })); setTyping(current => ({ ...current, [agent.channelId]: false }));
     const controller = new AbortController(); requests.current.set(agent.channelId, controller);
@@ -326,7 +327,7 @@ export function useChat() {
       activeRuns.current.delete(channelId);
       requests.current.get(channelId)?.abort(); requests.current.delete(channelId);
       setBusy(value => ({ ...value, [channelId]: false })); setTyping(value => ({ ...value, [channelId]: false }));
-      recordActivity(agent.id, { id: crypto.randomUUID(), runId: 'client', channelId, kind: 'status', label: 'Stopped', text: 'Response stopped by the user.', timestamp: Date.now() });
+      recordActivity(agent.id, { id: randomUuid(), runId: 'client', channelId, kind: 'status', label: 'Stopped', text: 'Response stopped by the user.', timestamp: Date.now() });
     } catch { recordError(agent, 'Could not stop the backend run. Check the connection and try again.'); }
   }
   const visibleBusy = { ...busy };

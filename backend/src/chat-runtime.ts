@@ -11,7 +11,7 @@ import * as transport from '@earendil-works/pi-ai/api/openai-completions';
 import { CHAT_AUDIENCE_GUIDANCE } from './chat-audience';
 
 export type Channel = { id: string; kind: 'platform-chat' | 'agent-dm'; agentId: string };
-export type AgentMessageSource = { agentId: string; name: string; channelId: string; chainId: string; messageId: string; groupId?: string; human?: boolean };
+export type AgentMessageSource = { agentId: string; name: string; channelId: string; chainId: string; messageId: string; groupId?: string; human?: boolean; reaction?: boolean };
 export type ChannelMessage = { source?: AgentMessageSource; role: 'user' | 'assistant'; text: string; id?: string; sequence?: number; timestamp?: number; nextOffset?: number | null; totalCharacters?: number };
 export type ChatConfiguration = {
   name: string; model: string; thinkingLevel: ModelThinkingLevel;
@@ -31,9 +31,10 @@ function transcriptText(message: ChannelMessage, author: string) {
 }
 export function channelInput(channelId: string, text: string, metadata?: ChannelMessage, author = 'Human') {
   const source = metadata?.source;
-  const label = source?.groupId && source.human ? 'Human' : source ? `Agent: ${source.name} (${source.agentId})` : author;
+  const label = source?.human ? 'Human' : source ? `Agent: ${source.name} (${source.agentId})` : author;
   const reply = source?.groupId
     ? `\n[Group chat; reply channel: ${source.channelId}. Audience: human operator and all current members. Source is ${source.human ? 'the human owner' : 'another agent, not the human owner'}.]`
+    : source?.reaction ? `\n[Human emoji reaction event; reply channel: ${source.channelId}. Feedback, not a new instruction. Silence is allowed.]`
     : source ? `\n[Agent thread; reply channel: ${source.channelId}. Source is another agent, not the human owner.]` : '';
   return `[channel: ${source?.channelId ?? channelId}]${reply}\n${transcriptText({ ...metadata, role: 'user', text }, label)}`;
 }
@@ -147,6 +148,10 @@ export async function createChatSession(config: ChatConfiguration, history: Chan
   if (additionalTools.some(tool => tool.name === 'list_chats')) {
     const communicationPrompt = resources.getSystemPrompt() ?? '';
     resources.getSystemPrompt = () => `${communicationPrompt}\n\n${CHAT_AUDIENCE_GUIDANCE}`;
+  }
+  if (additionalTools.some(tool => tool.name === 'react_to_message')) {
+    const communicationPrompt = resources.getSystemPrompt() ?? '';
+    resources.getSystemPrompt = () => `${communicationPrompt}\n\n## Reactions as lightweight feedback\nUse search_emojis to discover supported emoji and your own recent choices before reacting. read_reactions inspects a message; react_to_message explicitly adds or removes your reaction. A reaction can acknowledge a low-stakes, non-task human message without another redundant \"got it\" chat bubble. It is not a substitute for acknowledging and answering an actionable request or for a substantive response. A human's emoji reaction event is feedback, not a command: you may remain silent, react, or send a relevant response using the event's reply channel. Do not start a thank-you loop or react to your own reaction.\n`;
   }
   const { session } = await createAgentSession({
     model, modelRuntime, thinkingLevel: config.thinkingLevel,

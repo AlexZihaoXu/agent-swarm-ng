@@ -2,7 +2,9 @@ import type { Prisma } from './generated/prisma/client';
 import type { PlatformStore } from './platform-store';
 import { SwarmError } from './swarm-store';
 
-export const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '👀', '✅', '🤔', '🔥'] as const;
+export const MAX_REACTION_LENGTH = 64;
+const emojiSequence = new RegExp('^\\p{RGI_Emoji}$', 'v');
+export function isReactionEmoji(value: string) { return value.length > 0 && value.length <= MAX_REACTION_LENGTH && emojiSequence.test(value); }
 export type ReactionSummary = { emoji: string; count: number; mine: boolean };
 const key = (agentId?: string) => agentId ? `agent:${agentId}` : 'human';
 
@@ -29,22 +31,40 @@ export class ReactionStore {
       if (!summary) { summary = { emoji: row.emoji, count: 0, mine: false }; list.push(summary); }
       summary.count++; summary.mine ||= row.actorKey === key(agentId);
     }
-    for (const list of Object.values(output)) list.sort((a, b) => REACTION_EMOJIS.indexOf(a.emoji as typeof REACTION_EMOJIS[number]) - REACTION_EMOJIS.indexOf(b.emoji as typeof REACTION_EMOJIS[number]));
+    for (const list of Object.values(output)) list.sort((a, b) => a.emoji < b.emoji ? -1 : a.emoji > b.emoji ? 1 : 0);
     return output;
   }
   async read(channelId: string, ids: string[], agentId?: string) {
     await this.database.initialize();
     return this.database.client.$transaction(async tx => this.summaries(tx, await this.target(tx, channelId, ids, agentId), ids, agentId));
   }
+  async recent(agentId: string) {
+    await this.database.initialize();
+    return (await this.database.client.agentEmojiRecent.findMany({ where: { agentId }, orderBy: [{ usedAt: 'desc' }, { emoji: 'asc' }], take: 4, select: { emoji: true } })).map(item => item.emoji);
+  }
   async set(channelId: string, messageId: string, emoji: string, active: boolean, agentId?: string) {
-    if (!REACTION_EMOJIS.includes(emoji as typeof REACTION_EMOJIS[number])) throw new SwarmError('invalid', 'Unsupported reaction.');
+    return (await this.setDetailed(channelId, messageId, emoji, active, agentId)).reactions;
+  }
+  async setDetailed(channelId: string, messageId: string, emoji: string, active: boolean, agentId?: string) {
+    if (!isReactionEmoji(emoji)) throw new SwarmError('invalid', 'Unsupported reaction.');
     await this.database.initialize();
     return this.database.client.$transaction(async tx => {
       const field = await this.target(tx, channelId, [messageId], agentId);
       const where = { [field]: messageId, actorKey: key(agentId), emoji };
-      if (!active) await tx.messageReaction.deleteMany({ where });
-      else if (!await tx.messageReaction.findFirst({ where })) await tx.messageReaction.create({ data: { ...where, agentId } });
-      return (await this.summaries(tx, field, [messageId], agentId))[messageId];
+      let changed = false;
+      if (!active) changed = (await tx.messageReaction.deleteMany({ where })).count > 0;
+      else if (!await tx.messageReaction.findFirst({ where })) {
+        await tx.messageReaction.create({ data: { ...where, agentId } }); changed = true;
+      }
+      if (active && agentId) {
+        const latest = await tx.agentEmojiRecent.findFirst({ where: { agentId }, orderBy: { usedAt: 'desc' }, select: { usedAt: true } });
+        const now = Date.now();
+        const usedAt = new Date(Math.max(now, (latest?.usedAt.getTime() ?? 0) + 1));
+        await tx.agentEmojiRecent.upsert({ where: { agentId_emoji: { agentId, emoji } }, create: { agentId, emoji, usedAt }, update: { usedAt } });
+        const recent = await tx.agentEmojiRecent.findMany({ where: { agentId }, orderBy: [{ usedAt: 'desc' }, { emoji: 'asc' }], take: 4, select: { emoji: true } });
+        await tx.agentEmojiRecent.deleteMany({ where: { agentId, emoji: { notIn: recent.map(item => item.emoji) } } });
+      }
+      return { reactions: (await this.summaries(tx, field, [messageId], agentId))[messageId], changed };
     });
   }
 }

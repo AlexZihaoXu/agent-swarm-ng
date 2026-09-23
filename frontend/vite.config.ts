@@ -1,10 +1,10 @@
 import { fileURLToPath, URL } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), VitePWA({
     registerType: 'prompt',
     manifest: {
@@ -29,8 +29,10 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    allowedHosts: (loadEnv(mode, fileURLToPath(new URL('.', import.meta.url)), 'DEV_ALLOWED_HOSTS').DEV_ALLOWED_HOSTS ?? '')
+      .split(',').map(host => host.trim()).filter(Boolean),
     // Avoid transforming partially written files during local edits.
     watch: { awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 25 } },
     proxy: { '/api': { target: process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:3000' } },
   },
-});
+}));

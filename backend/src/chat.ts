@@ -51,7 +51,7 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
   let closing = false;
   registerSwarmRoutes(app, broker.store, database, active, () => closing);
   registerGroupRoutes(app, broker, groupId => runs.announce(groupId), () => closing);
-  registerReactionRoutes(app, broker.reactions, (channelId, messageId) => runs.reactionsChanged(channelId, messageId), () => closing);
+  registerReactionRoutes(app, broker.reactions, (channelId, messageId) => runs.reactionsChanged(channelId, messageId), () => closing, (channelId, messageId, emoji) => broker.notifyHumanReaction(channelId, messageId, emoji));
   app.addHook('preClose', async () => {
     closing = true; broker.close();
     for (const item of preparing.values()) item.controller.abort();

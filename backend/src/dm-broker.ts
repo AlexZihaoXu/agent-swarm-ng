@@ -15,6 +15,7 @@ import { createGroupTools } from './group-tools';
 import { groupSource, groupMessageView } from './group-message';
 import { ReactionStore } from './reaction-store';
 import { createReactionTools } from './reaction-tools';
+import { ReactionCoordinator } from './reaction-coordinator';
 
 type Job = { senderId: string; rootAgentId: string | null; chainId: string; run: ReturnType<AgentRuns['enqueue']>; cleanup: Promise<void> };
 /** Publishes once, then admits a source-labelled message to the recipient's normal inbox. */
@@ -22,13 +23,18 @@ export class DmBroker {
   readonly store: SwarmStore;
   readonly groups: GroupStore;
   readonly reactions: ReactionStore;
+  private reactionCoordinator: ReactionCoordinator;
   private starting?: Promise<void>;
   private closing = false;
   private jobs = new Map<string, Job>();
   private cancelling = new Map<string, Promise<void>>();
   private deleting = new Set<string>();
   private linked = new WeakSet<AbortSignal>();
-  constructor(private database: PlatformStore, private endpoints: EndpointStore, private codex: CodexProvider, private runs: AgentRuns) { this.store = new SwarmStore(database); this.groups = new GroupStore(database); this.reactions = new ReactionStore(database); }
+  constructor(private database: PlatformStore, private endpoints: EndpointStore, private codex: CodexProvider, private runs: AgentRuns) {
+    this.store = new SwarmStore(database); this.groups = new GroupStore(database); this.reactions = new ReactionStore(database);
+    this.reactionCoordinator = new ReactionCoordinator(database, endpoints, codex, runs, (agentId, input, context) => this.runInbox(agentId, input, context));
+  }
+  notifyHumanReaction(channelId: string, messageId: string, emoji: string) { return this.reactionCoordinator.offer(channelId, messageId, emoji); }
   ready() { return this.starting ??= this.store.cancelInterruptedDeliveries(); }
   async send(senderId: string, recipientId: string, text: string, callId: string, context: RunContext, inheritedChain?: string): Promise<DmReceipt> {
     context.signal.throwIfAborted();
@@ -133,7 +139,7 @@ ${preview.text}` : preview.text, timestamp: message.createdAt.getTime(), ...(mes
     const shared: ChannelMessage[] = groupHistory.reverse().map(message => ({ id: message.id, role: message.authorId === agentId ? 'assistant' : 'user', text: `${message.authorId === agentId ? `[Sent to group:${message.groupId}]\n` : ''}${messageText(message.text).text}`, timestamp: message.createdAt.getTime(), ...(message.authorId === agentId ? {} : { source: groupSource(message) }) }));
     const pending = new Set([incoming.id, ...context.inbox.pendingIds()]);
     const history = [...human, ...peers, ...shared].filter(message => !pending.has(message.id)).sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)).slice(-8);
-    let humanBatch = !incoming.source;
+    let humanBatch = !incoming.source || Boolean(incoming.source.reaction);
     let humanAuthority = !incoming.source || Boolean(incoming.source.human);
     let inherited = incoming.source?.chainId;
     let sources: AgentMessageSource[] = incoming.source ? [incoming.source] : [];
@@ -155,9 +161,9 @@ ${preview.text}` : preview.text, timestamp: message.createdAt.getTime(), ...(mes
       prepare: async messages => {
         const admitted: ChannelMessage[] = [];
         for (const message of messages) {
-          if (!message.source || (message.source.groupId ? await this.groups.claim(message.source.messageId, agentId) : await this.store.claim(message.source.messageId, agentId))) admitted.push(message);
+          if (!message.source || message.source.reaction || (message.source.groupId ? await this.groups.claim(message.source.messageId, agentId) : await this.store.claim(message.source.messageId, agentId))) admitted.push(message);
         }
-        humanBatch = admitted.some(message => !message.source);
+        humanBatch = admitted.some(message => !message.source || message.source.reaction);
         humanAuthority = admitted.some(message => !message.source || message.source.human);
         sources = admitted.flatMap(message => message.source ? [message.source] : []);
         inherited = sources[0]?.chainId;
@@ -165,7 +171,7 @@ ${preview.text}` : preview.text, timestamp: message.createdAt.getTime(), ...(mes
         return admitted;
       },
       complete: async (messages, failed) => {
-        for (const message of messages) if (message.source) {
+        for (const message of messages) if (message.source && !message.source.reaction) {
           const status = context.signal.aborted ? 'cancelled' : failed ? 'failed' : 'completed';
           if (message.source.groupId) {
             await this.groups.finish(message.source.messageId, agentId, status);
@@ -192,11 +198,13 @@ ${preview.text}` : preview.text, timestamp: message.createdAt.getTime(), ...(mes
   }
   async beforeDelete(agentId: string) {
     this.deleting.add(agentId);
+    await this.reactionCoordinator.cancelAgent(agentId);
+    await this.runs.settled(agentId);
     const related = [...this.jobs.values()].filter(job => job.senderId === agentId || job.rootAgentId === agentId || job.run.agentId === agentId);
     await Promise.all([...new Set(related.map(job => job.chainId))].map(id => this.cancelChain(id)));
     await Promise.all(related.filter(job => !job.run.humanOwned).map(job => job.cleanup));
   }
   afterDelete(agentId: string) { this.deleting.delete(agentId); }
-  close() { this.closing = true; }
-  async settled() { await this.starting; await Promise.all([...this.jobs.values()].map(job => job.cleanup)); await Promise.all(this.cancelling.values()); }
+  close() { this.closing = true; this.reactionCoordinator.close(); }
+  async settled() { await this.starting; await this.reactionCoordinator.settled(); await Promise.all([...this.jobs.values()].map(job => job.cleanup)); await Promise.all(this.cancelling.values()); }
 }

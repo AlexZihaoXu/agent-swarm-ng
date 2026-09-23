@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import * as ContextMenu from '@radix-ui/react-context-menu';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { asAgent, type ChatAgent, type RealAgent } from '@/use-chat';
@@ -16,12 +17,16 @@ import { cn } from '@/lib/utils';
 function GroupAvatar({ group }: { group: GroupChat }) {
   return <span aria-hidden="true" className="relative size-8 shrink-0">{group.members.slice(0, 3).map((member, index) => <span key={member.id} className="absolute" style={{ left: index === 1 ? 13 : index === 2 ? 6 : 0, top: index === 2 ? 13 : 0 }}><AgentAvatarArt {...(member.avatar ?? defaultAvatar(member.id))} size={20} /></span>)}{!group.members.length && <span className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground">#</span>}</span>;
 }
-export function ChatPanel({ agents, conversations, busy, typingIn, selectedAgent, selectedGroup, onAgent, onGroup, mobile, agentsLoading, agentsFailed, agentsCursor, loadAgents }: {
+export function ChatPanel({ agents, conversations, busy, typingIn, selectedAgent, selectedGroup, onAgent, onViewAgent, onGroup, mobile, agentsLoading, agentsFailed, agentsCursor, loadAgents }: {
   agents: ChatAgent[]; conversations: Record<string, ChatMessage[]>; busy: Record<string, boolean>; typingIn: (channel: string, destination: string) => boolean;
-  selectedAgent: string; selectedGroup: string; onAgent: (id: string, real?: RealAgent) => void; onGroup: (group: GroupChat) => void; mobile: boolean;
+  selectedAgent: string; selectedGroup: string; onAgent: (id: string, real?: RealAgent) => void; onViewAgent: (id: string, real?: RealAgent) => void; onGroup: (group: GroupChat) => void; mobile: boolean;
   agentsLoading: boolean; agentsFailed: boolean; agentsCursor: number | null; loadAgents: (after?: number) => Promise<void>;
 }) {
   const [search, setSearch] = useState('');
+  const [context, setContext] = useState<{ kind: 'dm'; agent: ChatAgent } | { kind: 'group'; group: GroupChat } | null>(null);
+  const [editor, setEditor] = useState<{ group?: GroupChat } | null>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
   const groups = useGroups(search.trim());
   const matches = useInfiniteQuery({ queryKey: ['chat-agent-search', search.trim()], enabled: Boolean(search.trim()), initialPageParam: undefined as number | undefined,
     queryFn: async ({ pageParam, signal }) => {
@@ -42,7 +47,22 @@ export function ChatPanel({ agents, conversations, busy, typingIn, selectedAgent
     if (search.trim()) { if (matches.isError) void matches.refetch(); else if (matches.hasNextPage) void matches.fetchNextPage(); }
     else if (agentsFailed || agentsCursor !== null) void loadAgents(agentsCursor ?? undefined);
   };
-  return <aside aria-label="Chats" className={cn('min-h-0 w-full shrink-0 flex-col border-border bg-sidebar sm:flex sm:w-72 sm:border-r', mobile ? 'hidden' : 'flex')}>
+  // Match the Agents sidebar's Kibo context-menu-standard-1 composition.
+  return <><ContextMenu.Root><ContextMenu.Trigger asChild><aside ref={panelRef} aria-label="Chats" tabIndex={0} className={cn('min-h-0 w-full shrink-0 flex-col border-border bg-sidebar outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:flex sm:w-72 sm:border-r', mobile ? 'hidden' : 'flex')}
+    onContextMenuCapture={event => {
+      const row = (event.target as HTMLElement).closest<HTMLElement>('[data-chat-kind][data-chat-id]');
+      const item = items.find(item => item.kind === row?.dataset.chatKind && item.id === row?.dataset.chatId);
+      setContext(item?.kind === 'dm' ? { kind: 'dm', agent: item.agent } : item?.kind === 'group' ? { kind: 'group', group: item.group } : null);
+      returnFocus.current = row ?? (document.activeElement instanceof HTMLElement ? document.activeElement : panelRef.current);
+    }}
+    onKeyDown={event => {
+      if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+      event.preventDefault();
+      const target = event.target as HTMLElement;
+      const bounds = target.getBoundingClientRect();
+      target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: bounds.left + 16, clientY: bounds.top + 16 }));
+    }}
+  >
     <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-3">
       <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg border border-foreground/15 bg-[#262626] px-2.5 focus-within:ring-1 focus-within:ring-ring">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-3.5 shrink-0 text-muted-foreground"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" strokeLinecap="round" /></svg>
@@ -56,13 +76,21 @@ export function ChatPanel({ agents, conversations, busy, typingIn, selectedAgent
         const selected = item.kind === 'group' ? item.id === selectedGroup : !selectedGroup && item.id === selectedAgent;
         const latest = item.kind === 'dm' ? conversations[item.agent.channelId]?.at(-1) : undefined;
         const preview = item.kind === 'group' ? `${item.group.lastMessage ? `${item.group.lastMessage.role === 'user' ? 'You' : item.group.lastMessage.authorName}: ${item.group.lastMessage.text}` : ''}` : latest?.text ?? item.agent.real?.lastMessage?.text ?? '';
-        return <li key={`${item.kind}:${item.id}`}><button type="button" aria-label={`Open ${item.kind === 'group' ? 'group chat' : 'conversation with'} ${item.name}`} aria-current={selected ? 'true' : undefined} onClick={() => item.kind === 'group' ? onGroup(item.group) : onAgent(item.id, item.agent.real)} className={cn('flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring', selected ? 'bg-foreground/10' : 'hover:bg-foreground/5')}>
-          {item.kind === 'group' ? <GroupAvatar group={item.group} /> : <AgentAvatar initials={item.agent.initials} avatar={item.agent.avatar} ready working={busy[item.agent.channelId]} typing={typingIn(item.agent.channelId, item.agent.channelId)} />}
+        return <li key={`${item.kind}:${item.id}`}><button type="button" data-chat-kind={item.kind} data-chat-id={item.id} aria-label={`Open ${item.kind === 'group' ? 'group chat' : 'conversation with'} ${item.name}`} aria-current={selected ? 'true' : undefined} onClick={() => item.kind === 'group' ? onGroup(item.group) : onAgent(item.id, item.agent.real)} className={cn('flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring', selected ? 'bg-foreground/10' : 'hover:bg-foreground/5')}>
+          {item.kind === 'group' ? <GroupAvatar group={item.group} /> : <AgentAvatar initials={item.agent.initials} avatar={item.agent.avatar} size="md" ready={Boolean(item.agent.real)} working={busy[item.agent.channelId]} typing={typingIn(item.agent.channelId, item.agent.channelId)} />}
           <span className="min-w-0 flex-1"><span className="flex items-baseline justify-between gap-2"><span className="truncate text-sm font-medium">{item.name}</span><SlideUpFadeSwap className="shrink-0 text-[11px] text-muted-foreground" text={new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} /></span><SlideUpFadeSwap renderText={renderMessagePreview} className="mt-0.5 block text-xs text-muted-foreground" prefix={item.kind === 'dm' && latest?.author === 'user' ? 'You: ' : ''} text={preview} /></span>
         </button></li>;
       })}</ul>
       {(loading || failed || more) && <Button variant="outline" size="sm" className="mt-3 w-full" disabled={loading} onClick={load}>{loading ? 'Loading chats…' : failed ? 'Retry loading chats' : 'Load more chats'}</Button>}
     </div>
     <div className="flex shrink-0 items-center gap-2.5 px-4 py-3"><span aria-hidden="true" className="flex size-7 items-center justify-center rounded-full bg-foreground/10 text-[11px]">YO</span><span className="text-sm font-medium">Your account</span></div>
-  </aside>;
+  </aside></ContextMenu.Trigger>
+    <ContextMenu.Portal><ContextMenu.Content className="context-menu-content z-50 min-w-48 rounded-lg border border-border bg-background p-1 shadow-lg" onCloseAutoFocus={event => { if (editor) event.preventDefault(); }}>
+      <ContextMenu.Item onSelect={() => setEditor({})} className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted"><span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center text-lg leading-none text-muted-foreground">+</span>Create group chat</ContextMenu.Item>
+      {context && <ContextMenu.Item onSelect={() => context.kind === 'group' ? onGroup(context.group) : onAgent(context.agent.id, context.agent.real)} className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" className="size-4 shrink-0"><path d="M4 5h16v12H8l-4 3V5z" /></svg>Open chat</ContextMenu.Item>}
+      {context?.kind === 'group' && <ContextMenu.Item onSelect={() => setEditor({ group: context.group })} className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="size-4 shrink-0"><path d="m15 5 4 4M5 15 16 4a2.8 2.8 0 0 1 4 4L9 19l-5 1z" strokeLinecap="round" strokeLinejoin="round" /></svg>Edit group chat</ContextMenu.Item>}
+      {context?.kind === 'dm' && <ContextMenu.Item onSelect={() => onViewAgent(context.agent.id, context.agent.real)} className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" className="size-4 shrink-0"><circle cx="12" cy="8" r="3" /><path d="M5 20v-2a7 7 0 0 1 14 0v2" /></svg>View in Agents</ContextMenu.Item>}
+    </ContextMenu.Content></ContextMenu.Portal>
+  </ContextMenu.Root>
+  {editor && <GroupEditor group={editor.group} open onOpenChange={open => { if (!open) { setEditor(null); requestAnimationFrame(() => { if (returnFocus.current?.isConnected && returnFocus.current.getClientRects().length) returnFocus.current.focus(); else panelRef.current?.focus(); }); } }} onSaved={onGroup} />}</>;
 }

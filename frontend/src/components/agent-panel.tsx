@@ -48,7 +48,7 @@ export function AgentPanel({ children, className, agents, onCreated, onDelete, o
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content
-            className="z-50 min-w-48 rounded-lg border border-border bg-background p-1 shadow-lg"
+            className="context-menu-content z-50 min-w-48 rounded-lg border border-border bg-background p-1 shadow-lg"
             onCloseAutoFocus={event => { if (dialogOpen) event.preventDefault(); }}
           >
             <ContextMenu.Item onSelect={() => { setDeletingAgent(null); setEditingAgent(null); setDialogOpen(true); }} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted">

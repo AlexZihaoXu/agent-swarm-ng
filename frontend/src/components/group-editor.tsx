@@ -8,8 +8,10 @@ import { defaultAvatar } from '@/lib/agent-avatar';
 import type { GroupChat } from '@/use-groups';
 
 // Kibo dialog-standard-1 and checkbox-standard-8: retain the dialog and labelled list composition.
-export function GroupEditor({ group, children, onSaved }: { group?: GroupChat; children: ReactNode; onSaved?: (group: GroupChat) => void }) {
-  const [open, setOpen] = useState(false);
+export function GroupEditor({ group, children, onSaved, open: controlledOpen, onOpenChange }: { group?: GroupChat; children?: ReactNode; onSaved?: (group: GroupChat) => void; open?: boolean; onOpenChange?: (open: boolean) => void }) {
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = controlledOpen ?? ownOpen;
+  const setOpen = (value: boolean) => controlledOpen === undefined ? setOwnOpen(value) : onOpenChange?.(value);
   const [name, setName] = useState(group?.name ?? '');
   const [selected, setSelected] = useState(new Set(group?.members.map(member => member.id) ?? []));
   const [search, setSearch] = useState('');
@@ -42,7 +44,7 @@ export function GroupEditor({ group, children, onSaved }: { group?: GroupChat; c
     if (value) { setName(group?.name ?? ''); setSelected(new Set(group?.members.map(member => member.id) ?? [])); setError(''); setSearch(''); }
     setOpen(value);
   }}>
-    <Dialog.Trigger asChild>{children}</Dialog.Trigger>
+    {children && <Dialog.Trigger asChild>{children}</Dialog.Trigger>}
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
       <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl">

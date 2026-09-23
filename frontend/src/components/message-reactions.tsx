@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, type ReactElement } from 'react';
+import * as ContextMenu from '@radix-ui/react-context-menu';
+import * as Popover from '@radix-ui/react-popover';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import type { paths } from '@/api/schema';
 import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/select';
+import { EmojiSearch } from '@/components/emoji-search';
 import { cn } from '@/lib/utils';
 import { reactionChoices as choices, recentReactionsKey, parseRecentReactions, rememberReaction, type ReactionEmoji as Emoji } from '@/lib/recent-reactions';
 
@@ -12,7 +14,10 @@ function savedRecents() {
   try { return parseRecentReactions(localStorage.getItem(recentReactionsKey)); } catch { return []; }
 }
 function AddReactionIcon() {
-  return <svg aria-hidden="true" viewBox="0 0 24 24" className="size-6" fill="currentColor"><circle cx="11" cy="13" r="9" /><g fill="#232428"><circle cx="7.5" cy="11.5" r="1.2" /><circle cx="14.5" cy="11.5" r="1.2" /><circle cx="19" cy="5" r="5" /></g><path d="M7.5 15.5q3.5 4 7 0" fill="none" stroke="#232428" strokeWidth="1.8" strokeLinecap="round" /><path d="M19 2v6m-3-3h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>;
+  return <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="10" cy="13" r="7" /><path d="M7.5 15.5q2.5 2.5 5 0M7.5 11h.01M12.5 11h.01M19 3v6m-3-3h6" /></svg>;
+}
+function ReplyIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m9 17-5-5 5-5M4 12h10a6 6 0 0 1 6 6" /></svg>;
 }
 export function useMessageReactions(channelId: string | undefined, ids: string[]) {
   return useQuery<ReactionMap>({ queryKey: ['reactions', channelId, ids.join(',')], enabled: Boolean(channelId && ids.length), placeholderData: previous => previous,
@@ -30,10 +35,12 @@ export function useMessageReactions(channelId: string | undefined, ids: string[]
 export function ReactionLoadError({ failed, retry }: { failed: boolean; retry: () => void }) {
   return failed ? <p role="alert" className="px-3 py-2 text-xs text-muted-foreground">Could not load reactions. <Button type="button" size="sm" variant="outline" onClick={retry}>Retry reactions</Button></p> : null;
 }
-// Kibo contextual button group + existing picker, styled to the operator's Discord reference.
-export function MessageReactions({ channelId, messageId, reactions = [] }: { channelId: string; messageId: string; reactions?: ReactionMap[string] }) {
+// Kibo context-menu-standard-7: recent emoji shortcuts and an accessible submenu on the message content.
+export function MessageReactions({ channelId, messageId, reactions = [], children }: { channelId: string; messageId: string; reactions?: ReactionMap[string]; children: ReactElement }) {
   const client = useQueryClient();
   const [pending, setPending] = useState(false), [error, setError] = useState('');
+  const [mobileChoices, setMobileChoices] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false), [pickerOpen, setPickerOpen] = useState(false);
   const recent = useQuery<Emoji[]>({ queryKey: ['reaction-recents'], queryFn: savedRecents, initialData: savedRecents, staleTime: Infinity });
   const change = async (emoji: Emoji) => {
     if (pending) return;
@@ -53,19 +60,37 @@ export function MessageReactions({ channelId, messageId, reactions = [] }: { cha
     finally { setPending(false); }
   };
   return <>
-    {reactions.length > 0 && <div aria-label="Message reactions" className="mt-1 flex flex-wrap gap-1">{reactions.map(reaction => <Button key={reaction.emoji} type="button" size="sm" variant="outline" aria-pressed={reaction.mine} aria-label={`${choices.find(item => item.value === reaction.emoji)?.label ?? reaction.emoji}: ${reaction.count} reaction${reaction.count === 1 ? '' : 's'}`} disabled={pending} onClick={() => void change(reaction.emoji as Emoji)} className={cn('h-6 gap-1 rounded-md px-1.5 text-xs', reaction.mine && 'border-primary/50 bg-primary/10')}><span aria-hidden="true">{reaction.emoji}</span><span>{reaction.count}</span></Button>)}</div>}
-    <div role="group" aria-label="Reaction actions" className="pointer-events-none absolute -top-9 right-1 z-20 flex items-center rounded-lg border border-foreground/10 bg-[#232428] p-1 opacity-0 shadow-md transition-opacity motion-reduce:transition-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 [&:has([data-state=open])]:pointer-events-auto [&:has([data-state=open])]:opacity-100">
-      {recent.data.map(emoji => {
-        const label = choices.find(choice => choice.value === emoji)!.label;
-        const mine = reactions.some(reaction => reaction.emoji === emoji && reaction.mine);
-        return <button key={emoji} type="button" aria-disabled={pending} aria-label={`React with ${label}`} aria-pressed={mine} title={mine ? `Remove ${label} reaction` : label} onClick={() => void change(emoji)} className="flex size-9 items-center justify-center rounded-md text-2xl leading-none outline-none [&:not([aria-disabled=true]):hover]:bg-white/10 focus-visible:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-40"><span aria-hidden="true">{emoji}</span></button>;
-      })}
-      {recent.data.length > 0 && <span aria-hidden="true" className="mx-1 h-6 w-px bg-foreground/10" />}
-      <div className="group/picker relative size-9">
-        <Select id={`reaction-${messageId}`} value="" ariaLabel="Add Reaction" triggerContent={<AddReactionIcon />} disabled={pending} onValueChange={value => void change(value as Emoji)} options={choices.map(choice => ({ ...choice, icon: <span>{choice.value}</span> }))} triggerClassName="!size-9 !justify-center !rounded-md !border-0 !bg-transparent !p-0 !text-muted-foreground enabled:hover:!bg-white/10 enabled:hover:!text-foreground focus-visible:!bg-white/10" />
-        <span aria-hidden="true" className="pointer-events-none absolute bottom-full right-0 mb-3 whitespace-nowrap rounded-lg border border-foreground/10 bg-[#232428] px-3 py-2 text-sm font-semibold text-foreground opacity-0 shadow-lg transition-opacity group-hover/picker:opacity-100 group-focus-within/picker:opacity-100">Add Reaction<span className="absolute -bottom-1 right-3 size-2 rotate-45 border-b border-r border-foreground/10 bg-[#232428]" /></span>
-      </div>
-    </div>
+    <ContextMenu.Root open={menuOpen} onOpenChange={open => { setMenuOpen(open); if (!open) setMobileChoices(false); }}>
+      <ContextMenu.Trigger asChild>{children}</ContextMenu.Trigger>
+      <ContextMenu.Portal><ContextMenu.Content aria-label="Message actions" onCloseAutoFocus={event => { if (pickerOpen) event.preventDefault(); }} className="context-menu-content z-50 min-w-52 rounded-lg border border-border bg-background p-1 shadow-lg">
+        {recent.data.length > 0 && <><div role="group" aria-label="Recent reactions" className="flex gap-0.5 px-1 py-1">
+          {recent.data.map(emoji => {
+            const label = choices.find(choice => choice.value === emoji)?.label ?? emoji;
+            const mine = reactions.some(reaction => reaction.emoji === emoji && reaction.mine);
+            return <ContextMenu.Item key={emoji} textValue={label} aria-label={mine ? `Remove ${label} reaction` : `React with ${label}`} disabled={pending} onSelect={() => void change(emoji)} className="flex size-9 cursor-pointer items-center justify-center rounded-md text-2xl leading-none outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40">{emoji}</ContextMenu.Item>;
+          })}
+        </div><ContextMenu.Separator className="my-1 h-px bg-border" /></>}
+        <ContextMenu.Item disabled={pending} aria-expanded={mobileChoices} onSelect={event => { event.preventDefault(); setMobileChoices(open => !open); }} className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40 sm:hidden">
+          <AddReactionIcon />Add reaction<span aria-hidden="true" className="ml-auto text-muted-foreground">›</span>
+        </ContextMenu.Item>
+        {mobileChoices && <div className="border-t border-border sm:hidden"><EmojiSearch compact onSelect={emoji => { setMenuOpen(false); void change(emoji); }} /></div>}
+        <ContextMenu.Sub>
+          <ContextMenu.SubTrigger disabled={pending} className="hidden w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm outline-none data-[highlighted]:bg-muted data-[state=open]:bg-muted data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40 sm:flex">
+            <AddReactionIcon />Add reaction<span aria-hidden="true" className="ml-auto text-muted-foreground">›</span>
+          </ContextMenu.SubTrigger>
+          <ContextMenu.Portal><ContextMenu.SubContent sideOffset={4} className="context-menu-content z-[60] rounded-lg border border-border bg-background shadow-lg">
+            <EmojiSearch onSelect={emoji => { setMenuOpen(false); void change(emoji); }} />
+          </ContextMenu.SubContent></ContextMenu.Portal>
+        </ContextMenu.Sub>
+        <ContextMenu.Item disabled className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground opacity-40 outline-none data-[disabled]:cursor-not-allowed"><ReplyIcon />Reply</ContextMenu.Item>
+      </ContextMenu.Content></ContextMenu.Portal>
+    </ContextMenu.Root>
+    {reactions.length > 0 && <div aria-label="Message reactions" className="ml-2 mt-1 flex flex-wrap items-center gap-1">{reactions.map(reaction => <Button key={reaction.emoji} type="button" size="sm" variant="outline" aria-pressed={reaction.mine} aria-label={`${choices.find(item => item.value === reaction.emoji)?.label ?? reaction.emoji}: ${reaction.count} reaction${reaction.count === 1 ? '' : 's'}`} disabled={pending} onClick={() => void change(reaction.emoji as Emoji)} className={cn('h-7 gap-1 rounded-md px-1.5 text-xs', reaction.mine && 'border-primary/50 bg-primary/10')}><span aria-hidden="true" className="text-base leading-none">{reaction.emoji}</span><span>{reaction.count}</span></Button>)}
+      <Popover.Root open={pickerOpen} onOpenChange={setPickerOpen}>
+        <Popover.Trigger asChild><button type="button" aria-label="Add reaction" disabled={pending} className="flex size-7 cursor-pointer items-center justify-center rounded-md border border-border bg-background text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"><AddReactionIcon /></button></Popover.Trigger>
+        <Popover.Portal><Popover.Content align="start" sideOffset={4} collisionPadding={12} className="z-[60] rounded-lg border border-border bg-background shadow-lg origin-[var(--radix-popover-content-transform-origin)] motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]"><EmojiSearch onSelect={emoji => { setPickerOpen(false); void change(emoji); }} /></Popover.Content></Popover.Portal>
+      </Popover.Root>
+    </div>}
     {error && <p role="alert" className="mt-1 text-xs text-red-400">{error}</p>}
   </>;
 }

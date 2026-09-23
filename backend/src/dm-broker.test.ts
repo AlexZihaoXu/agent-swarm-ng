@@ -10,7 +10,7 @@ import { DmBroker } from './dm-broker';
 import { buildApp } from './app';
 
 type Body = { model: string; tools?: { function: { name: string } }[]; messages: { role: string; content: unknown }[] };
-async function fixture(loop = false, gate?: Promise<void>) {
+async function fixture(loop = false, gate?: Promise<void>, reactionGate?: Promise<void>) {
   const captured: Body[] = []; let peerTarget = '';
   const server = createServer(async (request, response) => {
     const chunks = []; for await (const chunk of request) chunks.push(chunk);
@@ -18,16 +18,19 @@ async function fixture(loop = false, gate?: Promise<void>) {
     const system = String(body.messages.find(message => message.role === 'system')?.content);
     const lastInput = JSON.stringify(body.messages.filter(message => message.role === 'user').at(-1));
     const triage = body.tools?.some(tool => tool.function.name === 'triage_decision');
+    const reactionTriage = body.tools?.some(tool => tool.function.name === 'reaction_decision');
+    const reactionInput = !reactionTriage && lastInput.includes('[Human emoji reaction event;');
     const dm = !triage && lastInput.includes('[Agent thread; reply channel:');
     const group = !triage && lastInput.includes('[Group chat; reply channel:');
     if (dm || group) await gate;
+    if (reactionTriage) await reactionGate;
     if (response.destroyed) return;
     const incoming = JSON.stringify(body.messages.filter(message => message.role === 'user').at(-1));
     const hasTool = body.messages.some(message => message.role === 'tool');
-    const publish = group ? !hasTool && lastInput.includes('Source is the human owner') : !dm || !hasTool && (loop || incoming.includes('question'));
-    const channelId = dm || group ? lastInput.match(/reply channel: ([^.]+)\./)?.[1] : system.match(/(?:current channel is|channel is) ([^.]+)\./)?.[1];
-    const name = triage ? 'triage_decision' : !dm && incoming.includes('ask-peer') && !hasTool ? 'send_dm' : 'send_message';
-    const args = triage ? { action: 'queue', reason: 'Finish the current input first.' } : name === 'send_dm' ? { recipientId: peerTarget, text: 'question' } : { channelId, text: group ? `Group answer by ${system.startsWith('You are A.') ? 'A' : 'B'}` : dm ? 'answer' : 'Human reply', final: true };
+    const publish = reactionTriage || reactionInput ? !hasTool : group ? !hasTool && lastInput.includes('Source is the human owner') : !dm || !hasTool && (loop || incoming.includes('question'));
+    const channelId = dm || group || reactionInput ? lastInput.match(/reply channel: ([^.]+)\./)?.[1] : system.match(/(?:current channel is|channel is) ([^.]+)\./)?.[1];
+    const name = reactionTriage ? 'reaction_decision' : triage ? 'triage_decision' : reactionInput ? 'react_to_message' : !dm && incoming.includes('ask-peer') && !hasTool ? 'send_dm' : 'send_message';
+    const args = reactionTriage ? { action: lastInput.includes('❓') ? 'engage' : 'ignore', reason: 'Reaction assessed.' } : triage ? { action: 'queue', reason: 'Finish the current input first.' } : name === 'react_to_message' ? { channelId, messageId: lastInput.match(/message ([\w-]+) in/)?.[1], emoji: '👍', active: true } : name === 'send_dm' ? { recipientId: peerTarget, text: 'question' } : { channelId, text: group ? `Group answer by ${system.startsWith('You are A.') ? 'A' : 'B'}` : dm ? 'answer' : 'Human reply', final: true };
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
     const chunk = (delta: object, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: 'test', object: 'chat.completion.chunk', created: 1, model: body.model, choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     chunk({ role: 'assistant' });
@@ -107,6 +110,104 @@ it('exposes operator group creation, membership editing and human publication wi
     await vi.waitFor(async () => expect((await app.inject(`/api/groups/${group.id}/messages`)).json().messages).toHaveLength(2), { timeout: 15000 });
     expect(await f.database.client.dmGrant.count()).toBe(0);
   } finally { await app.close(); await f.close(false); }
+}, 20000);
+
+it('triages human reactions in a decision-only branch and only engages the normal agent when warranted', async () => {
+  const f = await fixture();
+  try {
+    const message = await f.database.appendMessage(f.a.channels[0].id, 'assistant', 'A finished result');
+    await f.broker.reactions.set(f.a.channels[0].id, message.id, '❤️', true);
+    await f.broker.notifyHumanReaction(f.a.channels[0].id, message.id, '❤️');
+    await f.broker.settled();
+    const decisions = () => f.captured.filter(body => body.tools?.some(tool => tool.function.name === 'reaction_decision'));
+    expect(decisions()).toHaveLength(1);
+    expect(decisions()[0].tools?.map(tool => tool.function.name)).toEqual(['reaction_decision']);
+    expect(JSON.stringify(decisions()[0])).toContain('A finished result');
+    expect(f.runs.snapshot()).toHaveLength(0);
+    expect(await f.database.client.message.count()).toBe(1);
+
+    await f.broker.reactions.set(f.a.channels[0].id, message.id, '❓', true);
+    await f.broker.notifyHumanReaction(f.a.channels[0].id, message.id, '❓');
+    await f.broker.settled(); await f.idle();
+    expect(decisions()).toHaveLength(2);
+    const action = f.captured.find(body => body.tools?.some(tool => tool.function.name === 'react_to_message') && JSON.stringify(body.messages).includes('[Human emoji reaction event;'));
+    expect(action).toBeDefined();
+    expect(action!.tools?.map(tool => tool.function.name)).toEqual(expect.arrayContaining(['search_emojis', 'read_reactions', 'react_to_message']));
+    expect(String(action!.messages[0]?.content)).toContain('low-stakes, non-task human message');
+    expect(String(action!.messages[0]?.content)).toContain('actionable request');
+    expect((await f.broker.reactions.read(f.a.channels[0].id, [message.id], f.a.id))[message.id]).toEqual(expect.arrayContaining([{ emoji: '👍', count: 1, mine: true }]));
+    expect(await f.database.client.message.count()).toBe(1); // Reaction events and internal output are never chat publications.
+  } finally { await f.close(); }
+}, 30000);
+
+it('runs the reaction decision branch while the agent has a busy main execution, then queues action', async () => {
+  const f = await fixture(); let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  try {
+    const message = await f.database.appendMessage(f.a.channels[0].id, 'assistant', 'Needs review');
+    const main = f.runs.start({ agentId: f.a.id, channelId: f.a.channels[0].id, clientMessageId: crypto.randomUUID() }, async () => { await gate; });
+    await f.broker.reactions.set(f.a.channels[0].id, message.id, '❓', true);
+    await f.broker.notifyHumanReaction(f.a.channels[0].id, message.id, '❓');
+    await vi.waitFor(() => expect(f.captured.some(body => body.tools?.some(tool => tool.function.name === 'reaction_decision'))).toBe(true), { timeout: 10000 });
+    await f.broker.settled();
+    expect(f.runs.snapshot().some(run => run.runId !== main.runId && run.queued)).toBe(true);
+    release(); await main.finished; await f.idle();
+    expect(f.captured.some(body => body.tools?.some(tool => tool.function.name === 'react_to_message'))).toBe(true);
+  } finally { release(); await f.close(); }
+}, 20000);
+
+it('bounds reaction decision fan-in per agent while preserving the saved emoji', async () => {
+  let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+  const f = await fixture(false, undefined, gate);
+  try {
+    for (let index = 0; index < 5; index++) {
+      const message = await f.database.appendMessage(f.a.channels[0].id, 'assistant', `Result ${index}`);
+      await f.broker.reactions.set(f.a.channels[0].id, message.id, '❤️', true);
+      await f.broker.notifyHumanReaction(f.a.channels[0].id, message.id, '❤️');
+    }
+    expect(await f.database.client.messageReaction.count()).toBe(5);
+    release(); await f.broker.settled();
+    expect(f.captured.filter(body => body.tools?.some(tool => tool.function.name === 'reaction_decision'))).toHaveLength(4);
+    expect(await f.database.client.message.count()).toBe(5);
+  } finally { release(); await f.close(); }
+}, 20000);
+
+it('commits new human emoji before admission and does not replay duplicate or removed reactions', async () => {
+  const f = await fixture();
+  const app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+  try {
+    const message = await f.database.appendMessage(f.a.channels[0].id, 'assistant', 'Finished');
+    const path = `/api/chats/${f.a.channels[0].id}/messages/${message.id}/reaction`;
+    const add = () => app.inject({ method: 'PUT', url: path, payload: { emoji: '🫶', active: true } });
+    expect((await add()).statusCode).toBe(200);
+    expect((await add()).statusCode).toBe(200);
+    await vi.waitFor(() => expect(f.captured.filter(body => body.tools?.some(tool => tool.function.name === 'reaction_decision'))).toHaveLength(1), { timeout: 10000 });
+    expect((await app.inject({ method: 'PUT', url: path, payload: { emoji: '🫶', active: false } })).statusCode).toBe(200);
+    expect(f.captured.filter(body => body.tools?.some(tool => tool.function.name === 'reaction_decision'))).toHaveLength(1);
+    expect((await f.database.client.messageReaction.findMany())).toEqual([]);
+    expect(await f.database.client.message.count()).toBe(1);
+  } finally { await app.close(); await f.close(false); }
+}, 20000);
+
+it('notifies only the group message author and skips removed members or human-authored group messages', async () => {
+  const f = await fixture();
+  try {
+    const group = await f.broker.groups.create('Team', [f.a.id, f.b.id]);
+    const human = await f.broker.groups.publishHuman(group.id, 'Question', crypto.randomUUID());
+    await f.broker.notifyHumanReaction(`group:${group.id}`, human.message.id, '❤️');
+    expect(f.captured).toHaveLength(0);
+    const chain = crypto.randomUUID(); await f.broker.store.beginChain(f.a.id, chain);
+    const written = await f.broker.groups.publishAgent(group.id, f.a.id, 'A result', chain, 'author');
+    await f.broker.reactions.set(`group:${group.id}`, written.message.id, '❤️', true);
+    await f.broker.notifyHumanReaction(`group:${group.id}`, written.message.id, '❤️');
+    await f.broker.settled();
+    expect(f.captured.filter(body => body.tools?.some(tool => tool.function.name === 'reaction_decision'))).toHaveLength(1);
+    expect(JSON.stringify(f.captured[0].messages)).toContain('A result');
+    await f.broker.groups.update(group.id, 'Team', [f.b.id]);
+    await f.broker.notifyHumanReaction(`group:${group.id}`, written.message.id, '❓');
+    await f.broker.settled();
+    expect(f.captured).toHaveLength(1);
+  } finally { await f.close(); }
 }, 20000);
 
 it('delivers source-labelled agent threads through the normal inbox and queues unrelated busy work', async () => {

@@ -3942,56 +3942,9 @@
                 ],
                 "properties": {
                   "emoji": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "enum": [
-                          "👍"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "❤️"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "😂"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "🎉"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "👀"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "✅"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "🤔"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "🔥"
-                        ]
-                      }
-                    ]
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "type": "string"
                   },
                   "active": {
                     "type": "boolean"

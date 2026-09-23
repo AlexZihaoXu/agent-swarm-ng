@@ -3,6 +3,7 @@ import { CodexConnection } from '@/components/codex-connection';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { randomUuid } from '@/lib/random-uuid';
 
 type TestResult =
   | { state: 'idle' | 'testing' | 'saved' }
@@ -158,7 +159,7 @@ export function Settings() {
             <h3 id="endpoints-title" className="text-sm font-semibold">API endpoints</h3>
             <p className="mt-1 text-xs text-muted-foreground">Connect an OpenAI-compatible provider or local server.</p>
           </div>
-          <Button variant="outline" size="sm" disabled={loading} onClick={() => setEndpoints(current => [...current, { id: crypto.randomUUID(), name: '', baseUrl: '', hasApiKey: false, saved: false }])}>
+          <Button variant="outline" size="sm" disabled={loading} onClick={() => setEndpoints(current => [...current, { id: randomUuid(), name: '', baseUrl: '', hasApiKey: false, saved: false }])}>
             <span aria-hidden="true" className="mr-2 text-lg leading-none">+</span>Add endpoint
           </Button>
         </div>

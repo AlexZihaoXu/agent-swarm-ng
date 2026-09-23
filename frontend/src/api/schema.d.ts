@@ -1544,7 +1544,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    emoji: "👍" | "❤️" | "😂" | "🎉" | "👀" | "✅" | "🤔" | "🔥";
+                    emoji: string;
                     active: boolean;
                 };
             };
