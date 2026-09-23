@@ -127,7 +127,7 @@ export function App() {
 
   return (
     <main className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background">
-      <h1 className="sr-only">Agent Swarm</h1>
+      <h1 className="sr-only">Agent Swarm NG</h1>
       <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
         <header className="relative flex h-14 shrink-0 items-center justify-center border-b border-border bg-sidebar px-4">
           {/* Basic Tabs composition: Kibo tabs/standard/tabs-standard-1. */}

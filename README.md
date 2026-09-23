@@ -1,4 +1,6 @@
-# Agent Swarm v2
+# Agent Swarm NG
+
+**NG means Next Gen.** Repository: [AlexZihaoXu/agent-swarm-ng](https://github.com/AlexZihaoXu/agent-swarm-ng).
 
 ![Status: Scaffold](https://img.shields.io/badge/status-scaffold-yellow)
 ![Language: TypeScript](https://img.shields.io/badge/language-TypeScript-3178C6?logo=typescript&logoColor=white)
@@ -48,7 +50,7 @@ Prisma + SQLite stores agents, channels, and published chat history. This single
 
 ## Project structure
 
-Core layout:
+Core layout (the current local checkout intentionally remains named `agent-swarm-v2`; no folder/session paths were renamed):
 
 ```text
 agent-swarm-v2/
@@ -106,6 +108,8 @@ Generated TypeScript types do not provide client-side runtime validation; add th
 ## Deployment
 
 Target x86_64 Linux for deployment. Use Caddy for production HTTPS and reverse proxying to support the PWA and future push notifications; keep proxy configuration limited to these needs. Development uses localhost.
+
+The Compose project identifier is `agent-swarm-ng`. This rename does not deploy anything, migrate data, or rename existing containers/volumes. Older `agent-swarm-v2` Compose volumes remain separate; explicitly plan data migration or volume reuse before switching an existing deployment.
 
 Two modes, using Compose overrides rather than profiles:
 

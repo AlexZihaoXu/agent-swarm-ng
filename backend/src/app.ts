@@ -12,7 +12,7 @@ import { ActivityEntrySchema } from './agent-activity';
 export async function buildApp({ fetcher, endpointStore, database, codex = new CodexProvider() }: { fetcher?: typeof fetch; endpointStore?: EndpointStore; database?: PlatformStore; codex?: CodexProvider } = {}) {
   const app = Fastify({ logger: true });
   await app.register(swagger, {
-    openapi: { info: { title: 'Agent Swarm API', version: '0.1.0' }, components: { schemas: { AgentActivityEntry: ActivityEntrySchema } } },
+    openapi: { info: { title: 'Agent Swarm NG API', version: '0.1.0' }, components: { schemas: { AgentActivityEntry: ActivityEntrySchema } } },
   });
 
   app.get('/api/health', {

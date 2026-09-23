@@ -1,4 +1,4 @@
-name: agent-swarm-v2
+name: agent-swarm-ng
 services:
   backend:
     build:

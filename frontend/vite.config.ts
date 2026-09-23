@@ -8,8 +8,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), VitePWA({
     registerType: 'prompt',
     manifest: {
-      name: 'Agent Swarm v2',
-      short_name: 'Agent Swarm',
+      name: 'Agent Swarm NG',
+      short_name: 'Agent Swarm NG',
       start_url: '/',
       display: 'standalone',
       theme_color: '#151515',

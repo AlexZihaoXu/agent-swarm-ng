@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "agent-swarm-v2",
+      "name": "agent-swarm-ng",
       "devDependencies": {
         "typescript": "^5.9.3",
         "vitest": "^3.2.4",
