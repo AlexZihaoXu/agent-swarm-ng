@@ -64,6 +64,17 @@ RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
+# Managed computers add on-demand GNOME/PipeWire previews and a sudo-capable
+# workspace. Keep this after the desktop/tool layers for incremental rebuilds.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        sudo iproute2 gstreamer1.0-tools gstreamer1.0-pipewire gstreamer1.0-plugins-good \
+    && printf 'ubuntu ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/ubuntu \
+    && chmod 0440 /etc/sudoers.d/ubuntu \
+    && rm -rf /var/lib/apt/lists/*
+COPY runtime/ /opt/swarm/
+RUN chmod 0755 /opt/swarm/*.sh && chmod 0644 /opt/swarm/*.py
+
 # Docker initializes fresh named volumes from these image directories.
 # Do not declare anonymous VOLUMEs or overwrite existing user files at startup.
 RUN chown ubuntu:ubuntu /workspace

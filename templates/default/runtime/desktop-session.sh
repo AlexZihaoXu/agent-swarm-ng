@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+runtime=${XDG_RUNTIME_DIR:?}
+pipewire > "$runtime/pipewire.log" 2>&1 &
+pipewire_pid=$!
+wireplumber > "$runtime/wireplumber.log" 2>&1 &
+wireplumber_pid=$!
+gnome-shell --wayland --headless --no-x11 --virtual-monitor 1920x1080 --mode=ubuntu > "$runtime/gnome-shell.log" 2>&1 &
+shell_pid=$!
+cast_pid=''
+cleanup() {
+    [ -z "$cast_pid" ] || kill "$cast_pid" 2>/dev/null || true
+    kill "$shell_pid" "$wireplumber_pid" "$pipewire_pid" 2>/dev/null || true
+    wait "$shell_pid" "$wireplumber_pid" "$pipewire_pid" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+attempt=0
+until [ -S "$runtime/pipewire-0" ] && gdbus call --session --timeout 2 \
+    --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig \
+    --method org.gnome.Mutter.DisplayConfig.GetCurrentState 2>/dev/null | grep -q '1920, 1080'; do
+    kill -0 "$shell_pid" 2>/dev/null || { echo 'GNOME exited before its monitor became ready' >&2; exit 1; }
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 60 ] || { echo 'GNOME monitor did not become ready' >&2; exit 1; }
+    sleep 0.5
+done
+# D-Bus-activated GNOME applications must inherit the virtual Wayland display.
+export WAYLAND_DISPLAY=wayland-0
+dbus-update-activation-environment WAYLAND_DISPLAY XDG_RUNTIME_DIR XDG_CURRENT_DESKTOP >/dev/null
+while kill -0 "$shell_pid" 2>/dev/null; do
+    /usr/bin/python3 /opt/swarm/screencast.py > "$runtime/screencast.log" 2>&1 &
+    cast_pid=$!
+    wait "$cast_pid" || true
+    cast_pid=''
+    rm -f "$runtime/screencast-node"
+    kill -0 "$shell_pid" 2>/dev/null || break
+    sleep 1
+done
+wait "$shell_pid" || exit 1
