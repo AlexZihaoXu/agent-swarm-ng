@@ -54,6 +54,6 @@ python docs/references/kibo/tools/test_snapshot.py
 python docs/references/kibo/tools/test_reference.py
 ```
 
-Refresh fetches the **same immutable pin** into the dedicated project `.cache/`, verifies the object, copies Git blobs without checkout/execution, and regenerates `upstream/`, `catalog/`, and `metadata/`. It preserves curated guides. A cache with an unexpected origin is rejected, not repointed. Source bytes and indexes reproduce; only manifest `generatedAt` changes. Changing the pin requires an explicit update and re-review of guides, not a routine refresh.
+Refresh fetches the **same immutable pin** into the dedicated project `.scratch/`, verifies the object, copies Git blobs without checkout/execution, and regenerates `upstream/`, `catalog/`, and `metadata/`. It preserves curated guides. A cache with an unexpected origin is rejected, not repointed. Source bytes and indexes reproduce; only manifest `generatedAt` changes. Changing the pin requires an explicit update and re-review of guides, not a routine refresh.
 
 `--check` verifies missing/changed/extra source, hashes/sizes, unsafe symlinks, and regenerated indexes without network access. The focused reference tests check local navigation, guide assignments, component/example and block/installer coverage, and the Notifications Button anchor. Upstream-internal links and remote websites are not rewritten or link-tested; exact copies remain immutable.

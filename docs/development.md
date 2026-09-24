@@ -28,16 +28,16 @@ API generation does not require a running server. Commit both `backend/openapi.j
 For browser tests (Git Bash/Linux), read the [Windows launch precautions](#windows-browser-launch-safety) first when running on the Windows host:
 
 ```sh
-export PLAYWRIGHT_BROWSERS_PATH="$PWD/.cache/ms-playwright"
+export PLAYWRIGHT_BROWSERS_PATH="$PWD/.scratch/ms-playwright"
 (cd frontend && bun x playwright install chromium)
 bun run test:e2e
 ```
 
-Playwright starts its own backend and frontend; stop existing instances on ports 3000 and 5173 first. Browser tests cover rendering, transitions, saved-history restoration/pagination, and Settings with mocked API/provider and ChatGPT device-login results. PWA installation, offline caching, and updates still need production-browser validation.
+Disposable development experiments, inspected external checkouts, and test outputs belong under ignored `.scratch/`; persistent app data and credentials stay in `.local/`. Playwright starts its own backend and frontend; stop existing instances on ports 3000 and 5173 first. Browser tests cover rendering, transitions, saved-history restoration/pagination, and Settings with mocked API/provider and ChatGPT device-login results. PWA installation, offline caching, and updates still need production-browser validation.
 
 ### Windows browser launch safety
 
-The owner's security investigation reproduced one Windows failed logon (Event 4625, status `0xC000006A`) from the top-level Chrome process during a single run of `.cache/check-codex-settings.mjs`. The reported cause is Chromium's empty-password account probe through `LogonUser()` at startup, not a website sign-in or an attack. Child processes did not produce additional failed logons in that capture. Treat this as a finding for this Windows host, not a guarantee about every browser/version.
+The owner's security investigation reproduced one Windows failed logon (Event 4625, status `0xC000006A`) from the top-level Chrome process during a one-off Chrome startup check. The reported cause is Chromium's empty-password account probe through `LogonUser()` at startup, not a website sign-in or an attack. Child processes did not produce additional failed logons in that capture. Treat this as a finding for this Windows host, not a guarantee about every browser/version.
 
 The reported local policy locks the account after **10 failed attempts within 10 minutes**. A running desktop session can continue while the account is locked, hiding the problem until the next sign-in.
 
@@ -225,6 +225,6 @@ The persistence test creates its own uniquely named project, verifies files surv
 
 ## Desktop validation status
 
-The image currently idles without starting GNOME. Temporary noVNC preview files under ignored `.cache/` are local experiments, not part of the supported startup path. The compositor test uses a non-root user, software rendering, and D-Bus readiness checks. Mount a fresh `/run` tmpfs: package installation leaves systemd seat directories in the image, which otherwise cause GNOME to expect a running systemd-logind service.
+The image currently idles without starting GNOME. Temporary noVNC preview files under ignored `.scratch/` are local experiments, not part of the supported startup path. The compositor test uses a non-root user, software rendering, and D-Bus readiness checks. Mount a fresh `/run` tmpfs: package installation leaves systemd seat directories in the image, which otherwise cause GNOME to expect a running systemd-logind service.
 
 Desktop resolution is fixed at 1920x1080, independent of browser viewport size. The test does not establish hardware encoding, 120 fps, streaming, or a complete desktop session. Optional-service warnings remain (including calendar, screencast, input-method, and authentication services). Production session startup and the desktop toggle are not implemented.

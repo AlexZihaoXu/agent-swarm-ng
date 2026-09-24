@@ -88,9 +88,9 @@ def title_from_source(source: bytes) -> str | None:
 
 
 def fetch_repository(temp_git: Path) -> None:
-    expected = project_root(reference_root()) / ".cache" / "kibo-reference-fetch" / "git"
+    expected = project_root(reference_root()) / ".scratch" / "kibo-reference-fetch" / "git"
     if temp_git.is_symlink() or (temp_git / ".git").is_symlink() or temp_git.resolve() != expected.absolute():
-        raise RuntimeError("fetch cache must be the project-local .cache/kibo-reference-fetch/git")
+        raise RuntimeError("fetch cache must be the project-local .scratch/kibo-reference-fetch/git")
     # Reinitialize only this dedicated cache. Reuse read-only Git pack files on Windows.
     run_git(["init", "-q", str(temp_git)])
     actual_root = Path(str(run_git(["rev-parse", "--show-toplevel"], temp_git)).strip())
@@ -248,7 +248,7 @@ def publish_directory(staging: Path, destination: Path) -> None:
 def refresh() -> None:
     root = reference_root()
     project = project_root(root)
-    cache = project / ".cache" / "kibo-reference-fetch"
+    cache = project / ".scratch" / "kibo-reference-fetch"
     cache.mkdir(parents=True, exist_ok=True)
     temp_git = cache / "git"
     fetch_repository(temp_git)
@@ -307,7 +307,7 @@ def check() -> None:
         file_path = actual[path]
         if file_path.stat().st_size != item["size"] or sha256_path(file_path) != item["sha256"]:
             problems.append(f"changed source: {path}")
-    cache = project_root(root) / ".cache" / "kibo-reference-check"
+    cache = project_root(root) / ".scratch" / "kibo-reference-check"
     cache.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="kibo-check-", dir=cache) as temp:
         expected_root = Path(temp)

@@ -52,7 +52,7 @@ No speculative reviewer suggestion was adopted as an application requirement. Gu
 - Expanded compact Button ID suffixes for unambiguous lookup and aligned toggle-group/toggle guide assignments with actual recording boundaries, rather than naïve lexical grouping.
 - Removed duplicated Deck API and Rating demo code from guidance in favor of exact source links. Long exact upstream/generated files remain intact. Bounded guide tables are retained because their rows document distinct variants; common lookup and adaptation rules are centralized in the entry guide.
 - Corrected 12 additional out-of-bounds upstream link hints after checking the exact files, including Spinner MDX features and shadcn package dependencies. Removed stale line anchors on evolving non-upstream documentation. Local viewers may still lack source-line anchor support; use an editor.
-- Initial refresh failed on Windows while deleting a read-only Git pack index in the dedicated cache, before any mirror publication. With supervisor approval, the local tool now reuses only the validated project-local Git cache, rejects an unexpected origin, initializes a missing origin, and fetches the same pin. No broad permission change or source edit was used. Check-time temporary directories now also stay under project `.cache/`.
+- Initial refresh failed on Windows while deleting a read-only Git pack index in the dedicated cache, before any mirror publication. With supervisor approval, the local tool now reuses only the validated project-local Git cache, rejects an unexpected origin, initializes a missing origin, and fetches the same pin. No broad permission change or source edit was used. Check-time temporary directories now also stay under project `.scratch/`.
 
 ## Validation evidence
 

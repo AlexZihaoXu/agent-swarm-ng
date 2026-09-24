@@ -29,7 +29,7 @@ class SnapshotToolTests(unittest.TestCase):
         self.assertIsNone(snapshot.title_from_source(b"export const title = makeTitle();"))
 
     def test_fetch_reuses_cache_with_expected_origin(self) -> None:
-        cache = snapshot.project_root(snapshot.reference_root()) / '.cache/kibo-reference-fetch/git'
+        cache = snapshot.project_root(snapshot.reference_root()) / '.scratch/kibo-reference-fetch/git'
         replies = ['', str(cache), 'origin\n', snapshot.SOURCE_URL + '\n', '', snapshot.REVISION, 'commit\n']
         with patch.object(snapshot, 'run_git', side_effect=replies) as git:
             snapshot.fetch_repository(cache)
@@ -37,7 +37,7 @@ class SnapshotToolTests(unittest.TestCase):
         self.assertFalse(any(c.args[0][:2] == ['remote', 'add'] for c in git.call_args_list))
 
     def test_fetch_refuses_unexpected_origin(self) -> None:
-        cache = snapshot.project_root(snapshot.reference_root()) / '.cache/kibo-reference-fetch/git'
+        cache = snapshot.project_root(snapshot.reference_root()) / '.scratch/kibo-reference-fetch/git'
         with patch.object(snapshot, 'run_git', side_effect=['', str(cache), 'origin\n', 'https://unexpected.invalid/repo.git\n']) as git:
             with self.assertRaisesRegex(RuntimeError, 'unexpected origin'):
                 snapshot.fetch_repository(cache)

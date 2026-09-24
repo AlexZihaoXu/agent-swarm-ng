@@ -27,7 +27,7 @@ test('keeps appearance and permission drafts across fixed tabs, drill-down, tran
   await dialog.getByRole('tab', { name: 'Avatar', exact: true }).click();
   await expect(dialog.getByRole('button', { name: 'Preview Bean', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await dialog.getByRole('tab', { name: 'Settings', exact: true }).click();
-  await dialog.screenshot({ path: '../.cache/agent-communication-settings-desktop.png', animations: 'disabled' });
+  await dialog.screenshot({ path: '../.scratch/agent-communication-settings-desktop.png', animations: 'disabled' });
   await dialog.getByRole('button', { name: 'View DM with Morgan' }).click();
   await expect(dialog.getByRole('region', { name: 'Agent DM transcript' })).toContainText('Separate peer result');
   await expect(page.getByRole('list', { name: 'Messages' })).not.toContainText('Separate peer result');
@@ -65,7 +65,7 @@ test('keeps paginated existing grants on mobile, supports search and reduced mot
   await expect(dialog.getByRole('checkbox', { name: 'Saved remote peer' })).toBeChecked();
   expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   const save = (await dialog.getByRole('button', { name: 'Save changes' }).boundingBox())!; expect(save.y + save.height).toBeLessThan(780);
-  await dialog.screenshot({ path: '../.cache/agent-communication-settings-mobile.png', animations: 'disabled' });
+  await dialog.screenshot({ path: '../.scratch/agent-communication-settings-mobile.png', animations: 'disabled' });
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 });
 test('tracks peer work separately from human messages and stops the peer run without chat notifications', async ({ page }) => {
@@ -110,7 +110,7 @@ test('received DMs use decorated chat bubbles, survive refresh, and open the pee
   const bubble = page.getByRole('article', { name: 'Message received from Morgan' });
   await expect(bubble).toHaveCount(1); await expect(bubble).toContainText('The research is ready.');
   expect(await bubble.evaluate(element => getComputedStyle(element).borderRadius)).toBe(await page.locator('[data-message-id]').first().evaluate(element => getComputedStyle(element).borderRadius));
-  await page.screenshot({ path: '../.cache/received-dm-bubble-desktop.png', animations: 'disabled' });
+  await page.screenshot({ path: '../.scratch/received-dm-bubble-desktop.png', animations: 'disabled' });
   await page.reload(); await expect(bubble).toHaveCount(1);
   await bubble.getByRole('button', { name: 'View conversation with Morgan' }).click();
   await expect(page.getByRole('combobox', { name: 'Chat with' })).toHaveText('Morgan');
@@ -124,7 +124,7 @@ test('received DMs use decorated chat bubbles, survive refresh, and open the pee
   await expect(bubble).toHaveCount(2); // Keep the open desktop conversation on resize.
   await expect(page.getByRole('complementary', { name: 'Agents' })).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: '../.cache/received-dm-bubble-mobile.png', animations: 'disabled' });
+  await page.screenshot({ path: '../.scratch/received-dm-bubble-mobile.png', animations: 'disabled' });
 });
 
 
@@ -166,7 +166,7 @@ test('Chat with switches the main history, shows agent avatars, and keeps self l
   await selector.click();
   await expect(page.getByRole('option', { name: 'You', exact: true }).locator('svg[data-avatar-shape]')).toHaveCount(0);
   await expect(page.getByRole('option', { name: 'Morgan', exact: true }).locator('svg[data-avatar-shape]')).toHaveCount(1);
-  await page.screenshot({ path: '../.cache/agent-dm-selector-avatars.png', animations: 'disabled' });
+  await page.screenshot({ path: '../.scratch/agent-dm-selector-avatars.png', animations: 'disabled' });
   await page.getByRole('option', { name: 'Morgan', exact: true }).click();
   await expect(selector.locator('svg[data-avatar-shape]')).toHaveCount(1);
   const header = page.getByRole('region', { name: 'Conversation with Avery', exact: true }).locator('header').first();
@@ -186,12 +186,12 @@ test('Chat with switches the main history, shows agent avatars, and keeps self l
   expect(await remote.locator('..').evaluate(element => getComputedStyle(element).justifyContent)).toBe('flex-end');
   expect(await self.evaluate(element => getComputedStyle(element).color)).toBe('rgb(237, 237, 237)');
   expect(await self.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe(await remote.evaluate(element => getComputedStyle(element).backgroundColor));
-  await page.screenshot({ path: '../.cache/agent-dm-main-view.png', animations: 'disabled' });
+  await page.screenshot({ path: '../.scratch/agent-dm-main-view.png', animations: 'disabled' });
   await page.setViewportSize({ width: 360, height: 780 });
   await expect(page.getByRole('region', { name: 'Agent conversation with Morgan' })).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Agents' })).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: '../.cache/agent-dm-main-view-mobile.png', animations: 'disabled' });
+  await page.screenshot({ path: '../.scratch/agent-dm-main-view-mobile.png', animations: 'disabled' });
   await expect(page.getByRole('button', { name: 'Back to agents' })).toContainText('Avery');
   await expect(selector).toHaveText('Morgan');
   await expect(header.locator('[data-slot=agent-exchange-icon]')).toHaveCount(1);
@@ -231,7 +231,7 @@ test('typing waits for a routed content stream and appears only in that conversa
   await expect(footer).toContainText('Morgan is typing…');
   await expect(footer.locator('.typing-dot')).toHaveCount(6);
   await expect(page.getByRole('form', { name: 'Message composer' })).toHaveCount(0);
-  await page.screenshot({ path: '../.cache/agent-dm-scoped-typing.png' });
+  await page.screenshot({ path: '../.scratch/agent-dm-scoped-typing.png' });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(footer.locator('.typing-dot').first()).toHaveCSS('animation-name', 'none');
   await emit({ type: 'typing', active: false, targets: [] });

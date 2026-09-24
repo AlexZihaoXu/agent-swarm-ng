@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-await mkdir(join(root, '.cache'), { recursive: true });
-const folder = await mkdtemp(join(root, '.cache/sqlite-tests-'));
+await mkdir(join(root, '.scratch'), { recursive: true });
+const folder = await mkdtemp(join(root, '.scratch/sqlite-tests-'));
 try {
   const args = process.argv.slice(2).filter(arg => arg !== '--');
   const child = Bun.spawn(['bun', 'run', 'vitest', 'run', ...args], {

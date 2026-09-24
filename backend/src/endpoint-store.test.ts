@@ -8,8 +8,8 @@ const directories: string[] = [];
 afterEach(async () => { await Promise.all(directories.splice(0).map(path => rm(path, { recursive: true, force: true }))); });
 
 async function storePath() {
-  await mkdir('.cache', { recursive: true });
-  const directory = await mkdtemp(join('.cache', 'endpoint-store-test-'));
+  await mkdir('.scratch', { recursive: true });
+  const directory = await mkdtemp(join('.scratch', 'endpoint-store-test-'));
   directories.push(directory);
   return join(directory, 'endpoints.json');
 }

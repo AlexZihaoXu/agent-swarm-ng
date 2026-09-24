@@ -8,7 +8,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.scratch/ms-playwright
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

@@ -4,7 +4,7 @@ dist/
 .env.*
 !.env.example
 coverage/
-.cache/
+.scratch/
 .local/
 backend/src/generated/
 *.db

@@ -71,7 +71,7 @@ describe('ChatGPT subscription connection', () => {
     } finally { session.dispose(); }
   });
   it('restores stored subscription metadata without refreshing or exposing tokens', async () => {
-    const directory = await mkdtemp(join(process.env.SQLITE_TEST_ROOT ?? '.cache', 'codex-auth-'));
+    const directory = await mkdtemp(join(process.env.SQLITE_TEST_ROOT ?? '.scratch', 'codex-auth-'));
     const authPath = join(directory, 'auth.json');
     await writeFile(authPath, JSON.stringify({ 'openai-codex': { type: 'oauth', access: 'PRIVATE ACCESS', refresh: 'PRIVATE REFRESH', expires: 0 } }));
     try {

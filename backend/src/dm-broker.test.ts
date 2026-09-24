@@ -41,7 +41,7 @@ async function fixture(loop = false, gate?: Promise<void>, reactionGate?: Promis
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
-  const folder = await mkdtemp(join('.cache', 'dm-broker-'));
+  const folder = await mkdtemp(join('.scratch', 'dm-broker-'));
   const endpoints = new EndpointStore(join(folder, 'endpoints.json'));
   await endpoints.save({ id: 'mock', name: 'Mock', baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/v1` });
   const a = await database.createAgent({ name: 'A', endpointId: 'mock', model: 'test-model', thinkingLevel: 'off' });

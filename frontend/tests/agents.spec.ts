@@ -119,7 +119,7 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await expect(working).toHaveCSS('width', '8px');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(dot).toHaveCSS('animation-name', 'none');
-  await page.screenshot({ path: '../.cache/aqua-working-status.png' });
+  await page.screenshot({ path: '../.scratch/aqua-working-status.png' });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const dotBox = (await working.boundingBox())!;
   await expect(avatar.locator('[data-slot="avatar-face"]')).not.toHaveCSS('mask-image', 'none');

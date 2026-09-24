@@ -22,8 +22,8 @@ let argumentGate: Promise<void> | undefined;
 let historyAnchorId = '';
 
 beforeAll(async () => {
-  await mkdir('.cache', { recursive: true });
-  folder = await mkdtemp(join('.cache', 'pi-chat-test-'));
+  await mkdir('.scratch', { recursive: true });
+  folder = await mkdtemp(join('.scratch', 'pi-chat-test-'));
   server = createServer(async (request, response) => {
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);

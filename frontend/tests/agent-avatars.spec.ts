@@ -45,7 +45,7 @@ test('all silhouettes move; randomization is stable and preserves the state prev
   await select(page, 'State preview', 'Idle');
   await page.getByLabel('State preview').click(); await expect(page.getByRole('option')).toHaveCount(3); await page.keyboard.press('Escape');
   await page.getByRole('region', { name: 'Agent editor', exact: true }).evaluate(element => { element.scrollTop = 0; });
-  await page.getByRole('dialog').screenshot({ path: '../.cache/agent-avatar-preview-desktop.png', animations: 'disabled' });
+  await page.getByRole('dialog').screenshot({ path: '../.scratch/agent-avatar-preview-desktop.png', animations: 'disabled' });
 });
 
 test('disclosure, shape and eye changes transition; the modal scrollbar is inset', async ({ page }) => {
@@ -94,7 +94,7 @@ test('disclosure, shape and eye changes transition; the modal scrollbar is inset
   const dialogBox = (await page.getByRole('dialog').boundingBox())!, barBox = (await scrollbar.boundingBox())!;
   expect(dialogBox.x + dialogBox.width - barBox.x - barBox.width).toBeGreaterThanOrEqual(10);
   expect(await viewport.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
-  await page.getByRole('dialog').screenshot({ path: '../.cache/avatar-editor-inset-scrollbar.png', animations: 'disabled' });
+  await page.getByRole('dialog').screenshot({ path: '../.scratch/avatar-editor-inset-scrollbar.png', animations: 'disabled' });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await toggle.click(); await expect(content).toHaveCSS('transition-property', 'none');
 });
@@ -135,7 +135,7 @@ test('direction previews turn the face in depth without rotating the eyelid clos
       await expect(art.locator('[data-eyelid="left"]')).toHaveAttribute('transform', /scale\(1 1\)/);
       expect(await art.locator('[data-eyelid="left"]').getAttribute('transform')).not.toMatch(/rotate|skew/);
       await art.scrollIntoViewIfNeeded();
-      await page.getByTestId('agent-avatar-preview').screenshot({ path: `../.cache/avatar-depth-${eyes === 'Circles' ? 'round' : 'pill'}-${direction.replaceAll(' ', '-')}.png`, animations: 'disabled' });
+      await page.getByTestId('agent-avatar-preview').screenshot({ path: `../.scratch/avatar-depth-${eyes === 'Circles' ? 'round' : 'pill'}-${direction.replaceAll(' ', '-')}.png`, animations: 'disabled' });
     }
   }
 });
@@ -217,7 +217,7 @@ test('mobile preview is scrollable without horizontal overflow and unsaved chang
   await page.getByRole('button', { name: 'Preview Triangle', exact: true }).click(); await select(page, 'Eye shape', 'Circles');
   const dialog = page.getByRole('dialog'); expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.getByRole('region', { name: 'Agent editor', exact: true }).evaluate(element => { element.scrollTop = 0; });
-  await dialog.screenshot({ path: '../.cache/agent-avatar-preview-mobile.png', animations: 'disabled' });
+  await dialog.screenshot({ path: '../.scratch/agent-avatar-preview-mobile.png', animations: 'disabled' });
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(card.locator('[data-avatar-shape]')).toHaveAttribute('data-avatar-seed', String(original.seed));
 });

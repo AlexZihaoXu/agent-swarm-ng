@@ -27,7 +27,7 @@ test('requires exact typed confirmation, supports cancellation, and persists del
   const dialog = page.getByRole('dialog', { name: 'Delete agent', exact: true });
   const remove = dialog.getByRole('button', { name: 'Delete agent', exact: true });
   await expect(remove).toBeDisabled();
-  await page.screenshot({ path: '../.cache/agent-delete-dialog.png', animations: 'disabled' });
+  await page.screenshot({ path: '../.scratch/agent-delete-dialog.png', animations: 'disabled' });
   await page.getByLabel('Confirm agent name').fill(`${agent.name} `);
   await expect(remove).toBeDisabled();
   await page.getByLabel('Confirm agent name').fill(agent.name);
