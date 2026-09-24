@@ -7,9 +7,10 @@ const name = 'Work computer';
 function fixture() {
   const resources = new Map<string, unknown>();
   const request = vi.fn(async () => Buffer.alloc(0));
-  const docker = { optional: async (path: string) => resources.get(path) ?? null, request, json: vi.fn(async () => []), exec: vi.fn(async () => Buffer.alloc(0)) } as unknown as DockerApi;
+  const execute = vi.fn(async () => Buffer.alloc(0));
+  const docker = { optional: async (path: string) => resources.get(path) ?? null, request, json: vi.fn(async () => []), exec: execute } as unknown as DockerApi;
   const manager = new ComputerManager(docker, 'swarm-ng-test', '{}');
-  return { manager, resources, request };
+  return { manager, resources, request, execute };
 }
 
 function existingRunning(manager: ComputerManager, resources: Map<string, unknown>) {
@@ -105,6 +106,33 @@ it('does not wipe a stopped computer or its data on a retried create', async () 
   });
   await expect(manager.create(id, name)).rejects.toMatchObject({ code: 409 });
   expect(request).not.toHaveBeenCalled();
+});
+
+it('executes only one bounded pointer click as ubuntu in the selected owned running computer', async () => {
+  const { manager, resources, execute } = fixture();
+  const path = `/containers/${manager.names.desktop(id)}/json`;
+  resources.set(path, { State: { Running: true }, Config: { Labels: manager.names.labels(id, 'desktop', name) } });
+  for (const [x, y] of [[-0.01, 0.5], [0.5, Infinity], [0.5, 1.1]]) {
+    await expect(manager.pointer(id, x, y)).rejects.toMatchObject({ code: 400 });
+  }
+  expect(execute).not.toHaveBeenCalled();
+  await manager.pointer(id, 0.5, 0.3);
+  expect(execute).toHaveBeenCalledWith(manager.names.desktop(id), ['/opt/swarm/desktop-input.sh', '0.5', '0.3'], 'ubuntu', 10_000);
+  resources.set(path, { State: { Running: true }, Config: { Labels: { 'swarm.ng.namespace': 'foreign' } } });
+  await expect(manager.pointer(id, 0.5, 0.3)).rejects.toMatchObject({ code: 409 });
+  expect(execute).toHaveBeenCalledTimes(1);
+});
+
+it('keeps full consent frames separate from the small grid JPEG cache', async () => {
+  const { manager, resources, execute } = fixture();
+  resources.set(`/containers/${manager.names.desktop(id)}/json`, {
+    State: { Running: true }, Config: { Labels: manager.names.labels(id, 'desktop', name) },
+  });
+  execute.mockResolvedValue(Buffer.from(Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64')));
+  expect(await manager.preview(id)).toEqual(Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+  expect(await manager.preview(id, true)).toEqual(Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+  expect(execute).toHaveBeenNthCalledWith(1, manager.names.desktop(id), ['/opt/swarm/render-preview.sh'], 'ubuntu', 16_000);
+  expect(execute).toHaveBeenNthCalledWith(2, manager.names.desktop(id), ['/opt/swarm/render-preview.sh', '--full'], 'ubuntu', 16_000);
 });
 
 it('refuses invalid resource IDs and namespaces before calling Docker', async () => {

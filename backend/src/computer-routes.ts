@@ -89,8 +89,8 @@ export function registerComputerRoutes(app: FastifyInstance, platform: PlatformS
       return { deleted: true };
     } catch (error) { return failure(reply, error); }
   });
-  app.get<{ Params: { id: string } }>('/api/computers/:id/preview', {
-    schema: { operationId: 'getComputerPreview', params: idParams, response: { 200: Type.String({ format: 'binary' }), ...errors } },
+  app.get<{ Params: { id: string }; Querystring: { full?: '1' } }>('/api/computers/:id/preview', {
+    schema: { operationId: 'getComputerPreview', params: idParams, querystring: Type.Object({ full: Type.Optional(Type.Literal('1')) }), response: { 200: Type.String({ format: 'binary' }), ...errors } },
   }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     if (!controller) return unavailable(reply);
@@ -98,9 +98,26 @@ export function registerComputerRoutes(app: FastifyInstance, platform: PlatformS
     if (!record) return reply.code(404).send({ message: 'Computer not found.' });
     if (record.state !== 'running') return unavailable(reply);
     try {
-      const image = await controller.preview(record.id);
+      const image = await controller.preview(record.id, request.query.full === '1');
       if (!image) return unavailable(reply);
       return reply.type('image/jpeg').send(Buffer.from(image));
+    } catch (error) { return failure(reply, error); }
+  });
+  app.post<{ Params: { id: string }; Body: { x: number; y: number } }>('/api/computers/:id/desktop/input', {
+    schema: {
+      operationId: 'sendComputerDesktopPointer', params: idParams,
+      body: Type.Object({ x: Type.Number({ minimum: 0, maximum: 1 }), y: Type.Number({ minimum: 0, maximum: 1 }) }, { additionalProperties: false }),
+      response: { 202: Type.Object({ accepted: Type.Boolean() }), ...errors },
+    },
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    if (!controller) return unavailable(reply);
+    const record = await store.get(request.params.id);
+    if (!record) return reply.code(404).send({ message: 'Computer not found.' });
+    if (record.state !== 'running') return unavailable(reply);
+    try {
+      await controller.pointer(record.id, request.body.x, request.body.y);
+      return reply.code(202).send({ accepted: true });
     } catch (error) { return failure(reply, error); }
   });
 }

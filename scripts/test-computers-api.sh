@@ -57,6 +57,22 @@ image=Path('.scratch/computer-api-e2e-preview.jpg').read_bytes()
 assert len(image)>200 and image[:2]==b'\xff\xd8' and image[-2:]==b'\xff\xd9'
 print('Real GNOME JPEG:',len(image),'bytes')
 PY
+curl -fsS --max-time 20 "$base/api/computers/$id/preview?full=1" -o .scratch/computer-api-e2e-full.jpg
+python3 - <<'PY'
+from pathlib import Path
+from struct import unpack
+image=Path('.scratch/computer-api-e2e-full.jpg').read_bytes()
+assert len(image)>200 and len(image)<512*1024 and image[:2]==b'\xff\xd8' and image[-2:]==b'\xff\xd9'
+sof=image.index(b'\xff\xc0')
+height,width=unpack('>HH',image[sof+5:sof+9])
+assert (width,height)==(1920,1080),(width,height)
+print('Full-resolution consent JPEG:',len(image),'bytes')
+PY
+# An innocuous click on the desktop background exercises the execution-time
+# UUID binding, ubuntu session D-Bus and bounded private Mutter input API.
+response=$(curl -fsS --max-time 12 -X POST "$base/api/computers/$id/desktop/input" \
+    -H 'Content-Type: application/json' --data '{"x":0.8,"y":0.8}')
+test "$response" = '{"accepted":true}'
 media="${computer}-media"
 python3 - "$media" "${namespace}-computer-media" "${computer}-private" <<'PY'
 import json,subprocess,sys

@@ -13,7 +13,8 @@ async function fixture() {
     async create(id, name) { calls.push(`create:${id}:${name}`); observed.set(id, { status: 'running', cpuPercent: 12.5, memoryBytes: 134217728 }); },
     async remove(id, name) { calls.push(`remove:${id}:${name}`); observed.delete(id); },
     async observe() { return observed; },
-    async preview(id) { if (!observed.has(id)) return null; return Buffer.from([0xff, 0xd8, 0xff, 0xd9]); },
+    async preview(id, full = false) { if (!observed.has(id)) return null; if (full) calls.push(`full-preview:${id}`); return Buffer.from([0xff, 0xd8, 0xff, 0xd9]); },
+    async pointer(id, x, y) { calls.push(`pointer:${id}:${x}:${y}`); },
   };
   const app = await buildApp({ database, computerController: controller });
   return { app, database, calls, observed, controller };
@@ -38,6 +39,33 @@ it('creates one platform computer, lists status/usage and serves its bounded JPE
     expect(image.headers['cache-control']).toBe('no-store');
     expect(image.rawPayload).toEqual(Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
     expect(await database.client.agent.count()).toBe(0);
+  } finally { await app.close(); await database.close(); }
+});
+
+it('limits first-run desktop input to an existing running computer and normalized coordinates', async () => {
+  const { app, database, calls } = await fixture();
+  try {
+    const row = (await app.inject({ method: 'POST', url: '/api/computers', payload: { name: 'Desk', requestKey: crypto.randomUUID() } })).json();
+    const path = `/api/computers/${row.id}/desktop/input`;
+    for (const payload of [{ x: -0.1, y: 0.5 }, { x: 1.1, y: 0 }, { x: 0.5, y: '3' }]) {
+      expect((await app.inject({ method: 'POST', url: path, payload })).statusCode, JSON.stringify(payload)).toBe(400);
+    }
+    expect((await app.inject({ method: 'POST', url: '/api/computers/not-a-computer/desktop/input', payload: { x: 0.5, y: 0.5 } })).statusCode).toBe(404);
+    expect(calls.filter(call => call.startsWith('pointer:'))).toEqual([]);
+    const accepted = await app.inject({ method: 'POST', url: path, payload: { x: 0.65, y: 0.43 } });
+    expect(accepted.statusCode).toBe(202);
+    expect(accepted.json()).toEqual({ accepted: true });
+    expect(calls).toContain(`pointer:${row.id}:0.65:0.43`);
+    // Fastify strips extra JSON keys; they never become command arguments.
+    const extra = await app.inject({ method: 'POST', url: path, payload: { x: 0.5, y: 0.5, command: 'shell' } });
+    expect(extra.statusCode).toBe(202);
+    expect(calls.filter(call => call.startsWith('pointer:'))).toEqual([`pointer:${row.id}:0.65:0.43`, `pointer:${row.id}:0.5:0.5`]);
+    const full = await app.inject({ method: 'GET', url: `/api/computers/${row.id}/preview?full=1` });
+    expect(full.statusCode).toBe(200);
+    expect(calls).toContain(`full-preview:${row.id}`);
+    expect((await app.inject({ method: 'GET', url: `/api/computers/${row.id}/preview?full=other` })).statusCode).toBe(400);
+    await database.client.computer.update({ where: { id: row.id }, data: { state: 'failed' } });
+    expect((await app.inject({ method: 'POST', url: path, payload: { x: 0.5, y: 0.5 } })).statusCode).toBe(503);
   } finally { await app.close(); await database.close(); }
 });
 

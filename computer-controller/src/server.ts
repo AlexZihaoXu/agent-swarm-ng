@@ -36,7 +36,7 @@ Bun.serve({
   hostname: '0.0.0.0', port: Number(process.env.COMPUTER_CONTROLLER_PORT ?? 3101),
   async fetch(request) {
     try {
-      const { pathname } = new URL(request.url);
+      const { pathname, searchParams } = new URL(request.url);
       if (pathname === '/health' && request.method === 'GET') {
         await docker.request('GET', '/_ping', undefined, 128, 2000);
         return json({ status: 'ok' });
@@ -48,7 +48,7 @@ Bun.serve({
         await manager.create(input.id, input.name);
         return json({ created: true }, 201);
       }
-      const match = /^\/computers\/([^/]+)(\/preview)?$/.exec(pathname);
+      const match = /^\/computers\/([^/]+)(\/preview|\/input)?$/.exec(pathname);
       if (!match) return json({ message: 'Not found.' }, 404);
       const id = decodeURIComponent(match[1]);
       if (request.method === 'DELETE' && !match[2]) {
@@ -57,8 +57,17 @@ Bun.serve({
         await manager.remove(id, input.name);
         return json({ deleted: true });
       }
-      if (request.method === 'GET' && match[2]) {
-        const image = await manager.preview(id);
+      if (request.method === 'POST' && match[2] === '/input') {
+        const input = await body(request);
+        if (!input || typeof input !== 'object' || !('x' in input) || !('y' in input) ||
+            typeof input.x !== 'number' || typeof input.y !== 'number') throw new ResourceError(400, 'Invalid desktop coordinates.');
+        await manager.pointer(id, input.x, input.y);
+        return json({ accepted: true }, 202);
+      }
+      if (request.method === 'GET' && match[2] === '/preview') {
+        const full = searchParams.get('full');
+        if (full !== null && full !== '1') throw new ResourceError(400, 'Invalid preview size.');
+        const image = await manager.preview(id, full === '1');
         if (!image) return json({ message: 'Computer preview unavailable.' }, 503);
         return new Response(new Uint8Array(image), { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' } });
       }

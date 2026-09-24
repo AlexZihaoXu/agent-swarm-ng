@@ -4,7 +4,8 @@ export interface ComputerController {
   create(id: string, name: string): Promise<void>;
   remove(id: string, name: string): Promise<void>;
   observe(): Promise<Map<string, ComputerObservation>>;
-  preview(id: string): Promise<Uint8Array | null>;
+  preview(id: string, full?: boolean): Promise<Uint8Array | null>;
+  pointer(id: string, x: number, y: number): Promise<void>;
 }
 
 /** Internal controller only; the browser cannot choose its Docker endpoint. */
@@ -36,8 +37,14 @@ export class HttpComputerController implements ComputerController {
     }
     return result;
   }
-  async preview(id: string) {
-    const response = await this.fetcher(new URL(`/computers/${encodeURIComponent(id)}/preview`, this.baseUrl), { signal: AbortSignal.timeout(16_000), redirect: 'error' });
+  async pointer(id: string, x: number, y: number) {
+    await this.request(`/computers/${encodeURIComponent(id)}/input`, {
+      method: 'POST', body: JSON.stringify({ x, y }),
+    });
+  }
+  async preview(id: string, full = false) {
+    const path = `/computers/${encodeURIComponent(id)}/preview${full ? '?full=1' : ''}`;
+    const response = await this.fetcher(new URL(path, this.baseUrl), { signal: AbortSignal.timeout(16_000), redirect: 'error' });
     if (response.status === 404 || response.status === 503) return null;
     if (!response.ok || response.headers.get('content-type')?.split(';')[0] !== 'image/jpeg') throw new Error('Computer preview is unavailable.');
     const reader = response.body?.getReader();
@@ -49,7 +56,7 @@ export class HttpComputerController implements ComputerController {
         const { value, done } = await reader.read();
         if (done) break;
         size += value.byteLength;
-        if (size > 256 * 1024) throw new Error('Computer preview exceeded its limit.');
+        if (size > (full ? 512 : 256) * 1024) throw new Error('Computer preview exceeded its limit.');
         chunks.push(value);
       }
     } finally { reader.releaseLock(); }

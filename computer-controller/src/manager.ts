@@ -239,7 +239,8 @@ export class ComputerManager {
     if (home) await this.docker.request('DELETE', this.path('volumes', home.Name));
     if (workspace) await this.docker.request('DELETE', this.path('volumes', workspace.Name));
     if (network) await this.docker.request('DELETE', this.path('networks', network.Id));
-    this.previewCache.delete(id);
+    this.previewCache.delete(`${id}:thumb`);
+    this.previewCache.delete(`${id}:full`);
   }
   async remove(idRaw: string, nameRaw: string) {
     const id = validateId(idRaw), name = validateName(nameRaw);
@@ -307,25 +308,39 @@ export class ComputerManager {
     }
     return computers;
   }
-  async preview(idRaw: string) {
+  async pointer(idRaw: string, x: number, y: number) {
     const id = validateId(idRaw);
-    const cached = this.previewCache.get(id);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) {
+      throw new ResourceError(400, 'Invalid desktop coordinates.');
+    }
+    const name = this.names.desktop(id);
+    const computer = await this.container(name, id, 'desktop');
+    if (!computer) throw new ResourceError(404, 'Computer not found.');
+    if (!computer.State.Running) throw new ResourceError(503, 'Computer desktop is unavailable.');
+    await this.docker.exec(name, ['/opt/swarm/desktop-input.sh', String(x), String(y)], 'ubuntu', 10_000);
+  }
+
+  async preview(idRaw: string, full = false) {
+    const id = validateId(idRaw);
+    const key = `${id}:${full ? 'full' : 'thumb'}`;
+    const cached = this.previewCache.get(key);
     if (cached && Date.now() - cached.at < 1800) return cached.image;
-    const pending = this.previewPending.get(id);
+    const pending = this.previewPending.get(key);
     if (pending) return pending;
     const work = (async () => {
       const name = this.names.desktop(id);
       const container = await this.container(name, id, 'desktop');
       if (!container) return null;
       if (!container.State.Running) return null;
-      const encoded = await this.docker.exec(name, ['/opt/swarm/render-preview.sh'], 'ubuntu', 16_000);
-      if (encoded.length > 256 * 1024) throw new ResourceError(503, 'Preview exceeded its limit.');
+      const encoded = await this.docker.exec(name, ['/opt/swarm/render-preview.sh', ...(full ? ['--full'] : [])], 'ubuntu', 16_000);
+      if (encoded.length > (full ? 700 : 256) * 1024) throw new ResourceError(503, 'Preview exceeded its limit.');
       const image = Buffer.from(encoded.toString().trim(), 'base64');
       if (image.length < 4 || image[0] !== 0xff || image[1] !== 0xd8 || image.at(-2) !== 0xff || image.at(-1) !== 0xd9) throw new ResourceError(503, 'Preview is not a JPEG.');
-      this.previewCache.set(id, { at: Date.now(), image });
+      if (image.length > (full ? 512 : 192) * 1024) throw new ResourceError(503, 'Preview exceeded its limit.');
+      this.previewCache.set(key, { at: Date.now(), image });
       return image;
-    })().finally(() => { this.previewPending.delete(id); });
-    this.previewPending.set(id, work);
+    })().finally(() => { this.previewPending.delete(key); });
+    this.previewPending.set(key, work);
     return work;
   }
 }
