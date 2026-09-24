@@ -43,6 +43,9 @@ export class AgentRuns {
     const event: RunEvent = { type: 'group_updated', groupId, message, publication, eventId: crypto.randomUUID(), runId: 'platform', agentId: 'human', channelId: `group:${groupId}` };
     this.broadcast(event);
   }
+  groupDeleted(groupId: string) {
+    this.broadcast({ type: 'group_deleted', groupId, eventId: crypto.randomUUID(), runId: 'platform', agentId: 'human', channelId: `group:${groupId}` });
+  }
   reactionsChanged(channelId: string, messageId: string) {
     this.broadcast({ type: 'reactions_updated', messageId, eventId: crypto.randomUUID(), runId: 'platform', agentId: 'human', channelId });
   }

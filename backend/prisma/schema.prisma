@@ -79,6 +79,9 @@ model DmMessage {
   sender         Agent    @relation("DmSender", fields: [senderId], references: [id], onDelete: Cascade)
   recipient      Agent    @relation("DmRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
   text           String
+  replyToId      String?
+  replyTo        DmMessage?  @relation("DmReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        DmMessage[] @relation("DmReplies")
   chainId        String
   chain          DmChain  @relation(fields: [chainId], references: [id], onDelete: Restrict)
   deliveryKey    String   @unique
@@ -91,6 +94,7 @@ model DmMessage {
   @@index([status, sequence])
   @@index([senderId])
   @@index([chainId])
+  @@index([replyToId])
 }
 
 model GroupChat {
@@ -125,6 +129,9 @@ model GroupMessage {
   authorName    String
   authorAvatar  String?
   text          String
+  replyToId     String?
+  replyTo       GroupMessage?     @relation("GroupReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies       GroupMessage[]    @relation("GroupReplies")
   chainId       String
   chain         DmChain           @relation(fields: [chainId], references: [id], onDelete: Restrict)
   submissionKey String            @unique
@@ -135,6 +142,7 @@ model GroupMessage {
   @@unique([id, groupId])
   @@index([groupId, sequence])
   @@index([chainId])
+  @@index([replyToId])
 }
 
 model GroupDelivery {
@@ -193,10 +201,14 @@ model Message {
   channelId String
   role      MessageRole
   text      String
+  replyToId String?
+  replyTo   Message?          @relation("ChannelReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   Message[]         @relation("ChannelReplies")
   createdAt DateTime          @default(now())
   channel   Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
   reactions MessageReaction[]
 
   @@index([channelId, sequence])
   @@index([channelId, createdAt, sequence])
+  @@index([replyToId])
 }

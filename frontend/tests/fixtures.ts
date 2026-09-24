@@ -92,7 +92,8 @@ export const test = base.extend({
       const agent = agents.find(item => item.id === body.agentId);
       if (!agent) return route.fulfill({ status: 501, json: { message: 'Configure a chat mock for this test.' } });
       const messages = history[agent.channelId];
-      const message = { id: body.clientMessageId, channelId: agent.channelId, sequence: messages.length + 1, role: 'user' as const, text: body.message, timestamp: await page.evaluate(() => Date.now()) };
+      const parent = messages.find(item => item.id === body.replyToMessageId);
+      const message = { id: body.clientMessageId, channelId: agent.channelId, sequence: messages.length + 1, role: 'user' as const, text: body.message, timestamp: await page.evaluate(() => Date.now()), replyTo: parent ? { id: parent.id, role: parent.role, text: parent.text.slice(0, 160) } : null };
       messages.push(message); agent.lastMessage = message;
       return route.fulfill({ contentType: 'application/x-ndjson', body: `${JSON.stringify({ type: 'user_message', ...message })}\n${JSON.stringify({ type: 'done' })}\n` });
     });

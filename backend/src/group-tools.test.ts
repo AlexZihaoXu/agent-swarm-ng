@@ -5,7 +5,7 @@ import type { SwarmStore } from './swarm-store';
 import { CHAT_AUDIENCE_GUIDANCE } from './chat-audience';
 
 it('binds discovery and bounded group history to the executing agent, not caller-supplied identity', async () => {
-  const row = { id: 'message', sequence: 2, role: 'assistant', authorId: 'b', authorName: 'B', createdAt: new Date(), text: 'x'.repeat(9000) };
+  const row = { id: 'message', sequence: 2, role: 'assistant', authorId: 'b', authorName: 'B', createdAt: new Date(), text: 'x'.repeat(9000), replyTo: { id: 'parent', role: 'user', authorId: null, authorName: 'You', text: 'Prior group message' } };
   const groups = { list: vi.fn(async () => ({ groups: [{ id: 'g', name: 'Team', members: [{ agent: { id: 'a', name: 'A' } }] }], nextCursor: null })), history: vi.fn(async () => ({ messages: [row], nextCursor: null })), message: vi.fn(async () => row), search: vi.fn(async () => ({ messages: [row], nextCursor: null })) };
   const swarm = { contacts: vi.fn(async () => []), dmPeers: vi.fn(async () => ({ peers: [{ id: 'b', name: 'B' }], nextCursor: null })) };
   const tools = createGroupTools(groups as unknown as GroupStore, swarm as unknown as SwarmStore, { id: 'private-a', agentId: 'a', kind: 'platform-chat' });
@@ -18,7 +18,9 @@ it('binds discovery and bounded group history to the executing agent, not caller
   expect(chats.human.channelId).toBe('private-a');
   expect(chats.dmConversations[0].canSend).toBe(false);
   expect(chats.groups[0].channelId).toBe('group:g');
-  expect((await call('read_group_messages', { channelId: 'group:g', agentId: 'spoofed' })).messages[0].text).toHaveLength(1000);
+  const groupMessages = (await call('read_group_messages', { channelId: 'group:g', agentId: 'spoofed' })).messages;
+  expect(groupMessages[0].text).toHaveLength(1000);
+  expect(groupMessages[0].replyTo).toMatchObject({ id: 'parent', authorName: 'You', text: 'Prior group message' });
   expect(groups.history).toHaveBeenCalledWith('g', 'a', undefined, undefined);
   expect((await call('read_group_messages', { channelId: 'group:g', messageId: 'message', offset: 1000 })).messages[0].text).toHaveLength(6000);
   expect(groups.message).toHaveBeenCalledWith('g', 'message', 'a');

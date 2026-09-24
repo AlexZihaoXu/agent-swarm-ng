@@ -158,7 +158,7 @@ export interface paths {
         get: operations["getGroup"];
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["deleteGroup"];
         options?: never;
         head?: never;
         patch: operations["updateGroup"];
@@ -801,6 +801,12 @@ export interface operations {
                             preview: string;
                             status: string;
                             timestamp: number;
+                            replyTo: {
+                                id: string;
+                                senderId: string;
+                                senderName: string;
+                                text: string;
+                            } | null;
                         }[];
                         nextCursor: number | null;
                     };
@@ -852,6 +858,12 @@ export interface operations {
                             text: string;
                             status: string;
                             timestamp: number;
+                            replyTo: {
+                                id: string;
+                                senderId: string;
+                                senderName: string;
+                                text: string;
+                            } | null;
                         }[];
                         nextCursor: number | null;
                     };
@@ -931,6 +943,13 @@ export interface operations {
                                 } | null;
                                 text: string;
                                 timestamp: number;
+                                replyTo: {
+                                    id: string;
+                                    role: "user" | "assistant";
+                                    authorId: string | null;
+                                    authorName: string;
+                                    text: string;
+                                } | null;
                             } | null;
                         }[];
                         nextCursor: number | null;
@@ -1035,6 +1054,13 @@ export interface operations {
                             } | null;
                             text: string;
                             timestamp: number;
+                            replyTo: {
+                                id: string;
+                                role: "user" | "assistant";
+                                authorId: string | null;
+                                authorName: string;
+                                text: string;
+                            } | null;
                         } | null;
                     };
                 };
@@ -1132,7 +1158,88 @@ export interface operations {
                             } | null;
                             text: string;
                             timestamp: number;
+                            replyTo: {
+                                id: string;
+                                role: "user" | "assistant";
+                                authorId: string | null;
+                                authorName: string;
+                                text: string;
+                            } | null;
                         } | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    deleteGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    confirmation: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deleted: boolean;
                     };
                 };
             };
@@ -1236,6 +1343,13 @@ export interface operations {
                             } | null;
                             text: string;
                             timestamp: number;
+                            replyTo: {
+                                id: string;
+                                role: "user" | "assistant";
+                                authorId: string | null;
+                                authorName: string;
+                                text: string;
+                            } | null;
                         } | null;
                     };
                 };
@@ -1322,6 +1436,13 @@ export interface operations {
                             } | null;
                             text: string;
                             timestamp: number;
+                            replyTo: {
+                                id: string;
+                                role: "user" | "assistant";
+                                authorId: string | null;
+                                authorName: string;
+                                text: string;
+                            } | null;
                         }[];
                         nextCursor: number | null;
                     };
@@ -1388,6 +1509,7 @@ export interface operations {
                     message: string;
                     /** Format: uuid */
                     clientMessageId: string;
+                    replyToMessageId?: string;
                 };
             };
         };
@@ -1414,6 +1536,13 @@ export interface operations {
                             } | null;
                             text: string;
                             timestamp: number;
+                            replyTo: {
+                                id: string;
+                                role: "user" | "assistant";
+                                authorId: string | null;
+                                authorName: string;
+                                text: string;
+                            } | null;
                         };
                         duplicate: boolean;
                     };
@@ -1718,6 +1847,11 @@ export interface operations {
                                 role: "user" | "assistant";
                                 text: string;
                                 timestamp: number;
+                                replyTo: {
+                                    id: string;
+                                    role: "user" | "assistant";
+                                    text: string;
+                                } | null;
                             } | null;
                         }[];
                         nextCursor: number | null;
@@ -1777,6 +1911,11 @@ export interface operations {
                             role: "user" | "assistant";
                             text: string;
                             timestamp: number;
+                            replyTo: {
+                                id: string;
+                                role: "user" | "assistant";
+                                text: string;
+                            } | null;
                         } | null;
                     };
                 };
@@ -1833,6 +1972,11 @@ export interface operations {
                             role: "user" | "assistant";
                             text: string;
                             timestamp: number;
+                            replyTo: {
+                                id: string;
+                                role: "user" | "assistant";
+                                text: string;
+                            } | null;
                         }[];
                         nextCursor: number | null;
                     };
@@ -2012,6 +2156,7 @@ export interface operations {
                     /** Format: uuid */
                     clientMessageId: string;
                     message: string;
+                    replyToMessageId?: string;
                 };
             };
         };
@@ -2049,6 +2194,11 @@ export interface operations {
                             role: "user" | "assistant";
                             text: string;
                             timestamp: number;
+                            replyTo: {
+                                id: string;
+                                role: "user" | "assistant";
+                                text: string;
+                            } | null;
                         };
                     };
                 };

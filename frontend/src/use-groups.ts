@@ -21,6 +21,15 @@ export function useGroupEvents() {
         client.setQueryData<GroupPage>(['group-messages', groupId], old => old ? { ...old, messages: mergeGroupMessages(old.messages, [message]) } : undefined);
       }
     };
+    const deleted = (event: Event) => {
+      const groupId = (event as CustomEvent<string>).detail;
+      if (!groupId) return;
+      void client.invalidateQueries({ queryKey: ['groups'] });
+      client.removeQueries({ queryKey: ['group', groupId], exact: true });
+      client.removeQueries({ queryKey: ['group-messages', groupId], exact: true });
+      client.removeQueries({ queryKey: ['group-pending', groupId], exact: true });
+      client.removeQueries({ queryKey: ['reactions', `group:${groupId}`] });
+    };
     const reactions = (event: Event) => { void client.invalidateQueries({ queryKey: ['reactions', (event as CustomEvent<string>).detail] }); };
     const reconnect = () => {
       void client.invalidateQueries({ queryKey: ['reactions'] });
@@ -30,8 +39,9 @@ export function useGroupEvents() {
     };
     window.addEventListener('swarm-reactions-updated', reactions);
     window.addEventListener('swarm-groups-updated', changed);
+    window.addEventListener('swarm-group-deleted', deleted);
     window.addEventListener('swarm-groups-reconnected', reconnect);
-    return () => { window.removeEventListener('swarm-reactions-updated', reactions); window.removeEventListener('swarm-groups-updated', changed); window.removeEventListener('swarm-groups-reconnected', reconnect); };
+    return () => { window.removeEventListener('swarm-reactions-updated', reactions); window.removeEventListener('swarm-groups-updated', changed); window.removeEventListener('swarm-group-deleted', deleted); window.removeEventListener('swarm-groups-reconnected', reconnect); };
   }, [client]);
 }
 export function useGroups(search = '') {

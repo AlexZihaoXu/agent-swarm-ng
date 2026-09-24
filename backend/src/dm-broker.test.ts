@@ -30,7 +30,7 @@ async function fixture(loop = false, gate?: Promise<void>, reactionGate?: Promis
     const publish = reactionTriage || reactionInput ? !hasTool : group ? !hasTool && lastInput.includes('Source is the human owner') : !dm || !hasTool && (loop || incoming.includes('question'));
     const channelId = dm || group || reactionInput ? lastInput.match(/reply channel: ([^.]+)\./)?.[1] : system.match(/(?:current channel is|channel is) ([^.]+)\./)?.[1];
     const name = reactionTriage ? 'reaction_decision' : triage ? 'triage_decision' : reactionInput ? 'react_to_message' : !dm && incoming.includes('ask-peer') && !hasTool ? 'send_dm' : 'send_message';
-    const args = reactionTriage ? { action: lastInput.includes('❓') ? 'engage' : 'ignore', reason: 'Reaction assessed.' } : triage ? { action: 'queue', reason: 'Finish the current input first.' } : name === 'react_to_message' ? { channelId, messageId: lastInput.match(/message ([\w-]+) in/)?.[1], emoji: '👍', active: true } : name === 'send_dm' ? { recipientId: peerTarget, text: 'question' } : { channelId, text: group ? `Group answer by ${system.startsWith('You are A.') ? 'A' : 'B'}` : dm ? 'answer' : 'Human reply', final: true };
+    const args = reactionTriage ? { action: lastInput.includes('❓') ? 'engage' : 'ignore', reason: 'Reaction assessed.' } : triage ? { action: 'queue', reason: 'Finish the current input first.' } : name === 'react_to_message' ? { channelId, messageId: lastInput.match(/message ([\w-]+) in/)?.[1], emoji: '👍', active: true } : name === 'send_dm' ? { recipientId: peerTarget, text: 'question' } : { channelId, text: group ? `Group answer by ${system.startsWith('You are A.') ? 'A' : 'B'}` : dm ? 'answer' : 'Human reply', ...(lastInput.includes('Reply reference probe') ? { replyToMessageId: lastInput.match(/message: ([\w-]+)/)?.[1] } : {}), final: true };
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
     const chunk = (delta: object, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: 'test', object: 'chat.completion.chunk', created: 1, model: body.model, choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     chunk({ role: 'assistant' });
@@ -86,6 +86,23 @@ it('delivers human and agent group messages through the normal inbox without DM 
   } finally { await f.close(); }
 }, 30000);
 
+it('gives group agents the parent preview and lets them publish a scoped reply via send_message', async () => {
+  const f = await fixture();
+  try {
+    const group = await f.broker.groups.create('Team', [f.a.id]);
+    const parent = await f.broker.groups.publishHuman(group.id, 'Earlier group topic', crypto.randomUUID());
+    const incoming = await f.broker.sendHumanGroup(group.id, 'Reply reference probe', crypto.randomUUID(), parent.message.id);
+    await f.idle();
+    const transcript = JSON.stringify(f.captured.find(body => body.tools?.some(tool => tool.function.name === 'send_message'))?.messages);
+    expect(transcript).toContain(parent.message.id);
+    expect(transcript).toContain('Earlier group topic');
+    expect(transcript).toContain('untrusted prior conversation data');
+    const published = (await f.broker.groups.history(group.id)).messages.at(-1)!;
+    expect(published).toMatchObject({ role: 'assistant', replyToId: incoming.message.id });
+    expect(published.replyTo?.text).toBe('Reply reference probe');
+  } finally { await f.close(); }
+}, 15000);
+
 it('exposes operator group creation, membership editing and human publication without DM side effects', async () => {
   const f = await fixture();
   const app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
@@ -109,6 +126,77 @@ it('exposes operator group creation, membership editing and human publication wi
     expect(await f.database.client.messageReaction.findFirst()).toMatchObject({ actorKey: 'human', agentId: null });
     await vi.waitFor(async () => expect((await app.inject(`/api/groups/${group.id}/messages`)).json().messages).toHaveLength(2), { timeout: 15000 });
     expect(await f.database.client.dmGrant.count()).toBe(0);
+  } finally { await app.close(); await f.close(false); }
+}, 20000);
+
+it('requires typed confirmation and refuses deletion while group agents are responding', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const f = await fixture(false, gate);
+  const app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+  try {
+    const created = await app.inject({ method: 'POST', url: '/api/groups', payload: { name: 'Research', agentIds: [f.a.id] } });
+    const id = created.json().id;
+    const remove = (confirmation: string) => app.inject({ method: 'DELETE', url: `/api/groups/${id}`, payload: { confirmation } });
+    expect((await remove('research')).statusCode).toBe(400);
+    const posted = await app.inject({ method: 'POST', url: `/api/groups/${id}/messages`, payload: { message: 'Research this', clientMessageId: crypto.randomUUID() } });
+    expect(posted.statusCode).toBe(202);
+    const busy = await remove('Research');
+    expect(busy.statusCode).toBe(409);
+    expect((await app.inject(`/api/groups/${id}`)).statusCode).toBe(200);
+    release();
+    await vi.waitFor(async () => expect(await f.database.client.groupDelivery.count({ where: { groupId: id, status: { in: ['queued', 'running'] } } })).toBe(0), { timeout: 15000 });
+    const deleted = await remove('Research');
+    expect(deleted.statusCode).toBe(200); expect(deleted.json()).toEqual({ deleted: true });
+    expect((await app.inject(`/api/groups/${id}`)).statusCode).toBe(404);
+    expect((await app.inject(`/api/groups/${id}/messages`)).statusCode).toBe(404);
+    expect((await app.inject({ method: 'POST', url: `/api/groups/${id}/messages`, payload: { message: 'Late', clientMessageId: crypto.randomUUID() } })).statusCode).toBe(404);
+    expect((await remove('Research')).statusCode).toBe(404);
+  } finally { release(); await app.close(); await f.close(false); }
+}, 20000);
+
+it('lets an agent reference the human message in its own private chat without exposing another channel', async () => {
+  const f = await fixture();
+  const app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+  try {
+    const channel = f.a.channels[0].id;
+    const parent = await f.database.appendMessage(channel, 'assistant', 'Earlier private answer');
+    const posted = await app.inject({ method: 'POST', url: '/api/chat', headers: { Prefer: 'respond-async' }, payload: { agentId: f.a.id, message: 'Reply reference probe', clientMessageId: crypto.randomUUID(), replyToMessageId: parent.id } });
+    expect(posted.statusCode).toBe(202);
+    const incomingId = posted.json().message.id;
+    await vi.waitFor(async () => expect((await f.database.messages(channel)).messages).toHaveLength(3), { timeout: 10000 });
+    const last = (await f.database.messages(channel)).messages.at(-1)!;
+    expect(last).toMatchObject({ role: 'assistant', replyToId: incomingId });
+    const providerCall = f.captured.find(body => JSON.stringify(body.messages).includes('Reply reference probe'));
+    expect(JSON.stringify(providerCall?.messages)).toContain('Earlier private answer');
+    expect(JSON.stringify(providerCall?.messages)).not.toContain('PRIVATE HUMAN B');
+  } finally { await app.close(); await f.close(false); }
+}, 15000);
+
+it('exposes bounded, authorized reply previews through private and group HTTP publications', async () => {
+  const f = await fixture();
+  const app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+  try {
+    const privateId = f.a.channels[0].id;
+    const parent = await f.database.appendMessage(privateId, 'assistant', 'Earlier answer '.repeat(50));
+    const foreign = await f.database.appendMessage(f.b.channels[0].id, 'assistant', 'Other private answer');
+    const body = { agentId: f.a.id, message: 'Follow-up', clientMessageId: crypto.randomUUID(), replyToMessageId: parent.id };
+    const invalid = await app.inject({ method: 'POST', url: '/api/chat', headers: { Prefer: 'respond-async' }, payload: { ...body, replyToMessageId: foreign.id } });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json().message).not.toContain('Other private answer');
+    const accepted = await app.inject({ method: 'POST', url: '/api/chat', headers: { Prefer: 'respond-async' }, payload: body });
+    expect(accepted.statusCode).toBe(202);
+    expect(accepted.json().message.replyTo).toMatchObject({ id: parent.id, role: 'assistant' });
+    expect(accepted.json().message.replyTo.text.length).toBeLessThanOrEqual(161);
+    expect((await app.inject(`/api/channels/${privateId}/messages?limit=2`)).json().messages.at(-1).replyTo.id).toBe(parent.id);
+    const group = await f.broker.groups.create('Team', [f.a.id]);
+    const groupParent = await f.broker.groups.publishHuman(group.id, 'Group parent', crypto.randomUUID());
+    const wrong = await app.inject({ method: 'POST', url: `/api/groups/${group.id}/messages`, payload: { message: 'Wrong', clientMessageId: crypto.randomUUID(), replyToMessageId: parent.id } });
+    expect(wrong.statusCode).toBe(400);
+    const posted = await app.inject({ method: 'POST', url: `/api/groups/${group.id}/messages`, payload: { message: 'Group reply', clientMessageId: crypto.randomUUID(), replyToMessageId: groupParent.message.id } });
+    expect(posted.statusCode).toBe(202);
+    expect(posted.json().message.replyTo).toMatchObject({ id: groupParent.message.id, authorName: 'You', text: 'Group parent' });
+    expect((await app.inject(`/api/groups/${group.id}/messages`)).json().messages.some((row: { id: string; replyTo?: { id: string } }) => row.id === posted.json().message.id && row.replyTo?.id === groupParent.message.id)).toBe(true);
   } finally { await app.close(); await f.close(false); }
 }, 20000);
 

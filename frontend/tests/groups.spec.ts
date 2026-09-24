@@ -66,7 +66,10 @@ for (const mobile of [false, true]) test(`Chat groups preserve Agents, group tim
   const detail = page.locator('[data-message-id="group-1"]');
   const content = detail.locator('[tabindex="0"]');
   await content.focus();
-  await expect(detail.locator('time').first()).toHaveCSS('opacity', '1');
+  if (mobile) {
+    await expect(detail.locator('time').first()).toBeHidden();
+    await expect(content.locator('time')).toBeVisible();
+  } else await expect(detail.locator('time').first()).toHaveCSS('opacity', '1');
   const idleShadow = await content.evaluate(element => getComputedStyle(element).boxShadow);
   await content.click({ button: 'right' });
   await expect(content).toHaveAttribute('data-state', 'open');
@@ -80,16 +83,20 @@ for (const mobile of [false, true]) test(`Chat groups preserve Agents, group tim
   await expect(detail.getByRole('button', { name: 'Add reaction' })).toBeVisible();
   await page.getByLabel('Message Research').fill('Human message');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.getByText('Human message', { exact: true })).toBeVisible();
-  const human = await page.getByText('Human message', { exact: true }).boundingBox();
-  const agent = await page.getByText('First finding', { exact: true }).boundingBox();
-  expect(human!.x).toBeGreaterThan(agent!.x);
+  const history = page.getByRole('region', { name: 'Group chat history' });
+  const human = history.getByText('Human message', { exact: true });
+  await expect(human).toBeVisible();
+  await expect.poll(async () => (await human.boundingBox())!.x > (await history.getByText('First finding', { exact: true }).boundingBox())!.x).toBe(true);
   if (mobile) await page.getByRole('button', { name: 'Back to chats' }).click();
   await expect(page.getByRole('button', { name: 'Open group chat Research', exact: true })).toContainText('Human message');
   if (mobile) await page.getByRole('button', { name: 'Open group chat Research', exact: true }).click();
   expect(grants).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath(`chat-group-${mobile ? 'mobile' : 'desktop'}.png`), fullPage: true });
+  if (mobile) await page.getByRole('button', { name: 'Back to chats' }).click();
   await page.getByRole('tab', { name: 'Agents', exact: true }).click();
-  await expect(page.getByText('Chat with', { exact: true })).toBeVisible();
+  if (mobile) {
+    await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
+    await expect(page.getByRole('combobox', { name: 'Chat with' })).toBeVisible();
+  } else await expect(page.getByText('Chat with', { exact: true })).toBeVisible();
 });

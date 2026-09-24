@@ -4,6 +4,7 @@ import type { PlatformStore } from './platform-store';
 import type { Channel } from './chat-runtime';
 import { ChannelHistory } from './channel-history';
 import { messageText, messageMatch } from './message-text';
+import { channelReply } from './reply-preview';
 
 type Row = Awaited<ReturnType<PlatformStore['appendMessage']>>;
 function integer(value: number | undefined, fallback: number, min: number, max: number) {
@@ -23,7 +24,7 @@ const result = (data: object) => ({ content: [{ type: 'text' as const, text: JSO
 export function createChatHistoryTools(store: PlatformStore, channel: Channel, name: string): ToolDefinition[] {
   const history = new ChannelHistory(store, channel.id);
   const author = (row: Row) => ({ role: row.role, name: row.role === 'user' ? 'Human' : name });
-  const view = (row: Row, offset = 0, length = 1000) => ({ ...position(row), author: author(row), ...messageText(row.text, offset, length) });
+  const view = (row: Row, offset = 0, length = 1000) => ({ ...position(row), author: author(row), replyTo: channelReply(row), ...messageText(row.text, offset, length) });
   const authorize = async (channelId?: string, signal?: AbortSignal) => {
     signal?.throwIfAborted();
     if (channelId !== undefined && channelId !== channel.id) throw new Error('Only the current channel is granted.');
@@ -76,7 +77,7 @@ export function createChatHistoryTools(store: PlatformStore, channel: Channel, n
         await authorize(args.channelId, signal);
         const page = await history.search(args.query, { limit, before: args.before, author: args.author, since, until });
         signal?.throwIfAborted();
-        const matches = page.messages.map(row => ({ ...position(row), author: author(row), ...messageMatch(row.text, args.query) }));
+        const matches = page.messages.map(row => ({ ...position(row), author: author(row), replyTo: channelReply(row), ...messageMatch(row.text, args.query) }));
         return result({ channelId: channel.id, query: args.query, order: 'newest-first', matches, nextCursor: page.nextCursor });
       },
     }),

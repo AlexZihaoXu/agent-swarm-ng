@@ -65,6 +65,16 @@
   to { transform: translateY(0) scale(1); }
 }
 
+@keyframes phone-detail-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes phone-list-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 @keyframes typing-dot {
   0%, 60%, 100% { opacity: 0.35; }
   30% { opacity: 1; }
@@ -73,6 +83,12 @@
 @keyframes presence-pulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
+}
+
+@media (max-width: 767px) and (prefers-reduced-motion: no-preference) {
+  .phone-detail-enter { animation: phone-detail-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .phone-list-enter { animation: phone-list-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .phone-tab-enter { animation: fade-in 160ms ease-out both; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -120,9 +136,28 @@
   .message-context-target { transition: box-shadow 150ms ease-out; }
 }
 
+/* iOS zooms the page when an editable field is smaller than 16px. Keep display text compact. */
+@media (max-width: 639px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+  textarea,
+  select {
+    font-size: 16px;
+    line-height: 1.25rem;
+  }
+
+  .phone-menu-targets [role='menuitem'] { min-height: 44px; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .message-context-target {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+
 body {
   margin: 0;
-  min-width: 320px;
   background: var(--background);
   color: var(--foreground);
   font-family: system-ui, sans-serif;

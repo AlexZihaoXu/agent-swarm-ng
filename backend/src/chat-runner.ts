@@ -13,7 +13,7 @@ export type InboxHooks = {
 };
 
 export async function runChat({ runId, signal, emit, inbox }: RunContext, config: ChatConfiguration, history: ChannelMessage[], message: ChannelMessage,
-  publish: (text: string) => Promise<object>, accessKey: string, subscriptionRuntime?: ModelRuntime, historyTools: ToolDefinition[] = [], hooks: InboxHooks = {}) {
+  publish: (text: string, replyToMessageId?: string) => Promise<object>, accessKey: string, subscriptionRuntime?: ModelRuntime, historyTools: ToolDefinition[] = [], hooks: InboxHooks = {}) {
   const { channel } = config;
   inbox.prepend(message);
   const activity = createActivityRecorder(channel.agentId, channel.id, accessKey, emit, runId);
@@ -28,10 +28,10 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
     signal.throwIfAborted();
     web = await createWebTools();
     signal.throwIfAborted();
-    session = await createChatSession(config, history, async (text, toolCallId, final) => {
+    session = await createChatSession(config, history, async (text, toolCallId, final, replyToMessageId) => {
       signal.throwIfAborted();
       // Publication belongs to the channel, not any connected browser.
-      const saved = await publish(text);
+      const saved = await publish(text, replyToMessageId);
       publicationTyping.published(toolCallId); published++;
       if (final) finalPublished = true;
       activity.record('channel', 'Channel publication', text);

@@ -3,6 +3,13 @@ import { AgentRuns } from './agent-runs';
 
 const identity = { agentId: 'agent', channelId: 'channel', clientMessageId: 'message' };
 describe('backend-owned agent runs', () => {
+  it('broadcasts group deletion to connected observers', () => {
+    const runs = new AgentRuns();
+    const events: object[] = [];
+    runs.subscribe(event => events.push(event));
+    runs.groupDeleted('group-id');
+    expect(events).toEqual([expect.objectContaining({ type: 'group_deleted', groupId: 'group-id', channelId: 'group:group-id' })]);
+  });
   it('keeps working without listeners and exposes its current state to reconnecting clients', async () => {
     const runs = new AgentRuns();
     let finish!: () => void;

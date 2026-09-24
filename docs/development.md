@@ -78,7 +78,7 @@ Create an agent from the agent panel's context menu, then choose a saved endpoin
 
 Pi SDK 0.85.1 uses OpenAI-compatible Chat Completions for API endpoints or native Codex Responses for the connected ChatGPT subscription, with explicitly granted **`send_message`**, **`read_messages`**, and **`search_messages`**, bound to the current platform-chat channel, plus four web tools from **[Pi Web Access](https://github.com/nicobailon/pi-web-access) 0.30.0**: `web_search`, `source_check`, `fetch_content`, and `get_search_content`. Default coding tools, resource discovery, skills, prompt expansion, global settings, and inherited credentials remain disabled. Endpoint keys are literal values, never Pi's command/environment configuration syntax.
 
-Agent communication grants also include `search_emojis` (bounded local emoji name/keyword search plus the agent's four saved recent choices), `read_reactions`, and `react_to_message`. A new human-added reaction is offered to a bounded, decision-only branch before any normal agent turn; see [reaction delivery and picker behavior](chat-and-groups.md#reaction-context-menu). These grants do not add shell, computer, or operator administration access.
+Agent communication grants also include `search_emojis` (bounded local emoji name/keyword search plus the agent's four saved recent choices), `read_reactions`, and `react_to_message`. [Message replies](message-replies.md) add an optional, server-validated same-conversation target to `send_message`/`send_dm`; bounded history and incoming context show its author/excerpt without granting another channel. A new human-added reaction is offered to a bounded, decision-only branch before any normal agent turn; see [reaction delivery and picker behavior](chat-and-groups.md#reaction-context-menu). These grants do not add shell, computer, or operator administration access.
 
 Web search uses keyless Exa MCP; queries go to Exa and public-page fetches contact their target websites. A dedicated Bun subprocess per turn keeps the extension's global configuration/result caches separate. It receives a minimal environment and generated configuration, not developer Pi settings, browser cookies, or endpoint credentials. Only public HTTP(S) readable/raw fetches are granted; the extension's private-network/redirect protections remain enabled. Local files, repository cloning, interactive browser workflows, extra model calls, and caller-supplied auth/proxies are disabled. Result IDs are turn-local; temporary files under `.local/web-turns` are removed on normal cleanup (a backend crash may leave leftovers). This is process/configuration isolation, not an OS sandbox. Agents still have no computer, shell, or interactive browser access.
 
@@ -122,10 +122,10 @@ Thinking-level controls use Pi's known OpenAI model metadata and standard `reaso
 
 ## Platform storage
 
-- **Prisma 7.9.1 + SQLite:** identities, channels, user/tool-published messages, reactions, and agent-specific recent emoji choices in ignored `.local/platform.db`. Bun uses the libSQL adapter; no separate database service is needed.
+- **Prisma 7.9.1 + SQLite:** identities, channels, user/tool-published messages, same-conversation reply references, reactions, and agent-specific recent emoji choices in ignored `.local/platform.db`. Bun uses the libSQL adapter; no separate database service is needed.
 - **Provider credentials:** API endpoint keys remain in `.local/endpoints.json`; ChatGPT OAuth credentials use `.local/openai-auth.json`. Neither is copied into chat records or returned by the API.
 - **Ephemeral:** drafts, typing, operator activity, and Pi sessions. No JSONL sessions are written. External providers may retain inference requests according to their policies.
-- **Docker:** both backend targets run as `bun` and use `platform_data` at `/app/.local`. Replacing a container preserves data; deleting the volume is destructive.
+- **Docker:** both backend targets run as `bun`. Default Compose uses `platform_data` at `/app/.local`; the Tailnet override bind-mounts the existing project `.local` there instead. Replacing a container preserves data; deleting the default Compose volume is destructive.
 
 Backend startup applies committed migrations with `prisma migrate deploy`; development also generates the client. Apply new migrations with the backend stopped: a live libSQL connection on Windows can cause Prisma's migration engine to report `database is locked`. Coordinate a restart rather than interrupting active runs or forcing the lock. `bun run api:generate`, `bun run typecheck`, and `bun run test` generate it as needed. Generated client files, database files, and WAL/SHM files are not committed. Unit tests use isolated databases and remove them after workers exit, including on Windows.
 
@@ -156,6 +156,19 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 # Production-style local build: https://localhost
 docker compose up --build -d
 ```
+
+For the existing Tailnet-only host instance, `compose.tailscale.yaml` binds the same project-local `.local` data into the backend and serves HTTP only on loopback and the explicitly chosen Tailscale IPv4 address, port 19090. **Stop the host backend before starting this Compose stack**: SQLite supports one backend process, and stopping an active run cancels its in-memory inference. Check `/api/events` for active runs first. Stop the host frontend listeners on port 19090 as well. Then:
+
+```sh
+export TAILSCALE_IP="$(tailscale ip -4)"
+# Fresh build on hosts where the Docker Bun/Prisma build succeeds:
+docker compose -f compose.yaml -f compose.tailscale.yaml up --build -d
+# Check http://$TAILSCALE_IP:19090/api/health
+```
+
+On this host the Bun 1.3.6 Docker build crashed during backend Prisma generation. The deployed backend instead uses an existing production image whose source and Prisma migrations were checksum-matched to the current tree and smoke-tested against an isolated database. To redeploy that **already built** backend and rebuild only the frontend, use `docker compose -f compose.yaml -f compose.tailscale.yaml build frontend` followed by `docker compose -f compose.yaml -f compose.tailscale.yaml up --no-build -d`; do not use this shortcut if backend source or migrations have changed. Rebuild the backend after resolving the Bun image crash.
+
+Containers use `restart: unless-stopped` and are intended to come back after host restarts; verify the Tailnet URL after reboot, since binding the Tailscale IPv4 address depends on that interface being ready. The backend mounts `.local` with its existing credentials and SQLite history rather than starting with an empty Docker volume. This is **not** a public deployment: the platform has no user authentication, and Tailnet access is still an access-control decision for the owner. Never expose port 19090 to a public interface.
 
 Development bind-mounts source and Prisma files. Generate the client after schema changes; rebuild images after dependency changes and before production deployment. File watching through Docker Desktop bind mounts may need platform-specific tuning.
 

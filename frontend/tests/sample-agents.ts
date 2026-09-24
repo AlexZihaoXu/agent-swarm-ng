@@ -21,7 +21,7 @@ const samples = [
 
 type Message = NonNullable<RealAgent['lastMessage']>;
 export const sampleHistory: Record<string, Message[]> = Object.fromEntries(samples.map(agent => [agent.id, agent.messages.map(([role, text], index) => ({
-  id: `${agent.id}-${index}`, sequence: index + 1, channelId: agent.id, role, text,
+  id: `${agent.id}-${index}`, sequence: index + 1, channelId: agent.id, role, text, replyTo: null,
   timestamp: new Date(2030, 0, 1, agent.hour, agent.minute).getTime(),
 }))]));
 export const sampleAgents: RealAgent[] = samples.map(agent => ({

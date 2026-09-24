@@ -2,7 +2,7 @@ import type { AgentRuns, RunContext } from './agent-runs';
 import type { PlatformStore } from './platform-store';
 import type { EndpointStore } from './endpoint-store';
 import type { CodexProvider } from './codex-provider';
-import { SwarmStore } from './swarm-store';
+import { SwarmStore, dmReplyInclude } from './swarm-store';
 import { createDmTools, type DmReceipt } from './dm-tools';
 import { resolveChatConnection } from './chat-connection';
 import type { AgentMessageSource, ChannelMessage } from './chat-runtime';
@@ -10,12 +10,13 @@ import { runChat } from './chat-runner';
 import { createChatHistoryTools } from './chat-history-tools';
 import { messageText } from './message-text';
 import { isLiveChain } from './communication-policy';
-import { GroupStore } from './group-store';
+import { GroupStore, groupReplyInclude } from './group-store';
 import { createGroupTools } from './group-tools';
 import { groupSource, groupMessageView } from './group-message';
 import { ReactionStore } from './reaction-store';
 import { createReactionTools } from './reaction-tools';
 import { ReactionCoordinator } from './reaction-coordinator';
+import { channelReply, groupReplyContext, dmReplyContext } from './reply-preview';
 
 type Job = { senderId: string; rootAgentId: string | null; chainId: string; run: ReturnType<AgentRuns['enqueue']>; cleanup: Promise<void> };
 /** Publishes once, then admits a source-labelled message to the recipient's normal inbox. */
@@ -36,7 +37,7 @@ export class DmBroker {
   }
   notifyHumanReaction(channelId: string, messageId: string, emoji: string) { return this.reactionCoordinator.offer(channelId, messageId, emoji); }
   ready() { return this.starting ??= this.store.cancelInterruptedDeliveries(); }
-  async send(senderId: string, recipientId: string, text: string, callId: string, context: RunContext, inheritedChain?: string): Promise<DmReceipt> {
+  async send(senderId: string, recipientId: string, text: string, callId: string, context: RunContext, inheritedChain?: string, replyToId?: string): Promise<DmReceipt> {
     context.signal.throwIfAborted();
     if (this.closing || this.deleting.has(senderId) || this.deleting.has(recipientId)) throw new Error('DM delivery is unavailable.');
     await this.ready(); context.signal.throwIfAborted();
@@ -49,7 +50,7 @@ export class DmBroker {
       await this.store.beginChain(senderId, chainId);
     }
     context.signal.throwIfAborted();
-    const { message, duplicate } = await this.store.send({ senderId, recipientId, text, chainId, deliveryKey: `${context.runId}:${callId}` });
+    const { message, duplicate } = await this.store.send({ senderId, recipientId, text, chainId, deliveryKey: `${context.runId}:${callId}`, replyToId });
     if (duplicate) return { id: message.id, conversationId: message.conversationId, status: message.status, duplicate };
     let status = message.status;
     try {
@@ -60,7 +61,7 @@ export class DmBroker {
         const recipient = await this.database.findAgent(recipientId);
         if (!recipient) throw new Error('Recipient no longer exists.');
         const incoming = await this.store.message(recipientId, senderId, message.id);
-        const input: ChannelMessage = { role: 'user', text, id: message.id, timestamp: message.createdAt.getTime(), source: { agentId: senderId, name: incoming.sender.name, channelId: message.conversationId, chainId, messageId: message.id } };
+        const input: ChannelMessage = { role: 'user', text, id: message.id, timestamp: message.createdAt.getTime(), replyTo: dmReplyContext(message), source: { agentId: senderId, name: incoming.sender.name, channelId: message.conversationId, chainId, messageId: message.id } };
         const channelId = recipient.channels[0].id;
         const run = this.runs.offer(recipientId, input, { type: 'dm_updated', channelId, conversationId: message.conversationId }) ?? this.runs.enqueue({ agentId: recipientId, channelId, clientMessageId: message.id, inputSource: 'agent' }, ctx => this.runInbox(recipientId, input, ctx), { queueTimeoutMs: 300000, executionTimeoutMs: 90000 });
         const cleanup = run.finished.then(async () => {
@@ -75,14 +76,14 @@ export class DmBroker {
     context.emit({ type: 'dm_updated', conversationId: message.conversationId });
     return { id: message.id, conversationId: message.conversationId, status, duplicate: false };
   }
-  async sendHumanGroup(groupId: string, text: string, clientMessageId: string) {
+  async sendHumanGroup(groupId: string, text: string, clientMessageId: string, replyToId?: string) {
     if (this.closing) throw new Error('Group delivery is unavailable.');
     await this.ready();
-    const publication = await this.groups.publishHuman(groupId, text, clientMessageId);
+    const publication = await this.groups.publishHuman(groupId, text, clientMessageId, replyToId);
     if (!publication.duplicate) await this.dispatchGroup(publication);
     return publication;
   }
-  async sendGroup(agentId: string, groupId: string, text: string, callId: string, context: RunContext, inheritedChain?: string) {
+  async sendGroup(agentId: string, groupId: string, text: string, callId: string, context: RunContext, inheritedChain?: string, replyToId?: string) {
     context.signal.throwIfAborted();
     if (this.closing || this.deleting.has(agentId)) throw new Error('Group delivery is unavailable.');
     await this.ready();
@@ -95,7 +96,7 @@ export class DmBroker {
       }
     }
     context.signal.throwIfAborted();
-    const publication = await this.groups.publishAgent(groupId, agentId, text, chainId, `${context.runId}:${callId}`);
+    const publication = await this.groups.publishAgent(groupId, agentId, text, chainId, `${context.runId}:${callId}`, replyToId);
     if (!publication.duplicate) await this.dispatchGroup(publication);
     return { id: publication.message.id, conversationId: `group:${groupId}`, duplicate: publication.duplicate, status: 'published' };
   }
@@ -108,7 +109,7 @@ export class DmBroker {
         if (this.closing || this.deleting.has(agentId) || !isLiveChain(chain)) throw new Error('Recipient unavailable.');
         const recipient = await this.database.findAgent(agentId);
         if (!recipient) throw new Error('Recipient no longer exists.');
-        const input: ChannelMessage = { role: 'user', text: message.text, id: message.id, timestamp: message.createdAt.getTime(), source: groupSource(message) };
+        const input: ChannelMessage = { role: 'user', text: message.text, id: message.id, timestamp: message.createdAt.getTime(), replyTo: groupReplyContext(message), source: groupSource(message) };
         const channelId = recipient.channels[0].id;
         const run = this.runs.offer(agentId, input, { type: 'group_delivery', channelId, groupId: message.groupId }) ?? this.runs.enqueue({ agentId, channelId, clientMessageId: message.id, ...(message.role === 'user' ? {} : { inputSource: 'agent' as const }) }, ctx => this.runInbox(agentId, input, ctx), { queueTimeoutMs: 300000, executionTimeoutMs: 90000 });
         const key = `${message.id}:${agentId}`;
@@ -126,17 +127,17 @@ export class DmBroker {
     const channel = { id: agent.channels[0].id, kind: 'platform-chat' as const, agentId };
     const connection = await resolveChatConnection(agent.endpointId, this.endpoints, this.codex, context.signal);
     const human = await this.database.context(channel.id, incoming.source ? undefined : incoming.id, incoming.source ? undefined : incoming.sequence);
-    const peerHistory = await this.database.client.dmMessage.findMany({ where: { OR: [{ senderId: agentId }, { recipientId: agentId, status: { notIn: ['queued', 'running'] } }] }, orderBy: { sequence: 'desc' }, take: 8, include: { sender: { select: { name: true } }, recipient: { select: { name: true } } } });
+    const peerHistory = await this.database.client.dmMessage.findMany({ where: { OR: [{ senderId: agentId }, { recipientId: agentId, status: { notIn: ['queued', 'running'] } }] }, orderBy: { sequence: 'desc' }, take: 8, include: { sender: { select: { name: true } }, recipient: { select: { name: true } }, ...dmReplyInclude } });
     const threads = new Map<string, AgentMessageSource>();
     const peers: ChannelMessage[] = peerHistory.reverse().map(message => {
       const source = { agentId: message.senderId, name: message.sender.name, channelId: message.conversationId, chainId: message.chainId, messageId: message.id };
       if (message.recipientId === agentId) threads.set(message.conversationId, source);
       const preview = messageText(message.text);
       return { id: message.id, role: message.senderId === agentId ? 'assistant' : 'user', text: message.senderId === agentId ? `[Sent to Agent: ${message.recipient.name} in ${message.conversationId}]
-${preview.text}` : preview.text, timestamp: message.createdAt.getTime(), ...(message.recipientId === agentId ? { source } : {}) };
+${preview.text}` : preview.text, timestamp: message.createdAt.getTime(), replyTo: dmReplyContext(message), ...(message.recipientId === agentId ? { source } : {}) };
     });
-    const groupHistory = await this.database.client.groupMessage.findMany({ where: { group: { members: { some: { agentId } } }, OR: [{ authorId: agentId }, { deliveries: { some: { agentId, status: { notIn: ['queued', 'running'] } } } }] }, orderBy: { sequence: 'desc' }, take: 8 });
-    const shared: ChannelMessage[] = groupHistory.reverse().map(message => ({ id: message.id, role: message.authorId === agentId ? 'assistant' : 'user', text: `${message.authorId === agentId ? `[Sent to group:${message.groupId}]\n` : ''}${messageText(message.text).text}`, timestamp: message.createdAt.getTime(), ...(message.authorId === agentId ? {} : { source: groupSource(message) }) }));
+    const groupHistory = await this.database.client.groupMessage.findMany({ where: { group: { members: { some: { agentId } } }, OR: [{ authorId: agentId }, { deliveries: { some: { agentId, status: { notIn: ['queued', 'running'] } } } }] }, orderBy: { sequence: 'desc' }, take: 8, include: groupReplyInclude });
+    const shared: ChannelMessage[] = groupHistory.reverse().map(message => ({ id: message.id, role: message.authorId === agentId ? 'assistant' : 'user', text: `${message.authorId === agentId ? `[Sent to group:${message.groupId}]\n` : ''}${messageText(message.text).text}`, timestamp: message.createdAt.getTime(), replyTo: groupReplyContext(message), ...(message.authorId === agentId ? {} : { source: groupSource(message) }) }));
     const pending = new Set([incoming.id, ...context.inbox.pendingIds()]);
     const history = [...human, ...peers, ...shared].filter(message => !pending.has(message.id)).sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)).slice(-8);
     let humanBatch = !incoming.source || Boolean(incoming.source.reaction);
@@ -144,19 +145,19 @@ ${preview.text}` : preview.text, timestamp: message.createdAt.getTime(), ...(mes
     let inherited = incoming.source?.chainId;
     let sources: AgentMessageSource[] = incoming.source ? [incoming.source] : [];
     const chainFor = (recipientId: string) => humanBatch ? undefined : sources.find(source => source.agentId === recipientId)?.chainId ?? inherited;
-    const peerTools = createDmTools(this.store, agentId, (recipientId, text, callId) => this.send(agentId, recipientId, text, callId, context, chainFor(recipientId)));
+    const peerTools = createDmTools(this.store, agentId, (recipientId, text, callId, replyToId) => this.send(agentId, recipientId, text, callId, context, chainFor(recipientId), replyToId));
     await runChat(context, {
       name: agent.name, model: agent.model, thinkingLevel: agent.thinkingLevel, baseUrl: connection.baseUrl, apiKey: connection.apiKey, channel,
-      publishPeer: async (channelId, text, callId) => {
-        if (channelId.startsWith('group:')) return JSON.stringify(await this.sendGroup(agentId, channelId.slice(6), text, callId, context, humanBatch ? undefined : sources.find(source => source.channelId === channelId)?.chainId ?? inherited));
+      publishPeer: async (channelId, text, callId, replyToId) => {
+        if (channelId.startsWith('group:')) return JSON.stringify(await this.sendGroup(agentId, channelId.slice(6), text, callId, context, humanBatch ? undefined : sources.find(source => source.channelId === channelId)?.chainId ?? inherited, replyToId));
         const source = threads.get(channelId);
         if (!source) throw new Error('Unknown agent thread. Use send_dm for a new allowed contact.');
-        return JSON.stringify(await this.send(agentId, source.agentId, text, callId, context, chainFor(source.agentId)));
+        return JSON.stringify(await this.send(agentId, source.agentId, text, callId, context, chainFor(source.agentId), replyToId));
       },
-    }, history, incoming, async text => {
+    }, history, incoming, async (text, replyToId) => {
       if (!humanAuthority) throw new Error('Reply to the input’s explicit group or agent-thread channel, not the private human channel.');
-      const message = await this.database.appendMessage(channel.id, 'assistant', text);
-      return { id: message.id, sequence: message.sequence, channelId: channel.id, role: message.role, text, timestamp: message.createdAt.getTime() };
+      const message = await this.database.appendMessage(channel.id, 'assistant', text, crypto.randomUUID(), replyToId);
+      return { id: message.id, sequence: message.sequence, channelId: channel.id, role: message.role, text, timestamp: message.createdAt.getTime(), replyTo: channelReply(message) };
     }, connection.accessKey, connection.subscriptionRuntime, [...createChatHistoryTools(this.database, channel, agent.name), ...peerTools, ...createGroupTools(this.groups, this.store, channel, () => humanAuthority), ...createReactionTools(this.reactions, channel, () => humanAuthority, (channelId, messageId) => this.runs.reactionsChanged(channelId, messageId))], {
       prepare: async messages => {
         const admitted: ChannelMessage[] = [];

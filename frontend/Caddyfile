@@ -7,7 +7,7 @@
 
 	handle {
 		root * /srv
-		@updates path /sw.js /index.html /manifest.webmanifest
+		@updates path / /sw.js /index.html /manifest.webmanifest
 		header @updates Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server

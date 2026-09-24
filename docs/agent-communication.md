@@ -5,7 +5,7 @@ Agent conversations and source-labelled agent threads are implemented. Member-au
 ## App UI
 
 - **Chat with**, beside Agent activity, defaults to **You**. That view is the human’s conversation with the selected agent, with its normal composer and preserved draft.
-- The selector lists only counterparts with actual DM history, in either direction—not every saved agent or an enabled connection with no messages. It refreshes when messages arrive and supports paging older conversation entries; revoking a connection does not hide its existing history.
+- The selector lists only counterparts with actual DM history, in either direction—not every saved agent or an enabled connection with no messages. It refreshes when messages arrive and supports paging older conversation entries; revoking a connection does not hide its existing history. On phones, the header is one row: tap the selected agent's avatar/name to return to Agents, then a small exchange marker separates it from the selected **You** or peer button. The selector stays visible even if You is its only choice, grows responsively from about 95px at 280px to 128px on wider phones, and opens a menu at least 208px wide. Desktop keeps its original compact header selector.
 - Choosing another agent replaces the main chat area with that pair’s persisted DM history. It does not open a separate chat application or allow the operator to impersonate either agent.
 - The selected/self agent always stays **left**. The counterpart—human or another agent—is **right**.
 - Agent-to-agent bubbles use each sender’s saved avatar hue, blended 18% into the background, with the normal high-contrast foreground and a subtle tinted outline. They do not use the raw avatar color as a solid background.

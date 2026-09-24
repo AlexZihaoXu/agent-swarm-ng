@@ -30,7 +30,7 @@ export function AgentAvatarPreview({ name, value, onChange, disabled = false, co
   const colors = avatarColors.map(item => ({ value: String(item.value), label: String(item.label) }));
   if (!colors.some(item => item.value === value.color)) colors.push({ value: value.color, label: `Custom (${value.color})` });
   return <section className="rounded-lg border border-border bg-sidebar/30 p-3">
-    {collapsible && <button type="button" aria-expanded={expanded} aria-controls={`${id}-content`} onClick={() => setExpanded(open => !open)} className="flex w-full cursor-pointer items-center gap-1 rounded-sm text-left text-sm font-medium outline-none transition-colors hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none">
+    {collapsible && <button type="button" aria-expanded={expanded} aria-controls={`${id}-content`} onClick={() => setExpanded(open => !open)} className="flex min-h-11 w-full cursor-pointer items-center gap-1 rounded-sm text-left text-sm font-medium outline-none transition-colors sm:min-h-0 hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none">
       <svg aria-hidden="true" viewBox="0 0 12 12" className={`size-3 transition-transform duration-200 motion-reduce:transition-none ${expanded ? 'rotate-90' : ''}`} fill="currentColor"><path d="m4 2 5 4-5 4z" /></svg>Avatar
     </button>}
     <div id={`${id}-content`} data-slot="avatar-disclosure" aria-hidden={!expanded} inert={!expanded} className={`grid transition-[grid-template-rows,opacity] duration-240 ease-out motion-reduce:transition-none ${expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
@@ -64,7 +64,7 @@ export function AgentAvatarPreview({ name, value, onChange, disabled = false, co
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onChange(randomizeAvatar(value))}>Randomize</Button>
+        <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={disabled} onClick={() => onChange(randomizeAvatar(value))}>Randomize</Button>
         <p className="text-[11px] leading-relaxed text-muted-foreground">New shape, color, eyes and motion variation. State preview stays unchanged.</p>
       </div>
       <p className="text-[11px] leading-relaxed text-muted-foreground">Shape, color and variation are saved. State and look previews are not saved. Live agents use their actual state and natural glances.</p>

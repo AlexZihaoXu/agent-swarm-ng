@@ -13,6 +13,7 @@ import { DmBroker } from './dm-broker';
 import { registerSwarmRoutes } from './swarm-routes';
 import { registerGroupRoutes } from './group-routes';
 import { registerReactionRoutes } from './reaction-routes';
+import { channelReply, channelReplyContext } from './reply-preview';
 
 const Thinking = Type.Union(Object.values(ThinkingLevel).map(value => Type.Literal(value)));
 const Selection = Type.Object({
@@ -22,6 +23,7 @@ const Selection = Type.Object({
 const Message = Type.Object({
   id: Type.String(), sequence: Type.Integer(), channelId: Type.String(),
   role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]), text: Type.String(), timestamp: Type.Number(),
+  replyTo: Type.Union([Type.Object({ id: Type.String(), role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]), text: Type.String() }), Type.Null()]),
 });
 const Cursor = Type.Union([Type.Integer(), Type.Null()]);
 const Agent = Type.Object({
@@ -32,9 +34,10 @@ const RunState = Type.Object({ runId: Type.String(), agentId: Type.String(), cha
 const ChatBody = Type.Object({
   agentId: Type.String({ minLength: 1, maxLength: 100 }),
   clientMessageId: Type.String({ format: 'uuid' }), message: Type.String({ minLength: 1, maxLength: 20000 }),
+  replyToMessageId: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
 }, { additionalProperties: false });
-const messageView = (message: { id: string; sequence: number; channelId: string; role: 'user' | 'assistant'; text: string; createdAt: Date }) => ({
-  id: message.id, sequence: message.sequence, channelId: message.channelId, role: message.role, text: message.text, timestamp: message.createdAt.getTime(),
+const messageView = (message: Awaited<ReturnType<PlatformStore['appendMessage']>>) => ({
+  id: message.id, sequence: message.sequence, channelId: message.channelId, role: message.role, text: message.text, timestamp: message.createdAt.getTime(), replyTo: channelReply(message),
 });
 function agentView(agent: NonNullable<Awaited<ReturnType<PlatformStore['findAgent']>>>) {
   const channel = agent.channels[0];
@@ -50,7 +53,7 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
   const preparing = new Map<string, { clientMessageId: string; controller: AbortController; finished: Promise<void> }>();
   let closing = false;
   registerSwarmRoutes(app, broker.store, database, active, () => closing);
-  registerGroupRoutes(app, broker, groupId => runs.announce(groupId), () => closing);
+  registerGroupRoutes(app, broker, groupId => runs.announce(groupId), () => closing, groupId => runs.groupDeleted(groupId));
   registerReactionRoutes(app, broker.reactions, (channelId, messageId) => runs.reactionsChanged(channelId, messageId), () => closing, (channelId, messageId, emoji) => broker.notifyHumanReaction(channelId, messageId, emoji));
   app.addHook('preClose', async () => {
     closing = true; broker.close();
@@ -152,7 +155,7 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
     schema: { operationId: 'sendChannelMessage', body: ChatBody, response: { 200: Type.String({ description: 'Legacy NDJSON observer stream. Prefer: respond-async returns 202 immediately; observe /api/events instead. Accepted work survives disconnects. Messages arriving during a run are coalesced or triaged for interruption; the returned run retains its original Stop target.' }), 202: Type.Object({ run: RunState, message: Message }), 400: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 503: ErrorResponse } },
   }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    const { agentId, clientMessageId, message } = request.body;
+    const { agentId, clientMessageId, message, replyToMessageId } = request.body;
     const stopVersion = runs.stopVersion(agentId);
     if (!message.trim()) return reply.code(400).send({ message: 'Message is empty.' });
     if (closing) return reply.code(503).send({ message: 'The backend is shutting down.' });
@@ -168,8 +171,8 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
       if (await database.findMessage(clientMessageId)) return reply.code(409).send({ message: 'This message was already received. Reload the channel history.' });
       await resolveChatConnection(agent.endpointId, store, codex, controller.signal);
       controller.signal.throwIfAborted();
-      const userMessage = await database.appendMessage(agent.channelId, 'user', message, clientMessageId);
-      const incoming = { role: 'user' as const, text: message, id: userMessage.id, sequence: userMessage.sequence, timestamp: userMessage.createdAt.getTime() };
+      const userMessage = await database.appendMessage(agent.channelId, 'user', message, clientMessageId, replyToMessageId);
+      const incoming = { role: 'user' as const, text: message, id: userMessage.id, sequence: userMessage.sequence, timestamp: userMessage.createdAt.getTime(), replyTo: channelReplyContext(userMessage, agent.name) };
       if (stopVersion !== runs.stopVersion(agentId)) return reply.code(409).send({ message: 'The run was stopped while your message was being saved. Reload history before continuing.' });
       let run = runs.offer(agentId, incoming, { type: 'user_message', ...messageView(userMessage) });
       const joined = Boolean(run);
@@ -189,6 +192,7 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
       return reply;
     } catch (error) {
       if (error instanceof ConnectionError) return reply.code(error.status).send({ message: error.message });
+      if (error instanceof Error && error.message.startsWith('Reply target not found')) return reply.code(400).send({ message: error.message });
       if (controller.signal.aborted) return reply.code(409).send({ message: 'The request was stopped before the agent started.' });
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') return reply.code(409).send({ message: 'This message was already received. Reload the channel history.' });
       return reply.code(503).send({ message: 'Could not save the message or initialize the agent. Reload history before retrying.' });

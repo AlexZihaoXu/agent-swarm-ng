@@ -41,7 +41,7 @@ export function EditAgentForm({ agent, onSave, onDone, onBusyChange }: {
   return <form onSubmit={event => { event.preventDefault(); void save(); }} className="flex max-h-[calc(90dvh-1rem)] min-h-0 flex-col">
     <div className="px-4 pt-4"><Dialog.Title className="text-lg font-semibold">Edit agent</Dialog.Title><Dialog.Description className="mt-2 break-words text-sm text-muted-foreground">Appearance and channel permissions for {agent.name}.</Dialog.Description></div>
     <Tabs.Root value={tab} onValueChange={setTab} className="mt-4 flex min-h-0 flex-col">
-      <Tabs.List aria-label="Agent editor sections" className="mx-4 inline-flex h-9 w-fit shrink-0 items-center justify-center rounded-lg bg-muted p-[3px] text-muted-foreground">
+      <Tabs.List aria-label="Agent editor sections" className="mx-4 inline-flex h-[50px] w-fit shrink-0 items-center justify-center rounded-lg bg-muted p-[3px] text-muted-foreground sm:h-9">
         {['avatar', 'settings'].map(value => <Tabs.Trigger key={value} value={value} className="inline-flex h-full items-center justify-center rounded-md px-3 py-1 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm motion-reduce:transition-none">{value === 'avatar' ? 'Avatar' : 'Settings'}</Tabs.Trigger>)}
       </Tabs.List>
       <ScrollArea label="Agent editor" viewportTabIndex={-1} className="mt-4 h-[min(32rem,calc(90dvh-13rem))] min-h-0" viewportClassName="[&>div]:!block">
@@ -52,9 +52,9 @@ export function EditAgentForm({ agent, onSave, onDone, onBusyChange }: {
       </ScrollArea>
     </Tabs.Root>
     <div className="px-4 pb-4 pt-4">
-      {loadError ? <p role="alert" className="mb-3 text-sm">Could not load permissions. <button type="button" onClick={() => setAttempt(value => value + 1)} className="underline">Retry settings</button></p> : !loaded && <p role="status" className="mb-3 text-xs text-muted-foreground">Loading settings…</p>}
+      {loadError ? <p role="alert" className="mb-3 text-sm">Could not load permissions. <button type="button" onClick={() => setAttempt(value => value + 1)} className="inline-flex min-h-11 items-center underline sm:min-h-0">Retry settings</button></p> : !loaded && <p role="status" className="mb-3 text-xs text-muted-foreground">Loading settings…</p>}
       {error && <p role="alert" className="mb-3 text-sm">{error}</p>}
-      <div className="flex justify-end gap-2"><Dialog.Close asChild><Button type="button" variant="outline" size="sm" disabled={busy}>Cancel</Button></Dialog.Close><Button type="submit" size="sm" disabled={busy || !loaded}>{busy ? 'Saving…' : 'Save changes'}</Button></div>
+      <div className="flex justify-end gap-2"><Dialog.Close asChild><Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={busy}>Cancel</Button></Dialog.Close><Button type="submit" size="sm" className="min-h-11 sm:min-h-0" disabled={busy || !loaded}>{busy ? 'Saving…' : 'Save changes'}</Button></div>
     </div>
   </form>;
 }

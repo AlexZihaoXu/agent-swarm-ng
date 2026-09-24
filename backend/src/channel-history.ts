@@ -1,5 +1,5 @@
 import { Prisma } from './generated/prisma/client';
-import type { PlatformStore } from './platform-store';
+import { channelReplyInclude, type PlatformStore } from './platform-store';
 
 type Row = Awaited<ReturnType<PlatformStore['appendMessage']>>;
 export type ReadSection = { before?: number; after?: number; at?: Date; messageId?: string; limit: number };
@@ -9,7 +9,7 @@ export class ChannelHistory {
   constructor(private store: PlatformStore, private channelId: string) {}
   async message(id: string) {
     await this.store.initialize();
-    const message = await this.store.client.message.findFirst({ where: { id, channelId: this.channelId } });
+    const message = await this.store.client.message.findFirst({ where: { id, channelId: this.channelId }, include: channelReplyInclude });
     if (!message) throw new Error('Message not found in this channel.');
     return message;
   }
@@ -18,18 +18,18 @@ export class ChannelHistory {
     const { limit } = options;
     let anchor: Row | null = null;
     if (options.messageId) anchor = await this.message(options.messageId);
-    else if (options.at) anchor = await this.store.client.message.findFirst({ where: { channelId: this.channelId, createdAt: { gte: options.at } }, orderBy: [{ createdAt: 'asc' }, { sequence: 'asc' }] });
+    else if (options.at) anchor = await this.store.client.message.findFirst({ where: { channelId: this.channelId, createdAt: { gte: options.at } }, orderBy: [{ createdAt: 'asc' }, { sequence: 'asc' }], include: channelReplyInclude });
     let messages: Row[];
     if (anchor) {
-      let older = await this.store.client.message.findMany({ where: { channelId: this.channelId, sequence: { lt: anchor.sequence } }, orderBy: { sequence: 'desc' }, take: Math.floor((limit - 1) / 2) });
-      const newer = await this.store.client.message.findMany({ where: { channelId: this.channelId, sequence: { gte: anchor.sequence } }, orderBy: { sequence: 'asc' }, take: limit - older.length });
-      if (older.length + newer.length < limit) older = await this.store.client.message.findMany({ where: { channelId: this.channelId, sequence: { lt: anchor.sequence } }, orderBy: { sequence: 'desc' }, take: limit - newer.length });
+      let older = await this.store.client.message.findMany({ where: { channelId: this.channelId, sequence: { lt: anchor.sequence } }, orderBy: { sequence: 'desc' }, take: Math.floor((limit - 1) / 2), include: channelReplyInclude });
+      const newer = await this.store.client.message.findMany({ where: { channelId: this.channelId, sequence: { gte: anchor.sequence } }, orderBy: { sequence: 'asc' }, take: limit - older.length, include: channelReplyInclude });
+      if (older.length + newer.length < limit) older = await this.store.client.message.findMany({ where: { channelId: this.channelId, sequence: { lt: anchor.sequence } }, orderBy: { sequence: 'desc' }, take: limit - newer.length, include: channelReplyInclude });
       messages = [...older.reverse(), ...newer];
     } else {
       const forwards = options.after !== undefined;
       messages = await this.store.client.message.findMany({
         where: { channelId: this.channelId, ...(forwards ? { sequence: { gt: options.after } } : options.before !== undefined ? { sequence: { lt: options.before } } : {}) },
-        orderBy: { sequence: forwards ? 'asc' : 'desc' }, take: limit,
+        orderBy: { sequence: forwards ? 'asc' : 'desc' }, take: limit, include: channelReplyInclude,
       });
       if (!forwards) messages.reverse();
     }
@@ -57,7 +57,7 @@ export class ChannelHistory {
       ${options.until ? Prisma.sql`AND createdAt <= ${options.until}` : Prisma.empty}
       ORDER BY sequence DESC LIMIT ${options.limit + 1}
     `);
-    const messages = ids.length ? await this.store.client.message.findMany({ where: { channelId: this.channelId, id: { in: ids.slice(0, options.limit).map(row => row.id) } }, orderBy: { sequence: 'desc' }, take: options.limit }) : [];
+    const messages = ids.length ? await this.store.client.message.findMany({ where: { channelId: this.channelId, id: { in: ids.slice(0, options.limit).map(row => row.id) } }, orderBy: { sequence: 'desc' }, take: options.limit, include: channelReplyInclude }) : [];
     return { messages, nextCursor: ids.length > options.limit ? messages.at(-1)!.sequence : null };
   }
 }

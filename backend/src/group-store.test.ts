@@ -45,6 +45,29 @@ it('commits publications and fan-out once, binds authors, and preserves delivery
     expect((await groups.history(group.id, b.id)).messages.map(message => message.text)).toEqual(['Discuss the task', 'My findings']);
   } finally { await database.close(); }
 });
+it('rejects foreign reply targets before group fan-out and binds duplicate keys to their original parent', async () => {
+  const { database, groups, a, b } = await fixture();
+  try {
+    const group = await groups.create('Team', [a.id, b.id]);
+    const other = await groups.create('Private', [a.id]);
+    const parent = await groups.publishHuman(group.id, 'Original', 'root');
+    const foreign = await groups.publishHuman(other.id, 'Foreign', 'other');
+    await expect(groups.publishHuman(group.id, 'No', 'bad', foreign.message.id)).rejects.toThrow('Reply target not found');
+    expect(await database.client.groupMessage.count({ where: { groupId: group.id } })).toBe(1);
+    const reply = await groups.publishHuman(group.id, 'About that', 'reply', parent.message.id);
+    expect(reply.message.replyTo?.text).toBe('Original');
+    expect((await groups.history(group.id, a.id, undefined, 1)).messages[0].replyTo?.id).toBe(parent.message.id);
+    expect((await groups.publishHuman(group.id, 'About that', 'reply', parent.message.id)).duplicate).toBe(true);
+    await expect(groups.publishHuman(group.id, 'About that', 'reply', undefined)).rejects.toThrow('different');
+    const agentReply = await groups.publishAgent(group.id, a.id, 'My answer', parent.message.chainId, 'agent-reply', reply.message.id);
+    expect(agentReply.message.replyToId).toBe(reply.message.id);
+    await groups.update(group.id, 'Team', [b.id]);
+    await expect(groups.publishAgent(group.id, a.id, 'No', parent.message.chainId, 'revoked-reply', parent.message.id)).rejects.toThrow('member');
+    await database.client.groupMessage.delete({ where: { id: parent.message.id } });
+    expect((await groups.message(group.id, reply.message.id, b.id)).replyTo).toBeNull();
+  } finally { await database.close(); }
+});
+
 it('keeps DM permission independent when a group task branches, while sharing its budget', async () => {
   const { database, groups, a, b } = await fixture();
   const swarm = new SwarmStore(database);
@@ -61,6 +84,41 @@ it('keeps DM permission independent when a group task branches, while sharing it
     expect((await database.client.dmChain.findUnique({ where: { id: root.message.chainId } }))?.remaining).toBe(30);
     await database.client.groupChat.delete({ where: { id: group.id } });
     await expect(send()).rejects.toThrow('chain stopped');
+  } finally { await database.close(); }
+});
+
+it('requires the exact name, rejects unfinished deliveries, and deletes only the chosen group and its history', async () => {
+  const { database, groups, a, b } = await fixture();
+  try {
+    const group = await groups.create('Team', [a.id, b.id]);
+    const other = await groups.create('Other', [a.id]);
+    const root = await groups.publishHuman(group.id, 'Hello', 'delete-root');
+    await groups.publishHuman(group.id, 'Reply', 'delete-reply', root.message.id);
+    await database.client.messageReaction.create({ data: { groupMessageId: root.message.id, actorKey: 'human', emoji: '👍' } });
+    const swarm = new SwarmStore(database);
+    await swarm.updateSettings(a.id, { allowedDmAgentIds: [b.id] });
+    await swarm.send({ senderId: a.id, recipientId: b.id, chainId: root.message.chainId, deliveryKey: 'keep-private', text: 'Private branch' });
+    await groups.publishHuman(other.id, 'Keep', 'keep-root');
+    await expect(groups.remove(group.id, 'team')).rejects.toThrow('exact group name');
+    await expect(groups.remove('missing', 'Team')).rejects.toThrow('Group not found');
+    await expect(groups.remove(group.id, 'Team')).rejects.toThrow('responding');
+    for (const delivery of root.deliveries) await groups.finish(root.message.id, delivery.agentId, 'completed');
+    const reply = (await groups.history(group.id)).messages.at(-1)!;
+    const deliveries = await database.client.groupDelivery.findMany({ where: { messageId: reply.id } });
+    for (const delivery of deliveries) await groups.finish(reply.id, delivery.agentId, 'completed');
+    await groups.remove(group.id, 'Team');
+    expect(await database.client.groupChat.count()).toBe(1);
+    expect(await database.client.groupMessage.count({ where: { groupId: group.id } })).toBe(0);
+    expect(await database.client.groupMember.count({ where: { groupId: group.id } })).toBe(0);
+    expect(await database.client.groupDelivery.count({ where: { groupId: group.id } })).toBe(0);
+    expect(await database.client.messageReaction.count({ where: { groupMessageId: root.message.id } })).toBe(0);
+    expect(await database.client.dmMessage.findUnique({ where: { deliveryKey: 'keep-private' } })).toMatchObject({ text: 'Private branch' });
+    expect(await database.client.dmChain.findUnique({ where: { id: root.message.chainId } })).toMatchObject({ rootGroupId: null });
+    await expect(swarm.send({ senderId: a.id, recipientId: b.id, chainId: root.message.chainId, deliveryKey: 'too-late', text: 'No' })).rejects.toThrow('chain stopped');
+    expect((await groups.history(other.id)).messages.map(message => message.text)).toEqual(['Keep']);
+    await expect(groups.publishHuman(group.id, 'Too late', 'late')).rejects.toThrow('Group not found');
+    await expect(groups.history(group.id)).rejects.toThrow('Group not found');
+    expect(await database.client.agent.count()).toBe(3);
   } finally { await database.close(); }
 });
 

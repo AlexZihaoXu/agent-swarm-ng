@@ -5,6 +5,7 @@ import { liveChainWhere } from './communication-policy';
 export const DM_CHAIN_LIMIT = 8;
 export const DM_TEXT_LIMIT = 8000;
 const pending = ['queued', 'running'];
+export const dmReplyInclude = { replyTo: { select: { id: true, text: true, senderId: true, sender: { select: { name: true } } } } } as const;
 export const dmConversationId = (a: string, b: string) => `dm:${[a, b].sort().join(':')}`;
 export class SwarmError extends Error {
   constructor(readonly code: 'invalid' | 'missing' | 'denied' | 'limit', message: string) { super(message); }
@@ -50,21 +51,22 @@ export class SwarmStore {
     if (chain.rootAgentId !== rootAgentId || chain.cancelled) throw new SwarmError('denied', 'This communication chain is no longer available.');
     return chain;
   }
-  async send(input: { senderId: string; recipientId: string; chainId: string; deliveryKey: string; text: string }) {
-    const { senderId, recipientId, chainId, deliveryKey, text } = input;
+  async send(input: { senderId: string; recipientId: string; chainId: string; deliveryKey: string; text: string; replyToId?: string }) {
+    const { senderId, recipientId, chainId, deliveryKey, text, replyToId } = input;
     if (senderId === recipientId || !text.trim() || text.length > DM_TEXT_LIMIT || !deliveryKey || deliveryKey.length > 256) throw new SwarmError('invalid', 'Invalid DM recipient, text, or delivery key.');
     await this.store.initialize();
     return this.store.client.$transaction(async tx => {
-      const previous = await tx.dmMessage.findUnique({ where: { deliveryKey } });
+      const previous = await tx.dmMessage.findUnique({ where: { deliveryKey }, include: dmReplyInclude });
       if (previous) {
-        if (previous.senderId !== senderId || previous.recipientId !== recipientId || previous.chainId !== chainId || previous.text !== text) throw new SwarmError('invalid', 'Delivery key was already used for a different message.');
+        if (previous.senderId !== senderId || previous.recipientId !== recipientId || previous.chainId !== chainId || previous.text !== text || previous.replyToId !== (replyToId ?? null)) throw new SwarmError('invalid', 'Delivery key was already used for a different message.');
         return { message: previous, duplicate: true };
       }
       if (!await tx.dmGrant.findUnique({ where: { senderId_recipientId: { senderId, recipientId } } })) throw new SwarmError('denied', 'This agent is not allowed to DM that recipient.');
+      if (replyToId && !await tx.dmMessage.findFirst({ where: { id: replyToId, conversationId: dmConversationId(senderId, recipientId) }, select: { id: true } })) throw new SwarmError('invalid', 'Reply target not found in this DM conversation.');
       if (await tx.dmMessage.count({ where: { recipientId, status: { in: pending } } }) >= 8 || await tx.dmMessage.count({ where: { status: { in: pending } } }) >= 64) throw new SwarmError('limit', 'The DM delivery queue is full.');
       const budget = await tx.dmChain.updateMany({ where: { ...liveChainWhere, id: chainId, remaining: { gt: 0 } }, data: { remaining: { decrement: 1 } } });
       if (!budget.count) throw new SwarmError('limit', 'The communication chain stopped or reached its message limit.');
-      const message = await tx.dmMessage.create({ data: { senderId, recipientId, chainId, deliveryKey, text, conversationId: dmConversationId(senderId, recipientId) } });
+      const message = await tx.dmMessage.create({ data: { senderId, recipientId, chainId, deliveryKey, text, replyToId, conversationId: dmConversationId(senderId, recipientId) }, include: dmReplyInclude });
       return { message, duplicate: false };
     });
   }
@@ -82,13 +84,13 @@ export class SwarmStore {
   async received(agentId: string, before?: number, limit = 20) {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 40 || (before !== undefined && (!Number.isSafeInteger(before) || before < 1))) throw new SwarmError('invalid', 'Invalid inbox window.');
     await this.store.initialize();
-    const rows = await this.store.client.dmMessage.findMany({ where: { recipientId: agentId, ...(before === undefined ? {} : { sequence: { lt: before } }) }, orderBy: { sequence: 'desc' }, take: limit + 1, include: { sender: { select: { id: true, name: true, avatar: true } } } });
+    const rows = await this.store.client.dmMessage.findMany({ where: { recipientId: agentId, ...(before === undefined ? {} : { sequence: { lt: before } }) }, orderBy: { sequence: 'desc' }, take: limit + 1, include: { sender: { select: { id: true, name: true, avatar: true } }, ...dmReplyInclude } });
     const messages = rows.slice(0, limit).reverse();
     return { messages, nextCursor: rows.length > limit ? messages[0].sequence : null };
   }
   async message(agentId: string, peerId: string, id: string) {
     await this.store.initialize();
-    const message = await this.store.client.dmMessage.findFirst({ where: { id, conversationId: dmConversationId(agentId, peerId), OR: [{ senderId: agentId, recipientId: peerId }, { senderId: peerId, recipientId: agentId }] }, include: { sender: { select: { name: true } } } });
+    const message = await this.store.client.dmMessage.findFirst({ where: { id, conversationId: dmConversationId(agentId, peerId), OR: [{ senderId: agentId, recipientId: peerId }, { senderId: peerId, recipientId: agentId }] }, include: { sender: { select: { name: true } }, ...dmReplyInclude } });
     if (!message) throw new SwarmError('missing', 'Message not found in this DM conversation.');
     return message;
   }
@@ -98,20 +100,20 @@ export class SwarmStore {
     const messages = await this.store.client.dmMessage.findMany({
       where: { conversationId: dmConversationId(agentId, peerId), OR: [{ senderId: agentId, recipientId: peerId }, { senderId: peerId, recipientId: agentId }], ...(before === undefined ? {} : { sequence: { lt: before } }) },
       orderBy: { sequence: 'desc' }, take: limit + 1,
-      include: { sender: { select: { name: true } }, recipient: { select: { name: true } } },
+      include: { sender: { select: { name: true } }, recipient: { select: { name: true } }, ...dmReplyInclude },
     });
     const page = messages.slice(0, limit).reverse();
     return { messages: page, nextCursor: messages.length > limit ? page[0].sequence : null };
   }
   async context(agentId: string, peerId: string, incomingSequence: number) {
     await this.store.initialize();
-    return (await this.store.client.dmMessage.findMany({ where: { conversationId: dmConversationId(agentId, peerId), OR: [{ senderId: agentId, recipientId: peerId }, { senderId: peerId, recipientId: agentId }], AND: [{ OR: [{ senderId: agentId }, { sequence: { lt: incomingSequence } }] }] }, orderBy: { sequence: 'desc' }, take: 8 })).reverse();
+    return (await this.store.client.dmMessage.findMany({ where: { conversationId: dmConversationId(agentId, peerId), OR: [{ senderId: agentId, recipientId: peerId }, { senderId: peerId, recipientId: agentId }], AND: [{ OR: [{ senderId: agentId }, { sequence: { lt: incomingSequence } }] }] }, orderBy: { sequence: 'desc' }, take: 8, include: dmReplyInclude })).reverse();
   }
   async claim(id: string, recipientId: string) {
     await this.store.initialize();
     const result = await this.store.client.dmMessage.updateMany({ where: { id, recipientId, status: 'queued', chain: liveChainWhere }, data: { status: 'running' } });
     if (!result.count) return null;
-    return this.store.client.dmMessage.findFirst({ where: { id, recipientId, status: 'running' }, include: { sender: { select: { id: true, name: true } } } });
+    return this.store.client.dmMessage.findFirst({ where: { id, recipientId, status: 'running' }, include: { sender: { select: { id: true, name: true } }, ...dmReplyInclude } });
   }
   async finish(id: string, recipientId: string, status: 'completed' | 'failed' | 'cancelled') {
     await this.store.initialize();

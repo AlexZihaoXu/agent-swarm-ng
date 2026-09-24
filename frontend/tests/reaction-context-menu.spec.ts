@@ -66,6 +66,7 @@ test('existing reactions have a spaced, larger emoji and a nearby Add reaction p
   await page.getByRole('menuitem', { name: 'Add reaction' }).hover();
   await page.getByRole('searchbox', { name: 'Search emojis' }).fill('fire');
   await page.getByRole('group', { name: 'Emoji choices' }).getByRole('button', { name: 'fire', exact: true }).click();
+  await expect(page.getByRole('menu', { name: 'Message actions' })).toHaveCount(0);
   const chip = row.getByRole('button', { name: 'Fire: 1 reaction' });
   await expect(chip).toBeVisible();
   await expect(row.getByLabel('Message reactions')).toHaveCSS('margin-left', '8px');
@@ -75,24 +76,25 @@ test('existing reactions have a spaced, larger emoji and a nearby Add reaction p
   const chipBounds = (await chip.boundingBox())!, pickerBounds = (await picker.boundingBox())!;
   expect(pickerBounds.x).toBeGreaterThan(chipBounds.x + chipBounds.width);
   await picker.click();
-  const emojiResults = page.getByRole('region', { name: 'Emoji results' });
+  const emojiDialog = page.getByRole('dialog');
+  const emojiResults = emojiDialog.getByRole('region', { name: 'Emoji results' });
   await emojiResults.hover();
   await emojiResults.evaluate(element => { element.scrollTop = 100; element.dispatchEvent(new Event('scroll')); });
   await expect(emojiResults.locator('xpath=..').locator('[data-slot="scroll-area-thumb"]')).toHaveCount(1);
-  await page.getByRole('searchbox', { name: 'Search emojis' }).fill('red heart');
-  await page.getByRole('group', { name: 'Emoji choices' }).getByRole('button', { name: 'red heart', exact: true }).click();
+  await emojiDialog.getByRole('searchbox', { name: 'Search emojis' }).fill('red heart');
+  await emojiDialog.getByRole('group', { name: 'Emoji choices' }).getByRole('button', { name: 'red heart', exact: true }).click();
   await expect(row.getByRole('button', { name: 'Heart: 1 reaction' })).toBeVisible();
   await picker.click();
-  await page.getByRole('searchbox', { name: 'Search emojis' }).fill('coder');
-  await page.getByRole('group', { name: 'Emoji choices' }).getByRole('button', { name: 'woman technologist: medium skin tone', exact: true }).click();
+  await emojiDialog.getByRole('searchbox', { name: 'Search emojis' }).fill('coder');
+  await emojiDialog.getByRole('group', { name: 'Emoji choices' }).getByRole('button', { name: 'woman technologist: medium skin tone', exact: true }).click();
   await expect(row.getByRole('button', { name: '👩🏽‍💻: 1 reaction' })).toBeVisible();
   await picker.click();
-  await page.getByRole('searchbox', { name: 'Search emojis' }).fill('canada');
-  await page.getByRole('group', { name: 'Emoji choices' }).getByRole('button', { name: 'flag: Canada', exact: true }).click();
+  await emojiDialog.getByRole('searchbox', { name: 'Search emojis' }).fill('canada');
+  await emojiDialog.getByRole('group', { name: 'Emoji choices' }).getByRole('button', { name: 'flag: Canada', exact: true }).click();
   await expect(row.getByRole('button', { name: '🇨🇦: 1 reaction' })).toBeVisible();
 });
 
-test('right-clicking a bubble opens recent reactions, an emoji submenu, and disabled Reply', async ({ page }) => {
+test('right-clicking a bubble opens recent reactions, an emoji submenu, and Reply', async ({ page }) => {
   const saved = new Map<string, { emoji: string; count: number; mine: boolean }[]>();
   let fail = false;
   await page.route('**/api/chats/*/reactions*', route => route.fulfill({ json: { messages: new URL(route.request().url()).searchParams.getAll('ids').map(id => ({ id, reactions: saved.get(id) ?? [] })) } }));
@@ -115,7 +117,7 @@ test('right-clicking a bubble opens recent reactions, an emoji submenu, and disa
   const menu = page.getByRole('menu', { name: 'Message actions' });
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('group', { name: 'Recent reactions' })).toHaveCount(0);
-  await expect(menu.getByRole('menuitem', { name: 'Reply' })).toHaveAttribute('aria-disabled', 'true');
+  await expect(menu.getByRole('menuitem', { name: 'Reply' })).not.toHaveAttribute('aria-disabled', 'true');
   const add = menu.getByRole('menuitem', { name: 'Add reaction' });
   await add.hover();
   await page.getByRole('searchbox', { name: 'Search emojis' }).fill('thumbs up');
@@ -176,9 +178,84 @@ test('right-clicking a bubble opens recent reactions, an emoji submenu, and disa
 
 test.describe('touch', () => {
   test.use({ hasTouch: true });
+  test('a real touch with slight finger drift opens the right-click menu', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
+    const bubble = page.locator('[data-message-id="avery-0"]');
+    await expect(bubble).toHaveCSS('user-select', 'none');
+    const box = (await bubble.boundingBox())!;
+    const x = box.x + box.width / 2, y = box.y + box.height / 2;
+    const client = await page.context().newCDPSession(page);
+    const menu = page.getByRole('menu', { name: 'Message actions' });
+    let touching = false;
+    const start = async () => { touching = true; await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] }); };
+    const end = async () => { if (touching) { touching = false; await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); } };
+    try {
+      await start();
+      await page.waitForTimeout(100);
+      await end();
+      await page.waitForTimeout(750);
+      await expect(menu).toHaveCount(0);
+
+      await start();
+      await page.waitForTimeout(130);
+      await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 30, y: y + 25, id: 1 }] });
+      await page.waitForTimeout(800);
+      await expect(menu).toHaveCount(0);
+      await end();
+
+      await start();
+      await page.waitForTimeout(130);
+      await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 3, y: y + 2, id: 1 }] });
+      await expect(menu).toBeVisible({ timeout: 1800 });
+      await end();
+      await expect(menu).toBeVisible();
+      await menu.getByRole('menuitem', { name: 'Reply' }).tap();
+      await expect(page.getByLabel('Replying to Avery')).toBeVisible();
+    } finally {
+      await end();
+      await client.detach();
+    }
+  });
+
+  test('a group message uses the same menu on a real mobile hold', async ({ page }) => {
+    const group = { id: 'team', name: 'Team', createdAt: Date.now(), members: [], lastMessage: null };
+    const messages = [{ id: 'group-1', sequence: 1, groupId: 'team', role: 'user', authorId: null, authorName: 'You', authorAvatar: null, text: 'Group note', timestamp: Date.now(), replyTo: null }];
+    await page.route(/\/api\/groups(?:\?.*)?$/, route => route.fulfill({ json: { groups: [group], nextCursor: null } }));
+    await page.route('**/api/groups/team', route => route.fulfill({ json: group }));
+    await page.route('**/api/groups/team/messages*', route => route.fulfill({ json: { messages, nextCursor: null } }));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await page.getByRole('tab', { name: 'Chat' }).click();
+    await page.getByRole('button', { name: 'Open group chat Team' }).click();
+    const bubble = page.locator('[data-message-id="group-1"] .message-context-target');
+    const box = (await bubble.boundingBox())!;
+    const x = box.x + box.width / 2, y = box.y + box.height / 2;
+    const client = await page.context().newCDPSession(page);
+    try {
+      await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] });
+      await page.waitForTimeout(130);
+      await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 3, y: y + 2, id: 1 }] });
+      const menu = page.getByRole('menu', { name: 'Message actions' });
+      await expect(menu).toBeVisible({ timeout: 1800 });
+      await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await menu.getByRole('menuitem', { name: 'Reply' }).tap();
+      await expect(page.getByLabel('Replying to You')).toBeVisible();
+    } finally {
+      await client.detach();
+    }
+  });
+
   test('long-press opens the message actions without hover', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.route('**/api/chats/*/messages/*/reaction', route => route.fulfill({ json: { reactions: [{ emoji: '👍', count: 1, mine: true }] } }));
+    const saved = new Map<string, { emoji: string; count: number; mine: boolean }[]>();
+    await page.route('**/api/chats/*/reactions*', route => route.fulfill({ json: { messages: new URL(route.request().url()).searchParams.getAll('ids').map(id => ({ id, reactions: saved.get(id) ?? [] })) } }));
+    await page.route('**/api/chats/*/messages/*/reaction', route => {
+      const id = new URL(route.request().url()).pathname.split('/').at(-2)!;
+      saved.set(id, [{ emoji: '👍', count: 1, mine: true }]);
+      return route.fulfill({ json: { reactions: saved.get(id) } });
+    });
     await page.goto('/');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
     const bubble = page.locator('[data-message-id="avery-0"]');
@@ -190,7 +267,7 @@ test.describe('touch', () => {
     const bounds = (await menu.boundingBox())!;
     expect(bounds.x).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
-    await expect(menu.getByRole('menuitem', { name: 'Reply' })).toHaveAttribute('aria-disabled', 'true');
+    await expect(menu.getByRole('menuitem', { name: 'Reply' })).not.toHaveAttribute('aria-disabled', 'true');
     await menu.getByRole('menuitem', { name: 'Add reaction' }).tap();
     await page.getByRole('searchbox', { name: 'Search emojis' }).fill('thumbs up');
     await page.getByRole('group', { name: 'Emoji choices' }).getByRole('button', { name: 'thumbs up', exact: true }).tap();

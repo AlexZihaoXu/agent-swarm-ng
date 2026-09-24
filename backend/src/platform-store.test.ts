@@ -28,6 +28,26 @@ describe('Prisma SQLite platform records', () => {
     } finally { await store.close(); }
   });
 
+  it('saves only same-channel reply targets and returns previews when the parent is outside the page', async () => {
+    const store = await prepareDatabase(join(folder, 'replies.db'));
+    try {
+      const agent = await store.createAgent(config), other = await store.createAgent(config);
+      const channelId = agent.channels[0].id;
+      const parent = await store.appendMessage(channelId, 'assistant', 'A prior answer');
+      const foreign = await store.appendMessage(other.channels[0].id, 'assistant', 'Private answer');
+      for (let i = 0; i < 52; i++) await store.appendMessage(channelId, 'user', `Filler ${i}`);
+      const reply = await store.appendMessage(channelId, 'user', 'Which answer?', crypto.randomUUID(), parent.id);
+      expect(reply.replyToId).toBe(parent.id);
+      expect(reply.replyTo?.text).toBe('A prior answer');
+      expect((await store.messages(channelId, undefined, 1)).messages[0].replyTo?.id).toBe(parent.id);
+      await expect(store.appendMessage(channelId, 'user', 'No', crypto.randomUUID(), foreign.id)).rejects.toThrow('Reply target not found');
+      await expect(store.appendMessage(channelId, 'user', 'No', crypto.randomUUID(), 'missing')).rejects.toThrow('Reply target not found');
+      expect(await store.client.message.count({ where: { channelId } })).toBe(54);
+      await store.client.message.delete({ where: { id: parent.id } });
+      expect((await store.messages(channelId, undefined, 1)).messages[0]).toMatchObject({ id: reply.id, replyToId: null, replyTo: null });
+    } finally { await store.close(); }
+  });
+
   it('uses channel-scoped keyset pages without overlap or ordering by tied timestamps', async () => {
     const store = await prepareDatabase(join(folder, 'pages.db'));
     try {

@@ -1,0 +1,12 @@
+# Tailnet-only deployment of the same project-local data used by the host backend.
+# Set TAILSCALE_IP to this machine's Tailscale IPv4 address before starting.
+services:
+  backend:
+    volumes: !override
+      - ./.local:/app/.local
+  frontend:
+    environment:
+      SITE_ADDRESS: ":19090"
+    ports: !override
+      - "127.0.0.1:19090:19090"
+      - "${TAILSCALE_IP:?Set TAILSCALE_IP to this machine's Tailscale IPv4 address}:19090:19090"

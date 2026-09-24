@@ -1173,7 +1173,8 @@
                           "senderAvatar",
                           "preview",
                           "status",
-                          "timestamp"
+                          "timestamp",
+                          "replyTo"
                         ],
                         "properties": {
                           "id": {
@@ -1296,6 +1297,36 @@
                           },
                           "timestamp": {
                             "type": "number"
+                          },
+                          "replyTo": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "senderId",
+                                  "senderName",
+                                  "text"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "senderId": {
+                                    "type": "string"
+                                  },
+                                  "senderName": {
+                                    "type": "string"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       }
@@ -1406,7 +1437,8 @@
                           "recipientName",
                           "text",
                           "status",
-                          "timestamp"
+                          "timestamp",
+                          "replyTo"
                         ],
                         "properties": {
                           "id": {
@@ -1438,6 +1470,36 @@
                           },
                           "timestamp": {
                             "type": "number"
+                          },
+                          "replyTo": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "senderId",
+                                  "senderName",
+                                  "text"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "senderId": {
+                                    "type": "string"
+                                  },
+                                  "senderName": {
+                                    "type": "string"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       }
@@ -1695,7 +1757,8 @@
                                   "authorName",
                                   "authorAvatar",
                                   "text",
-                                  "timestamp"
+                                  "timestamp",
+                                  "replyTo"
                                 ],
                                 "properties": {
                                   "id": {
@@ -1838,6 +1901,60 @@
                                   },
                                   "timestamp": {
                                     "type": "number"
+                                  },
+                                  "replyTo": {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "required": [
+                                          "id",
+                                          "role",
+                                          "authorId",
+                                          "authorName",
+                                          "text"
+                                        ],
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "role": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "user"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "assistant"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "authorId": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string"
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          },
+                                          "authorName": {
+                                            "type": "string"
+                                          },
+                                          "text": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
                                   }
                                 }
                               },
@@ -2130,7 +2247,8 @@
                             "authorName",
                             "authorAvatar",
                             "text",
-                            "timestamp"
+                            "timestamp",
+                            "replyTo"
                           ],
                           "properties": {
                             "id": {
@@ -2273,6 +2391,60 @@
                             },
                             "timestamp": {
                               "type": "number"
+                            },
+                            "replyTo": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "id",
+                                    "role",
+                                    "authorId",
+                                    "authorName",
+                                    "text"
+                                  ],
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "role": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "user"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "assistant"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "authorId": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "authorName": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             }
                           }
                         },
@@ -2533,7 +2705,8 @@
                             "authorName",
                             "authorAvatar",
                             "text",
-                            "timestamp"
+                            "timestamp",
+                            "replyTo"
                           ],
                           "properties": {
                             "id": {
@@ -2676,6 +2849,60 @@
                             },
                             "timestamp": {
                               "type": "number"
+                            },
+                            "replyTo": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "id",
+                                    "role",
+                                    "authorId",
+                                    "authorName",
+                                    "text"
+                                  ],
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "role": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "user"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "assistant"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "authorId": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "authorName": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             }
                           }
                         },
@@ -2967,7 +3194,8 @@
                             "authorName",
                             "authorAvatar",
                             "text",
-                            "timestamp"
+                            "timestamp",
+                            "replyTo"
                           ],
                           "properties": {
                             "id": {
@@ -3110,6 +3338,60 @@
                             },
                             "timestamp": {
                               "type": "number"
+                            },
+                            "replyTo": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "id",
+                                    "role",
+                                    "authorId",
+                                    "authorName",
+                                    "text"
+                                  ],
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "role": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "user"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "assistant"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "authorId": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "authorName": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             }
                           }
                         },
@@ -3117,6 +3399,134 @@
                           "type": "null"
                         }
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteGroup",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "confirmation"
+                ],
+                "properties": {
+                  "confirmation": {
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -3257,7 +3667,8 @@
                           "authorName",
                           "authorAvatar",
                           "text",
-                          "timestamp"
+                          "timestamp",
+                          "replyTo"
                         ],
                         "properties": {
                           "id": {
@@ -3400,6 +3811,60 @@
                           },
                           "timestamp": {
                             "type": "number"
+                          },
+                          "replyTo": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "role",
+                                  "authorId",
+                                  "authorName",
+                                  "text"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "role": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "user"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "assistant"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "authorId": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "authorName": {
+                                    "type": "string"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       }
@@ -3515,6 +3980,11 @@
                   "clientMessageId": {
                     "format": "uuid",
                     "type": "string"
+                  },
+                  "replyToMessageId": {
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "type": "string"
                   }
                 }
               }
@@ -3556,7 +4026,8 @@
                         "authorName",
                         "authorAvatar",
                         "text",
-                        "timestamp"
+                        "timestamp",
+                        "replyTo"
                       ],
                       "properties": {
                         "id": {
@@ -3699,6 +4170,60 @@
                         },
                         "timestamp": {
                           "type": "number"
+                        },
+                        "replyTo": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "role",
+                                "authorId",
+                                "authorName",
+                                "text"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "role": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "user"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "assistant"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "authorId": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "authorName": {
+                                  "type": "string"
+                                },
+                                "text": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       }
                     },
@@ -4479,7 +5004,8 @@
                                   "channelId",
                                   "role",
                                   "text",
-                                  "timestamp"
+                                  "timestamp",
+                                  "replyTo"
                                 ],
                                 "properties": {
                                   "id": {
@@ -4512,6 +5038,45 @@
                                   },
                                   "timestamp": {
                                     "type": "number"
+                                  },
+                                  "replyTo": {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "required": [
+                                          "id",
+                                          "role",
+                                          "text"
+                                        ],
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "role": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "user"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "assistant"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "text": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
                                   }
                                 }
                               },
@@ -4908,7 +5473,8 @@
                             "channelId",
                             "role",
                             "text",
-                            "timestamp"
+                            "timestamp",
+                            "replyTo"
                           ],
                           "properties": {
                             "id": {
@@ -4941,6 +5507,45 @@
                             },
                             "timestamp": {
                               "type": "number"
+                            },
+                            "replyTo": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "id",
+                                    "role",
+                                    "text"
+                                  ],
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "role": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "user"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "assistant"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             }
                           }
                         },
@@ -5049,7 +5654,8 @@
                           "channelId",
                           "role",
                           "text",
-                          "timestamp"
+                          "timestamp",
+                          "replyTo"
                         ],
                         "properties": {
                           "id": {
@@ -5082,6 +5688,45 @@
                           },
                           "timestamp": {
                             "type": "number"
+                          },
+                          "replyTo": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "role",
+                                  "text"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "role": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "user"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "assistant"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       }
@@ -5565,6 +6210,11 @@
                     "minLength": 1,
                     "maxLength": 20000,
                     "type": "string"
+                  },
+                  "replyToMessageId": {
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "type": "string"
                   }
                 }
               }
@@ -5639,7 +6289,8 @@
                         "channelId",
                         "role",
                         "text",
-                        "timestamp"
+                        "timestamp",
+                        "replyTo"
                       ],
                       "properties": {
                         "id": {
@@ -5672,6 +6323,45 @@
                         },
                         "timestamp": {
                           "type": "number"
+                        },
+                        "replyTo": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "role",
+                                "text"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "role": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "user"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "assistant"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "text": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       }
                     }

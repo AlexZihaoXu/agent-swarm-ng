@@ -121,11 +121,35 @@ test('received DMs use decorated chat bubbles, survive refresh, and open the pee
   await expect(bubble).toHaveCount(2);
   expect(await page.evaluate(() => (window as unknown as { notificationAudio: { starts: number } }).notificationAudio.starts)).toBe(0);
   await page.setViewportSize({ width: 360, height: 780 });
-  await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
+  await expect(bubble).toHaveCount(2); // Keep the open desktop conversation on resize.
+  await expect(page.getByRole('complementary', { name: 'Agents' })).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '../.cache/received-dm-bubble-mobile.png', animations: 'disabled' });
 });
 
+
+test.describe('phone peer selector', () => {
+  test.use({ hasTouch: true, isMobile: true });
+  test('touch opens, changes peer, and returns to You without trapping the chat', async ({ page }) => {
+    await mockDmPeers(page);
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Open conversation with Avery' }).tap();
+    const selector = page.getByRole('combobox', { name: 'Chat with' });
+    await expect(selector).toHaveText('You');
+    expect((await selector.boundingBox())!.width).toBeGreaterThanOrEqual(104);
+    await selector.tap();
+    const menu = page.getByRole('listbox');
+    expect((await menu.boundingBox())!.width).toBeGreaterThanOrEqual(180);
+    await menu.getByRole('option', { name: 'Morgan', exact: true }).tap();
+    await expect(page.getByRole('region', { name: 'Agent conversation with Morgan' })).toBeVisible();
+    await expect(selector).toHaveText('Morgan');
+    await selector.tap();
+    await menu.getByRole('option', { name: 'You', exact: true }).tap();
+    await expect(page.getByRole('form', { name: 'Message composer' })).toBeVisible();
+    await expect(menu).toHaveCount(0);
+  });
+});
 
 test('Chat with switches the main history, shows agent avatars, and keeps self left with readable sender tints', async ({ page }) => {
   await mockDmPeers(page);
@@ -164,12 +188,16 @@ test('Chat with switches the main history, shows agent avatars, and keeps self l
   expect(await self.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe(await remote.evaluate(element => getComputedStyle(element).backgroundColor));
   await page.screenshot({ path: '../.cache/agent-dm-main-view.png', animations: 'disabled' });
   await page.setViewportSize({ width: 360, height: 780 });
-  await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
+  await expect(page.getByRole('region', { name: 'Agent conversation with Morgan' })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Agents' })).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '../.cache/agent-dm-main-view-mobile.png', animations: 'disabled' });
+  await expect(page.getByRole('button', { name: 'Back to agents' })).toContainText('Avery');
+  await expect(selector).toHaveText('Morgan');
+  await expect(header.locator('[data-slot=agent-exchange-icon]')).toHaveCount(1);
   await selector.click(); await page.getByRole('option', { name: 'You', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Message Avery' })).toHaveValue('Keep my human draft');
-  await expect(header.locator('[data-slot=agent-exchange-icon]')).toHaveCount(0); await expect(header.locator('svg[data-avatar-shape]')).toHaveCount(1);
+  await expect(header.locator('[data-slot=agent-exchange-icon]')).toHaveCount(1); await expect(header.locator('svg[data-avatar-shape]')).toHaveCount(1);
 });
 
 

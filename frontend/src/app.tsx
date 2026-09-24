@@ -7,6 +7,8 @@ import { AgentPanel } from '@/components/agent-panel';
 import { AgentAvatar, AgentName } from '@/components/chat-identity';
 import { cn } from '@/lib/utils';
 import { useChat, type ChatAgent } from '@/use-chat';
+import type { ChatMessage } from '@/chat-types';
+import { replyExcerpt } from '@/lib/reply-preview';
 import { SlideUpFadeSwap } from '@/components/ui/slide-up-fade-swap';
 import { renderMessagePreview } from '@/components/message-markdown';
 import { useDmConversations } from '@/use-dm-conversations';
@@ -50,16 +52,28 @@ export function App() {
   } = useChat();
   const [selectedId, setSelectedId] = useState<string>(agents[0]?.id ?? '');
   const [mobileConversation, setMobileConversation] = useState(false);
+  const [isPhone, setIsPhone] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const [activeTab, setActiveTab] = useState('agents');
   const [selectedGroup, setSelectedGroup] = useState('');
   useGroupEvents();
+  useEffect(() => {
+    const deleted = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== selectedGroup) return;
+      setSelectedGroup(''); setMobileConversation(false);
+    };
+    window.addEventListener('swarm-group-deleted', deleted);
+    return () => window.removeEventListener('swarm-group-deleted', deleted);
+  }, [selectedGroup]);
   const [search, setSearch] = useState('');
   const [activityOpen, setActivityOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingSend = useRef<string | null>(null);
+  const [replyTargets, setReplyTargets] = useState<Record<string, ChatMessage>>({});
+  const pendingReplyAcks = useRef(new Map<string, { channelId: string; targetId: string }>());
   const visibleAgents = agents.filter(item => item.name.toLowerCase().includes(search.trim().toLowerCase()));
   const agent = agents.find(item => item.id === selectedId) ?? agents[0] ?? emptyAgent;
+  const narrowDetail = activeTab !== 'settings' && mobileConversation && Boolean(selectedGroup || agent.id);
   const inbox = useDmInbox(agent.id);
   const dmConversations = useDmConversations(agent.id);
   const [conversation, setConversation] = useState<{ owner: string; peer: string; selected?: { id: string; name: string; avatar?: AvatarAppearance | null; channelId?: string } }>({ owner: '', peer: 'you' });
@@ -82,9 +96,30 @@ export function App() {
   const draft = drafts[agent.channelId] ?? '';
   const messages = conversations[agent.channelId] ?? [];
   const timeline = conversationTimeline(messages, inbox.messages);
-  const previousConversation = useRef({ id: agent.id, count: timeline.length, first: timeline[0]?.id, last: timeline.at(-1)?.id, height: 0 });
+  const previousConversation = useRef({ id: agent.id, viewport: null as HTMLDivElement | null, count: timeline.length, first: timeline[0]?.id, last: timeline.at(-1)?.id, height: 0 });
 
   useEffect(() => { void loadHistory(agent); }, [agent.id]);
+  // A desktop conversation stays open when its window narrows; an initially narrow visit starts at the list.
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)');
+    const onChange = (event: MediaQueryListEvent) => {
+      setIsPhone(event.matches);
+      if (event.matches && (selectedGroup || agent.id)) setMobileConversation(true);
+    };
+    setIsPhone(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, [agent.id, selectedGroup]);
+  useEffect(() => {
+    for (const [id, pending] of pendingReplyAcks.current) {
+      if (!conversations[pending.channelId]?.some(message => message.id === id && message.sequence !== undefined)) continue;
+      pendingReplyAcks.current.delete(id);
+      setReplyTargets(current => {
+        if (current[pending.channelId]?.id !== pending.targetId) return current;
+        const next = { ...current }; delete next[pending.channelId]; return next;
+      });
+    }
+  }, [conversations]);
 
   useLayoutEffect(() => {
     const input = inputRef.current;
@@ -96,17 +131,22 @@ export function App() {
   useLayoutEffect(() => {
     if (conversationPeer !== 'you') return;
     const scroller = scrollRef.current;
+    // A hidden phone pane has no usable scroll position. Wait until it opens.
+    if (!scroller?.clientHeight) return;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const previous = previousConversation.current;
+    const newViewport = previous.viewport !== scroller;
     const addedMessage = previous.id === agent.id && timeline.length > previous.count;
-    const prepended = addedMessage && previous.first && previous.first !== timeline[0]?.id && previous.last === timeline.at(-1)?.id;
-    if (scroller && prepended) scroller.scrollTop += scroller.scrollHeight - previous.height;
-    else scroller?.scrollTo({ top: scroller.scrollHeight, behavior: addedMessage && !reducedMotion ? 'smooth' : 'instant' });
-    previousConversation.current = { id: agent.id, count: timeline.length, first: timeline[0]?.id, last: timeline.at(-1)?.id, height: scroller?.scrollHeight ?? 0 };
-
+    const prepended = !newViewport && addedMessage && previous.first && previous.first !== timeline[0]?.id && previous.last === timeline.at(-1)?.id;
     const sentId = pendingSend.current;
+    if (prepended) scroller.scrollTop += scroller.scrollHeight - previous.height;
+    else if (newViewport || addedMessage && (Boolean(sentId) || previous.height - scroller.scrollTop - scroller.clientHeight < 80)) {
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: addedMessage && !newViewport && !reducedMotion ? 'smooth' : 'instant' });
+    }
+    previousConversation.current = { id: agent.id, viewport: scroller, count: timeline.length, first: timeline[0]?.id, last: timeline.at(-1)?.id, height: scroller.scrollHeight };
+
     pendingSend.current = null;
-    if (!sentId || !scroller || reducedMotion) return;
+    if (!sentId || reducedMotion) return;
     const bubble = scroller.querySelector<HTMLElement>(`[data-message-id="${sentId}"]`);
     const input = inputRef.current;
     if (!bubble || !input) return;
@@ -119,8 +159,10 @@ export function App() {
 
   function sendMessage() {
     if (conversationPeer !== 'you') return;
-    const messageId = send(agent, draft);
+    const target = replyTargets[agent.channelId];
+    const messageId = send(agent, draft, target ? { id: target.id, role: target.author === 'user' ? 'user' : 'assistant', text: replyExcerpt(target.text) } : undefined);
     if (!messageId) return;
+    if (target) pendingReplyAcks.current.set(messageId, { channelId: agent.channelId, targetId: target.id });
     pendingSend.current = messageId;
     inputRef.current?.focus();
   }
@@ -128,13 +170,13 @@ export function App() {
   return (
     <main className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background">
       <h1 className="sr-only">Agent Swarm NG</h1>
-      <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
-        <header className="relative flex h-14 shrink-0 items-center justify-center border-b border-border bg-sidebar px-4">
-          {/* Basic Tabs composition: Kibo tabs/standard/tabs-standard-1. */}
-          <Tabs.List aria-label="Main navigation" className="relative isolate grid h-9 w-72 grid-cols-3 items-center rounded-lg bg-muted p-1">
-            <span aria-hidden="true" data-testid="tab-indicator" className="pointer-events-none absolute inset-y-1 left-1 w-[calc((100%-8px)/3)] rounded-md bg-background shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none" style={{ transform: `translateX(${['agents', 'chat', 'settings'].indexOf(activeTab) * 100}%)` }} />
+      <Tabs.Root value={activeTab} onValueChange={value => { setActiveTab(value); if (window.matchMedia('(max-width: 767px)').matches) setMobileConversation(false); }} className="flex min-h-0 flex-1 flex-col">
+        <header className={cn('pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex justify-center md:pointer-events-auto md:relative md:inset-auto md:order-first md:h-14 md:min-h-14 md:shrink-0 md:items-center md:border-b md:border-border md:bg-sidebar md:px-4', narrowDetail && 'max-md:hidden')}>
+          {/* Basic Tabs composition: Kibo tabs/standard/tabs-standard-1, floating without a footer on phones. */}
+          <Tabs.List aria-label="Main navigation" className="pointer-events-auto relative isolate grid h-[50px] w-[min(18rem,calc(100vw-2rem))] grid-cols-3 items-center rounded-lg border border-border bg-muted p-[3px] shadow-lg md:h-9 md:w-72 md:border-0 md:p-1 md:shadow-none">
+            <span aria-hidden="true" data-testid="tab-indicator" className="pointer-events-none absolute inset-y-[3px] left-[3px] w-[calc((100%-6px)/3)] rounded-md bg-background shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none md:inset-y-1 md:left-1 md:w-[calc((100%-8px)/3)]" style={{ transform: `translateX(${['agents', 'chat', 'settings'].indexOf(activeTab) * 100}%)` }} />
             {['Agents', 'Chat', 'Settings'].map(label => (
-              <Tabs.Trigger key={label} value={label.toLowerCase()} className="relative z-10 rounded-md px-3 py-1 text-sm font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:text-foreground">
+              <Tabs.Trigger key={label} value={label.toLowerCase()} className="relative z-10 min-h-11 rounded-md px-3 py-1 text-sm font-medium md:min-h-0 text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:text-foreground">
                 {label}
               </Tabs.Trigger>
             ))}
@@ -144,17 +186,18 @@ export function App() {
         <Tabs.Content value={activeTab === 'chat' ? 'chat' : 'agents'} className="min-h-0 flex-1 outline-none data-[state=active]:flex">
           {activeTab === 'chat' ? <ChatPanel agents={agents} conversations={conversations} busy={busy} typingIn={typingIn} selectedAgent={agent.id} selectedGroup={selectedGroup} mobile={mobileConversation} agentsLoading={agentsLoading} agentsFailed={agentsFailed} agentsCursor={agentsCursor} loadAgents={loadAgents} onAgent={(id, real) => { if (real && !agents.some(agent => agent.id === id)) addAgent(real, false); setSelectedId(id); setSelectedGroup(''); setMobileConversation(true); }} onViewAgent={(id, real) => { if (real && !agents.some(agent => agent.id === id)) addAgent(real, false); setSelectedId(id); setSelectedGroup(''); setMobileConversation(true); setActiveTab('agents'); }} onGroup={group => { setSelectedGroup(group.id); setMobileConversation(true); setActivityOpen(false); }} /> : <AgentPanel agents={agents} onEditAvatar={editAvatar} onDelete={async (target, confirmation) => {
             await deleteAgent(target, confirmation);
+            setReplyTargets(current => { const next = { ...current }; delete next[target.channelId]; return next; });
             if (agent.id === target.id) {
               setSelectedId(agents.find(item => item.id !== target.id)?.id ?? '');
               setActivityOpen(false); setMobileConversation(false);
             }
           }} onCreated={real => { addAgent(real); setSelectedId(real.id); setSearch(''); setMobileConversation(true); }} className={cn(
-            'min-h-0 w-full shrink-0 flex-col border-border bg-sidebar sm:flex sm:w-72 sm:border-r',
+            'phone-list-enter min-h-0 w-full shrink-0 flex-col border-border bg-sidebar pb-[calc(5rem+env(safe-area-inset-bottom))] md:flex md:w-72 md:border-r md:pb-0',
             mobileConversation ? 'hidden' : 'flex',
           )}>
             {/* Search-with-icon composition: Kibo input-group/icons/input-group-icons-1. */}
-            <div className="shrink-0 px-4 pb-2 pt-3">
-              <div className="flex h-8 items-center gap-2 rounded-lg border border-foreground/15 bg-[#262626] px-2.5 focus-within:ring-1 focus-within:ring-ring">
+            <div className="shrink-0 px-4 pb-2 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-3">
+              <div className="flex h-11 items-center gap-2 rounded-lg border border-foreground/15 bg-[#262626] px-2.5 focus-within:ring-1 focus-within:ring-ring sm:h-8">
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-3.5 shrink-0 text-muted-foreground"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" strokeLinecap="round" /></svg>
                 <input type="search" aria-label="Search agents" placeholder="Search agents" value={search} onChange={event => setSearch(event.target.value)} className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground" />
               </div>
@@ -199,47 +242,49 @@ export function App() {
           </AgentPanel>}
 
           {activeTab === 'chat' && selectedGroup ? <GroupConversation key={selectedGroup} groupId={selectedGroup} mobile={mobileConversation} onBack={() => setMobileConversation(false)} draft={drafts[`group:${selectedGroup}`] ?? ''} onDraft={text => setDraft(`group:${selectedGroup}`, text)} typingIn={typingIn} /> : agents.length > 0 ? <section aria-label={`Conversation with ${agent.name}`} className={cn(
-            'min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none sm:flex',
+            'phone-detail-enter min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none md:flex',
             activityOpen && 'lg:mr-96',
             mobileConversation ? 'flex' : 'hidden',
           )}>
-            <header className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border px-4 py-1.5">
-              <Button variant="outline" size="sm" className="px-2 sm:hidden" aria-label={activeTab === 'chat' ? 'Back to chats' : 'Back to agents'} onClick={() => setMobileConversation(false)}>
-                <span aria-hidden="true">←</span>
-              </Button>
-              <AgentAvatar initials={agent.initials} avatar={agent.avatar} ready={Boolean(agent.real)} typing={selfTyping} working={busy[agent.channelId]} />
-              <div className="flex min-w-0 flex-[1_1_9rem] items-center gap-2">
-                <AgentName name={agent.name} />
-                {conversationPeer !== 'you' && peer && <><AgentExchangeIcon /><AgentAvatar initials={peer.name.slice(0, 2).toUpperCase()} avatar={peer.avatar ?? defaultAvatar(peer.id)} ready={Boolean(peer)} working={busy[peerChannel]} typing={peerTyping} /><span className="min-w-0 truncate text-sm font-semibold" title={peer.name}>{peer.name}</span></>}
-              </div>
-              <div className="ml-auto flex shrink-0 items-center gap-2">
-              {activeTab !== 'chat' && <div className="flex items-center gap-2"><label htmlFor="agent-dm-conversation" className="whitespace-nowrap text-xs text-muted-foreground">Chat with</label><div className="w-36"><Select id="agent-dm-conversation" value={conversationPeer} onValueChange={value => { if (value === 'load-more') void dmConversations.load(dmConversations.failed ? undefined : dmConversations.cursor ?? undefined); else chooseConversation(value); }} options={[{ value: 'you', label: 'You' }, ...peers.map(peer => ({ value: peer.id, label: peer.name === 'You' ? 'You (agent)' : peer.name, icon: <AgentAvatarArt {...(peer.avatar ?? defaultAvatar(peer.id))} size={20} /> })), ...(dmConversations.cursor !== null || dmConversations.failed ? [{ value: 'load-more', label: dmConversations.busy ? 'Loading conversations…' : dmConversations.failed ? 'Retry conversations' : 'More conversations…' }] : [])]} triggerClassName="!h-7 !rounded-md !px-2 !text-xs" /></div></div>}
-              <AgentActivityPanel agent={agent} entries={activity[agent.id] ?? []} open={activityOpen} onOpenChange={setActivityOpen} />
+            <header className="flex min-h-11 shrink-0 flex-nowrap items-center gap-x-1 border-b border-border px-4 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] md:flex-wrap md:gap-x-2 md:gap-y-1.5">
+              {isPhone ? <button type="button" aria-label={activeTab === 'chat' ? 'Back to chats' : 'Back to agents'} title={activeTab === 'chat' ? 'Back to chats' : 'Back to agents'} onClick={() => setMobileConversation(false)} className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-1 overflow-hidden text-left outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"><AgentAvatar initials={agent.initials} avatar={agent.avatar} ready={Boolean(agent.real)} typing={selfTyping} working={busy[agent.channelId]} /><span role="heading" aria-level={2} className="min-w-0 truncate text-sm font-semibold" title={agent.name}>{agent.name}</span></button> : <>
+                <AgentAvatar initials={agent.initials} avatar={agent.avatar} ready={Boolean(agent.real)} typing={selfTyping} working={busy[agent.channelId]} />
+                <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-[1_1_9rem]">
+                  {conversationPeer !== 'you' && peer ? <><AgentName name={agent.name} /><AgentExchangeIcon /><AgentAvatar initials={peer.name.slice(0, 2).toUpperCase()} avatar={peer.avatar ?? defaultAvatar(peer.id)} ready={Boolean(peer)} working={busy[peerChannel]} typing={peerTyping} /><span className="min-w-0 truncate text-sm font-semibold" title={peer.name}>{peer.name}</span></> : <AgentName name={agent.name} />}
+                </div>
+              </>}
+              {isPhone && activeTab !== 'chat' && <AgentExchangeIcon />}
+              <div className="ml-auto flex shrink-0 items-center gap-1 md:gap-2">
+                {activeTab !== 'chat' && <div className="flex items-center gap-2">
+                  <label htmlFor="agent-dm-conversation" className="hidden whitespace-nowrap text-xs text-muted-foreground md:inline">Chat with</label>
+                  <div className="w-[clamp(5.5rem,34vw,8rem)] md:w-36"><Select id="agent-dm-conversation" ariaLabel="Chat with" value={conversationPeer} onValueChange={value => { if (value === 'load-more') void dmConversations.load(dmConversations.failed ? undefined : dmConversations.cursor ?? undefined); else chooseConversation(value); }} options={[{ value: 'you', label: 'You' }, ...peers.map(peer => ({ value: peer.id, label: peer.name === 'You' ? 'You (agent)' : peer.name, icon: <AgentAvatarArt {...(peer.avatar ?? defaultAvatar(peer.id))} size={20} /> })), ...(dmConversations.cursor !== null || dmConversations.failed ? [{ value: 'load-more', label: dmConversations.busy ? 'Loading conversations…' : dmConversations.failed ? 'Retry conversations' : 'More conversations…' }] : [])]} triggerClassName="!h-11 !w-full !justify-between !px-3 !text-sm md:!h-7 md:!min-h-0 md:!px-2 md:!text-xs" contentClassName="min-w-52 md:min-w-0" triggerContent={isPhone ? <><span className="min-w-0 flex-1 truncate">{peer?.name ?? 'You'}</span><svg aria-hidden="true" viewBox="0 0 12 12" className="size-3 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m2 4 4 4 4-4" /></svg></> : <><span className="flex min-w-0 items-center gap-1">{peer && <AgentAvatarArt {...(peer.avatar ?? defaultAvatar(peer.id))} size={20} />}<span className="min-w-0 truncate">{peer?.name ?? 'You'}</span></span><svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="m6 9 6 6 6-6" /></svg></>} /></div>
+                </div>}
+                <AgentActivityPanel agent={agent} entries={activity[agent.id] ?? []} open={activityOpen} onOpenChange={setActivityOpen} />
               </div>
             </header>
 
-            <ScrollArea key={`${agent.id}:${conversationPeer}`} viewportRef={scrollRef} label="Chat history" className="min-h-0 flex-1">
+            <ScrollArea key={`${agent.id}:${conversationPeer}`} viewportRef={scrollRef} label="Chat history" className="min-h-0 flex-1" viewportClassName="[&>div]:!block [&>div]:w-full">
               {conversationPeer === 'you' ? <>
               {(historyLoading[agent.channelId] || historyFailed[agent.channelId] || historyCursor[agent.channelId] != null) && <div className="px-5 pt-3 text-center"><Button variant="outline" size="sm" disabled={historyLoading[agent.channelId] || busy[agent.channelId]} onClick={() => void loadHistory(agent, Boolean(historyReady[agent.channelId]))}>{historyLoading[agent.channelId] ? 'Loading messages…' : historyFailed[agent.channelId] ? 'Retry loading messages' : 'Load earlier messages'}</Button></div>}
               {(inbox.failed || inbox.cursor !== null) && <div className="px-5 pt-3 text-center"><Button variant="outline" size="sm" disabled={inbox.busy} onClick={() => void inbox.load(inbox.failed ? undefined : inbox.cursor ?? undefined)}>{inbox.failed ? 'Retry agent messages' : 'Earlier agent messages'}</Button></div>}
-              {historyReady[agent.channelId] && <ConversationMessages reactionChannel={agent.channelId} messages={messages} time={agent.time} agentName={agent.name} notices={inbox.messages} onViewDm={notice => { chooseConversation(notice.senderId); setActiveTab('agents'); }} />}
+              {historyReady[agent.channelId] && <ConversationMessages reactionChannel={agent.channelId} messages={messages} time={agent.time} agentName={agent.name} notices={inbox.messages} onViewDm={notice => { chooseConversation(notice.senderId); setActiveTab('agents'); }} onReply={message => { setReplyTargets(current => ({ ...current, [agent.channelId]: message })); requestAnimationFrame(() => inputRef.current?.focus()); }} />}
               </> : peer ? <AgentDmTranscript key={`${agent.id}:${peer.id}`} agentId={agent.id} peerId={peer.id} bubbleView={{ agentName: agent.name, peerName: peer.name, agentAvatar: agent.avatar ?? defaultAvatar(agent.id), peerAvatar: peer.avatar ?? defaultAvatar(peer.id), viewport: scrollRef }} /> : <p className="p-5 text-sm text-muted-foreground">This agent is no longer available.</p>}
             </ScrollArea>
 
-            {conversationPeer === 'you' ? <div className="shrink-0 px-4 pb-3 pt-2 sm:px-5">
+            {conversationPeer === 'you' ? <div className="shrink-0 pl-[calc(1.5rem+env(safe-area-inset-left))] pr-[calc(1.5rem+env(safe-area-inset-right))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:px-5 sm:pb-3">
               <div className="w-full">
                 <div className="mb-1 flex h-5 min-w-0 items-center px-2">
                   <AgentTypingStatus name={agent.name} typing={selfTyping} working={busy[agent.channelId]} connected={eventsConnected} />
                 </div>
-                <ChatComposer key={agent.id} name={agent.name} draft={draft} onChange={text => setDraft(agent.channelId, text)} onSend={sendMessage} busy={busy[agent.channelId]} onStop={() => stop(agent.channelId)} disabled={historyLoading[agent.channelId] || (Boolean(agent.real) && !historyReady[agent.channelId])} inputRef={inputRef} />
+                <ChatComposer key={agent.id} name={agent.name} draft={draft} onChange={text => setDraft(agent.channelId, text)} onSend={sendMessage} busy={busy[agent.channelId]} onStop={() => stop(agent.channelId)} disabled={historyLoading[agent.channelId] || (Boolean(agent.real) && !historyReady[agent.channelId])} inputRef={inputRef} reply={replyTargets[agent.channelId] ? { author: replyTargets[agent.channelId].author === 'user' ? 'You' : agent.name, text: replyExcerpt(replyTargets[agent.channelId].text) } : undefined} onCancelReply={() => { setReplyTargets(current => { const next = { ...current }; delete next[agent.channelId]; return next; }); inputRef.current?.focus(); }} />
               </div>
-            </div> : <div aria-label="Agent conversation status" className="shrink-0 border-t border-border px-5 py-3">
+            </div> : <div aria-label="Agent conversation status" className="shrink-0 border-t border-border px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 sm:py-3">
               {selfTyping || peerTyping ? <div className="flex min-h-5 items-center gap-3"><div className="flex min-w-0 flex-1"><AgentTypingStatus name={agent.name} typing={selfTyping} /></div><div className="flex min-w-0 flex-1 justify-end"><AgentTypingStatus name={peer?.name ?? 'Agent'} typing={peerTyping} /></div></div> : <p className="text-center text-xs text-muted-foreground">Agent-to-agent conversation · messages are sent by the agents</p>}
             </div>}
-          </section> : <section aria-label="No agent selected" className="hidden min-w-0 flex-1 items-center justify-center p-6 text-sm text-muted-foreground sm:flex">Select or create an agent to start chatting.</section>}
+          </section> : <section aria-label="No agent selected" className="hidden min-w-0 flex-1 items-center justify-center p-6 text-sm text-muted-foreground md:flex">Select or create an agent to start chatting.</section>}
         </Tabs.Content>
 
-        <Tabs.Content value="settings" forceMount className="min-h-0 flex-1 overflow-y-auto outline-none data-[state=inactive]:hidden">
+        <Tabs.Content value="settings" forceMount className="phone-tab-enter min-h-0 flex-1 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none data-[state=inactive]:hidden md:pb-0">
           <Settings />
         </Tabs.Content>
       </Tabs.Root>

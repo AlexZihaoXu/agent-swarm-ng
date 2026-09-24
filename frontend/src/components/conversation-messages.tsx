@@ -8,13 +8,13 @@ import { agentBubbleStyle } from '@/lib/bubble-color';
 import { conversationTimeline } from '@/lib/conversation-timeline';
 import type { ChatMessage } from '@/chat-types';
 import { MessageReactions, useMessageReactions, ReactionLoadError } from '@/components/message-reactions';
+import { MessageReply } from '@/components/message-reply';
 
-
-export function ConversationMessages({ messages, time, agentName, notices = [], onViewDm, counterpartName = 'You', senderStyles, reactionChannel }: {
+export function ConversationMessages({ messages, time, agentName, notices = [], onViewDm, counterpartName = 'You', senderStyles, reactionChannel, onReply }: {
   messages: ChatMessage[];
   time: string;
   agentName: string; notices?: DmNotice[]; onViewDm?: (notice: DmNotice) => void;
-  counterpartName?: string; reactionChannel?: string; senderStyles?: { agent: AvatarAppearance; user: AvatarAppearance };
+  counterpartName?: string; reactionChannel?: string; senderStyles?: { agent: AvatarAppearance; user: AvatarAppearance }; onReply?: (message: ChatMessage) => void;
 }) {
   // Stagger the history present on entry; newly appended messages enter immediately.
   const reactions = useMessageReactions(reactionChannel, messages.filter(message => message.sequence !== undefined).map(message => message.id));
@@ -36,16 +36,17 @@ export function ConversationMessages({ messages, time, agentName, notices = [], 
           const bubble = <div data-message-id={message.id} tabIndex={reactionChannel && message.sequence !== undefined ? 0 : undefined} style={{ animationDelay: `${index >= entranceStart && index < entranceCount.current ? (index - entranceStart + 1) * 75 : 0}ms`, ...(senderColor ? agentBubbleStyle(senderColor) : {}) }} className={cn(
               'message-enter message-context-target min-w-0 origin-top whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-5 [overflow-wrap:anywhere]',
               message.author === 'user' ? 'bg-primary text-primary-foreground' : 'bg-foreground/[0.07]',
-              reactionChannel ? 'max-w-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring' : 'max-w-[85%] sm:max-w-[75%]',
+              reactionChannel ? 'max-w-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring' : 'max-w-[85%] md:max-w-[75%]',
             )}>
               <span className={senderStyles ? 'mb-1 block text-[11px] font-medium opacity-80' : 'sr-only'}>{message.author === 'user' ? counterpartName : agentName}{senderStyles ? '' : ': '}</span>
+              {message.replyTo && <div className="mb-2"><MessageReply author={message.replyTo.role === 'user' ? counterpartName : agentName} text={message.replyTo.text} /></div>}
               <MessageMarkdown text={message.text} />
             </div>;
           const content = reactionChannel && message.sequence !== undefined
-            ? <MessageReactions channelId={reactionChannel} messageId={message.id} reactions={reactions.data?.[message.id]}>{bubble}</MessageReactions>
+            ? <MessageReactions channelId={reactionChannel} messageId={message.id} reactions={reactions.data?.[message.id]} onReply={onReply ? () => onReply(message) : undefined}>{bubble}</MessageReactions>
             : bubble;
           return <li key={message.id} className={cn('relative flex', message.author === 'user' && 'justify-end')}>
-            {reactionChannel ? <div className={cn('min-w-0 max-w-[85%] sm:max-w-[75%]', message.author === 'user' && 'flex flex-col items-end')}>{content}</div> : content}
+            {reactionChannel ? <div className={cn('min-w-0 max-w-[85%] md:max-w-[75%]', message.author === 'user' && 'flex flex-col items-end')}>{content}</div> : content}
           </li>;
         })}
       </ol>

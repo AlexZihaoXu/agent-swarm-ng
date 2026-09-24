@@ -14,7 +14,7 @@ export type RealAgent = paths['/api/agents']['post']['responses'][200]['content'
 export type ChatAgent = { id: string; name: string; initials: string; time: string; channelId: string; avatar?: AvatarAppearance; real?: RealAgent };
 type SavedMessage = paths['/api/channels/{channelId}/messages']['get']['responses'][200]['content']['application/json']['messages'][number];
 type Run = { runId: string; agentId: string; channelId: string; clientMessageId: string; typing?: boolean; typingTargets?: string[] };
-const asMessage = (message: SavedMessage): ChatMessage => ({ id: message.id, sequence: message.sequence, author: message.role === 'user' ? 'user' : 'agent', text: message.text, timestamp: message.timestamp, time: clock(message.timestamp) });
+const asMessage = (message: SavedMessage): ChatMessage => ({ id: message.id, sequence: message.sequence, author: message.role === 'user' ? 'user' : 'agent', text: message.text, timestamp: message.timestamp, time: clock(message.timestamp), replyTo: message.replyTo });
 export const asAgent = (real: RealAgent): ChatAgent => ({ avatar: real.avatar ?? defaultAvatar(real.id), id: real.id, name: real.name, initials: real.name.slice(0, 2).toUpperCase(), time: clock(real.lastMessage?.timestamp ?? real.createdAt), channelId: real.channelId, real });
 const clock = (timestamp = Date.now()) => new Date(timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s+/g, ' ');
 function withoutKey<T>(record: Record<string, T>, key: string) { const next = { ...record }; delete next[key]; return next; }
@@ -205,6 +205,9 @@ export function useChat() {
     if (event.type === 'reactions_updated' && typeof event.channelId === 'string') {
       window.dispatchEvent(new CustomEvent('swarm-reactions-updated', { detail: event.channelId })); return;
     }
+    if (event.type === 'group_deleted' && typeof event.groupId === 'string') {
+      window.dispatchEvent(new CustomEvent('swarm-group-deleted', { detail: event.groupId })); return;
+    }
     if (event.type === 'group_updated' && typeof event.groupId === 'string') {
       window.dispatchEvent(new CustomEvent('swarm-groups-updated', { detail: { groupId: event.groupId, message: event.message } }));
       if (event.publication && event.message?.role === 'assistant' && typeof event.message.id === 'string' && !remember(knownMessages.current, `group:${event.groupId}:${event.message.id}`)) notification.current?.play();
@@ -246,7 +249,9 @@ export function useChat() {
       }
       const duplicate = remember(knownMessages.current, `${channel}:${event.id}`);
       if (event.type === 'channel_message' && !duplicate) void notification.current?.play();
-      const published: ChatMessage = { id: event.id, sequence: event.sequence, author: event.type === 'user_message' ? 'user' : 'agent', text: event.text, timestamp: event.timestamp ?? Date.now(), time: clock(event.timestamp) };
+      const reference = event.replyTo;
+      const replyTo: ChatMessage['replyTo'] = reference && typeof reference.id === 'string' && typeof reference.text === 'string' && ['user', 'assistant'].includes(reference.role) ? { id: reference.id, role: reference.role, text: reference.text } : null;
+      const published: ChatMessage = { id: event.id, sequence: event.sequence, author: event.type === 'user_message' ? 'user' : 'agent', text: event.text, timestamp: event.timestamp ?? Date.now(), time: clock(event.timestamp), replyTo };
       setConversations(current => {
         const messages = current[channel] ?? [];
         return { ...current, [channel]: messages.some(item => item.id === published.id) ? messages.map(item => item.id === published.id ? published : item) : ordered([...messages, published]) };
@@ -266,7 +271,7 @@ export function useChat() {
     const channel = agent.channelId;
     let accepted = false, completed = false;
     try {
-      const { data, error, response } = await api.POST('/api/chat', { headers: { Prefer: 'respond-async' }, body: { agentId: agent.id, clientMessageId: message.id, message: message.text }, parseAs: 'stream', signal: controller.signal });
+      const { data, error, response } = await api.POST('/api/chat', { headers: { Prefer: 'respond-async' }, body: { agentId: agent.id, clientMessageId: message.id, message: message.text, replyToMessageId: message.replyTo?.id }, parseAs: 'stream', signal: controller.signal });
       if (error || !data) { recordError(agent, error?.message ?? 'Could not start the channel response.'); return; }
       if (response.status === 202) {
         const result = await new Response(data).json();
@@ -294,11 +299,11 @@ export function useChat() {
       }
     }
   }
-  function send(agent: ChatAgent, text: string) {
+  function send(agent: ChatAgent, text: string, replyTo?: ChatMessage['replyTo']) {
     text = text.trim();
     if (!agent.real || !text || requests.current.has(agent.channelId) || historyRequests.current.has(agent.channelId) || !loadedHistory.current.has(agent.channelId)) return;
     const pending = pendingMessages.current.get(agent.channelId);
-    const message: ChatMessage = pending?.text === text ? pending : { id: randomUuid(), author: 'user', text, time: clock() };
+    const message: ChatMessage = pending?.text === text && (pending.replyTo?.id ?? null) === (replyTo?.id ?? null) ? pending : { id: randomUuid(), author: 'user', text, time: clock(), replyTo };
     pendingMessages.current.set(agent.channelId, message);
     setDrafts(current => ({ ...current, [agent.channelId]: '' })); setErrors(current => ({ ...current, [agent.channelId]: '' })); setTyping(current => ({ ...current, [agent.channelId]: false }));
     const controller = new AbortController(); requests.current.set(agent.channelId, controller);

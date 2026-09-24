@@ -3,7 +3,9 @@ import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { databaseUrl } from './database-location';
 import { messageText } from './message-text';
 import { encodeAvatar, type AgentAvatar } from './agent-avatar';
+import { channelReplyContext } from './reply-preview';
 
+export const channelReplyInclude = { replyTo: { select: { id: true, role: true, text: true } } } as const;
 const agentSelection = { channels: { where: { kind: 'platform-chat' }, take: 1 } };
 type StoredAgent = Prisma.AgentGetPayload<{ include: typeof agentSelection }>;
 type AgentInput = Pick<Prisma.AgentCreateInput, 'name' | 'endpointId' | 'model' | 'thinkingLevel'> & { avatar?: AgentAvatar };
@@ -51,7 +53,7 @@ export class PlatformStore {
     // Prisma nested take across multiple parents reads all matching SQLite rows, then trims in memory.
     // Use bounded indexed lookups instead, so listing cards never loads entire conversations.
     const channels = await Promise.all(agent.channels.map(async channel => ({ ...channel,
-      messages: await this.client.message.findMany({ where: { channelId: channel.id }, orderBy: { sequence: 'desc' }, take: 1 }),
+      messages: await this.client.message.findMany({ where: { channelId: channel.id }, orderBy: { sequence: 'desc' }, take: 1, include: channelReplyInclude }),
     })));
     return { ...agent, channels };
   }
@@ -61,14 +63,17 @@ export class PlatformStore {
   }
   async messages(channelId: string, before?: number, limit = 50) {
     await this.initialize();
-    const rows = await this.client.message.findMany({ where: { channelId, ...(before ? { sequence: { lt: before } } : {}) }, orderBy: { sequence: 'desc' }, take: limit + 1 });
+    const rows = await this.client.message.findMany({ where: { channelId, ...(before ? { sequence: { lt: before } } : {}) }, orderBy: { sequence: 'desc' }, take: limit + 1, include: channelReplyInclude });
     const more = rows.length > limit;
     const messages = rows.slice(0, limit).reverse();
     return { messages, nextCursor: more ? messages[0].sequence : null };
   }
-  async appendMessage(channelId: string, role: 'user' | 'assistant', text: string, id: string = crypto.randomUUID()) {
+  async appendMessage(channelId: string, role: 'user' | 'assistant', text: string, id: string = crypto.randomUUID(), replyToId?: string) {
     await this.initialize();
-    return this.client.message.create({ data: { id, channelId, role, text } });
+    return this.client.$transaction(async tx => {
+      if (replyToId && !await tx.message.findFirst({ where: { id: replyToId, channelId }, select: { id: true } })) throw new Error('Reply target not found in this channel.');
+      return tx.message.create({ data: { id, channelId, role, text, replyToId }, include: channelReplyInclude });
+    });
   }
   async findMessage(id: string) {
     await this.initialize();
@@ -77,9 +82,11 @@ export class PlatformStore {
   async context(channelId: string, excludeMessageId?: string, pendingAfterSequence?: number) {
     await this.initialize();
     const messages = pendingAfterSequence === undefined ? (await this.messages(channelId, undefined, excludeMessageId ? 9 : 8)).messages
-      : (await this.client.message.findMany({ where: { channelId, OR: [{ role: 'assistant' }, { sequence: { lt: pendingAfterSequence } }] }, orderBy: { sequence: 'desc' }, take: 8 })).reverse();
+      : (await this.client.message.findMany({ where: { channelId, OR: [{ role: 'assistant' }, { sequence: { lt: pendingAfterSequence } }] }, orderBy: { sequence: 'desc' }, take: 8, include: channelReplyInclude })).reverse();
+    const agent = messages.some(message => message.replyTo) ? await this.client.channel.findUnique({ where: { id: channelId }, select: { agent: { select: { name: true } } } }) : null;
     return messages.filter(message => message.id !== excludeMessageId).slice(-8).map(message => ({
       id: message.id, sequence: message.sequence, role: message.role, timestamp: message.createdAt.getTime(),
+      replyTo: channelReplyContext(message, agent?.agent.name ?? 'Agent'),
       ...messageText(message.text),
     }));
   }

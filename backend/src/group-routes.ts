@@ -12,7 +12,7 @@ const Cursor = Type.Union([Type.Integer(), Type.Null()]);
 const ErrorResponse = Type.Object({ message: Type.String() });
 const errors = { 400: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 503: ErrorResponse };
 const Edit = Type.Object({ name: Type.String({ minLength: 1, maxLength: 80 }), agentIds: Type.Array(Id, { minItems: 1, maxItems: GROUP_MEMBER_LIMIT, uniqueItems: true }) }, { additionalProperties: false });
-export const GroupMessageSchema = Type.Object({ id: Type.String(), sequence: Type.Integer(), groupId: Type.String(), role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]), authorId: Type.Union([Type.String(), Type.Null()]), authorName: Type.String(), authorAvatar: Type.Union([AvatarSchema, Type.Null()]), text: Type.String(), timestamp: Type.Number() });
+export const GroupMessageSchema = Type.Object({ id: Type.String(), sequence: Type.Integer(), groupId: Type.String(), role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]), authorId: Type.Union([Type.String(), Type.Null()]), authorName: Type.String(), authorAvatar: Type.Union([AvatarSchema, Type.Null()]), text: Type.String(), timestamp: Type.Number(), replyTo: Type.Union([Type.Object({ id: Type.String(), role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]), authorId: Type.Union([Type.String(), Type.Null()]), authorName: Type.String(), text: Type.String() }), Type.Null()]) });
 const Group = Type.Object({ id: Type.String(), name: Type.String(), createdAt: Type.Number(), members: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.Union([AvatarSchema, Type.Null()]), channelId: Type.String() })), lastMessage: Type.Union([GroupMessageSchema, Type.Null()]) });
 function groupView(group: Awaited<ReturnType<DmBroker['groups']['get']>> & { lastMessage?: Parameters<typeof groupMessageView>[0] | null }) {
   return { id: group.id, name: group.name, createdAt: group.createdAt.getTime(), members: group.members.map(({ agent }) => ({ id: agent.id, name: agent.name, avatar: agent.avatar ? JSON.parse(agent.avatar) : null, channelId: agent.channels[0].id })), lastMessage: group.lastMessage ? groupMessageView(group.lastMessage) : null };
@@ -25,7 +25,7 @@ async function safely(reply: FastifyReply, operation: () => Promise<unknown>, st
     return reply.code(503).send({ message: 'The group operation could not finish. Reload history before retrying a message.' });
   }
 }
-export function registerGroupRoutes(app: FastifyInstance, broker: DmBroker, announce: (groupId: string) => void, closing: () => boolean) {
+export function registerGroupRoutes(app: FastifyInstance, broker: DmBroker, announce: (groupId: string) => void, closing: () => boolean, announceDeleted: (groupId: string) => void) {
   const writable = () => { if (closing()) throw new Error('Backend closing.'); };
   app.get<{ Querystring: { after?: number; limit?: number; search?: string } }>('/api/groups', {
     schema: { operationId: 'listGroups', querystring: Type.Object({ after: Type.Optional(Type.Integer({ minimum: 1 })), limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 40 })), search: Type.Optional(Type.String({ maxLength: 80 })) }), response: { 200: Type.Object({ groups: Type.Array(Group), nextCursor: Cursor }), ...errors } },
@@ -42,16 +42,23 @@ export function registerGroupRoutes(app: FastifyInstance, broker: DmBroker, anno
   app.patch<{ Params: { id: string }; Body: Static<typeof Edit> }>('/api/groups/:id', {
     schema: { operationId: 'updateGroup', params: Params, body: Edit, response: { 200: Group, ...errors } },
   }, (request, reply) => safely(reply, async () => { writable(); const group = await broker.groups.update(request.params.id, request.body.name, request.body.agentIds); announce(group.id); return groupView(group); }));
+  app.delete<{ Params: { id: string }; Body: { confirmation: string } }>('/api/groups/:id', {
+    schema: { operationId: 'deleteGroup', params: Params, body: Type.Object({ confirmation: Type.String({ minLength: 1, maxLength: 80 }) }, { additionalProperties: false }), response: { 200: Type.Object({ deleted: Type.Boolean() }), ...errors } },
+  }, (request, reply) => safely(reply, async () => {
+    writable(); await broker.groups.remove(request.params.id, request.body.confirmation);
+    announceDeleted(request.params.id);
+    return { deleted: true };
+  }));
   app.get<{ Params: { id: string }; Querystring: { before?: number; limit?: number } }>('/api/groups/:id/messages', {
     schema: { operationId: 'listGroupMessages', params: Params, querystring: Type.Object({ before: Type.Optional(Type.Integer({ minimum: 1 })), limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 40 })) }), response: { 200: Type.Object({ messages: Type.Array(GroupMessageSchema), nextCursor: Cursor }), ...errors } },
   }, (request, reply) => safely(reply, async () => {
     const page = await broker.groups.history(request.params.id, undefined, request.query.before, request.query.limit);
     return { messages: page.messages.map(groupMessageView), nextCursor: page.nextCursor };
   }));
-  app.post<{ Params: { id: string }; Body: { message: string; clientMessageId: string } }>('/api/groups/:id/messages', {
-    schema: { operationId: 'sendGroupMessage', params: Params, body: Type.Object({ message: Type.String({ minLength: 1, maxLength: 20000 }), clientMessageId: Type.String({ format: 'uuid' }) }, { additionalProperties: false }), response: { 202: Type.Object({ message: GroupMessageSchema, duplicate: Type.Boolean() }), ...errors } },
+  app.post<{ Params: { id: string }; Body: { message: string; clientMessageId: string; replyToMessageId?: string } }>('/api/groups/:id/messages', {
+    schema: { operationId: 'sendGroupMessage', params: Params, body: Type.Object({ message: Type.String({ minLength: 1, maxLength: 20000 }), clientMessageId: Type.String({ format: 'uuid' }), replyToMessageId: Type.Optional(Id) }, { additionalProperties: false }), response: { 202: Type.Object({ message: GroupMessageSchema, duplicate: Type.Boolean() }), ...errors } },
   }, (request, reply) => safely(reply, async () => {
-    writable(); const publication = await broker.sendHumanGroup(request.params.id, request.body.message, request.body.clientMessageId);
+    writable(); const publication = await broker.sendHumanGroup(request.params.id, request.body.message, request.body.clientMessageId, request.body.replyToMessageId);
     return { message: groupMessageView(publication.message), duplicate: publication.duplicate };
   }, 202));
 }

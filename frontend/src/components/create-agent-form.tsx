@@ -7,7 +7,7 @@ import { AgentAvatarPreview } from '@/components/agent-avatar-preview';
 import { randomizeAvatar } from '@/lib/agent-avatar';
 import type { RealAgent } from '@/use-chat';
 
-const fieldClass = 'h-10 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40';
+const fieldClass = 'h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:h-10';
 type Endpoint = { id: string; name: string; baseUrl: string };
 const codexConnection = 'provider:openai-codex';
 
@@ -106,8 +106,8 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
       {error && <p role="alert" className="mt-4 text-sm">{error}</p>}
       <p className="mt-4 text-xs text-muted-foreground">Agent and chat history are saved locally. Drafts and internal activity clear on refresh. Only channel-tool messages are shown.</p>
       <div className="mt-6 flex justify-end gap-2">
-        <Dialog.Close asChild><Button type="button" variant="outline" size="sm">Cancel</Button></Dialog.Close>
-        <Button type="submit" size="sm" disabled={creating || !name.trim() || !model || !levels.includes(thinking)}>{creating ? 'Creating…' : 'Create agent'}</Button>
+        <Dialog.Close asChild><Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-0">Cancel</Button></Dialog.Close>
+        <Button type="submit" size="sm" className="min-h-11 sm:min-h-0" disabled={creating || !name.trim() || !model || !levels.includes(thinking)}>{creating ? 'Creating…' : 'Create agent'}</Button>
       </div>
     </form>
   );

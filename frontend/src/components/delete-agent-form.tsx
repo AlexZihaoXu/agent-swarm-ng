@@ -27,11 +27,11 @@ export function DeleteAgentForm({ agent, onDelete, onDone, onBusyChange }: {
       </Dialog.Description>
       <p id={`${id}-help`} className="mt-5 break-words text-sm">Type <strong className="select-text">{agent.name}</strong> exactly to confirm.</p>
       <label htmlFor={id} className="mt-4 block text-sm font-medium">Confirm agent name</label>
-      <input id={id} aria-describedby={`${id}-help`} value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={busy} autoComplete="off" spellCheck={false} className="mt-2 h-10 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50" />
+      <input id={id} aria-describedby={`${id}-help`} value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={busy} autoComplete="off" spellCheck={false} className="mt-2 h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10" />
       {error && <p role="alert" className="mt-4 text-sm">{error}</p>}
       <div className="mt-6 flex justify-end gap-2">
-        <Dialog.Close asChild><Button type="button" variant="outline" size="sm" disabled={busy}>Cancel</Button></Dialog.Close>
-        <Button type="submit" variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10" size="sm" disabled={busy || confirmation !== agent.name}>{busy ? 'Deleting…' : 'Delete agent'}</Button>
+        <Dialog.Close asChild><Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={busy}>Cancel</Button></Dialog.Close>
+        <Button type="submit" variant="outline" className="min-h-11 border-red-500/50 text-red-400 hover:bg-red-500/10 sm:min-h-0" size="sm" disabled={busy || confirmation !== agent.name}>{busy ? 'Deleting…' : 'Delete agent'}</Button>
       </div>
     </form>
   );

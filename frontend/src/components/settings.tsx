@@ -10,7 +10,7 @@ type TestResult =
   | { state: 'success'; models: string[] }
   | { state: 'error'; message: string };
 
-const inputClass = 'h-10 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50';
+const inputClass = 'h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10';
 
 type Endpoint = { id: string; name: string; baseUrl: string; hasApiKey: boolean; saved: boolean };
 
@@ -70,7 +70,7 @@ function EndpointCard({ endpoint, onSaved, onRemove }: { endpoint: Endpoint; onS
           <h3 id={`${id}-title`} className="truncate text-sm font-semibold">{name.trim() || 'New endpoint'}</h3>
           <p className="mt-1 text-xs text-muted-foreground">OpenAI-compatible API</p>
         </div>
-        <button type="button" onClick={onRemove} aria-label="Remove endpoint" className="rounded-lg p-2 text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+        <button type="button" onClick={onRemove} aria-label="Remove endpoint" className="flex size-11 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring sm:size-auto sm:p-2">
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="size-4"><path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" /></svg>
         </button>
       </div>
@@ -90,10 +90,10 @@ function EndpointCard({ endpoint, onSaved, onRemove }: { endpoint: Endpoint; onS
             <label htmlFor={`${id}-key`} className="block text-sm font-medium">API key</label>
             <input id={`${id}-key`} type="password" value={apiKey} onChange={event => { setApiKey(event.target.value); setKeyChanged(true); setResult({ state: 'idle' }); }} placeholder={endpoint.hasApiKey && !keyChanged ? 'Saved key — enter to replace' : 'Optional for local servers'} autoComplete="new-password" spellCheck={false} className={inputClass} />
           </div>
-          {endpoint.hasApiKey && !keyChanged && <button type="button" className="rounded text-xs text-muted-foreground underline underline-offset-4" onClick={() => { setKeyChanged(true); setApiKey(''); setResult({ state: 'idle' }); }}>Clear saved key</button>}
+          {endpoint.hasApiKey && !keyChanged && <button type="button" className="min-h-11 rounded text-xs text-muted-foreground underline underline-offset-4 sm:min-h-0" onClick={() => { setKeyChanged(true); setApiKey(''); setResult({ state: 'idle' }); }}>Clear saved key</button>}
           <div className="flex flex-wrap items-center gap-3 pt-1">
-            <Button type="button" size="sm" disabled={testing || saving || !name.trim() || !baseUrl.trim()} onClick={() => void saveEndpoint()}>{saving ? 'Saving…' : 'Save endpoint'}</Button>
-            <Button type="submit" variant="outline" size="sm" disabled={testing || !baseUrl.trim()}>{testing ? 'Testing…' : 'Test connection'}</Button>
+            <Button type="button" size="sm" className="min-h-11 sm:min-h-0" disabled={testing || saving || !name.trim() || !baseUrl.trim()} onClick={() => void saveEndpoint()}>{saving ? 'Saving…' : 'Save endpoint'}</Button>
+            <Button type="submit" variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={testing || !baseUrl.trim()}>{testing ? 'Testing…' : 'Test connection'}</Button>
             <span className="text-xs text-muted-foreground">Lists models only. No inference request.</span>
           </div>
         </fieldset>
@@ -106,7 +106,7 @@ function EndpointCard({ endpoint, onSaved, onRemove }: { endpoint: Endpoint; onS
           <p role="status" className="text-sm">Connected · {result.models.length} {result.models.length === 1 ? 'model' : 'models'} available</p>
           {result.models.length > 0 && (
             <details className="mt-2">
-              <summary className="rounded text-xs text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring">View models</summary>
+              <summary className="flex min-h-11 items-center rounded text-xs text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring sm:min-h-0">View models</summary>
               <ScrollArea label="Available models" className="mt-3" style={{ height: Math.min(result.models.length * 28, 144) }}>
                 <ul className="space-y-1 pr-4 font-mono text-xs text-muted-foreground">
                   {result.models.map(model => <li key={model} className="break-all py-1">{model}</li>)}
@@ -147,7 +147,7 @@ export function Settings() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8 sm:py-10">
+    <div className="mx-auto w-full max-w-3xl px-5 pb-8 pt-[calc(2rem+env(safe-area-inset-top))] sm:px-8 md:py-10">
       <header className="mb-8">
         <h2 className="text-xl font-semibold">Settings</h2>
         <p className="mt-2 text-sm text-muted-foreground">Manage your model connections.</p>
@@ -159,7 +159,7 @@ export function Settings() {
             <h3 id="endpoints-title" className="text-sm font-semibold">API endpoints</h3>
             <p className="mt-1 text-xs text-muted-foreground">Connect an OpenAI-compatible provider or local server.</p>
           </div>
-          <Button variant="outline" size="sm" disabled={loading} onClick={() => setEndpoints(current => [...current, { id: randomUuid(), name: '', baseUrl: '', hasApiKey: false, saved: false }])}>
+          <Button variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={loading} onClick={() => setEndpoints(current => [...current, { id: randomUuid(), name: '', baseUrl: '', hasApiKey: false, saved: false }])}>
             <span aria-hidden="true" className="mr-2 text-lg leading-none">+</span>Add endpoint
           </Button>
         </div>

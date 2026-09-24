@@ -4,6 +4,7 @@ import type { GroupStore } from './group-store';
 import { dmConversationId, type SwarmStore } from './swarm-store';
 import type { Channel } from './chat-runtime';
 import { messageText, messageMatch } from './message-text';
+import { groupReply } from './reply-preview';
 
 const result = (data: object) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data) }], details: {} });
 function groupId(channelId: string) {
@@ -11,7 +12,7 @@ function groupId(channelId: string) {
   return channelId.slice(6);
 }
 type Row = Awaited<ReturnType<GroupStore['message']>>;
-const metadata = (row: Row) => ({ id: row.id, sequence: row.sequence, author: { kind: row.role === 'user' ? 'human' : 'agent', id: row.authorId, name: row.role === 'user' ? 'Human' : row.authorName }, timestamp: row.createdAt.toISOString() });
+const metadata = (row: Row) => ({ id: row.id, sequence: row.sequence, author: { kind: row.role === 'user' ? 'human' : 'agent', id: row.authorId, name: row.role === 'user' ? 'Human' : row.authorName }, timestamp: row.createdAt.toISOString(), replyTo: groupReply(row) });
 const view = (row: Row, offset = 0, length = 1000) => ({ ...metadata(row), ...messageText(row.text, offset, length) });
 
 export function createGroupTools(groups: GroupStore, swarm: SwarmStore, channel: Channel, canPublishHuman = () => true) {

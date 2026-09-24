@@ -97,6 +97,25 @@ describe('agent chat-history tools', () => {
     } finally { await store.close(); }
   });
 
+  it('shows a bounded same-channel reply reference even when its parent is older than the read window', async () => {
+    const { store, channel, other, call } = await fixture();
+    try {
+      const parent = await store.appendMessage(channel.id, 'assistant', 'Old context '.repeat(100));
+      await store.appendMessage(other, 'assistant', 'FOREIGN SECRET');
+      for (let index = 0; index < 30; index++) await store.appendMessage(channel.id, 'user', `Filler ${index}`);
+      const reply = await store.appendMessage(channel.id, 'user', 'Follow-up', crypto.randomUUID(), parent.id);
+      const section = await call('read_messages');
+      const last = section.messages.at(-1);
+      expect(last.replyTo).toMatchObject({ id: parent.id, role: 'assistant' });
+      expect(last.replyTo.text.length).toBeLessThanOrEqual(161);
+      expect(JSON.stringify(section)).not.toContain('FOREIGN SECRET');
+      expect((await call('read_messages', { messageId: reply.id, offset: 0 })).messages[0].replyTo.id).toBe(parent.id);
+      expect((await call('search_messages', { query: 'Follow-up' })).matches[0].replyTo.id).toBe(parent.id);
+      const parentRead = await call('read_messages', { messageId: parent.id, offset: 0 });
+      expect(parentRead.messages[0].text).toContain('Old context');
+    } finally { await store.close(); }
+  });
+
   it('enforces the granted channel and rejects ambiguous or invalid navigation', async () => {
     const { store, channel, other, call } = await fixture();
     try {

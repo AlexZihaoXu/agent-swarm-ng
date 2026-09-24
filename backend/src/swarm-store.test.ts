@@ -79,6 +79,24 @@ it('shares one monotonic chain budget across replies and fan-out, and deduplicat
     expect(await database.client.dmMessage.count()).toBe(DM_CHAIN_LIMIT);
   } finally { await database.close(); }
 });
+it('binds agent DM replies to one conversation and refuses changed retry targets', async () => {
+  const { database, swarm, a, b, c, chainId } = await fixture();
+  try {
+    await swarm.updateSettings(a.id, { allowedDmAgentIds: [b.id, c.id] });
+    const first = await swarm.send({ senderId: a.id, recipientId: b.id, chainId, deliveryKey: 'first', text: 'First' });
+    const foreign = await swarm.send({ senderId: a.id, recipientId: c.id, chainId, deliveryKey: 'foreign', text: 'Foreign' });
+    const send = (replyToId?: string) => swarm.send({ senderId: a.id, recipientId: b.id, chainId, deliveryKey: 'reply', text: 'About that', replyToId });
+    await expect(send(foreign.message.id)).rejects.toThrow('Reply target not found');
+    const reply = await send(first.message.id);
+    expect(reply.message.replyTo?.text).toBe('First');
+    expect((await swarm.history(b.id, a.id)).messages.at(-1)?.replyTo?.id).toBe(first.message.id);
+    expect((await send(first.message.id)).duplicate).toBe(true);
+    await expect(send()).rejects.toThrow('different');
+    await database.client.dmMessage.delete({ where: { id: first.message.id } });
+    expect((await swarm.history(b.id, a.id)).messages.at(-1)?.replyTo).toBeNull();
+  } finally { await database.close(); }
+});
+
 it('does not overspend the chain when deliveries race', async () => {
   const { database, swarm, a, b, c, chainId, send } = await fixture();
   try {
