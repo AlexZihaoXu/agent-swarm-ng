@@ -4,13 +4,16 @@ import { Type } from '@sinclair/typebox';
 import { registerModelEndpoints } from './model-endpoints';
 import type { EndpointStore } from './endpoint-store';
 import { registerChat } from './chat';
-import type { PlatformStore } from './platform-store';
+import { PlatformStore } from './platform-store';
 import { CodexProvider } from './codex-provider';
 import { registerCodex } from './codex-routes';
 import { ActivityEntrySchema } from './agent-activity';
+import { registerComputerRoutes } from './computer-routes';
+import { HttpComputerController, type ComputerController } from './computer-controller-client';
 
-export async function buildApp({ fetcher, endpointStore, database, codex = new CodexProvider() }: { fetcher?: typeof fetch; endpointStore?: EndpointStore; database?: PlatformStore; codex?: CodexProvider } = {}) {
+export async function buildApp({ fetcher, endpointStore, database, codex = new CodexProvider(), computerController }: { fetcher?: typeof fetch; endpointStore?: EndpointStore; database?: PlatformStore; codex?: CodexProvider; computerController?: ComputerController | null } = {}) {
   const app = Fastify({ logger: true });
+  const platform = database ?? new PlatformStore();
   await app.register(swagger, {
     openapi: { info: { title: 'Agent Swarm NG API', version: '0.1.0' }, components: { schemas: { AgentActivityEntry: ActivityEntrySchema } } },
   });
@@ -24,7 +27,8 @@ export async function buildApp({ fetcher, endpointStore, database, codex = new C
 
   registerModelEndpoints(app, fetcher, endpointStore);
   registerCodex(app, codex);
-  registerChat(app, endpointStore, database, codex);
+  registerChat(app, endpointStore, platform, codex);
+  registerComputerRoutes(app, platform, computerController === undefined ? (process.env.COMPUTER_CONTROLLER_URL ? new HttpComputerController(process.env.COMPUTER_CONTROLLER_URL) : null) : computerController);
 
   await app.ready();
   return app;

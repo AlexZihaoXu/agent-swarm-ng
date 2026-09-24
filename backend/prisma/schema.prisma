@@ -23,6 +23,18 @@ enum MessageRole {
   assistant
 }
 
+// A computer is a platform resource, not an agent or a chat channel.
+// Docker labels/volumes carry the same ID for recovery and ownership checks.
+model Computer {
+  sequence   Int      @id @default(autoincrement())
+  id         String   @unique @default(uuid())
+  name       String
+  requestKey String   @unique
+  state      String   @default("creating")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
 model Agent {
   sequence         Int               @id @default(autoincrement())
   id               String            @unique @default(uuid())
