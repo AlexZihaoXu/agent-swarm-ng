@@ -1,6 +1,13 @@
 import { test, expect, type Page } from './fixtures';
 
 type Computer = { id: string; name: string; state: string; createdAt: number; cpuPercent: number | null; memoryBytes: number | null };
+async function expectCentered(page: Page, dialog: ReturnType<Page['getByRole']>) {
+  const box = await dialog.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box && viewport).toBeTruthy();
+  expect(Math.abs(box!.x + box!.width / 2 - viewport!.width / 2)).toBeLessThan(3);
+  expect(Math.abs(box!.y + box!.height / 2 - viewport!.height / 2)).toBeLessThan(3);
+}
 async function mockComputers(page: Page, initial: Computer[] = []) {
   const computers = [...initial];
   let previews = 0;
@@ -67,10 +74,12 @@ test('280px phone keeps the grid, tabs and dialogs reachable without reduced-mot
   await page.getByRole('button', { name: 'Create computer' }).click();
   const dialog = page.getByRole('dialog', { name: 'Create computer' });
   await expect(dialog.getByLabel('Computer name')).toBeVisible();
+  await expectCentered(page, dialog);
   await expect(dialog).toHaveCSS('animation-name', 'none');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await card.getByRole('button', { name: /Delete Very long/ }).click();
   await expect(page.getByRole('dialog', { name: 'Delete computer' }).getByLabel('Confirm computer name')).toBeVisible();
+  await expectCentered(page, page.getByRole('dialog', { name: 'Delete computer' }));
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
@@ -166,12 +175,14 @@ test('creates a computer and requires an exact typed name before destructive del
   await page.getByRole('tab', { name: 'Computers' }).click();
   await page.getByRole('button', { name: 'Create computer' }).click();
   const create = page.getByRole('dialog', { name: 'Create computer' });
+  await expectCentered(page, create);
   await create.getByLabel('Computer name').fill('Test machine');
   await create.getByRole('button', { name: 'Create computer' }).click();
   await expect(page.getByRole('article', { name: 'Test machine' })).toBeVisible();
   expect(computers).toHaveLength(1);
   await page.getByRole('article', { name: 'Test machine' }).getByRole('button', { name: 'Delete Test machine' }).click();
   const dialog = page.getByRole('dialog', { name: 'Delete computer' });
+  await expectCentered(page, dialog);
   await expect(dialog).toContainText('home');
   await expect(dialog).toContainText('workspace');
   const confirm = dialog.getByLabel('Confirm computer name');
