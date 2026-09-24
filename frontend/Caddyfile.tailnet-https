@@ -1,0 +1,17 @@
+# Optional stage-2 Tailnet HTTPS deployment on the SAME dashboard TCP port.
+# The cert/key are provisioned by the operator under .local/ and mounted
+# read-only by compose.tailscale-https.yaml, never served to the browser.
+{$SITE_ADDRESS} {
+	tls /etc/caddy/tailnet.crt /etc/caddy/tailnet.key
+	encode zstd gzip
+
+	import /etc/caddy/ComputerRoutes
+
+	handle {
+		root * /srv
+		@updates path / /sw.js /index.html /manifest.webmanifest
+		header @updates Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}

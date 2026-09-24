@@ -1,0 +1,11 @@
+# Opt-in future stage-2 HTTPS overlay. Do NOT deploy without separate approval.
+# Combine with compose.yaml + compose.tailscale.yaml. One Tailnet TCP port 19090,
+# no port 443, WebRTC/UDP or per-computer listener is published.
+services:
+  frontend:
+    environment:
+      SITE_ADDRESS: "${TAILSCALE_DNS_NAME:?Set this machine's trusted Tailnet DNS name}:19090"
+    volumes:
+      - ./frontend/Caddyfile.tailnet-https:/etc/caddy/Caddyfile:ro
+      - ./.local/certs/tailnet.crt:/etc/caddy/tailnet.crt:ro
+      - ./.local/certs/tailnet.key:/etc/caddy/tailnet.key:ro
