@@ -1,18 +1,63 @@
-# Shared by production Caddy and the isolated development proxy. A canonical
-# UUID selects only a controller-owned relay's short DNS alias on the bridge.
-@computerDesktop path_regexp computerDesktop ^/computers/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/desktop(?:/.*)?$
-handle @computerDesktop {
-	reverse_proxy computer-{re.computerDesktop.1}:8080 {
+# Shared by production Caddy and the isolated development proxy. The root
+# document and all executable assets come from trusted build-time image bytes,
+# never from the sudo-capable computer's writable filesystem.
+@computerDesktopRoot path_regexp computerDesktopRoot ^/computers/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/desktop/$
+handle @computerDesktopRoot {
+	root * /srv
+	rewrite * /desktop-frame.html
+	file_server
+}
+
+@computerAsset path_regexp computerAsset ^/computers/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/desktop/(assets/[A-Za-z0-9._-]+\.(?:js|css)|jsdb/[a-z0-9_-]+/[A-Za-z0-9._-]+\.json|icon(?:-[0-9]+)?\.png|selkies\.svg|favicon\.ico|manifest\.json)$
+handle @computerAsset {
+	root * /srv/selkies
+	rewrite * /{re.computerAsset.1}
+	file_server
+}
+
+# A canonical UUID selects only a controller-owned relay's short DNS alias.
+# A non-upgrade GET to the WebSocket URL may NEVER load computer HTML/JS.
+@computerWS {
+	path_regexp computerWS ^/computers/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/desktop/api/websockets$
+	header Upgrade websocket
+}
+handle @computerWS {
+	reverse_proxy computer-{re.computerWS.1}:8080 {
 		# Selkies validates WebSocket Origin against Host. Its TLS upstream
 		# would otherwise replace the dashboard Host with the relay alias.
 		header_up Host {http.request.host}
+		header_down -Set-Cookie
 		transport http {
 			tls
-			# Selkies' per-computer certificate is self-signed. The upstream
-			# endpoint is owned by Docker labels on the isolated media network.
+			# The backend is only a controller-labelled endpoint on the
+			# gateway-less media bridge; its certificate is self-signed.
 			tls_insecure_skip_verify
 		}
 	}
+}
+
+# The sudo computer can replace its own API responses. Force a non-executable
+# type even if it sends text/html or JavaScript; direct navigation downloads.
+@computerJSON path_regexp computerJSON ^/computers/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/desktop/api/(?:health|status)$
+handle @computerJSON {
+	reverse_proxy computer-{re.computerJSON.1}:8080 {
+		header_up Host {http.request.host}
+		header_down Content-Type "application/json; charset=utf-8"
+		header_down X-Content-Type-Options nosniff
+		header_down Content-Disposition attachment
+		header_down -Set-Cookie
+		header_down -Location
+		header_down -Refresh
+		transport http {
+			tls
+			tls_insecure_skip_verify
+		}
+	}
+}
+
+@computerUnknown path_regexp computerUnknown ^/computers/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/desktop(?:/.*)?$
+handle @computerUnknown {
+	respond "Unknown computer viewer path" 404
 }
 
 handle /api/* {

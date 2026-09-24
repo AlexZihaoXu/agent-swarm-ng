@@ -100,7 +100,9 @@ export function registerComputerRoutes(app: FastifyInstance, platform: PlatformS
     try {
       const image = await controller.preview(record.id, request.query.full === '1');
       if (!image) return unavailable(reply);
-      return reply.type('image/jpeg').send(Buffer.from(image));
+      // Sudo in the computer controls these bytes. Never let a direct
+      // navigation or script tag interpret a JPEG polyglot as executable.
+      return reply.header('X-Content-Type-Options', 'nosniff').type('image/jpeg').send(Buffer.from(image));
     } catch (error) { return failure(reply, error); }
   });
   app.post<{ Params: { id: string }; Body: { x: number; y: number } }>('/api/computers/:id/desktop/input', {

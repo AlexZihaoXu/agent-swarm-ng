@@ -32,16 +32,23 @@ curl -fsS --max-time 120 -X POST "$base/api/computers" -H 'Content-Type: applica
 id=$(python3 -c 'import json; print(json.load(open(".scratch/computer-api-e2e-create.json"))["id"])')
 computer="${namespace}-computer-${id}"
 gateway="${computer}-gateway"
+if [ -n "${COMPUTER_RENDER_DEVICE:-}" ]; then
+    docker exec -u ubuntu "$computer" vainfo --display drm --device "$COMPUTER_RENDER_DEVICE" > .scratch/computer-api-e2e-vainfo.log 2>&1
+    grep -q 'VAProfileH264High.*VAEntrypointEncSlice' .scratch/computer-api-e2e-vainfo.log
+    echo 'Managed non-root computer can use the host H.264 VA-API render node.'
+fi
 python3 - "$computer" "${computer}-private" <<'PY'
-import json,subprocess,sys
+import json,os,subprocess,sys
 container=json.loads(subprocess.check_output(['docker','inspect',sys.argv[1]]))[0]
 network=json.loads(subprocess.check_output(['docker','network','inspect',sys.argv[2]]))[0]
 assert not container['HostConfig'].get('PortBindings'),container['HostConfig'].get('PortBindings')
 assert container['HostConfig']['Runtime']=='sysbox-runc'
+device=os.environ.get('COMPUTER_RENDER_DEVICE','')
+assert (container['HostConfig'].get('Devices') or []) == ([{'PathOnHost':device,'PathInContainer':device,'CgroupPermissions':'rwm'}] if device else []),container['HostConfig'].get('Devices')
 assert network['Internal'] and not network['EnableIPv6']
 assert network['Options']['com.docker.network.bridge.gateway_mode_ipv4']=='isolated'
 assert network['IPAM']['Config'][0].get('Gateway') in (None,'','invalid IP')
-print('No computer host ports; user namespace and gateway-less private bridge selected')
+print('No computer host ports; user namespace and gateway-less private bridge selected; DRM render node:',device or 'none')
 PY
 python3 - "$id" "$name" <<'PY'
 import json,sys
@@ -97,7 +104,7 @@ fi
 # a Vite SPA fallback would not contain this title. No computer port is bound.
 viewer="$base/computers/$id/desktop/"
 attempt=0
-until curl -fsS --max-time 6 "$viewer" -o .scratch/computer-api-e2e-viewer.html && grep -q 'Selkies' .scratch/computer-api-e2e-viewer.html; do
+until curl -fsS --max-time 6 "$viewer" -o .scratch/computer-api-e2e-viewer.html && grep -q "Object.defineProperty(window, 'localStorage'" .scratch/computer-api-e2e-viewer.html; do
     attempt=$((attempt+1))
     if [ "$attempt" -ge 30 ]; then
         docker logs "${namespace}-caddy-dev-1" --tail 25 >&2 || true
@@ -109,7 +116,24 @@ until curl -fsS --max-time 6 "$viewer" -o .scratch/computer-api-e2e-viewer.html 
     fi
     sleep 1
 done
-echo 'Same-port dashboard-to-Selkies HTML proxy passed.'
+asset="${viewer}assets/index-CPWh3fQ6.js"
+curl -fsS --max-time 12 "$asset" -o .scratch/computer-api-e2e-client.js
+cmp .scratch/computer-api-e2e-client.js .scratch/selkies-client-web/assets/index-CPWh3fQ6.js
+# Sudo inside the *test* computer can replace its own copy, but that must not
+# change the JavaScript the dashboard sends to a same-origin viewer.
+docker exec -u ubuntu "$computer" sudo -n sh -c 'printf "%s\n" "/* untrusted computer asset */" > /opt/selkies/lib/python3.12/site-packages/selkies/selkies_web/assets/index-CPWh3fQ6.js'
+curl -fsS --max-time 12 "$asset" -o .scratch/computer-api-e2e-client-after.js
+cmp .scratch/computer-api-e2e-client.js .scratch/computer-api-e2e-client-after.js
+for forbidden in api/files/ api/tokens api/sessions api/switch api/websockets; do
+    code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 6 "${viewer}${forbidden}")
+    test "$code" = 404 || { echo "Untrusted computer endpoint is reachable: $forbidden" >&2; exit 1; }
+done
+curl -fsS --max-time 6 -D .scratch/computer-api-e2e-json-headers.txt "${viewer}api/status" -o .scratch/computer-api-e2e-status.json
+grep -qi '^Content-Type: application/json;' .scratch/computer-api-e2e-json-headers.txt
+grep -qi '^X-Content-Type-Options: nosniff' .scratch/computer-api-e2e-json-headers.txt
+grep -qi '^Content-Disposition: attachment' .scratch/computer-api-e2e-json-headers.txt
+! grep -Eqi '^(Set-Cookie|Location|Refresh):' .scratch/computer-api-e2e-json-headers.txt
+echo 'Only trusted assets execute; guest HTML, plain WebSocket GET, cookies and unused endpoints are blocked.'
 curl -sS --max-time 3 --http1.1 -D .scratch/computer-api-e2e-ws-headers.txt -o /dev/null \
     -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
     -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H "Origin: $base" \

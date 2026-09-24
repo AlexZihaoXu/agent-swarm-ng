@@ -20,4 +20,7 @@ FROM caddy:2-alpine AS production
 COPY frontend/Caddyfile /etc/caddy/Caddyfile
 COPY frontend/Caddyfile.computers /etc/caddy/ComputerRoutes
 COPY --from=build /app/frontend/dist /srv
+# Runtime guest sudo cannot edit this immutable client copy. Update the pinned
+# Selkies version, hashes, and trusted wrapper together on upstream upgrades.
+COPY --from=agent-swarm-default:stage2 /opt/selkies/lib/python3.12/site-packages/selkies/selkies_web /srv/selkies
 EXPOSE 80 443

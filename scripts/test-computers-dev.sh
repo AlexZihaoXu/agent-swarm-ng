@@ -46,8 +46,9 @@ trap cleanup EXIT INT TERM
 # in a tracked test. The web app remains accessible only via loopback:5173.
 if command -v tailscale >/dev/null 2>&1; then export COMPUTER_TEST_TAILNET_IP="$(tailscale ip -4 2>/dev/null || true)"; fi
 compose --profile computer-images build computer-image computer-egress-image computer-media-image
+sh scripts/prepare-selkies-client.sh
 compose build backend frontend computer-controller
-compose up --no-build -d
+compose up --no-build -d || { compose logs --tail=30 backend computer-controller frontend caddy-dev >&2 || true; exit 1; }
 attempt=0
 until curl -fsS --max-time 2 http://127.0.0.1:5173/api/computers >/dev/null 2>&1; do
     attempt=$((attempt+1)); [ "$attempt" -lt 180 ] || { compose ps; echo 'Dev dashboard did not become ready.' >&2; exit 1; }
@@ -61,10 +62,25 @@ browser() {
         --security-opt "seccomp=$root/templates/default/security/chromium-seccomp.json" \
         --security-opt no-new-privileges:true --cap-add SYS_CHROOT \
         -v "$root":/work -v "$bun_bin":/usr/local/bin/bun:ro -w /work \
-        -e COMPUTER_E2E_ALLOW=1 -e PLAYWRIGHT_BROWSERS_PATH=/work/.scratch/ms-playwright \
+        -e COMPUTER_E2E_ALLOW=1 -e COMPUTER_E2E_PERF="${COMPUTER_E2E_PERF:-}" \
+        -e COMPUTER_E2E_ENCODER="$(if [ -n "${COMPUTER_RENDER_DEVICE:-}" ]; then echo vaapi; else echo software; fi)" \
+        -e PLAYWRIGHT_BROWSERS_PATH=/work/.scratch/ms-playwright \
         mcr.microsoft.com/playwright/python:v1.62.0-noble \
         /usr/local/bin/bun run --cwd frontend "$@"
 }
 browser playwright install chromium-headless-shell
-browser test:e2e --config playwright.computers.config.ts --workers=1 --retries=0
+if ! browser test:e2e --config playwright.computers.config.ts --workers=1 --retries=0; then
+    # Bounded, non-secret capture diagnostics from only this test namespace;
+    # no guest credentials, provider logs or unrelated Docker containers.
+    : > .scratch/computers-failed-stream-diagnostics.log
+    for container in $(docker ps -q --filter "label=swarm.ng.namespace=$project" --filter 'label=swarm.ng.role=desktop'); do
+        docker exec "$container" sh -c "grep -E '^\\[HostCapture\\]|^INFO:ws:Client|^WARNING:ws:Capture' /run/user/1000/selkies.log | tail -45" >> .scratch/computers-failed-stream-diagnostics.log 2>/dev/null || true
+        docker exec -u ubuntu -e XDG_RUNTIME_DIR=/run/user/1000 "$container" sh -c 'pw-link -oI; pw-link -iI; pw-link -l' >> .scratch/computers-failed-stream-diagnostics.log 2>/dev/null || true
+    done
+    echo 'Browser E2E failed; scoped Selkies/PipeWire diagnostics saved in .scratch before cleanup.' >&2
+    exit 1
+fi
+if [ "${COMPUTER_FULL_BROWSER:-}" = 1 ]; then
+    browser test:e2e --config ../.scratch/playwright-computers-full.config.ts --workers=1 --retries=0
+fi
 printf 'Computers dev API and browser E2E passed; removing this test project.\n'

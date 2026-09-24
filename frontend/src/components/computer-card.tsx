@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { paths } from '@/api/schema';
 
-type Computer = paths['/api/computers']['get']['responses'][200]['content']['application/json']['computers'][number];
+export type Computer = paths['/api/computers']['get']['responses'][200]['content']['application/json']['computers'][number];
 
-export function ComputerCard({ computer, onDelete, canManage }: { computer: Computer; onDelete: (computer: Computer) => void; canManage: boolean }) {
+export function ComputerCard({ computer, onDelete, onOpen, canManage }: { computer: Computer; onDelete: (computer: Computer) => void; onOpen: (computer: Computer) => void; canManage: boolean }) {
   const target = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
   const [pageVisible, setPageVisible] = useState(() => document.visibilityState === 'visible');
@@ -32,7 +32,7 @@ export function ComputerCard({ computer, onDelete, canManage }: { computer: Comp
 
   const status = running ? 'Running' : computer.state === 'exited' ? 'Stopped' : computer.state === 'unavailable' ? 'Unavailable' : computer.state;
   return <article ref={target} aria-label={computer.name} className="min-w-0 overflow-hidden rounded-xl border border-border bg-sidebar shadow-sm">
-    <div data-testid="computer-preview" className="relative aspect-video overflow-hidden bg-black/55">
+    <button type="button" data-testid="computer-preview" aria-label={`Open ${computer.name} desktop`} onClick={() => onOpen(computer)} disabled={!running || !canManage} className="relative block aspect-video w-full overflow-hidden bg-black/55 text-left enabled:cursor-pointer disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
       {running && visible && frame > 0 && <img
         alt={`Desktop preview of ${computer.name}`}
         src={`/api/computers/${encodeURIComponent(computer.id)}/preview?at=${frame}`}
@@ -44,7 +44,7 @@ export function ComputerCard({ computer, onDelete, canManage }: { computer: Comp
         {!running ? 'Desktop offline' : failed ? 'Preview unavailable' : 'Loading preview…'}
       </div>}
       <span className="absolute bottom-2 left-2 rounded-md bg-black/75 px-2 py-1 text-xs text-white">{status}</span>
-    </div>
+    </button>
     <div className="space-y-1.5 px-3 py-2.5">
       <div className="flex min-w-0 items-center justify-between gap-2">
         <h3 className="min-w-0 truncate text-sm font-semibold" title={computer.name}>{computer.name}</h3>

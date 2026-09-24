@@ -33,6 +33,8 @@ services:
     volumes:
       - ./frontend/Caddyfile.dev:/etc/caddy/Caddyfile:ro
       - ./frontend/Caddyfile.computers:/etc/caddy/ComputerRoutes:ro
+      - ./frontend/public/desktop-frame.html:/srv/desktop-frame.html:ro
+      - ./.scratch/selkies-client-web:/srv/selkies:ro
     depends_on:
       backend:
         condition: service_healthy

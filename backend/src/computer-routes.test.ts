@@ -36,6 +36,7 @@ it('creates one platform computer, lists status/usage and serves its bounded JPE
     const image = await app.inject({ method: 'GET', url: `/api/computers/${computer.id}/preview` });
     expect(image.statusCode).toBe(200);
     expect(image.headers['content-type']).toContain('image/jpeg');
+    expect(image.headers['x-content-type-options']).toBe('nosniff');
     expect(image.headers['cache-control']).toBe('no-store');
     expect(image.rawPayload).toEqual(Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
     expect(await database.client.agent.count()).toBe(0);
@@ -62,6 +63,7 @@ it('limits first-run desktop input to an existing running computer and normalize
     expect(calls.filter(call => call.startsWith('pointer:'))).toEqual([`pointer:${row.id}:0.65:0.43`, `pointer:${row.id}:0.5:0.5`]);
     const full = await app.inject({ method: 'GET', url: `/api/computers/${row.id}/preview?full=1` });
     expect(full.statusCode).toBe(200);
+    expect(full.headers['x-content-type-options']).toBe('nosniff');
     expect(calls).toContain(`full-preview:${row.id}`);
     expect((await app.inject({ method: 'GET', url: `/api/computers/${row.id}/preview?full=other` })).statusCode).toBe(400);
     await database.client.computer.update({ where: { id: row.id }, data: { state: 'failed' } });

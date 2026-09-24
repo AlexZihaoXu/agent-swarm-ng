@@ -74,6 +74,81 @@ test('280px phone keeps the grid, tabs and dialogs reachable without reduced-mot
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('opens a computer on the dashboard port, lets a person click its consent preview, then returns to the grid', async ({ page }) => {
+  const id = '83b9e248-6bf5-427a-bd85-9799b1b89eb5';
+  const { computers } = await mockComputers(page, [{ id, name: 'Work desk', state: 'running', createdAt: 0, cpuPercent: 3, memoryBytes: 104857600 }]);
+  const clicks: Array<{ x: number; y: number }> = [];
+  await page.route(new RegExp(`/api/computers/${id}/preview\\?full=1`), route => route.fulfill({
+    status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect width="1920" height="1080" fill="#523348"/></svg>',
+  }));
+  await page.route(`**/api/computers/${id}/desktop/input`, route => {
+    clicks.push(route.request().postDataJSON());
+    return route.fulfill({ status: 202, json: { accepted: true } });
+  });
+  await page.route(url => new URL(url).pathname.startsWith(`/computers/${id}/desktop/`), route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Selkies</title><video></video>' }));
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Computers' }).click();
+  await page.getByRole('article', { name: 'Work desk' }).getByRole('button', { name: 'Open Work desk desktop' }).click();
+  await expect(page.getByRole('navigation', { name: 'Computer location' })).toContainText('Work desk');
+  await expect(page.locator('iframe[title="Work desk desktop"]')).toHaveAttribute('src', `/computers/${id}/desktop/`);
+  const preview = page.getByRole('button', { name: /Click the permission dialog/ });
+  await expect(preview).toBeVisible();
+  await preview.click({ position: { x: 200, y: 100 } });
+  await expect.poll(() => clicks.length).toBe(1);
+  expect(clicks[0].x).toBeGreaterThan(0);
+  expect(clicks[0].x).toBeLessThan(1);
+  expect(clicks[0].y).toBeGreaterThan(0);
+  expect(clicks[0].y).toBeLessThan(1);
+  await page.screenshot({ path: '../.scratch/computers-viewer-consent-desktop.png', animations: 'disabled' });
+  await page.getByRole('button', { name: 'Back to computers' }).click();
+  await expect(page.getByRole('article', { name: 'Work desk' })).toBeVisible();
+  await expect(page.locator('iframe[title="Work desk desktop"]')).toHaveCount(0);
+  expect(computers).toHaveLength(1);
+});
+
+test('280px computer viewer keeps consent controls reachable with reduced motion', async ({ page }) => {
+  const id = '4e99510e-dd0a-4751-bda3-c4679715a0ee';
+  await mockComputers(page, [{ id, name: 'Phone desk', state: 'running', createdAt: 0, cpuPercent: 2, memoryBytes: 104857600 }]);
+  await page.route(new RegExp(`/api/computers/${id}/preview\\?full=1`), route => route.fulfill({
+    status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect width="1920" height="1080" fill="#523348"/></svg>',
+  }));
+  await page.route(url => new URL(url).pathname.startsWith(`/computers/${id}/desktop/`), route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Selkies</title><video></video>' }));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 280, height: 640 });
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Computers' }).click();
+  await page.getByRole('button', { name: 'Open Phone desk desktop' }).click();
+  await expect(page.getByRole('button', { name: 'Back to computers' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Click the permission dialog/ })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Computers' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.getByTestId('computer-viewer')).toHaveCSS('animation-name', 'none');
+  await page.screenshot({ path: '../.scratch/computers-viewer-consent-phone.png', animations: 'disabled' });
+});
+
+test('viewer reports an offline stream and retries its iframe without erasing the computer', async ({ page }) => {
+  const id = 'da02f137-8a73-4e93-9d22-95886ca9f9fa';
+  const { computers } = await mockComputers(page, [{ id, name: 'Recoverable desk', state: 'running', createdAt: 0, cpuPercent: 2, memoryBytes: 104857600 }]);
+  let healthy = false;
+  let loads = 0;
+  await page.addInitScript(computerId => localStorage.setItem(`computer-consent:${computerId}`, 'yes'), id);
+  await page.route(`**/computers/${id}/desktop/api/health`, route => route.fulfill({ status: healthy ? 200 : 503, json: { status: healthy ? 'ok' : 'unavailable' } }));
+  await page.route(`**/computers/${id}/desktop/`, route => {
+    loads++;
+    return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Trusted desktop</title><video></video>' });
+  });
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Computers' }).click();
+  await page.getByRole('button', { name: 'Open Recoverable desk desktop' }).click();
+  const viewer = page.getByTestId('computer-viewer');
+  await expect(viewer.getByRole('alert')).toContainText('Desktop stream unavailable.');
+  healthy = true;
+  await viewer.getByRole('button', { name: 'Retry connection' }).click();
+  await expect(viewer.getByRole('alert')).toHaveCount(0);
+  await expect.poll(() => loads).toBeGreaterThan(1);
+  expect(computers).toHaveLength(1);
+});
+
 test('keeps saved computers visible but controls disabled when their controller is offline', async ({ page }) => {
   await mockComputers(page);
   await page.route(/\/api\/computers(?:\?.*)?$/, route => route.fulfill({ json: { controllerConnected: false, computers: [{ id: 'saved', name: 'Saved computer', state: 'unavailable', createdAt: 0, cpuPercent: null, memoryBytes: null }] } }));

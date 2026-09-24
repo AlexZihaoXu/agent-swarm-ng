@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Selkies desktop</title>
+  <!-- This trusted, same-origin client needs WebCodecs. Its per-view ephemeral
+       Web Storage keeps Selkies UI preferences out of dashboard persistence;
+       it is NOT an origin boundary. Guest-modifiable executable endpoints
+       are denied by Caddy and only pinned frontend assets are loaded here. -->
+  <script>
+    (() => {
+      const storage = () => {
+        const values = new Map();
+        return {
+          get length() { return values.size; },
+          key(index) { return [...values.keys()][index] ?? null; },
+          getItem(key) { return values.get(String(key)) ?? null; },
+          setItem(key, value) { values.set(String(key), String(value)); },
+          removeItem(key) { values.delete(String(key)); },
+          clear() { values.clear(); },
+        };
+      };
+      Object.defineProperty(window, 'localStorage', { value: storage(), configurable: false });
+      Object.defineProperty(window, 'sessionStorage', { value: storage(), configurable: false });
+    })();
+  </script>
+  <!-- Selkies 2.0.0 asset hashes match the SHA-256-pinned package in
+       templates/default/Dockerfile. This document and its executable assets
+       are served from trusted frontend bytes, never from container sudo. Only
+       bounded WS/JSON endpoints are proxied to the computer. -->
+  <script type="module" crossorigin src="./assets/index-CPWh3fQ6.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-D97fjY6g.css" />
+</head>
+<body><div id="app"></div><div id="root"></div><div id="touch-gamepad-host"></div></body>
+</html>
