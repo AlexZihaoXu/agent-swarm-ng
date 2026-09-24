@@ -50,10 +50,10 @@ Prisma + SQLite stores agents, channels, and published chat history. This single
 
 ## Project structure
 
-Core layout (the current local checkout intentionally remains named `agent-swarm-v2`; no folder/session paths were renamed):
+Core layout of this `agent-swarm-ng` repository (the older v2 project is separate):
 
 ```text
-agent-swarm-v2/
+agent-swarm-ng/
 ├── AGENTS.md
 ├── README.md
 ├── compose.yaml
@@ -62,6 +62,9 @@ agent-swarm-v2/
 │   ├── Dockerfile
 │   └── src/
 ├── backend/
+│   ├── Dockerfile
+│   └── src/
+├── computer-controller/
 │   ├── Dockerfile
 │   └── src/
 ├── templates/

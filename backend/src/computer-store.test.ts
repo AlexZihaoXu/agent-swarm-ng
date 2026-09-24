@@ -42,6 +42,19 @@ describe('computer identity and lifecycle', () => {
     } finally { await database.close(); }
   });
 
+  it('bounds retained computer records without breaking idempotent retries at the cap', async () => {
+    const { database, computers } = await fixture();
+    try {
+      const key = crypto.randomUUID();
+      await database.client.computer.createMany({ data: [
+        { name: 'Original', requestKey: key, state: 'failed' },
+        ...Array.from({ length: 99 }, (_, index) => ({ name: `Other ${index}`, requestKey: crypto.randomUUID(), state: 'failed' })),
+      ] });
+      await expect(computers.reserve('Overflow', crypto.randomUUID())).rejects.toThrow('limit');
+      expect((await computers.reserve('Original', key)).created).toBe(false);
+    } finally { await database.close(); }
+  });
+
   it('retains a failed create for operator recovery and allows exact-name cleanup', async () => {
     const { database, computers } = await fixture();
     try {

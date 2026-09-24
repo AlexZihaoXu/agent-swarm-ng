@@ -16,7 +16,10 @@ export class ComputerStore {
     const existing = await this.platform.client.computer.findUnique({ where: { requestKey } });
     if (existing) return { computer: this.sameRequest(existing, name), created: false };
     try {
-      const computer = await this.platform.client.computer.create({ data: { name, requestKey } });
+      const computer = await this.platform.client.$transaction(async tx => {
+        if (await tx.computer.count() >= 100) throw new ComputerStoreError('conflict', 'Computer record limit reached. Delete unused computers first.');
+        return tx.computer.create({ data: { name, requestKey } });
+      });
       return { computer, created: true };
     } catch (error) {
       // Two simultaneous HTTP retries may race on the unique operation key.

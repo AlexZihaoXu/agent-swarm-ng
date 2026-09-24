@@ -38,7 +38,17 @@ export function registerComputerRoutes(app: FastifyInstance, platform: PlatformS
     try {
       const records = await store.list();
       const observed = controller ? await controller.observe().catch(() => null) : null;
-      return { computers: records.map(record => view(record, observed?.get(record.id))), controllerConnected: observed !== null };
+      const reconciled = await Promise.all(records.map(async record => {
+        if (record.state !== 'creating') return record;
+        if (observed?.get(record.id)?.status === 'running' && await store.markRunning(record.id)) return { ...record, state: 'running' };
+        // A backend crash can leave a completed or partial Docker operation
+        // without its response. Once the 120s create deadline has elapsed,
+        // expose a failed record for exact-name cleanup instead of a permanent
+        // 'creating' row that the operator cannot delete.
+        if (Date.now() - record.createdAt.getTime() > 120_000 && await store.markFailed(record.id)) return { ...record, state: 'failed' };
+        return record;
+      }));
+      return { computers: reconciled.map(record => view(record, observed?.get(record.id))), controllerConnected: observed !== null };
     } catch (error) { return failure(reply, error); }
   });
   app.post<{ Body: { name: string; requestKey: string } }>('/api/computers', {
@@ -72,7 +82,10 @@ export function registerComputerRoutes(app: FastifyInstance, platform: PlatformS
     try {
       const record = await store.markDeleting(request.params.id, request.body.confirmation);
       await controller.remove(record.id, record.name);
-      if (!await store.finalizeDelete(record.id, record.name)) return unavailable(reply);
+      if (!await store.finalizeDelete(record.id, record.name) && await store.get(record.id)) return unavailable(reply);
+      // A concurrent, identically confirmed deletion may already have removed
+      // the record after this controller request was queued. Its effects are
+      // complete, not a new failure that should prompt an unsafe retry.
       return { deleted: true };
     } catch (error) { return failure(reply, error); }
   });

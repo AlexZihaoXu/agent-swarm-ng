@@ -4,12 +4,23 @@ set -eu
 namespace=${COMPUTER_TEST_NAMESPACE:?Set the isolated test namespace}
 case "$namespace" in sng-comp-test-*) ;; *) echo 'Refusing a non-test namespace' >&2; exit 1;; esac
 base=http://127.0.0.1:5173
+frontend=$(docker ps -q --filter "label=com.docker.compose.project=$namespace" --filter 'label=com.docker.compose.service=frontend')
+controller=$(docker ps -q --filter "label=com.docker.compose.project=$namespace" --filter 'label=com.docker.compose.service=computer-controller')
+if [ -z "$frontend" ] || [ -z "$controller" ] || [ "$(docker port "$frontend" 5173/tcp)" != '127.0.0.1:5173' ] || ! docker inspect "$controller" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -qx "COMPUTER_NAMESPACE=$namespace"; then
+    echo 'Refusing: port 5173 is not this isolated computer test project.' >&2; exit 1
+fi
 name="API test $(python3 -c 'import uuid; print(uuid.uuid4().hex[:8])')"
 key=$(python3 -c 'import uuid; print(uuid.uuid4())')
 id=''
+other_id=''
+other_name="Second ${name}"
 target="${namespace}-private-probe"
 cleanup() {
     docker rm -f "$target" >/dev/null 2>&1 || true
+    if [ -n "$other_id" ]; then
+        body=$(python3 -c 'import json,sys; print(json.dumps({"confirmation":sys.argv[1]}))' "$other_name")
+        curl -fsS -X DELETE "$base/api/computers/$other_id" -H 'Content-Type: application/json' --data "$body" >/dev/null 2>&1 || true
+    fi
     if [ -n "$id" ]; then
         body=$(python3 -c 'import json,sys; print(json.dumps({"confirmation":sys.argv[1]}))' "$name")
         curl -fsS -X DELETE "$base/api/computers/$id" -H 'Content-Type: application/json' --data "$body" >/dev/null 2>&1 || true
@@ -67,6 +78,42 @@ PY
     if docker exec -u ubuntu "$computer" curl -fsS --max-time 3 "http://${COMPUTER_TEST_TAILNET_IP}:${COMPUTER_TEST_TAILNET_PORT:-19090}/api/health" >/dev/null 2>&1; then echo 'Tailnet escape!' >&2; exit 1; fi
 fi
 echo 'Reachable private target blocked; optional Tailnet probe denied if configured.'
+# A second real GNOME computer must have a distinct bridge and volume pair.
+second_key=$(python3 -c 'import uuid; print(uuid.uuid4())')
+second_payload=$(python3 -c 'import json,sys; print(json.dumps({"name":sys.argv[1],"requestKey":sys.argv[2]}))' "$other_name" "$second_key")
+curl -fsS --max-time 120 -X POST "$base/api/computers" -H 'Content-Type: application/json' --data "$second_payload" > .scratch/computer-api-e2e-second.json
+other_id=$(python3 -c 'import json; print(json.load(open(".scratch/computer-api-e2e-second.json"))["id"])')
+other_container="${namespace}-computer-${other_id}"
+other_private="${other_container}-private"
+other_ip=$(docker inspect "$other_container" --format "{{(index .NetworkSettings.Networks \"$other_private\").IPAddress}}")
+test "$other_private" != "${computer}-private"
+docker exec -d -u ubuntu "$other_container" python3 -m http.server 8808 --bind 0.0.0.0 >/dev/null
+attempt=0
+until docker exec -u ubuntu "$other_container" curl -fsS --max-time 2 http://127.0.0.1:8808/ >/dev/null 2>&1; do
+    attempt=$((attempt+1)); [ "$attempt" -lt 20 ] || { echo 'Second computer test service did not start'; exit 1; }; sleep 0.2
+done
+if docker exec -u ubuntu "$computer" curl -fsS --max-time 3 "http://$other_ip:8808/" >/dev/null 2>&1; then echo 'Computer-to-computer escape!' >&2; exit 1; fi
+python3 - "$base" "$id" "$other_id" <<'PY'
+from concurrent.futures import ThreadPoolExecutor
+from urllib.request import urlopen
+import json,sys,time
+base,first,second=sys.argv[1:]
+rows=json.load(urlopen(base+'/api/computers',timeout=10))['computers']
+assert {first,second}.issubset({r['id'] for r in rows})
+start=time.monotonic()
+def image(id):
+    with urlopen(f'{base}/api/computers/{id}/preview',timeout=20) as reply: return reply.read()
+with ThreadPoolExecutor(max_workers=2) as pool: frames=list(pool.map(image,(first,second)))
+assert all(len(frame)>200 and frame[:2]==b'\xff\xd8' and frame[-2:]==b'\xff\xd9' for frame in frames)
+print('Two independent real previews:',[len(frame) for frame in frames],'bytes in',round(time.monotonic()-start,2),'s')
+PY
+body=$(python3 -c 'import json,sys; print(json.dumps({"confirmation":sys.argv[1]}))' "$other_name")
+curl -fsS --max-time 60 -X DELETE "$base/api/computers/$other_id" -H 'Content-Type: application/json' --data "$body" > .scratch/computer-api-e2e-second-delete.json
+deleted_other=$other_id; other_id=''
+test "$(docker ps -aq --filter "label=swarm.ng.id=$deleted_other" | wc -l)" -eq 0
+test "$(docker volume ls -q --filter "label=swarm.ng.id=$deleted_other" | wc -l)" -eq 0
+test "$(docker network ls -q --filter "label=swarm.ng.id=$deleted_other" | wc -l)" -eq 0
+echo 'Two independent computers, simultaneous previews and lateral denial passed.'
 # Check retry identity and exact-name deletion against the real backend.
 test "$(curl -fsS -X POST "$base/api/computers" -H 'Content-Type: application/json' --data "$payload" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')" = "$id"
 code=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "$base/api/computers/$id" -H 'Content-Type: application/json' --data '{"confirmation":"wrong"}')

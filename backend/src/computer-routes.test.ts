@@ -57,6 +57,34 @@ it('validates exact-name deletion on the backend and never calls Docker for inva
   } finally { await app.close(); await database.close(); }
 });
 
+it('treats two identically confirmed concurrent deletes as one completed effect', async () => {
+  const { app, database, controller } = await fixture();
+  try {
+    const row = (await app.inject({ method: 'POST', url: '/api/computers', payload: { name: 'Concurrent', requestKey: crypto.randomUUID() } })).json();
+    const remove = controller.remove;
+    controller.remove = async (id, name) => { await new Promise(resolve => setTimeout(resolve, 20)); return remove(id, name); };
+    const results = await Promise.all([1, 2].map(() => app.inject({ method: 'DELETE', url: `/api/computers/${row.id}`, payload: { confirmation: 'Concurrent' } })));
+    expect(results.map(result => result.statusCode)).toEqual([200, 200]);
+    expect(await database.client.computer.count()).toBe(0);
+  } finally { await app.close(); await database.close(); }
+});
+
+it('reconciles a crash between Docker creation and a saved status, and unlocks stale partial creates', async () => {
+  const { app, database, observed } = await fixture();
+  try {
+    const store = new ComputerStore(database);
+    const live = (await store.reserve('Recovered', crypto.randomUUID())).computer;
+    observed.set(live.id, { status: 'running', cpuPercent: 1, memoryBytes: 123 });
+    const first = (await app.inject({ method: 'GET', url: '/api/computers' })).json();
+    expect(first.computers[0]).toMatchObject({ id: live.id, state: 'running' });
+    const partial = (await store.reserve('Partial', crypto.randomUUID())).computer;
+    await database.client.computer.update({ where: { id: partial.id }, data: { createdAt: new Date(Date.now() - 180_000) } });
+    const second = (await app.inject({ method: 'GET', url: '/api/computers' })).json();
+    expect(second.computers.find((item: { id: string }) => item.id === partial.id)).toMatchObject({ state: 'failed' });
+    expect((await app.inject({ method: 'DELETE', url: `/api/computers/${partial.id}`, payload: { confirmation: 'Partial' } })).statusCode).toBe(200);
+  } finally { await app.close(); await database.close(); }
+});
+
 it('shows saved computers as unavailable during a controller outage without hiding identities', async () => {
   const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
   const store = new ComputerStore(database);
