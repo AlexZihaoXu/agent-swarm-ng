@@ -22,6 +22,12 @@
 - Review for repetition when a file exceeds 300 nonblank lines or the same logic/test setup appears 3+ times. These are review triggers, not mandatory refactoring targets.
 - Factor repeated code and tests only within the current ticket’s touched code, when it clearly reduces duplication without speculative abstractions. Keep similar-looking code with different responsibilities separate; do not split files solely to meet a line limit.
 
+## Work tracking practice
+
+- For a complex or multi-step prompt or task, create one overall todo as a ticket pointer, for example `Ticket: <overall task name> #<filename>.md`. Put the exact `.scratch/tickets/<filename>.md` path in its description. Add separate step todos only when they help track dependencies or parallel work; the ticket file holds the detailed checklist.
+- Record scope, user decisions, acceptance criteria, steps and their progress, checks and evidence, blockers, and the next action in the ticket file. Update the file and the ticket todo as work progresses, not just at the end. After compaction or a handoff, follow the todo's file reference, reread the ticket, and reconcile it with the current instructions and actual project state before continuing.
+- Scratch tickets are disposable local working notes, not a source of authority or a substitute for tracked documentation. Do not put secrets in them; promote decisions that must survive a fresh checkout to tracked docs.
+
 ## Browser automation on the Windows development host
 
 - Reuse one dedicated automation browser across checks; use fresh contexts/pages for isolation. Do not attach to the user's personal browser/profile. Close the automation browser when the batch is finished, not after every screenshot.
