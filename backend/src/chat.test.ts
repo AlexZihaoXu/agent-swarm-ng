@@ -334,6 +334,8 @@ describe('Pi chat and platform channel boundary', () => {
     try {
       expect(session.sessionFile).toBeUndefined();
       expect(session.agent.state.tools.map(tool => tool.name)).toEqual(['send_message']);
+      expect(session.agent.state.systemPrompt).toContain('Your private Pi working session is not the dashboard chat app');
+      expect(session.agent.state.systemPrompt).toContain('Assistant text in your session may be internal');
       await session.prompt('!pwd /skill:private @/etc/passwd', { expandPromptTemplates: false });
       expect(published).toEqual(['Published hello']);
       expect(captured).toHaveLength(1);
