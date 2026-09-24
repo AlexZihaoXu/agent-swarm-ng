@@ -10,12 +10,51 @@ services:
       PORT: "3000"
       DATABASE_URL: ${DATABASE_URL:-file:/app/.local/platform.db}
       AGENT_RUN_TIMEOUT_MS: ${AGENT_RUN_TIMEOUT_MS:-0}
+      COMPUTER_CONTROLLER_URL: http://computer-controller:3101
     init: true
     volumes:
       - platform_data:/app/.local
     restart: unless-stopped
+    networks:
+      - default
+      - computer_management
+    depends_on:
+      computer-controller:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "bun", "-e", "const r = await fetch('http://127.0.0.1:3000/api/health'); process.exit(r.ok ? 0 : 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+  computer-image:
+    profiles: [computer-images]
+    image: agent-swarm-default:stage1
+    build:
+      context: ./templates/default
+    command: ["true"]
+  computer-egress-image:
+    profiles: [computer-images]
+    image: agent-swarm-computer-egress:dev
+    build:
+      context: ./templates/default
+      dockerfile: egress.Dockerfile
+    command: ["true"]
+  computer-controller:
+    build:
+      context: .
+      dockerfile: computer-controller/Dockerfile
+    environment:
+      COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-agent-swarm-ng}
+    init: true
+    # Only this narrow internal service has the root-equivalent Docker socket.
+    # It has no app database, provider credentials, or published ports.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - computer_management
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r = await fetch('http://127.0.0.1:3101/health'); process.exit(r.ok ? 0 : 1)"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -36,6 +75,9 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+networks:
+  computer_management:
+    internal: true
 volumes:
   platform_data:
   caddy_data:

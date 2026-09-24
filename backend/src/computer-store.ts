@@ -12,7 +12,7 @@ export class ComputerStore {
   async reserve(rawName: string, requestKey: string) {
     await this.platform.initialize();
     const name = rawName.trim();
-    if (!name || name.length > 80) throw new ComputerStoreError('invalid', 'Computer name must be 1–80 characters.');
+    if (!name || name.length > 80 || /[\u0000-\u001f\u007f]/.test(name)) throw new ComputerStoreError('invalid', 'Computer name must be 1–80 printable characters.');
     const existing = await this.platform.client.computer.findUnique({ where: { requestKey } });
     if (existing) return { computer: this.sameRequest(existing, name), created: false };
     try {
