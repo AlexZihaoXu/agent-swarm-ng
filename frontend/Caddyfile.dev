@@ -1,0 +1,7 @@
+:5173 {
+	encode zstd gzip
+	import /etc/caddy/ComputerRoutes
+	handle {
+		reverse_proxy frontend:5173
+	}
+}

@@ -4,9 +4,9 @@ set -eu
 namespace=${COMPUTER_TEST_NAMESPACE:?Set the isolated test namespace}
 case "$namespace" in sng-comp-test-*) ;; *) echo 'Refusing a non-test namespace' >&2; exit 1;; esac
 base=http://127.0.0.1:5173
-frontend=$(docker ps -q --filter "label=com.docker.compose.project=$namespace" --filter 'label=com.docker.compose.service=frontend')
+ingress=$(docker ps -q --filter "label=com.docker.compose.project=$namespace" --filter 'label=com.docker.compose.service=caddy-dev')
 controller=$(docker ps -q --filter "label=com.docker.compose.project=$namespace" --filter 'label=com.docker.compose.service=computer-controller')
-if [ -z "$frontend" ] || [ -z "$controller" ] || [ "$(docker port "$frontend" 5173/tcp)" != '127.0.0.1:5173' ] || ! docker inspect "$controller" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -qx "COMPUTER_NAMESPACE=$namespace"; then
+if [ -z "$ingress" ] || [ -z "$controller" ] || [ "$(docker port "$ingress" 5173/tcp)" != '127.0.0.1:5173' ] || ! docker inspect "$controller" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -qx "COMPUTER_NAMESPACE=$namespace"; then
     echo 'Refusing: port 5173 is not this isolated computer test project.' >&2; exit 1
 fi
 name="API test $(python3 -c 'import uuid; print(uuid.uuid4().hex[:8])')"
@@ -57,6 +57,52 @@ image=Path('.scratch/computer-api-e2e-preview.jpg').read_bytes()
 assert len(image)>200 and image[:2]==b'\xff\xd8' and image[-2:]==b'\xff\xd9'
 print('Real GNOME JPEG:',len(image),'bytes')
 PY
+media="${computer}-media"
+python3 - "$media" "${namespace}-computer-media" "${computer}-private" <<'PY'
+import json,subprocess,sys
+relay=json.loads(subprocess.check_output(['docker','inspect',sys.argv[1]]))[0]
+assert relay['State']['Running'] and not relay['HostConfig'].get('PortBindings')
+assert relay['HostConfig']['CapDrop']==['ALL'] and relay['HostConfig']['ReadonlyRootfs']
+assert relay['Config']['User']=='65532:65532' and not relay['Mounts']
+assert set(relay['NetworkSettings']['Networks'])==set(sys.argv[2:])
+assert 'computer-'+relay['Config']['Labels']['swarm.ng.id'] in (relay['NetworkSettings']['Networks'][sys.argv[2]].get('DNSNames') or [])
+print('No media relay host ports; only its own private and isolated dashboard bridges')
+PY
+test -n "$(docker exec "${namespace}-caddy-dev-1" getent hosts "computer-$id")"
+media_ip=$(docker inspect "$media" --format "{{(index .NetworkSettings.Networks \"${namespace}-computer-media\").IPAddress}}")
+relay_private_ip=$(docker inspect "$media" --format "{{(index .NetworkSettings.Networks \"${computer}-private\").IPAddress}}")
+if docker exec -u ubuntu "$computer" curl -kfsS --connect-timeout 2 --max-time 3 "https://$media_ip:8080/computers/$id/desktop/" >/dev/null 2>&1; then echo 'Computer reached the media bridge!' >&2; exit 1; fi
+if docker exec -u ubuntu "$computer" curl -kfsS --connect-timeout 2 --max-time 3 "https://$relay_private_ip:8080/computers/$id/desktop/" >/dev/null 2>&1; then
+    docker exec "$media" ip -o -4 addr show >&2 || true
+    docker inspect "$media" --format '{{json .NetworkSettings.Networks}}' >&2 || true
+    echo 'Relay listened on the computer-facing bridge!' >&2; exit 1
+fi
+# The dev dashboard's *existing* 5173 listener must proxy the Selkies HTML;
+# a Vite SPA fallback would not contain this title. No computer port is bound.
+viewer="$base/computers/$id/desktop/"
+attempt=0
+until curl -fsS --max-time 6 "$viewer" -o .scratch/computer-api-e2e-viewer.html && grep -q 'Selkies' .scratch/computer-api-e2e-viewer.html; do
+    attempt=$((attempt+1))
+    if [ "$attempt" -ge 30 ]; then
+        docker logs "${namespace}-caddy-dev-1" --tail 25 >&2 || true
+        docker logs "$media" --tail 20 >&2 || true
+        docker exec "$media" ip -o -4 addr show >&2 || true
+        docker inspect "$media" --format '{{json .NetworkSettings.Networks}}' >&2 || true
+        docker exec "$computer" curl -kfsS --max-time 3 "https://127.0.0.1:8080/computers/$id/desktop/" -o /dev/null >&2 || true
+        echo 'Same-port computer viewer did not proxy Selkies' >&2; exit 1
+    fi
+    sleep 1
+done
+echo 'Same-port dashboard-to-Selkies HTML proxy passed.'
+curl -sS --max-time 3 --http1.1 -D .scratch/computer-api-e2e-ws-headers.txt -o /dev/null \
+    -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+    -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H "Origin: $base" \
+    "${viewer}api/websockets" >/dev/null 2>&1 || true
+if ! grep -q '^HTTP/1.1 101 ' .scratch/computer-api-e2e-ws-headers.txt; then
+    docker logs "${namespace}-caddy-dev-1" --tail 15 >&2 || true
+    echo 'Same-port WebSocket upgrade failed' >&2; exit 1
+fi
+echo 'Same-port browser WebSocket upgrade and reverse-only media isolation passed.'
 docker exec -u ubuntu "$computer" sudo -n sh -c 'test "$(id -u)" -eq 0 && test "$(awk "NR==1 {print \$2}" /proc/self/uid_map)" -ne 0'
 docker exec -u ubuntu "$computer" curl -fsS --max-time 8 http://example.com | grep -q 'Example Domain'
 docker exec -u ubuntu "$computer" sudo -n timeout 90s apt-get update -qq

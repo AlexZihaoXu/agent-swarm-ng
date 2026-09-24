@@ -3,8 +3,8 @@ import { DockerApi, DockerApiError } from './docker-api';
 import { ComputerNames, ResourceError, validateId, validateName, type ResourceRole } from './resources';
 
 type Container = {
-  Id: string; Config: { Labels?: Record<string, string> }; State: { Running: boolean; Status: string };
-  NetworkSettings: { Networks: Record<string, { IPAddress: string }> };
+  Id: string; Config: { Labels?: Record<string, string>; Env?: string[] }; State: { Running: boolean; Status: string };
+  NetworkSettings: { Networks: Record<string, { IPAddress: string; Aliases?: string[] | null; DNSNames?: string[] }> };
 };
 type ListedContainer = { Id: string; State: string; Labels: Record<string, string> };
 type Network = { Id: string; Driver: string; Internal: boolean; EnableIPv6: boolean; Labels?: Record<string, string>; Options?: Record<string, string>; IPAM: { Config: { Subnet?: string; Gateway?: string }[] } };
@@ -15,6 +15,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const PRIVATE_MODE = 'com.docker.network.bridge.gateway_mode_ipv4';
 const DEFAULT_IMAGE = 'agent-swarm-default:stage2';
 const DEFAULT_GATEWAY_IMAGE = 'agent-swarm-computer-egress:dev';
+const DEFAULT_MEDIA_IMAGE = 'agent-swarm-computer-media:stage2';
 
 /** Owns only its labelled Docker computers; other projects and agent containers are untouchable. */
 export class ComputerManager {
@@ -28,6 +29,7 @@ export class ComputerManager {
     private readonly seccomp: string = readFileSync(new URL('../../templates/default/security/chromium-seccomp.json', import.meta.url), 'utf8'),
     private readonly image = DEFAULT_IMAGE,
     private readonly gatewayImage = DEFAULT_GATEWAY_IMAGE,
+    private readonly mediaImage = DEFAULT_MEDIA_IMAGE,
     private readonly maxComputers = 4,
   ) {
     this.names = new ComputerNames(namespace);
@@ -69,6 +71,18 @@ export class ComputerManager {
     if (!result || result.Driver !== 'bridge' || result.Internal !== (role === 'private-network') || result.EnableIPv6 || (role === 'private-network' && (result.Options?.[PRIVATE_MODE] !== 'isolated' || Boolean(result.IPAM.Config[0]?.Gateway && result.IPAM.Config[0]?.Gateway !== 'invalid IP')))) throw new ResourceError(409, 'Computer network has unsafe settings.');
     return result;
   }
+  private async mediaNetwork() {
+    // This shared bridge is created by Compose for Caddy, not by computers.
+    // Never attach a media relay to an arbitrary operator-supplied network.
+    const network = await this.docker.optional<Network>(this.path('networks', this.names.mediaNetwork));
+    if (!network || network.Driver !== 'bridge' || !network.Internal || network.EnableIPv6 ||
+        network.Options?.[PRIVATE_MODE] !== 'isolated' ||
+        Boolean(network.IPAM.Config[0]?.Gateway && network.IPAM.Config[0].Gateway !== 'invalid IP') ||
+        network.Labels?.['com.docker.compose.project'] !== this.names.namespace) {
+      throw new ResourceError(503, 'Isolated dashboard media network is unavailable.');
+    }
+    return network;
+  }
   private async ensureVolume(id: string, role: 'home' | 'workspace') {
     const name = this.names.volume(id, role);
     if (await this.volume(name, id, role)) return;
@@ -106,6 +120,49 @@ export class ComputerManager {
     return address;
   }
 
+  private async ensureMedia(id: string, name: string, computer: Container) {
+    const mediaNetwork = await this.mediaNetwork();
+    const privateNetwork = this.names.privateNetwork(id);
+    const target = computer.NetworkSettings.Networks[privateNetwork]?.IPAddress;
+    const subnet = mediaNetwork.IPAM.Config[0]?.Subnet;
+    if (!target || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(target)) throw new ResourceError(503, 'Computer private address is unavailable.');
+    if (!subnet || !/^\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}$/.test(subnet)) throw new ResourceError(503, 'Media bridge subnet is unavailable.');
+    const mediaName = this.names.media(id);
+    let relay = await this.container(mediaName, id, 'media', name);
+    if (!relay) {
+      await this.docker.request('POST', `/containers/create?name=${encodeURIComponent(mediaName)}`, {
+        Image: this.mediaImage, Labels: this.names.labels(id, 'media', name),
+        Env: [`COMPUTER_PRIVATE_IP=${target}`, `COMPUTER_MEDIA_SUBNET=${subnet}`],
+        HostConfig: {
+          NetworkMode: this.names.mediaNetwork, CapDrop: ['ALL'],
+          SecurityOpt: ['no-new-privileges:true'], ReadonlyRootfs: true,
+          Memory: 64 * 1024 * 1024, PidsLimit: 64, RestartPolicy: { Name: 'no' },
+        },
+        NetworkingConfig: { EndpointsConfig: {
+          [this.names.mediaNetwork]: { Aliases: [this.names.mediaAlias(id)] },
+        } },
+      });
+      relay = await this.container(mediaName, id, 'media', name);
+    }
+    const mediaEndpoint = relay?.NetworkSettings.Networks[this.names.mediaNetwork];
+    if (!relay || !mediaEndpoint || !mediaNetwork.Id ||
+        ![...(mediaEndpoint.Aliases ?? []), ...(mediaEndpoint.DNSNames ?? [])].includes(this.names.mediaAlias(id))) {
+      throw new ResourceError(503, 'Computer media relay lacks its approved dashboard alias.');
+    }
+    if (![`COMPUTER_PRIVATE_IP=${target}`, `COMPUTER_MEDIA_SUBNET=${subnet}`].every(value => relay.Config.Env?.includes(value)) ||
+        Object.keys(relay.NetworkSettings.Networks).some(network => network !== this.names.mediaNetwork && network !== privateNetwork)) {
+      // A stale target can forward another computer's screen after Docker
+      // reassigns addresses. Never reuse or start an altered relay.
+      throw new ResourceError(409, 'Computer media relay has an unsafe target or network.');
+    }
+    if (!relay.NetworkSettings.Networks[privateNetwork]) {
+      const privateOwned = await this.network(privateNetwork, id, 'private-network');
+      if (!privateOwned) throw new ResourceError(503, 'Computer private bridge is unavailable.');
+      await this.docker.request('POST', `${this.path('networks', privateOwned.Id)}/connect`, { Container: mediaName });
+    }
+    if (!relay.State.Running) await this.docker.request('POST', `${this.path('containers', mediaName)}/start`);
+  }
+
   private async createOwned(id: string, name: string) {
     const computerName = this.names.desktop(id);
     const existing = await this.container(computerName, id, 'desktop', name);
@@ -116,12 +173,13 @@ export class ComputerManager {
       const home = await this.volume(this.names.volume(id, 'home'), id, 'home');
       const workspace = await this.volume(this.names.volume(id, 'workspace'), id, 'workspace');
       if (!gateway?.State.Running || !network || !home || !workspace) throw new ResourceError(503, 'Computer resources are incomplete.');
+      await this.ensureMedia(id, name, existing);
       return;
     }
     const count = await this.listIds();
     if (count.length >= this.maxComputers) throw new ResourceError(409, 'Computer limit reached.');
     // These images are operator-built, never supplied by the browser.
-    for (const image of [this.image, this.gatewayImage]) {
+    for (const image of [this.image, this.gatewayImage, this.mediaImage]) {
       if (!await this.docker.optional(this.path('images', image) + '/json')) throw new ResourceError(503, 'Build the approved computer images before creating computers.');
     }
     const egress = await this.ensureNetwork(this.names.egressNetwork, null, 'egress-network');
@@ -154,6 +212,9 @@ export class ComputerManager {
       catch { await delay(500); }
     }
     if (!ready) throw new ResourceError(503, 'Computer desktop did not become ready.');
+    const computer = await this.container(computerName, id, 'desktop', name);
+    if (!computer) throw new ResourceError(503, 'Computer container is unavailable.');
+    await this.ensureMedia(id, name, computer);
   }
 
   async create(idRaw: string, nameRaw: string) {
@@ -167,10 +228,12 @@ export class ComputerManager {
   private async removeOwned(id: string, name: string) {
     const computer = await this.container(this.names.desktop(id), id, 'desktop', name);
     const gateway = await this.container(this.names.gateway(id), id, 'egress', name);
+    const media = await this.container(this.names.media(id), id, 'media', name);
     const network = await this.network(this.names.privateNetwork(id), id, 'private-network');
     const home = await this.volume(this.names.volume(id, 'home'), id, 'home');
     const workspace = await this.volume(this.names.volume(id, 'workspace'), id, 'workspace');
     // All present resources have passed ownership/name checks before any deletion.
+    if (media) await this.docker.request('DELETE', `${this.path('containers', media.Id)}?force=true&v=false`);
     if (computer) await this.docker.request('DELETE', `${this.path('containers', computer.Id)}?force=true&v=false`);
     if (gateway) await this.docker.request('DELETE', `${this.path('containers', gateway.Id)}?force=true&v=false`);
     if (home) await this.docker.request('DELETE', this.path('volumes', home.Name));
@@ -208,6 +271,8 @@ export class ComputerManager {
           await this.ensureGateway(id, name, subnet, network);
           const latest = await this.container(this.names.desktop(id), id, 'desktop', name);
           if (latest && !latest.State.Running) await this.docker.request('POST', `${this.path('containers', latest.Id)}/start`);
+          const running = await this.container(this.names.desktop(id), id, 'desktop', name);
+          if (running?.State.Running) await this.ensureMedia(id, name, running);
         } catch (error) {
           // Keep owned volumes and the resource record for explicit recovery.
           console.error('Computer recovery incomplete:', id, error instanceof Error ? error.message : String(error));

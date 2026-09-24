@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY frontend/package.json frontend/package.json
 COPY backend/package.json backend/package.json
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --network-concurrency=8
 COPY tsconfig.base.json ./
 COPY frontend frontend
 WORKDIR /app/frontend
@@ -18,5 +18,6 @@ RUN bun run build
 
 FROM caddy:2-alpine AS production
 COPY frontend/Caddyfile /etc/caddy/Caddyfile
+COPY frontend/Caddyfile.computers /etc/caddy/ComputerRoutes
 COPY --from=build /app/frontend/dist /srv
 EXPOSE 80 443

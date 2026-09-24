@@ -4,6 +4,8 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const desktopPath = /^\/computers\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/desktop(?:\/|$)/;
+
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), VitePWA({
     registerType: 'prompt',
@@ -21,7 +23,7 @@ export default defineConfig(({ mode }) => ({
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,png,svg,woff2,mp3}'],
-      navigateFallbackDenylist: [/^\/api(?:\/|$)/],
+      navigateFallbackDenylist: [/^\/api(?:\/|$)/, desktopPath],
       runtimeCaching: [],
     },
   })],

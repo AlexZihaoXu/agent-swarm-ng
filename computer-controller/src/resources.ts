@@ -1,4 +1,4 @@
-export type ResourceRole = 'desktop' | 'egress' | 'private-network' | 'egress-network' | 'home' | 'workspace';
+export type ResourceRole = 'desktop' | 'egress' | 'media' | 'private-network' | 'egress-network' | 'home' | 'workspace';
 export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const NAMESPACE = /^[a-z0-9][a-z0-9-]{0,29}$/;
 
@@ -22,12 +22,18 @@ export function validateName(name: string) {
 export class ComputerNames {
   readonly namespace: string;
   readonly egressNetwork: string;
+  readonly mediaNetwork: string;
   constructor(namespace: string) {
     this.namespace = validateNamespace(namespace);
     this.egressNetwork = `${namespace}-computer-egress`;
+    this.mediaNetwork = `${namespace}-computer-media`;
   }
   desktop(id: string) { return `${this.namespace}-computer-${validateId(id)}`; }
   gateway(id: string) { return `${this.desktop(id)}-gateway`; }
+  media(id: string) { return `${this.desktop(id)}-media`; }
+  // Docker resource names can exceed a 63-byte DNS label in test namespaces.
+  // This alias is short, canonical and confined to one Compose media bridge.
+  mediaAlias(id: string) { return `computer-${validateId(id)}`; }
   privateNetwork(id: string) { return `${this.desktop(id)}-private`; }
   volume(id: string, role: 'home' | 'workspace') { return `${this.desktop(id)}-${role}`; }
   labels(id: string | null, role: ResourceRole, name?: string): Record<string, string> {

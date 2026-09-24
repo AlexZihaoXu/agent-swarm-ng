@@ -1,9 +1,7 @@
 {$SITE_ADDRESS:localhost} {
 	encode zstd gzip
 
-	handle /api/* {
-		reverse_proxy backend:3000
-	}
+	import /etc/caddy/ComputerRoutes
 
 	handle {
 		root * /srv

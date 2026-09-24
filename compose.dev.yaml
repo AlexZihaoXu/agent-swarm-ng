@@ -14,11 +14,28 @@ services:
       target: development
     environment:
       API_PROXY_TARGET: http://backend:3000
-    ports: !override
-      - "127.0.0.1:5173:5173"
+    networks: !override
+      - default
+    ports: !override []
     volumes: !override
       - ./frontend/src:/app/frontend/src
       - ./frontend/public:/app/frontend/public
       - ./frontend/index.html:/app/frontend/index.html
       - ./frontend/vite.config.ts:/app/frontend/vite.config.ts
+    restart: "no"
+  caddy-dev:
+    image: caddy:2-alpine
+    ports:
+      - "127.0.0.1:5173:5173"
+    networks:
+      - default
+      - computer_media
+    volumes:
+      - ./frontend/Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - ./frontend/Caddyfile.computers:/etc/caddy/ComputerRoutes:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
     restart: "no"

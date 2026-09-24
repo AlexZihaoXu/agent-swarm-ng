@@ -21,6 +21,14 @@ cleanup() {
     networks=$(docker network ls -q --filter "label=swarm.ng.namespace=$project")
     [ -z "$networks" ] || docker network rm $networks >/dev/null 2>&1 || true
     compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+    # Only images built and labelled for this unique Compose project are
+    # disposable; retain the approved shared computer/egress/media templates.
+    for service in backend frontend computer-controller; do
+        image="$project-$service:latest"
+        if [ "$(docker image inspect "$image" --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)" = "$project" ]; then
+            docker image rm "$image" >/dev/null 2>&1 || { echo "Could not remove test image: $image" >&2; status=1; }
+        fi
+    done
     if [ -n "$(docker ps -aq --filter "label=swarm.ng.namespace=$project")$(docker volume ls -q --filter "label=swarm.ng.namespace=$project")$(docker network ls -q --filter "label=swarm.ng.namespace=$project")$(docker ps -aq --filter "label=com.docker.compose.project=$project")$(docker volume ls -q --filter "label=com.docker.compose.project=$project")$(docker network ls -q --filter "label=com.docker.compose.project=$project")" ]; then
         echo 'Some test-labelled Docker resources could not be removed.' >&2
         status=1
@@ -37,7 +45,7 @@ trap cleanup EXIT INT TERM
 # The optional Tailnet probe uses the host's current address; never hardcode it
 # in a tracked test. The web app remains accessible only via loopback:5173.
 if command -v tailscale >/dev/null 2>&1; then export COMPUTER_TEST_TAILNET_IP="$(tailscale ip -4 2>/dev/null || true)"; fi
-compose --profile computer-images build computer-image computer-egress-image
+compose --profile computer-images build computer-image computer-egress-image computer-media-image
 compose build backend frontend computer-controller
 compose up --no-build -d
 attempt=0

@@ -1,0 +1,20 @@
+# Shared by production Caddy and the isolated development proxy. A canonical
+# UUID selects only a controller-owned relay's short DNS alias on the bridge.
+@computerDesktop path_regexp computerDesktop ^/computers/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/desktop(?:/.*)?$
+handle @computerDesktop {
+	reverse_proxy computer-{re.computerDesktop.1}:8080 {
+		# Selkies validates WebSocket Origin against Host. Its TLS upstream
+		# would otherwise replace the dashboard Host with the relay alias.
+		header_up Host {http.request.host}
+		transport http {
+			tls
+			# Selkies' per-computer certificate is self-signed. The upstream
+			# endpoint is owned by Docker labels on the isolated media network.
+			tls_insecure_skip_verify
+		}
+	}
+}
+
+handle /api/* {
+	reverse_proxy backend:3000
+}
