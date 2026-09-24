@@ -107,6 +107,33 @@ const channelEvents = (body: string) => eventsFrom(body).filter(event => !['acti
 });
 
 describe('Pi chat and platform channel boundary', () => {
+  it('restores private Pi tool context from SQLite after a completed run and backend restart', async () => {
+    behavior = 'tool'; captured = [];
+    const path = join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`);
+    const firstDatabase = await prepareDatabase(path);
+    const first = await testApp(firstDatabase);
+    let agent: { id: string; channelId: string };
+    try {
+      agent = (await first.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const sent = await first.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent, 'First task') });
+      expect(sent.statusCode).toBe(200);
+      expect(await firstDatabase.client.agentSessionEntry.count({ where: { agentId: agent.id } })).toBeGreaterThan(0);
+    } finally { await first.close(); }
+    const secondDatabase = new PlatformStore(pathToFileURL(path).href);
+    await secondDatabase.appendMessage(agent!.channelId, 'assistant', 'Committed without private checkpoint');
+    const second = await testApp(secondDatabase);
+    try {
+      const sent = await second.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent!, 'Second task') });
+      expect(sent.statusCode).toBe(200);
+      const restored = captured.at(-1)!.messages;
+      expect(JSON.stringify(restored)).toContain('First task');
+      expect(JSON.stringify(restored)).toContain('Committed without private checkpoint');
+      expect(restored.some(message => message.role === 'tool')).toBe(true);
+      const visible = (await second.inject(`/api/channels/${agent!.channelId}/messages`)).json().messages;
+      expect(visible.filter((message: { role: string }) => message.role === 'assistant')).toHaveLength(3);
+      expect(JSON.stringify(visible)).not.toContain('PRIVATE DIRECT OUTPUT');
+    } finally { await second.close(); }
+  }, 16000);
   it('publishes answer parts sequentially and reports estimated context only to activity', async () => {
     behavior = 'multipart'; captured = []; const app = await testApp();
     try {
@@ -514,7 +541,8 @@ describe('Pi chat and platform channel boundary', () => {
       expect(JSON.stringify(captured[1].messages)).toContain('Earlier question');
       expect(JSON.stringify(captured[1].messages)).toContain('Published hello');
       expect(JSON.stringify(captured[1].messages)).not.toContain('FORGED');
-      expect(JSON.stringify(captured[1].messages)).not.toContain('PRIVATE');
+      expect(JSON.stringify(captured[1].messages)).toContain('PRIVATE DIRECT OUTPUT'); // Private Pi context now survives a restart.
+      expect(JSON.stringify((await second.inject(`/api/channels/${agent.channelId}/messages`)).json())).not.toContain('PRIVATE');
       expect((await second.inject('/api/channels/missing/messages')).statusCode).toBe(404);
       expect((await second.inject({ method: 'POST', url: '/api/chat', payload: chatPayload({ id: 'missing' }) })).statusCode).toBe(404);
     } finally { await second.close(); }

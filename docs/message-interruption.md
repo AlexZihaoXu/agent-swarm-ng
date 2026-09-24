@@ -18,7 +18,7 @@
 - Clone the main conversation and system context. In-flight tool calls require explicit pending placeholders in the fork so its provider transcript is valid; these placeholders must never be written back into the main branch.
 - Fork reasoning stays internal. Only its bounded decision justification is used for control/continuation; normal assistant publications still require `send_message`.
 - Forking duplicates context and incurs additional inference cost; this first version deliberately favors testing fork behavior over context minimization.
-- Current scope does not provide restart recovery or durable job queues.
+- Completed private Pi session checkpoints can be restored on the next run after restart; this scope does not provide automatic recovery or durable requeueing of an interrupted job.
 
 ## Implementation and limits
 

@@ -70,7 +70,7 @@ for (const width of [280, 320, 1280]) test(`delete group chat requires confirmat
   await page.getByRole('button', { name: 'Edit group chat', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete group chat', exact: true }).click();
   let dialog = page.getByRole('dialog');
-  await expect(dialog.getByText('This permanently deletes the group', { exact: false })).toBeVisible();
+  await expect(dialog.getByText('This permanently deletes the group', { exact: false })).toContainText('Agents may retain context');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toHaveCount(0);

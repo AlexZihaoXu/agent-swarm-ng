@@ -26,7 +26,8 @@ async function fixture(loop = false, gate?: Promise<void>, reactionGate?: Promis
     if (reactionTriage) await reactionGate;
     if (response.destroyed) return;
     const incoming = JSON.stringify(body.messages.filter(message => message.role === 'user').at(-1));
-    const hasTool = body.messages.some(message => message.role === 'tool');
+    const lastUserIndex = body.messages.reduce((last, message, index) => message.role === 'user' ? index : last, -1);
+    const hasTool = body.messages.slice(lastUserIndex + 1).some(message => message.role === 'tool');
     const publish = reactionTriage || reactionInput ? !hasTool : group ? !hasTool && lastInput.includes('Source is the human owner') : !dm || !hasTool && (loop || incoming.includes('question'));
     const channelId = dm || group || reactionInput ? lastInput.match(/reply channel: ([^.]+)\./)?.[1] : system.match(/(?:current channel is|channel is) ([^.]+)\./)?.[1];
     const name = reactionTriage ? 'reaction_decision' : triage ? 'triage_decision' : reactionInput ? 'react_to_message' : !dm && incoming.includes('ask-peer') && !hasTool ? 'send_dm' : 'send_message';
@@ -85,6 +86,25 @@ it('delivers human and agent group messages through the normal inbox without DM 
     expect((await f.broker.groups.history(group.id)).messages).toHaveLength(3);
   } finally { await f.close(); }
 }, 30000);
+
+it('retains one private Pi working session across a group turn and a later human-channel turn', async () => {
+  const f = await fixture();
+  let app: Awaited<ReturnType<typeof buildApp>> | undefined;
+  try {
+    const group = await f.broker.groups.create('Shared research', [f.a.id]);
+    await f.broker.sendHumanGroup(group.id, 'Earlier shared finding', crypto.randomUUID());
+    await f.idle();
+    expect(await f.database.client.agentSessionEntry.count({ where: { agentId: f.a.id } })).toBeGreaterThan(0);
+    app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+    const response = await app.inject({ method: 'POST', url: '/api/chat', headers: { prefer: 'respond-async' }, payload: { agentId: f.a.id, message: 'Continue the work privately', clientMessageId: crypto.randomUUID() } });
+    expect(response.statusCode).toBe(202);
+    await vi.waitFor(async () => expect(await f.database.client.message.count({ where: { channelId: f.a.channels[0].id, role: 'assistant' } })).toBe(1), { timeout: 15000 });
+    const privateRequest = f.captured.find(body => JSON.stringify(body.messages).includes('Continue the work privately'))!;
+    expect(JSON.stringify(privateRequest.messages)).toContain('Earlier shared finding');
+    expect(privateRequest.messages.some(message => message.role === 'tool')).toBe(true);
+    expect((await f.database.client.groupMessage.count({ where: { groupId: group.id } }))).toBe(2);
+  } finally { await app?.close(); await f.close(!app); }
+}, 20000);
 
 it('gives group agents the parent preview and lets them publish a scoped reply via send_message', async () => {
   const f = await fixture();

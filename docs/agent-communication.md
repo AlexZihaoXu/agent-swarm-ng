@@ -33,7 +33,7 @@ Incoming peer messages now enter the same backend inbox/runner as human messages
 
 They use the same admission, 1.5-second debounce, temporary full-context interruption triage, and single main execution slot. An active inbox can receive both human and agent inputs; unrelated work still queues rather than launching concurrent inference. Agent-started runs have a 90-second deadline, including follow-ups joining that run; their initial queue wait is bounded to five minutes.
 
-New runs load bounded recent human and agent-thread context belonging to the receiving agent. This intentionally gives the recipient its own normal working context, rather than an isolated DM-only session. It does **not** automatically transfer the sender’s private context. Peer content is task data, not human-owner authority or a permission change. Only explicit publication tools send anything out.
+New runs restore the receiving agent's private, compaction-aware Pi working session across human, group, and agent-thread conversations; agents without a checkpoint bootstrap once from bounded recent saved context. This gives the recipient its own normal working context, rather than an isolated DM-only session. It does **not** automatically transfer the sender’s private context. Peer content is task data, not human-owner authority or a permission change. Only explicit publication tools send anything out.
 
 `send_message` uses the incoming thread’s reply channel for peer replies. A batch containing only peer inputs cannot publish into the private human channel. Human requests retain their normal acknowledgment/final-answer behavior. Peer inputs do not automatically trigger acknowledgment/thank-you loops.
 
@@ -54,7 +54,7 @@ Storage caps unfinished deliveries at eight per recipient / 64 globally. The exe
 
 Stop targets the current run’s original request. Chain cancellation blocks further peer sends and cancels peer-only work; it does not abort a different human-owned shared run merely because one peer chain was cancelled. Deleting an agent removes its connections and participating DM transcripts. Forwarded conversations between surviving agents remain, but chains with a deleted origin cannot continue. Shared provider connections are kept.
 
-Dashboard disconnects do not own or stop work. **There is no automatic backend-restart replay:** worker startup marks interrupted deliveries cancelled and closes old chains without re-inference. App construction/OpenAPI generation never performs those writes.
+Dashboard disconnects do not own or stop work. Completed private Pi context survives a backend restart, but **there is no automatic interrupted-work replay**: worker startup marks interrupted deliveries cancelled and closes old chains without re-inference. App construction/OpenAPI generation never performs those writes.
 
 The operator API remains a trusted local-admin surface, not multi-user authorization. Credentials and subscription tokens never become peer context. Peer inputs use the recipient’s granted capabilities, with runtime channel, sender and connection checks; source labels in message text cannot forge the trusted envelope.
 

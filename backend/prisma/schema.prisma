@@ -41,6 +41,7 @@ model Agent {
   groupMemberships GroupMember[]
   reactions        MessageReaction[]
   recentEmojis     AgentEmojiRecent[]
+  privateSession   AgentSession?
 }
 
 model DmGrant {
@@ -141,6 +142,7 @@ model GroupMessage {
 
   @@unique([id, groupId])
   @@index([groupId, sequence])
+  @@index([authorId, sequence])
   @@index([chainId])
   @@index([replyToId])
 }
@@ -167,6 +169,34 @@ model AgentEmojiRecent {
 
   @@id([agentId, emoji])
   @@index([agentId, usedAt])
+}
+
+// Private Pi working history; never returned as platform chat or operator activity.
+model AgentSession {
+  agentId    String              @id
+  sessionId  String
+  header     String
+  entryCount    Int                 @default(0)
+  activeStart   Int                 @default(0)
+  leafId        String?
+  privateCursor Int                 @default(0)
+  dmCursor      Int                 @default(0)
+  groupCursor   Int                 @default(0)
+  updatedAt     DateTime            @updatedAt
+  agent      Agent               @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  entries    AgentSessionEntry[]
+}
+
+model AgentSessionEntry {
+  agentId  String
+  position Int
+  entryId  String
+  parentId String?
+  payload  String
+  session  AgentSession @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+
+  @@id([agentId, position])
+  @@unique([agentId, entryId])
 }
 
 model MessageReaction {

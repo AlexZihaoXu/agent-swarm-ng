@@ -17,6 +17,7 @@ import { ReactionStore } from './reaction-store';
 import { createReactionTools } from './reaction-tools';
 import { ReactionCoordinator } from './reaction-coordinator';
 import { channelReply, groupReplyContext, dmReplyContext } from './reply-preview';
+import { AgentSessionStore } from './agent-session-store';
 
 type Job = { senderId: string; rootAgentId: string | null; chainId: string; run: ReturnType<AgentRuns['enqueue']>; cleanup: Promise<void> };
 /** Publishes once, then admits a source-labelled message to the recipient's normal inbox. */
@@ -24,6 +25,7 @@ export class DmBroker {
   readonly store: SwarmStore;
   readonly groups: GroupStore;
   readonly reactions: ReactionStore;
+  readonly sessions: AgentSessionStore;
   private reactionCoordinator: ReactionCoordinator;
   private starting?: Promise<void>;
   private closing = false;
@@ -32,7 +34,7 @@ export class DmBroker {
   private deleting = new Set<string>();
   private linked = new WeakSet<AbortSignal>();
   constructor(private database: PlatformStore, private endpoints: EndpointStore, private codex: CodexProvider, private runs: AgentRuns) {
-    this.store = new SwarmStore(database); this.groups = new GroupStore(database); this.reactions = new ReactionStore(database);
+    this.store = new SwarmStore(database); this.groups = new GroupStore(database); this.reactions = new ReactionStore(database); this.sessions = new AgentSessionStore(database);
     this.reactionCoordinator = new ReactionCoordinator(database, endpoints, codex, runs, (agentId, input, context) => this.runInbox(agentId, input, context));
   }
   notifyHumanReaction(channelId: string, messageId: string, emoji: string) { return this.reactionCoordinator.offer(channelId, messageId, emoji); }
@@ -159,6 +161,7 @@ ${preview.text}` : preview.text, timestamp: message.createdAt.getTime(), replyTo
       const message = await this.database.appendMessage(channel.id, 'assistant', text, crypto.randomUUID(), replyToId);
       return { id: message.id, sequence: message.sequence, channelId: channel.id, role: message.role, text, timestamp: message.createdAt.getTime(), replyTo: channelReply(message) };
     }, connection.accessKey, connection.subscriptionRuntime, [...createChatHistoryTools(this.database, channel, agent.name), ...peerTools, ...createGroupTools(this.groups, this.store, channel, () => humanAuthority), ...createReactionTools(this.reactions, channel, () => humanAuthority, (channelId, messageId) => this.runs.reactionsChanged(channelId, messageId))], {
+      sessionStore: this.sessions,
       prepare: async messages => {
         const admitted: ChannelMessage[] = [];
         for (const message of messages) {

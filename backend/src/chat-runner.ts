@@ -1,4 +1,4 @@
-import type { ModelRuntime, ToolDefinition } from '@earendil-works/pi-coding-agent';
+import { SessionManager, type ModelRuntime, type ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { createActivityRecorder } from './agent-activity';
 import { channelInput, createChatSession, type ChatConfiguration, type ChannelMessage } from './chat-runtime';
 import { createWebTools } from './web-tools';
@@ -6,10 +6,12 @@ import type { RunContext } from './agent-runs';
 import { evaluateInterruption } from './interruption-triage';
 import { formatContextUsage } from './context-usage';
 import { createPublicationTyping } from './publication-typing';
+import { AgentSessionStore } from './agent-session-store';
 
 export type InboxHooks = {
   prepare?: (messages: ChannelMessage[]) => Promise<ChannelMessage[]>;
   complete?: (messages: ChannelMessage[], failed: boolean) => Promise<void>;
+  sessionStore?: AgentSessionStore;
 };
 
 export async function runChat({ runId, signal, emit, inbox }: RunContext, config: ChatConfiguration, history: ChannelMessage[], message: ChannelMessage,
@@ -22,13 +24,17 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
   let web: Awaited<ReturnType<typeof createWebTools>> | undefined;
   let session: Awaited<ReturnType<typeof createChatSession>> | undefined;
   let unsubscribe = () => {};
+  let checkpoint = Promise.resolve();
+  let checkpointFailure: unknown;
   const abort = () => { void session?.abort(); };
   const clearTyping = publicationTyping.clear;
   try {
     signal.throwIfAborted();
     web = await createWebTools();
     signal.throwIfAborted();
-    session = await createChatSession(config, history, async (text, toolCallId, final, replyToMessageId) => {
+    const restored = await hooks.sessionStore?.load(channel.agentId);
+    const manager = hooks.sessionStore ? restored ?? SessionManager.inMemory() : undefined;
+    session = await createChatSession(config, restored ? [] : history, async (text, toolCallId, final, replyToMessageId) => {
       signal.throwIfAborted();
       // Publication belongs to the channel, not any connected browser.
       const saved = await publish(text, replyToMessageId);
@@ -36,7 +42,8 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
       if (final) finalPublished = true;
       activity.record('channel', 'Channel publication', text);
       emit({ type: 'channel_message', ...saved });
-    }, [...historyTools, ...web.tools], subscriptionRuntime);
+    }, [...historyTools, ...web.tools], subscriptionRuntime, manager);
+    if (hooks.sessionStore && !restored && session.sessionManager.getEntries().length) await hooks.sessionStore.save(channel.agentId, session.sessionManager);
     signal.addEventListener('abort', abort, { once: true });
     signal.throwIfAborted();
     activity.record('system', 'System prompt', session.agent.state.systemPrompt);
@@ -50,6 +57,17 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
       }
       else activity.onEvent(event);
       if (event.type === 'message_end') reportContext();
+      if (hooks.sessionStore && !signal.aborted && (event.type === 'turn_end' && event.message.role === 'assistant' && !['aborted', 'error'].includes(event.message.stopReason) || event.type === 'compaction_end' && event.result && !event.aborted)) {
+        // Capture the completed boundary now; a later provider turn may already be streaming
+        // by the time the queued SQLite write acquires its short transaction.
+        try {
+          const snapshot = AgentSessionStore.capture(session!.sessionManager);
+          checkpoint = checkpoint.then(() => hooks.sessionStore!.save(channel.agentId, snapshot, { advancePublications: false })).catch(error => {
+            checkpointFailure = error;
+            void session?.abort();
+          });
+        } catch (error) { checkpointFailure = error; void session?.abort(); }
+      }
       publicationTyping.onEvent(event);
     });
     const main = session;
@@ -72,6 +90,9 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
               : `Automatic channel reminder: nothing was sent to channel ${channel.id}. Plain assistant output is internal. For an actionable task, acknowledge now with send_message and final:false, then continue working and publish the result with final:true. If the answer is already ready, deliver it now with final:true. Use channelId=${JSON.stringify(channel.id)}. If no reply was appropriate or the user requested silence, remain silent.`,
           }, { triggerTurn: true });
         }
+        await checkpoint;
+        if (checkpointFailure) throw checkpointFailure;
+        if (!signal.aborted) await hooks.sessionStore?.save(channel.agentId, main.sessionManager);
       }, async (messages, triageSignal) => {
         activity.record('status', 'Interruption triage', 'Evaluating new messages in a temporary full-context fork.');
         const decision = await evaluateInterruption(main, channel.id, messages, triageSignal);
@@ -87,10 +108,10 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
     }
     inbox.close();
   } catch {
-    activity.record('error', signal.aborted ? 'Stopped' : 'Request failed', signal.aborted ? 'The agent run was stopped.' : 'The model request failed. Check the endpoint and model configuration.');
-    emit({ type: 'error', message: signal.aborted ? 'The agent was stopped.' : 'The model request failed. Check the endpoint, model, and tool-calling support.' });
+    activity.record('error', signal.aborted ? 'Stopped' : 'Request failed', signal.aborted ? 'The agent run was stopped.' : checkpointFailure ? 'The private agent session could not be saved. Published messages remain in chat.' : 'The model request failed. Check the endpoint and model configuration.');
+    emit({ type: 'error', message: signal.aborted ? 'The agent was stopped.' : checkpointFailure ? 'The private agent session could not be saved. Published messages remain in chat.' : 'The model request failed. Check the endpoint, model, and tool-calling support.' });
   } finally {
-    inbox.close(); clearTyping(); unsubscribe(); signal.removeEventListener('abort', abort); session?.dispose();
+    inbox.close(); clearTyping(); unsubscribe(); signal.removeEventListener('abort', abort); await checkpoint; session?.dispose();
     await web?.close();
   }
 }
