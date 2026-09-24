@@ -6456,7 +6456,8 @@
                 "schema": {
                   "type": "object",
                   "required": [
-                    "computers"
+                    "computers",
+                    "controllerConnected"
                   ],
                   "properties": {
                     "computers": {
@@ -6506,6 +6507,9 @@
                           }
                         }
                       }
+                    },
+                    "controllerConnected": {
+                      "type": "boolean"
                     }
                   }
                 }

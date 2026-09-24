@@ -2321,6 +2321,7 @@ export interface operations {
                             cpuPercent: number | null;
                             memoryBytes: number | null;
                         }[];
+                        controllerConnected: boolean;
                     };
                 };
             };

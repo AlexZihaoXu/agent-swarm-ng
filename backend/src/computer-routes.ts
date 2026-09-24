@@ -32,13 +32,13 @@ function failure(reply: FastifyReply, error: unknown) {
 export function registerComputerRoutes(app: FastifyInstance, platform: PlatformStore, controller: ComputerController | null) {
   const store = new ComputerStore(platform);
   app.get('/api/computers', {
-    schema: { operationId: 'listComputers', response: { 200: Type.Object({ computers: Type.Array(viewSchema) }), ...errors } },
+    schema: { operationId: 'listComputers', response: { 200: Type.Object({ computers: Type.Array(viewSchema), controllerConnected: Type.Boolean() }), ...errors } },
   }, async (_, reply) => {
     reply.header('Cache-Control', 'no-store');
-    if (!controller) return unavailable(reply);
     try {
-      const [records, observed] = await Promise.all([store.list(), controller.observe()]);
-      return { computers: records.map(record => view(record, observed.get(record.id))) };
+      const records = await store.list();
+      const observed = controller ? await controller.observe().catch(() => null) : null;
+      return { computers: records.map(record => view(record, observed?.get(record.id))), controllerConnected: observed !== null };
     } catch (error) { return failure(reply, error); }
   });
   app.post<{ Body: { name: string; requestKey: string } }>('/api/computers', {

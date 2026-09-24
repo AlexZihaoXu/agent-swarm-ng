@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { buildApp } from './app';
 import { prepareDatabase } from './test-database';
 import type { ComputerController } from './computer-controller-client';
+import { ComputerStore } from './computer-store';
 
 async function fixture() {
   const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
@@ -30,7 +31,7 @@ it('creates one platform computer, lists status/usage and serves its bounded JPE
     expect(retry.statusCode).toBe(200);
     expect(retry.json().id).toBe(computer.id);
     expect(calls).toEqual([`create:${computer.id}:My computer`]);
-    expect((await app.inject({ method: 'GET', url: '/api/computers' })).json().computers).toEqual([computer]);
+    expect((await app.inject({ method: 'GET', url: '/api/computers' })).json()).toEqual({ computers: [computer], controllerConnected: true });
     const image = await app.inject({ method: 'GET', url: `/api/computers/${computer.id}/preview` });
     expect(image.statusCode).toBe(200);
     expect(image.headers['content-type']).toContain('image/jpeg');
@@ -53,6 +54,20 @@ it('validates exact-name deletion on the backend and never calls Docker for inva
     expect((await app.inject({ method: 'DELETE', url: `/api/computers/${created.id}`, payload: { confirmation: 'Example' } })).statusCode).toBe(200);
     expect(calls).toContain(`remove:${created.id}:Example`);
     expect(await database.client.computer.count()).toBe(0);
+  } finally { await app.close(); await database.close(); }
+});
+
+it('shows saved computers as unavailable during a controller outage without hiding identities', async () => {
+  const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
+  const store = new ComputerStore(database);
+  const { computer } = await store.reserve('Kept machine', crypto.randomUUID());
+  await store.markRunning(computer.id);
+  const app = await buildApp({ database, computerController: null });
+  try {
+    const response = await app.inject({ method: 'GET', url: '/api/computers' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ controllerConnected: false, computers: [{ id: computer.id, name: 'Kept machine', state: 'unavailable', cpuPercent: null, memoryBytes: null }] });
+    expect((await app.inject({ method: 'POST', url: '/api/computers', payload: { name: 'Other', requestKey: crypto.randomUUID() } })).statusCode).toBe(503);
   } finally { await app.close(); await database.close(); }
 });
 

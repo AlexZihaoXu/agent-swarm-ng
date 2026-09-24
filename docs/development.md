@@ -21,6 +21,8 @@ bun run api:check
 bun run typecheck
 bun run test
 bun run build
+# Opt-in Linux/Docker computer lifecycle + browser E2E (unique test project; cleans its own resources):
+sh scripts/test-computers-dev.sh
 ```
 
 API generation does not require a running server. Commit both `backend/openapi.json` and `frontend/src/api/schema.d.ts` when the contract changes. CI checks generated files for drift.
@@ -176,7 +178,7 @@ Caddy serves the built frontend and proxies `/api` in production. Local HTTPS us
 
 Ports bind to loopback by default. `.env.example` documents the settings; authentication is not implemented, so **do not expose this scaffold publicly**. Public-domain HTTPS configuration and access control must be completed before external deployment.
 
-The backend has no Docker socket mount or container-management endpoints yet. `templates/default/` contains a placeholder template definition and an Ubuntu GNOME package foundation—not a desktop-ready environment. Platform Compose does not build or start it; the standalone workspace Compose file below does.
+The backend exposes typed computer-management routes but **does not** mount the Docker socket. An internal-only `computer-controller` service has the socket and no app `.local` or provider credential mount; it accepts only fixed-template, label-checked lifecycle requests. Platform Compose does not automatically build the managed computer/egress images: build the `computer-image` and `computer-egress-image` profile services before creating computers. The standalone workspace Compose file below still idles without desktop startup. The managed runtime boots GNOME/PipeWire and passwordless sudo only under the isolated Sysbox computer controller; see [Computers](computers.md) for its distinct isolation and E2E checks.
 
 ## Default environment image
 
@@ -201,7 +203,7 @@ docker run --rm agent-swarm-default:dev dpkg-query -W
 
 The image includes Chrome, VS Code, Git, curl, C/C++ build tools, Node.js 22 with npm, Bun 1.3.6, Python 3 with venv support, uv 0.9.18, and tmux. Chrome and VS Code use their signed vendor apt repositories rather than Snap. The workspace Compose configuration enables the [Chromium-compatible seccomp profile](../templates/default/security/README.md) and `no-new-privileges`. Chrome runs as the non-root workspace user with its namespace and Seccomp-BPF sandboxes enabled; it does not use `--no-sandbox`, privileged mode, or added `SYS_ADMIN` capability. This permits namespace syscalls throughout the container, so revalidate the trade-off and host-specific restrictions on the Linux deployment target. VS Code's WSL installation prompt is suppressed because the Linux editor is intentional inside this container.
 
-The default process runs as `ubuntu`, with `/home/ubuntu` as its home and `/workspace` as its working directory. No agent harnesses or credentials are installed. Use the same Compose project name to reconnect replacement containers to their data; use a different name for a separate environment:
+The standalone default process runs as `ubuntu`, with `/home/ubuntu` as its home and `/workspace` as its working directory. The managed-computer controller instead starts a mapped-root bootstrap and drops into the Ubuntu user's headless GNOME session. No agent harnesses or credentials are installed. Use the same Compose project name to reconnect replacement containers to their data; use a different name for a separate environment:
 
 ```sh
 docker compose -p swarm-demo -f templates/default/compose.yaml up --build -d
@@ -225,6 +227,6 @@ The persistence test creates its own uniquely named project, verifies files surv
 
 ## Desktop validation status
 
-The image currently idles without starting GNOME. Temporary noVNC preview files under ignored `.scratch/` are local experiments, not part of the supported startup path. The compositor test uses a non-root user, software rendering, and D-Bus readiness checks. Mount a fresh `/run` tmpfs: package installation leaves systemd seat directories in the image, which otherwise cause GNOME to expect a running systemd-logind service.
+The standalone workspace image still idles without starting GNOME. The separate managed-computer startup now runs a headless GNOME/PipeWire session, and a real JPEG preview was verified in an isolated dev deployment; this is not yet interactive video/control. Temporary noVNC files under ignored `.scratch/` remain old local experiments, not a supported startup path. The compositor test uses a non-root user, software rendering, and D-Bus readiness checks. Mount a fresh `/run` tmpfs: package installation leaves systemd seat directories in the image, which otherwise cause GNOME to expect a running systemd-logind service.
 
-Desktop resolution is fixed at 1920x1080, independent of browser viewport size. The test does not establish hardware encoding, 120 fps, streaming, or a complete desktop session. Optional-service warnings remain (including calendar, screencast, input-method, and authentication services). Production session startup and the desktop toggle are not implemented.
+Desktop resolution is fixed at 1920x1080, independent of browser viewport size. The compositor smoke test alone does not establish hardware encoding, 120 fps, streaming, or a complete desktop session. Managed-runtime probes additionally verified a PipeWire screenshot and noVNC-free preview; optional-service warnings remain. Interactive production streaming and the desktop toggle are not implemented.

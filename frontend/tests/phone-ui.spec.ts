@@ -7,7 +7,7 @@ for (const width of [320, 390]) test(`phone controls and reply composer remain r
   await page.setViewportSize({ width, height: 640 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  for (const label of ['Agents', 'Chat', 'Settings']) expect((await size(page.getByRole('tab', { name: label }))).height).toBeGreaterThanOrEqual(44);
+  for (const label of ['Agents', 'Chat', 'Computers', 'Settings']) expect((await size(page.getByRole('tab', { name: label }))).height).toBeGreaterThanOrEqual(44);
   await expect(page.getByLabel('Search agents')).toHaveCSS('font-size', '16px');
   await page.getByRole('tab', { name: 'Chat' }).click();
   expect((await size(page.getByRole('button', { name: 'Create group chat' }))).width).toBeGreaterThanOrEqual(44);

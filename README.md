@@ -8,7 +8,7 @@
 
 A platform for **persistent agents** with long-term memory and shared awareness across communication channels. Agents use explicitly granted capabilities to access shared, containerized **computers**; they are not bound to a computer or limited to coding.
 
-**Today:** Pi-backed agents with durable identities, human DMs, member-authorized group chats and reactions in Prisma + SQLite, saved endpoint preferences, and a standalone Ubuntu GNOME workspace foundation. Long-term agent memory and the full swarm runtime are not implemented. Read the [swarm vision](docs/vision.md) for agreed concepts and deliberately open questions.
+**Today:** Pi-backed agents with durable identities, human DMs, member-authorized group chats and reactions in Prisma + SQLite; saved endpoint preferences; and a Computers dashboard that creates/deletes isolated Ubuntu GNOME environments with low-rate desktop previews. Interactive remote-desktop control, agent computer grants, long-term agent memory, and the full swarm runtime are not implemented. Computers are verified in isolated dev mode, not deployed to the live Tailnet instance. Read the [swarm vision](docs/vision.md) for agreed concepts and deliberately open questions.
 
 ## Getting started
 
@@ -33,7 +33,7 @@ Open http://localhost:5173. See [development instructions](docs/development.md) 
 
 The [vision document](docs/vision.md) distinguishes agreed direction from unresolved design and implementation options. Human-like interaction does not imply human-level discretion or require an endlessly running model conversation.
 
-Existing environment work is a foundation for computers, not the full product definition. The current Pi runtime saves published chat and private Pi working-session checkpoints in SQLite. Completed context survives backend restarts, but an interrupted model stream or job does not automatically resume. Long-term memory, external channels, general resource permissions, computer assignments, and computer-control policies remain unimplemented. DM connections and group-chat membership are implemented communication grants. The next milestone and implementation order require explicit agreement; this vision does not authorize building them all at once.
+The managed Computers dashboard adds creation/deletion and passive previews to the environment foundation, not agent-computer assignments or interactive control. The current Pi runtime saves published chat and private Pi working-session checkpoints in SQLite. Completed context survives backend restarts, but an interrupted model stream or job does not automatically resume. Long-term memory, external channels, general resource permissions, computer assignments, and computer-control policies remain unimplemented. DM connections and group-chat membership are implemented communication grants. The next milestone and implementation order require explicit agreement; this vision does not authorize building them all at once.
 
 ## Stack
 
@@ -41,10 +41,10 @@ Existing environment work is a foundation for computers, not the full product de
 - **Backend:** TypeScript, Bun + Fastify.
 - **API contract:** TypeBox + `@fastify/swagger`; generated client types with `openapi-typescript` and requests through `openapi-fetch`.
 - **PWA:** `vite-plugin-pwa`.
-- **Docker integration:** `dockerode`, pending Bun compatibility validation.
+- **Docker integration:** a separate, narrow Bun controller uses the Docker Engine Unix-socket API; the chat/backend process never mounts the Docker socket.
 - **Testing:** Vitest for unit/integration tests; Playwright for essential browser workflows. On the Windows development host, follow the [browser launch safety rules](docs/development.md#windows-browser-launch-safety) to avoid account lockout.
 - **Deployment:** Docker Compose with development overrides; Caddy for production HTTPS and reverse proxying.
-- **Desktop streaming candidates:** Selkies/WebRTC with AMD hardware encoding; coturn for optional relay fallback. Compatibility and performance need validation.
+- **Interactive desktop streaming:** not yet built. Candidate TCP-capable browser transports, capture and AMD hardware encoding must be measured on the deployment host; the owner requires all external video/input via the dashboard's single TCP HTTP(S) port, not additional UDP or per-computer ports.
 
 Prisma + SQLite stores agents, channels, and published chat history. This single-backend setup uses WAL, indexed cursor pagination, and bounded model context; durable chat is not long-term agent memory.
 
@@ -74,16 +74,17 @@ agent-swarm-v2/
 
 - **`frontend/`** — saved agent creation/chat with paginated history, Settings with API endpoints and ChatGPT subscription sign-in, and PWA setup. The dashboard reconnects to backend-owned runs after refresh; drafts and old internal activity clear. Only explicitly published agent messages enter chat. Create or right-click an agent to customize its [animated avatar](docs/agent-avatars.md), including silhouette, color, eye shape, and randomized motion variation. **Edit agent → Settings → Channels → Swarm App** manages mutual [agent connections](docs/agent-communication.md). **Chat with** switches the main view between **You** and agent-to-agent history, with source-labelled inbox delivery and sender-tinted bubbles. The separate **Chat** tab provides human DMs, searchable chats, member-selected groups, Discord-style author grouping, and persisted reactions; see [Chat and groups](docs/chat-and-groups.md).
 - **`backend/`** — Pi SDK chat with channel-bound publication/history tools and Pi Web Access search/fetch tools, Prisma/SQLite migrations and history, endpoint preferences, and an OpenAPI contract. No agent file/shell/computer access. Private working-session entries persist separately from chat; interrupted runs do not replay. Includes 1.5-second message debounce and temporary-fork interruption triage for follow-ups. See [chat and storage](docs/development.md#pi-agents-and-channels) and [interruption assumptions](docs/message-interruption.md).
-- **`templates/default/`** — Ubuntu GNOME workspace image, standalone Compose configuration, and smoke tests. Production desktop startup, streaming, and the platform template schema remain unimplemented.
+- **`computer-controller/`** — internal Docker-socket service for constrained computer lifecycle, owned volumes, filtered egress and bounded previews. The API/backend has no socket mount.
+- **`templates/default/`** — Ubuntu GNOME image and standalone Compose configuration. The managed-computer runtime boots a headless GNOME/PipeWire session and renders passive JPEG previews; interactive desktop streaming is still separate scope.
 - **`docs/`** — [swarm vision](docs/vision.md), development instructions, and reference material. The [local Kibo reference entry guide](docs/references/kibo/README.md) provides pinned source, searchable indexes, and adaptation notes.
 
-Root Compose files run the platform; dynamic environment creation by the backend is still pending. `templates/default/compose.yaml` provides a standalone workspace with persistent home and workspace volumes. Keep tests beside their code where supported. Add no shared packages or separate services without a concrete need.
+Root Compose files run the platform; the backend requests fixed-template computer creation through an internal controller. No product-agent computer tools are granted. `templates/default/compose.yaml` provides a standalone workspace with persistent home and workspace volumes. Keep tests beside their code where supported. Add no shared packages or separate services without a concrete need.
 
-The default image uses **Ubuntu 24.04 LTS with Ubuntu GNOME**, retaining Ubuntu’s appearance—not substituting XFCE. Preserve the standard Ubuntu appearance: visual defaults, wallpapers, Yaru themes/icons, fonts, and icon-rendering support are essentials—not bloat. Include desktop/session essentials, terminal, file manager, and settings; exclude office apps, games, email clients, media apps, and other bundled extras. Avoid the full `ubuntu-desktop` installation. The image and GNOME compositor are smoke-tested; complete session management and production streaming still need implementation and validation.
+The default image uses **Ubuntu 24.04 LTS with Ubuntu GNOME**, retaining Ubuntu’s appearance—not substituting XFCE. Preserve the standard Ubuntu appearance: visual defaults, wallpapers, Yaru themes/icons, fonts, and icon-rendering support are essentials—not bloat. Include desktop/session essentials, terminal, file manager, and settings; exclude office apps, games, email clients, media apps, and other bundled extras. Avoid the full `ubuntu-desktop` installation. The image and GNOME compositor were smoke-tested; the managed runtime boots a headless session and serves on-demand preview frames. Production deployment and interactive streaming remain unvalidated.
 
 The workspace includes Chrome, VS Code, Git/curl, build tools, Node.js/npm, Bun, Python/uv, and tmux. Separate named volumes retain `/home/ubuntu` and `/workspace` across container replacement; deletion of their data is explicit. tmux preserves sessions across client disconnections, not container restarts. See [workspace setup and checks](docs/development.md#workspace-tools-and-persistence).
 
-Desktop resolution is fixed at **1920×1080**; do not resize it automatically to match the browser viewport. Desktop streaming should prefer direct connections and use TURN as a relay fallback. Hardware-encoded 120 fps is a validation target, not a guarantee.
+Desktop resolution is fixed at **1920×1080**; do not resize it automatically to match the browser viewport. Passive grid previews are 480×270 JPEGs requested at up to 0.5 fps per visible card. Future interactive streaming must use one external TCP dashboard port; measure achievable latency and hardware encoding rather than promising 120 fps.
 
 ## Progressive web app
 
@@ -128,7 +129,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 
 ## Project status
 
-The platform includes persisted agent identities and chat history, endpoint preferences, generated API types, tests, and Compose files. Long-term memory, external channels, general resource-permission groups, computer assignments/control, dashboard container management, desktop streaming, and platform user authentication remain unimplemented. Accepted runs continue without an open dashboard. Completed Pi working context has private SQLite checkpoints; operator traces remain ephemeral and interrupted runs do not resume after a backend restart. Platform and standalone workspace data use separate persistent storage; neither is the future long-term memory system.
+The platform includes persisted agent and computer identities, chat history, endpoint preferences, generated API types, tests, and Compose files. Long-term memory, external channels, general resource-permission groups, computer assignments/control, interactive desktop streaming, and platform user authentication remain unimplemented. Computer creation/deletion, status and passive previews are implemented for isolated dev deployment; see [Computers](docs/computers.md). Accepted runs continue without an open dashboard. Completed Pi working context has private SQLite checkpoints; operator traces remain ephemeral and interrupted runs do not resume after a backend restart. Platform and standalone workspace data use separate persistent storage; neither is the future long-term memory system.
 
 Validate Bun compatibility with Docker libraries and long-lived connections, plus AMD hardware encoding and streaming performance, before relying on them.
 

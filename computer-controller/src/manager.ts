@@ -7,7 +7,7 @@ type Container = {
   NetworkSettings: { Networks: Record<string, { IPAddress: string }> };
 };
 type ListedContainer = { Id: string; State: string; Labels: Record<string, string> };
-type Network = { Id: string; Internal: boolean; EnableIPv6: boolean; Labels?: Record<string, string>; Options?: Record<string, string>; IPAM: { Config: { Subnet?: string }[] } };
+type Network = { Id: string; Driver: string; Internal: boolean; EnableIPv6: boolean; Labels?: Record<string, string>; Options?: Record<string, string>; IPAM: { Config: { Subnet?: string; Gateway?: string }[] } };
 type Volume = { Name: string; Labels?: Record<string, string> };
 type Statistics = { cpu_stats?: { cpu_usage?: { total_usage?: number }; system_cpu_usage?: number; online_cpus?: number }; precpu_stats?: { cpu_usage?: { total_usage?: number }; system_cpu_usage?: number }; memory_stats?: { usage?: number; stats?: { inactive_file?: number } } };
 
@@ -29,7 +29,10 @@ export class ComputerManager {
     private readonly image = DEFAULT_IMAGE,
     private readonly gatewayImage = DEFAULT_GATEWAY_IMAGE,
     private readonly maxComputers = 4,
-  ) { this.names = new ComputerNames(namespace); }
+  ) {
+    this.names = new ComputerNames(namespace);
+    if (!Number.isInteger(maxComputers) || maxComputers < 1 || maxComputers > 100) throw new Error('Invalid computer limit.');
+  }
 
   private async exclusive<T>(operation: () => Promise<T>): Promise<T> {
     const previous = this.queue;
@@ -63,7 +66,7 @@ export class ComputerManager {
       });
       result = await this.network(name, id, role);
     }
-    if (!result || result.Internal !== (role === 'private-network') || result.EnableIPv6 || (role === 'private-network' && result.Options?.[PRIVATE_MODE] !== 'isolated')) throw new ResourceError(409, 'Computer network has unsafe settings.');
+    if (!result || result.Driver !== 'bridge' || result.Internal !== (role === 'private-network') || result.EnableIPv6 || (role === 'private-network' && (result.Options?.[PRIVATE_MODE] !== 'isolated' || Boolean(result.IPAM.Config[0]?.Gateway && result.IPAM.Config[0]?.Gateway !== 'invalid IP')))) throw new ResourceError(409, 'Computer network has unsafe settings.');
     return result;
   }
   private async ensureVolume(id: string, role: 'home' | 'workspace') {
@@ -108,6 +111,11 @@ export class ComputerManager {
     const existing = await this.container(computerName, id, 'desktop', name);
     if (existing) {
       if (!existing.State.Running) throw new ResourceError(409, 'Computer is stopped; automatic restart is not enabled.');
+      const gateway = await this.container(this.names.gateway(id), id, 'egress', name);
+      const network = await this.network(this.names.privateNetwork(id), id, 'private-network');
+      const home = await this.volume(this.names.volume(id, 'home'), id, 'home');
+      const workspace = await this.volume(this.names.volume(id, 'workspace'), id, 'workspace');
+      if (!gateway?.State.Running || !network || !home || !workspace) throw new ResourceError(503, 'Computer resources are incomplete.');
       return;
     }
     const count = await this.listIds();

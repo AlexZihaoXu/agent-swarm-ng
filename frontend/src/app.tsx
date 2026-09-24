@@ -20,6 +20,7 @@ import { ConversationMessages } from '@/components/conversation-messages';
 import { isTypingInConversation } from '@/lib/conversation-typing';
 import { conversationTimeline } from '@/lib/conversation-timeline';
 import { Settings } from '@/components/settings';
+import { ComputersPanel } from '@/components/computers-panel';
 import { AgentTypingStatus } from '@/components/agent-typing-status';
 import { AvatarFace, PresenceIndicator } from '@/components/typing-indicator';
 import { AgentActivityPanel } from '@/components/agent-activity-panel';
@@ -73,7 +74,7 @@ export function App() {
   const pendingReplyAcks = useRef(new Map<string, { channelId: string; targetId: string }>());
   const visibleAgents = agents.filter(item => item.name.toLowerCase().includes(search.trim().toLowerCase()));
   const agent = agents.find(item => item.id === selectedId) ?? agents[0] ?? emptyAgent;
-  const narrowDetail = activeTab !== 'settings' && mobileConversation && Boolean(selectedGroup || agent.id);
+  const narrowDetail = (activeTab === 'agents' || activeTab === 'chat') && mobileConversation && Boolean(selectedGroup || agent.id);
   const inbox = useDmInbox(agent.id);
   const dmConversations = useDmConversations(agent.id);
   const [conversation, setConversation] = useState<{ owner: string; peer: string; selected?: { id: string; name: string; avatar?: AvatarAppearance | null; channelId?: string } }>({ owner: '', peer: 'you' });
@@ -173,10 +174,10 @@ export function App() {
       <Tabs.Root value={activeTab} onValueChange={value => { setActiveTab(value); if (window.matchMedia('(max-width: 767px)').matches) setMobileConversation(false); }} className="flex min-h-0 flex-1 flex-col">
         <header className={cn('pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex justify-center md:pointer-events-auto md:relative md:inset-auto md:order-first md:h-14 md:min-h-14 md:shrink-0 md:items-center md:border-b md:border-border md:bg-sidebar md:px-4', narrowDetail && 'max-md:hidden')}>
           {/* Basic Tabs composition: Kibo tabs/standard/tabs-standard-1, floating without a footer on phones. */}
-          <Tabs.List aria-label="Main navigation" className="pointer-events-auto relative isolate grid h-[50px] w-[min(18rem,calc(100vw-2rem))] grid-cols-3 items-center rounded-lg border border-border bg-muted p-[3px] shadow-lg md:h-9 md:w-72 md:border-0 md:p-1 md:shadow-none">
-            <span aria-hidden="true" data-testid="tab-indicator" className="pointer-events-none absolute inset-y-[3px] left-[3px] w-[calc((100%-6px)/3)] rounded-md bg-background shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none md:inset-y-1 md:left-1 md:w-[calc((100%-8px)/3)]" style={{ transform: `translateX(${['agents', 'chat', 'settings'].indexOf(activeTab) * 100}%)` }} />
-            {['Agents', 'Chat', 'Settings'].map(label => (
-              <Tabs.Trigger key={label} value={label.toLowerCase()} className="relative z-10 min-h-11 rounded-md px-3 py-1 text-sm font-medium md:min-h-0 text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:text-foreground">
+          <Tabs.List aria-label="Main navigation" className="pointer-events-auto relative isolate grid h-[50px] w-[min(23rem,calc(100vw-2rem))] grid-cols-4 items-center rounded-lg border border-border bg-muted p-[3px] shadow-lg md:h-9 md:w-96 md:border-0 md:p-1 md:shadow-none">
+            <span aria-hidden="true" data-testid="tab-indicator" className="pointer-events-none absolute inset-y-[3px] left-[3px] w-[calc((100%-6px)/4)] rounded-md bg-background shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none md:inset-y-1 md:left-1 md:w-[calc((100%-8px)/4)]" style={{ transform: `translateX(${['agents', 'chat', 'computers', 'settings'].indexOf(activeTab) * 100}%)` }} />
+            {['Agents', 'Chat', 'Computers', 'Settings'].map(label => (
+              <Tabs.Trigger key={label} value={label.toLowerCase()} className="relative z-10 min-h-11 min-w-0 rounded-md px-1 py-1 text-[11px] font-medium md:min-h-0 md:px-3 md:text-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:text-foreground">
                 {label}
               </Tabs.Trigger>
             ))}
@@ -284,6 +285,9 @@ export function App() {
           </section> : <section aria-label="No agent selected" className="hidden min-w-0 flex-1 items-center justify-center p-6 text-sm text-muted-foreground md:flex">Select or create an agent to start chatting.</section>}
         </Tabs.Content>
 
+        <Tabs.Content value="computers" className="min-h-0 flex-1 outline-none data-[state=active]:flex">
+          <ComputersPanel />
+        </Tabs.Content>
         <Tabs.Content value="settings" forceMount className="phone-tab-enter min-h-0 flex-1 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none data-[state=inactive]:hidden md:pb-0">
           <Settings />
         </Tabs.Content>

@@ -4,7 +4,7 @@ import { defaultAvatar } from '../src/lib/agent-avatar';
 test('saved agents follow the agents and chat layout', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(36, 36, 36)');
-  await expect(page.getByRole('tab')).toHaveText(['Agents', 'Chat', 'Settings']);
+  await expect(page.getByRole('tab')).toHaveText(['Agents', 'Chat', 'Computers', 'Settings']);
   await expect(page.getByRole('tab', { name: 'Agents', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('heading', { name: 'Avery', exact: true })).toBeVisible();
   await expect(page.getByText('Your account', { exact: true })).toBeVisible();
@@ -273,6 +273,8 @@ test('settings is reachable with keyboard-accessible tabs', async ({ page }) => 
   await page.getByRole('tab', { name: 'Agents', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'Chat', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Computers' })).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'Settings' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
