@@ -1,5 +1,5 @@
-# Package foundation only: desktop session startup and streaming are not wired yet.
-# Not built or launched by platform Compose.
+# Ubuntu desktop foundation for both standalone workspaces and managed computers.
+# Only the managed controller starts the desktop; Compose builds this image on demand.
 FROM ubuntu:24.04
 WORKDIR /workspace
 
@@ -64,14 +64,28 @@ RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
-# Managed computers add on-demand GNOME/PipeWire previews and a sudo-capable
-# workspace. Keep this after the desktop/tool layers for incremental rebuilds.
+# Managed computers add GNOME/PipeWire capture and a sudo-capable workspace.
+# Keep this after the desktop/tool layers for incremental rebuilds.
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         sudo iproute2 gstreamer1.0-tools gstreamer1.0-pipewire gstreamer1.0-plugins-good \
     && printf 'ubuntu ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/ubuntu \
     && chmod 0440 /etc/sudoers.d/ubuntu \
     && rm -rf /var/lib/apt/lists/*
+# Selkies 2.0.0 provides proven H.264/WebCodecs over WebSocket plus browser
+# input. Keep its download, hash and apt dependencies in one incremental layer;
+# source and matching amd64/arm64 release assets are under MPL-2.0.
+RUN set -eu; arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+      amd64) digest=bbaa4d71012b9374a753b7dfddc1da07e31f34b04277fe4fb3d045f18fd88391;; \
+      arm64) digest=3900f3ba805898c495829629092553cc1cf4d5a864ffc4056f57d21646ad45e4;; \
+      *) echo "Unsupported Selkies architecture: $arch" >&2; exit 1;; \
+    esac; \
+    curl -fLsS --retry 3 --max-time 150 "https://github.com/selkies-project/selkies/releases/download/2.0.0/selkies-2.0.0-ubuntu24.04-${arch}.deb" -o /tmp/selkies.deb; \
+    echo "$digest  /tmp/selkies.deb" | sha256sum -c -; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends /tmp/selkies.deb; \
+    rm -rf /var/lib/apt/lists/* /tmp/selkies.deb
 COPY runtime/ /opt/swarm/
 RUN chmod 0755 /opt/swarm/*.sh && chmod 0644 /opt/swarm/*.py
 
@@ -82,5 +96,5 @@ RUN chown ubuntu:ubuntu /workspace
 ENV HOME=/home/ubuntu DONT_PROMPT_WSL_INSTALL=1
 USER ubuntu
 
-# No desktop processes run until the session/streaming integration is implemented.
+# The standalone image remains idle until the managed controller starts it.
 CMD ["sleep", "infinity"]

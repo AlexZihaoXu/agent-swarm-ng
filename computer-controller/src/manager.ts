@@ -13,7 +13,7 @@ type Statistics = { cpu_stats?: { cpu_usage?: { total_usage?: number }; system_c
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const PRIVATE_MODE = 'com.docker.network.bridge.gateway_mode_ipv4';
-const DEFAULT_IMAGE = 'agent-swarm-default:stage1';
+const DEFAULT_IMAGE = 'agent-swarm-default:stage2';
 const DEFAULT_GATEWAY_IMAGE = 'agent-swarm-computer-egress:dev';
 
 /** Owns only its labelled Docker computers; other projects and agent containers are untouchable. */
@@ -134,7 +134,7 @@ export class ComputerManager {
     await this.ensureVolume(id, 'workspace');
     await this.docker.request('POST', `/containers/create?name=${encodeURIComponent(computerName)}`, {
       Image: this.image, User: 'root', Cmd: ['/opt/swarm/start-computer.sh'],
-      Labels: this.names.labels(id, 'desktop', name), Env: [`COMPUTER_GATEWAY=${gateway}`],
+      Labels: this.names.labels(id, 'desktop', name), Env: [`COMPUTER_GATEWAY=${gateway}`, `COMPUTER_ID=${id}`],
       HostConfig: {
         Runtime: 'sysbox-runc', NetworkMode: this.names.privateNetwork(id), Dns: ['1.1.1.1'],
         CapDrop: ['ALL'], SecurityOpt: [`seccomp=${this.seccomp}`], Init: true,

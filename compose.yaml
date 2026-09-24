@@ -28,7 +28,7 @@ services:
       retries: 3
   computer-image:
     profiles: [computer-images]
-    image: agent-swarm-default:stage1
+    image: agent-swarm-default:stage2
     build:
       context: ./templates/default
     command: ["true"]

@@ -3,6 +3,7 @@
 set -eu
 [ "$(id -u)" -eq 0 ]
 gateway=${COMPUTER_GATEWAY:?A filtered egress gateway is required}
+id=${COMPUTER_ID:?A managed computer ID is required}
 python3 - "$gateway" <<'PY'
 import ipaddress, sys
 address = ipaddress.ip_address(sys.argv[1])
@@ -23,6 +24,7 @@ dbus-daemon --config-file=/run/computer-system-bus.conf --fork --nosyslog
 test -S /run/dbus/system_bus_socket
 exec runuser -u ubuntu -- env \
     HOME=/home/ubuntu \
+    COMPUTER_ID="$id" \
     XDG_RUNTIME_DIR=/run/user/1000 \
     XDG_CURRENT_DESKTOP=ubuntu:GNOME \
     XDG_SESSION_TYPE=wayland \

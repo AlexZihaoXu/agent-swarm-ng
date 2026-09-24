@@ -5,7 +5,7 @@ import { ResourceError } from './resources';
 process.umask(0o077);
 const docker = new DockerApi();
 const manager = new ComputerManager(docker, process.env.COMPUTER_NAMESPACE ?? 'agent-swarm-ng', undefined,
-  process.env.COMPUTER_IMAGE ?? 'agent-swarm-default:stage1',
+  process.env.COMPUTER_IMAGE ?? 'agent-swarm-default:stage2',
   process.env.COMPUTER_EGRESS_IMAGE ?? 'agent-swarm-computer-egress:dev',
   Number(process.env.COMPUTER_MAX_COUNT ?? 4));
 // Boot-time reconciliation starts only our labelled computers, always after

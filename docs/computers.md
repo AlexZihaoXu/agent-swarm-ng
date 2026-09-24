@@ -1,6 +1,6 @@
-# Computers — lifecycle and passive previews
+# Computers — lifecycle, previews and interactive desktop
 
-Status: stage 1 lifecycle and passive previews passed isolated development API/browser E2E and were deployed to the existing trusted Tailnet dashboard on 2026-09-24 at local `main` commit `0db84ab`. Interactive low-latency control is separate work and was **not** deployed.
+Status: stage 1 lifecycle and passive previews passed isolated development API/browser E2E, merged into local `main` and were deployed to the trusted Tailnet dashboard on 2026-09-24. Stage 2 interactive desktop remains in progress on a separate branch and was **not** deployed.
 
 ## Terms and ownership
 
@@ -22,7 +22,13 @@ The Ubuntu GNOME 46 image boots a 1920×1080 headless Wayland virtual monitor an
 
 The UI keeps the existing Kibo-derived Basic Tabs navigation and typed Delete Confirmation dialog. The Kibo Image Card preview/source placed its title before the image, conflicting with the owner's chosen screenshot-first YouTube-like grid; that card composition is intentionally custom and retains the requested image → name → CPU/memory hierarchy without demo data or dependencies.
 
-This stage deliberately does not include agent assignment, console/tmux access, real-time input, clipboard/audio, multi-user login or interactive video. Current access policy is the trusted dashboard network: anyone allowed to open it may manage computers; **do not expose it publicly**. App-level user control is later scope. The eventual interactive stream must also fit the single external TCP dashboard port.
+The lifecycle/preview milestone did not include agent assignment, console/tmux access, real-time input, clipboard/audio, multi-user login or interactive video. Current access policy is the trusted dashboard network: anyone allowed to open it may manage computers; **do not expose it publicly**. App-level user control is later scope.
+
+## Interactive runtime under development
+
+The stage-2 image pins the MPL-2.0 Selkies 2.0.0 Ubuntu 24.04 packages by amd64/arm64 SHA-256. **Selkies** supplies H.264 encoding, WebSocket transport, WebCodecs browser decode and mouse/keyboard input; WebRTC/TURN is intentionally not enabled because it would require additional relay TCP ports or a non-HTTP multiplexer. This stream is distinct from the sparse JPEG previews. It starts inside each managed GNOME computer, not in the backend's chat event loop, and does not publish a host port. GNOME's first-run RemoteDesktop portal needs explicit screen-sharing and remote-interaction consent. The portal's persistent restore token belongs to the computer's home volume, not the dashboard or any agent. Because headless GNOME has no session manager linking private video ports, the in-computer bridge identifies its own preview PipeWire node and links only the one other matching GNOME video output to Selkies's matching input; ambiguous capture sets fail closed. The consumer and encoder run without a host device mount or Docker socket. The internal stream currently uses a self-signed HTTPS certificate; the final dashboard proxy must terminate trusted HTTPS on the **same sole external TCP port** for WebCodecs on non-localhost origins. No live Tailnet certificate was issued or deployed.
+
+On the actual isolated AMD64 development host, a disposable GNOME computer produced a 1920×1080 Selkies x264 stream at about 20 encoded frames per second, and a separate sandboxed Chromium browser decoded visible GNOME frames. Browser clicks opened Files and Meta opened GNOME Overview. One first frame was logged 14.8ms after its compositor timestamp; this is **not** glass-to-glass latency. A pinned ARM64 package exists, but its runtime was not tested. These are in-container private-bridge proofs, not evidence that the same-port dashboard viewer/proxy, portal-consent bootstrap, reconnect or deployment works. The 2-CPU/4-GiB computer limit and software-encoding fallback remain; GPU passthrough has not been granted. No agent receives computer tools by creating a computer.
 
 ## Development verification and cleanup
 
