@@ -8,7 +8,8 @@ const manager = new ComputerManager(docker, process.env.COMPUTER_NAMESPACE ?? 'a
   process.env.COMPUTER_IMAGE ?? 'agent-swarm-default:stage2',
   process.env.COMPUTER_EGRESS_IMAGE ?? 'agent-swarm-computer-egress:dev',
   process.env.COMPUTER_MEDIA_IMAGE ?? 'agent-swarm-computer-media:stage2',
-  Number(process.env.COMPUTER_MAX_COUNT ?? 4));
+  Number(process.env.COMPUTER_MAX_COUNT ?? 4),
+  process.env.COMPUTER_RENDER_DEVICE ?? '');
 // Boot-time reconciliation starts only our labelled computers, always after
 // their filtered egress sidecars. No model inference or agent work is replayed.
 await manager.resume();

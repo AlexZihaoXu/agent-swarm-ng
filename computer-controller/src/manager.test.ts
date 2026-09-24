@@ -4,13 +4,13 @@ import { DockerApi } from './docker-api';
 
 const id = '4a18018a-4689-4fa5-86ca-4dc080d41fb4';
 const name = 'Work computer';
-function fixture() {
+function fixture(renderDevice = '') {
   const resources = new Map<string, unknown>();
   const request = vi.fn(async () => Buffer.alloc(0));
   const execute = vi.fn(async () => Buffer.alloc(0));
   const docker = { optional: async (path: string) => resources.get(path) ?? null, request, json: vi.fn(async () => []), exec: execute } as unknown as DockerApi;
-  const manager = new ComputerManager(docker, 'swarm-ng-test', '{}');
-  return { manager, resources, request, execute };
+  const manager = new ComputerManager(docker, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, renderDevice);
+  return { manager, resources, request, execute, docker };
 }
 
 function existingRunning(manager: ComputerManager, resources: Map<string, unknown>) {
@@ -99,6 +99,19 @@ it('never starts an owned relay whose target changed to another address', async 
   expect(request).not.toHaveBeenCalled();
 });
 
+it('stops a running owned desktop on controller restart if its GPU grant was revoked', async () => {
+  const { manager, resources, request, docker } = fixture();
+  existingRunning(manager, resources);
+  const desktop = resources.get(`/containers/${manager.names.desktop(id)}/json`) as { HostConfig?: unknown };
+  desktop.HostConfig = { Devices: [{ PathOnHost: '/dev/dri/renderD128', PathInContainer: '/dev/dri/renderD128', CgroupPermissions: 'rwm' }] };
+  const network = resources.get(`/networks/${manager.names.privateNetwork(id)}`) as { IPAM?: unknown };
+  network.IPAM = { Config: [{ Subnet: '172.25.10.0/24' }] };
+  vi.mocked(docker.json).mockResolvedValue([{ Id: 'desktop', State: 'running', Labels: manager.names.labels(id, 'desktop', name) }]);
+  await manager.resume();
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(request).toHaveBeenCalledWith('POST', '/containers/desktop/stop?t=5');
+});
+
 it('does not wipe a stopped computer or its data on a retried create', async () => {
   const { manager, resources, request } = fixture();
   resources.set(`/containers/${manager.names.desktop(id)}/json`, {
@@ -139,5 +152,7 @@ it('refuses invalid resource IDs and namespaces before calling Docker', async ()
   const { manager, request } = fixture();
   await expect(manager.remove('../agent-swarm-v2', name)).rejects.toMatchObject({ code: 400 });
   expect(() => new ComputerManager({} as DockerApi, '../outside', '{}')).toThrow('namespace');
+  expect(() => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '/dev/dri/card0')).toThrow('render device');
+  expect(() => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '/etc/shadow')).toThrow('render device');
   expect(request).not.toHaveBeenCalled();
 });

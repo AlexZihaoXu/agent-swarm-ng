@@ -4,6 +4,7 @@ import { ComputerNames, ResourceError, validateId, validateName, type ResourceRo
 
 type Container = {
   Id: string; Config: { Labels?: Record<string, string>; Env?: string[] }; State: { Running: boolean; Status: string };
+  HostConfig?: { Devices?: { PathOnHost: string; PathInContainer: string; CgroupPermissions: string }[] | null };
   NetworkSettings: { Networks: Record<string, { IPAddress: string; Aliases?: string[] | null; DNSNames?: string[] }> };
 };
 type ListedContainer = { Id: string; State: string; Labels: Record<string, string> };
@@ -31,9 +32,13 @@ export class ComputerManager {
     private readonly gatewayImage = DEFAULT_GATEWAY_IMAGE,
     private readonly mediaImage = DEFAULT_MEDIA_IMAGE,
     private readonly maxComputers = 4,
+    private readonly renderDevice = '',
   ) {
     this.names = new ComputerNames(namespace);
     if (!Number.isInteger(maxComputers) || maxComputers < 1 || maxComputers > 100) throw new Error('Invalid computer limit.');
+    // Only an operator-selected DRM render node, never a card/modeset device
+    // or arbitrary host path, may be shared with sudo-capable computers.
+    if (renderDevice && !/^\/dev\/dri\/renderD\d{3}$/.test(renderDevice)) throw new Error('Invalid computer render device.');
   }
 
   private async exclusive<T>(operation: () => Promise<T>): Promise<T> {
@@ -44,6 +49,12 @@ export class ComputerManager {
     try { return await operation(); } finally { done(); }
   }
   private path(kind: string, name: string) { return `/${kind}/${encodeURIComponent(name)}`; }
+  private renderDeviceMatches(computer: Container) {
+    const devices = computer.HostConfig?.Devices ?? [];
+    if (!this.renderDevice) return devices.length === 0;
+    return devices.length === 1 && devices[0].PathOnHost === this.renderDevice &&
+      devices[0].PathInContainer === this.renderDevice && devices[0].CgroupPermissions === 'rwm';
+  }
   private async container(name: string, id: string, role: ResourceRole, displayName?: string) {
     const value = await this.docker.optional<Container>(`${this.path('containers', name)}/json`);
     if (value) this.names.assertOwned(value.Config.Labels, id, role, displayName);
@@ -167,6 +178,7 @@ export class ComputerManager {
     const computerName = this.names.desktop(id);
     const existing = await this.container(computerName, id, 'desktop', name);
     if (existing) {
+      if (!this.renderDeviceMatches(existing)) throw new ResourceError(409, 'Computer render-device grant differs from the current operator setting.');
       if (!existing.State.Running) throw new ResourceError(409, 'Computer is stopped; automatic restart is not enabled.');
       const gateway = await this.container(this.names.gateway(id), id, 'egress', name);
       const network = await this.network(this.names.privateNetwork(id), id, 'private-network');
@@ -196,6 +208,7 @@ export class ComputerManager {
       HostConfig: {
         Runtime: 'sysbox-runc', NetworkMode: this.names.privateNetwork(id), Dns: ['1.1.1.1'],
         CapDrop: ['ALL'], SecurityOpt: [`seccomp=${this.seccomp}`], Init: true,
+        ...(this.renderDevice ? { Devices: [{ PathOnHost: this.renderDevice, PathInContainer: this.renderDevice, CgroupPermissions: 'rwm' }] } : {}),
         Tmpfs: { '/run': 'rw,nosuid,size=64m' }, ShmSize: 256 * 1024 * 1024,
         NanoCpus: 2_000_000_000, Memory: 4 * 1024 * 1024 * 1024, PidsLimit: 1024,
         RestartPolicy: { Name: 'no' },
@@ -257,10 +270,19 @@ export class ComputerManager {
           if (!id || !name) continue;
           validateId(id); validateName(name);
           const desktop = await this.container(this.names.desktop(id), id, 'desktop', name);
+          if (!desktop) continue;
+          if (!this.renderDeviceMatches(desktop)) {
+            // Revoking the operator's GPU grant must take effect when this
+            // controller restarts. Stop only the owned computer; preserve its
+            // volumes and refuse to restart with stale host-device access.
+            if (desktop.State.Running) await this.docker.request('POST', `${this.path('containers', desktop.Id)}/stop?t=5`);
+            console.error('Computer render-device setting changed; owned desktop stopped:', id);
+            continue;
+          }
           const gateway = await this.container(this.names.gateway(id), id, 'egress', name);
           const network = await this.network(this.names.privateNetwork(id), id, 'private-network');
           const subnet = network?.IPAM.Config[0]?.Subnet;
-          if (!desktop || !network || !subnet) continue;
+          if (!network || !subnet) continue;
           // A restarting gateway attached to the private bridge has a brief
           // period before its firewall loads. Never start it with a computer
           // running through that bridge: stop the computer first, then bring

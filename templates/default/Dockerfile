@@ -84,7 +84,7 @@ RUN set -eu; arch="$(dpkg --print-architecture)"; \
     curl -fLsS --retry 3 --max-time 150 "https://github.com/selkies-project/selkies/releases/download/2.0.0/selkies-2.0.0-ubuntu24.04-${arch}.deb" -o /tmp/selkies.deb; \
     echo "$digest  /tmp/selkies.deb" | sha256sum -c -; \
     apt-get update; \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends /tmp/selkies.deb; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends /tmp/selkies.deb mesa-va-drivers vainfo; \
     rm -rf /var/lib/apt/lists/* /tmp/selkies.deb
 COPY runtime/ /opt/swarm/
 RUN chmod 0755 /opt/swarm/*.sh && chmod 0644 /opt/swarm/*.py
