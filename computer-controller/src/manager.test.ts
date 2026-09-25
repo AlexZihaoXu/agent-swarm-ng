@@ -159,6 +159,13 @@ it('keeps full consent frames separate from the small grid JPEG cache', async ()
   expect(execute).toHaveBeenNthCalledWith(2, manager.names.desktop(id), ['/opt/swarm/render-preview.sh', '--full'], 'ubuntu', 16_000);
 });
 
+it('rejects unbounded or fractional operator CPU quotas before creating Docker resources', () => {
+  for (const limit of [0, 1.5, 9, Number.NaN, Number.POSITIVE_INFINITY]) {
+    expect(() => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '', limit)).toThrow('CPU limit');
+  }
+  expect(() => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '', 4)).not.toThrow();
+});
+
 it('refuses invalid resource IDs and namespaces before calling Docker', async () => {
   const { manager, request } = fixture();
   await expect(manager.remove('../agent-swarm-v2', name)).rejects.toMatchObject({ code: 400 });

@@ -54,6 +54,7 @@ services:
       COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-agent-swarm-ng}
       # Opt-in: shares ONLY this DRM render node with each sudo computer.
       COMPUTER_RENDER_DEVICE: ${COMPUTER_RENDER_DEVICE:-}
+      COMPUTER_CPU_LIMIT: ${COMPUTER_CPU_LIMIT:-2}
     init: true
     # Only this narrow internal service has the root-equivalent Docker socket.
     # It has no app database, provider credentials, or published ports.

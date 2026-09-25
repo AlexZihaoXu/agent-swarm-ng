@@ -33,12 +33,14 @@ export class ComputerManager {
     private readonly mediaImage = DEFAULT_MEDIA_IMAGE,
     private readonly maxComputers = 4,
     private readonly renderDevice = '',
+    private readonly cpuLimit = 2,
   ) {
     this.names = new ComputerNames(namespace);
     if (!Number.isInteger(maxComputers) || maxComputers < 1 || maxComputers > 100) throw new Error('Invalid computer limit.');
     // Only an operator-selected DRM render node, never a card/modeset device
     // or arbitrary host path, may be shared with sudo-capable computers.
     if (renderDevice && !/^\/dev\/dri\/renderD\d{3}$/.test(renderDevice)) throw new Error('Invalid computer render device.');
+    if (!Number.isInteger(cpuLimit) || cpuLimit < 1 || cpuLimit > 8) throw new Error('Invalid computer CPU limit.');
   }
 
   private async exclusive<T>(operation: () => Promise<T>): Promise<T> {
@@ -220,7 +222,7 @@ export class ComputerManager {
         CapDrop: ['ALL'], SecurityOpt: [`seccomp=${this.seccomp}`], Init: true,
         ...(this.renderDevice ? { Devices: [{ PathOnHost: this.renderDevice, PathInContainer: this.renderDevice, CgroupPermissions: 'rwm' }] } : {}),
         Tmpfs: { '/run': 'rw,nosuid,size=64m' }, ShmSize: 256 * 1024 * 1024,
-        NanoCpus: 2_000_000_000, Memory: 4 * 1024 * 1024 * 1024, PidsLimit: 1024,
+        NanoCpus: this.cpuLimit * 1_000_000_000, Memory: 4 * 1024 * 1024 * 1024, PidsLimit: 1024,
         RestartPolicy: { Name: 'no' },
         Mounts: [
           { Type: 'volume', Source: this.names.volume(id, 'home'), Target: '/home/ubuntu' },

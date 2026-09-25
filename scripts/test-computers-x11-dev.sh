@@ -8,10 +8,17 @@ export COMPUTER_NAMESPACE="$project"
 # GPU proof is opt-in and grants only the single existing render node to the
 # disposable computer. The default no-device gate remains unchanged.
 case "${TEST_RENDER_DEVICE:-}" in ''|/dev/dri/renderD128) ;; *) echo 'Invalid disposable render device' >&2; exit 1;; esac
+case "${TEST_DISPLAY_SERVER:-xvfb}" in xvfb|xorg120) ;; *) echo 'Invalid disposable display server' >&2; exit 1;; esac
 export COMPUTER_RENDER_DEVICE="${TEST_RENDER_DEVICE:-}"
-# Do not retag the image selected by the running live controller while a
-# disposable test project builds or creates computers.
-export TEST_X11_IMAGE=agent-swarm-default:http-jpeg-x11-120-quality50-candidate
+if [ "${TEST_DISPLAY_SERVER:-xvfb}" = xorg120 ]; then
+    export COMPUTER_CPU_LIMIT=4
+    export TEST_X11_IMAGE=agent-swarm-default:xorg120-120-candidate
+else
+    export COMPUTER_CPU_LIMIT=2
+    # Do not retag the image selected by the running live controller while a
+    # disposable test project builds or creates computers.
+    export TEST_X11_IMAGE=agent-swarm-default:http-jpeg-x11-120-quality50-candidate
+fi
 compose() { docker compose -p "$project" -f compose.yaml -f compose.dev.yaml -f scripts/compose.test-x11.yaml "$@"; }
 cleanup() {
     status=$?
@@ -54,7 +61,14 @@ docker build -t agent-swarm-default:stage2 templates/default
 docker build -t agent-swarm-computer-egress:dev -f templates/default/egress.Dockerfile templates/default
 docker build -t agent-swarm-computer-media:stage2 -f templates/default/media.Dockerfile templates/default
 docker build -t agent-swarm-default:http-jpeg --build-arg COMPUTER_STREAM_ENCODER=jpeg templates/default
-docker build -t "$TEST_X11_IMAGE" -f templates/default/x11.Dockerfile .
+if [ "${TEST_DISPLAY_SERVER:-xvfb}" = xorg120 ]; then
+    # The approved X11 base must be built directly already; do not retag its
+    # running/live creation image during an isolated experiment.
+    docker image inspect agent-swarm-default:http-jpeg-x11 >/dev/null
+    docker build -t "$TEST_X11_IMAGE" -f templates/default/xorg120.Dockerfile .
+else
+    docker build -t "$TEST_X11_IMAGE" -f templates/default/x11.Dockerfile .
+fi
 sh scripts/prepare-selkies-client.sh
 test "$(sha256sum .scratch/selkies-client-web/assets/selkies-core-BbKps5RD.js | cut -d ' ' -f 1)" = 633f8909c4ef14c2a3c178292f4b6d47dbacbf71ccd55060ace4db623b000c52
 compose build backend frontend computer-controller
@@ -84,12 +98,13 @@ if [ "$ready" -ne 1 ]; then
     exit 1
 fi
 file .scratch/x11-gnome-preview.jpg
-python3 - "$container" "$project" "$id" "$COMPUTER_RENDER_DEVICE" <<'PY'
+python3 - "$container" "$project" "$id" "$COMPUTER_RENDER_DEVICE" "$COMPUTER_CPU_LIMIT" <<'PY'
 import json,subprocess,sys
-computer,namespace,id,device=sys.argv[1:]
+computer,namespace,id,device,cpus=sys.argv[1:]
 c=json.loads(subprocess.check_output(['docker','inspect',computer]))[0]
 assert c['Config']['Labels']['swarm.ng.namespace']==namespace and c['Config']['Labels']['swarm.ng.id']==id
 assert c['HostConfig']['Runtime']=='sysbox-runc' and c['HostConfig']['CapDrop']==['ALL']
+assert c['HostConfig']['NanoCpus']==int(cpus)*1_000_000_000
 assert not c['HostConfig'].get('PortBindings')
 assert c['HostConfig'].get('Devices') in (None,[]) if not device else c['HostConfig'].get('Devices')==[{
     'PathOnHost':device,'PathInContainer':device,'CgroupPermissions':'rwm'}]
@@ -104,7 +119,11 @@ assert relay['State']['Running'] and not relay['HostConfig'].get('PortBindings')
 assert relay['HostConfig']['ReadonlyRootfs'] and relay['HostConfig']['CapDrop']==['ALL'] and not relay['Mounts']
 print('X11 desktop retains Sysbox, same two owned volumes, gateway-less bridge and bounded unprivileged media relay.')
 PY
-docker exec "$container" sh -c 'ps -eo args | grep "[X]vfb :1" | grep -q -- "-nolisten tcp"; ps -eo args | grep "[X]vfb :1" | grep -q -- "-fakescreenfps 120"'
+if [ "${TEST_DISPLAY_SERVER:-xvfb}" = xorg120 ]; then
+    docker exec "$container" sh -c 'ps -eo args | grep "[X]org :1" | grep -q -- "-nolisten tcp"; ps -eo args | grep "[X]org :1" | grep -q -- "/opt/swarm/xorg-dummy.conf"'
+else
+    docker exec "$container" sh -c 'ps -eo args | grep "[X]vfb :1" | grep -q -- "-nolisten tcp"; ps -eo args | grep "[X]vfb :1" | grep -q -- "-fakescreenfps 120"'
+fi
 for attempt in $(seq 1 30); do
     if curl -fsS --max-time 3 "http://127.0.0.1:5173/computers/$id/desktop/api/health" >/dev/null 2>&1; then break; fi
     sleep 1
@@ -113,13 +132,22 @@ curl -fsS --max-time 3 "http://127.0.0.1:5173/computers/$id/desktop/api/health" 
 docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--framerate=120"'
 docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--jpeg-quality=50"'
 docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--scaling-dpi=96"'
-docker exec -u ubuntu -e DISPLAY=:1 "$container" xrandr --current | grep -E '^Screen|current|[0-9]+\.[0-9]+\*' | head -5
+if [ "${TEST_DISPLAY_SERVER:-xvfb}" = xorg120 ]; then
+    randr=$(docker exec -u ubuntu -e DISPLAY=:1 "$container" xrandr --current)
+    printf '%s\n' "$randr" | head -4
+    [ "$(printf '%s\n' "$randr" | awk '$1 ~ /^[0-9]+x[0-9]+/ {print $1, $2}')" = '1920x1080_120 120.00*+' ] || { echo 'Xorg did not expose only the fixed 120-Hz mode' >&2; exit 1; }
+    state=$(docker exec -u ubuntu -e DISPLAY=:1 "$container" sh -c 'p=$(pgrep -u ubuntu -x gnome-shell | head -1); export DBUS_SESSION_BUS_ADDRESS=$(tr "\0" "\n" < "/proc/$p/environ" | grep "^DBUS_SESSION_BUS_ADDRESS=" | cut -d = -f 2-); gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.GetCurrentState')
+    printf '%s' "$state" | python3 -c 'import re,sys;s=sys.stdin.read();m=re.search(r"1920, 1080, ([0-9.]+), 1\.0",s);assert m and 119.9<float(m.group(1))<120.1;print("GNOME logical1x virtual mode:",m.group(1),"Hz")'
+    [ "$(docker exec -u ubuntu "$container" gsettings get org.gnome.desktop.interface text-scaling-factor)" = 1.0 ]
+else
+    docker exec -u ubuntu -e DISPLAY=:1 "$container" xrandr --current | grep -E '^Screen|current|[0-9]+\.[0-9]+\*' | head -5
+fi
 media_ip=$(docker inspect "${container}-media" --format "{{(index .NetworkSettings.Networks \"${project}-computer-media\").IPAddress}}")
 [ -n "$media_ip" ]
 if docker exec -u ubuntu "$container" curl -kfsS --connect-timeout 2 --max-time 3 "https://$media_ip:8080/computers/$id/desktop/" >/dev/null 2>&1; then
     echo 'X11 desktop reached forbidden dashboard media bridge!' >&2; exit 1
 fi
-echo 'Xvfb TCP disabled; guest cannot reach its dashboard media relay.'
+echo 'Guest X11 TCP disabled; guest cannot reach its dashboard media relay.'
 if [ -n "$COMPUTER_RENDER_DEVICE" ]; then
     docker exec -u ubuntu "$container" sh -c 'test -r /dev/dri/renderD128 && test ! -e /dev/dri/card0 && vainfo --display drm --device /dev/dri/renderD128 2>&1 | grep -q "VAProfileHEVCMain.*EncSlice"'
     docker exec "$container" sh -c 'grep -q "Exec=/opt/swarm/launch-chrome.sh" /usr/local/share/applications/google-chrome.desktop'

@@ -1,0 +1,19 @@
+# Opt-in Xorg dummy 1920x1080@120 on the existing Tailnet HTTP/JPEG port.
+# Apply AFTER compose.yaml, compose.tailscale.yaml,
+# compose.tailscale-http-jpeg.yaml, compose.tailscale-http-jpeg-x11.yaml.
+# This replaces neither running desktop nor volumes by itself. Rehearse and
+# coordinate a volume-preserving image migration; no extra host ports or UDP.
+services:
+  computer-xorg120-image:
+    profiles: [computer-images]
+    image: agent-swarm-default:http-jpeg-xorg120
+    build:
+      context: .
+      dockerfile: templates/default/xorg120.Dockerfile
+    command: ["true"]
+  computer-controller:
+    environment:
+      COMPUTER_IMAGE: agent-swarm-default:http-jpeg-xorg120
+      # An explicit operator choice: a four-CPU quota improved small-motion
+      # client throughput on this 16-core host; not a universal120 guarantee.
+      COMPUTER_CPU_LIMIT: ${COMPUTER_CPU_LIMIT:-4}
