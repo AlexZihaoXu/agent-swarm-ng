@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
@@ -17,7 +17,7 @@ function ComputerDialog({ children }: { children: ReactNode }) {
   </Dialog.Portal>;
 }
 
-export function ComputersPanel() {
+export function ComputersPanel({ onViewingChange }: { onViewingChange: (viewing: boolean) => void }) {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ['computers'], queryFn: async ({ signal }) => {
     const { data, error } = await api.GET('/api/computers', { signal });
@@ -33,6 +33,9 @@ export function ComputersPanel() {
   const [selected, setSelected] = useState<Computer | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const viewing = computers.find(computer => computer.id === viewingId);
+  useEffect(() => {
+    if (viewingId && query.isSuccess && !viewing) { setViewingId(null); onViewingChange(false); }
+  }, [viewingId, viewing, query.isSuccess, onViewingChange]);
   const [confirmation, setConfirmation] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -64,7 +67,10 @@ export function ComputersPanel() {
   };
 
   return <section aria-label="Computers" className="computer-tab-enter flex min-h-0 w-full flex-col">
-    {viewing ? <ComputerViewer key={viewing.id} computer={viewing} canManage={Boolean(query.data?.controllerConnected)} onBack={() => setViewingId(null)} /> : <>
+    {viewing ? <ComputerViewer key={viewing.id} computer={viewing} canManage={Boolean(query.data?.controllerConnected)} onBack={() => {
+      setViewingId(null); onViewingChange(false);
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="tab"][data-state="active"]')?.focus());
+    }} /> : <>
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:px-6 md:py-4">
       <div><h2 className="text-lg font-semibold">Computers</h2><p className="text-xs text-muted-foreground">Containerized Ubuntu desktops</p></div>
       <Dialog.Root open={createOpen} onOpenChange={open => { if (createBusy) return; setCreateOpen(open); if (open) { setName(''); setRequestKey(randomUuid()); setCreateError(''); } }}>
@@ -90,7 +96,7 @@ export function ComputersPanel() {
       {query.isSuccess && !query.data.controllerConnected && <p role="status" className="mb-4 rounded-lg border border-border bg-sidebar p-3 text-sm text-muted-foreground">Computer management is offline. Saved computers remain visible; creation, deletion and previews are unavailable.</p>}
       {query.isSuccess && query.data.controllerConnected && computers.length === 0 && <p role="status" className="py-10 text-center text-sm text-muted-foreground">No computers yet. Create one to get started.</p>}
       {computers.length > 0 && <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-4 md:gap-5">
-        {computers.map(computer => <ComputerCard key={computer.id} computer={computer} canManage={Boolean(query.data?.controllerConnected)} onOpen={target => setViewingId(target.id)} onDelete={target => { setConfirmation(''); setDeleteError(''); setSelected(target); }} />)}
+        {computers.map(computer => <ComputerCard key={computer.id} computer={computer} canManage={Boolean(query.data?.controllerConnected)} onOpen={target => { setViewingId(target.id); onViewingChange(true); }} onDelete={target => { setConfirmation(''); setDeleteError(''); setSelected(target); }} />)}
       </div>}
     </div>
     </>}

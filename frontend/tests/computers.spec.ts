@@ -96,8 +96,11 @@ test('opens a computer on the dashboard port, lets a person click its consent pr
   });
   await page.route(url => new URL(url).pathname.startsWith(`/computers/${id}/desktop/`), route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Selkies</title><video></video>' }));
   await page.goto('/');
+  const tabs = page.getByRole('tablist', { name: 'Main navigation' });
   await page.getByRole('tab', { name: 'Computers' }).click();
+  await expect(tabs).toBeVisible();
   await page.getByRole('article', { name: 'Work desk' }).getByRole('button', { name: 'Open Work desk desktop' }).click();
+  await expect(tabs).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Computer location' })).toContainText('Work desk');
   await expect(page.locator('iframe[title="Work desk desktop"]')).toHaveAttribute('src', `/computers/${id}/desktop/`);
   const preview = page.getByRole('button', { name: /Click the permission dialog/ });
@@ -137,6 +140,8 @@ test('opens a computer on the dashboard port, lets a person click its consent pr
   await expect(preview).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Grant screen access' })).toBeVisible();
   await page.getByRole('button', { name: 'Back to computers' }).click();
+  await expect(tabs).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Computers' })).toBeFocused();
   await expect(page.getByRole('article', { name: 'Work desk' })).toBeVisible();
   await expect(page.locator('iframe[title="Work desk desktop"]')).toHaveCount(0);
   expect(computers).toHaveLength(1);
@@ -158,7 +163,8 @@ test('280px computer viewer keeps consent controls reachable with reduced motion
   await expect(page.getByRole('button', { name: /Click the permission dialog/ })).toBeVisible();
   await expect(page.getByText('Permission preview: clicks only.')).toBeVisible();
   await expect(page.getByRole('button', { name: /Click the permission dialog/ }).locator('img')).toHaveAttribute('draggable', 'false');
-  await expect(page.getByRole('tab', { name: 'Computers' })).toBeVisible();
+  await expect(page.getByRole('tablist', { name: 'Main navigation' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Computer location' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.getByTestId('computer-viewer')).toHaveCSS('animation-name', 'none');
   await page.screenshot({ path: '../.scratch/computers-viewer-consent-phone.png', animations: 'disabled' });

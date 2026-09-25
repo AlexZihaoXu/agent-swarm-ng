@@ -54,7 +54,9 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
   useEffect(() => {
     const scroller = streamRef.current;
     if (!running || !scroller) return;
-    const resize = () => setStreamWidth(Math.max(scroller.clientWidth, Math.round(scroller.clientHeight * 16 / 9)));
+    const resize = () => setStreamWidth(window.matchMedia('(max-width: 767px)').matches
+      ? Math.max(scroller.clientWidth, Math.round(scroller.clientHeight * 16 / 9))
+      : scroller.clientWidth);
     const observer = new ResizeObserver(resize);
     observer.observe(scroller);
     resize();
@@ -142,12 +144,12 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
       </nav>
       {running && import.meta.env.VITE_COMPUTER_PORTAL_FREE !== 'true' && !setupOpen && <Button type="button" variant="outline" size="sm" className="min-h-10 shrink-0" onClick={() => { setSetupOpen(true); setClickError(''); }}>Grant screen access</Button>}
     </header>
-    <div className="relative flex min-h-0 flex-1 flex-col bg-black pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
+    <div className="relative flex min-h-0 flex-1 flex-col bg-black pb-[env(safe-area-inset-bottom)] md:pb-0">
       {!running ? <p role="status" className="m-auto px-5 text-center text-sm text-muted-foreground">Desktop unavailable. Its saved files remain until confirmed deletion.</p> : <>
         <div ref={streamRef} onScroll={event => setPanOffset(event.currentTarget.scrollLeft)} className="relative flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden bg-black">
           <iframe key={`${id}:${viewerKey}`} title={`${computer.name} desktop`} src={url} referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-downloads" allow="fullscreen" style={{ width: streamWidth ? `${streamWidth}px` : '100%' }} className="h-full min-h-0 shrink-0 border-0 bg-black" />
         </div>
-        {streamWidth > (streamRef.current?.clientWidth ?? 0) + 4 && !setupOpen && <div className="absolute bottom-[calc(5.75rem+env(safe-area-inset-bottom))] left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full bg-background/90 p-1 shadow-lg md:bottom-3">
+        {streamWidth > (streamRef.current?.clientWidth ?? 0) + 4 && !setupOpen && <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full bg-background/90 p-1 shadow-lg md:bottom-3">
           <Button type="button" variant="outline" size="sm" aria-label="Pan desktop left" disabled={panOffset < 1} className="min-h-11 min-w-11" onClick={() => streamRef.current?.scrollBy({ left: -240 })}>←</Button>
           <span className="text-xs text-muted-foreground">Pan desktop</span>
           <Button type="button" variant="outline" size="sm" aria-label="Pan desktop right" disabled={panOffset >= streamWidth - (streamRef.current?.clientWidth ?? 0) - 1} className="min-h-11 min-w-11" onClick={() => streamRef.current?.scrollBy({ left: 240 })}>→</Button>
@@ -156,7 +158,7 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
           <p>Desktop stream unavailable. Your computer and files have not been deleted.</p>
           <Button type="button" variant="outline" onClick={() => { setAvailable('checking'); setViewerKey(key => key + 1); }}>Retry connection</Button>
         </div>}
-        {setupOpen && <div className="absolute inset-x-0 top-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-10 flex min-h-0 flex-col bg-background p-3 md:bottom-0 md:p-5">
+        {setupOpen && <div className="absolute inset-x-0 top-0 bottom-[env(safe-area-inset-bottom)] z-10 flex min-h-0 flex-col bg-background p-3 md:bottom-0 md:p-5">
           <h3 className="shrink-0 text-base font-semibold">Grant screen access</h3>
           <p className="mt-1 shrink-0 text-xs leading-relaxed text-muted-foreground"><strong>Permission preview: clicks only.</strong> Wait for Ubuntu’s dialog, turn on “Allow Remote Interaction”, then click “Share”. Arrow keys move the marker; Enter clicks it. To drag windows or type, choose <strong>Show live desktop</strong> after granting access.</p>
           <div className="mt-2 flex shrink-0 items-center justify-end gap-2 text-xs text-muted-foreground">

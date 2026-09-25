@@ -55,6 +55,7 @@ export function App() {
   const [mobileConversation, setMobileConversation] = useState(false);
   const [isPhone, setIsPhone] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const [activeTab, setActiveTab] = useState('agents');
+  const [computerViewerOpen, setComputerViewerOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState('');
   useGroupEvents();
   useEffect(() => {
@@ -171,8 +172,8 @@ export function App() {
   return (
     <main className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background">
       <h1 className="sr-only">Agent Swarm NG</h1>
-      <Tabs.Root value={activeTab} onValueChange={value => { setActiveTab(value); if (window.matchMedia('(max-width: 767px)').matches) setMobileConversation(false); }} className="flex min-h-0 flex-1 flex-col">
-        <header className={cn('pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex justify-center md:pointer-events-auto md:relative md:inset-auto md:order-first md:h-14 md:min-h-14 md:shrink-0 md:items-center md:border-b md:border-border md:bg-sidebar md:px-4', narrowDetail && 'max-md:hidden')}>
+      <Tabs.Root value={activeTab} onValueChange={value => { setActiveTab(value); setComputerViewerOpen(false); if (window.matchMedia('(max-width: 767px)').matches) setMobileConversation(false); }} className="flex min-h-0 flex-1 flex-col">
+        {!computerViewerOpen && <header className={cn('pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex justify-center md:pointer-events-auto md:relative md:inset-auto md:order-first md:h-14 md:min-h-14 md:shrink-0 md:items-center md:border-b md:border-border md:bg-sidebar md:px-4', narrowDetail && 'max-md:hidden')}>
           {/* Basic Tabs composition: Kibo tabs/standard/tabs-standard-1, floating without a footer on phones. */}
           <Tabs.List aria-label="Main navigation" className="pointer-events-auto relative isolate grid h-[50px] w-[min(23rem,calc(100vw-2rem))] grid-cols-4 items-center rounded-lg border border-border bg-muted p-[3px] shadow-lg md:h-9 md:w-96 md:border-0 md:p-1 md:shadow-none">
             <span aria-hidden="true" data-testid="tab-indicator" className="pointer-events-none absolute inset-y-[3px] left-[3px] w-[calc((100%-6px)/4)] rounded-md bg-background shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none md:inset-y-1 md:left-1 md:w-[calc((100%-8px)/4)]" style={{ transform: `translateX(${['agents', 'chat', 'computers', 'settings'].indexOf(activeTab) * 100}%)` }} />
@@ -182,7 +183,7 @@ export function App() {
               </Tabs.Trigger>
             ))}
           </Tabs.List>
-        </header>
+        </header>}
 
         <Tabs.Content value={activeTab === 'chat' ? 'chat' : 'agents'} className="min-h-0 flex-1 outline-none data-[state=active]:flex">
           {activeTab === 'chat' ? <ChatPanel agents={agents} conversations={conversations} busy={busy} typingIn={typingIn} selectedAgent={agent.id} selectedGroup={selectedGroup} mobile={mobileConversation} agentsLoading={agentsLoading} agentsFailed={agentsFailed} agentsCursor={agentsCursor} loadAgents={loadAgents} onAgent={(id, real) => { if (real && !agents.some(agent => agent.id === id)) addAgent(real, false); setSelectedId(id); setSelectedGroup(''); setMobileConversation(true); }} onViewAgent={(id, real) => { if (real && !agents.some(agent => agent.id === id)) addAgent(real, false); setSelectedId(id); setSelectedGroup(''); setMobileConversation(true); setActiveTab('agents'); }} onGroup={group => { setSelectedGroup(group.id); setMobileConversation(true); setActivityOpen(false); }} /> : <AgentPanel agents={agents} onEditAvatar={editAvatar} onDelete={async (target, confirmation) => {
@@ -286,7 +287,7 @@ export function App() {
         </Tabs.Content>
 
         <Tabs.Content value="computers" className="min-h-0 flex-1 outline-none data-[state=active]:flex">
-          <ComputersPanel />
+          <ComputersPanel onViewingChange={setComputerViewerOpen} />
         </Tabs.Content>
         <Tabs.Content value="settings" forceMount className="phone-tab-enter min-h-0 flex-1 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none data-[state=inactive]:hidden md:pb-0">
           <Settings />
