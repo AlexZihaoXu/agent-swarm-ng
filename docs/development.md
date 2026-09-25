@@ -13,6 +13,17 @@ bun run dev:frontend
 
 Open http://localhost:5173. Vite proxies `/api` to the backend on localhost:3000.
 
+## Dashboard locations
+
+Stable dashboard destinations live in the URL, so a refresh or copied link can reopen them and browser Back/Forward tracks navigation:
+
+- `/agents`, `/agents/:id`, `/agents/:id/dm/:peerId` — agent list, human conversation, and agent-to-agent transcript. Agent editor sections and Channel → Swarm App → DM drilldowns live under `/agents/:id/edit/...`; create/delete dialogs have their own paths.
+- `/chat`, `/chat/agents/:id`, `/chat/groups/:id` — chat list, human DM and group history. Group create/edit/delete dialogs use nested `/chat/groups/...` paths.
+- `/computers`, `/computers/:id` — grid and human desktop viewer; create/delete dialogs use `/computers/new` and `/computers/:id/delete`. This **dashboard route is different from** the locked-down trusted Selkies iframe at `/computers/:id/desktop/`.
+- `/settings`, `/settings/endpoints/new`, `/settings/endpoints/:id` — saved connections and the endpoint editor. The `/` entry redirects to Agents.
+
+Only navigation is encoded: unsaved messages, searches, API keys, provider sign-in codes, consent/confirmation text and agent activity traces are **not** stored in URLs or restored after refresh. IDs in a path are not access grants; the existing backend authorization checks still apply. Unknown/deleted destinations show a return path rather than selecting a different resource. Production Caddy serves dashboard paths through the SPA fallback **after** its bounded `/api/*` and `/computers/:id/desktop/*` handlers; the PWA fallback also excludes those paths.
+
 ## Checks
 
 ```sh

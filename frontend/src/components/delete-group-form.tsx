@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import type { GroupChat } from '@/use-groups';
 
 // Kibo dialog/standard/dialog-standard-5: typed destructive confirmation, adapted to the group API.
-export function DeleteGroupForm({ group, open, onOpenChange }: { group: GroupChat; open: boolean; onOpenChange: (open: boolean) => void }) {
+export function DeleteGroupForm({ group, open, onOpenChange, onDeleted }: { group: GroupChat; open: boolean; onOpenChange: (open: boolean) => void; onDeleted?: () => void }) {
   const id = useId();
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
@@ -16,7 +16,7 @@ export function DeleteGroupForm({ group, open, onOpenChange }: { group: GroupCha
     try {
       const result = await api.DELETE('/api/groups/{id}', { params: { path: { id: group.id } }, body: { confirmation } });
       if (result.error || !result.data) throw new Error(result.error?.message ?? 'Could not delete the group chat.');
-      onOpenChange(false);
+      if (onDeleted) onDeleted(); else onOpenChange(false);
       window.dispatchEvent(new CustomEvent('swarm-group-deleted', { detail: group.id }));
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not delete the group chat.'); }
     finally { setBusy(false); }

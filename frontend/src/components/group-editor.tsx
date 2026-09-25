@@ -35,7 +35,8 @@ export function GroupEditor({ group, children, onSaved, onDelete, open: controll
       if (result.error || !result.data) throw new Error(result.error?.message ?? 'Could not save the group.');
       void client.invalidateQueries({ queryKey: ['groups'] });
       client.setQueryData(['group', result.data.id], result.data);
-      onSaved?.(result.data); setOpen(false);
+      onSaved?.(result.data);
+      if (controlledOpen === undefined || !onSaved) setOpen(false);
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not save the group.'); }
     finally { setSaving(false); }
   };
@@ -66,7 +67,7 @@ export function GroupEditor({ group, children, onSaved, onDelete, open: controll
             </div>
           </fieldset>
           {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
-          {group && onDelete && <Button type="button" variant="outline" className="min-h-11 w-full border-red-500/50 text-red-400 hover:bg-red-500/10" disabled={saving} onClick={() => { setOpen(false); onDelete(); }}>Delete group chat</Button>}
+          {group && onDelete && <Button type="button" variant="outline" className="min-h-11 w-full border-red-500/50 text-red-400 hover:bg-red-500/10" disabled={saving} onClick={() => { if (controlledOpen === undefined) setOpen(false); onDelete(); }}>Delete group chat</Button>}
           <div className="flex justify-end gap-2">
             <Dialog.Close asChild><Button type="button" variant="outline" className="min-h-11 sm:min-h-0" disabled={saving}>Cancel</Button></Dialog.Close>
             <Button type="submit" className="min-h-11 sm:min-h-0" disabled={saving || !name.trim() || !selected.size}>{saving ? 'Saving…' : group ? 'Save changes' : 'Create group'}</Button>

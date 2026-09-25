@@ -4,6 +4,7 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { randomUuid } from '@/lib/random-uuid';
+import { endpointPath, type DashboardRoute } from '@/lib/dashboard-location';
 
 type TestResult =
   | { state: 'idle' | 'testing' | 'saved' }
@@ -120,8 +121,9 @@ function EndpointCard({ endpoint, onSaved, onRemove }: { endpoint: Endpoint; onS
   );
 }
 
-export function Settings() {
+export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavigate: (path: string) => void }) {
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
+  const newEndpointId = useRef(randomUuid());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -136,6 +138,15 @@ export function Settings() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    if (loading || route.kind !== 'endpoint-new') return;
+    setEndpoints(current => current.some(item => item.id === newEndpointId.current) ? current : [...current, { id: newEndpointId.current, name: '', baseUrl: '', hasApiKey: false, saved: false }]);
+  }, [loading, route.kind]);
+  useEffect(() => {
+    if (loading || route.kind !== 'endpoint') return;
+    document.getElementById(`endpoint-${route.endpointId}`)?.scrollIntoView({ block: 'nearest' });
+  }, [loading, route.kind, route.endpointId, endpoints.length]);
+
   async function removeEndpoint(endpoint: Endpoint) {
     if (endpoint.saved) {
       try {
@@ -144,6 +155,7 @@ export function Settings() {
       } catch { setError('Could not remove the saved endpoint.'); return; }
     }
     setEndpoints(current => current.filter(item => item.id !== endpoint.id));
+    if (route.endpointId === endpoint.id || route.kind === 'endpoint-new' && !endpoint.saved) onNavigate('/settings');
   }
 
   return (
@@ -159,7 +171,7 @@ export function Settings() {
             <h3 id="endpoints-title" className="text-sm font-semibold">API endpoints</h3>
             <p className="mt-1 text-xs text-muted-foreground">Connect an OpenAI-compatible provider or local server.</p>
           </div>
-          <Button variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={loading} onClick={() => setEndpoints(current => [...current, { id: randomUuid(), name: '', baseUrl: '', hasApiKey: false, saved: false }])}>
+          <Button variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={loading} onClick={() => { newEndpointId.current = randomUuid(); setEndpoints(current => [...current, { id: newEndpointId.current, name: '', baseUrl: '', hasApiKey: false, saved: false }]); onNavigate('/settings/endpoints/new'); }}>
             <span aria-hidden="true" className="mr-2 text-lg leading-none">+</span>Add endpoint
           </Button>
         </div>
@@ -172,7 +184,8 @@ export function Settings() {
               <p className="mt-2 text-xs text-muted-foreground">Add a connection to check its available models.</p>
             </div>
           )}
-          {endpoints.map(endpoint => <EndpointCard key={endpoint.id} endpoint={endpoint} onSaved={saved => setEndpoints(current => current.map(item => item.id === saved.id ? saved : item))} onRemove={() => void removeEndpoint(endpoint)} />)}
+          {route.kind === 'endpoint' && !loading && !error && !endpoints.some(item => item.id === route.endpointId) && <p role="alert" className="text-sm">Endpoint not found. <button type="button" className="cursor-pointer underline" onClick={() => onNavigate('/settings')}>Return to settings</button></p>}
+          {endpoints.map(endpoint => <div key={endpoint.id} id={`endpoint-${endpoint.id}`}><EndpointCard endpoint={endpoint} onSaved={saved => { setEndpoints(current => current.map(item => item.id === endpoint.id ? saved : item)); onNavigate(endpointPath(saved.id)); }} onRemove={() => void removeEndpoint(endpoint)} /></div>)}
         </div>
         <p className="mt-5 text-xs leading-relaxed text-muted-foreground">Save endpoints to keep them after restart. Keys are stored on the backend, never in browser storage. Changing a saved URL clears its key unless you enter a replacement. Use HTTPS for remote providers.</p>
       </section>

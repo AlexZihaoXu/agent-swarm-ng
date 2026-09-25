@@ -13,12 +13,13 @@ import { mergeGroupMessages, useGroupMessages, type GroupMessage, type GroupPage
 import { cn } from '@/lib/utils';
 import { randomUuid } from '@/lib/random-uuid';
 import { replyExcerpt } from '@/lib/reply-preview';
+import { chatGroupPath } from '@/lib/dashboard-location';
 
 class GroupNotFoundError extends Error {}
 
-export function GroupConversation({ groupId, mobile, onBack, draft, onDraft, typingIn }: { groupId: string; mobile: boolean; onBack: () => void; draft: string; onDraft: (text: string) => void; typingIn: (channelId: string, destination: string) => boolean }) {
+export function GroupConversation({ groupId, modal, returnTo, onNavigate, mobile, onBack, draft, onDraft, typingIn }: { groupId: string; modal: 'edit' | 'delete' | null; returnTo: string; onNavigate: (path: string, options?: { replace?: boolean; state?: unknown }) => void; mobile: boolean; onBack: () => void; draft: string; onDraft: (text: string) => void; typingIn: (channelId: string, destination: string) => boolean }) {
   const client = useQueryClient();
-  const group = useQuery({ queryKey: ['group', groupId], queryFn: async ({ signal }) => {
+  const group = useQuery({ queryKey: ['group', groupId], retry: (failures, failure) => !(failure instanceof GroupNotFoundError) && failures < 3, queryFn: async ({ signal }) => {
     const { data, error, response } = await api.GET('/api/groups/{id}', { params: { path: { id: groupId } }, signal });
     if (response.status === 404) throw new GroupNotFoundError('Group not found.');
     if (!data || error) throw new Error(error?.message ?? 'Could not load the group.');
@@ -30,7 +31,6 @@ export function GroupConversation({ groupId, mobile, onBack, draft, onDraft, typ
   const history = useGroupMessages(groupId);
   const messages = history.data?.messages ?? [];
   const [sending, setSending] = useState(false), [loadingOlder, setLoadingOlder] = useState(false), [error, setError] = useState('');
-  const [deleting, setDeleting] = useState(false);
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -70,7 +70,7 @@ export function GroupConversation({ groupId, mobile, onBack, draft, onDraft, typ
       <div className="min-w-0 flex-1 md:hidden"><MobileConversationBreadcrumb parent="Chats" current={name} onBack={onBack} /><p className="truncate px-2 text-[11px] text-muted-foreground">You{group.data?.members.map(member => `, ${member.name}`).join('')}</p></div>
       <span aria-hidden="true" className="hidden text-xl text-muted-foreground md:inline">#</span>
       <div className="hidden min-w-0 flex-1 md:block"><h2 className="truncate text-sm font-semibold">{name}</h2><p className="truncate text-[11px] text-muted-foreground">You{group.data?.members.map(member => `, ${member.name}`).join('')}</p></div>
-      {group.data && <><GroupEditor group={group.data} onDelete={() => setDeleting(true)}><Button size="sm" variant="outline" aria-label="Edit group chat" className="size-11 shrink-0 p-0 md:h-9 md:w-auto md:px-3"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" className="size-4 md:hidden"><path d="m15 5 4 4M5 15 16 4a2.8 2.8 0 0 1 4 4L9 19l-5 1z" /></svg><span className="hidden md:inline">Edit group</span></Button></GroupEditor><DeleteGroupForm group={group.data} open={deleting} onOpenChange={setDeleting} /></>}
+      {group.data && <><GroupEditor group={group.data} open={modal === 'edit'} onOpenChange={open => onNavigate(open ? `${chatGroupPath(groupId)}/edit` : returnTo, open ? { state: { returnTo: chatGroupPath(groupId) } } : undefined)} onSaved={() => onNavigate(returnTo)} onDelete={() => onNavigate(`${chatGroupPath(groupId)}/delete`, { state: { returnTo } })}><Button size="sm" variant="outline" aria-label="Edit group chat" className="size-11 shrink-0 p-0 md:h-9 md:w-auto md:px-3"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" className="size-4 md:hidden"><path d="m15 5 4 4M5 15 16 4a2.8 2.8 0 0 1 4 4L9 19l-5 1z" /></svg><span className="hidden md:inline">Edit group</span></Button></GroupEditor><DeleteGroupForm group={group.data} open={modal === 'delete'} onOpenChange={open => onNavigate(open ? `${chatGroupPath(groupId)}/delete` : returnTo, open ? { state: { returnTo } } : undefined)} onDeleted={() => onNavigate('/chat', { replace: true })} /></>}
     </header>
     <ScrollArea viewportRef={viewport} label="Group chat history" className="min-h-0 flex-1" viewportClassName="[&>div]:!block [&>div]:w-full" onScroll={() => { const element = viewport.current; if (element) nearBottom.current = element.scrollHeight - element.clientHeight - element.scrollTop < 80; }}>
       {(history.isPending || history.isError || group.isError || history.data?.nextCursor != null) && <div className="p-3 text-center"><Button variant="outline" size="sm" disabled={history.isFetching || loadingOlder} onClick={() => {

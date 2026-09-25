@@ -12,8 +12,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<App />} />
-          <Route path="*" element={<main className="p-8">Page not found. <a href="/">Return home</a></main>} />
+          <Route path="*" element={<App />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

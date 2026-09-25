@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { randomUuid } from '@/lib/random-uuid';
 import { ComputerCard, type Computer } from './computer-card';
 import { ComputerViewer } from './computer-viewer';
+import { computerPath } from '@/lib/dashboard-location';
 type ComputerList = { computers: Computer[] };
 
 function ComputerDialog({ children }: { children: ReactNode }) {
@@ -17,7 +18,7 @@ function ComputerDialog({ children }: { children: ReactNode }) {
   </Dialog.Portal>;
 }
 
-export function ComputersPanel({ onViewingChange }: { onViewingChange: (viewing: boolean) => void }) {
+export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate, onBack }: { viewingId: string | null; dialog: 'new' | 'delete' | null; deleteId: string | null; onOpen: (id: string) => void; onNavigate: (path: string) => void; onBack: () => void }) {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ['computers'], queryFn: async ({ signal }) => {
     const { data, error } = await api.GET('/api/computers', { signal });
@@ -25,17 +26,20 @@ export function ComputersPanel({ onViewingChange }: { onViewingChange: (viewing:
     return data;
   }, refetchInterval: 5000, refetchIntervalInBackground: false });
   const computers = query.data?.computers ?? [];
-  const [createOpen, setCreateOpen] = useState(false);
+  const createOpen = dialog === 'new';
   const [name, setName] = useState('');
   const [requestKey, setRequestKey] = useState(randomUuid);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState('');
-  const [selected, setSelected] = useState<Computer | null>(null);
-  const [viewingId, setViewingId] = useState<string | null>(null);
+  const selected = dialog === 'delete' ? computers.find(computer => computer.id === deleteId) ?? null : null;
   const viewing = computers.find(computer => computer.id === viewingId);
+  const focusGridTab = useRef(false);
   useEffect(() => {
-    if (viewingId && query.isSuccess && !viewing) { setViewingId(null); onViewingChange(false); }
-  }, [viewingId, viewing, query.isSuccess, onViewingChange]);
+    if (viewingId !== null || !focusGridTab.current) return;
+    focusGridTab.current = false;
+    const frame = requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="tab"][data-state="active"]')?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [viewingId]);
   const [confirmation, setConfirmation] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -50,7 +54,7 @@ export function ComputersPanel({ onViewingChange }: { onViewingChange: (viewing:
       const result = await api.POST('/api/computers', { body: { name: name.trim(), requestKey } });
       if (!result.data || result.error) throw new Error(result.error?.message ?? 'Could not create the computer.');
       client.setQueryData<ComputerList>(['computers'], previous => ({ computers: [...(previous?.computers ?? []).filter(item => item.id !== result.data!.id), result.data!] }));
-      setCreateOpen(false); refresh();
+      onBack(); refresh();
     } catch (error) { setCreateError(error instanceof Error ? error.message : 'Could not create the computer.'); }
     finally { setCreateBusy(false); }
   };
@@ -61,19 +65,16 @@ export function ComputersPanel({ onViewingChange }: { onViewingChange: (viewing:
       const result = await api.DELETE('/api/computers/{id}', { params: { path: { id: selected.id } }, body: { confirmation } });
       if (!result.data || result.error) throw new Error(result.error?.message ?? 'Could not delete the computer.');
       client.setQueryData<ComputerList>(['computers'], previous => ({ computers: (previous?.computers ?? []).filter(item => item.id !== selected.id) }));
-      setSelected(null); refresh();
+      onBack(); refresh();
     } catch (error) { setDeleteError(error instanceof Error ? error.message : 'Could not delete the computer.'); }
     finally { setDeleteBusy(false); }
   };
 
   return <section aria-label="Computers" className="computer-tab-enter flex min-h-0 w-full flex-col">
-    {viewing ? <ComputerViewer key={viewing.id} computer={viewing} canManage={Boolean(query.data?.controllerConnected)} onBack={() => {
-      setViewingId(null); onViewingChange(false);
-      requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="tab"][data-state="active"]')?.focus());
-    }} /> : <>
+    {viewing ? <ComputerViewer key={viewing.id} computer={viewing} canManage={Boolean(query.data?.controllerConnected)} onBack={() => { focusGridTab.current = true; onBack(); }} /> : (viewingId || dialog === 'delete' && !selected) && query.isSuccess ? <div className="p-6 text-sm" role="alert">Computer not found. <button type="button" className="cursor-pointer underline" onClick={onBack}>Return to computers</button></div> : <>
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:px-6 md:py-4">
       <div><h2 className="text-lg font-semibold">Computers</h2><p className="text-xs text-muted-foreground">Containerized Ubuntu desktops</p></div>
-      <Dialog.Root open={createOpen} onOpenChange={open => { if (createBusy) return; setCreateOpen(open); if (open) { setName(''); setRequestKey(randomUuid()); setCreateError(''); } }}>
+      <Dialog.Root open={createOpen} onOpenChange={open => { if (createBusy) return; if (open) { setName(''); setRequestKey(randomUuid()); setCreateError(''); onNavigate('/computers/new'); } else onBack(); }}>
         <Dialog.Trigger asChild><Button type="button" size="sm" disabled={!query.data?.controllerConnected} className="min-h-11 md:min-h-0">Create computer</Button></Dialog.Trigger>
         <ComputerDialog>
           <form onSubmit={event => { event.preventDefault(); void submitCreate(); }}>
@@ -96,11 +97,11 @@ export function ComputersPanel({ onViewingChange }: { onViewingChange: (viewing:
       {query.isSuccess && !query.data.controllerConnected && <p role="status" className="mb-4 rounded-lg border border-border bg-sidebar p-3 text-sm text-muted-foreground">Computer management is offline. Saved computers remain visible; creation, deletion and previews are unavailable.</p>}
       {query.isSuccess && query.data.controllerConnected && computers.length === 0 && <p role="status" className="py-10 text-center text-sm text-muted-foreground">No computers yet. Create one to get started.</p>}
       {computers.length > 0 && <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-4 md:gap-5">
-        {computers.map(computer => <ComputerCard key={computer.id} computer={computer} canManage={Boolean(query.data?.controllerConnected)} onOpen={target => { setViewingId(target.id); onViewingChange(true); }} onDelete={target => { setConfirmation(''); setDeleteError(''); setSelected(target); }} />)}
+        {computers.map(computer => <ComputerCard key={computer.id} computer={computer} canManage={Boolean(query.data?.controllerConnected)} onOpen={target => onOpen(target.id)} onDelete={target => { setConfirmation(''); setDeleteError(''); onNavigate(`${computerPath(target.id)}/delete`); }} />)}
       </div>}
     </div>
     </>}
-    <Dialog.Root open={selected !== null} onOpenChange={open => { if (!open && !deleteBusy) setSelected(null); }}>
+    <Dialog.Root open={selected !== null} onOpenChange={open => { if (!open && !deleteBusy) { setConfirmation(''); onBack(); } }}>
       {selected && <ComputerDialog>
         <form onSubmit={event => { event.preventDefault(); void submitDelete(); }}>
           <Dialog.Title className="text-lg font-semibold">Delete computer</Dialog.Title>

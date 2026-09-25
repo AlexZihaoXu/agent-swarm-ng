@@ -4,15 +4,16 @@ import { Button } from '@/components/ui/button';
 import { AgentDmTranscript } from '@/components/agent-dm-transcript';
 type Peer = { id: string; name: string };
 // Kibo breadcrumb-standard-4 and checkbox-standard-8, with application navigation and native checkboxes.
-export function AgentChannelSettings({ agentId, selected, known, onChange, disabled }: {
-  agentId: string; selected: string[]; known: Peer[]; onChange: (ids: string[]) => void; disabled: boolean;
+export function AgentChannelSettings({ agentId, screen: screenType, peerId, onNavigate, selected, known, onChange, disabled }: {
+  agentId: string; screen: 'channels' | 'swarm' | 'dm'; peerId?: string; onNavigate: (next: 'channels' | 'swarm' | Peer) => void;
+  selected: string[]; known: Peer[]; onChange: (ids: string[]) => void; disabled: boolean;
 }) {
-  const [screen, setScreen] = useState<'channels' | 'swarm' | Peer>('channels');
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const [query, setQuery] = useState(''), [peers, setPeers] = useState<Peer[]>(known);
+  const screen: 'channels' | 'swarm' | Peer = screenType === 'dm' ? known.find(peer => peer.id === peerId) ?? peers.find(peer => peer.id === peerId) ?? { id: peerId ?? '', name: 'Agent' } : screenType;
   const [cursor, setCursor] = useState<number | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const request = useRef<AbortController | null>(null);
-  function navigate(next: typeof screen, back = false) { setDirection(back ? 'back' : 'forward'); setScreen(next); }
+  function navigate(next: typeof screen, back = false) { setDirection(back ? 'back' : 'forward'); onNavigate(next); }
   async function load(after?: number) {
     request.current?.abort(); const controller = new AbortController(); request.current = controller;
     setBusy(true); setError('');

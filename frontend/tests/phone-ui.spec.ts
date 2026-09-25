@@ -84,6 +84,7 @@ test('phone agent creation and editing expose reachable form and permission cont
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
   await page.getByRole('button', { name: 'Open conversation with Avery' }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Edit agent' }).click();
+  await expect(page.getByRole('dialog', { name: 'Edit agent' })).toBeVisible();
   expect((await size(page.getByRole('tab', { name: 'Settings' }).last())).height).toBeGreaterThanOrEqual(44);
   await page.getByRole('dialog').getByRole('tab', { name: 'Settings' }).click();
   await page.getByRole('button', { name: /Swarm App/ }).click();
