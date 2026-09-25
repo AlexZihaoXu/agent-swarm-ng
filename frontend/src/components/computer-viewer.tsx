@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent, type KeyboardEvent, type PointerEvent } from 'react';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import type { Computer } from './computer-card';
@@ -20,11 +20,14 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
   const [available, setAvailable] = useState<'checking' | 'online' | 'offline'>('checking');
   const [viewerKey, setViewerKey] = useState(0);
   const [cursor, setCursor] = useState({ x: 0.5, y: 0.5 });
+  const [keyboardTargetVisible, setKeyboardTargetVisible] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [fitWidth, setFitWidth] = useState(0);
   const [streamWidth, setStreamWidth] = useState(0);
   const [panOffset, setPanOffset] = useState(0);
   const imageRef = useRef<HTMLImageElement>(null);
+  const previewPointerStart = useRef<{ x: number; y: number } | null>(null);
+  const previewDragged = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<HTMLDivElement>(null);
   const url = `/computers/${encodeURIComponent(id)}/desktop/`;
@@ -87,8 +90,13 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
     } catch (error) { setClickError(error instanceof Error ? error.message : 'Could not click the computer desktop.'); }
     finally { setClickBusy(false); }
   };
+  const movePreviewPointer = (event: PointerEvent<HTMLButtonElement>) => {
+    const start = previewPointerStart.current;
+    if (start && (event.clientX - start.x) ** 2 + (event.clientY - start.y) ** 2 > 64) previewDragged.current = true;
+  };
   const clickPreview = (event: MouseEvent<HTMLButtonElement>) => {
     if (event.detail === 0) { void click(cursor.x, cursor.y); return; }
+    if (previewDragged.current) { previewDragged.current = false; return; }
     const image = imageRef.current;
     if (!image || !image.naturalWidth || !image.naturalHeight) return;
     const box = image.getBoundingClientRect();
@@ -108,6 +116,7 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
     }[event.key];
     if (!delta) return;
     event.preventDefault();
+    setKeyboardTargetVisible(true);
     setCursor(previous => ({
       x: Math.max(0, Math.min(1, previous.x + delta[0])),
       y: Math.max(0, Math.min(1, previous.y + delta[1])),
@@ -145,17 +154,17 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
           <Button type="button" variant="outline" onClick={() => { setAvailable('checking'); setViewerKey(key => key + 1); }}>Retry connection</Button>
         </div>}
         {setupOpen && <div className="absolute inset-x-0 top-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-10 flex min-h-0 flex-col bg-background p-3 md:bottom-0 md:p-5">
-          <h3 className="shrink-0 text-base font-semibold">Allow desktop control</h3>
-          <p className="mt-1 shrink-0 text-xs leading-relaxed text-muted-foreground">Wait for Ubuntu’s permission dialog. Turn on “Allow Remote Interaction” and click “Share”; click the preview only when the dialog is visible. Arrow keys move the marker; Enter clicks it. Once granted, choose Show live desktop.</p>
+          <h3 className="shrink-0 text-base font-semibold">Grant screen access</h3>
+          <p className="mt-1 shrink-0 text-xs leading-relaxed text-muted-foreground"><strong>Permission preview: clicks only.</strong> Wait for Ubuntu’s dialog, turn on “Allow Remote Interaction”, then click “Share”. Arrow keys move the marker; Enter clicks it. To drag windows or type, choose <strong>Show live desktop</strong> after granting access.</p>
           <div className="mt-2 flex shrink-0 items-center justify-end gap-2 text-xs text-muted-foreground">
             <Button type="button" variant="outline" size="sm" aria-label="Zoom out desktop preview" disabled={zoom <= 1} onClick={() => setZoom(value => Math.max(1, value - 1))} className="min-h-11 px-3 md:min-h-0">−</Button>
             <span role="status" aria-label={`Preview zoom ${zoom} times`} className="min-w-7 text-center">{zoom}×</span>
             <Button type="button" variant="outline" size="sm" aria-label="Zoom in desktop preview" disabled={zoom >= 4} onClick={() => setZoom(value => Math.min(4, value + 1))} className="min-h-11 px-3 md:min-h-0">+</Button>
           </div>
           <div ref={scrollRef} className={`min-h-0 flex-1 overflow-auto py-3 ${zoom === 1 ? 'flex items-center justify-center' : ''}`}>
-            <button type="button" aria-label={`Click the permission dialog for ${computer.name}`} data-testid="computer-consent-preview" disabled={!previewLoaded || clickBusy || available === 'offline'} onClick={clickPreview} onKeyDown={moveCursor} style={{ width: fitWidth ? `${fitWidth * zoom}px` : '100%' }} className="relative block aspect-video shrink-0 overflow-hidden rounded-lg border border-border bg-black enabled:cursor-crosshair disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <img ref={imageRef} src={`/api/computers/${encodeURIComponent(id)}/preview?full=1&at=${frame}`} alt={`Live screen of ${computer.name}`} onLoad={() => { setPreviewLoaded(true); setPreviewFailed(false); }} onError={() => { setPreviewLoaded(false); setPreviewFailed(true); }} className="h-full w-full object-contain" />
-              {previewLoaded && <span aria-hidden="true" className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/40 shadow-[0_0_2px_2px_black]" style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%` }} />}
+            <button type="button" aria-label={`Click the permission dialog for ${computer.name}`} data-testid="computer-consent-preview" disabled={!previewLoaded || clickBusy || available === 'offline'} onClick={clickPreview} onKeyDown={moveCursor} onPointerDown={event => { previewPointerStart.current = { x: event.clientX, y: event.clientY }; previewDragged.current = false; setKeyboardTargetVisible(false); }} onPointerMove={movePreviewPointer} onPointerUp={() => { previewPointerStart.current = null; }} onPointerCancel={() => { previewPointerStart.current = null; previewDragged.current = true; }} style={{ width: fitWidth ? `${fitWidth * zoom}px` : '100%' }} className="relative block aspect-video shrink-0 overflow-hidden rounded-lg border border-border bg-black enabled:cursor-pointer disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <img ref={imageRef} src={`/api/computers/${encodeURIComponent(id)}/preview?full=1&at=${frame}`} alt={`Permission preview of ${computer.name}`} draggable={false} onDragStart={event => event.preventDefault()} onLoad={() => { setPreviewLoaded(true); setPreviewFailed(false); }} onError={() => { setPreviewLoaded(false); setPreviewFailed(true); }} className="h-full w-full select-none object-contain" />
+              {previewLoaded && keyboardTargetVisible && <span aria-hidden="true" data-testid="computer-keyboard-target" className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/40 shadow-[0_0_2px_2px_black]" style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%` }} />}
               {!previewLoaded && <span role="status" className="absolute inset-0 flex items-center justify-center text-sm text-white">{previewFailed ? 'Preview unavailable' : 'Loading screen…'}</span>}
             </button>
           </div>
