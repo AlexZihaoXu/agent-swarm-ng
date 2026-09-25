@@ -193,6 +193,31 @@ test('viewer reports an offline stream and retries its iframe without erasing th
   expect(computers).toHaveLength(1);
 });
 
+test('trusted desktop frame smooths a downscaled stream despite upstream pixelated canvas styles', async ({ page }) => {
+  // The pinned Selkies client sets crisp-edges inline even when its 1920px
+  // canvas is displayed at 1280px. Exercise the exact trusted frame HTML;
+  // mock only unused upstream bundles, not the frame's own CSS.
+  await page.route('**/assets/index-CPWh3fQ6.js', route => route.fulfill({ contentType: 'text/javascript', body: '' }));
+  await page.route('**/assets/index-D97fjY6g.css', route => route.fulfill({ contentType: 'text/css', body: '' }));
+  await page.goto('/desktop-frame.html');
+  await page.evaluate(() => {
+    for (const id of ['videoCanvas', 'videoWorkerCanvas']) {
+      const canvas = document.createElement('canvas');
+      canvas.id = id;
+      canvas.width = 1920;
+      canvas.height = 1080;
+      canvas.style.width = '1280px';
+      canvas.style.height = '720px';
+      canvas.style.imageRendering = 'pixelated';
+      canvas.style.setProperty('image-rendering', 'crisp-edges');
+      document.body.appendChild(canvas);
+    }
+  });
+  for (const id of ['videoCanvas', 'videoWorkerCanvas']) {
+    await expect(page.locator(`#${id}`)).toHaveCSS('image-rendering', 'auto');
+  }
+});
+
 test('keeps saved computers visible but controls disabled when their controller is offline', async ({ page }) => {
   await mockComputers(page);
   await page.route(/\/api\/computers(?:\?.*)?$/, route => route.fulfill({ json: { controllerConnected: false, computers: [{ id: 'saved', name: 'Saved computer', state: 'unavailable', createdAt: 0, cpuPercent: null, memoryBytes: null }] } }));

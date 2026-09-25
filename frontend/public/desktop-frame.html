@@ -4,6 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Selkies desktop</title>
+  <style>
+    /* The pinned client marks its JPEG canvases crisp-edges for 1:1 display,
+       but this fixed 1920px desktop is often downscaled in the dashboard.
+       Smooth that browser-only scaling without changing decoded pixels/input. */
+    #videoCanvas, #videoWorkerCanvas { image-rendering: auto !important; }
+  </style>
   <!-- This trusted, same-origin client needs WebCodecs. Its per-view ephemeral
        Web Storage keeps Selkies UI preferences out of dashboard persistence;
        it is NOT an origin boundary. Guest-modifiable executable endpoints
