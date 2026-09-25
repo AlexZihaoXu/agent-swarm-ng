@@ -44,7 +44,7 @@ The managed Computers dashboard adds creation/deletion, passive previews and an 
 - **Docker integration:** a separate, narrow Bun controller uses the Docker Engine Unix-socket API; the chat/backend process never mounts the Docker socket.
 - **Testing:** Vitest for unit/integration tests; Playwright for essential browser workflows. On the Windows development host, follow the [browser launch safety rules](docs/development.md#windows-browser-launch-safety) to avoid account lockout.
 - **Deployment:** Docker Compose with development overrides; Caddy for production HTTPS and reverse proxying.
-- **Interactive desktop streaming:** pinned Selkies H.264/WebCodecs over the dashboard's single TCP HTTP(S) port; GNOME portal consent and scoped input were verified in isolated dev. The Radeon 680M VA-API encoder is operator-opt-in because software x264 was faster in the measured local input-to-decoded-frame trial. No WebRTC/UDP or per-computer host ports. Stage 2 is not deployed to the Tailnet; see [Computers](docs/computers.md).
+- **Interactive desktop streaming:** pinned Selkies H.264/WebCodecs requires HTTPS outside localhost; an operator-built JPEG/createImageBitmap mode also passed isolated real video/input tests over non-localhost HTTP for a deliberately trusted private LAN. Both use the dashboard's single TCP port, not WebRTC/UDP or per-computer host ports. The Radeon 680M VA-API encoder remains opt-in because x264 was lower-latency in the H.264 trial. No stage-2 mode is live yet; see [Computers](docs/computers.md).
 
 Prisma + SQLite stores agents, channels, and published chat history. This single-backend setup uses WAL, indexed cursor pagination, and bounded model context; durable chat is not long-term agent memory.
 
@@ -127,7 +127,7 @@ Compose configurations are scaffolded. Authentication is not implemented; ports 
 # Selkies client assets from the pinned computer image.
 docker compose --profile computer-images build computer-image computer-egress-image computer-media-image
 
-# Local production-mode build (Tailnet stage-2 deployment needs separate approval)
+# Local production-mode build (remote stage-2 access requires a chosen, reviewed bind)
 docker compose up --build -d
 
 # Development
