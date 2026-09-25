@@ -103,6 +103,7 @@ done
 curl -fsS --max-time 3 "http://127.0.0.1:5173/computers/$id/desktop/api/health" >/dev/null
 docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--framerate=120"'
 docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--jpeg-quality=50"'
+docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--scaling-dpi=96"'
 docker exec -u ubuntu -e DISPLAY=:1 "$container" xrandr --current | grep -E '^Screen|current|[0-9]+\.[0-9]+\*' | head -5
 media_ip=$(docker inspect "${container}-media" --format "{{(index .NetworkSettings.Networks \"${project}-computer-media\").IPAddress}}")
 [ -n "$media_ip" ]
@@ -110,6 +111,12 @@ if docker exec -u ubuntu "$container" curl -kfsS --connect-timeout 2 --max-time 
     echo 'X11 desktop reached forbidden dashboard media bridge!' >&2; exit 1
 fi
 echo 'Xvfb TCP disabled; guest cannot reach its dashboard media relay.'
+xft_dpi() { docker exec -u ubuntu -e DISPLAY=:1 "$container" xrdb -query 2>/dev/null | awk '$1 == "Xft.dpi:" { print $2 }'; }
+# Xft resources may be unset until the first viewer; they must never take a
+# browser's 2x DPR. A connected viewer must settle at operator-owned 96.
+initial_dpi=$(xft_dpi)
+case "$initial_dpi" in ''|96) ;; *) echo "Unexpected pre-view Xft DPI: $initial_dpi" >&2; exit 1;; esac
+echo "Pre-view Xft DPI: ${initial_dpi:-unset}"
 mkdir -p .scratch/x11-e2e-results
 bun_bin=$(command -v bun)
 docker run --rm --network "${project}_default" --user "$(id -u):$(id -g)" \
@@ -122,6 +129,12 @@ docker run --rm --network "${project}_default" --user "$(id -u):$(id -g)" \
     -v "$PWD/.scratch/ms-playwright":/browser:ro -v "$bun_bin":/usr/local/bin/bun:ro \
     -w /work -e TEST_COMPUTER_ID="$id" -e PLAYWRIGHT_BROWSERS_PATH=/browser \
     mcr.microsoft.com/playwright/python:v1.62.0-noble /usr/local/bin/bun scripts/test-computers-x11-browser.mjs
+test "$(xft_dpi)" = "$initial_dpi"
+docker exec "$container" sh -c 'grep scaling_dpi /run/user/1000/selkies.log' | grep -Fq "allowed list ['96']"
+if docker exec "$container" sh -c 'grep -q "DPI changed from" /run/user/1000/selkies.log'; then echo 'Browser changed guest DPI!' >&2; exit 1; fi
+echo "Disposable X11 Xft DPI unchanged (${initial_dpi:-unset}) after a 2x-DPR primary browser session; guest remained at 1920x1080."
+curl -fsS --max-time 120 -X DELETE "http://127.0.0.1:5173/api/computers/$id" -H 'Content-Type: application/json' \
+    -d '{"confirmation":"Portal-free disposable probe"}' | python3 -c 'import json,sys;assert json.load(sys.stdin)["deleted"];print("Owned disposable X11 computer deleted: true")'
 # Also check the independent mocked portal-free UI at desktop/phone widths.
 docker run --rm --network host --user "$(id -u):$(id -g)" \
     --security-opt "seccomp=$PWD/templates/default/security/chromium-seccomp.json" \

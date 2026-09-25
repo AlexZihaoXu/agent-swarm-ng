@@ -142,13 +142,26 @@ try{
  }
  if(!panned)throw Error('Phone pan control failed');
  console.log('NO_PORTAL_PHONE_PAN',true);
+ await page.close(); // Release the primary viewer before the HiDPI session.
+ // A second context in the same automation browser emulates a HiDPI viewer.
+ // Guest Xft DPI must remain at its operator-owned 96 despite client DPR=2.
+ const highDpi=await browser.newPage({viewport:{width:1280,height:800},deviceScaleFactor:2});
+ highDpi.on('pageerror',error=>errors.push(error.message.slice(0,200)));
+ await highDpi.goto(base,{waitUntil:'domcontentloaded',timeout:15000});
+ await highDpi.getByRole('tab',{name:'Computers'}).click();
+ await highDpi.getByRole('button',{name:`Open ${name} desktop`}).click();
+ const highFrame=highDpi.frameLocator(`iframe[title="${name} desktop"]`);
+ await highFrame.locator('#videoCanvas').waitFor({state:'attached',timeout:40000});
+ await highDpi.waitForTimeout(850);
+ const dpr=await highFrame.locator('body').evaluate(()=>window.devicePixelRatio);
+ if(dpr!==2)throw Error('HiDPI browser did not request a 2x screen density');
+ console.log('HIGH_DPR_VIEWER_CONNECTED',{dpr});
+ await highDpi.close();
  if(errors.length)throw Error(`Browser errors: ${JSON.stringify(errors.slice(0,4))}`);
 }catch(error){
  await page.screenshot({path:'/work/.scratch/x11-portal-free-failure.png',animations:'disabled'}).catch(()=>{});
  console.log('E2E_FAILURE_CONTEXT',String(error).slice(0,220));
  throw error;
 }finally{
- const deleted=await page.request.delete(`${base}/api/computers/${id}`,{data:{confirmation:name},timeout:120000}).catch(()=>null);
- console.log('Owned disposable X11 computer deleted:',deleted?.ok()??false);
  await browser.close();
 }

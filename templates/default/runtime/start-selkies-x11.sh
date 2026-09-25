@@ -22,7 +22,7 @@ while :; do
     # advertising controls that cannot work (or bypassing the media allowlist).
     DISPLAY=:1 selkies --wayland=false \
         --addr=0.0.0.0 --port=8080 --subfolder="/computers/$id/desktop" \
-        --enable-https=true --enable-basic-auth=false --enable-dual-mode=false --enable-resize=false \
+        --enable-https=true --enable-basic-auth=false --enable-dual-mode=false --enable-resize=false --scaling-dpi=96 \
         --audio-enabled=false --gamepad-enabled=false --webcam-enabled=false \
         --enable-clipboard=false --file-transfers=none --printing-enabled=false \
         --ui-sidebar-show-audio-settings=false --ui-sidebar-show-gamepads=false \
