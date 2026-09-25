@@ -123,9 +123,15 @@ Two modes, using Compose overrides rather than profiles:
 Compose configurations are scaffolded. Authentication is not implemented; ports bind to loopback by default. Do not expose publicly.
 
 ```sh
-# Build approved computer images first; the production frontend embeds
-# Selkies client assets from the pinned computer image.
-docker compose --profile computer-images build computer-image computer-egress-image computer-media-image
+# Build approved managed images directly: Compose project labels baked into
+# shared images would be inherited by their Docker-created child containers.
+# The production frontend embeds Selkies client assets from the pinned image.
+docker build -t agent-swarm-default:stage2 templates/default
+docker build -t agent-swarm-computer-egress:dev -f templates/default/egress.Dockerfile templates/default
+docker build -t agent-swarm-computer-media:stage2 -f templates/default/media.Dockerfile templates/default
+# For deployed Tailnet X11/JPEG, build its distinct images afterward:
+docker build -t agent-swarm-default:http-jpeg --build-arg COMPUTER_STREAM_ENCODER=jpeg templates/default
+docker build -t agent-swarm-default:http-jpeg-x11 -f templates/default/x11.Dockerfile .
 
 # Local production-mode build (remote stage-2 access requires a chosen, reviewed bind)
 docker compose up --build -d

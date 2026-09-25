@@ -20,7 +20,15 @@ cleanup() {
     [ -z "$volumes" ] || docker volume rm $volumes >/dev/null 2>&1 || true
     networks=$(docker network ls -q --filter "label=swarm.ng.namespace=$project")
     [ -z "$networks" ] || docker network rm $networks >/dev/null 2>&1 || true
-    compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+    # A prior shared image may have stamped a disposable Compose project label
+    # onto a *different* managed computer. Never let down remove that guest.
+    foreign=0
+    for candidate in $(docker ps -aq --filter "label=com.docker.compose.project=$project"); do
+        owner=$(docker inspect "$candidate" --format '{{index .Config.Labels "swarm.ng.namespace"}}')
+        if [ -n "$owner" ] && [ "$owner" != '<no value>' ] && [ "$owner" != "$project" ]; then foreign=1; fi
+    done
+    if [ "$foreign" -eq 0 ]; then compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+    else echo 'Refusing Compose down: a foreign managed container inherited this test project label.' >&2; status=1; fi
     # Only images built and labelled for this unique Compose project are
     # disposable; retain the approved shared computer/egress/media templates.
     for service in backend frontend computer-controller; do
@@ -45,7 +53,12 @@ trap cleanup EXIT INT TERM
 # The optional Tailnet probe uses the host's current address; never hardcode it
 # in a tracked test. The web app remains accessible only via loopback:5173.
 if command -v tailscale >/dev/null 2>&1; then export COMPUTER_TEST_TAILNET_IP="$(tailscale ip -4 2>/dev/null || true)"; fi
-compose --profile computer-images build computer-image computer-egress-image computer-media-image
+# Shared managed images must not inherit this disposable Compose project's
+# com.docker.compose.* labels: the Docker API otherwise copies them onto live
+# gateway/media containers, making test cleanup mistake live resources for its own.
+docker build -t agent-swarm-default:stage2 templates/default
+docker build -t agent-swarm-computer-egress:dev -f templates/default/egress.Dockerfile templates/default
+docker build -t agent-swarm-computer-media:stage2 -f templates/default/media.Dockerfile templates/default
 sh scripts/prepare-selkies-client.sh
 compose build backend frontend computer-controller
 compose up --no-build -d || { compose logs --tail=30 backend computer-controller frontend caddy-dev >&2 || true; exit 1; }

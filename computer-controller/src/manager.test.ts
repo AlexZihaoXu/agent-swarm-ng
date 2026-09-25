@@ -31,6 +31,17 @@ function existingRunning(manager: ComputerManager, resources: Map<string, unknow
   }
 }
 
+it.each(['agent-swarm-default:stage2', 'agent-swarm-computer-egress:dev', 'agent-swarm-computer-media:stage2'])(
+  'refuses a Compose-labelled managed image before creating resources: %s', async tainted => {
+    const { manager, resources, request } = fixture();
+    for (const image of ['agent-swarm-default:stage2', 'agent-swarm-computer-egress:dev', 'agent-swarm-computer-media:stage2']) {
+      resources.set(`/images/${encodeURIComponent(image)}/json`, { Config: { Labels: image === tainted ? { 'com.docker.compose.project': 'disposable' } : {} } });
+    }
+    await expect(manager.create(id, name)).rejects.toMatchObject({ code: 503, message: expect.stringContaining('Compose') });
+    expect(request).not.toHaveBeenCalled();
+  },
+);
+
 it('uses a canonical DNS alias shorter than one label for isolated media relays', () => {
   const { manager } = fixture();
   expect(manager.names.mediaAlias(id)).toBe(`computer-${id}`);

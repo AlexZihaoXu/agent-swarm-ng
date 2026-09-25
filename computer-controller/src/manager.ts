@@ -94,6 +94,15 @@ export class ComputerManager {
     }
     return network;
   }
+  private async approvedImage(image: string) {
+    const inspected = await this.docker.optional<{ Config?: { Labels?: Record<string, string> | null } }>(`${this.path('images', image)}/json`);
+    if (!inspected) throw new ResourceError(503, 'Build the approved computer images before creating computers.');
+    // Docker merges image labels into new container labels. A shared image
+    // built under a disposable Compose project would falsely mark a live
+    // gateway/media/desktop as that test project's resource.
+    if (Object.keys(inspected.Config?.Labels ?? {}).some(label => label.startsWith('com.docker.compose.')))
+      throw new ResourceError(503, 'Build approved computer images directly without Compose project labels.');
+  }
   private async ensureVolume(id: string, role: 'home' | 'workspace') {
     const name = this.names.volume(id, role);
     if (await this.volume(name, id, role)) return;
@@ -104,6 +113,7 @@ export class ComputerManager {
     const gatewayName = this.names.gateway(id);
     let gateway = await this.container(gatewayName, id, 'egress', name);
     if (!gateway) {
+      await this.approvedImage(this.gatewayImage);
       await this.docker.request('POST', `/containers/create?name=${encodeURIComponent(gatewayName)}`, {
         Image: this.gatewayImage, Labels: this.names.labels(id, 'egress', name), Env: [`COMPUTER_SUBNET=${subnet}`],
         HostConfig: {
@@ -141,6 +151,7 @@ export class ComputerManager {
     const mediaName = this.names.media(id);
     let relay = await this.container(mediaName, id, 'media', name);
     if (!relay) {
+      await this.approvedImage(this.mediaImage);
       await this.docker.request('POST', `/containers/create?name=${encodeURIComponent(mediaName)}`, {
         Image: this.mediaImage, Labels: this.names.labels(id, 'media', name),
         Env: [`COMPUTER_PRIVATE_IP=${target}`, `COMPUTER_MEDIA_SUBNET=${subnet}`],
@@ -191,9 +202,7 @@ export class ComputerManager {
     const count = await this.listIds();
     if (count.length >= this.maxComputers) throw new ResourceError(409, 'Computer limit reached.');
     // These images are operator-built, never supplied by the browser.
-    for (const image of [this.image, this.gatewayImage, this.mediaImage]) {
-      if (!await this.docker.optional(this.path('images', image) + '/json')) throw new ResourceError(503, 'Build the approved computer images before creating computers.');
-    }
+    for (const image of [this.image, this.gatewayImage, this.mediaImage]) await this.approvedImage(image);
     const egress = await this.ensureNetwork(this.names.egressNetwork, null, 'egress-network');
     const privateNetwork = await this.ensureNetwork(this.names.privateNetwork(id), id, 'private-network');
     const subnet = privateNetwork.IPAM.Config[0]?.Subnet;

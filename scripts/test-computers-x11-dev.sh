@@ -19,7 +19,16 @@ cleanup() {
     [ -z "$volumes" ] || docker volume rm $volumes >/dev/null 2>&1 || true
     networks=$(docker network ls -q --filter "label=swarm.ng.namespace=$project")
     [ -z "$networks" ] || docker network rm $networks >/dev/null 2>&1 || true
-    compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+    # Compose image labels can be inherited by separately managed computers.
+    # Refuse broad project cleanup if any other namespace is mislabeled as
+    # ours, even though our own strict swarm.ng.namespace cleanup is safe.
+    foreign=0
+    for candidate in $(docker ps -aq --filter "label=com.docker.compose.project=$project"); do
+        owner=$(docker inspect "$candidate" --format '{{index .Config.Labels "swarm.ng.namespace"}}')
+        if [ -n "$owner" ] && [ "$owner" != '<no value>' ] && [ "$owner" != "$project" ]; then foreign=1; fi
+    done
+    if [ "$foreign" -eq 0 ]; then compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+    else echo 'Refusing Compose down: a foreign managed container inherited this test project label.' >&2; status=1; fi
     for service in backend frontend computer-controller; do
         image="$project-$service:latest"
         if [ "$(docker image inspect "$image" --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)" = "$project" ]; then docker image rm "$image" >/dev/null 2>&1 || status=1; fi
@@ -29,9 +38,12 @@ cleanup() {
 }
 [ -z "$(docker ps -aq --filter "label=swarm.ng.namespace=$project")" ] || exit 1
 trap cleanup EXIT INT TERM
-# Build approved images before the frontend copies its pinned trusted client.
-# These shared tags are retained; only this test namespace is cleaned.
-compose --profile computer-images build computer-image computer-egress-image computer-media-image
+# Build shared managed images directly rather than via this disposable Compose
+# project. Compose image labels would be inherited by live child containers,
+# allowing a test project's cleanup to mistake those containers for its own.
+docker build -t agent-swarm-default:stage2 templates/default
+docker build -t agent-swarm-computer-egress:dev -f templates/default/egress.Dockerfile templates/default
+docker build -t agent-swarm-computer-media:stage2 -f templates/default/media.Dockerfile templates/default
 docker build -t agent-swarm-default:http-jpeg --build-arg COMPUTER_STREAM_ENCODER=jpeg templates/default
 docker build -t agent-swarm-default:http-jpeg-x11 -f templates/default/x11.Dockerfile .
 sh scripts/prepare-selkies-client.sh
