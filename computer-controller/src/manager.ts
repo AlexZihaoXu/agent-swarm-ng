@@ -213,7 +213,8 @@ export class ComputerManager {
     await this.ensureVolume(id, 'workspace');
     await this.docker.request('POST', `/containers/create?name=${encodeURIComponent(computerName)}`, {
       Image: this.image, User: 'root', Cmd: ['/opt/swarm/start-computer.sh'],
-      Labels: this.names.labels(id, 'desktop', name), Env: [`COMPUTER_GATEWAY=${gateway}`, `COMPUTER_ID=${id}`],
+      Labels: this.names.labels(id, 'desktop', name), Env: [`COMPUTER_GATEWAY=${gateway}`, `COMPUTER_ID=${id}`,
+        ...(this.renderDevice ? [`COMPUTER_GPU_RENDER_DEVICE=${this.renderDevice}`] : [])],
       HostConfig: {
         Runtime: 'sysbox-runc', NetworkMode: this.names.privateNetwork(id), Dns: ['1.1.1.1'],
         CapDrop: ['ALL'], SecurityOpt: [`seccomp=${this.seccomp}`], Init: true,

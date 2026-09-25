@@ -35,3 +35,38 @@ test('portal-free computer opens directly into a live same-origin viewer', async
   await expect(tabs).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Computers' })).toBeFocused();
 });
+
+test('trusted desktop shortcut menu sends reserved chords without opening a browser tab', async ({ page }) => {
+  const id = '7ad66d47-c09d-478b-96be-8c734ac555eb';
+  await page.route(/\/api\/computers(?:\?.*)?$/, route => route.fulfill({ json: { controllerConnected: true, computers: [
+    { id, name: 'Test X11 desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0 },
+  ] } }));
+  await page.route(`**/computers/${id}/desktop/api/health`, route => route.fulfill({ json: { status: 'ok' } }));
+  // Use the real trusted inline bridge, but stub the pinned streamer module so
+  // this mocked UI test never connects to a real computer or changes one.
+  const html = await (await page.request.get('/desktop-frame.html')).text();
+  await page.route(`**/computers/${id}/desktop/`, route => route.fulfill({ contentType: 'text/html', body: html
+    .replace(/<script type="module"[^>]+><\/script>/, '')
+    .replace('</body>', '<canvas id="videoCanvas"></canvas><script>window.__keys=[];window.webrtcInput={inputAttached:true,send(key){window.__keys.push(key)}};</script></body>') }));
+  await page.goto('/computers/' + id);
+  const viewer = page.getByTestId('computer-viewer');
+  await expect(viewer).toBeVisible();
+  await expect(viewer.locator('iframe')).toHaveCount(1);
+  const frame = page.frameLocator('iframe[title="Test X11 desk desktop"]');
+  await expect(frame.locator('#videoCanvas')).toBeAttached();
+  await expect(viewer.getByRole('button', { name: 'Remote shortcuts' })).toBeVisible({ timeout: 4000 });
+  await viewer.getByRole('button', { name: 'Remote shortcuts' }).click();
+  await page.getByRole('menuitem', { name: /New tab.*Ctrl\+T/ }).click();
+  await expect.poll(() => frame.locator('body').evaluate(() => (window as unknown as { __keys: string[] }).__keys)).toEqual(['kd,65507', 'kd,116', 'ku,116', 'ku,65507']);
+  expect(page.context().pages()).toHaveLength(1);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await viewer.getByRole('button', { name: 'Remote shortcuts' }).click();
+  await page.getByRole('menuitem', { name: /Address bar.*Ctrl\+L/ }).click();
+  await expect.poll(() => frame.locator('body').evaluate(() => (window as unknown as { __keys: string[] }).__keys)).toEqual([
+    'kd,65507', 'kd,116', 'ku,116', 'ku,65507', 'kd,65507', 'kd,108', 'ku,108', 'ku,65507',
+  ]);
+  await frame.locator('body').evaluate(() => window.postMessage({ type: 'swarm:desktop-shortcut', name: 'new-tab' }, location.origin));
+  await page.waitForTimeout(50);
+  expect(await frame.locator('body').evaluate(() => (window as unknown as { __keys: string[] }).__keys)).toHaveLength(8);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

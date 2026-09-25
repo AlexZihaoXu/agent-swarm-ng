@@ -31,6 +31,32 @@
       Object.defineProperty(window, 'sessionStorage', { value: storage(), configurable: false });
     })();
   </script>
+  <!-- The trusted dashboard can request only these fixed guest key chords.
+       Browser-reserved shortcuts cannot be captured on the insecure Tailnet
+       HTTP origin; the menu provides an explicit alternative. No guest HTML
+       or untrusted postMessage source may provide arbitrary key codes. -->
+  <script>
+    (() => {
+      const shortcuts = Object.freeze({
+        'new-tab': 116, 'close-tab': 119, 'address-bar': 108,
+        'reload': 114, 'new-window': 110,
+      });
+      window.addEventListener('message', event => {
+        if (event.origin !== location.origin || event.source !== window.parent ||
+            event.data?.type !== 'swarm:desktop-shortcut' ||
+            !Object.hasOwn(shortcuts, event.data.name)) return;
+        const input = window.webrtcInput;
+        if (!input?.inputAttached || typeof input.send !== 'function') return;
+        // X11 keysyms: Control_L=65507 and lowercase ASCII t/w/l/r/n.
+        // Release both keys even if the target app closes its own tab.
+        input.send('kd,65507');
+        input.send(`kd,${shortcuts[event.data.name]}`);
+        input.send(`ku,${shortcuts[event.data.name]}`);
+        input.send('ku,65507');
+        input.element?.focus?.({ preventScroll: true });
+      });
+    })();
+  </script>
   <!-- Selkies 2.0.0 assets are copied from the SHA-256-pinned package in
        templates/default/Dockerfile. Its core has one SHA-checked frontend-only
        HTTP/JPEG preflight patch; the secure WebCodecs path is unchanged. No

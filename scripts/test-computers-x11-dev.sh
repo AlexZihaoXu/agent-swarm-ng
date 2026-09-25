@@ -5,6 +5,10 @@ set -eu
 cd "$(dirname "$0")/.."
 project="sng-x11-test-$(date +%M%S)-$$"
 export COMPUTER_NAMESPACE="$project"
+# GPU proof is opt-in and grants only the single existing render node to the
+# disposable computer. The default no-device gate remains unchanged.
+case "${TEST_RENDER_DEVICE:-}" in ''|/dev/dri/renderD128) ;; *) echo 'Invalid disposable render device' >&2; exit 1;; esac
+export COMPUTER_RENDER_DEVICE="${TEST_RENDER_DEVICE:-}"
 # Do not retag the image selected by the running live controller while a
 # disposable test project builds or creates computers.
 export TEST_X11_IMAGE=agent-swarm-default:http-jpeg-x11-120-quality50-candidate
@@ -14,7 +18,9 @@ cleanup() {
     trap - EXIT INT TERM
     if [ "$status" -ne 0 ]; then
         candidate=$(docker ps -q --filter "label=swarm.ng.namespace=$project" --filter 'label=swarm.ng.role=desktop' | head -1)
-        [ -z "$candidate" ] || docker exec "$candidate" sh -c 'tail -36 /run/user/1000/selkies.log' 2>/dev/null | cut -c1-230 || true
+        if [ -n "$candidate" ]; then
+            docker exec "$candidate" sh -c 'echo "GUI Chrome diagnostics:"; tail -25 /tmp/swarm-webgl-gui.log 2>/dev/null || true; echo "Selkies diagnostics:"; tail -36 /run/user/1000/selkies.log' 2>/dev/null | cut -c1-230 || true
+        fi
     fi
     ids=$(docker ps -aq --filter "label=swarm.ng.namespace=$project")
     [ -z "$ids" ] || docker rm -f $ids >/dev/null 2>&1 || true
@@ -78,13 +84,16 @@ if [ "$ready" -ne 1 ]; then
     exit 1
 fi
 file .scratch/x11-gnome-preview.jpg
-python3 - "$container" "$project" "$id" <<'PY'
+python3 - "$container" "$project" "$id" "$COMPUTER_RENDER_DEVICE" <<'PY'
 import json,subprocess,sys
-computer,namespace,id=sys.argv[1:]
+computer,namespace,id,device=sys.argv[1:]
 c=json.loads(subprocess.check_output(['docker','inspect',computer]))[0]
 assert c['Config']['Labels']['swarm.ng.namespace']==namespace and c['Config']['Labels']['swarm.ng.id']==id
 assert c['HostConfig']['Runtime']=='sysbox-runc' and c['HostConfig']['CapDrop']==['ALL']
-assert not c['HostConfig'].get('PortBindings') and not c['HostConfig'].get('Devices')
+assert not c['HostConfig'].get('PortBindings')
+assert c['HostConfig'].get('Devices') in (None,[]) if not device else c['HostConfig'].get('Devices')==[{
+    'PathOnHost':device,'PathInContainer':device,'CgroupPermissions':'rwm'}]
+assert ('COMPUTER_GPU_RENDER_DEVICE='+device in c['Config']['Env']) == bool(device)
 assert {m['Destination']:m['Name'] for m in c['Mounts'] if m['Type']=='volume'}=={
     '/home/ubuntu':computer+'-home','/workspace':computer+'-workspace'}
 network=json.loads(subprocess.check_output(['docker','network','inspect',computer+'-private']))[0]
@@ -111,6 +120,26 @@ if docker exec -u ubuntu "$container" curl -kfsS --connect-timeout 2 --max-time 
     echo 'X11 desktop reached forbidden dashboard media bridge!' >&2; exit 1
 fi
 echo 'Xvfb TCP disabled; guest cannot reach its dashboard media relay.'
+if [ -n "$COMPUTER_RENDER_DEVICE" ]; then
+    docker exec -u ubuntu "$container" sh -c 'test -r /dev/dri/renderD128 && test ! -e /dev/dri/card0 && vainfo --display drm --device /dev/dri/renderD128 2>&1 | grep -q "VAProfileHEVCMain.*EncSlice"'
+    docker exec "$container" sh -c 'grep -q "Exec=/opt/swarm/launch-chrome.sh" /usr/local/share/applications/google-chrome.desktop'
+    docker cp scripts/test-computers-webgl.html "$container:/tmp/swarm-webgl-probe.html" >/dev/null
+    # A real, sandboxed guest Chrome must draw WebGL pixels and disclose a
+    # non-software GPU renderer. VAAPI encode alone does not establish WebGL.
+    docker exec -u ubuntu -e DISPLAY=:1 "$container" sh -c 'timeout 40 /opt/swarm/launch-chrome.sh --headless --disable-dev-shm-usage --no-first-run --no-default-browser-check --user-data-dir=/tmp/swarm-webgl-headless --virtual-time-budget=4500 --dump-dom file:///tmp/swarm-webgl-probe.html 2>/tmp/swarm-webgl-chrome.log' > .scratch/x11-webgl-result.html
+    python3 - <<'PY'
+from pathlib import Path
+from html.parser import HTMLParser
+class Result(HTMLParser):
+ def __init__(self): super().__init__();self.inside=False;self.text=''
+ def handle_starttag(self,tag,attrs): self.inside=tag=='output' and ('id','result') in attrs
+ def handle_data(self,data):
+  if self.inside:self.text+=data
+result=Result();result.feed(Path('.scratch/x11-webgl-result.html').read_text());print('GUEST_WEBGL_RESULT',result.text[:1200])
+assert '"ok":true' in result.text, 'WebGL did not draw expected pixels'
+assert all(x not in result.text.lower() for x in ('swiftshader','llvmpipe','software rasterizer')), 'WebGL fell back to software rendering'
+PY
+fi
 xft_dpi() { docker exec -u ubuntu -e DISPLAY=:1 "$container" xrdb -query 2>/dev/null | awk '$1 == "Xft.dpi:" { print $2 }'; }
 # Xft resources may be unset until the first viewer; they must never take a
 # browser's 2x DPR. A connected viewer must settle at operator-owned 96.
@@ -129,6 +158,23 @@ docker run --rm --network "${project}_default" --user "$(id -u):$(id -g)" \
     -v "$PWD/.scratch/ms-playwright":/browser:ro -v "$bun_bin":/usr/local/bin/bun:ro \
     -w /work -e TEST_COMPUTER_ID="$id" -e PLAYWRIGHT_BROWSERS_PATH=/browser \
     mcr.microsoft.com/playwright/python:v1.62.0-noble /usr/local/bin/bun scripts/test-computers-x11-browser.mjs
+if [ -n "$COMPUTER_RENDER_DEVICE" ]; then
+    # The GNOME-launched browser uses the opt-in Radeon path; its shader must
+    # be visible over JPEG, and trusted controls must target guest tabs only.
+    docker exec -u ubuntu -e DISPLAY=:1 "$container" sh -c '/opt/swarm/launch-chrome.sh --no-first-run --no-default-browser-check --new-window --window-size=920,730 --user-data-dir=/tmp/swarm-webgl-gui file:///tmp/swarm-webgl-probe.html > /tmp/swarm-webgl-gui.log 2>&1 < /dev/null &'
+    sleep 3
+    docker exec -u ubuntu -e DISPLAY=:1 "$container" sh -c 'ps -eww -o args | grep -q "[c]hrome --no-first-run"; xprop -root _NET_ACTIVE_WINDOW 2>/dev/null | head -1'
+    docker run --rm --network "${project}_default" --user "$(id -u):$(id -g)" \
+        --security-opt "seccomp=$PWD/templates/default/security/chromium-seccomp.json" \
+        --security-opt no-new-privileges:true --cap-add SYS_CHROOT \
+        -v "$PWD/frontend/node_modules":/work/frontend/node_modules:ro \
+        -v "$PWD/node_modules":/work/node_modules:ro \
+        -v "$PWD/scripts/test-computers-x11-gpu-browser.mjs":/work/scripts/test-computers-x11-gpu-browser.mjs:ro \
+        -v "$PWD/.scratch/x11-e2e-results":/work/.scratch:rw \
+        -v "$PWD/.scratch/ms-playwright":/browser:ro -v "$bun_bin":/usr/local/bin/bun:ro \
+        -w /work -e TEST_COMPUTER_ID="$id" -e PLAYWRIGHT_BROWSERS_PATH=/browser \
+        mcr.microsoft.com/playwright/python:v1.62.0-noble /usr/local/bin/bun scripts/test-computers-x11-gpu-browser.mjs
+fi
 test "$(xft_dpi)" = "$initial_dpi"
 docker exec "$container" sh -c 'grep scaling_dpi /run/user/1000/selkies.log' | grep -Fq "allowed list ['96']"
 if docker exec "$container" sh -c 'grep -q "DPI changed from" /run/user/1000/selkies.log'; then echo 'Browser changed guest DPI!' >&2; exit 1; fi

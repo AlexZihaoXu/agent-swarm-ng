@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent, type KeyboardEvent, type PointerEvent } from 'react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import type { Computer } from './computer-card';
@@ -33,6 +34,7 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
   const previewDragged = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const url = `/computers/${encodeURIComponent(id)}/desktop/`;
 
   useEffect(() => {
@@ -131,6 +133,10 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
     try { localStorage.setItem(`computer-consent:${id}`, 'yes'); } catch { /* Private browsing still works. */ }
     setSetupOpen(false);
   };
+  const sendShortcut = (name: string) => {
+    if (!running || setupOpen || available === 'offline') return;
+    iframeRef.current?.contentWindow?.postMessage({ type: 'swarm:desktop-shortcut', name }, window.location.origin);
+  };
 
   return <section data-testid="computer-viewer" aria-label={`${computer.name} desktop`} className="computer-viewer-enter flex min-h-0 w-full flex-1 flex-col">
     <header className="flex min-w-0 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-4 py-3 md:px-6">
@@ -142,12 +148,26 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
           <li aria-current="page" className="min-w-0 truncate font-semibold" title={computer.name}>{computer.name}</li>
         </ol>
       </nav>
+      {running && !setupOpen && <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild><Button type="button" variant="outline" size="sm" aria-label="Remote shortcuts" disabled={available === 'offline'} className="min-h-11 shrink-0 gap-2 md:min-h-0">Send keys <span aria-hidden="true">⌄</span></Button></DropdownMenu.Trigger>
+        <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={5} collisionPadding={12} aria-label="Remote shortcuts" className="z-50 w-56 rounded-lg border border-border bg-background p-1 text-sm shadow-lg motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]">
+          {([
+            ['new-tab', 'New tab', 'Ctrl+T', '+'],
+            ['close-tab', 'Close tab', 'Ctrl+W', '×'],
+            ['address-bar', 'Address bar', 'Ctrl+L', '⌕'],
+            ['reload', 'Reload', 'Ctrl+R', '↻'],
+            ['new-window', 'New window', 'Ctrl+N', '▣'],
+          ] as const).map(([name, label, keys, symbol]) => <DropdownMenu.Item key={name} onSelect={() => sendShortcut(name)} className="flex min-h-10 cursor-pointer items-center gap-3 rounded-md px-2 outline-none focus:bg-muted focus:text-foreground data-[disabled]:cursor-default data-[disabled]:opacity-50">
+            <span aria-hidden="true" className="w-4 text-center text-muted-foreground">{symbol}</span><span className="flex-1">{label}</span><kbd className="text-xs text-muted-foreground">{keys}</kbd>
+          </DropdownMenu.Item>)}
+        </DropdownMenu.Content></DropdownMenu.Portal>
+      </DropdownMenu.Root>}
       {running && import.meta.env.VITE_COMPUTER_PORTAL_FREE !== 'true' && !setupOpen && <Button type="button" variant="outline" size="sm" className="min-h-10 shrink-0" onClick={() => { setSetupOpen(true); setClickError(''); }}>Grant screen access</Button>}
     </header>
     <div className="relative flex min-h-0 flex-1 flex-col bg-black pb-[env(safe-area-inset-bottom)] md:pb-0">
       {!running ? <p role="status" className="m-auto px-5 text-center text-sm text-muted-foreground">Desktop unavailable. Its saved files remain until confirmed deletion.</p> : <>
         <div ref={streamRef} onScroll={event => setPanOffset(event.currentTarget.scrollLeft)} className="relative flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden bg-black">
-          <iframe key={`${id}:${viewerKey}`} title={`${computer.name} desktop`} src={url} referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-downloads" allow="fullscreen" style={{ width: streamWidth ? `${streamWidth}px` : '100%' }} className="h-full min-h-0 shrink-0 border-0 bg-black" />
+          <iframe ref={iframeRef} key={`${id}:${viewerKey}`} title={`${computer.name} desktop`} src={url} referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-downloads" allow="fullscreen" style={{ width: streamWidth ? `${streamWidth}px` : '100%' }} className="h-full min-h-0 shrink-0 border-0 bg-black" />
         </div>
         {streamWidth > (streamRef.current?.clientWidth ?? 0) + 4 && !setupOpen && <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full bg-background/90 p-1 shadow-lg md:bottom-3">
           <Button type="button" variant="outline" size="sm" aria-label="Pan desktop left" disabled={panOffset < 1} className="min-h-11 min-w-11" onClick={() => streamRef.current?.scrollBy({ left: -240 })}>←</Button>
