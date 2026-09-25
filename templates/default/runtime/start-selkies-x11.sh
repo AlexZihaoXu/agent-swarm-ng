@@ -28,7 +28,7 @@ while :; do
         --ui-sidebar-show-audio-settings=false --ui-sidebar-show-gamepads=false \
         --ui-sidebar-show-webcam=false --ui-sidebar-show-clipboard=false \
         --ui-sidebar-show-files=false --ui-sidebar-show-apps=false \
-        --ui-sidebar-show-sharing=false --encoder="$encoder" --framerate=120 \
+        --ui-sidebar-show-sharing=false --encoder="$encoder" --framerate=120 --jpeg-quality=50 \
         >> "$runtime/selkies.log" 2>&1 &
     child=$!
     wait "$child" || true

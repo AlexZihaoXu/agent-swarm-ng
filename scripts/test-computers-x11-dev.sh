@@ -5,6 +5,9 @@ set -eu
 cd "$(dirname "$0")/.."
 project="sng-x11-test-$(date +%M%S)-$$"
 export COMPUTER_NAMESPACE="$project"
+# Do not retag the image selected by the running live controller while a
+# disposable test project builds or creates computers.
+export TEST_X11_IMAGE=agent-swarm-default:http-jpeg-x11-120-quality50-candidate
 compose() { docker compose -p "$project" -f compose.yaml -f compose.dev.yaml -f scripts/compose.test-x11.yaml "$@"; }
 cleanup() {
     status=$?
@@ -45,7 +48,7 @@ docker build -t agent-swarm-default:stage2 templates/default
 docker build -t agent-swarm-computer-egress:dev -f templates/default/egress.Dockerfile templates/default
 docker build -t agent-swarm-computer-media:stage2 -f templates/default/media.Dockerfile templates/default
 docker build -t agent-swarm-default:http-jpeg --build-arg COMPUTER_STREAM_ENCODER=jpeg templates/default
-docker build -t agent-swarm-default:http-jpeg-x11 -f templates/default/x11.Dockerfile .
+docker build -t "$TEST_X11_IMAGE" -f templates/default/x11.Dockerfile .
 sh scripts/prepare-selkies-client.sh
 test "$(sha256sum .scratch/selkies-client-web/assets/selkies-core-BbKps5RD.js | cut -d ' ' -f 1)" = 633f8909c4ef14c2a3c178292f4b6d47dbacbf71ccd55060ace4db623b000c52
 compose build backend frontend computer-controller
@@ -99,6 +102,7 @@ for attempt in $(seq 1 30); do
 done
 curl -fsS --max-time 3 "http://127.0.0.1:5173/computers/$id/desktop/api/health" >/dev/null
 docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--framerate=120"'
+docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--jpeg-quality=50"'
 docker exec -u ubuntu -e DISPLAY=:1 "$container" xrandr --current | grep -E '^Screen|current|[0-9]+\.[0-9]+\*' | head -5
 media_ip=$(docker inspect "${container}-media" --format "{{(index .NetworkSettings.Networks \"${project}-computer-media\").IPAddress}}")
 [ -n "$media_ip" ]

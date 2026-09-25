@@ -2,7 +2,7 @@
 services:
   computer-controller:
     environment:
-      COMPUTER_IMAGE: agent-swarm-default:http-jpeg-x11
+      COMPUTER_IMAGE: ${TEST_X11_IMAGE:-agent-swarm-default:http-jpeg-x11}
   frontend:
     environment:
       DEV_ALLOWED_HOSTS: caddy-dev
