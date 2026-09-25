@@ -92,7 +92,14 @@ assert relay['State']['Running'] and not relay['HostConfig'].get('PortBindings')
 assert relay['HostConfig']['ReadonlyRootfs'] and relay['HostConfig']['CapDrop']==['ALL'] and not relay['Mounts']
 print('X11 desktop retains Sysbox, same two owned volumes, gateway-less bridge and bounded unprivileged media relay.')
 PY
-docker exec "$container" sh -c 'ps -eo args | grep "[X]vfb :1" | grep -q -- "-nolisten tcp"'
+docker exec "$container" sh -c 'ps -eo args | grep "[X]vfb :1" | grep -q -- "-nolisten tcp"; ps -eo args | grep "[X]vfb :1" | grep -q -- "-fakescreenfps 120"'
+for attempt in $(seq 1 30); do
+    if curl -fsS --max-time 3 "http://127.0.0.1:5173/computers/$id/desktop/api/health" >/dev/null 2>&1; then break; fi
+    sleep 1
+done
+curl -fsS --max-time 3 "http://127.0.0.1:5173/computers/$id/desktop/api/health" >/dev/null
+docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--framerate=120"'
+docker exec -u ubuntu -e DISPLAY=:1 "$container" xrandr --current | grep -E '^Screen|current|[0-9]+\.[0-9]+\*' | head -5
 media_ip=$(docker inspect "${container}-media" --format "{{(index .NetworkSettings.Networks \"${project}-computer-media\").IPAddress}}")
 [ -n "$media_ip" ]
 if docker exec -u ubuntu "$container" curl -kfsS --connect-timeout 2 --max-time 3 "https://$media_ip:8080/computers/$id/desktop/" >/dev/null 2>&1; then

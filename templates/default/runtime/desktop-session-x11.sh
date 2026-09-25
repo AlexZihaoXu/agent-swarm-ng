@@ -9,7 +9,9 @@ pipewire > "$runtime/pipewire.log" 2>&1 &
 pipewire_pid=$!
 wireplumber > "$runtime/wireplumber.log" 2>&1 &
 wireplumber_pid=$!
-Xvfb :1 -screen 0 1920x1080x24 -nolisten tcp +extension GLX +extension RANDR -dpi 96 > "$runtime/xvfb.log" 2>&1 &
+# Present a 120 Hz virtual screen to GNOME; this is a target, not a promise
+# that every app or remote JPEG frame can be encoded/delivered at 120 fps.
+Xvfb :1 -screen 0 1920x1080x24 -fakescreenfps 120 -nolisten tcp +extension GLX +extension RANDR -dpi 96 > "$runtime/xvfb.log" 2>&1 &
 xvfb_pid=$!
 shell_pid=''
 stream_pid=''
