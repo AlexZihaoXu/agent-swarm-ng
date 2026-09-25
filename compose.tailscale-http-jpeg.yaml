@@ -1,0 +1,15 @@
+# Explicit stage-2 HTTP/JPEG mode on the existing Tailnet TCP 19090 listener.
+# Combine with compose.yaml + compose.tailscale.yaml. Tailscale encrypts the
+# device-to-device transport; browsers still see an insecure HTTP origin, so
+# WebCodecs is unavailable and only the separate JPEG image works here.
+# No public/UDP/443/per-computer port is published. App authentication is absent.
+services:
+  computer-image:
+    image: agent-swarm-default:http-jpeg
+    build:
+      context: ./templates/default
+      args:
+        COMPUTER_STREAM_ENCODER: jpeg
+  computer-controller:
+    environment:
+      COMPUTER_IMAGE: agent-swarm-default:http-jpeg
