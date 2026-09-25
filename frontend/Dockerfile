@@ -16,11 +16,18 @@ CMD ["bun", "run", "dev"]
 FROM base AS build
 RUN bun run build
 
+# Keep the pinned browser-client adaptation independent of app source changes
+# so both package extraction and the audited HTTP/JPEG patch cache separately.
+FROM node:22-bookworm-slim AS trusted-selkies-client
+COPY --from=agent-swarm-default:stage2 /opt/selkies/lib/python3.12/site-packages/selkies/selkies_web /srv/selkies
+COPY scripts/patch-selkies-http-client.mjs /tmp/patch-selkies-http-client.mjs
+RUN node /tmp/patch-selkies-http-client.mjs /srv/selkies
+
 FROM caddy:2-alpine AS production
 COPY frontend/Caddyfile /etc/caddy/Caddyfile
 COPY frontend/Caddyfile.computers /etc/caddy/ComputerRoutes
 COPY --from=build /app/frontend/dist /srv
 # Runtime guest sudo cannot edit this immutable client copy. Update the pinned
 # Selkies version, hashes, and trusted wrapper together on upstream upgrades.
-COPY --from=agent-swarm-default:stage2 /opt/selkies/lib/python3.12/site-packages/selkies/selkies_web /srv/selkies
+COPY --from=trusted-selkies-client /srv/selkies /srv/selkies
 EXPOSE 80 443

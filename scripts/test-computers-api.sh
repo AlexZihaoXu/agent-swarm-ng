@@ -119,11 +119,17 @@ done
 asset="${viewer}assets/index-CPWh3fQ6.js"
 curl -fsS --max-time 12 "$asset" -o .scratch/computer-api-e2e-client.js
 cmp .scratch/computer-api-e2e-client.js .scratch/selkies-client-web/assets/index-CPWh3fQ6.js
+core="${viewer}assets/selkies-core-BbKps5RD.js"
+curl -fsS --max-time 12 "$core" -o .scratch/computer-api-e2e-core.js
+cmp .scratch/computer-api-e2e-core.js .scratch/selkies-client-web/assets/selkies-core-BbKps5RD.js
+echo '633f8909c4ef14c2a3c178292f4b6d47dbacbf71ccd55060ace4db623b000c52  .scratch/computer-api-e2e-core.js' | sha256sum -c -
 # Sudo inside the *test* computer can replace its own copy, but that must not
 # change the JavaScript the dashboard sends to a same-origin viewer.
-docker exec -u ubuntu "$computer" sudo -n sh -c 'printf "%s\n" "/* untrusted computer asset */" > /opt/selkies/lib/python3.12/site-packages/selkies/selkies_web/assets/index-CPWh3fQ6.js'
+docker exec -u ubuntu "$computer" sudo -n sh -c 'printf "%s\n" "/* untrusted computer asset */" > /opt/selkies/lib/python3.12/site-packages/selkies/selkies_web/assets/index-CPWh3fQ6.js; printf "%s\n" "/* guest core override */" > /opt/selkies/lib/python3.12/site-packages/selkies/selkies_web/assets/selkies-core-BbKps5RD.js'
 curl -fsS --max-time 12 "$asset" -o .scratch/computer-api-e2e-client-after.js
 cmp .scratch/computer-api-e2e-client.js .scratch/computer-api-e2e-client-after.js
+curl -fsS --max-time 12 "$core" -o .scratch/computer-api-e2e-core-after.js
+cmp .scratch/computer-api-e2e-core.js .scratch/computer-api-e2e-core-after.js
 for forbidden in api/files/ api/tokens api/sessions api/switch api/websockets; do
     code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 6 "${viewer}${forbidden}")
     test "$code" = 404 || { echo "Untrusted computer endpoint is reachable: $forbidden" >&2; exit 1; }

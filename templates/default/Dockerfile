@@ -88,6 +88,11 @@ RUN set -eu; arch="$(dpkg --print-architecture)"; \
     rm -rf /var/lib/apt/lists/* /tmp/selkies.deb
 COPY runtime/ /opt/swarm/
 RUN chmod 0755 /opt/swarm/*.sh && chmod 0644 /opt/swarm/*.py
+# Operator-built HTTP/LAN variant uses JPEG/createImageBitmap instead of
+# browser-secure-context WebCodecs; the default image retains H.264.
+ARG COMPUTER_STREAM_ENCODER=h264enc
+RUN case "$COMPUTER_STREAM_ENCODER" in h264enc|jpeg) ;; *) echo 'Unsupported computer encoder' >&2; exit 1;; esac
+ENV COMPUTER_STREAM_ENCODER=$COMPUTER_STREAM_ENCODER
 
 # Docker initializes fresh named volumes from these image directories.
 # Do not declare anonymous VOLUMEs or overwrite existing user files at startup.

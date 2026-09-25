@@ -7,7 +7,9 @@ cd "$root"
 image=agent-swarm-default:stage2
 image_id=$(docker image inspect "$image" --format '{{.Id}}')
 dest="$root/.scratch/selkies-client-web"
-if [ -f "$dest/.source-image" ] && [ "$(cat "$dest/.source-image")" = "$image_id" ] && [ -f "$dest/assets/index-CPWh3fQ6.js" ]; then exit 0; fi
+patched_core_hash=633f8909c4ef14c2a3c178292f4b6d47dbacbf71ccd55060ace4db623b000c52
+if [ -f "$dest/.source-image" ] && [ "$(cat "$dest/.source-image")" = "$image_id" ] && [ -f "$dest/assets/index-CPWh3fQ6.js" ] &&
+   [ "$(sha256sum "$dest/assets/selkies-core-BbKps5RD.js" 2>/dev/null | cut -d ' ' -f 1)" = "$patched_core_hash" ]; then exit 0; fi
 if [ -e "$dest" ] && { [ -L "$dest" ] || [ ! -f "$dest/.source-image" ]; }; then
     echo 'Refusing to overwrite an unowned Selkies scratch directory.' >&2; exit 1
 fi
@@ -24,6 +26,7 @@ mkdir -m 700 "$tmp"
 container=$(docker create --entrypoint /bin/true "$image")
 docker cp "$container:/opt/selkies/lib/python3.12/site-packages/selkies/selkies_web/." "$tmp/"
 test -f "$tmp/assets/index-CPWh3fQ6.js" && test -f "$tmp/assets/index-D97fjY6g.css"
+node scripts/patch-selkies-http-client.mjs "$tmp"
 printf '%s\n' "$image_id" > "$tmp/.source-image"
 if [ -d "$dest" ]; then mv "$dest" "$old"; fi
 mv "$tmp" "$dest"

@@ -8,6 +8,8 @@ case "$id" in
 esac
 case "$id" in *[!0-9a-f-]*) echo 'Invalid managed computer ID' >&2; exit 1;; esac
 runtime=${XDG_RUNTIME_DIR:?}
+encoder=${COMPUTER_STREAM_ENCODER:-h264enc}
+case "$encoder" in h264enc|jpeg) ;; *) echo 'Invalid computer encoder' >&2; exit 1;; esac
 child=''
 cleanup() {
     [ -z "$child" ] || { kill "$child" 2>/dev/null || true; wait "$child" 2>/dev/null || true; }
@@ -25,7 +27,7 @@ while :; do
         --ui-sidebar-show-audio-settings=false --ui-sidebar-show-gamepads=false \
         --ui-sidebar-show-webcam=false --ui-sidebar-show-clipboard=false \
         --ui-sidebar-show-files=false --ui-sidebar-show-apps=false \
-        --ui-sidebar-show-sharing=false --encoder=h264enc --framerate=30 \
+        --ui-sidebar-show-sharing=false --encoder="$encoder" --framerate=30 \
         >> "$runtime/selkies.log" 2>&1 &
     child=$!
     wait "$child" || true

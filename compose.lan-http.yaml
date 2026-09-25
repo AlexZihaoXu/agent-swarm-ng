@@ -1,0 +1,23 @@
+# Explicit opt-in HTTP deployment on a trusted private LAN. Browser WebCodecs
+# are unavailable on remote HTTP origins, so new computers use JPEG instead.
+# This dashboard has NO user authentication; never set LAN_IP to 0.0.0.0 or a
+# public address without a separate access-policy decision.
+services:
+  backend:
+    volumes: !override
+      - ./.local:/app/.local
+  computer-image:
+    image: agent-swarm-default:http-jpeg
+    build:
+      context: ./templates/default
+      args:
+        COMPUTER_STREAM_ENCODER: jpeg
+  computer-controller:
+    environment:
+      COMPUTER_IMAGE: agent-swarm-default:http-jpeg
+  frontend:
+    environment:
+      SITE_ADDRESS: ":19090"
+    ports: !override
+      - "127.0.0.1:19090:19090"
+      - "${LAN_IP:?Set a trusted private-LAN IPv4 address}:19090:19090"

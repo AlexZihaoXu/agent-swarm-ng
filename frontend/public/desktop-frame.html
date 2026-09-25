@@ -25,10 +25,10 @@
       Object.defineProperty(window, 'sessionStorage', { value: storage(), configurable: false });
     })();
   </script>
-  <!-- Selkies 2.0.0 asset hashes match the SHA-256-pinned package in
-       templates/default/Dockerfile. This document and its executable assets
-       are served from trusted frontend bytes, never from container sudo. Only
-       bounded WS/JSON endpoints are proxied to the computer. -->
+  <!-- Selkies 2.0.0 assets are copied from the SHA-256-pinned package in
+       templates/default/Dockerfile. Its core has one SHA-checked frontend-only
+       HTTP/JPEG preflight patch; the secure WebCodecs path is unchanged. No
+       executable bytes come from container sudo. Only bounded WS/JSON is proxied. -->
   <script type="module" crossorigin src="./assets/index-CPWh3fQ6.js"></script>
   <link rel="stylesheet" crossorigin href="./assets/index-D97fjY6g.css" />
 </head>
