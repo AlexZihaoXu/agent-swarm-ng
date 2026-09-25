@@ -14,6 +14,8 @@ EXPOSE 5173
 CMD ["bun", "run", "dev"]
 
 FROM base AS build
+ARG VITE_COMPUTER_PORTAL_FREE=false
+ENV VITE_COMPUTER_PORTAL_FREE=$VITE_COMPUTER_PORTAL_FREE
 RUN bun run build
 
 # Keep the pinned browser-client adaptation independent of app source changes

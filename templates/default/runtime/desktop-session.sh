@@ -45,7 +45,7 @@ while kill -0 "$shell_pid" 2>/dev/null; do
     cast_pid=$!
     wait "$cast_pid" || true
     cast_pid=''
-    rm -f "$runtime/screencast-node"
+    rm -f "$runtime/screencast-node" "$runtime/desktop-ready"
     kill -0 "$shell_pid" 2>/dev/null || break
     sleep 1
 done

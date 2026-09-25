@@ -1,0 +1,23 @@
+# Opt-in portal-free Ubuntu GNOME/X11 on the existing Tailnet HTTP/JPEG port.
+# Combine AFTER compose.yaml + compose.tailscale.yaml +
+# compose.tailscale-http-jpeg.yaml. Build computer-image, egress, media and
+# computer-x11-image before frontend. Existing Wayland computers require an
+# owner-coordinated, volume-preserving image migration; Compose alone will NOT
+# upgrade them. No public bind, UDP or extra per-computer host ports.
+# Every Tailnet peer that can reach this unauthenticated dashboard can now
+# control the desktop without a second GNOME permission prompt.
+services:
+  computer-x11-image:
+    profiles: [computer-images]
+    image: agent-swarm-default:http-jpeg-x11
+    build:
+      context: .
+      dockerfile: templates/default/x11.Dockerfile
+    command: ["true"]
+  computer-controller:
+    environment:
+      COMPUTER_IMAGE: agent-swarm-default:http-jpeg-x11
+  frontend:
+    build:
+      args:
+        VITE_COMPUTER_PORTAL_FREE: "true"

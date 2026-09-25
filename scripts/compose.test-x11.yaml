@@ -1,0 +1,12 @@
+# Opt-in isolated test only. Never use with the live Tailnet project.
+services:
+  computer-controller:
+    environment:
+      COMPUTER_IMAGE: agent-swarm-default:http-jpeg-x11
+  frontend:
+    environment:
+      DEV_ALLOWED_HOSTS: caddy-dev
+      VITE_COMPUTER_PORTAL_FREE: "true"
+  caddy-dev:
+    volumes:
+      - ./.scratch/selkies-client-web:/srv/selkies:ro

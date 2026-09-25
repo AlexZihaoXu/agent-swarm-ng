@@ -4,6 +4,9 @@ import { Button } from '@/components/ui/button';
 import type { Computer } from './computer-card';
 
 function initialSetup(id: string) {
+  // Only the separate, operator-selected GNOME/X11 image bypasses portal
+  // consent. The default Wayland/secure H.264 viewer retains its normal gate.
+  if (import.meta.env.VITE_COMPUTER_PORTAL_FREE === 'true') return false;
   try { return localStorage.getItem(`computer-consent:${id}`) !== 'yes'; }
   catch { return true; }
 }
@@ -137,7 +140,7 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
           <li aria-current="page" className="min-w-0 truncate font-semibold" title={computer.name}>{computer.name}</li>
         </ol>
       </nav>
-      {running && !setupOpen && <Button type="button" variant="outline" size="sm" className="min-h-10 shrink-0" onClick={() => { setSetupOpen(true); setClickError(''); }}>Grant screen access</Button>}
+      {running && import.meta.env.VITE_COMPUTER_PORTAL_FREE !== 'true' && !setupOpen && <Button type="button" variant="outline" size="sm" className="min-h-10 shrink-0" onClick={() => { setSetupOpen(true); setClickError(''); }}>Grant screen access</Button>}
     </header>
     <div className="relative flex min-h-0 flex-1 flex-col bg-black pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
       {!running ? <p role="status" className="m-auto px-5 text-center text-sm text-muted-foreground">Desktop unavailable. Its saved files remain until confirmed deletion.</p> : <>

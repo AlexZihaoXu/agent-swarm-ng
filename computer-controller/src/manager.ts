@@ -221,7 +221,7 @@ export class ComputerManager {
     await this.docker.request('POST', `${this.path('containers', computerName)}/start`);
     let ready = false;
     for (let attempt = 0; attempt < 80; attempt++) {
-      try { await this.docker.exec(computerName, ['test', '-f', '/run/user/1000/screencast-node'], 'ubuntu', 4000); ready = true; break; }
+      try { await this.docker.exec(computerName, ['test', '-f', '/run/user/1000/desktop-ready'], 'ubuntu', 4000); ready = true; break; }
       catch { await delay(500); }
     }
     if (!ready) throw new ResourceError(503, 'Computer desktop did not become ready.');
