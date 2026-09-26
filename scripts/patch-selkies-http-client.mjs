@@ -18,31 +18,29 @@ const oldGuard = 'function Io(){return ga(),window.isSecureContext?(window.Video
 const jpegGuard = 'function Io(){ga();if(!window.isSecureContext){if(typeof createImageBitmap!==`function`){console.error(`JPEG decode unavailable on HTTP.`);return !1}console.warn(`HTTP origin: using JPEG fallback without WebCodecs.`);Lo();return !0}return window.VideoDecoder===void 0?(console.warn(`VideoDecoder API unavailable: the stream is pinned to the jpeg encoder.`),Lo()):console.log(`Pre-flight checks passed: Secure context and VideoDecoder API are available.`),!0}';
 const oldAudio = 'async function De(){if(N!==`primary`)';
 const httpAudio = 'async function De(){if(!window.isSecureContext)return;if(N!==`primary`)';
-// A secure origin may also upgrade *off* a JPEG-default server. This is the
-// WebSocket transport's own server-settings callback, placed after upstream
-// applies the published encoder and stores the hardware backend table. The
-// ladder `ea()` prices every codec against that table, so with no table yet
-// (a viewer connecting before the startup GPU probe reported) it declines to
-// switch; skipping without consuming the one-shot flag lets a later settings
-// payload try again. `sa()` reads the encoder back out of localStorage, so the
-// switch sequence mirrors upstream's own decoder-failure path and `aa()` then
-// transmits it.
-// A secure origin may also upgrade *off* a JPEG-default server. This is the
-// WebSocket transport's own server-settings callback, placed after upstream
-// applies the published encoder and stores the hardware backend table (`Yi`):
-// the ladder `ea()` prices every codec against that table, so without it there
-// it declines to switch. `ea()` returns the best encoder this host encodes in
-// hardware that this browser decodes, jpeg only as a last resort. The switch
-// sequence mirrors upstream's own decoder-failure path, and `sa()` reads the
-// encoder back out of localStorage, so `aa()` transmits it. One ask per page
-// load keeps a deliberate later choice in the viewer sidebar authoritative.
+// Both origins negotiate their own encoder against one server default. This is
+// the WebSocket transport's own server-settings callback, placed after upstream
+// applies the published encoder and stores the hardware backend table (`Yi`).
+//
+//  * Insecure origin (HTTP 19090): browsers have no WebCodecs, so request the
+//    JPEG stripes encoder whenever the server defaults to something else.
+//  * Secure origin (HTTPS 19091): request the operator's AV1 default whenever
+//    the server is on something else, falling back to upstream's own ladder
+//    `ea()` (hardware-first, priced against `Yi`) when AV1 is not on the menu.
+//    A browser that cannot decode the chosen codec still trips upstream's own
+//    decoder-failure downgrade, so an explicit AV1 ask is safe.
+//
+// The switch sequence mirrors upstream's own decoder-failure path, and `sa()`
+// reads the encoder back out of localStorage, so `aa()` transmits it. One ask
+// per page load keeps a deliberate later sidebar choice authoritative; a
+// missing hardware table defers rather than consuming the one-shot flag.
 const oldUpgrade = 'typeof window.encoder==`string`&&ia(window.encoder,e.settings.encoder)';
-const secureUpgrade = 'typeof window.encoder==`string`&&ia(window.encoder,e.settings.encoder),(()=>{try{let n=e.settings&&e.settings.encoder;if(!n||typeof n.value!=`string`||n.locked===!0)return;if(!window.isSecureContext||typeof VideoDecoder==`u`)return;if(String(n.value)!==`jpeg`||window.__swarmEncoderUpgradeAsked||!Yi)return;let r=ea();if(!r||r===`jpeg`){window.__swarmEncoderUpgradeAsked=!0;return}window.__swarmEncoderUpgradeAsked=!0,Wi=r,V=r,Ir(`encoder`,r),si=!1,ri=null,ii=0,ai=0,oi=null,wi(),console.warn(`[Selkies] secure origin: switching from jpeg to ${r}.`),aa(`secure origin prefers ${r}`)}catch(n){console.warn(`[Selkies] secure encoder upgrade failed:`,n)}})()';
+const secureUpgrade = 'typeof window.encoder==`string`&&ia(window.encoder,e.settings.encoder),(()=>{try{let n=e.settings&&e.settings.encoder;if(!n||typeof n.value!=`string`||n.locked===!0||window.__swarmEncoderAsked)return;let secure=window.isSecureContext&&typeof VideoDecoder!=`u`,have=String(n.value),allowed=Array.isArray(n.allowed)?n.allowed:[],explicit=secure&&allowed.includes(`av1enc`)?`av1enc`:null;if(secure&&!explicit&&!Yi)return;let want=secure?(explicit||ea()||`jpeg`):`jpeg`;if(have===want||!allowed.includes(want))return;window.__swarmEncoderAsked=!0,Wi=want,V=want,Ir(`encoder`,want),si=!1,ri=null,ii=0,ai=0,oi=null,wi(),console.warn(`[Selkies] ${secure?`secure`:`insecure`} origin: switching from ${have} to ${want}.`),aa(`${secure?`secure`:`insecure`} origin prefers ${want}`)}catch(n){console.warn(`[Selkies] encoder preference was not sent:`,n)}})()';
 for (const needle of [oldGuard, oldAudio, oldUpgrade]) {
   if (original.split(needle).length !== 2) throw new Error('Pinned Selkies patch anchor changed; review upstream.');
 }
 const patched = original.replace(oldGuard, jpegGuard).replace(oldAudio, httpAudio).replace(oldUpgrade, secureUpgrade);
-if (sha256(patched) !== 'ef414260687a434d609955e6ef18d9fccdd9500ca6169e827ee3f7b74f25c6d8') {
+if (sha256(patched) !== '5a6d4716d048938637df9e6454fedada071546b02a74d3a74451e36e24ed54c4') {
   throw new Error('Unexpected trusted client derivative; refuse to serve it.');
 }
 writeFileSync(path, patched);

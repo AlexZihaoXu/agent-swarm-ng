@@ -9,7 +9,13 @@
 # the operator accepts the browser warning once. Tailscale already encrypts the
 # transport, so this adds a browser capability, not confidentiality.
 #
-# Computer image: unchanged, and that is now correct rather than a compromise.
+# Computer image: the AV1-default desktop. The guest launcher now defaults to
+# `--encoder=av1enc` with CRF 20 / paint-over CRF 18 / burst 2, and publishes the
+# full encoder menu, so each origin negotiates its own: the secure viewer keeps
+# AV1 (software SVT-AV1 on this host; the GPU encodes H.264/HEVC only), while the
+# insecure HTTP viewer now *requests* JPEG stripes because the reviewed client
+# patch transmits an insecure-origin preference too. The previous JPEG-pinned
+# image stays tagged as `agent-swarm-default:jpeg-fallback-20260926`.
 # Two fixes make one JPEG-default image serve both origins: the guest launcher
 # publishes the operator encoder plus the full upstream menu (a bare
 # `--encoder=jpeg` publishes a one-item allowed list that blocks every client
@@ -31,12 +37,15 @@ services:
       - ./frontend/Caddyfile.tailnet-dual:/etc/caddy/Caddyfile:ro
       - ./.local/certs/dashboard-selfsigned.crt:/etc/caddy/dashboard-selfsigned.crt:ro
       - ./.local/certs/dashboard-selfsigned.key:/etc/caddy/dashboard-selfsigned.key:ro
-  computer-h264-xorg120-image:
+  computer-av1-xorg120-image:
     profiles: [computer-images]
-    image: agent-swarm-default:h264-xorg120
+    image: agent-swarm-default:av1-xorg120
     build:
       context: .
       dockerfile: templates/default/xorg120.Dockerfile
       args:
-        COMPUTER_X11_BASE: agent-swarm-default:h264-x11
+        COMPUTER_X11_BASE: agent-swarm-default:av1-x11
     command: ["true"]
+  computer-controller:
+    environment:
+      COMPUTER_IMAGE: agent-swarm-default:av1-xorg120

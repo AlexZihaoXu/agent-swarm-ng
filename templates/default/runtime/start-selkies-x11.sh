@@ -9,8 +9,8 @@ case "$id" in
 esac
 case "$id" in *[!0-9a-f-]*) echo 'Invalid managed computer ID' >&2; exit 1;; esac
 runtime=${XDG_RUNTIME_DIR:?}
-encoder=${COMPUTER_STREAM_ENCODER:-h264enc}
-case "$encoder" in h264enc|jpeg) ;; *) echo 'Invalid computer encoder' >&2; exit 1;; esac
+encoder=${COMPUTER_STREAM_ENCODER:-av1enc}
+case "$encoder" in av1enc|h264enc|jpeg) ;; *) echo 'Invalid computer encoder' >&2; exit 1;; esac
 # Selkies parses ANY enum override as the complete published menu, so
 # `--encoder=jpeg` alone advertises a one-item list and every client request to
 # switch is refused. Keep the operator's encoder as the default and first stop,
@@ -39,6 +39,7 @@ while :; do
         --ui-sidebar-show-webcam=false --ui-sidebar-show-clipboard=false \
         --ui-sidebar-show-files=false --ui-sidebar-show-apps=false \
         --ui-sidebar-show-sharing=false --encoder="$encoder_menu" --framerate=120 --jpeg-quality=50 \
+        --video-crf=20 --video-paintover-crf=18 --video-paintover-burst-frames=2 \
         >> "$runtime/selkies.log" 2>&1 &
     child=$!
     wait "$child" || true
