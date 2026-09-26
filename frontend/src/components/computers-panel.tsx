@@ -70,7 +70,10 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
   const refresh = () => void client.invalidateQueries({ queryKey: ['computers'] });
   const submitCreate = async () => {
     const requested = name.trim();
-    if (createBusy || !requested) return;
+    // !createOpen blocks a stray submit that lands on the dialog's exiting
+    // (still-mounted, aria-modal) button during the close animation, which is
+    // the only accessible "Create computer" match for a moment after Cancel.
+    if (createBusy || !requested || !createOpen) return;
     const usedSuggestion = requested === suggestion.current;
     setCreateBusy(true); setCreateError('');
     try {

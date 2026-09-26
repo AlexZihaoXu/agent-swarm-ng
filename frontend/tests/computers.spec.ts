@@ -227,7 +227,7 @@ test('viewer reports an offline stream and retries its iframe without erasing th
   expect(computers).toHaveLength(1);
 });
 
-test('trusted desktop frame smooths a downscaled stream despite upstream pixelated canvas styles', async ({ page }) => {
+test('trusted desktop frame smooths a downscaled stream despite upstream pixelated sink styles', async ({ page }) => {
   // The pinned Selkies client sets crisp-edges inline even when its 1920px
   // canvas is displayed at 1280px. Exercise the exact trusted frame HTML;
   // mock only unused upstream bundles, not the frame's own CSS.
@@ -246,8 +246,17 @@ test('trusted desktop frame smooths a downscaled stream despite upstream pixelat
       canvas.style.setProperty('image-rendering', 'crisp-edges');
       document.body.appendChild(canvas);
     }
+    // The WebCodecs H.264 path presents through this page-level video element;
+    // upstream marks it crisp inline for 1:1 display even while downscaled.
+    const video = document.createElement('video');
+    video.id = 'videoStream';
+    video.style.width = '1280px';
+    video.style.height = '720px';
+    video.style.imageRendering = 'pixelated';
+    video.style.setProperty('image-rendering', 'crisp-edges');
+    document.body.appendChild(video);
   });
-  for (const id of ['videoCanvas', 'videoWorkerCanvas']) {
+  for (const id of ['videoCanvas', 'videoWorkerCanvas', 'videoStream']) {
     await expect(page.locator(`#${id}`)).toHaveCSS('image-rendering', 'auto');
   }
 });
@@ -277,12 +286,17 @@ test('suggests a non-duplicate Workspace-NG default name and keeps an edited nam
   await create.getByRole('button', { name: 'Create computer' }).click();
   await expect(page.getByRole('article', { name: suggested })).toBeVisible();
   expect(computers.map(computer => computer.name)).toContain(suggested);
+  // The dialog stays mounted through its exit animation while Radix keeps the
+  // rest of the page aria-hidden; a reopen click before it hides would land on
+  // the exiting submit button instead of the header trigger.
+  await expect(create).toBeHidden();
   await trigger.click();
   const next = await field.inputValue();
   expect(next).toMatch(/^Workspace-NG[A-Z]{4}$/);
   expect(computers.map(computer => computer.name)).not.toContain(next);
   await field.fill('Desk prime');
   await create.getByRole('button', { name: 'Cancel' }).click();
+  await expect(create).toBeHidden();
   await trigger.click();
   await expect(field).toHaveValue('Desk prime');
 });
