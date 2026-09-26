@@ -297,8 +297,19 @@ test('computer card offers a shared context menu and power control', async ({ pa
   expect(cpuRatio).toBeCloseTo(0.6445, 2);
   await expect(dials.nth(1)).toContainText('1820 MB');
   await expect(dials.nth(1)).toContainText('of 4096 MB');
+  // The "..." alone is visible at rest; hover reveals its border and surface.
+  const actions = card.getByRole('button', { name: 'Actions for Menu desk' });
+  const rest = await actions.evaluate(node => {
+    const style = getComputedStyle(node);
+    return { background: style.backgroundColor, border: style.borderTopColor };
+  });
+  expect(rest.background).toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
+  expect(rest.border).toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
+  await actions.hover();
+  await expect.poll(() => actions.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe(rest.background);
+  await expect.poll(() => actions.evaluate(node => getComputedStyle(node).borderTopColor)).not.toBe(rest.border);
   // The "..." trigger opens the same menu as a right click.
-  await card.getByRole('button', { name: 'Actions for Menu desk' }).click();
+  await actions.click();
   const menu = page.getByRole('menu');
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: 'Open' })).toBeEnabled();

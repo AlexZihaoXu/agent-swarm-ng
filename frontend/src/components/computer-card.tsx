@@ -107,7 +107,7 @@ export function ComputerCard({ computer, canManage, onOpen }: {
         <h3 className="min-w-0 flex-1 truncate text-sm font-semibold" title={computer.name}>{computer.name}</h3>
         <Button type="button" variant="outline" size="sm" aria-label={`Actions for ${computer.name}`} aria-haspopup="menu"
           disabled={!canManage} onClick={openMenu}
-          className="min-h-11 min-w-11 shrink-0 cursor-pointer rounded-md px-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50 md:min-h-9 md:min-w-9">
+          className="min-h-11 min-w-11 shrink-0 cursor-pointer rounded-md border-transparent bg-transparent px-2 text-muted-foreground shadow-none hover:border-border hover:bg-muted/70 hover:text-foreground focus-visible:border-border focus-visible:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50 md:min-h-9 md:min-w-9">
           <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4" fill="currentColor"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
         </Button>
       </div>
