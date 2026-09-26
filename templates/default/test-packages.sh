@@ -21,6 +21,16 @@ fi
 # Check Ubuntu's effective visual defaults, not just package presence.
 export XDG_CURRENT_DESKTOP=ubuntu:GNOME GSETTINGS_BACKEND=memory
 test "$(gsettings get org.gnome.desktop.interface icon-theme)" = "'Yaru'"
+# Windows Task View-style virtual desktops are GNOME workspaces, not separate
+# platform Computers. Keep just one, and pin the installed browser/editor
+# alongside Files; Ubuntu Dock's separate Trash icon remains enabled.
+test "$(gsettings get org.gnome.mutter dynamic-workspaces)" = false
+test "$(gsettings get org.gnome.desktop.wm.preferences num-workspaces)" = 1
+test "$(gsettings get org.gnome.shell favorite-apps)" = "['org.gnome.Nautilus.desktop', 'google-chrome.desktop', 'com.microsoft.VSCode.desktop']"
+test "$(gsettings get org.gnome.shell.extensions.dash-to-dock show-trash)" = true
+test -r /usr/share/applications/org.gnome.Nautilus.desktop
+test -r /usr/share/applications/google-chrome.desktop
+test -r /usr/share/applications/com.microsoft.VSCode.desktop
 for key in picture-uri picture-uri-dark; do
     uri=$(gsettings get org.gnome.desktop.background "$key" | tr -d "'")
     case "$uri" in

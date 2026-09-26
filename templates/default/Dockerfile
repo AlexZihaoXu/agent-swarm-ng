@@ -128,6 +128,13 @@ RUN install -d -m 0755 /home/agent/.nvm \
        '  . "$NVM_DIR/nvm.sh" --no-use' \
        'fi' > /etc/profile.d/nvm-agent.sh
 
+# GNOME Task View-style desktops are workspaces inside each Computer. Keep
+# one fixed workspace; pin Files, Chrome and the already-installed VS Code in
+# Ubuntu Dock without changing its separate Trash icon. Schema defaults leave
+# existing home-volume customizations alone; no owner desktop is restarted.
+COPY gnome-workspace.gschema.override /usr/share/glib-2.0/schemas/90_swarm-computer.gschema.override
+RUN glib-compile-schemas /usr/share/glib-2.0/schemas
+
 # Operator-built HTTP/LAN variant uses JPEG/createImageBitmap instead of
 # browser-secure-context WebCodecs; H.264/H.265 builds retain JPEG as a
 # negotiated HTTP fallback rather than enabling software codecs implicitly.

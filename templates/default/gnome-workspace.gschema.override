@@ -1,0 +1,19 @@
+# Within a Computer, a Windows Task View-style virtual desktop is one GNOME
+# workspace. This does not limit the number of platform Computers or change
+# the persistent /workspace volume. GNOME's fixed workspace count removes the
+# extra workspace from Overview; users with sudo can still change preferences.
+[org.gnome.mutter]
+dynamic-workspaces=false
+# Ubuntu has a per-desktop override that otherwise wins over the generic key.
+[org.gnome.mutter:ubuntu]
+dynamic-workspaces=false
+
+[org.gnome.desktop.wm.preferences]
+num-workspaces=1
+
+# Files stays first, then the existing Chrome and VS Code packages. Ubuntu
+# Dock's Trash icon is separate from favorite-apps and retains its default.
+[org.gnome.shell]
+favorite-apps=['org.gnome.Nautilus.desktop', 'google-chrome.desktop', 'com.microsoft.VSCode.desktop']
+[org.gnome.shell:ubuntu]
+favorite-apps=['org.gnome.Nautilus.desktop', 'google-chrome.desktop', 'com.microsoft.VSCode.desktop']

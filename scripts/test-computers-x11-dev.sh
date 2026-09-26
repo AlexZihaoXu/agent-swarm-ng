@@ -97,6 +97,19 @@ container="$project-computer-$id"
 [ "$(docker inspect "$container" --format '{{index .Config.Labels "swarm.ng.id"}}')" = "$id" ]
 [ "$(docker inspect "$container" --format '{{.State.Running}}')" = true ]
 echo 'Created disposable X11 GNOME desktop; waiting for its JPEG preview.'
+# A Windows Task View virtual desktop maps to one GNOME workspace inside this
+# computer; it does not limit the number of platform Computers. Inspect the
+# running user session (not just the image's compiled schema defaults).
+GNOME_BUS=$(docker exec -u agent "$container" sh -c 'p=$(pgrep -u agent -x gnome-shell | head -1); tr "\0" "\n" < "/proc/$p/environ" | grep "^DBUS_SESSION_BUS_ADDRESS=" | cut -d = -f 2-')
+case "$GNOME_BUS" in unix:path=/tmp/dbus-*) ;; *) echo 'GNOME session bus unavailable' >&2; exit 1;; esac
+gnome_setting() { docker exec -u agent -e DBUS_SESSION_BUS_ADDRESS="$GNOME_BUS" -e XDG_CURRENT_DESKTOP=ubuntu:GNOME "$container" gsettings get "$1" "$2"; }
+[ "$(gnome_setting org.gnome.mutter dynamic-workspaces)" = false ]
+[ "$(gnome_setting org.gnome.desktop.wm.preferences num-workspaces)" = 1 ]
+[ "$(gnome_setting org.gnome.shell favorite-apps)" = "['org.gnome.Nautilus.desktop', 'google-chrome.desktop', 'com.microsoft.VSCode.desktop']" ]
+[ "$(gnome_setting org.gnome.shell.extensions.dash-to-dock show-trash)" = true ]
+docker exec "$container" sh -c 'grep -q "^Exec=/opt/swarm/launch-chrome.sh" /usr/local/share/applications/google-chrome.desktop && test -r /usr/share/applications/com.microsoft.VSCode.desktop'
+docker exec -u agent -e DISPLAY=:1 "$container" xprop -root _NET_NUMBER_OF_DESKTOPS | grep -Eq '^_NET_NUMBER_OF_DESKTOPS\(CARDINAL\) = 1$'
+echo 'One GNOME workspace and Files/Chrome/VS Code dock favorites, with Trash still enabled.'
 if [ "${TEST_TOOLCHAIN_E2E:-0}" = 1 ]; then
     docker exec -u agent "$container" sh -c 'set -eu; for tool in pi uv gcc g++ ffmpeg node npm; do command -v "$tool" >/dev/null; done; pi --version; uv --version; ffmpeg -version | head -1; test ! -e "$HOME/.pi/agent/auth.json"'
     docker exec -u agent "$container" bash -ic 'command -v nvm >/dev/null && test "$(nvm --version)" = 0.40.5 && node --version' 2>/dev/null
