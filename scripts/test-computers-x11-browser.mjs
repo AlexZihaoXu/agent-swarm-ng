@@ -26,7 +26,8 @@ await page.addInitScript(()=>{
 });
 const errors=[];
 page.on('pageerror',error=>errors.push(error.message.slice(0,200)));
-page.on('console',msg=>{if(msg.type()==='error')errors.push(msg.text().slice(0,200));});
+page.on('console',msg=>{if(msg.type()==='error')errors.push(`${msg.text().slice(0,150)} @${msg.location().url.slice(0,120)}`);});
+page.on('requestfailed',request=>console.log('REQUEST_FAILED',JSON.stringify({path:new URL(request.url()).pathname,reason:request.failure()?.errorText})));
 async function pixel(x,y){
  const png=await page.screenshot({animations:'disabled'});
  return page.evaluate(async({image,x,y})=>{

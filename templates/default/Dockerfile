@@ -100,6 +100,34 @@ RUN set -eu \
     && test -z "$(getent passwd ubuntu || true)"
 COPY runtime/ /opt/swarm/
 RUN chmod 0755 /opt/swarm/*.sh && chmod 0644 /opt/swarm/*.py
+# Incremental guest toolchain additions stay after the existing desktop and
+# browser layers but before the codec build argument: the H.264/H.265/JPEG
+# variants share these cached layers. build-essential and uv already exist.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+# Pin the official npm release. --ignore-scripts avoids dependency lifecycle
+# hooks; the package carries npm-shrinkwrap for its transitive dependencies.
+# Install only the CLI, never host Pi settings, sessions, tokens or API keys.
+RUN npm install -g --ignore-scripts --no-audit --no-fund @earendil-works/pi-coding-agent@0.87.1 \
+    && pi --version
+# Audited nvm-sh/nvm v0.40.5 (commit 1889911f0841e669de0be5bd02c737a3f1fd20fa).
+# Vendor only nvm.sh, completion and MIT license. Source with --no-use so a
+# fresh shell keeps the preinstalled system Node/npm until the user chooses.
+COPY vendor/nvm/ /opt/swarm/vendor/nvm/
+RUN install -d -m 0755 /home/agent/.nvm \
+    && cp /opt/swarm/vendor/nvm/nvm.sh /opt/swarm/vendor/nvm/bash_completion /home/agent/.nvm/ \
+    && chown -R agent:agent /home/agent/.nvm \
+    && printf '%s\n' '' '# nvm (available without replacing the system Node by default)' \
+       'export NVM_DIR="$HOME/.nvm"' \
+       '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" --no-use' \
+       '[ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"' >> /home/agent/.bashrc \
+    && printf '%s\n' '# Source nvm in agent Bash login shells, without changing system Node by default.' \
+       'if [ -n "${BASH_VERSION:-}" ] && [ "$(id -un)" = agent ] && [ -s /home/agent/.nvm/nvm.sh ]; then' \
+       '  export NVM_DIR=/home/agent/.nvm' \
+       '  . "$NVM_DIR/nvm.sh" --no-use' \
+       'fi' > /etc/profile.d/nvm-agent.sh
+
 # Operator-built HTTP/LAN variant uses JPEG/createImageBitmap instead of
 # browser-secure-context WebCodecs; H.264/H.265 builds retain JPEG as a
 # negotiated HTTP fallback rather than enabling software codecs implicitly.

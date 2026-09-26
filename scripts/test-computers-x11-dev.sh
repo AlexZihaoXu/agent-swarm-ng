@@ -97,6 +97,12 @@ container="$project-computer-$id"
 [ "$(docker inspect "$container" --format '{{index .Config.Labels "swarm.ng.id"}}')" = "$id" ]
 [ "$(docker inspect "$container" --format '{{.State.Running}}')" = true ]
 echo 'Created disposable X11 GNOME desktop; waiting for its JPEG preview.'
+if [ "${TEST_TOOLCHAIN_E2E:-0}" = 1 ]; then
+    docker exec -u agent "$container" sh -c 'set -eu; for tool in pi uv gcc g++ ffmpeg node npm; do command -v "$tool" >/dev/null; done; pi --version; uv --version; ffmpeg -version | head -1; test ! -e "$HOME/.pi/agent/auth.json"'
+    docker exec -u agent "$container" bash -ic 'command -v nvm >/dev/null && test "$(nvm --version)" = 0.40.5 && node --version' 2>/dev/null
+    docker exec -u agent "$container" bash -lc 'command -v nvm >/dev/null && test "$(nvm --version)" = 0.40.5 && node --version' 2>/dev/null
+    echo 'Managed guest toolchain available as agent with no baked Pi credential.'
+fi
 ready=0
 for attempt in $(seq 1 35); do
     if curl -fsS --max-time 12 "http://127.0.0.1:5173/api/computers/$id/preview?full=1" -o .scratch/x11-gnome-preview.jpg 2>/dev/null; then ready=1; break; fi
@@ -131,6 +137,26 @@ assert relay['State']['Running'] and not relay['HostConfig'].get('PortBindings')
 assert relay['HostConfig']['ReadonlyRootfs'] and relay['HostConfig']['CapDrop']==['ALL'] and not relay['Mounts']
 print('X11 desktop retains Sysbox, same two owned volumes, gateway-less bridge and bounded unprivileged media relay.')
 PY
+if [ "${TEST_SETTINGS_E2E:-0}" = 1 ]; then
+    before_id=$(docker inspect "$container" --format '{{.Id}}')
+    docker exec -u agent "$container" sh -c 'printf settings-survived > /home/agent/.swarm-settings-e2e-sentinel'
+    curl -fsS --max-time 45 -X POST "http://127.0.0.1:5173/api/computers/$id/power" -H 'Content-Type: application/json' -d '{"action":"stop"}' >/dev/null
+    [ "$(docker inspect "$container" --format '{{.State.Running}}')" = false ]
+    curl -fsS --max-time 45 -X PATCH "http://127.0.0.1:5173/api/computers/$id/settings" -H 'Content-Type: application/json' \
+        -d '{"cpuCores":2,"memoryGiB":6,"timezone":"America/Toronto"}' \
+        | python3 -c 'import json,sys;x=json.load(sys.stdin);assert (x["cpuCores"],x["memoryGiB"],x["timezone"])==(2,6,"America/Toronto")'
+    curl -fsS --max-time 70 -X POST "http://127.0.0.1:5173/api/computers/$id/settings/replacement" -H 'Content-Type: application/json' \
+        -d '{"cpuCores":3,"memoryGiB":5,"timezone":"Etc/UTC","confirmReplacement":true}' \
+        | python3 -c 'import json,sys;x=json.load(sys.stdin);assert (x["state"],x["cpuCores"],x["memoryGiB"],x["timezone"])==("exited",3,5,"Etc/UTC")'
+    [ "$(docker inspect "$container" --format '{{.State.Running}}')" = false ]
+    [ "$(docker inspect "$container" --format '{{.Id}}')" != "$before_id" ]
+    docker inspect "$container" --format '{{json .Config.Env}}' | grep -Fq 'TZ=Etc/UTC'
+    docker inspect "$container" --format '{{.HostConfig.NanoCpus}} {{.HostConfig.Memory}} {{.HostConfig.MemorySwap}}' \
+        | grep -Fq '3000000000 5368709120 10737418240'
+    curl -fsS --max-time 75 -X POST "http://127.0.0.1:5173/api/computers/$id/power" -H 'Content-Type: application/json' -d '{"action":"start"}' >/dev/null
+    docker exec -u agent "$container" sh -c 'test "$(cat /home/agent/.swarm-settings-e2e-sentinel)" = settings-survived && test "$(date +%Z)" = UTC'
+    echo 'Settings E2E: live CPU/RAM update, stopped TZ replacement, exact UUID/volumes preserved, power-on succeeded.'
+fi
 if [ "${TEST_DISPLAY_SERVER:-xvfb}" = xorg120 ]; then
     docker exec "$container" sh -c 'ps -eo args | grep "[X]org :1" | grep -q -- "-nolisten tcp"; ps -eo args | grep "[X]org :1" | grep -q -- "/opt/swarm/xorg-dummy.conf"'
 else
