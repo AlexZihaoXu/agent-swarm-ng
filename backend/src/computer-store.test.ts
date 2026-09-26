@@ -42,6 +42,18 @@ describe('computer identity and lifecycle', () => {
     } finally { await database.close(); }
   });
 
+  it('rejects a name that only differs in case from an existing computer', async () => {
+    const { database, computers } = await fixture();
+    try {
+      await computers.reserve('Workspace-NGABCD', crypto.randomUUID());
+      await expect(computers.reserve('workspace-ngabcd', crypto.randomUUID())).rejects.toThrow('already in use');
+      await expect(computers.reserve('  Workspace-NGABCD  ', crypto.randomUUID())).rejects.toThrow('already in use');
+      const distinct = await computers.reserve('Workspace-NGWXYZ', crypto.randomUUID());
+      expect(distinct.created).toBe(true);
+      expect(await database.client.computer.count()).toBe(2);
+    } finally { await database.close(); }
+  });
+
   it('bounds retained computer records without breaking idempotent retries at the cap', async () => {
     const { database, computers } = await fixture();
     try {

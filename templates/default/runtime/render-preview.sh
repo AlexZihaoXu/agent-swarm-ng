@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run as ubuntu in its desktop runtime; write no persistent screenshot files.
+# Run as agent in its desktop runtime; write no persistent screenshot files.
 set -eu
 runtime=${XDG_RUNTIME_DIR:?}
 case "${1:-}" in

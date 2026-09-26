@@ -170,6 +170,40 @@ test('280px computer viewer keeps consent controls reachable with reduced motion
   await page.screenshot({ path: '../.scratch/computers-viewer-consent-phone.png', animations: 'disabled' });
 });
 
+test('320px viewer with a long name keeps the back control clear of its action buttons', async ({ page }) => {
+  const id = 'b0ab6a5e-1a1b-4a12-9d5f-0f3a5b6c7d8e';
+  const name = 'E2E desktop 1790379814000';
+  await mockComputers(page, [{ id, name, state: 'running', createdAt: 0, cpuPercent: 2, memoryBytes: 104857600 }]);
+  await page.route(new RegExp(`/api/computers/${id}/preview\\?full=1`), route => route.fulfill({
+    status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect width="1920" height="1080" fill="#523348"/></svg>',
+  }));
+  await page.route(url => new URL(url).pathname.startsWith(`/computers/${id}/desktop/`), route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Selkies</title><video></video>' }));
+  // Consent already granted, so the header renders its live action buttons.
+  await page.addInitScript(key => localStorage.setItem(key, 'yes'), `computer-consent:${id}`);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Computers' }).click();
+  await page.getByRole('button', { name: `Open ${name} desktop` }).click();
+  const back = page.getByRole('button', { name: 'Back to computers' });
+  await expect(back).toBeVisible();
+  const box = await back.boundingBox();
+  // Every header action must clear the back control, whatever the viewer state renders.
+  let checked = 0;
+  for (const action of await page.getByTestId('computer-viewer').locator('header button').all()) {
+    if (await action.getAttribute('aria-label') === 'Back to computers') continue;
+    await expect(action).toBeVisible();
+    const rect = await action.boundingBox();
+    const clear = Boolean(box && rect && (rect.x >= box.x + box.width || box.x >= rect.x + rect.width || rect.y >= box.y + box.height || box.y >= rect.y + rect.height));
+    expect(clear, `a header action overlaps the back control: ${JSON.stringify({ box, rect })}`).toBe(true);
+    checked += 1;
+  }
+  expect(checked).toBeGreaterThan(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '../.scratch/computers-viewer-phone-header.png', animations: 'disabled' });
+  await back.click();
+  await expect(page.getByRole('button', { name: `Open ${name} desktop` })).toBeVisible();
+});
+
 test('viewer reports an offline stream and retries its iframe without erasing the computer', async ({ page }) => {
   const id = 'da02f137-8a73-4e93-9d22-95886ca9f9fa';
   const { computers } = await mockComputers(page, [{ id, name: 'Recoverable desk', state: 'running', createdAt: 0, cpuPercent: 2, memoryBytes: 104857600 }]);
@@ -227,6 +261,30 @@ test('keeps saved computers visible but controls disabled when their controller 
   await expect(page.getByText('Computer management is offline.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create computer' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Delete Saved computer' })).toBeDisabled();
+});
+
+test('suggests a non-duplicate Workspace-NG default name and keeps an edited name', async ({ page }) => {
+  const { computers } = await mockComputers(page, [{ id: 'taken', name: 'Workspace-NGAAAA', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0 }]);
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Computers' }).click();
+  const trigger = page.getByRole('button', { name: 'Create computer' });
+  await trigger.click();
+  const create = page.getByRole('dialog', { name: 'Create computer' });
+  const field = create.getByLabel('Computer name');
+  await expect(field).toHaveValue(/^Workspace-NG[A-Z]{4}$/);
+  const suggested = await field.inputValue();
+  expect(suggested).not.toBe('Workspace-NGAAAA');
+  await create.getByRole('button', { name: 'Create computer' }).click();
+  await expect(page.getByRole('article', { name: suggested })).toBeVisible();
+  expect(computers.map(computer => computer.name)).toContain(suggested);
+  await trigger.click();
+  const next = await field.inputValue();
+  expect(next).toMatch(/^Workspace-NG[A-Z]{4}$/);
+  expect(computers.map(computer => computer.name)).not.toContain(next);
+  await field.fill('Desk prime');
+  await create.getByRole('button', { name: 'Cancel' }).click();
+  await trigger.click();
+  await expect(field).toHaveValue('Desk prime');
 });
 
 test('creates a computer and requires an exact typed name before destructive deletion', async ({ page }) => {

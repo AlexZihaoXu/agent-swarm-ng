@@ -225,7 +225,7 @@ export class ComputerManager {
         NanoCpus: this.cpuLimit * 1_000_000_000, Memory: 4 * 1024 * 1024 * 1024, PidsLimit: 1024,
         RestartPolicy: { Name: 'no' },
         Mounts: [
-          { Type: 'volume', Source: this.names.volume(id, 'home'), Target: '/home/ubuntu' },
+          { Type: 'volume', Source: this.names.volume(id, 'home'), Target: '/home/agent' },
           { Type: 'volume', Source: this.names.volume(id, 'workspace'), Target: '/workspace' },
         ],
       },
@@ -233,7 +233,7 @@ export class ComputerManager {
     await this.docker.request('POST', `${this.path('containers', computerName)}/start`);
     let ready = false;
     for (let attempt = 0; attempt < 80; attempt++) {
-      try { await this.docker.exec(computerName, ['test', '-f', '/run/user/1000/desktop-ready'], 'ubuntu', 4000); ready = true; break; }
+      try { await this.docker.exec(computerName, ['test', '-f', '/run/user/1000/desktop-ready'], 'agent', 4000); ready = true; break; }
       catch { await delay(500); }
     }
     if (!ready) throw new ResourceError(503, 'Computer desktop did not become ready.');
@@ -351,7 +351,7 @@ export class ComputerManager {
     const computer = await this.container(name, id, 'desktop');
     if (!computer) throw new ResourceError(404, 'Computer not found.');
     if (!computer.State.Running) throw new ResourceError(503, 'Computer desktop is unavailable.');
-    await this.docker.exec(name, ['/opt/swarm/desktop-input.sh', String(x), String(y)], 'ubuntu', 10_000);
+    await this.docker.exec(name, ['/opt/swarm/desktop-input.sh', String(x), String(y)], 'agent', 10_000);
   }
 
   async preview(idRaw: string, full = false) {
@@ -366,7 +366,7 @@ export class ComputerManager {
       const container = await this.container(name, id, 'desktop');
       if (!container) return null;
       if (!container.State.Running) return null;
-      const encoded = await this.docker.exec(name, ['/opt/swarm/render-preview.sh', ...(full ? ['--full'] : [])], 'ubuntu', 16_000);
+      const encoded = await this.docker.exec(name, ['/opt/swarm/render-preview.sh', ...(full ? ['--full'] : [])], 'agent', 16_000);
       if (encoded.length > (full ? 700 : 256) * 1024) throw new ResourceError(503, 'Preview exceeded its limit.');
       const image = Buffer.from(encoded.toString().trim(), 'base64');
       if (image.length < 4 || image[0] !== 0xff || image[1] !== 0xd8 || image.at(-2) !== 0xff || image.at(-1) !== 0xd9) throw new ResourceError(503, 'Preview is not a JPEG.');

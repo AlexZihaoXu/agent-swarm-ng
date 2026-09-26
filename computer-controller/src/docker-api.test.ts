@@ -28,7 +28,7 @@ it('bounds Docker Unix-socket responses and decodes only stdout from an exec str
     else if (path === '/v1.44/exec/exec-id/json') res.end(JSON.stringify({ ExitCode: 0 }));
     else res.writeHead(404).end();
   });
-  expect(await client.exec('owned', ['/opt/swarm/render-preview.sh'], 'ubuntu')).toEqual(Buffer.from('frame-data'));
+  expect(await client.exec('owned', ['/opt/swarm/render-preview.sh'], 'agent')).toEqual(Buffer.from('frame-data'));
 });
 
 it('never treats a missing or failed Docker resource as a successful exec', async () => {

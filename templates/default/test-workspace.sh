@@ -2,8 +2,8 @@
 # Run inside the image as its default user.
 set -eu
 
-test "$(id -un)" = ubuntu
-test "$HOME" = /home/ubuntu
+test "$(id -un)" = agent
+test "$HOME" = /home/agent
 test -w "$HOME"
 test -w /workspace
 

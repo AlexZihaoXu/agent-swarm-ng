@@ -86,6 +86,18 @@ RUN set -eu; arch="$(dpkg --print-architecture)"; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends /tmp/selkies.deb mesa-va-drivers vainfo; \
     rm -rf /var/lib/apt/lists/* /tmp/selkies.deb
+# Name the interactive guest account `agent`. uid/gid stay 1000 so a home volume
+# created by an older image remains readable at its new mount point. Ubuntu's
+# session identifiers (`--mode=ubuntu`, `XDG_CURRENT_DESKTOP=ubuntu:GNOME`,
+# `/usr/share/ubuntu`) are distro names, not the account, and stay unchanged.
+RUN set -eu \
+    && usermod -l agent ubuntu \
+    && groupmod -n agent ubuntu \
+    && usermod -d /home/agent -m agent \
+    && mv /etc/sudoers.d/ubuntu /etc/sudoers.d/agent \
+    && sed -i 's/^ubuntu /agent /' /etc/sudoers.d/agent \
+    && getent passwd agent | grep -q '^agent:x:1000:1000:' \
+    && test -z "$(getent passwd ubuntu || true)"
 COPY runtime/ /opt/swarm/
 RUN chmod 0755 /opt/swarm/*.sh && chmod 0644 /opt/swarm/*.py
 # Operator-built HTTP/LAN variant uses JPEG/createImageBitmap instead of
@@ -96,10 +108,10 @@ ENV COMPUTER_STREAM_ENCODER=$COMPUTER_STREAM_ENCODER
 
 # Docker initializes fresh named volumes from these image directories.
 # Do not declare anonymous VOLUMEs or overwrite existing user files at startup.
-RUN chown ubuntu:ubuntu /workspace
+RUN chown agent:agent /workspace
 # This is intentionally the Linux editor, including when Docker runs on WSL2.
-ENV HOME=/home/ubuntu DONT_PROMPT_WSL_INSTALL=1
-USER ubuntu
+ENV HOME=/home/agent DONT_PROMPT_WSL_INSTALL=1
+USER agent
 
 # The standalone image remains idle until the managed controller starts it.
 CMD ["sleep", "infinity"]

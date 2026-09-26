@@ -13,6 +13,7 @@ export COMPUTER_RENDER_DEVICE="${TEST_RENDER_DEVICE:-}"
 if [ "${TEST_DISPLAY_SERVER:-xvfb}" = xorg120 ]; then
     export COMPUTER_CPU_LIMIT=4
     export TEST_X11_IMAGE=agent-swarm-default:xorg120-120-candidate
+    export TEST_X11_BASE=agent-swarm-default:xorg120-120-gate-base
 else
     export COMPUTER_CPU_LIMIT=2
     # Do not retag the image selected by the running live controller while a
@@ -62,10 +63,11 @@ docker build -t agent-swarm-computer-egress:dev -f templates/default/egress.Dock
 docker build -t agent-swarm-computer-media:stage2 -f templates/default/media.Dockerfile templates/default
 docker build -t agent-swarm-default:http-jpeg --build-arg COMPUTER_STREAM_ENCODER=jpeg templates/default
 if [ "${TEST_DISPLAY_SERVER:-xvfb}" = xorg120 ]; then
-    # The approved X11 base must be built directly already; do not retag its
-    # running/live creation image during an isolated experiment.
-    docker image inspect agent-swarm-default:http-jpeg-x11 >/dev/null
-    docker build -t "$TEST_X11_IMAGE" -f templates/default/xorg120.Dockerfile .
+    # Build this gate's own X11 base from the freshly compiled JPEG image so a
+    # stale cached base cannot disagree with the controller, and never retag the
+    # http-jpeg-x11 creation image the documented rollback overlay selects.
+    docker build -t "$TEST_X11_BASE" -f templates/default/x11.Dockerfile .
+    docker build -t "$TEST_X11_IMAGE" -f templates/default/xorg120.Dockerfile --build-arg COMPUTER_X11_BASE="$TEST_X11_BASE" .
 else
     docker build -t "$TEST_X11_IMAGE" -f templates/default/x11.Dockerfile .
 fi
@@ -109,8 +111,11 @@ assert not c['HostConfig'].get('PortBindings')
 assert c['HostConfig'].get('Devices') in (None,[]) if not device else c['HostConfig'].get('Devices')==[{
     'PathOnHost':device,'PathInContainer':device,'CgroupPermissions':'rwm'}]
 assert ('COMPUTER_GPU_RENDER_DEVICE='+device in c['Config']['Env']) == bool(device)
+# A stale desktop image would still carry the old guest account, and the
+# controller's readiness exec would fail with no explanation.
+assert 'HOME=/home/agent' in c['Config']['Env'], 'the desktop image must run as the agent user'
 assert {m['Destination']:m['Name'] for m in c['Mounts'] if m['Type']=='volume'}=={
-    '/home/ubuntu':computer+'-home','/workspace':computer+'-workspace'}
+    '/home/agent':computer+'-home','/workspace':computer+'-workspace'}
 network=json.loads(subprocess.check_output(['docker','network','inspect',computer+'-private']))[0]
 assert network['Internal'] and not network['EnableIPv6']
 assert network['Options']['com.docker.network.bridge.gateway_mode_ipv4']=='isolated'
@@ -133,28 +138,28 @@ docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=fals
 docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--jpeg-quality=50"'
 docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--scaling-dpi=96"'
 if [ "${TEST_DISPLAY_SERVER:-xvfb}" = xorg120 ]; then
-    randr=$(docker exec -u ubuntu -e DISPLAY=:1 "$container" xrandr --current)
+    randr=$(docker exec -u agent -e DISPLAY=:1 "$container" xrandr --current)
     printf '%s\n' "$randr" | head -4
     [ "$(printf '%s\n' "$randr" | awk '$1 ~ /^[0-9]+x[0-9]+/ {print $1, $2}')" = '1920x1080_120 120.00*+' ] || { echo 'Xorg did not expose only the fixed 120-Hz mode' >&2; exit 1; }
-    state=$(docker exec -u ubuntu -e DISPLAY=:1 "$container" sh -c 'p=$(pgrep -u ubuntu -x gnome-shell | head -1); export DBUS_SESSION_BUS_ADDRESS=$(tr "\0" "\n" < "/proc/$p/environ" | grep "^DBUS_SESSION_BUS_ADDRESS=" | cut -d = -f 2-); gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.GetCurrentState')
+    state=$(docker exec -u agent -e DISPLAY=:1 "$container" sh -c 'p=$(pgrep -u agent -x gnome-shell | head -1); export DBUS_SESSION_BUS_ADDRESS=$(tr "\0" "\n" < "/proc/$p/environ" | grep "^DBUS_SESSION_BUS_ADDRESS=" | cut -d = -f 2-); gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.GetCurrentState')
     printf '%s' "$state" | python3 -c 'import re,sys;s=sys.stdin.read();m=re.search(r"1920, 1080, ([0-9.]+), 1\.0",s);assert m and 119.9<float(m.group(1))<120.1;print("GNOME logical1x virtual mode:",m.group(1),"Hz")'
-    [ "$(docker exec -u ubuntu "$container" gsettings get org.gnome.desktop.interface text-scaling-factor)" = 1.0 ]
+    [ "$(docker exec -u agent "$container" gsettings get org.gnome.desktop.interface text-scaling-factor)" = 1.0 ]
 else
-    docker exec -u ubuntu -e DISPLAY=:1 "$container" xrandr --current | grep -E '^Screen|current|[0-9]+\.[0-9]+\*' | head -5
+    docker exec -u agent -e DISPLAY=:1 "$container" xrandr --current | grep -E '^Screen|current|[0-9]+\.[0-9]+\*' | head -5
 fi
 media_ip=$(docker inspect "${container}-media" --format "{{(index .NetworkSettings.Networks \"${project}-computer-media\").IPAddress}}")
 [ -n "$media_ip" ]
-if docker exec -u ubuntu "$container" curl -kfsS --connect-timeout 2 --max-time 3 "https://$media_ip:8080/computers/$id/desktop/" >/dev/null 2>&1; then
+if docker exec -u agent "$container" curl -kfsS --connect-timeout 2 --max-time 3 "https://$media_ip:8080/computers/$id/desktop/" >/dev/null 2>&1; then
     echo 'X11 desktop reached forbidden dashboard media bridge!' >&2; exit 1
 fi
 echo 'Guest X11 TCP disabled; guest cannot reach its dashboard media relay.'
 if [ -n "$COMPUTER_RENDER_DEVICE" ]; then
-    docker exec -u ubuntu "$container" sh -c 'test -r /dev/dri/renderD128 && test ! -e /dev/dri/card0 && vainfo --display drm --device /dev/dri/renderD128 2>&1 | grep -q "VAProfileHEVCMain.*EncSlice"'
+    docker exec -u agent "$container" sh -c 'test -r /dev/dri/renderD128 && test ! -e /dev/dri/card0 && vainfo --display drm --device /dev/dri/renderD128 2>&1 | grep -q "VAProfileHEVCMain.*EncSlice"'
     docker exec "$container" sh -c 'grep -q "Exec=/opt/swarm/launch-chrome.sh" /usr/local/share/applications/google-chrome.desktop'
     docker cp scripts/test-computers-webgl.html "$container:/tmp/swarm-webgl-probe.html" >/dev/null
     # A real, sandboxed guest Chrome must draw WebGL pixels and disclose a
     # non-software GPU renderer. VAAPI encode alone does not establish WebGL.
-    docker exec -u ubuntu -e DISPLAY=:1 "$container" sh -c 'timeout 40 /opt/swarm/launch-chrome.sh --headless --disable-dev-shm-usage --no-first-run --no-default-browser-check --user-data-dir=/tmp/swarm-webgl-headless --virtual-time-budget=4500 --dump-dom file:///tmp/swarm-webgl-probe.html 2>/tmp/swarm-webgl-chrome.log' > .scratch/x11-webgl-result.html
+    docker exec -u agent -e DISPLAY=:1 "$container" sh -c 'timeout 40 /opt/swarm/launch-chrome.sh --headless --disable-dev-shm-usage --no-first-run --no-default-browser-check --user-data-dir=/tmp/swarm-webgl-headless --virtual-time-budget=4500 --dump-dom file:///tmp/swarm-webgl-probe.html 2>/tmp/swarm-webgl-chrome.log' > .scratch/x11-webgl-result.html
     python3 - <<'PY'
 from pathlib import Path
 from html.parser import HTMLParser
@@ -168,7 +173,7 @@ assert '"ok":true' in result.text, 'WebGL did not draw expected pixels'
 assert all(x not in result.text.lower() for x in ('swiftshader','llvmpipe','software rasterizer')), 'WebGL fell back to software rendering'
 PY
 fi
-xft_dpi() { docker exec -u ubuntu -e DISPLAY=:1 "$container" xrdb -query 2>/dev/null | awk '$1 == "Xft.dpi:" { print $2 }'; }
+xft_dpi() { docker exec -u agent -e DISPLAY=:1 "$container" xrdb -query 2>/dev/null | awk '$1 == "Xft.dpi:" { print $2 }'; }
 # Xft resources may be unset until the first viewer; they must never take a
 # browser's 2x DPR. A connected viewer must settle at operator-owned 96.
 initial_dpi=$(xft_dpi)
@@ -189,9 +194,9 @@ docker run --rm --network "${project}_default" --user "$(id -u):$(id -g)" \
 if [ -n "$COMPUTER_RENDER_DEVICE" ]; then
     # The GNOME-launched browser uses the opt-in Radeon path; its shader must
     # be visible over JPEG, and trusted controls must target guest tabs only.
-    docker exec -u ubuntu -e DISPLAY=:1 "$container" sh -c '/opt/swarm/launch-chrome.sh --no-first-run --no-default-browser-check --new-window --window-size=920,730 --user-data-dir=/tmp/swarm-webgl-gui file:///tmp/swarm-webgl-probe.html > /tmp/swarm-webgl-gui.log 2>&1 < /dev/null &'
+    docker exec -u agent -e DISPLAY=:1 "$container" sh -c '/opt/swarm/launch-chrome.sh --no-first-run --no-default-browser-check --new-window --window-size=920,730 --user-data-dir=/tmp/swarm-webgl-gui file:///tmp/swarm-webgl-probe.html > /tmp/swarm-webgl-gui.log 2>&1 < /dev/null &'
     sleep 3
-    docker exec -u ubuntu -e DISPLAY=:1 "$container" sh -c 'ps -eww -o args | grep -q "[c]hrome --no-first-run"; xprop -root _NET_ACTIVE_WINDOW 2>/dev/null | head -1'
+    docker exec -u agent -e DISPLAY=:1 "$container" sh -c 'ps -eww -o args | grep -q "[c]hrome --no-first-run"; xprop -root _NET_ACTIVE_WINDOW 2>/dev/null | head -1'
     docker run --rm --network "${project}_default" --user "$(id -u):$(id -g)" \
         --security-opt "seccomp=$PWD/templates/default/security/chromium-seccomp.json" \
         --security-opt no-new-privileges:true --cap-add SYS_CHROOT \

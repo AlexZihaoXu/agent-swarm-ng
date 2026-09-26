@@ -33,7 +33,7 @@ id=$(python3 -c 'import json; print(json.load(open(".scratch/computer-api-e2e-cr
 computer="${namespace}-computer-${id}"
 gateway="${computer}-gateway"
 if [ -n "${COMPUTER_RENDER_DEVICE:-}" ]; then
-    docker exec -u ubuntu "$computer" vainfo --display drm --device "$COMPUTER_RENDER_DEVICE" > .scratch/computer-api-e2e-vainfo.log 2>&1
+    docker exec -u agent "$computer" vainfo --display drm --device "$COMPUTER_RENDER_DEVICE" > .scratch/computer-api-e2e-vainfo.log 2>&1
     grep -q 'VAProfileH264High.*VAEntrypointEncSlice' .scratch/computer-api-e2e-vainfo.log
     echo 'Managed non-root computer can use the host H.264 VA-API render node.'
 fi
@@ -94,8 +94,8 @@ PY
 test -n "$(docker exec "${namespace}-caddy-dev-1" getent hosts "computer-$id")"
 media_ip=$(docker inspect "$media" --format "{{(index .NetworkSettings.Networks \"${namespace}-computer-media\").IPAddress}}")
 relay_private_ip=$(docker inspect "$media" --format "{{(index .NetworkSettings.Networks \"${computer}-private\").IPAddress}}")
-if docker exec -u ubuntu "$computer" curl -kfsS --connect-timeout 2 --max-time 3 "https://$media_ip:8080/computers/$id/desktop/" >/dev/null 2>&1; then echo 'Computer reached the media bridge!' >&2; exit 1; fi
-if docker exec -u ubuntu "$computer" curl -kfsS --connect-timeout 2 --max-time 3 "https://$relay_private_ip:8080/computers/$id/desktop/" >/dev/null 2>&1; then
+if docker exec -u agent "$computer" curl -kfsS --connect-timeout 2 --max-time 3 "https://$media_ip:8080/computers/$id/desktop/" >/dev/null 2>&1; then echo 'Computer reached the media bridge!' >&2; exit 1; fi
+if docker exec -u agent "$computer" curl -kfsS --connect-timeout 2 --max-time 3 "https://$relay_private_ip:8080/computers/$id/desktop/" >/dev/null 2>&1; then
     docker exec "$media" ip -o -4 addr show >&2 || true
     docker inspect "$media" --format '{{json .NetworkSettings.Networks}}' >&2 || true
     echo 'Relay listened on the computer-facing bridge!' >&2; exit 1
@@ -125,7 +125,7 @@ cmp .scratch/computer-api-e2e-core.js .scratch/selkies-client-web/assets/selkies
 echo '633f8909c4ef14c2a3c178292f4b6d47dbacbf71ccd55060ace4db623b000c52  .scratch/computer-api-e2e-core.js' | sha256sum -c -
 # Sudo inside the *test* computer can replace its own copy, but that must not
 # change the JavaScript the dashboard sends to a same-origin viewer.
-docker exec -u ubuntu "$computer" sudo -n sh -c 'printf "%s\n" "/* untrusted computer asset */" > /opt/selkies/lib/python3.12/site-packages/selkies/selkies_web/assets/index-CPWh3fQ6.js; printf "%s\n" "/* guest core override */" > /opt/selkies/lib/python3.12/site-packages/selkies/selkies_web/assets/selkies-core-BbKps5RD.js'
+docker exec -u agent "$computer" sudo -n sh -c 'printf "%s\n" "/* untrusted computer asset */" > /opt/selkies/lib/python3.12/site-packages/selkies/selkies_web/assets/index-CPWh3fQ6.js; printf "%s\n" "/* guest core override */" > /opt/selkies/lib/python3.12/site-packages/selkies/selkies_web/assets/selkies-core-BbKps5RD.js'
 curl -fsS --max-time 12 "$asset" -o .scratch/computer-api-e2e-client-after.js
 cmp .scratch/computer-api-e2e-client.js .scratch/computer-api-e2e-client-after.js
 curl -fsS --max-time 12 "$core" -o .scratch/computer-api-e2e-core-after.js
@@ -149,9 +149,9 @@ if ! grep -q '^HTTP/1.1 101 ' .scratch/computer-api-e2e-ws-headers.txt; then
     echo 'Same-port WebSocket upgrade failed' >&2; exit 1
 fi
 echo 'Same-port browser WebSocket upgrade and reverse-only media isolation passed.'
-docker exec -u ubuntu "$computer" sudo -n sh -c 'test "$(id -u)" -eq 0 && test "$(awk "NR==1 {print \$2}" /proc/self/uid_map)" -ne 0'
-docker exec -u ubuntu "$computer" curl -fsS --max-time 8 http://example.com | grep -q 'Example Domain'
-docker exec -u ubuntu "$computer" sudo -n timeout 90s apt-get update -qq
+docker exec -u agent "$computer" sudo -n sh -c 'test "$(id -u)" -eq 0 && test "$(awk "NR==1 {print \$2}" /proc/self/uid_map)" -ne 0'
+docker exec -u agent "$computer" curl -fsS --max-time 8 http://example.com | grep -q 'Example Domain'
+docker exec -u agent "$computer" sudo -n timeout 90s apt-get update -qq
 echo 'Passwordless sudo is mapped to an unprivileged host UID; public HTTP and sudo apt work.'
 # Use an actually reachable service on the public egress bridge to prove that
 # rejection comes from the gateway firewall, not from a closed destination port.
@@ -161,13 +161,13 @@ attempt=0
 until [ "$(docker exec "$gateway" wget -T 2 -qO- "http://$target_ip:8080" 2>/dev/null)" = probe-ok ]; do
     attempt=$((attempt+1)); [ "$attempt" -lt 15 ] || { echo 'Private test service not reachable from gateway'; exit 1; }; sleep 1
 done
-if docker exec -u ubuntu "$computer" curl -fsS --max-time 3 "http://$target_ip:8080" >/dev/null 2>&1; then echo 'Private network escape!' >&2; exit 1; fi
+if docker exec -u agent "$computer" curl -fsS --max-time 3 "http://$target_ip:8080" >/dev/null 2>&1; then echo 'Private network escape!' >&2; exit 1; fi
 if [ -n "${COMPUTER_TEST_TAILNET_IP:-}" ]; then
     python3 - "$COMPUTER_TEST_TAILNET_IP" <<'PY'
 import ipaddress,sys
 assert ipaddress.ip_address(sys.argv[1]) in ipaddress.ip_network('100.64.0.0/10')
 PY
-    if docker exec -u ubuntu "$computer" curl -fsS --max-time 3 "http://${COMPUTER_TEST_TAILNET_IP}:${COMPUTER_TEST_TAILNET_PORT:-19090}/api/health" >/dev/null 2>&1; then echo 'Tailnet escape!' >&2; exit 1; fi
+    if docker exec -u agent "$computer" curl -fsS --max-time 3 "http://${COMPUTER_TEST_TAILNET_IP}:${COMPUTER_TEST_TAILNET_PORT:-19090}/api/health" >/dev/null 2>&1; then echo 'Tailnet escape!' >&2; exit 1; fi
 fi
 echo 'Reachable private target blocked; optional Tailnet probe denied if configured.'
 # A second real GNOME computer must have a distinct bridge and volume pair.
@@ -179,12 +179,12 @@ other_container="${namespace}-computer-${other_id}"
 other_private="${other_container}-private"
 other_ip=$(docker inspect "$other_container" --format "{{(index .NetworkSettings.Networks \"$other_private\").IPAddress}}")
 test "$other_private" != "${computer}-private"
-docker exec -d -u ubuntu "$other_container" python3 -m http.server 8808 --bind 0.0.0.0 >/dev/null
+docker exec -d -u agent "$other_container" python3 -m http.server 8808 --bind 0.0.0.0 >/dev/null
 attempt=0
-until docker exec -u ubuntu "$other_container" curl -fsS --max-time 2 http://127.0.0.1:8808/ >/dev/null 2>&1; do
+until docker exec -u agent "$other_container" curl -fsS --max-time 2 http://127.0.0.1:8808/ >/dev/null 2>&1; do
     attempt=$((attempt+1)); [ "$attempt" -lt 20 ] || { echo 'Second computer test service did not start'; exit 1; }; sleep 0.2
 done
-if docker exec -u ubuntu "$computer" curl -fsS --max-time 3 "http://$other_ip:8808/" >/dev/null 2>&1; then echo 'Computer-to-computer escape!' >&2; exit 1; fi
+if docker exec -u agent "$computer" curl -fsS --max-time 3 "http://$other_ip:8808/" >/dev/null 2>&1; then echo 'Computer-to-computer escape!' >&2; exit 1; fi
 python3 - "$base" "$id" "$other_id" <<'PY'
 from concurrent.futures import ThreadPoolExecutor
 from urllib.request import urlopen

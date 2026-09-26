@@ -34,6 +34,11 @@ bun run test
 bun run build
 # Opt-in Linux/Docker computer lifecycle + browser E2E (unique test project; cleans its own resources):
 sh scripts/test-computers-dev.sh
+# Opt in to the single validated render node for that gate (off by default, so the
+# disposable controller and its host-side device assertions always agree):
+TEST_RENDER_DEVICE=/dev/dri/renderD128 sh scripts/test-computers-dev.sh
+# Xorg dummy 120 Hz variant of the portal-free gate (builds its own X11 base tag):
+TEST_DISPLAY_SERVER=xorg120 TEST_RENDER_DEVICE=/dev/dri/renderD128 sh scripts/test-computers-x11-dev.sh
 ```
 
 API generation does not require a running server. Commit both `backend/openapi.json` and `frontend/src/api/schema.d.ts` when the contract changes. CI checks generated files for drift.
@@ -221,7 +226,7 @@ docker run --rm agent-swarm-default:dev dpkg-query -W
 
 The image includes Chrome, VS Code, Git, curl, C/C++ build tools, Node.js 22 with npm, Bun 1.3.6, Python 3 with venv support, uv 0.9.18, and tmux. Chrome and VS Code use their signed vendor apt repositories rather than Snap. The workspace Compose configuration enables the [Chromium-compatible seccomp profile](../templates/default/security/README.md) and `no-new-privileges`. Chrome runs as the non-root workspace user with its namespace and Seccomp-BPF sandboxes enabled; it does not use `--no-sandbox`, privileged mode, or added `SYS_ADMIN` capability. This permits namespace syscalls throughout the container, so revalidate the trade-off and host-specific restrictions on the Linux deployment target. VS Code's WSL installation prompt is suppressed because the Linux editor is intentional inside this container.
 
-The standalone default process runs as `ubuntu`, with `/home/ubuntu` as its home and `/workspace` as its working directory. The managed-computer controller instead starts a mapped-root bootstrap and drops into the Ubuntu user's headless GNOME session. No agent harnesses or credentials are installed. Use the same Compose project name to reconnect replacement containers to their data; use a different name for a separate environment:
+The standalone default process runs as `agent`, with `/home/agent` as its home and `/workspace` as its working directory. The managed-computer controller instead starts a mapped-root bootstrap and drops into the `agent` user's headless GNOME session. That account keeps uid/gid 1000 from Ubuntu's base `ubuntu` user, which the image renames, so an older home volume remains readable at the new mount point. No agent harnesses or credentials are installed. Use the same Compose project name to reconnect replacement containers to their data; use a different name for a separate environment:
 
 ```sh
 docker compose -p swarm-demo -f templates/default/compose.yaml up --build -d

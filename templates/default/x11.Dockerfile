@@ -14,4 +14,4 @@ RUN chmod 0755 /opt/swarm/desktop-session.sh /opt/swarm/start-selkies.sh /opt/sw
     && mkdir -p /usr/local/share/applications \
     && sed 's#Exec=/usr/bin/google-chrome-stable#Exec=/opt/swarm/launch-chrome.sh#g' \
        /usr/share/applications/google-chrome.desktop > /usr/local/share/applications/google-chrome.desktop
-USER ubuntu
+USER agent

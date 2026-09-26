@@ -132,7 +132,7 @@ it('does not wipe a stopped computer or its data on a retried create', async () 
   expect(request).not.toHaveBeenCalled();
 });
 
-it('executes only one bounded pointer click as ubuntu in the selected owned running computer', async () => {
+it('executes only one bounded pointer click as agent in the selected owned running computer', async () => {
   const { manager, resources, execute } = fixture();
   const path = `/containers/${manager.names.desktop(id)}/json`;
   resources.set(path, { State: { Running: true }, Config: { Labels: manager.names.labels(id, 'desktop', name) } });
@@ -141,7 +141,7 @@ it('executes only one bounded pointer click as ubuntu in the selected owned runn
   }
   expect(execute).not.toHaveBeenCalled();
   await manager.pointer(id, 0.5, 0.3);
-  expect(execute).toHaveBeenCalledWith(manager.names.desktop(id), ['/opt/swarm/desktop-input.sh', '0.5', '0.3'], 'ubuntu', 10_000);
+  expect(execute).toHaveBeenCalledWith(manager.names.desktop(id), ['/opt/swarm/desktop-input.sh', '0.5', '0.3'], 'agent', 10_000);
   resources.set(path, { State: { Running: true }, Config: { Labels: { 'swarm.ng.namespace': 'foreign' } } });
   await expect(manager.pointer(id, 0.5, 0.3)).rejects.toMatchObject({ code: 409 });
   expect(execute).toHaveBeenCalledTimes(1);
@@ -155,8 +155,8 @@ it('keeps full consent frames separate from the small grid JPEG cache', async ()
   execute.mockResolvedValue(Buffer.from(Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64')));
   expect(await manager.preview(id)).toEqual(Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
   expect(await manager.preview(id, true)).toEqual(Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
-  expect(execute).toHaveBeenNthCalledWith(1, manager.names.desktop(id), ['/opt/swarm/render-preview.sh'], 'ubuntu', 16_000);
-  expect(execute).toHaveBeenNthCalledWith(2, manager.names.desktop(id), ['/opt/swarm/render-preview.sh', '--full'], 'ubuntu', 16_000);
+  expect(execute).toHaveBeenNthCalledWith(1, manager.names.desktop(id), ['/opt/swarm/render-preview.sh'], 'agent', 16_000);
+  expect(execute).toHaveBeenNthCalledWith(2, manager.names.desktop(id), ['/opt/swarm/render-preview.sh', '--full'], 'agent', 16_000);
 });
 
 it('rejects unbounded or fractional operator CPU quotas before creating Docker resources', () => {

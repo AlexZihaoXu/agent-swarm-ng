@@ -11,7 +11,7 @@ services:
       - seccomp=./security/chromium-seccomp.json
       - no-new-privileges:true
     volumes:
-      - home:/home/ubuntu
+      - home:/home/agent
       - workspace:/workspace
 volumes:
   home:

@@ -1,13 +1,13 @@
 #!/bin/sh
 # GNOME compositor smoke test, not a complete session or streaming test.
 # Run with --user root --init --tmpfs /run --shm-size=256m.
-# The disposable container starts as root; the desktop itself runs as ubuntu.
+# The disposable container starts as root; the desktop itself runs as agent.
 set -eu
 mkdir -p /run/dbus
 dbus-daemon --system --fork
-install -d -m 700 -o ubuntu -g ubuntu /tmp/gnome-runtime
+install -d -m 700 -o agent -g agent /tmp/gnome-runtime
 
-runuser -u ubuntu -- env \
+runuser -u agent -- env \
     XDG_RUNTIME_DIR=/tmp/gnome-runtime \
     XDG_SESSION_TYPE=wayland \
     XDG_CURRENT_DESKTOP=ubuntu:GNOME \

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { randomUuid } from '@/lib/random-uuid';
+import { generateComputerName } from '@/lib/computer-name';
 import { ComputerCard, type Computer } from './computer-card';
 import { ComputerViewer } from './computer-viewer';
 import { computerPath } from '@/lib/dashboard-location';
@@ -28,6 +29,26 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
   const computers = query.data?.computers ?? [];
   const createOpen = dialog === 'new';
   const [name, setName] = useState('');
+  const suggestion = useRef<string | null>(null);
+  const alignedToRoster = useRef(false);
+  // A default suggestion is generated locally, then aligned once with the live
+  // roster; the backend still rejects any duplicate name authoritatively.
+  const suggestName = () => {
+    const previous = suggestion.current;
+    const taken = new Set(computers.map(computer => computer.name));
+    if (previous) taken.add(previous);
+    suggestion.current = generateComputerName(taken);
+    return suggestion.current;
+  };
+  useEffect(() => {
+    if (alignedToRoster.current) return;
+    if (query.data) alignedToRoster.current = true;
+    else if (suggestion.current) return;
+    const previous = suggestion.current;
+    const next = suggestName();
+    setName(current => !current.trim() || current === previous ? next ?? current : current);
+  }, [query.data]);
+
   const [requestKey, setRequestKey] = useState(randomUuid);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState('');
@@ -48,14 +69,25 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
 
   const refresh = () => void client.invalidateQueries({ queryKey: ['computers'] });
   const submitCreate = async () => {
-    if (createBusy || !name.trim()) return;
+    const requested = name.trim();
+    if (createBusy || !requested) return;
+    const usedSuggestion = requested === suggestion.current;
     setCreateBusy(true); setCreateError('');
     try {
-      const result = await api.POST('/api/computers', { body: { name: name.trim(), requestKey } });
+      const result = await api.POST('/api/computers', { body: { name: requested, requestKey } });
       if (!result.data || result.error) throw new Error(result.error?.message ?? 'Could not create the computer.');
       client.setQueryData<ComputerList>(['computers'], previous => ({ computers: [...(previous?.computers ?? []).filter(item => item.id !== result.data!.id), result.data!] }));
+      // A consumed default must not linger: it is now a taken name. suggestName
+      // still sees it as the previous suggestion, so the replacement avoids it.
+      if (usedSuggestion) setName(suggestName() ?? '');
+      else { suggestion.current = null; setName(''); }
+      alignedToRoster.current = true;
       onBack(); refresh();
-    } catch (error) { setCreateError(error instanceof Error ? error.message : 'Could not create the computer.'); }
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : 'Could not create the computer.');
+      // An unedited suggestion is disposable: offer a fresh name so retrying is one click.
+      if (requested === suggestion.current) setName(suggestName() ?? name);
+    }
     finally { setCreateBusy(false); }
   };
   const submitDelete = async () => {
@@ -74,7 +106,11 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
     {viewing ? <ComputerViewer key={viewing.id} computer={viewing} canManage={Boolean(query.data?.controllerConnected)} onBack={() => { focusGridTab.current = true; onBack(); }} /> : (viewingId || dialog === 'delete' && !selected) && query.isSuccess ? <div className="p-6 text-sm" role="alert">Computer not found. <button type="button" className="cursor-pointer underline" onClick={onBack}>Return to computers</button></div> : <>
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:px-6 md:py-4">
       <div><h2 className="text-lg font-semibold">Computers</h2><p className="text-xs text-muted-foreground">Containerized Ubuntu desktops</p></div>
-      <Dialog.Root open={createOpen} onOpenChange={open => { if (createBusy) return; if (open) { setName(''); setRequestKey(randomUuid()); setCreateError(''); onNavigate('/computers/new'); } else onBack(); }}>
+      <Dialog.Root open={createOpen} onOpenChange={open => { if (createBusy) return; if (open) {
+        const previous = suggestion.current;
+        if (!name.trim() || name === previous) setName(suggestName() ?? name);
+        setRequestKey(randomUuid()); setCreateError(''); onNavigate('/computers/new');
+      } else onBack(); }}>
         <Dialog.Trigger asChild><Button type="button" size="sm" disabled={!query.data?.controllerConnected} className="min-h-11 md:min-h-0">Create computer</Button></Dialog.Trigger>
         <ComputerDialog>
           <form onSubmit={event => { event.preventDefault(); void submitCreate(); }}>

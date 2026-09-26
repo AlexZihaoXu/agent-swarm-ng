@@ -8,7 +8,7 @@ compose() { docker compose -p "$project" -f "$directory/compose.yaml" "$@"; }
 trap 'compose down --volumes' EXIT
 
 compose run --rm -T --no-deps workspace sh -eu -c '
-    test "$(id -un)" = ubuntu
+    test "$(id -un)" = agent
     printf home-survives > "$HOME/persistence-check"
     printf workspace-survives > /workspace/persistence-check
 '

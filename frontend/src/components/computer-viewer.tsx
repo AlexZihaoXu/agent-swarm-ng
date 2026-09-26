@@ -140,8 +140,10 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
 
   return <section data-testid="computer-viewer" aria-label={`${computer.name} desktop`} className="computer-viewer-enter flex min-h-0 w-full flex-1 flex-col">
     <header className="flex min-w-0 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-4 py-3 md:px-6">
-      {/* Kibo Breadcrumb with Slash Separator, adapted to a real back action. */}
-      <nav aria-label="Computer location" className="min-w-0 flex-1">
+      {/* Kibo Breadcrumb with Slash Separator, adapted to a real back action.
+          The breadcrumb claims a full row on phones so the action buttons wrap
+          below it instead of painting over the back control. */}
+      <nav aria-label="Computer location" className="min-w-0 basis-full md:flex-1 md:basis-auto">
         <ol className="flex min-w-0 items-center gap-2 text-sm">
           <li><button type="button" aria-label="Back to computers" onClick={onBack} className="min-h-11 cursor-pointer rounded-md text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0">Computers</button></li>
           <li aria-hidden="true" className="text-muted-foreground">/</li>
@@ -149,7 +151,7 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
         </ol>
       </nav>
       {running && !setupOpen && <DropdownMenu.Root>
-        <DropdownMenu.Trigger asChild><Button type="button" variant="outline" size="sm" aria-label="Remote shortcuts" disabled={available === 'offline'} className="min-h-11 shrink-0 gap-2 md:min-h-0">Send keys <span aria-hidden="true">⌄</span></Button></DropdownMenu.Trigger>
+        <DropdownMenu.Trigger asChild><Button type="button" variant="outline" size="sm" aria-label="Remote shortcuts" disabled={available === 'offline'} className="ml-auto min-h-11 shrink-0 gap-2 md:min-h-0">Send keys <span aria-hidden="true">⌄</span></Button></DropdownMenu.Trigger>
         <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={5} collisionPadding={12} aria-label="Remote shortcuts" className="z-50 w-56 rounded-lg border border-border bg-background p-1 text-sm shadow-lg motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]">
           {([
             ['new-tab', 'New tab', 'Ctrl+T', '+'],

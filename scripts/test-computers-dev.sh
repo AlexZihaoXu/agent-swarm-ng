@@ -4,6 +4,11 @@ set -eu
 [ "$(uname -s)" = Linux ] || { echo 'This sandboxed browser harness targets Linux Docker.' >&2; exit 1; }
 project="sng-comp-test-$(date +%M%S)-$$"
 export COMPUTER_NAMESPACE="$project" COMPUTER_TEST_NAMESPACE="$project"
+# The repository `.env` can grant the live computer a render node. A disposable
+# gate opts in explicitly with TEST_RENDER_DEVICE so the controller it starts
+# and the host-side assertions always agree on the device mapping.
+case "${TEST_RENDER_DEVICE:-}" in ''|/dev/dri/renderD128) ;; *) echo 'Invalid disposable render device' >&2; exit 1;; esac
+export COMPUTER_RENDER_DEVICE="${TEST_RENDER_DEVICE:-}"
 root=$(CDPATH='' cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 mkdir -p .scratch
@@ -88,7 +93,7 @@ if ! browser test:e2e --config playwright.computers.config.ts --workers=1 --retr
     : > .scratch/computers-failed-stream-diagnostics.log
     for container in $(docker ps -q --filter "label=swarm.ng.namespace=$project" --filter 'label=swarm.ng.role=desktop'); do
         docker exec "$container" sh -c "grep -E '^\\[HostCapture\\]|^INFO:ws:Client|^WARNING:ws:Capture' /run/user/1000/selkies.log | tail -45" >> .scratch/computers-failed-stream-diagnostics.log 2>/dev/null || true
-        docker exec -u ubuntu -e XDG_RUNTIME_DIR=/run/user/1000 "$container" sh -c 'pw-link -oI; pw-link -iI; pw-link -l' >> .scratch/computers-failed-stream-diagnostics.log 2>/dev/null || true
+        docker exec -u agent -e XDG_RUNTIME_DIR=/run/user/1000 "$container" sh -c 'pw-link -oI; pw-link -iI; pw-link -l' >> .scratch/computers-failed-stream-diagnostics.log 2>/dev/null || true
     done
     echo 'Browser E2E failed; scoped Selkies/PipeWire diagnostics saved in .scratch before cleanup.' >&2
     exit 1

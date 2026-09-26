@@ -14,7 +14,7 @@ PY
 # no unfiltered default route; the gateway sidecar filters outside this namespace.
 ip route replace default via "$gateway"
 mkdir -p /run/dbus /run/user/1000
-chown ubuntu:ubuntu /run/user/1000
+chown agent:agent /run/user/1000
 chmod 0700 /run/user/1000
 # Sysbox's mapped root cannot perform dbus-daemon's messagebus UID/capability
 # drop. Preserve the distribution's system-bus policies and run the daemon as
@@ -22,8 +22,8 @@ chmod 0700 /run/user/1000
 sed '/<user>messagebus<\/user>/d' /usr/share/dbus-1/system.conf > /run/computer-system-bus.conf
 dbus-daemon --config-file=/run/computer-system-bus.conf --fork --nosyslog
 test -S /run/dbus/system_bus_socket
-exec runuser -u ubuntu -- env \
-    HOME=/home/ubuntu \
+exec runuser -u agent -- env \
+    HOME=/home/agent \
     COMPUTER_ID="$id" \
     XDG_RUNTIME_DIR=/run/user/1000 \
     XDG_CURRENT_DESKTOP=ubuntu:GNOME \

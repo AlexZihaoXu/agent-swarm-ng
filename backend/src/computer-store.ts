@@ -18,6 +18,12 @@ export class ComputerStore {
     try {
       const computer = await this.platform.client.$transaction(async tx => {
         if (await tx.computer.count() >= 100) throw new ComputerStoreError('conflict', 'Computer record limit reached. Delete unused computers first.');
+        // Names are how an operator confirms a deletion, so keep them unambiguous.
+        // SQLite has no case-insensitive index here, so compare the bounded roster.
+        const taken = await tx.computer.findMany({ select: { name: true } });
+        if (taken.some(record => record.name.toLocaleLowerCase('en-US') === name.toLocaleLowerCase('en-US'))) {
+          throw new ComputerStoreError('conflict', 'That computer name is already in use. Choose another name.');
+        }
         return tx.computer.create({ data: { name, requestKey } });
       });
       return { computer, created: true };
