@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent, type KeyboardEvent, type 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
+import { desktopStreamFit } from '@/lib/computer-fit';
 import type { Computer } from './computer-card';
 
 function initialSetup(id: string) {
@@ -27,7 +28,7 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
   const [keyboardTargetVisible, setKeyboardTargetVisible] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [fitWidth, setFitWidth] = useState(0);
-  const [streamWidth, setStreamWidth] = useState(0);
+  const [stream, setStream] = useState({ width: 0, height: 0 });
   const [panOffset, setPanOffset] = useState(0);
   const imageRef = useRef<HTMLImageElement>(null);
   const previewPointerStart = useRef<{ x: number; y: number } | null>(null);
@@ -56,9 +57,9 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
   useEffect(() => {
     const scroller = streamRef.current;
     if (!running || !scroller) return;
-    const resize = () => setStreamWidth(window.matchMedia('(max-width: 767px)').matches
-      ? Math.max(scroller.clientWidth, Math.round(scroller.clientHeight * 16 / 9))
-      : scroller.clientWidth);
+    // Contain the fixed 1920x1080 desktop in the available box so resizing the
+    // browser window re-fits instantly instead of stretching the picture.
+    const resize = () => setStream(desktopStreamFit(scroller.clientWidth, scroller.clientHeight, window.matchMedia('(max-width: 767px)').matches));
     const observer = new ResizeObserver(resize);
     observer.observe(scroller);
     resize();
@@ -169,12 +170,12 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
     <div className="relative flex min-h-0 flex-1 flex-col bg-black pb-[env(safe-area-inset-bottom)] md:pb-0">
       {!running ? <p role="status" className="m-auto px-5 text-center text-sm text-muted-foreground">Desktop unavailable. Its saved files remain until confirmed deletion.</p> : <>
         <div ref={streamRef} onScroll={event => setPanOffset(event.currentTarget.scrollLeft)} className="relative flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden bg-black">
-          <iframe ref={iframeRef} key={`${id}:${viewerKey}`} title={`${computer.name} desktop`} src={url} referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-downloads" allow="fullscreen" style={{ width: streamWidth ? `${streamWidth}px` : '100%' }} className="h-full min-h-0 shrink-0 border-0 bg-black" />
+          <iframe ref={iframeRef} key={`${id}:${viewerKey}`} title={`${computer.name} desktop`} src={url} referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-downloads" allow="fullscreen" style={{ width: stream.width ? `${stream.width}px` : '100%', height: stream.height ? `${stream.height}px` : '100%' }} className="m-auto min-h-0 shrink-0 border-0 bg-black" />
         </div>
-        {streamWidth > (streamRef.current?.clientWidth ?? 0) + 4 && !setupOpen && <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full bg-background/90 p-1 shadow-lg md:bottom-3">
+        {stream.width > (streamRef.current?.clientWidth ?? 0) + 4 && !setupOpen && <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full bg-background/90 p-1 shadow-lg md:bottom-3">
           <Button type="button" variant="outline" size="sm" aria-label="Pan desktop left" disabled={panOffset < 1} className="min-h-11 min-w-11" onClick={() => streamRef.current?.scrollBy({ left: -240 })}>←</Button>
           <span className="text-xs text-muted-foreground">Pan desktop</span>
-          <Button type="button" variant="outline" size="sm" aria-label="Pan desktop right" disabled={panOffset >= streamWidth - (streamRef.current?.clientWidth ?? 0) - 1} className="min-h-11 min-w-11" onClick={() => streamRef.current?.scrollBy({ left: 240 })}>→</Button>
+          <Button type="button" variant="outline" size="sm" aria-label="Pan desktop right" disabled={panOffset >= stream.width - (streamRef.current?.clientWidth ?? 0) - 1} className="min-h-11 min-w-11" onClick={() => streamRef.current?.scrollBy({ left: 240 })}>→</Button>
         </div>}
         {available === 'offline' && !setupOpen && <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/95 p-5 text-center text-sm">
           <p>Desktop stream unavailable. Your computer and files have not been deleted.</p>

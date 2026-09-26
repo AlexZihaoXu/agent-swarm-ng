@@ -204,6 +204,56 @@ test('320px viewer with a long name keeps the back control clear of its action b
   await expect(page.getByRole('button', { name: `Open ${name} desktop` })).toBeVisible();
 });
 
+test('resizing the window re-fits the desktop without a reload', async ({ page }) => {
+  // The guest resolution is operator-locked, so only the display may change.
+  // The iframe box must always be the exact contain fit of its container at
+  // 16:9, never a stretched or stale size.
+  const id = '2f0bd2e2-2f1b-4a55-9b1d-6c2f6b9a1c77';
+  await mockComputers(page, [{ id, name: 'Resizable desk', state: 'running', createdAt: 0, cpuPercent: 2, memoryBytes: 104857600 }]);
+  await page.route(new RegExp(`/api/computers/${id}/preview\\?full=1`), route => route.fulfill({
+    status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect width="1920" height="1080" fill="#523348"/></svg>',
+  }));
+  await page.route(url => new URL(url).pathname.startsWith(`/computers/${id}/desktop/`), route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Selkies</title><video></video>' }));
+  await page.addInitScript(key => localStorage.setItem(key, 'yes'), `computer-consent:${id}`);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Computers' }).click();
+  await page.getByRole('button', { name: 'Open Resizable desk desktop' }).click();
+  const stream = page.getByTestId('computer-viewer').locator('iframe[title="Resizable desk desktop"]');
+  await expect(stream).toBeVisible();
+  const measure = () => page.evaluate(() => {
+    const scroller = document.querySelector('[data-testid="computer-viewer"] .overflow-x-auto');
+    const frame = document.querySelector('iframe[title="Resizable desk desktop"]');
+    if (!scroller || !frame) throw Error('viewer stream elements missing');
+    const box = frame.getBoundingClientRect();
+    return { container: [scroller.clientWidth, scroller.clientHeight], iframe: [Math.round(box.width), Math.round(box.height)] };
+  });
+  const seen: number[][] = [];
+  for (const [width, height] of [[1440, 900], [1100, 900], [1100, 500], [900, 700], [768, 900]] as const) {
+    await page.setViewportSize({ width, height });
+    // The container ResizeObserver feeds React state, so the re-fit lands a
+    // frame or two after the viewport change rather than synchronously.
+    let last = await measure();
+    for (let attempt = 0; attempt < 25; attempt += 1) {
+      const container = last.container[0] * 16 / 9;
+      const wanted = Math.round(Math.min(last.container[1], container));
+      if (Math.abs(last.iframe[1] - wanted) <= 1) break;
+      await page.waitForTimeout(120);
+      last = await measure();
+    }
+    const [cw, ch] = last.container, [fw, fh] = last.iframe;
+    // Exact contain fit: fill whichever dimension binds, keep 16:9, never overflow.
+    const expectedHeight = Math.round(Math.min(ch, cw * 9 / 16));
+    expect(fh, `${width}x${height}: height ${fh} in container ${cw}x${ch}`).toBeCloseTo(expectedHeight, 0);
+    expect(fw / fh, `${width}x${height}: aspect at ${cw}x${ch}`).toBeCloseTo(16 / 9, 1);
+    expect(fw).toBeLessThanOrEqual(cw);
+    expect(fh).toBeLessThanOrEqual(ch);
+    seen.push([fw, fh]);
+  }
+  // Genuine re-layout: the smallest and largest viewports must differ.
+  expect(new Set(seen.map(box => box.join('x'))).size).toBeGreaterThan(3);
+});
+
 test('viewer reports an offline stream and retries its iframe without erasing the computer', async ({ page }) => {
   const id = 'da02f137-8a73-4e93-9d22-95886ca9f9fa';
   const { computers } = await mockComputers(page, [{ id, name: 'Recoverable desk', state: 'running', createdAt: 0, cpuPercent: 2, memoryBytes: 104857600 }]);
