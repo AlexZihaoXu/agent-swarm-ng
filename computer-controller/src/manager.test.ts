@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { ComputerManager, desktopEnvironment } from './manager';
+import { ComputerManager, computerHostname, desktopCreateBody, desktopEnvironment } from './manager';
 import { DockerApi } from './docker-api';
 
 const id = '4a18018a-4689-4fa5-86ca-4dc080d41fb4';
@@ -176,6 +176,57 @@ it('rejects operator timezones that are not a plain IANA zone name', () => {
     expect(make(good)).not.toThrow();
   }
 });
+
+it('derives a valid guest hostname from the computer name', () => {
+  // The owner reads this in the guest prompt: agent@workspace-ngclzr, not a
+  // Docker container ID.
+  expect(computerHostname('Workspace-NGCLZR', id)).toBe('workspace-ngclzr');
+  expect(computerHostname('Design machine', id)).toBe('design-machine');
+  expect(computerHostname('  Lots   of    spaces  ', id)).toBe('lots-of-spaces');
+  expect(computerHostname('Desk_prime.v2', id)).toBe('desk-prime-v2');
+  // Undecodable-as-a-hostname input must still yield something usable.
+  expect(computerHostname('☕', id)).toBe(`computer-${id.slice(0, 8)}`);
+  expect(computerHostname('', id)).toBe(`computer-${id.slice(0, 8)}`);
+  // RFC 1123 shape: lowercase labels, no leading/trailing hyphen, <=63 chars.
+  const long = computerHostname('a'.repeat(40) + '-' + 'b'.repeat(40), id);
+  expect(long.length).toBeLessThanOrEqual(63);
+  expect(long).toMatch(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/);
+  for (const label of long.split('-')) expect(label.length).toBeLessThanOrEqual(63);
+  expect(computerHostname('-leading and trailing-', id)).toBe('leading-and-trailing');
+});
+
+it('puts the derived hostname and every grant in one desktop create body', () => {
+  const input = {
+    image: 'agent-swarm-default:av1-xorg120', labels: { role: 'desktop' },
+    env: desktopEnvironment(id, '172.25.10.1', '/dev/dri/renderD128', 'America/Toronto'),
+    hostname: computerHostname('Workspace-NGCLZR', id),
+    privateNetwork: 'swarm-ng-test-computer-' + id + '-private', seccomp: '{"defaultAction":"SCMP_ACT_ERRNO"}',
+    renderDevice: '/dev/dri/renderD128', cpuLimit: 4,
+    homeVolume: 'swarm-ng-test-computer-' + id + '-home', workspaceVolume: 'swarm-ng-test-computer-' + id + '-workspace',
+  };
+  const body = desktopCreateBody(input);
+  // Must be top-level Config: inside HostConfig Docker ignores it silently.
+  expect(body.Hostname).toBe('workspace-ngclzr');
+  expect('Hostname' in body.HostConfig).toBe(false);
+  // The isolation contract must survive the extraction unchanged.
+  expect(body.HostConfig).toMatchObject({
+    Runtime: 'sysbox-runc', CapDrop: ['ALL'], Init: true,
+    NanoCpus: 4_000_000_000, PidsLimit: 1024, RestartPolicy: { Name: 'no' }, Dns: ['1.1.1.1'],
+  });
+  expect(body.User).toBe('root');
+  expect(body.Cmd).toEqual(['/opt/swarm/start-computer.sh']);
+  expect(body.HostConfig.Devices).toEqual([{ PathOnHost: '/dev/dri/renderD128', PathInContainer: '/dev/dri/renderD128', CgroupPermissions: 'rwm' }]);
+  expect(body.HostConfig.Mounts.map((mount: { Target: string }) => mount.Target)).toEqual(['/home/agent', '/workspace']);
+  expect(body.HostConfig.SecurityOpt).toEqual(['seccomp={"defaultAction":"SCMP_ACT_ERRNO"}']);
+  expect(body.Env).toContain('TZ=America/Toronto');
+  // A computer without the GPU grant still gets a hostname.
+  const plain = desktopCreateBody({ ...input, renderDevice: '', env: desktopEnvironment(id, '172.25.10.1', '', '') });
+  expect(plain.Hostname).toBe('workspace-ngclzr');
+  expect('Devices' in plain.HostConfig).toBe(false);
+});
+
+
+
 
 it('publishes the operator timezone only to the desktop container', () => {
   expect(desktopEnvironment(id, '172.25.10.1', '', 'America/Toronto')).toEqual([

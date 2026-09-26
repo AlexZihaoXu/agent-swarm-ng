@@ -19,6 +19,20 @@ const DEFAULT_GATEWAY_IMAGE = 'agent-swarm-computer-egress:dev';
 const DEFAULT_MEDIA_IMAGE = 'agent-swarm-computer-media:stage2';
 
 /** Owns only its labelled Docker computers; other projects and agent containers are untouchable. */
+/** Guest hostname from the operator-visible computer name, so the desktop
+ * prompt reads agent@workspace-ngclzr rather than a Docker container ID.
+ * RFC 1123 shape only: lowercase alphanumerics and internal hyphens, at most
+ * 63 characters, never empty. Anything unusable falls back to a stable
+ * ID-derived name. */
+export function computerHostname(name: string, id: string) {
+  const slug = name.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 63)
+    .replace(/-+$/g, '');
+  return slug || `computer-${validateId(id).slice(0, 8)}`;
+}
+
 /** Desktop container environment: only operator-supplied grants, never
  * browser input. The guest clock is operator-chosen rather than inherited from
  * the host, so `timezone` publishes both TZ (for processes started before the
@@ -28,6 +42,33 @@ export function desktopEnvironment(id: string, gateway: string, renderDevice: st
   return [`COMPUTER_GATEWAY=${gateway}`, `COMPUTER_ID=${id}`,
     ...(renderDevice ? [`COMPUTER_GPU_RENDER_DEVICE=${renderDevice}`] : []),
     ...(timezone ? [`TZ=${timezone}`, `COMPUTER_TIMEZONE=${timezone}`] : [])];
+}
+
+/** Desktop container create body: one place so the operator-supplied fields
+ * (hostname, grants, mounts) are directly testable without Docker seeding. */
+export function desktopCreateBody(input: {
+  image: string; labels: Record<string, string>; env: string[]; hostname: string;
+  privateNetwork: string; seccomp: string; renderDevice: string; cpuLimit: number;
+  homeVolume: string; workspaceVolume: string;
+}) {
+  return {
+    // Hostname is a top-level Config field, NOT part of HostConfig: Docker
+    // silently ignores it there and falls back to the container's short ID.
+    Image: input.image, User: 'root', Cmd: ['/opt/swarm/start-computer.sh'],
+    Labels: input.labels, Env: input.env, Hostname: input.hostname, Domainname: '',
+    HostConfig: {
+      Runtime: 'sysbox-runc', NetworkMode: input.privateNetwork, Dns: ['1.1.1.1'],
+      CapDrop: ['ALL'], SecurityOpt: [`seccomp=${input.seccomp}`], Init: true,
+      ...(input.renderDevice ? { Devices: [{ PathOnHost: input.renderDevice, PathInContainer: input.renderDevice, CgroupPermissions: 'rwm' }] } : {}),
+      Tmpfs: { '/run': 'rw,nosuid,size=64m' }, ShmSize: 256 * 1024 * 1024,
+      NanoCpus: input.cpuLimit * 1_000_000_000, Memory: 4 * 1024 * 1024 * 1024, PidsLimit: 1024,
+      RestartPolicy: { Name: 'no' },
+      Mounts: [
+        { Type: 'volume', Source: input.homeVolume, Target: '/home/agent' },
+        { Type: 'volume', Source: input.workspaceVolume, Target: '/workspace' },
+      ],
+    },
+  };
 }
 
 export class ComputerManager {
@@ -231,22 +272,15 @@ export class ComputerManager {
     const gateway = await this.ensureGateway(id, name, subnet, privateNetwork);
     await this.ensureVolume(id, 'home');
     await this.ensureVolume(id, 'workspace');
-    await this.docker.request('POST', `/containers/create?name=${encodeURIComponent(computerName)}`, {
-      Image: this.image, User: 'root', Cmd: ['/opt/swarm/start-computer.sh'],
-      Labels: this.names.labels(id, 'desktop', name), Env: desktopEnvironment(id, gateway, this.renderDevice, this.timezone),
-      HostConfig: {
-        Runtime: 'sysbox-runc', NetworkMode: this.names.privateNetwork(id), Dns: ['1.1.1.1'],
-        CapDrop: ['ALL'], SecurityOpt: [`seccomp=${this.seccomp}`], Init: true,
-        ...(this.renderDevice ? { Devices: [{ PathOnHost: this.renderDevice, PathInContainer: this.renderDevice, CgroupPermissions: 'rwm' }] } : {}),
-        Tmpfs: { '/run': 'rw,nosuid,size=64m' }, ShmSize: 256 * 1024 * 1024,
-        NanoCpus: this.cpuLimit * 1_000_000_000, Memory: 4 * 1024 * 1024 * 1024, PidsLimit: 1024,
-        RestartPolicy: { Name: 'no' },
-        Mounts: [
-          { Type: 'volume', Source: this.names.volume(id, 'home'), Target: '/home/agent' },
-          { Type: 'volume', Source: this.names.volume(id, 'workspace'), Target: '/workspace' },
-        ],
-      },
-    });
+    await this.docker.request('POST', `/containers/create?name=${encodeURIComponent(computerName)}`,
+      desktopCreateBody({
+        image: this.image, labels: this.names.labels(id, 'desktop', name),
+        env: desktopEnvironment(id, gateway, this.renderDevice, this.timezone),
+        hostname: computerHostname(name, id),
+        privateNetwork: this.names.privateNetwork(id), seccomp: this.seccomp,
+        renderDevice: this.renderDevice, cpuLimit: this.cpuLimit,
+        homeVolume: this.names.volume(id, 'home'), workspaceVolume: this.names.volume(id, 'workspace'),
+      }));
     await this.docker.request('POST', `${this.path('containers', computerName)}/start`);
     let ready = false;
     for (let attempt = 0; attempt < 80; attempt++) {
