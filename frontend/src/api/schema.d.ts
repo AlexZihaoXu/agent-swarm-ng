@@ -356,6 +356,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/computers/settings-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getComputerSettingsLimits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/computers/{id}": {
         parameters: {
             query?: never;
@@ -382,6 +398,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["powerComputer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/computers/{id}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateComputerSettings"];
+        trace?: never;
+    };
+    "/api/computers/{id}/settings/replacement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["replaceStoppedComputerSettings"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2350,6 +2398,9 @@ export interface operations {
                             name: string;
                             state: string;
                             createdAt: number;
+                            cpuCores: number | null;
+                            memoryGiB: number | null;
+                            timezone: string | null;
                             cpuPercent: number | null;
                             memoryBytes: number | null;
                             memoryLimitBytes: number | null;
@@ -2418,6 +2469,9 @@ export interface operations {
                     name: string;
                     /** Format: uuid */
                     requestKey: string;
+                    cpuCores?: number;
+                    memoryGiB?: number;
+                    timezone?: string;
                 };
             };
         };
@@ -2433,6 +2487,9 @@ export interface operations {
                         name: string;
                         state: string;
                         createdAt: number;
+                        cpuCores: number | null;
+                        memoryGiB: number | null;
+                        timezone: string | null;
                         cpuPercent: number | null;
                         memoryBytes: number | null;
                         memoryLimitBytes: number | null;
@@ -2451,10 +2508,89 @@ export interface operations {
                         name: string;
                         state: string;
                         createdAt: number;
+                        cpuCores: number | null;
+                        memoryGiB: number | null;
+                        timezone: string | null;
                         cpuPercent: number | null;
                         memoryBytes: number | null;
                         memoryLimitBytes: number | null;
                         cpuCount: number | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getComputerSettingsLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        cpuCores: {
+                            min: number;
+                            max: number;
+                            default: number;
+                        };
+                        memoryGiB: {
+                            min: number;
+                            max: number;
+                            default: number;
+                        };
+                        timezoneDefault: string;
                     };
                 };
             };
@@ -2606,6 +2742,180 @@ export interface operations {
                         accepted: boolean;
                         action: string;
                         desiredState: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    updateComputerSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    cpuCores: number;
+                    memoryGiB: number;
+                    timezone: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        name: string;
+                        state: string;
+                        createdAt: number;
+                        cpuCores: number | null;
+                        memoryGiB: number | null;
+                        timezone: string | null;
+                        cpuPercent: number | null;
+                        memoryBytes: number | null;
+                        memoryLimitBytes: number | null;
+                        cpuCount: number | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    replaceStoppedComputerSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    cpuCores: number;
+                    memoryGiB: number;
+                    timezone: string;
+                    /** @enum {boolean} */
+                    confirmReplacement: true;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        name: string;
+                        state: string;
+                        createdAt: number;
+                        cpuCores: number | null;
+                        memoryGiB: number | null;
+                        timezone: string | null;
+                        cpuPercent: number | null;
+                        memoryBytes: number | null;
+                        memoryLimitBytes: number | null;
+                        cpuCount: number | null;
                     };
                 };
             };

@@ -1,13 +1,23 @@
+import type { ComputerSettings } from './computer-store';
+
 export type ComputerObservation = { status: string; cpuPercent: number | null; memoryBytes: number | null; memoryLimitBytes: number | null; cpuCount: number | null };
+export type ComputerLimits = {
+  cpuCores: { min: number; max: number; default: number };
+  memoryGiB: { min: number; max: number; default: number };
+  timezoneDefault: string;
+};
 
 export interface ComputerController {
-  create(id: string, name: string): Promise<void>;
+  limits(): Promise<ComputerLimits>;
+  create(id: string, name: string, settings: ComputerSettings): Promise<void>;
   remove(id: string, name: string): Promise<void>;
   observe(): Promise<Map<string, ComputerObservation>>;
   preview(id: string, full?: boolean): Promise<Uint8Array | null>;
   pointer(id: string, x: number, y: number): Promise<void>;
   start(id: string, name: string): Promise<void>;
   stop(id: string, name: string): Promise<void>;
+  updateResources(id: string, name: string, settings: Pick<ComputerSettings, 'cpuCores' | 'memoryGiB'>): Promise<void>;
+  replaceStopped(id: string, name: string, settings: ComputerSettings): Promise<void>;
 }
 
 /** Internal controller only; the browser cannot choose its Docker endpoint. */
@@ -22,8 +32,18 @@ export class HttpComputerController implements ComputerController {
     if (!response.ok) throw new Error(`Computer controller returned ${response.status}.`);
     return response;
   }
-  async create(id: string, name: string) {
-    await this.request('/computers', { method: 'POST', body: JSON.stringify({ id, name }) }, 120_000);
+  async limits(): Promise<ComputerLimits> {
+    const response = await this.request('/computers/settings-limits');
+    const data: unknown = await response.json();
+    if (!data || typeof data !== 'object' || !('cpuCores' in data) || !('memoryGiB' in data) || !('timezoneDefault' in data) ||
+      typeof data.timezoneDefault !== 'string' || !data.cpuCores || !data.memoryGiB ||
+      typeof data.cpuCores !== 'object' || typeof data.memoryGiB !== 'object' ||
+      !('max' in data.cpuCores) || !('max' in data.memoryGiB) ||
+      typeof data.cpuCores.max !== 'number' || typeof data.memoryGiB.max !== 'number') throw new Error('Invalid computer capacity.');
+    return data as ComputerLimits;
+  }
+  async create(id: string, name: string, settings: ComputerSettings) {
+    await this.request('/computers', { method: 'POST', body: JSON.stringify({ id, name, settings }) }, 120_000);
   }
   async remove(id: string, name: string) {
     await this.request(`/computers/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ name }) }, 60_000);
@@ -44,6 +64,12 @@ export class HttpComputerController implements ComputerController {
   }
   async stop(id: string, name: string) {
     await this.request(`/computers/${encodeURIComponent(id)}/power`, { method: 'POST', body: JSON.stringify({ name, action: 'stop' }) }, 45_000);
+  }
+  async updateResources(id: string, name: string, settings: Pick<ComputerSettings, 'cpuCores' | 'memoryGiB'>) {
+    await this.request(`/computers/${encodeURIComponent(id)}/settings`, { method: 'PATCH', body: JSON.stringify({ name, ...settings }) }, 30_000);
+  }
+  async replaceStopped(id: string, name: string, settings: ComputerSettings) {
+    await this.request(`/computers/${encodeURIComponent(id)}/settings/replacement`, { method: 'POST', body: JSON.stringify({ name, ...settings }) }, 60_000);
   }
   async pointer(id: string, x: number, y: number) {
     await this.request(`/computers/${encodeURIComponent(id)}/input`, {

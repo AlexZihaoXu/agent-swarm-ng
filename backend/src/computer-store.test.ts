@@ -26,6 +26,23 @@ describe('computer identity and lifecycle', () => {
     } finally { await database.close(); }
   });
 
+  it('persists per-computer choices and rejects an idempotency key reused with different settings', async () => {
+    const { database, computers } = await fixture();
+    try {
+      const key = crypto.randomUUID();
+      const settings = { cpuCores: 3, memoryGiB: 6, timezone: 'America/Toronto' };
+      const first = await computers.reserve('Configurable', key, settings);
+      expect(first.computer).toMatchObject(settings);
+      expect((await computers.reserve('Configurable', key, settings)).created).toBe(false);
+      await expect(computers.reserve('Configurable', key, { ...settings, memoryGiB: 7 })).rejects.toThrow('different settings');
+      expect(await computers.get(first.computer.id)).toMatchObject(settings);
+      // Legacy records remain unknown, not silently backfilled with a false
+      // 4-GiB/Toronto claim when their actual Docker quota/env may differ.
+      const legacy = await computers.reserve('Legacy', crypto.randomUUID());
+      expect(legacy.computer).toMatchObject({ cpuCores: null, memoryGiB: null, timezone: null });
+    } finally { await database.close(); }
+  });
+
   it('requires the exact current name and a completed create before deleting data', async () => {
     const { database, computers } = await fixture();
     try {
@@ -76,6 +93,20 @@ describe('computer identity and lifecycle', () => {
       await computers.markDeleting(computer.id, 'Failed machine');
       await computers.finalizeDelete(computer.id, 'Failed machine');
       expect(await database.client.computer.count()).toBe(0);
+    } finally { await database.close(); }
+  });
+});
+
+describe('computer resource settings', () => {
+  it('updates saved CPU and RAM without changing timezone, identity or power intent', async () => {
+    const { database, computers } = await fixture();
+    try {
+      const { computer } = await computers.reserve('Editable', crypto.randomUUID(), { cpuCores: 4, memoryGiB: 4, timezone: 'America/Toronto' });
+      await computers.markRunning(computer.id);
+      expect(await computers.updateResources(computer.id, { cpuCores: 2, memoryGiB: 6 })).toMatchObject({
+        id: computer.id, cpuCores: 2, memoryGiB: 6, timezone: 'America/Toronto', desiredState: 'running',
+      });
+      await expect(computers.updateResources('missing-id', { cpuCores: 2, memoryGiB: 6 })).rejects.toThrow('not found');
     } finally { await database.close(); }
   });
 });

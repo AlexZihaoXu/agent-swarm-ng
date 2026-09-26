@@ -1,6 +1,6 @@
 import { test, expect, type Page } from './fixtures';
 
-type Computer = { id: string; name: string; state: string; createdAt: number; cpuPercent: number | null; memoryBytes: number | null; memoryLimitBytes?: number | null; cpuCount?: number | null };
+type Computer = { id: string; name: string; state: string; createdAt: number; cpuPercent: number | null; memoryBytes: number | null; memoryLimitBytes?: number | null; cpuCount?: number | null; cpuCores?: number | null; memoryGiB?: number | null; timezone?: string | null };
 async function expectCentered(page: Page, dialog: ReturnType<Page['getByRole']>) {
   const box = await dialog.boundingBox();
   const viewport = page.viewportSize();
@@ -10,19 +10,38 @@ async function expectCentered(page: Page, dialog: ReturnType<Page['getByRole']>)
 }
 async function mockComputers(page: Page, initial: Computer[] = []) {
   const computers = [...initial];
+  const createdSettings: Array<{ cpuCores?: number; memoryGiB?: number; timezone?: string }> = [];
   let previews = 0;
   await page.route(/\/api\/computers(?:\?.*)?$/, route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: { computers, controllerConnected: true } });
     if (route.request().method() !== 'POST') return route.fulfill({ status: 405 });
-    const { name } = route.request().postDataJSON();
-    const row: Computer = { id: crypto.randomUUID(), name, state: 'running', createdAt: Date.now(), cpuPercent: 1.5, memoryBytes: 209715200 };
+    const { name, cpuCores, memoryGiB, timezone } = route.request().postDataJSON();
+    createdSettings.push({ cpuCores, memoryGiB, timezone });
+    const row: Computer = { id: crypto.randomUUID(), name, state: 'running', createdAt: Date.now(), cpuPercent: 1.5, memoryBytes: 209715200, memoryLimitBytes: memoryGiB * 1024 ** 3, cpuCount: cpuCores, cpuCores, memoryGiB, timezone };
     computers.push(row);
     return route.fulfill({ status: 201, json: row });
   });
   await page.route('**/api/computers/**', route => {
     const path = new URL(route.request().url()).pathname.split('/');
     const id = path[3];
+    if (id === 'settings-limits') return route.fulfill({ json: { cpuCores: { min: 1, max: 8, default: 4 }, memoryGiB: { min: 1, max: 16, default: 4 }, timezoneDefault: 'America/Toronto' } });
     if (path[4] === 'preview') { previews++; return route.fulfill({ status: 503, json: { message: 'Preview warming up.' } }); }
+    if (path[4] === 'settings' && path[5] === 'replacement' && route.request().method() === 'POST') {
+      const row = computers.find(item => item.id === id);
+      if (!row) return route.fulfill({ status: 404 });
+      const { cpuCores, memoryGiB, timezone, confirmReplacement } = route.request().postDataJSON();
+      if (!confirmReplacement || row.state !== 'exited') return route.fulfill({ status: 409 });
+      Object.assign(row, { cpuCores, memoryGiB, timezone, memoryLimitBytes: memoryGiB * 1024 ** 3, cpuCount: cpuCores });
+      return route.fulfill({ json: row });
+    }
+    if (path[4] === 'settings' && route.request().method() === 'PATCH') {
+      const row = computers.find(item => item.id === id);
+      if (!row) return route.fulfill({ status: 404 });
+      const { cpuCores, memoryGiB, timezone } = route.request().postDataJSON();
+      if (timezone !== row.timezone) return route.fulfill({ status: 409, json: { message: 'Changing timezone requires container replacement and a desktop restart.' } });
+      Object.assign(row, { cpuCores, memoryGiB, memoryLimitBytes: memoryGiB * 1024 ** 3, cpuCount: cpuCores });
+      return route.fulfill({ json: row });
+    }
     if (route.request().method() !== 'DELETE') return route.fulfill({ status: 405 });
     const index = computers.findIndex(item => item.id === id);
     if (index === -1) return route.fulfill({ status: 404, json: { message: 'Not found.' } });
@@ -30,7 +49,7 @@ async function mockComputers(page: Page, initial: Computer[] = []) {
     computers.splice(index, 1);
     return route.fulfill({ json: { deleted: true } });
   });
-  return { computers, previewCount: () => previews };
+  return { computers, previewCount: () => previews, createdSettings };
 }
 
 test('Computers shows a responsive screenshot-first grid with name and CPU/memory below', async ({ page }) => {
@@ -265,7 +284,7 @@ test('computer card offers a shared context menu and power control', async ({ pa
   const id = '9c1f2a6e-3b4d-4c8a-9e11-2d5f7a9b0c13';
   // CPU is summed across cores by Docker (257.8% of 4 cores = 64% of capacity),
   // so the dial fraction must divide by the container's own CPU count.
-  const { computers } = await mockComputers(page, [{ id, name: 'Menu desk', state: 'running', createdAt: 0, cpuPercent: 257.8, memoryBytes: 1908874320, memoryLimitBytes: 4294967296, cpuCount: 4 } as unknown as Computer]);
+  const { computers } = await mockComputers(page, [{ id, name: 'Menu desk', state: 'running', createdAt: 0, cpuPercent: 257.8, memoryBytes: 1908874320, memoryLimitBytes: 4294967296, cpuCount: 4, cpuCores: 4, memoryGiB: 4, timezone: 'America/Toronto' } as unknown as Computer]);
   await page.route(new RegExp(`/api/computers/${id}/preview\\?full=1`), route => route.fulfill({
     status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#523348"/></svg>',
   }));
@@ -315,9 +334,9 @@ test('computer card offers a shared context menu and power control', async ({ pa
   await expect(menu.getByRole('menuitem', { name: 'Open' })).toBeEnabled();
   await expect(menu.getByRole('menuitem', { name: /Power off/ })).toBeEnabled();
   await expect(menu.getByRole('menuitem', { name: /File browser/ })).toBeDisabled();
-  await expect(menu.getByRole('menuitem', { name: /Settings/ })).toBeDisabled();
+  await expect(menu.getByRole('menuitem', { name: /Settings/ })).toBeEnabled();
   // "Gray this out" means visibly dimmed, not merely non-interactive.
-  for (const name of [/File browser/, /Settings/]) {
+  for (const name of [/File browser/]) {
     const opacity = await menu.getByRole('menuitem', { name }).evaluate(node => Number(getComputedStyle(node).opacity));
     expect(opacity, `${name} must be dimmed`).toBeLessThan(0.6);
   }
@@ -342,6 +361,57 @@ test('computer card offers a shared context menu and power control', async ({ pa
   await page.getByRole('menu').getByRole('menuitem', { name: /Power on/ }).click();
   await expect(card.getByText('Running')).toBeVisible();
   await expect(card.getByRole('button', { name: /^(Start|Stop)$/ })).toHaveCount(0);
+});
+
+test('computer Settings from the shared menu edits live limits and warns before timezone replacement', async ({ page }) => {
+  const id = '9c1f2a6e-3b4d-4c8a-9e11-2d5f7a9b0c13';
+  const { computers } = await mockComputers(page, [{ id, name: 'Settings desk', state: 'running', createdAt: 0,
+    cpuPercent: 1, memoryBytes: 1_073_741_824, memoryLimitBytes: 4 * 1024 ** 3, cpuCount: 4,
+    cpuCores: 4, memoryGiB: 4, timezone: 'America/Toronto' }]);
+  await page.goto('/computers');
+  const card = page.getByRole('article', { name: 'Settings desk' });
+  await card.getByRole('button', { name: 'Actions for Settings desk' }).click();
+  await page.getByRole('menuitem', { name: 'Settings' }).click();
+  await expect(page).toHaveURL(new RegExp(`/computers/${id}/settings$`));
+  const dialog = page.getByRole('dialog', { name: 'Settings for Settings desk' });
+  await expect(dialog.getByLabel('CPU cores', { exact: true })).toHaveValue('4');
+  await expect(dialog.getByLabel('Memory (GiB RAM)', { exact: true })).toHaveValue('4');
+  await expect(dialog.getByLabel('Timezone', { exact: true })).toHaveValue('America/Toronto');
+  await dialog.getByLabel('CPU cores', { exact: true }).fill('2');
+  await dialog.getByLabel('Memory (GiB RAM)', { exact: true }).fill('6');
+  await dialog.getByRole('button', { name: 'Save settings' }).click();
+  await expect(dialog).toBeHidden();
+  expect(computers[0]).toMatchObject({ cpuCores: 2, memoryGiB: 6, timezone: 'America/Toronto' });
+  await expect(card.getByTestId('usage-dial').nth(1)).toContainText('of 6144 MB');
+  await card.getByRole('button', { name: 'Actions for Settings desk' }).click();
+  await page.getByRole('menuitem', { name: 'Settings' }).click();
+  const reopened = page.getByRole('dialog', { name: 'Settings for Settings desk' });
+  await expect(reopened.getByLabel('CPU cores', { exact: true })).toHaveValue('2');
+  await reopened.getByLabel('Timezone', { exact: true }).fill('Etc/UTC');
+  await expect(reopened.getByRole('alert')).toContainText('Power off the computer');
+  await expect(reopened.getByRole('button', { name: 'Power off first' })).toBeDisabled();
+  await reopened.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page).toHaveURL(/\/computers$/);
+});
+
+test('a stopped computer can change timezone only after explicit replacement confirmation', async ({ page }) => {
+  const id = '9c1f2a6e-3b4d-4c8a-9e11-2d5f7a9b0c13';
+  const { computers } = await mockComputers(page, [{ id, name: 'Stopped desk', state: 'exited', createdAt: 0,
+    cpuPercent: null, memoryBytes: null, memoryLimitBytes: null, cpuCount: null,
+    cpuCores: 4, memoryGiB: 4, timezone: 'America/Toronto' }]);
+  await page.goto('/computers');
+  await page.getByRole('button', { name: 'Actions for Stopped desk' }).click();
+  await page.getByRole('menuitem', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings for Stopped desk' });
+  await dialog.getByLabel('Timezone', { exact: true }).fill('Etc/UTC');
+  await expect(dialog.getByRole('alert')).toContainText('home/workspace volumes stay intact');
+  const replace = dialog.getByRole('button', { name: 'Replace stopped computer' });
+  await expect(replace).toBeDisabled();
+  await dialog.getByRole('checkbox', { name: /I understand this will replace/ }).check();
+  await expect(replace).toBeEnabled();
+  await replace.click();
+  await expect(dialog).toBeHidden();
+  expect(computers[0]).toMatchObject({ timezone: 'Etc/UTC', state: 'exited' });
 });
 
 test('preview dissolves without the breathing brightness dip', async ({ page }) => {
@@ -479,6 +549,28 @@ test('keeps saved computers visible but controls disabled when their controller 
   await expect(page.getByText('Computer management is offline.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create computer' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Actions for Saved computer' })).toBeDisabled();
+});
+
+test('new computer offers detected CPU/memory controls with today’s defaults and Toronto time', async ({ page }) => {
+  const { createdSettings } = await mockComputers(page);
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Computers' }).click();
+  await page.getByRole('button', { name: 'Create computer' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Create computer' });
+  const cpu = dialog.getByLabel('CPU cores', { exact: true });
+  const memory = dialog.getByLabel('Memory (GiB RAM)', { exact: true });
+  const timezone = dialog.getByLabel('Timezone', { exact: true });
+  await expect(cpu).toHaveValue('4');
+  await expect(memory).toHaveValue('4');
+  await expect(timezone).toHaveValue('America/Toronto');
+  await expect(dialog).toContainText('additional host swap');
+  await dialog.getByRole('button', { name: 'Increase CPU cores' }).click();
+  await memory.fill('6');
+  await timezone.fill('Etc/UTC');
+  await dialog.getByLabel('Computer name').fill('Custom resources');
+  await dialog.getByRole('button', { name: 'Create computer' }).click();
+  await expect(page.getByRole('article', { name: 'Custom resources' })).toBeVisible();
+  expect(createdSettings).toEqual([{ cpuCores: 5, memoryGiB: 6, timezone: 'Etc/UTC' }]);
 });
 
 test('suggests a non-duplicate Workspace-NG default name and keeps an edited name', async ({ page }) => {

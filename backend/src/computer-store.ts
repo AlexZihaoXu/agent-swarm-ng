@@ -1,6 +1,8 @@
 import type { PlatformStore } from './platform-store';
 import type { Computer } from './generated/prisma/client';
 
+export type ComputerSettings = { cpuCores: number; memoryGiB: number; timezone: string };
+
 export class ComputerStoreError extends Error {
   constructor(readonly code: 'missing' | 'confirmation' | 'conflict' | 'invalid', message: string) { super(message); }
 }
@@ -9,12 +11,21 @@ export class ComputerStoreError extends Error {
 export class ComputerStore {
   constructor(private readonly platform: PlatformStore) {}
 
-  async reserve(rawName: string, requestKey: string) {
+  async reserve(rawName: string, requestKey: string, settings?: ComputerSettings) {
     await this.platform.initialize();
     const name = rawName.trim();
     if (!name || name.length > 80 || /[\u0000-\u001f\u007f]/.test(name)) throw new ComputerStoreError('invalid', 'Computer name must be 1–80 printable characters.');
+    if (settings && (!Number.isInteger(settings.cpuCores) || settings.cpuCores < 1 || settings.cpuCores > 8 ||
+      !Number.isInteger(settings.memoryGiB) || settings.memoryGiB < 1 || settings.memoryGiB > 16 ||
+      !/^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/.test(settings.timezone) || settings.timezone.length > 64)) {
+      throw new ComputerStoreError('invalid', 'Invalid computer settings.');
+    }
+    if (settings) {
+      try { new Intl.DateTimeFormat('en', { timeZone: settings.timezone }); }
+      catch { throw new ComputerStoreError('invalid', 'Unknown computer timezone.'); }
+    }
     const existing = await this.platform.client.computer.findUnique({ where: { requestKey } });
-    if (existing) return { computer: this.sameRequest(existing, name), created: false };
+    if (existing) return { computer: this.sameRequest(existing, name, settings), created: false };
     try {
       const computer = await this.platform.client.$transaction(async tx => {
         if (await tx.computer.count() >= 100) throw new ComputerStoreError('conflict', 'Computer record limit reached. Delete unused computers first.');
@@ -24,19 +35,22 @@ export class ComputerStore {
         if (taken.some(record => record.name.toLocaleLowerCase('en-US') === name.toLocaleLowerCase('en-US'))) {
           throw new ComputerStoreError('conflict', 'That computer name is already in use. Choose another name.');
         }
-        return tx.computer.create({ data: { name, requestKey } });
+        return tx.computer.create({ data: { name, requestKey, ...(settings ?? {}) } });
       });
       return { computer, created: true };
     } catch (error) {
       // Two simultaneous HTTP retries may race on the unique operation key.
       const raced = await this.platform.client.computer.findUnique({ where: { requestKey } });
       if (!raced) throw error;
-      return { computer: this.sameRequest(raced, name), created: false };
+      return { computer: this.sameRequest(raced, name, settings), created: false };
     }
   }
 
-  private sameRequest<T extends { name: string }>(computer: T, name: string) {
+  private sameRequest<T extends { name: string; cpuCores?: number | null; memoryGiB?: number | null; timezone?: string | null }>(computer: T, name: string, settings?: ComputerSettings) {
     if (computer.name !== name) throw new ComputerStoreError('conflict', 'This create request was used with a different name.');
+    if (settings && (computer.cpuCores !== settings.cpuCores || computer.memoryGiB !== settings.memoryGiB || computer.timezone !== settings.timezone)) {
+      throw new ComputerStoreError('conflict', 'This create request was used with different settings.');
+    }
     return computer;
   }
 
@@ -52,6 +66,29 @@ export class ComputerStore {
       throw new ComputerStoreError('conflict', 'This computer is not available for power changes.');
     }
     return this.platform.client.computer.update({ where: { id }, data: { desiredState: desired } });
+  }
+
+  /** Resource changes can apply live; keep the persisted request aligned with
+   * the controller after its Docker update succeeds. Timezone is deliberately
+   * untouched because container Env is immutable without replacement. */
+  private async updateSavedSettings(id: string, settings: Pick<ComputerSettings, 'cpuCores' | 'memoryGiB'> & { timezone?: string }) {
+    await this.platform.initialize();
+    const record = await this.get(id);
+    if (!record) throw new ComputerStoreError('missing', 'Computer not found.');
+    if (record.state !== 'running') throw new ComputerStoreError('conflict', 'Computer cannot change resources before creation completes.');
+    const updated = await this.platform.client.computer.updateMany({ where: { id, state: 'running' }, data: settings });
+    if (updated.count !== 1) throw new ComputerStoreError('conflict', 'Computer changed while updating settings.');
+    return (await this.get(id))!;
+  }
+
+  async updateResources(id: string, settings: Pick<ComputerSettings, 'cpuCores' | 'memoryGiB'>) {
+    return this.updateSavedSettings(id, settings);
+  }
+
+  /** Called only after the controller has replaced a powered-off desktop with
+   * the new immutable TZ environment and preserved the named volumes. */
+  async updateSettings(id: string, settings: ComputerSettings) {
+    return this.updateSavedSettings(id, settings);
   }
 
   /** Identities the operator explicitly powered off, for startup reconciliation. */

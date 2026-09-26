@@ -1,14 +1,18 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import type { PlatformStore } from './platform-store';
-import { ComputerStore, ComputerStoreError } from './computer-store';
+import { ComputerStore, ComputerStoreError, type ComputerSettings } from './computer-store';
 import type { ComputerController, ComputerObservation } from './computer-controller-client';
 
 const idParams = Type.Object({ id: Type.String({ minLength: 1, maxLength: 80 }) });
 const errorSchema = Type.Object({ message: Type.String() });
 const errors = { 400: errorSchema, 404: errorSchema, 409: errorSchema, 503: errorSchema };
+const boundedChoice = Type.Object({ min: Type.Integer(), max: Type.Integer(), default: Type.Integer() });
+const limitsSchema = Type.Object({ cpuCores: boundedChoice, memoryGiB: boundedChoice, timezoneDefault: Type.String() });
 const viewSchema = Type.Object({
   id: Type.String(), name: Type.String(), state: Type.String(), createdAt: Type.Number(),
+  cpuCores: Type.Union([Type.Integer(), Type.Null()]), memoryGiB: Type.Union([Type.Integer(), Type.Null()]),
+  timezone: Type.Union([Type.String(), Type.Null()]),
   cpuPercent: Type.Union([Type.Number(), Type.Null()]), memoryBytes: Type.Union([Type.Number(), Type.Null()]),
   // Dial denominators come from the enforced container quotas, never the browser.
   memoryLimitBytes: Type.Union([Type.Number(), Type.Null()]),
@@ -16,9 +20,13 @@ const viewSchema = Type.Object({
   cpuCount: Type.Union([Type.Number(), Type.Null()]),
 });
 
-function view(record: { id: string; name: string; state: string; createdAt: Date }, observed?: ComputerObservation) {
+function view(record: { id: string; name: string; state: string; createdAt: Date; cpuCores: number | null; memoryGiB: number | null; timezone: string | null }, observed?: ComputerObservation) {
   return {
     id: record.id, name: record.name,
+    cpuCores: observed?.cpuCount ?? record.cpuCores ?? null,
+    memoryGiB: observed?.memoryLimitBytes && Number.isInteger(observed.memoryLimitBytes / 1024 ** 3)
+      ? observed.memoryLimitBytes / 1024 ** 3 : record.memoryGiB,
+    timezone: record.timezone,
     state: record.state === 'running' ? (observed?.status ?? 'unavailable') : record.state,
     createdAt: record.createdAt.getTime(), cpuPercent: observed?.cpuPercent ?? null, memoryBytes: observed?.memoryBytes ?? null,
     memoryLimitBytes: observed?.memoryLimitBytes ?? null, cpuCount: observed?.cpuCount ?? null,
@@ -56,18 +64,39 @@ export function registerComputerRoutes(app: FastifyInstance, platform: PlatformS
       return { computers: reconciled.map(record => view(record, observed?.get(record.id))), controllerConnected: observed !== null };
     } catch (error) { return failure(reply, error); }
   });
-  app.post<{ Body: { name: string; requestKey: string } }>('/api/computers', {
-    schema: { operationId: 'createComputer', body: Type.Object({ name: Type.String({ minLength: 1, maxLength: 80 }), requestKey: Type.String({ format: 'uuid' }) }, { additionalProperties: false }), response: { 200: viewSchema, 201: viewSchema, ...errors } },
+  app.get('/api/computers/settings-limits', {
+    schema: { operationId: 'getComputerSettingsLimits', response: { 200: limitsSchema, ...errors } },
+  }, async (_, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    if (!controller) return unavailable(reply);
+    try { return await controller.limits(); } catch (error) { return failure(reply, error); }
+  });
+  app.post<{ Body: { name: string; requestKey: string; cpuCores?: number; memoryGiB?: number; timezone?: string } }>('/api/computers', {
+    schema: { operationId: 'createComputer', body: Type.Object({
+      name: Type.String({ minLength: 1, maxLength: 80 }), requestKey: Type.String({ format: 'uuid' }),
+      cpuCores: Type.Optional(Type.Integer({ minimum: 1, maximum: 8 })),
+      memoryGiB: Type.Optional(Type.Integer({ minimum: 1, maximum: 16 })),
+      timezone: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+    }, { additionalProperties: false }), response: { 200: viewSchema, 201: viewSchema, ...errors } },
   }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     if (!controller) return unavailable(reply);
     let recordId: string | undefined;
     try {
-      const { computer, created } = await store.reserve(request.body.name, request.body.requestKey);
+      const limits = await controller.limits();
+      const settings: ComputerSettings = {
+        cpuCores: request.body.cpuCores ?? limits.cpuCores.default,
+        memoryGiB: request.body.memoryGiB ?? limits.memoryGiB.default,
+        timezone: request.body.timezone ?? limits.timezoneDefault,
+      };
+      if (settings.cpuCores > limits.cpuCores.max || settings.memoryGiB > limits.memoryGiB.max) {
+        throw new ComputerStoreError('invalid', 'Computer settings exceed this host’s capacity.');
+      }
+      const { computer, created } = await store.reserve(request.body.name, request.body.requestKey, settings);
       recordId = computer.id;
       if (computer.state === 'deleting' || computer.state === 'failed') return reply.code(409).send({ message: 'Delete the incomplete computer before reusing this create request.' });
       if (computer.state === 'creating') {
-        await controller.create(computer.id, computer.name);
+        await controller.create(computer.id, computer.name, settings);
         await store.markRunning(computer.id);
       }
       const observed = await controller.observe();
@@ -117,6 +146,71 @@ export function registerComputerRoutes(app: FastifyInstance, platform: PlatformS
       if (request.body.action === 'start') await controller.start(record.id, record.name);
       else await controller.stop(record.id, record.name);
       return reply.code(202).send({ accepted: true, action: request.body.action, desiredState: updated.desiredState });
+    } catch (error) { return failure(reply, error); }
+  });
+  app.patch<{ Params: { id: string }; Body: ComputerSettings }>('/api/computers/:id/settings', {
+    schema: {
+      operationId: 'updateComputerSettings', params: idParams,
+      body: Type.Object({
+        cpuCores: Type.Integer({ minimum: 1, maximum: 8 }),
+        memoryGiB: Type.Integer({ minimum: 1, maximum: 16 }),
+        timezone: Type.String({ minLength: 1, maxLength: 64 }),
+      }, { additionalProperties: false }),
+      response: { 200: viewSchema, ...errors },
+    },
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    if (!controller) return unavailable(reply);
+    try {
+      const record = await store.get(request.params.id);
+      if (!record) return reply.code(404).send({ message: 'Computer not found.' });
+      if (record.state !== 'running') return reply.code(409).send({ message: 'Computer creation or deletion is unfinished.' });
+      if (request.body.timezone !== record.timezone) {
+        return reply.code(409).send({ message: 'Changing timezone requires container replacement and a desktop restart. Confirm the restart separately before applying it.' });
+      }
+      const limits = await controller.limits();
+      if (request.body.cpuCores > limits.cpuCores.max || request.body.memoryGiB > limits.memoryGiB.max) {
+        throw new ComputerStoreError('invalid', 'Computer settings exceed this host’s capacity.');
+      }
+      await controller.updateResources(record.id, record.name, request.body);
+      const updated = await store.updateResources(record.id, request.body);
+      const observed = await controller.observe();
+      return view(updated, observed.get(record.id));
+    } catch (error) { return failure(reply, error); }
+  });
+  app.post<{ Params: { id: string }; Body: ComputerSettings & { confirmReplacement: true } }>('/api/computers/:id/settings/replacement', {
+    schema: {
+      operationId: 'replaceStoppedComputerSettings', params: idParams,
+      body: Type.Object({
+        cpuCores: Type.Integer({ minimum: 1, maximum: 8 }),
+        memoryGiB: Type.Integer({ minimum: 1, maximum: 16 }),
+        timezone: Type.String({ minLength: 1, maxLength: 64 }),
+        confirmReplacement: Type.Literal(true),
+      }, { additionalProperties: false }),
+      response: { 200: viewSchema, ...errors },
+    },
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    if (!controller) return unavailable(reply);
+    try {
+      const record = await store.get(request.params.id);
+      if (!record) return reply.code(404).send({ message: 'Computer not found.' });
+      if (record.state !== 'running' || record.desiredState !== 'stopped') {
+        return reply.code(409).send({ message: 'Power off this computer before replacing it for a timezone change.' });
+      }
+      const observed = await controller.observe();
+      if (observed.get(record.id)?.status !== 'exited') {
+        return reply.code(409).send({ message: 'Wait for the computer to finish powering off before changing timezone.' });
+      }
+      const limits = await controller.limits();
+      if (request.body.cpuCores > limits.cpuCores.max || request.body.memoryGiB > limits.memoryGiB.max) {
+        throw new ComputerStoreError('invalid', 'Computer settings exceed this host’s capacity.');
+      }
+      const settings = { cpuCores: request.body.cpuCores, memoryGiB: request.body.memoryGiB, timezone: request.body.timezone };
+      await controller.replaceStopped(record.id, record.name, settings);
+      const updated = await store.updateSettings(record.id, settings);
+      const current = await controller.observe();
+      return view(updated, current.get(record.id));
     } catch (error) { return failure(reply, error); }
   });
   app.get<{ Params: { id: string }; Querystring: { full?: '1' } }>('/api/computers/:id/preview', {

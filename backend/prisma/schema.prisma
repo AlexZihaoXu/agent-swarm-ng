@@ -32,6 +32,11 @@ model Computer {
   requestKey String   @unique
   state      String   @default("creating")
   desiredState String @default("running")
+  // Null denotes a pre-settings computer: infer effective values from Docker,
+  // never fabricate a requested policy for an existing owner workspace.
+  cpuCores   Int?
+  memoryGiB  Int?
+  timezone   String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }

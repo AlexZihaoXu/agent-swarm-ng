@@ -326,7 +326,7 @@ export function App() {
         </Tabs.Content>
 
         <Tabs.Content value="computers" className="min-h-0 flex-1 outline-none data-[state=active]:flex">
-          <ComputersPanel viewingId={route.kind === 'computer' ? route.computerId ?? null : null} dialog={route.kind === 'computer-new' ? 'new' : route.kind === 'computer-delete' ? 'delete' : null} deleteId={route.kind === 'computer-delete' ? route.computerId ?? null : null} onOpen={id => navigate(computerPath(id))} onNavigate={navigate} onBack={() => navigate('/computers')} />
+          <ComputersPanel viewingId={route.kind === 'computer' ? route.computerId ?? null : null} dialog={route.kind === 'computer-new' ? 'new' : route.kind === 'computer-delete' ? 'delete' : route.kind === 'computer-settings' ? 'settings' : null} deleteId={route.kind === 'computer-delete' ? route.computerId ?? null : null} settingsId={route.kind === 'computer-settings' ? route.computerId ?? null : null} onOpen={id => navigate(computerPath(id))} onNavigate={navigate} onBack={() => navigate('/computers')} />
         </Tabs.Content>
         <Tabs.Content value="settings" forceMount className="phone-tab-enter min-h-0 flex-1 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none data-[state=inactive]:hidden md:pb-0">
           <Settings route={route} onNavigate={navigate} />

@@ -8,7 +8,8 @@ import type { ComputerController, ComputerObservation } from './computer-control
 function controller(observed: Map<string, ComputerObservation>, calls: string[]): ComputerController {
   const noop = async () => {};
   return {
-    create: noop, remove: noop, preview: async () => null, pointer: noop, start: noop,
+    create: noop, remove: noop, updateResources: noop, replaceStopped: noop, preview: async () => null, pointer: noop, start: noop,
+    limits: async () => ({ cpuCores: { min: 1, max: 8, default: 4 }, memoryGiB: { min: 1, max: 16, default: 4 }, timezoneDefault: 'America/Toronto' }),
     observe: async () => observed,
     async stop(id) { calls.push(`stop:${id}`); },
   };

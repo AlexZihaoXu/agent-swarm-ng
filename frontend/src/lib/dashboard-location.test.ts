@@ -20,6 +20,7 @@ describe('dashboard paths', () => {
     expect(parseDashboardPath('/chat/groups/team/edit').kind).toBe('group-edit');
     expect(parseDashboardPath('/computers/new').kind).toBe('computer-new');
     expect(parseDashboardPath('/computers/c-1/delete').kind).toBe('computer-delete');
+    expect(parseDashboardPath('/computers/c-1/settings')).toMatchObject({ kind: 'computer-settings', computerId: 'c-1' });
     expect(parseDashboardPath('/settings/endpoints/new').kind).toBe('endpoint-new');
     expect(parseDashboardPath(endpointPath('ep1'))).toMatchObject({ kind: 'endpoint', endpointId: 'ep1' });
   });

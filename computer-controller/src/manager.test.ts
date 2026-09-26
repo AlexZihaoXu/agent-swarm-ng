@@ -31,6 +31,54 @@ function existingRunning(manager: ComputerManager, resources: Map<string, unknow
   }
 }
 
+function stoppedReplacementFixture() {
+  const context = fixture();
+  const { manager, resources, request, docker } = context;
+  existingRunning(manager, resources);
+  const canonical = manager.names.desktop(id), next = `${canonical}-settings-next`, previous = `${canonical}-settings-previous`;
+  const old = resources.get(`/containers/${canonical}/json`) as Record<string, any>;
+  Object.assign(old, { Id: 'old-desktop', Image: 'sha256:approved', HostConfig: { Devices: [] }, State: { Running: false, Status: 'exited' } });
+  const gateway = resources.get(`/containers/${manager.names.gateway(id)}/json`) as Record<string, any>;
+  gateway.NetworkSettings = { Networks: { [manager.names.privateNetwork(id)]: { IPAddress: '172.25.10.1' } } };
+  resources.set('/images/sha256%3Aapproved/json', { Config: { Labels: {} } });
+  let failNewRename = false, loseOldDeleteResponse = false;
+  vi.mocked(docker.json).mockImplementation(async (method: string, path: string, body?: unknown) => {
+    if (method === 'GET' && path === '/info') return { NCPU: 16, MemTotal: 28 * 1024 ** 3 };
+    if (method === 'POST' && path.startsWith('/containers/create?name=')) {
+      const config = body as Record<string, any>;
+      resources.set(`/containers/${next}/json`, {
+        Id: 'new-desktop', Image: 'sha256:approved', State: { Running: false, Status: 'created' },
+        Config: { Labels: config.Labels, Env: config.Env }, HostConfig: config.HostConfig,
+        NetworkSettings: { Networks: { [manager.names.privateNetwork(id)]: { IPAddress: '172.25.10.3' } } },
+      });
+      return { Id: 'new-desktop' };
+    }
+    return [];
+  });
+  request.mockImplementation(async (method: unknown, path: unknown) => {
+    const url = String(path);
+    if (method === 'POST' && url === `/containers/old-desktop/rename?name=${encodeURIComponent(previous)}`) {
+      resources.set(`/containers/${previous}/json`, resources.get(`/containers/${canonical}/json`));
+      resources.delete(`/containers/${canonical}/json`);
+    } else if (method === 'POST' && url.startsWith('/containers/new-desktop/rename?')) {
+      if (failNewRename) throw Error('simulated rename failure');
+      resources.set(`/containers/${canonical}/json`, resources.get(`/containers/${next}/json`));
+      resources.delete(`/containers/${next}/json`);
+    } else if (method === 'DELETE' && url.startsWith('/containers/new-desktop?')) {
+      resources.delete(`/containers/${canonical}/json`);
+      resources.delete(`/containers/${next}/json`);
+    } else if (method === 'POST' && url === `/containers/old-desktop/rename?name=${encodeURIComponent(canonical)}`) {
+      resources.set(`/containers/${canonical}/json`, resources.get(`/containers/${previous}/json`));
+      resources.delete(`/containers/${previous}/json`);
+    } else if (method === 'DELETE' && url.startsWith('/containers/old-desktop?')) {
+      resources.delete(`/containers/${previous}/json`);
+      if (loseOldDeleteResponse) throw Error('simulated lost delete response');
+    }
+    return Buffer.alloc(0);
+  });
+  return { ...context, canonical, next, previous, failRename: () => { failNewRename = true; }, loseDeleteResponse: () => { loseOldDeleteResponse = true; } };
+}
+
 it.each(['agent-swarm-default:stage2', 'agent-swarm-computer-egress:dev', 'agent-swarm-computer-media:stage2'])(
   'refuses a Compose-labelled managed image before creating resources: %s', async tainted => {
     const { manager, resources, request } = fixture();
@@ -182,6 +230,83 @@ it('refreshes grid thumbnails at the 500 ms card cadence but retains the full-pr
   }
 });
 
+it('detects and caches Docker host capacity for per-computer creation choices', async () => {
+  const { manager, docker } = fixture('', 'America/Toronto');
+  vi.mocked(docker.json).mockResolvedValue({ NCPU: 16, MemTotal: 28 * 1024 ** 3 });
+  expect(await manager.limits()).toMatchObject({ cpuCores: { max: 8, default: 2 }, memoryGiB: { max: 16, default: 4 }, timezoneDefault: 'America/Toronto' });
+  expect(await manager.limits()).toMatchObject({ cpuCores: { max: 8 } });
+  expect(docker.json).toHaveBeenCalledTimes(1);
+  expect(docker.json).toHaveBeenCalledWith('GET', '/info', undefined, 256 * 1024);
+});
+
+it('refuses browser settings above host capacity before creating Docker resources', async () => {
+  const { manager, docker, request } = fixture();
+  vi.mocked(docker.json).mockResolvedValue({ NCPU: 2, MemTotal: 4 * 1024 ** 3 });
+  await expect(manager.create(id, name, { cpuCores: 3, memoryGiB: 4, timezone: 'America/Toronto' })).rejects.toMatchObject({ code: 400 });
+  expect(request).not.toHaveBeenCalled();
+});
+
+it('updates only an owned desktop’s CPU, RAM and equal swap live, without restarting it', async () => {
+  const { manager, resources, request, docker } = fixture();
+  existingRunning(manager, resources);
+  vi.mocked(docker.json).mockResolvedValue({ NCPU: 16, MemTotal: 28 * 1024 ** 3 });
+  await manager.updateResources(id, name, { cpuCores: 2, memoryGiB: 6 });
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(request).toHaveBeenCalledWith('POST', '/containers/desktop/update', {
+    NanoCpus: 2_000_000_000, Memory: 6 * 1024 ** 3, MemorySwap: 12 * 1024 ** 3,
+  });
+  const desktop = resources.get(`/containers/${manager.names.desktop(id)}/json`) as { Config: { Labels: Record<string, string> } };
+  desktop.Config.Labels['swarm.ng.namespace'] = 'foreign';
+  await expect(manager.updateResources(id, name, { cpuCores: 2, memoryGiB: 6 })).rejects.toMatchObject({ code: 409 });
+  expect(request).toHaveBeenCalledTimes(1);
+});
+
+it('never replaces a running or foreign desktop for a timezone edit', async () => {
+  const { manager, resources, request, docker } = fixture();
+  existingRunning(manager, resources);
+  vi.mocked(docker.json).mockResolvedValue({ NCPU: 16, MemTotal: 28 * 1024 ** 3 });
+  const settings = { cpuCores: 2, memoryGiB: 6, timezone: 'Etc/UTC' };
+  await expect(manager.replaceStopped(id, name, settings)).rejects.toMatchObject({ code: 409, message: expect.stringContaining('Power off') });
+  const desktop = resources.get(`/containers/${manager.names.desktop(id)}/json`) as { State: { Running: boolean }; Config: { Labels: Record<string, string> } };
+  desktop.State.Running = false;
+  desktop.Config.Labels['swarm.ng.namespace'] = 'foreign';
+  await expect(manager.replaceStopped(id, name, settings)).rejects.toMatchObject({ code: 409 });
+  expect(request).not.toHaveBeenCalled();
+});
+
+it('replaces a stopped owned desktop with new TZ/env while preserving both named volumes and not starting it', async () => {
+  const { manager, resources, request, canonical, previous } = stoppedReplacementFixture();
+  await manager.replaceStopped(id, name, { cpuCores: 2, memoryGiB: 6, timezone: 'Etc/UTC' });
+  const replacement = resources.get(`/containers/${canonical}/json`) as Record<string, any>;
+  expect(replacement.Id).toBe('new-desktop');
+  expect(replacement.State.Running).toBe(false);
+  expect(replacement.Config.Env).toContain('TZ=Etc/UTC');
+  expect(replacement.HostConfig).toMatchObject({ NanoCpus: 2_000_000_000, Memory: 6 * 1024 ** 3, MemorySwap: 12 * 1024 ** 3 });
+  expect(resources.has(`/containers/${previous}/json`)).toBe(false);
+  for (const role of ['home', 'workspace'] as const) expect(resources.has(`/volumes/${manager.names.volume(id, role)}`)).toBe(true);
+  expect(request.mock.calls.some(call => String(call[1]).includes('/start'))).toBe(false);
+  expect(request.mock.calls.some(call => String(call[1]).startsWith('/volumes/') && call[0] === 'DELETE')).toBe(false);
+});
+
+it('restores the old stopped desktop if promotion of the replacement fails', async () => {
+  const { manager, resources, request, canonical, next, previous, failRename } = stoppedReplacementFixture();
+  failRename();
+  await expect(manager.replaceStopped(id, name, { cpuCores: 2, memoryGiB: 6, timezone: 'Etc/UTC' })).rejects.toThrow('simulated rename failure');
+  expect((resources.get(`/containers/${canonical}/json`) as { Id: string }).Id).toBe('old-desktop');
+  expect(resources.has(`/containers/${next}/json`)).toBe(false);
+  expect(resources.has(`/containers/${previous}/json`)).toBe(false);
+  for (const role of ['home', 'workspace'] as const) expect(resources.has(`/volumes/${manager.names.volume(id, role)}`)).toBe(true);
+  expect(request.mock.calls.some(call => call[0] === 'DELETE' && String(call[1]).startsWith('/volumes/'))).toBe(false);
+});
+
+it('keeps the new desktop if Docker deleted the old one but lost the DELETE response', async () => {
+  const { manager, resources, canonical, previous, loseDeleteResponse } = stoppedReplacementFixture();
+  loseDeleteResponse();
+  await manager.replaceStopped(id, name, { cpuCores: 2, memoryGiB: 6, timezone: 'Etc/UTC' });
+  expect((resources.get(`/containers/${canonical}/json`) as { Id: string }).Id).toBe('new-desktop');
+  expect(resources.has(`/containers/${previous}/json`)).toBe(false);
+});
+
 it('rejects unbounded or fractional operator CPU quotas before creating Docker resources', () => {
   for (const limit of [0, 1.5, 9, Number.NaN, Number.POSITIVE_INFINITY]) {
     expect(() => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '', limit)).toThrow('CPU limit');
@@ -224,7 +349,7 @@ it('puts the derived hostname and every grant in one desktop create body', () =>
     env: desktopEnvironment(id, '172.25.10.1', '/dev/dri/renderD128', 'America/Toronto'),
     hostname: computerHostname('Workspace-NGCLZR', id),
     privateNetwork: 'swarm-ng-test-computer-' + id + '-private', seccomp: '{"defaultAction":"SCMP_ACT_ERRNO"}',
-    renderDevice: '/dev/dri/renderD128', cpuLimit: 4,
+    renderDevice: '/dev/dri/renderD128', cpuLimit: 4, memoryGiB: 6,
     homeVolume: 'swarm-ng-test-computer-' + id + '-home', workspaceVolume: 'swarm-ng-test-computer-' + id + '-workspace',
   };
   const body = desktopCreateBody(input);
@@ -234,7 +359,8 @@ it('puts the derived hostname and every grant in one desktop create body', () =>
   // The isolation contract must survive the extraction unchanged.
   expect(body.HostConfig).toMatchObject({
     Runtime: 'sysbox-runc', CapDrop: ['ALL'], Init: true,
-    NanoCpus: 4_000_000_000, PidsLimit: 1024, RestartPolicy: { Name: 'no' }, Dns: ['1.1.1.1'],
+    NanoCpus: 4_000_000_000, Memory: 6 * 1024 ** 3, MemorySwap: 12 * 1024 ** 3,
+    PidsLimit: 1024, RestartPolicy: { Name: 'no' }, Dns: ['1.1.1.1'],
   });
   expect(body.User).toBe('root');
   expect(body.Cmd).toEqual(['/opt/swarm/start-computer.sh']);

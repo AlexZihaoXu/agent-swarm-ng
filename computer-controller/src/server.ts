@@ -1,6 +1,7 @@
 import { DockerApi, DockerApiError } from './docker-api';
 import { ComputerManager } from './manager';
 import { ResourceError } from './resources';
+import type { ComputerConfiguration } from './computer-configuration';
 
 process.umask(0o077);
 const docker = new DockerApi();
@@ -44,14 +45,16 @@ Bun.serve({
         await docker.request('GET', '/_ping', undefined, 128, 2000);
         return json({ status: 'ok' });
       }
+      if (pathname === '/computers/settings-limits' && request.method === 'GET') return json(await manager.limits());
       if (pathname === '/computers' && request.method === 'GET') return json({ computers: await manager.observe() });
       if (pathname === '/computers' && request.method === 'POST') {
         const input = await body(request);
         if (!input || typeof input !== 'object' || !('id' in input) || !('name' in input) || typeof input.id !== 'string' || typeof input.name !== 'string') throw new ResourceError(400, 'Invalid computer request.');
-        await manager.create(input.id, input.name);
+        if ('settings' in input && (!input.settings || typeof input.settings !== 'object' || Array.isArray(input.settings))) throw new ResourceError(400, 'Invalid computer settings.');
+        await manager.create(input.id, input.name, 'settings' in input ? input.settings as ComputerConfiguration : undefined);
         return json({ created: true }, 201);
       }
-      const match = /^\/computers\/([^/]+)(\/preview|\/input|\/power)?$/.exec(pathname);
+      const match = /^\/computers\/([^/]+)(\/preview|\/input|\/power|\/settings|\/settings\/replacement)?$/.exec(pathname);
       if (!match) return json({ message: 'Not found.' }, 404);
       const id = decodeURIComponent(match[1]);
       if (request.method === 'DELETE' && !match[2]) {
@@ -69,6 +72,20 @@ Bun.serve({
         if (input.action === 'start') await manager.start(id, input.name);
         else await manager.stop(id, input.name);
         return json({ action: input.action, accepted: true }, 202);
+      }
+      if (request.method === 'POST' && match[2] === '/settings/replacement') {
+        const input = await body(request);
+        if (!input || typeof input !== 'object' || !('name' in input) || typeof input.name !== 'string' ||
+            !('cpuCores' in input) || !('memoryGiB' in input) || !('timezone' in input)) throw new ResourceError(400, 'Invalid computer settings.');
+        await manager.replaceStopped(id, input.name, { cpuCores: input.cpuCores as number, memoryGiB: input.memoryGiB as number, timezone: input.timezone as string });
+        return json({ replaced: true });
+      }
+      if (request.method === 'PATCH' && match[2] === '/settings') {
+        const input = await body(request);
+        if (!input || typeof input !== 'object' || !('name' in input) || typeof input.name !== 'string' ||
+            !('cpuCores' in input) || !('memoryGiB' in input)) throw new ResourceError(400, 'Invalid computer settings.');
+        await manager.updateResources(id, input.name, { cpuCores: input.cpuCores as number, memoryGiB: input.memoryGiB as number });
+        return json({ updated: true });
       }
       if (request.method === 'POST' && match[2] === '/input') {
         const input = await body(request);

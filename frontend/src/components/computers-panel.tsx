@@ -6,8 +6,10 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { randomUuid } from '@/lib/random-uuid';
 import { generateComputerName } from '@/lib/computer-name';
+import { defaultComputerSettings, parseComputerSettings, type ComputerSettingsDraft } from '@/lib/computer-settings';
 import { ComputerCard, type Computer } from './computer-card';
 import { ComputerViewer } from './computer-viewer';
+import { ComputerResourceFields } from './computer-resource-fields';
 import { computerPath } from '@/lib/dashboard-location';
 type ComputerList = { computers: Computer[] };
 
@@ -24,7 +26,7 @@ function ComputerDialog({ children }: { children: ReactNode }) {
   </Dialog.Portal>;
 }
 
-export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate, onBack }: { viewingId: string | null; dialog: 'new' | 'delete' | null; deleteId: string | null; onOpen: (id: string) => void; onNavigate: (path: string) => void; onBack: () => void }) {
+export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen, onNavigate, onBack }: { viewingId: string | null; dialog: 'new' | 'delete' | 'settings' | null; deleteId: string | null; settingsId: string | null; onOpen: (id: string) => void; onNavigate: (path: string) => void; onBack: () => void }) {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ['computers'], queryFn: async ({ signal }) => {
     const { data, error } = await api.GET('/api/computers', { signal });
@@ -32,8 +34,21 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
     return data;
   }, refetchInterval: 5000, refetchIntervalInBackground: false });
   const computers = query.data?.computers ?? [];
+  const limitsQuery = useQuery({ queryKey: ['computer-settings-limits'], queryFn: async ({ signal }) => {
+    const { data, error } = await api.GET('/api/computers/settings-limits', { signal });
+    if (!data || error) throw new Error(error?.message ?? 'Could not detect computer limits.');
+    return data;
+  }, enabled: Boolean(query.data?.controllerConnected), staleTime: 60_000 });
   const createOpen = dialog === 'new';
   const [name, setName] = useState('');
+  const [settingsDraft, setSettingsDraft] = useState<ComputerSettingsDraft | null>(null);
+  const [editDraft, setEditDraft] = useState<ComputerSettingsDraft | null>(null);
+  const [settingsBusy, setSettingsBusy] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
+  const [replaceConfirmed, setReplaceConfirmed] = useState(false);
+  const suggestedSettings = limitsQuery.data ? defaultComputerSettings(limitsQuery.data) : null;
+  const formSettings = settingsDraft ?? suggestedSettings;
+  const parsedSettings = formSettings && limitsQuery.data ? parseComputerSettings(formSettings, limitsQuery.data) : null;
   const suggestion = useRef<string | null>(null);
   const alignedToRoster = useRef(false);
   // A default suggestion is generated locally, then aligned once with the live
@@ -58,6 +73,14 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState('');
   const selected = dialog === 'delete' ? computers.find(computer => computer.id === deleteId) ?? null : null;
+  const settingsComputer = dialog === 'settings' ? computers.find(computer => computer.id === settingsId) ?? null : null;
+  const editSettings = editDraft ?? (settingsComputer && limitsQuery.data ? {
+    cpuCores: String(settingsComputer.cpuCores ?? limitsQuery.data.cpuCores.default),
+    memoryGiB: String(settingsComputer.memoryGiB ?? limitsQuery.data.memoryGiB.default),
+    timezone: settingsComputer.timezone ?? limitsQuery.data.timezoneDefault,
+  } : null);
+  const parsedEdit = editSettings && limitsQuery.data ? parseComputerSettings(editSettings, limitsQuery.data) : null;
+  const timezoneChanged = Boolean(settingsComputer && editSettings && editSettings.timezone !== settingsComputer.timezone);
   const viewing = computers.find(computer => computer.id === viewingId);
   const focusGridTab = useRef(false);
   useEffect(() => {
@@ -81,11 +104,11 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
     // !createOpen blocks a stray submit that lands on the dialog's exiting
     // (still-mounted, aria-modal) button during the close animation, which is
     // the only accessible "Create computer" match for a moment after Cancel.
-    if (createBusy || !requested || !createOpen) return;
+    if (createBusy || !requested || !createOpen || !parsedSettings) return;
     const usedSuggestion = requested === suggestion.current;
     setCreateBusy(true); setCreateError('');
     try {
-      const result = await api.POST('/api/computers', { body: { name: requested, requestKey } });
+      const result = await api.POST('/api/computers', { body: { name: requested, requestKey, ...parsedSettings } });
       if (!result.data || result.error) throw new Error(result.error?.message ?? 'Could not create the computer.');
       client.setQueryData<ComputerList>(['computers'], previous => ({ computers: [...(previous?.computers ?? []).filter(item => item.id !== result.data!.id), result.data!] }));
       // A consumed default must not linger: it is now a taken name. suggestName
@@ -100,6 +123,19 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
       if (requested === suggestion.current) setName(suggestName() ?? name);
     }
     finally { setCreateBusy(false); }
+  };
+  const submitSettings = async () => {
+    if (!settingsComputer || !parsedEdit || settingsBusy || timezoneChanged && (settingsComputer.state !== 'exited' || !replaceConfirmed)) return;
+    setSettingsBusy(true); setSettingsError('');
+    try {
+      const result = timezoneChanged
+        ? await api.POST('/api/computers/{id}/settings/replacement', { params: { path: { id: settingsComputer.id } }, body: { ...parsedEdit, confirmReplacement: true } })
+        : await api.PATCH('/api/computers/{id}/settings', { params: { path: { id: settingsComputer.id } }, body: parsedEdit });
+      if (!result.data || result.error) throw new Error(result.error?.message ?? 'Could not update computer settings.');
+      client.setQueryData<ComputerList>(['computers'], previous => ({ computers: (previous?.computers ?? []).map(item => item.id === settingsComputer.id ? result.data! : item) }));
+      onBack(); refresh();
+    } catch (error) { setSettingsError(error instanceof Error ? error.message : 'Could not update computer settings.'); }
+    finally { setSettingsBusy(false); }
   };
   const submitDelete = async () => {
     if (!selected || deleteBusy || confirmation !== selected.name) return;
@@ -125,13 +161,13 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
   };
 
   return <section aria-label="Computers" className="computer-tab-enter flex min-h-0 w-full flex-col">
-    {viewing ? <ComputerViewer key={viewing.id} computer={viewing} canManage={Boolean(query.data?.controllerConnected)} onBack={() => { focusGridTab.current = true; onBack(); }} /> : (viewingId || dialog === 'delete' && !selected) && query.isSuccess ? <div className="p-6 text-sm" role="alert">Computer not found. <button type="button" className="cursor-pointer underline" onClick={onBack}>Return to computers</button></div> : <>
+    {viewing ? <ComputerViewer key={viewing.id} computer={viewing} canManage={Boolean(query.data?.controllerConnected)} onBack={() => { focusGridTab.current = true; onBack(); }} /> : (viewingId || dialog === 'delete' && !selected || dialog === 'settings' && !settingsComputer) && query.isSuccess ? <div className="p-6 text-sm" role="alert">Computer not found. <button type="button" className="cursor-pointer underline" onClick={onBack}>Return to computers</button></div> : <>
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:px-6 md:py-4">
       <div><h2 className="text-lg font-semibold">Computers</h2><p className="text-xs text-muted-foreground">Containerized Ubuntu desktops</p></div>
       <Dialog.Root open={createOpen} onOpenChange={open => { if (createBusy) return; if (open) {
         const previous = suggestion.current;
         if (!name.trim() || name === previous) setName(suggestName() ?? name);
-        setRequestKey(randomUuid()); setCreateError(''); onNavigate('/computers/new');
+        setRequestKey(randomUuid()); setCreateError(''); setSettingsDraft(null); onNavigate('/computers/new');
       } else onBack(); }}>
         <Dialog.Trigger asChild><Button type="button" size="sm" disabled={!query.data?.controllerConnected} className="min-h-11 md:min-h-0">Create computer</Button></Dialog.Trigger>
         <ComputerDialog>
@@ -140,10 +176,13 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
             <Dialog.Description className="mt-2 text-sm text-muted-foreground">Create a separate Ubuntu desktop with a persistent home and workspace.</Dialog.Description>
             <label htmlFor={createId} className="mt-5 block text-sm font-medium">Computer name</label>
             <input id={createId} autoFocus maxLength={80} value={name} disabled={createBusy} onChange={event => setName(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10 sm:text-sm" />
+            {limitsQuery.isError && <p role="alert" className="mt-4 text-sm text-red-400">{limitsQuery.error.message} <button type="button" className="cursor-pointer underline" onClick={() => void limitsQuery.refetch()}>Retry</button></p>}
+            {!limitsQuery.isError && !limitsQuery.data && <p role="status" className="mt-4 text-sm text-muted-foreground">Detecting host limits…</p>}
+            {limitsQuery.data && formSettings && <ComputerResourceFields limits={limitsQuery.data} value={formSettings} onChange={setSettingsDraft} disabled={createBusy} />}
             {createError && <p role="alert" className="mt-4 text-sm text-red-400">{createError}</p>}
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Dialog.Close asChild><Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={createBusy}>Cancel</Button></Dialog.Close>
-              <Button type="submit" size="sm" className="min-h-11 sm:min-h-0" disabled={createBusy || !name.trim()}>{createBusy ? 'Creating…' : 'Create computer'}</Button>
+              <Button type="submit" size="sm" className="min-h-11 sm:min-h-0" disabled={createBusy || !name.trim() || !parsedSettings}>{createBusy ? 'Creating…' : 'Create computer'}</Button>
             </div>
           </form>
         </ComputerDialog>
@@ -168,7 +207,7 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content className="context-menu-content phone-menu-targets z-50 min-w-56 rounded-lg border border-border bg-background p-1 text-sm shadow-lg"
-            onCloseAutoFocus={event => { if (createOpen || selected !== null) event.preventDefault(); }}>
+            onCloseAutoFocus={event => { if (createOpen || selected !== null || settingsComputer !== null) event.preventDefault(); }}>
             <ContextMenu.Item disabled={!menuTarget || menuTarget.state !== 'running' || !query.data?.controllerConnected}
               onSelect={() => { if (menuTarget) onOpen(menuTarget.id); }}
               className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
@@ -183,8 +222,9 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
               className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40">
               <MenuIcon path="M3 7h6l2 2h10v10H3zM8 13h8" label="Files" />File browser
             </ContextMenu.Item>
-            <ContextMenu.Item disabled title="Coming soon: per-computer settings"
-              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40">
+            <ContextMenu.Item disabled={!menuTarget || !query.data?.controllerConnected || (menuTarget.state !== 'running' && menuTarget.state !== 'exited')}
+              onSelect={() => { setEditDraft(null); setSettingsError(''); setReplaceConfirmed(false); if (menuTarget) onNavigate(`${computerPath(menuTarget.id)}/settings`); }}
+              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
               <MenuIcon path="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8M12 2.4v2.4M12 19.2v2.4M4.6 7.8l2 1.2M17.4 15l2 1.2M4.6 16.2l2-1.2M17.4 9l2-1.2M2.4 12h2.4M19.2 12h2.4" label="Settings" />Settings
             </ContextMenu.Item>
             <ContextMenu.Separator className="my-1 h-px bg-border" />
@@ -199,6 +239,26 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
       </ContextMenu.Root>}
     </div>
     </>}
+    <Dialog.Root open={settingsComputer !== null} onOpenChange={open => { if (!open && !settingsBusy) { setEditDraft(null); onBack(); } }}>
+      {settingsComputer && <ComputerDialog>
+        <form onSubmit={event => { event.preventDefault(); void submitSettings(); }}>
+          <Dialog.Title className="text-lg font-semibold">Settings for {settingsComputer.name}</Dialog.Title>
+          <Dialog.Description className="mt-2 text-sm text-muted-foreground">CPU and RAM changes apply without restarting the desktop. Lowering RAM below current use may kill processes.</Dialog.Description>
+          {limitsQuery.data && editSettings && <ComputerResourceFields limits={limitsQuery.data} value={editSettings} onChange={setEditDraft} disabled={settingsBusy} />}
+          {timezoneChanged && <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+            <p role="alert">Changing timezone requires replacing the container. {settingsComputer.state === 'exited'
+              ? 'The computer is off: its home/workspace volumes stay intact. Power it on from the menu after saving.'
+              : 'Power off the computer from the menu first, then reopen Settings. No running desktop will be restarted automatically.'}</p>
+            {settingsComputer.state === 'exited' && <label className="mt-3 flex cursor-pointer items-start gap-2"><input type="checkbox" checked={replaceConfirmed} disabled={settingsBusy} onChange={event => setReplaceConfirmed(event.target.checked)} className="mt-1" />I understand this will replace the stopped container, preserving its home and workspace</label>}
+          </div>}
+          {settingsError && <p role="alert" className="mt-4 text-sm text-red-400">{settingsError}</p>}
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Dialog.Close asChild><Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={settingsBusy}>Cancel</Button></Dialog.Close>
+            <Button type="submit" size="sm" className="min-h-11 sm:min-h-0" disabled={settingsBusy || !parsedEdit || timezoneChanged && (settingsComputer.state !== 'exited' || !replaceConfirmed) || !query.data?.controllerConnected}>{settingsBusy ? 'Saving…' : timezoneChanged ? settingsComputer.state === 'exited' ? 'Replace stopped computer' : 'Power off first' : 'Save settings'}</Button>
+          </div>
+        </form>
+      </ComputerDialog>}
+    </Dialog.Root>
     <Dialog.Root open={selected !== null} onOpenChange={open => { if (!open && !deleteBusy) { setConfirmation(''); onBack(); } }}>
       {selected && <ComputerDialog>
         <form onSubmit={event => { event.preventDefault(); void submitDelete(); }}>

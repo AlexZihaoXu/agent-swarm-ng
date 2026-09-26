@@ -3,23 +3,34 @@ import { join } from 'node:path';
 import { buildApp } from './app';
 import { prepareDatabase } from './test-database';
 import type { ComputerController, ComputerObservation } from './computer-controller-client';
-import { ComputerStore } from './computer-store';
+import { ComputerStore, type ComputerSettings } from './computer-store';
 
 async function fixture() {
   const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
   const calls: string[] = [];
+  const settingsCalls: ComputerSettings[] = [];
   const observed = new Map<string, ComputerObservation>();
   const controller: ComputerController = {
-    async create(id, name) { calls.push(`create:${id}:${name}`); observed.set(id, { status: 'running', cpuPercent: 12.5, memoryBytes: 134217728, memoryLimitBytes: 4_294_967_296, cpuCount: 4 }); },
+    async limits() { return { cpuCores: { min: 1, max: 8, default: 4 }, memoryGiB: { min: 1, max: 16, default: 4 }, timezoneDefault: 'America/Toronto' }; },
+    async create(id, name, settings) { calls.push(`create:${id}:${name}`); settingsCalls.push(settings); observed.set(id, { status: 'running', cpuPercent: 12.5, memoryBytes: 134217728, memoryLimitBytes: settings.memoryGiB * 1024 ** 3, cpuCount: settings.cpuCores }); },
     async remove(id, name) { calls.push(`remove:${id}:${name}`); observed.delete(id); },
     async observe() { return observed; },
     async preview(id, full = false) { if (!observed.has(id)) return null; if (full) calls.push(`full-preview:${id}`); return Buffer.from([0xff, 0xd8, 0xff, 0xd9]); },
     async pointer(id, x, y) { calls.push(`pointer:${id}:${x}:${y}`); },
     async start(id, name) { calls.push(`start:${id}:${name}`); observed.set(id, { status: 'running', cpuPercent: 3, memoryBytes: 209715200, memoryLimitBytes: 4_294_967_296, cpuCount: 4 }); },
     async stop(id, name) { calls.push(`stop:${id}:${name}`); observed.set(id, { status: 'exited', cpuPercent: null, memoryBytes: null, memoryLimitBytes: null, cpuCount: null }); },
+    async updateResources(id, name, settings) {
+      calls.push(`update:${id}:${name}:${settings.cpuCores}:${settings.memoryGiB}`);
+      const previous = observed.get(id)!;
+      observed.set(id, { ...previous, cpuCount: settings.cpuCores, memoryLimitBytes: settings.memoryGiB * 1024 ** 3 });
+    },
+    async replaceStopped(id, name, settings) {
+      calls.push(`replace:${id}:${name}:${settings.timezone}`);
+      observed.set(id, { status: 'exited', cpuPercent: null, memoryBytes: null, memoryLimitBytes: null, cpuCount: null });
+    },
   };
   const app = await buildApp({ database, computerController: controller });
-  return { app, database, calls, observed, controller };
+  return { app, database, calls, settingsCalls, observed, controller };
 }
 
 it('creates one platform computer, lists status/usage and serves its bounded JPEG without granting agents tools', async () => {
@@ -42,6 +53,53 @@ it('creates one platform computer, lists status/usage and serves its bounded JPE
     expect(image.headers['cache-control']).toBe('no-store');
     expect(image.rawPayload).toEqual(Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
     expect(await database.client.agent.count()).toBe(0);
+  } finally { await app.close(); await database.close(); }
+});
+
+it('offers detected host bounds and persists per-computer creation choices without changing defaults', async () => {
+  const { app, database, settingsCalls } = await fixture();
+  try {
+    const limits = await app.inject({ method: 'GET', url: '/api/computers/settings-limits' });
+    expect(limits.statusCode).toBe(200);
+    expect(limits.json()).toMatchObject({ cpuCores: { max: 8, default: 4 }, memoryGiB: { max: 16, default: 4 }, timezoneDefault: 'America/Toronto' });
+    const key = crypto.randomUUID();
+    const payload = { name: 'Custom desk', requestKey: key, cpuCores: 3, memoryGiB: 6, timezone: 'Etc/UTC' };
+    const created = await app.inject({ method: 'POST', url: '/api/computers', payload });
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({ cpuCores: 3, memoryGiB: 6, timezone: 'Etc/UTC', memoryLimitBytes: 6 * 1024 ** 3, cpuCount: 3 });
+    expect(settingsCalls).toEqual([{ cpuCores: 3, memoryGiB: 6, timezone: 'Etc/UTC' }]);
+    expect(await database.client.computer.findUnique({ where: { id: created.json().id } })).toMatchObject({ cpuCores: 3, memoryGiB: 6, timezone: 'Etc/UTC' });
+    expect((await app.inject({ method: 'POST', url: '/api/computers', payload: { ...payload, memoryGiB: 7 } })).statusCode).toBe(409);
+    for (const bad of [{ cpuCores: 9 }, { memoryGiB: 17 }, { cpuCores: 2.5 }, { timezone: '../etc/passwd' }, { timezone: 'Not/A/Zone' }]) {
+      expect((await app.inject({ method: 'POST', url: '/api/computers', payload: { name: 'Bad desk', requestKey: crypto.randomUUID(), ...bad } })).statusCode).toBe(400);
+    }
+  } finally { await app.close(); await database.close(); }
+});
+
+it('edits an owned computer’s CPU and memory live but never silently changes its timezone', async () => {
+  const { app, database, calls } = await fixture();
+  try {
+    const created = await app.inject({ method: 'POST', url: '/api/computers', payload: { name: 'Editable desk', requestKey: crypto.randomUUID() } });
+    const id = created.json().id as string;
+    const saved = await app.inject({ method: 'PATCH', url: `/api/computers/${id}/settings`, payload: { cpuCores: 2, memoryGiB: 6, timezone: 'America/Toronto' } });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toMatchObject({ cpuCores: 2, memoryGiB: 6, timezone: 'America/Toronto', cpuCount: 2, memoryLimitBytes: 6 * 1024 ** 3 });
+    expect(calls).toContain(`update:${id}:Editable desk:2:6`);
+    expect(await database.client.computer.findUnique({ where: { id } })).toMatchObject({ cpuCores: 2, memoryGiB: 6, timezone: 'America/Toronto' });
+    const timezone = await app.inject({ method: 'PATCH', url: `/api/computers/${id}/settings`, payload: { cpuCores: 2, memoryGiB: 6, timezone: 'Etc/UTC' } });
+    expect(timezone.statusCode).toBe(409);
+    expect(timezone.json().message).toMatch(/replacement|restart/i);
+    expect(calls.filter(call => call.startsWith('update:'))).toHaveLength(1);
+    const replacementUrl = `/api/computers/${id}/settings/replacement`;
+    const replacement = { cpuCores: 2, memoryGiB: 6, timezone: 'Etc/UTC', confirmReplacement: true };
+    expect((await app.inject({ method: 'POST', url: replacementUrl, payload: replacement })).statusCode).toBe(409);
+    await app.inject({ method: 'POST', url: `/api/computers/${id}/power`, payload: { action: 'stop' } });
+    expect((await app.inject({ method: 'POST', url: replacementUrl, payload: { ...replacement, confirmReplacement: false } })).statusCode).toBe(400);
+    const replaced = await app.inject({ method: 'POST', url: replacementUrl, payload: replacement });
+    expect(replaced.statusCode).toBe(200);
+    expect(replaced.json()).toMatchObject({ state: 'exited', cpuCores: 2, memoryGiB: 6, timezone: 'Etc/UTC' });
+    expect(calls).toContain(`replace:${id}:Editable desk:Etc/UTC`);
+    expect(await database.client.computer.findUnique({ where: { id } })).toMatchObject({ timezone: 'Etc/UTC', desiredState: 'stopped' });
   } finally { await app.close(); await database.close(); }
 });
 

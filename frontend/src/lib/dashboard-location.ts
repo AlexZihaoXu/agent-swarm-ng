@@ -3,7 +3,7 @@ export type DashboardRoute = {
   tab: DashboardTab;
   kind: 'root' | 'not-found' | 'agents-list' | 'agent' | 'agent-dm' | 'agent-new' | 'agent-delete' | 'agent-edit' |
     'chat-list' | 'chat-agent' | 'chat-group' | 'group-new' | 'group-edit' | 'group-delete' |
-    'computers-list' | 'computer' | 'computer-new' | 'computer-delete' | 'settings' | 'endpoint-new' | 'endpoint';
+    'computers-list' | 'computer' | 'computer-new' | 'computer-delete' | 'computer-settings' | 'settings' | 'endpoint-new' | 'endpoint';
   agentId?: string;
   peerId?: string;
   groupId?: string;
@@ -62,6 +62,7 @@ export function parseDashboardPath(pathname: string): DashboardRoute {
     if (parts.length === 2 && id === 'new') return { tab: 'computers', kind: 'computer-new' };
     if (parts.length === 2) return { tab: 'computers', kind: 'computer', computerId: id };
     if (parts.length === 3 && third === 'delete') return { tab: 'computers', kind: 'computer-delete', computerId: id };
+    if (parts.length === 3 && third === 'settings') return { tab: 'computers', kind: 'computer-settings', computerId: id };
   }
   if (section === 'settings') {
     if (parts.length === 1) return { tab: 'settings', kind: 'settings' };
