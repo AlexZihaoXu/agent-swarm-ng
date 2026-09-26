@@ -318,24 +318,33 @@ it('refuses power changes for an unknown, foreign or invalid computer before cal
   expect(request.mock.calls.filter(call => call[0] === 'POST')).toHaveLength(0);
 });
 
-it('reports the container cgroup memory limit as the usage denominator', async () => {
+it('uses the enforced container quota, not the cgroup limit stats reports', async () => {
   const { manager, docker } = fixture();
   vi.mocked(docker.json).mockImplementation(async (_method: unknown, path: unknown) => {
     if (String(path).startsWith('/containers/json')) {
       return [{ Id: 'desktop', State: 'running', Labels: manager.names.labels(id, 'desktop', name) }];
     }
+    if (String(path) === '/containers/desktop/json') {
+      return { Id: 'desktop', State: { Running: true }, Config: { Labels: manager.names.labels(id, 'desktop', name) }, HostConfig: { Memory: 4_294_967_296 } };
+    }
     if (String(path).includes('/stats?stream=false')) {
       return {
         cpu_stats: { cpu_usage: { total_usage: 2_000_000_000 }, system_cpu_usage: 20_000_000_000, online_cpus: 4 },
         precpu_stats: { cpu_usage: { total_usage: 1_000_000_000 }, system_cpu_usage: 10_000_000_000 },
-        memory_stats: { usage: 2_147_483_648, limit: 4_294_967_296, stats: { inactive_file: 104_857_600 } },
+        // Sysbox nests the desktop, so the stats payload reports the parent
+        // cgroup's 28 GiB limit rather than the 4 GiB quota Docker enforces.
+        memory_stats: { usage: 2_147_483_648, limit: 30_208_245_760, stats: { inactive_file: 104_857_600 } },
       };
     }
     return [];
   });
   const rows = await manager.observe();
   const row = rows.find(item => item.id === id);
-  // 2 GiB used minus 100 MiB inactive file, against the container's own 4 GiB limit.
+  // 2 GiB used minus 100 MiB inactive file, against the enforced 4 GiB quota.
   expect(row).toMatchObject({ status: 'running', memoryBytes: 2_042_626_048, memoryLimitBytes: 4_294_967_296 });
   expect(row?.cpuPercent).toBe(40);
+  // The quota is read once per container id, not on every 5s roster poll.
+  const inspects = vi.mocked(docker.json).mock.calls.filter(call => String(call[1]) === '/containers/desktop/json');
+  await manager.observe();
+  expect(vi.mocked(docker.json).mock.calls.filter(call => String(call[1]) === '/containers/desktop/json')).toHaveLength(inspects.length);
 });

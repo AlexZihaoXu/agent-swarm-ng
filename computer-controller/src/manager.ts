@@ -418,8 +418,28 @@ export class ComputerManager {
     if (rows.length > 100) throw new ResourceError(503, 'Too many managed computers.');
     return rows.filter(row => row.Labels?.['swarm.ng.role'] === 'desktop' && row.Labels?.['swarm.ng.namespace'] === this.names.namespace && row.Labels?.['swarm.ng.managed'] === 'computer');
   }
+  /** Enforced container memory quota, cached per Docker container id.
+   * Recreation produces a new id, so the cache cannot serve a stale quota. */
+  private memoryLimits = new Map<string, number | null>();
+  private async memoryLimit(containerId: string) {
+    if (this.memoryLimits.has(containerId)) return this.memoryLimits.get(containerId) ?? null;
+    let limit: number | null = null;
+    try {
+      const info = await this.docker.json<{ HostConfig?: { Memory?: number } }>('GET', `${this.path('containers', containerId)}/json`);
+      const configured = info.HostConfig?.Memory;
+      // 0 means "no limit configured"; report null rather than an infinite dial.
+      if (typeof configured === 'number' && configured > 0) limit = configured;
+    } catch { /* The dial stays empty when the quota cannot be read. */ }
+    this.memoryLimits.set(containerId, limit);
+    return limit;
+  }
+
   async observe() {
     const rows = await this.listIds();
+    // Prune quotas for containers that no longer exist, so repeated recreation
+    // cannot grow the cache without bound.
+    const alive = new Set(rows.map(row => row.Id));
+    for (const cached of this.memoryLimits.keys()) if (!alive.has(cached)) this.memoryLimits.delete(cached);
     const computers = [];
     for (const row of rows) {
       const id = row.Labels['swarm.ng.id'];
@@ -432,9 +452,10 @@ export class ComputerManager {
           const system = (stats.cpu_stats?.system_cpu_usage ?? 0) - (stats.precpu_stats?.system_cpu_usage ?? 0);
           if (system > 0 && cpu >= 0) cpuPercent = Math.round(cpu / system * (stats.cpu_stats?.online_cpus ?? 1) * 1000) / 10;
           if (typeof stats.memory_stats?.usage === 'number') memoryBytes = Math.max(0, stats.memory_stats.usage - (stats.memory_stats.stats?.inactive_file ?? 0));
-          // The dial's denominator comes from the container's own cgroup limit,
-          // so the dashboard never hardcodes (or guesses) the operator quota.
-          if (typeof stats.memory_stats?.limit === 'number' && stats.memory_stats.limit > 0) memoryLimitBytes = stats.memory_stats.limit;
+          // Sysbox nests the desktop, so the stats payload reports the parent
+          // cgroup's limit (host memory) rather than the quota Docker enforces.
+          // The enforced HostConfig.Memory is the honest denominator.
+          memoryLimitBytes = await this.memoryLimit(row.Id);
         } catch { /* State stays visible when live stats are temporarily unavailable. */ }
       }
       computers.push({ id, status: row.State, cpuPercent, memoryBytes, memoryLimitBytes });
