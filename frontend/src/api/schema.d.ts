@@ -2353,6 +2353,7 @@ export interface operations {
                             cpuPercent: number | null;
                             memoryBytes: number | null;
                             memoryLimitBytes: number | null;
+                            cpuCount: number | null;
                         }[];
                         controllerConnected: boolean;
                     };
@@ -2435,6 +2436,7 @@ export interface operations {
                         cpuPercent: number | null;
                         memoryBytes: number | null;
                         memoryLimitBytes: number | null;
+                        cpuCount: number | null;
                     };
                 };
             };
@@ -2452,6 +2454,7 @@ export interface operations {
                         cpuPercent: number | null;
                         memoryBytes: number | null;
                         memoryLimitBytes: number | null;
+                        cpuCount: number | null;
                     };
                 };
             };

@@ -1,4 +1,4 @@
-export type ComputerObservation = { status: string; cpuPercent: number | null; memoryBytes: number | null; memoryLimitBytes: number | null };
+export type ComputerObservation = { status: string; cpuPercent: number | null; memoryBytes: number | null; memoryLimitBytes: number | null; cpuCount: number | null };
 
 export interface ComputerController {
   create(id: string, name: string): Promise<void>;
@@ -35,7 +35,7 @@ export class HttpComputerController implements ComputerController {
     const result = new Map<string, ComputerObservation>();
     for (const item of data.computers) {
       if (!item || typeof item !== 'object' || typeof item.id !== 'string' || typeof item.status !== 'string') throw new Error('Invalid computer observation.');
-      result.set(item.id, { status: item.status, cpuPercent: item.cpuPercent ?? null, memoryBytes: item.memoryBytes ?? null, memoryLimitBytes: item.memoryLimitBytes ?? null });
+      result.set(item.id, { status: item.status, cpuPercent: item.cpuPercent ?? null, memoryBytes: item.memoryBytes ?? null, memoryLimitBytes: item.memoryLimitBytes ?? null, cpuCount: item.cpuCount ?? null });
     }
     return result;
   }

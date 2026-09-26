@@ -6471,7 +6471,8 @@
                           "createdAt",
                           "cpuPercent",
                           "memoryBytes",
-                          "memoryLimitBytes"
+                          "memoryLimitBytes",
+                          "cpuCount"
                         ],
                         "properties": {
                           "id": {
@@ -6507,6 +6508,16 @@
                             ]
                           },
                           "memoryLimitBytes": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "cpuCount": {
                             "anyOf": [
                               {
                                 "type": "number"
@@ -6643,7 +6654,8 @@
                     "createdAt",
                     "cpuPercent",
                     "memoryBytes",
-                    "memoryLimitBytes"
+                    "memoryLimitBytes",
+                    "cpuCount"
                   ],
                   "properties": {
                     "id": {
@@ -6679,6 +6691,16 @@
                       ]
                     },
                     "memoryLimitBytes": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cpuCount": {
                       "anyOf": [
                         {
                           "type": "number"
@@ -6706,7 +6728,8 @@
                     "createdAt",
                     "cpuPercent",
                     "memoryBytes",
-                    "memoryLimitBytes"
+                    "memoryLimitBytes",
+                    "cpuCount"
                   ],
                   "properties": {
                     "id": {
@@ -6742,6 +6765,16 @@
                       ]
                     },
                     "memoryLimitBytes": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cpuCount": {
                       "anyOf": [
                         {
                           "type": "number"

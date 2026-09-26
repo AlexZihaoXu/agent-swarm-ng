@@ -70,6 +70,10 @@ export function ComputerCard({ computer, canManage, busy, onOpen, onPower }: {
   }, [polling, computer.id]);
 
   const status = running ? 'Running' : stopped ? 'Stopped' : computer.state === 'unavailable' ? 'Unavailable' : computer.state === 'creating' ? 'Creating' : computer.state === 'deleting' ? 'Deleting' : computer.state;
+  // Docker sums CPU across cores, so divide by the container's own CPU count to
+  // keep the dial a true fraction of capacity instead of saturating at 100%.
+  const cpuFraction = computer.cpuPercent === null ? null
+    : computer.cpuPercent / (100 * Math.max(1, computer.cpuCount ?? 1));
   const memoryMiB = computer.memoryBytes === null ? null : Math.round(computer.memoryBytes / (1024 * 1024));
   const limitMiB = computer.memoryLimitBytes === null ? null : Math.round(computer.memoryLimitBytes / (1024 * 1024));
   const openMenu = () => {
@@ -108,7 +112,7 @@ export function ComputerCard({ computer, canManage, busy, onOpen, onPower }: {
       </div>
       {/* CPU starts at the left edge; memory begins at the card's centre. */}
       <div className="flex items-center gap-3 text-xs">
-        <div className="min-w-0 flex-1"><UsageDial label="CPU" value={computer.cpuPercent === null ? '—' : `${computer.cpuPercent.toFixed(1)}%`} fraction={computer.cpuPercent === null ? null : computer.cpuPercent / 100} /></div>
+        <div className="min-w-0 flex-1"><UsageDial label="CPU" value={computer.cpuPercent === null ? '—' : `${computer.cpuPercent.toFixed(1)}%`} fraction={cpuFraction} /></div>
         <div className="min-w-0 flex-1"><UsageDial label="Memory" value={memoryMiB === null ? '—' : `${memoryMiB} MB`} caption={limitMiB ? `of ${limitMiB} MB` : undefined} fraction={memoryMiB === null || !limitMiB ? null : memoryMiB / limitMiB} /></div>
       </div>
       {running || stopped ? <Button type="button" size="sm" variant="outline" disabled={!canManage || busy}

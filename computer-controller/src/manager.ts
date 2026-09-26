@@ -418,20 +418,21 @@ export class ComputerManager {
     if (rows.length > 100) throw new ResourceError(503, 'Too many managed computers.');
     return rows.filter(row => row.Labels?.['swarm.ng.role'] === 'desktop' && row.Labels?.['swarm.ng.namespace'] === this.names.namespace && row.Labels?.['swarm.ng.managed'] === 'computer');
   }
-  /** Enforced container memory quota, cached per Docker container id.
-   * Recreation produces a new id, so the cache cannot serve a stale quota. */
-  private memoryLimits = new Map<string, number | null>();
-  private async memoryLimit(containerId: string) {
-    if (this.memoryLimits.has(containerId)) return this.memoryLimits.get(containerId) ?? null;
-    let limit: number | null = null;
+  /** Enforced container quotas, cached per Docker container id. Recreation
+   * produces a new id, so the cache cannot serve a stale quota. */
+  private quotas = new Map<string, { memory: number | null; cpuCount: number | null }>();
+  private async containerQuota(containerId: string) {
+    const cached = this.quotas.get(containerId);
+    if (cached) return cached;
+    const quota = { memory: null as number | null, cpuCount: null as number | null };
     try {
-      const info = await this.docker.json<{ HostConfig?: { Memory?: number } }>('GET', `${this.path('containers', containerId)}/json`);
-      const configured = info.HostConfig?.Memory;
+      const info = await this.docker.json<{ HostConfig?: { Memory?: number; NanoCpus?: number } }>('GET', `${this.path('containers', containerId)}/json`);
       // 0 means "no limit configured"; report null rather than an infinite dial.
-      if (typeof configured === 'number' && configured > 0) limit = configured;
-    } catch { /* The dial stays empty when the quota cannot be read. */ }
-    this.memoryLimits.set(containerId, limit);
-    return limit;
+      if (typeof info.HostConfig?.Memory === 'number' && info.HostConfig.Memory > 0) quota.memory = info.HostConfig.Memory;
+      if (typeof info.HostConfig?.NanoCpus === 'number' && info.HostConfig.NanoCpus > 0) quota.cpuCount = info.HostConfig.NanoCpus / 1_000_000_000;
+    } catch { /* Dials stay empty when the quota cannot be read. */ }
+    this.quotas.set(containerId, quota);
+    return quota;
   }
 
   async observe() {
@@ -439,12 +440,12 @@ export class ComputerManager {
     // Prune quotas for containers that no longer exist, so repeated recreation
     // cannot grow the cache without bound.
     const alive = new Set(rows.map(row => row.Id));
-    for (const cached of this.memoryLimits.keys()) if (!alive.has(cached)) this.memoryLimits.delete(cached);
+    for (const cached of this.quotas.keys()) if (!alive.has(cached)) this.quotas.delete(cached);
     const computers = [];
     for (const row of rows) {
       const id = row.Labels['swarm.ng.id'];
       if (!id || !/^\S+$/.test(id)) continue;
-      let cpuPercent: number | null = null, memoryBytes: number | null = null, memoryLimitBytes: number | null = null;
+      let cpuPercent: number | null = null, memoryBytes: number | null = null, memoryLimitBytes: number | null = null, cpuCount: number | null = null;
       if (row.State === 'running') {
         try {
           const stats = await this.docker.json<Statistics>('GET', `${this.path('containers', row.Id)}/stats?stream=false`);
@@ -455,10 +456,14 @@ export class ComputerManager {
           // Sysbox nests the desktop, so the stats payload reports the parent
           // cgroup's limit (host memory) rather than the quota Docker enforces.
           // The enforced HostConfig.Memory is the honest denominator.
-          memoryLimitBytes = await this.memoryLimit(row.Id);
+          const quota = await this.containerQuota(row.Id);
+          memoryLimitBytes = quota.memory;
+          cpuCount = quota.cpuCount;
         } catch { /* State stays visible when live stats are temporarily unavailable. */ }
       }
-      computers.push({ id, status: row.State, cpuPercent, memoryBytes, memoryLimitBytes });
+      // Docker reports CPU as the sum across cores, so a 4-CPU computer can
+      // read 250%. The count lets the dashboard draw an honest fraction.
+      computers.push({ id, status: row.State, cpuPercent, memoryBytes, memoryLimitBytes, cpuCount });
     }
     return computers;
   }

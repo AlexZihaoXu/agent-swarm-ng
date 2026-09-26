@@ -325,7 +325,7 @@ it('uses the enforced container quota, not the cgroup limit stats reports', asyn
       return [{ Id: 'desktop', State: 'running', Labels: manager.names.labels(id, 'desktop', name) }];
     }
     if (String(path) === '/containers/desktop/json') {
-      return { Id: 'desktop', State: { Running: true }, Config: { Labels: manager.names.labels(id, 'desktop', name) }, HostConfig: { Memory: 4_294_967_296 } };
+      return { Id: 'desktop', State: { Running: true }, Config: { Labels: manager.names.labels(id, 'desktop', name) }, HostConfig: { Memory: 4_294_967_296, NanoCpus: 4_000_000_000 } };
     }
     if (String(path).includes('/stats?stream=false')) {
       return {
@@ -341,7 +341,8 @@ it('uses the enforced container quota, not the cgroup limit stats reports', asyn
   const rows = await manager.observe();
   const row = rows.find(item => item.id === id);
   // 2 GiB used minus 100 MiB inactive file, against the enforced 4 GiB quota.
-  expect(row).toMatchObject({ status: 'running', memoryBytes: 2_042_626_048, memoryLimitBytes: 4_294_967_296 });
+  expect(row).toMatchObject({ status: 'running', memoryBytes: 2_042_626_048, memoryLimitBytes: 4_294_967_296, cpuCount: 4 });
+  // Docker sums CPU across cores, so 40% of one core of four reads as 40 here.
   expect(row?.cpuPercent).toBe(40);
   // The quota is read once per container id, not on every 5s roster poll.
   const inspects = vi.mocked(docker.json).mock.calls.filter(call => String(call[1]) === '/containers/desktop/json');

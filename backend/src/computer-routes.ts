@@ -10,8 +10,10 @@ const errors = { 400: errorSchema, 404: errorSchema, 409: errorSchema, 503: erro
 const viewSchema = Type.Object({
   id: Type.String(), name: Type.String(), state: Type.String(), createdAt: Type.Number(),
   cpuPercent: Type.Union([Type.Number(), Type.Null()]), memoryBytes: Type.Union([Type.Number(), Type.Null()]),
-  // The dial denominator comes from the container cgroup, never the browser.
+  // Dial denominators come from the enforced container quotas, never the browser.
   memoryLimitBytes: Type.Union([Type.Number(), Type.Null()]),
+  // Docker sums CPU across cores, so the count is needed for an honest fraction.
+  cpuCount: Type.Union([Type.Number(), Type.Null()]),
 });
 
 function view(record: { id: string; name: string; state: string; createdAt: Date }, observed?: ComputerObservation) {
@@ -19,7 +21,7 @@ function view(record: { id: string; name: string; state: string; createdAt: Date
     id: record.id, name: record.name,
     state: record.state === 'running' ? (observed?.status ?? 'unavailable') : record.state,
     createdAt: record.createdAt.getTime(), cpuPercent: observed?.cpuPercent ?? null, memoryBytes: observed?.memoryBytes ?? null,
-    memoryLimitBytes: observed?.memoryLimitBytes ?? null,
+    memoryLimitBytes: observed?.memoryLimitBytes ?? null, cpuCount: observed?.cpuCount ?? null,
   };
 }
 function unavailable(reply: FastifyReply) {

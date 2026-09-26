@@ -1,6 +1,6 @@
 import { test, expect, type Page } from './fixtures';
 
-type Computer = { id: string; name: string; state: string; createdAt: number; cpuPercent: number | null; memoryBytes: number | null; memoryLimitBytes?: number | null };
+type Computer = { id: string; name: string; state: string; createdAt: number; cpuPercent: number | null; memoryBytes: number | null; memoryLimitBytes?: number | null; cpuCount?: number | null };
 async function expectCentered(page: Page, dialog: ReturnType<Page['getByRole']>) {
   const box = await dialog.boundingBox();
   const viewport = page.viewportSize();
@@ -35,8 +35,8 @@ async function mockComputers(page: Page, initial: Computer[] = []) {
 
 test('Computers shows a responsive screenshot-first grid with name and CPU/memory below', async ({ page }) => {
   const { previewCount } = await mockComputers(page, [
-    { id: 'alpha', name: 'Research', state: 'running', createdAt: 0, cpuPercent: 12.5, memoryBytes: 268435456, memoryLimitBytes: 4294967296 },
-    { id: 'beta', name: 'Offline', state: 'exited', createdAt: 0, cpuPercent: null, memoryBytes: null, memoryLimitBytes: null },
+    { id: 'alpha', name: 'Research', state: 'running', createdAt: 0, cpuPercent: 12.5, memoryBytes: 268435456, memoryLimitBytes: 4294967296, cpuCount: 4 },
+    { id: 'beta', name: 'Offline', state: 'exited', createdAt: 0, cpuPercent: null, memoryBytes: null, memoryLimitBytes: null, cpuCount: null },
   ]);
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/');
@@ -263,7 +263,9 @@ test('resizing the window re-fits the desktop without a reload', async ({ page }
 
 test('computer card offers a shared context menu and power control', async ({ page }) => {
   const id = '9c1f2a6e-3b4d-4c8a-9e11-2d5f7a9b0c13';
-  const { computers } = await mockComputers(page, [{ id, name: 'Menu desk', state: 'running', createdAt: 0, cpuPercent: 11.1, memoryBytes: 1908874_320, memoryLimitBytes: 4294967296 } as unknown as Computer]);
+  // CPU is summed across cores by Docker (257.8% of 4 cores = 64% of capacity),
+  // so the dial fraction must divide by the container's own CPU count.
+  const { computers } = await mockComputers(page, [{ id, name: 'Menu desk', state: 'running', createdAt: 0, cpuPercent: 257.8, memoryBytes: 1908874320, memoryLimitBytes: 4294967296, cpuCount: 4 } as unknown as Computer]);
   await page.route(new RegExp(`/api/computers/${id}/preview\\?full=1`), route => route.fulfill({
     status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#523348"/></svg>',
   }));
@@ -284,7 +286,14 @@ test('computer card offers a shared context menu and power control', async ({ pa
   // Dials first: while a menu is open Radix aria-hides the rest of the app.
   const dials = card.getByTestId('usage-dial');
   await expect(dials).toHaveCount(2);
-  await expect(dials.nth(0)).toContainText('11.1%');
+  await expect(dials.nth(0)).toContainText('257.8%');
+  const cpuRatio = await dials.nth(0).evaluate(node => {
+    const arc = node.querySelectorAll('circle')[1];
+    const dash = Number(arc.getAttribute('stroke-dasharray'));
+    return 1 - Number(arc.getAttribute('stroke-dashoffset')) / dash;
+  });
+  // 257.8% across four cores is 64.5% of capacity, not a saturated ring.
+  expect(cpuRatio).toBeCloseTo(0.6445, 2);
   await expect(dials.nth(1)).toContainText('1820 MB');
   await expect(dials.nth(1)).toContainText('of 4096 MB');
   // The "..." trigger opens the same menu as a right click.
@@ -321,7 +330,7 @@ test('computer card offers a shared context menu and power control', async ({ pa
 
 test('preview crossfades with the two layers always summing to one opacity', async ({ page }) => {
   const id = 'b7d0c4e2-6a19-4b3e-8f2c-1a9e5d3c7b64';
-  await mockComputers(page, [{ id, name: 'Fade desk', state: 'running', createdAt: 0, cpuPercent: 2, memoryBytes: 104857600, memoryLimitBytes: 4294967296 } as unknown as Computer]);
+  await mockComputers(page, [{ id, name: 'Fade desk', state: 'running', createdAt: 0, cpuPercent: 2, memoryBytes: 104857600, memoryLimitBytes: 4294967296, cpuCount: 4 } as unknown as Computer]);
   let requests = 0;
   await page.route(new RegExp(`/api/computers/${id}/preview\\?at=`), route => {
     requests += 1;
