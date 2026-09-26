@@ -372,6 +372,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/computers/{id}/power": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["powerComputer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/computers/{id}/preview": {
         parameters: {
             query?: never;
@@ -2336,6 +2352,7 @@ export interface operations {
                             createdAt: number;
                             cpuPercent: number | null;
                             memoryBytes: number | null;
+                            memoryLimitBytes: number | null;
                         }[];
                         controllerConnected: boolean;
                     };
@@ -2417,6 +2434,7 @@ export interface operations {
                         createdAt: number;
                         cpuPercent: number | null;
                         memoryBytes: number | null;
+                        memoryLimitBytes: number | null;
                     };
                 };
             };
@@ -2433,6 +2451,7 @@ export interface operations {
                         createdAt: number;
                         cpuPercent: number | null;
                         memoryBytes: number | null;
+                        memoryLimitBytes: number | null;
                     };
                 };
             };
@@ -2507,6 +2526,83 @@ export interface operations {
                 content: {
                     "application/json": {
                         deleted: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    powerComputer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    action: "start" | "stop";
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        accepted: boolean;
+                        action: string;
+                        desiredState: string;
                     };
                 };
             };

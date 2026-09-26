@@ -79,3 +79,21 @@ describe('computer identity and lifecycle', () => {
     } finally { await database.close(); }
   });
 });
+
+describe('computer power intent', () => {
+  it('records an explicit stop so controller reconciliation cannot revive it, and a start clears it', async () => {
+    const { database, computers } = await fixture();
+    try {
+      const { computer } = await computers.reserve('Powered desk', crypto.randomUUID());
+      await computers.markRunning(computer.id);
+      expect(computer.desiredState).toBe('running');
+      expect(await computers.setDesiredState(computer.id, 'stopped')).toMatchObject({ desiredState: 'stopped' });
+      expect((await computers.get(computer.id))?.desiredState).toBe('stopped');
+      // Reconciliation only ever considers computers the operator left on.
+      expect(await computers.stoppedIds()).toEqual([computer.id]);
+      expect(await computers.setDesiredState(computer.id, 'running')).toMatchObject({ desiredState: 'running' });
+      expect(await computers.stoppedIds()).toEqual([]);
+      await expect(computers.setDesiredState('missing-id', 'stopped')).rejects.toThrow('not found');
+    } finally { await database.close(); }
+  });
+});

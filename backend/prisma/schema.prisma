@@ -31,6 +31,7 @@ model Computer {
   name       String
   requestKey String   @unique
   state      String   @default("creating")
+  desiredState String @default("running")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }

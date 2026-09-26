@@ -40,6 +40,26 @@ export class ComputerStore {
     return computer;
   }
 
+  /** Persist the operator's power intent. A stopped computer must stay stopped
+   * across controller restarts, whose boot reconciliation otherwise starts every
+   * owned desktop it finds. */
+  async setDesiredState(id: string, desired: 'running' | 'stopped') {
+    await this.platform.initialize();
+    if (desired !== 'running' && desired !== 'stopped') throw new ComputerStoreError('invalid', 'Unknown computer power state.');
+    const record = await this.platform.client.computer.findUnique({ where: { id } });
+    if (!record) throw new ComputerStoreError('missing', 'Computer not found.');
+    if (record.state === 'deleting' || record.state === 'failed') {
+      throw new ComputerStoreError('conflict', 'This computer is not available for power changes.');
+    }
+    return this.platform.client.computer.update({ where: { id }, data: { desiredState: desired } });
+  }
+
+  /** Identities the operator explicitly powered off, for startup reconciliation. */
+  async stoppedIds() {
+    await this.platform.initialize();
+    return (await this.platform.client.computer.findMany({ where: { desiredState: 'stopped' }, select: { id: true }, orderBy: { sequence: 'asc' }, take: 100 })).map(record => record.id);
+  }
+
   async get(id: string) {
     await this.platform.initialize();
     return this.platform.client.computer.findUnique({ where: { id } });

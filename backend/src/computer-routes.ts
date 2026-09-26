@@ -10,6 +10,8 @@ const errors = { 400: errorSchema, 404: errorSchema, 409: errorSchema, 503: erro
 const viewSchema = Type.Object({
   id: Type.String(), name: Type.String(), state: Type.String(), createdAt: Type.Number(),
   cpuPercent: Type.Union([Type.Number(), Type.Null()]), memoryBytes: Type.Union([Type.Number(), Type.Null()]),
+  // The dial denominator comes from the container cgroup, never the browser.
+  memoryLimitBytes: Type.Union([Type.Number(), Type.Null()]),
 });
 
 function view(record: { id: string; name: string; state: string; createdAt: Date }, observed?: ComputerObservation) {
@@ -17,6 +19,7 @@ function view(record: { id: string; name: string; state: string; createdAt: Date
     id: record.id, name: record.name,
     state: record.state === 'running' ? (observed?.status ?? 'unavailable') : record.state,
     createdAt: record.createdAt.getTime(), cpuPercent: observed?.cpuPercent ?? null, memoryBytes: observed?.memoryBytes ?? null,
+    memoryLimitBytes: observed?.memoryLimitBytes ?? null,
   };
 }
 function unavailable(reply: FastifyReply) {
@@ -87,6 +90,31 @@ export function registerComputerRoutes(app: FastifyInstance, platform: PlatformS
       // the record after this controller request was queued. Its effects are
       // complete, not a new failure that should prompt an unsafe retry.
       return { deleted: true };
+    } catch (error) { return failure(reply, error); }
+  });
+  app.post<{ Params: { id: string }; Body: { action: 'start' | 'stop' } }>('/api/computers/:id/power', {
+    schema: {
+      operationId: 'powerComputer', params: idParams,
+      body: Type.Object({ action: Type.Unsafe<'start' | 'stop'>({ type: 'string', enum: ['start', 'stop'] }) }, { additionalProperties: false }),
+      response: { 202: Type.Object({ accepted: Type.Boolean(), action: Type.String(), desiredState: Type.String() }), ...errors },
+    },
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    if (!controller) return unavailable(reply);
+    try {
+      const record = await store.get(request.params.id);
+      if (!record) return reply.code(404).send({ message: 'Computer not found.' });
+      if (record.state !== 'running') {
+        return reply.code(409).send({ message: 'This computer cannot change power state while its create or delete is unfinished.' });
+      }
+      // Record the operator's intent BEFORE touching Docker: a crash in between
+      // then leaves a computer that is running but marked stopped, which startup
+      // reconciliation stops again. The reverse order could silently revive it.
+      const desired = request.body.action === 'start' ? 'running' : 'stopped';
+      const updated = await store.setDesiredState(record.id, desired);
+      if (request.body.action === 'start') await controller.start(record.id, record.name);
+      else await controller.stop(record.id, record.name);
+      return reply.code(202).send({ accepted: true, action: request.body.action, desiredState: updated.desiredState });
     } catch (error) { return failure(reply, error); }
   });
   app.get<{ Params: { id: string }; Querystring: { full?: '1' } }>('/api/computers/:id/preview', {

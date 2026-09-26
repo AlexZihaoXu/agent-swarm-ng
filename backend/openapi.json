@@ -6470,7 +6470,8 @@
                           "state",
                           "createdAt",
                           "cpuPercent",
-                          "memoryBytes"
+                          "memoryBytes",
+                          "memoryLimitBytes"
                         ],
                         "properties": {
                           "id": {
@@ -6496,6 +6497,16 @@
                             ]
                           },
                           "memoryBytes": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "memoryLimitBytes": {
                             "anyOf": [
                               {
                                 "type": "number"
@@ -6631,7 +6642,8 @@
                     "state",
                     "createdAt",
                     "cpuPercent",
-                    "memoryBytes"
+                    "memoryBytes",
+                    "memoryLimitBytes"
                   ],
                   "properties": {
                     "id": {
@@ -6657,6 +6669,16 @@
                       ]
                     },
                     "memoryBytes": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "memoryLimitBytes": {
                       "anyOf": [
                         {
                           "type": "number"
@@ -6683,7 +6705,8 @@
                     "state",
                     "createdAt",
                     "cpuPercent",
-                    "memoryBytes"
+                    "memoryBytes",
+                    "memoryLimitBytes"
                   ],
                   "properties": {
                     "id": {
@@ -6709,6 +6732,16 @@
                       ]
                     },
                     "memoryBytes": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "memoryLimitBytes": {
                       "anyOf": [
                         {
                           "type": "number"
@@ -6847,6 +6880,146 @@
                   "properties": {
                     "deleted": {
                       "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/computers/{id}/power": {
+      "post": {
+        "operationId": "powerComputer",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "start",
+                      "stop"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 80,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "accepted",
+                    "action",
+                    "desiredState"
+                  ],
+                  "properties": {
+                    "accepted": {
+                      "type": "boolean"
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "desiredState": {
+                      "type": "string"
                     }
                   }
                 }

@@ -2,19 +2,21 @@ import { expect, it } from 'vitest';
 import { join } from 'node:path';
 import { buildApp } from './app';
 import { prepareDatabase } from './test-database';
-import type { ComputerController } from './computer-controller-client';
+import type { ComputerController, ComputerObservation } from './computer-controller-client';
 import { ComputerStore } from './computer-store';
 
 async function fixture() {
   const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
   const calls: string[] = [];
-  const observed = new Map<string, { status: string; cpuPercent: number | null; memoryBytes: number | null }>();
+  const observed = new Map<string, ComputerObservation>();
   const controller: ComputerController = {
-    async create(id, name) { calls.push(`create:${id}:${name}`); observed.set(id, { status: 'running', cpuPercent: 12.5, memoryBytes: 134217728 }); },
+    async create(id, name) { calls.push(`create:${id}:${name}`); observed.set(id, { status: 'running', cpuPercent: 12.5, memoryBytes: 134217728, memoryLimitBytes: 4_294_967_296 }); },
     async remove(id, name) { calls.push(`remove:${id}:${name}`); observed.delete(id); },
     async observe() { return observed; },
     async preview(id, full = false) { if (!observed.has(id)) return null; if (full) calls.push(`full-preview:${id}`); return Buffer.from([0xff, 0xd8, 0xff, 0xd9]); },
     async pointer(id, x, y) { calls.push(`pointer:${id}:${x}:${y}`); },
+    async start(id, name) { calls.push(`start:${id}:${name}`); observed.set(id, { status: 'running', cpuPercent: 3, memoryBytes: 209715200, memoryLimitBytes: 4_294_967_296 }); },
+    async stop(id, name) { calls.push(`stop:${id}:${name}`); observed.set(id, { status: 'exited', cpuPercent: null, memoryBytes: null, memoryLimitBytes: null }); },
   };
   const app = await buildApp({ database, computerController: controller });
   return { app, database, calls, observed, controller };
@@ -41,6 +43,39 @@ it('creates one platform computer, lists status/usage and serves its bounded JPE
     expect(image.rawPayload).toEqual(Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
     expect(await database.client.agent.count()).toBe(0);
   } finally { await app.close(); await database.close(); }
+});
+
+it('powers a computer off and on, remembering the operator intent', async () => {
+  const { app, calls, observed } = await fixture();
+  try {
+    const created = await app.inject({ method: 'POST', url: '/api/computers', payload: { name: 'Power desk', requestKey: crypto.randomUUID() } });
+    const id = created.json().id as string;
+    expect(observed.get(id)?.status).toBe('running');
+    const stopped = await app.inject({ method: 'POST', url: `/api/computers/${id}/power`, payload: { action: 'stop' } });
+    expect(stopped.statusCode).toBe(202);
+    expect(stopped.json()).toMatchObject({ accepted: true, action: 'stop', desiredState: 'stopped' });
+    expect(calls).toContain(`stop:${id}:Power desk`);
+    expect((await app.inject({ method: 'GET', url: '/api/computers' })).json().computers[0]).toMatchObject({ state: 'exited', cpuPercent: null });
+    const started = await app.inject({ method: 'POST', url: `/api/computers/${id}/power`, payload: { action: 'start' } });
+    expect(started.statusCode).toBe(202);
+    expect(started.json()).toMatchObject({ action: 'start', desiredState: 'running' });
+    expect(calls).toContain(`start:${id}:Power desk`);
+    expect((await app.inject({ method: 'GET', url: '/api/computers' })).json().computers[0].state).toBe('running');
+  } finally { await app.close(); }
+});
+
+it('refuses an unknown power action, an unknown computer, and one still being created', async () => {
+  const { app, calls, database } = await fixture();
+  try {
+    const created = await app.inject({ method: 'POST', url: '/api/computers', payload: { name: 'Guarded desk', requestKey: crypto.randomUUID() } });
+    const id = created.json().id as string;
+    expect((await app.inject({ method: 'POST', url: `/api/computers/${id}/power`, payload: { action: 'reboot' } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: `/api/computers/${crypto.randomUUID()}/power`, payload: { action: 'stop' } })).statusCode).toBe(404);
+    const pending = await database.client.computer.create({ data: { name: 'Half built', requestKey: crypto.randomUUID(), state: 'creating' } });
+    expect((await app.inject({ method: 'POST', url: `/api/computers/${pending.id}/power`, payload: { action: 'stop' } })).statusCode).toBe(409);
+    // Every refusal above happens before any Docker call.
+    expect(calls.filter(call => call.startsWith('stop:') || call.startsWith('start:'))).toHaveLength(0);
+  } finally { await app.close(); }
 });
 
 it('limits first-run desktop input to an existing running computer and normalized coordinates', async () => {
@@ -104,7 +139,7 @@ it('reconciles a crash between Docker creation and a saved status, and unlocks s
   try {
     const store = new ComputerStore(database);
     const live = (await store.reserve('Recovered', crypto.randomUUID())).computer;
-    observed.set(live.id, { status: 'running', cpuPercent: 1, memoryBytes: 123 });
+    observed.set(live.id, { status: 'running', cpuPercent: 1, memoryBytes: 123, memoryLimitBytes: 4_294_967_296 });
     const first = (await app.inject({ method: 'GET', url: '/api/computers' })).json();
     expect(first.computers[0]).toMatchObject({ id: live.id, state: 'running' });
     const partial = (await store.reserve('Partial', crypto.randomUUID())).computer;

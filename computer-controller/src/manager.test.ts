@@ -6,7 +6,7 @@ const id = '4a18018a-4689-4fa5-86ca-4dc080d41fb4';
 const name = 'Work computer';
 function fixture(renderDevice = '', timezone = '') {
   const resources = new Map<string, unknown>();
-  const request = vi.fn(async () => Buffer.alloc(0));
+  const request = vi.fn(async (..._args: unknown[]) => Buffer.alloc(0));
   const execute = vi.fn(async () => Buffer.alloc(0));
   const docker = { optional: async (path: string) => resources.get(path) ?? null, request, json: vi.fn(async () => []), exec: execute } as unknown as DockerApi;
   const manager = new ComputerManager(docker, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, renderDevice, 2, timezone);
@@ -246,4 +246,96 @@ it('refuses invalid resource IDs and namespaces before calling Docker', async ()
   expect(() => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '/dev/dri/card0')).toThrow('render device');
   expect(() => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '/etc/shadow')).toThrow('render device');
   expect(request).not.toHaveBeenCalled();
+});
+
+it('stops only the owned desktop and its media relay, preserving gateway, volumes and record', async () => {
+  const { manager, resources, request } = fixture();
+  existingRunning(manager, resources);
+  resources.set(`/containers/${manager.names.media(id)}/json`, {
+    Id: 'relay', State: { Running: true }, Config: { Labels: manager.names.labels(id, 'media', name) },
+  });
+  await manager.stop(id, name);
+  const calls = request.mock.calls.map(call => `${call[0]} ${call[1]}`);
+  expect(calls).toContain('POST /containers/relay/stop?t=5');
+  expect(calls).toContain('POST /containers/desktop/stop?t=5');
+  // The filtered egress gateway and both volumes must survive a power stop.
+  expect(calls.some(call => call.includes('/containers/gateway/'))).toBe(false);
+  expect(calls.some(call => call.includes('volumes/') && call.startsWith('DELETE'))).toBe(false);
+  expect(calls.some(call => call.startsWith('DELETE'))).toBe(false);
+});
+
+it('always allows stopping but never starts a computer with a stale render grant', async () => {
+  // Power-off is safe regardless of operator grants; power-on must not revive a
+  // desktop with host-device access the current operator no longer grants.
+  const stopped = fixture('/dev/dri/renderD129');
+  existingRunning(stopped.manager, stopped.resources);
+  await stopped.manager.stop(id, name);
+  expect(stopped.request.mock.calls.map(call => `${call[0]} ${call[1]}`)).toContain('POST /containers/desktop/stop?t=5');
+  const started = fixture('/dev/dri/renderD129');
+  existingRunning(started.manager, started.resources);
+  (started.resources.get(`/containers/${started.manager.names.desktop(id)}/json`) as { State: { Running: boolean } }).State.Running = false;
+  await expect(started.manager.start(id, name)).rejects.toMatchObject({ code: 409 });
+  expect(started.request.mock.calls.filter(call => String(call[1]).includes('/start'))).toHaveLength(0);
+});
+
+it('starts a stopped computer through its filtered gateway before the desktop', async () => {
+  const { manager, resources, request } = fixture();
+  existingRunning(manager, resources);
+  // Everything owned exists but is stopped.
+  for (const role of ['desktop', 'egress'] as const) {
+    const key = role === 'desktop' ? `/containers/${manager.names.desktop(id)}/json` : `/containers/${manager.names.gateway(id)}/json`;
+    const container = resources.get(key) as { State: { Running: boolean } };
+    container.State.Running = false;
+  }
+  // The private bridge must look like the real isolated one before a desktop
+  // may reattach: bridge driver, internal, no IPv6, isolated gateway mode.
+  // The shared filtered egress bridge is Compose-owned and must already exist.
+  resources.set(`/networks/${manager.names.egressNetwork}`, {
+    Id: 'egress', Labels: manager.names.labels(null, 'egress-network'),
+    Driver: 'bridge', Internal: false, EnableIPv6: false, Options: {}, IPAM: { Config: [] },
+  });
+  resources.set(`/networks/${manager.names.privateNetwork(id)}`, {
+    Id: 'private', Labels: manager.names.labels(id, 'private-network'), Driver: 'bridge', Internal: true,
+    EnableIPv6: false, Options: { 'com.docker.network.bridge.gateway_mode_ipv4': 'isolated' },
+    IPAM: { Config: [{ Subnet: '172.25.10.0/24' }] },
+  });
+  await manager.start(id, name);
+  const posts = request.mock.calls.filter(call => call[0] === 'POST').map(call => String(call[1]));
+  // The gateway must be running before the desktop attaches to the bridge.
+  expect(posts.indexOf('/containers/gateway/start')).toBeGreaterThanOrEqual(0);
+  expect(posts.indexOf('/containers/desktop/start')).toBeGreaterThan(posts.indexOf('/containers/gateway/start'));
+});
+
+it('refuses power changes for an unknown, foreign or invalid computer before calling Docker', async () => {
+  const { manager, resources, request } = fixture();
+  existingRunning(manager, resources);
+  // A well-formed ID with no owned desktop is a 404; a renamed computer is a
+  // 409 ownership refusal; a malformed ID is rejected before any Docker call.
+  await expect(manager.start('550e8400-e29b-41d4-a716-446655440000', name)).rejects.toMatchObject({ code: 404 });
+  await expect(manager.stop(id, 'Other name')).rejects.toMatchObject({ code: 409 });
+  await expect(manager.start('../escape', name)).rejects.toMatchObject({ code: 400 });
+  await expect(manager.stop(id, 'x'.repeat(81))).rejects.toMatchObject({ code: 400 });
+  expect(request.mock.calls.filter(call => call[0] === 'POST')).toHaveLength(0);
+});
+
+it('reports the container cgroup memory limit as the usage denominator', async () => {
+  const { manager, docker } = fixture();
+  vi.mocked(docker.json).mockImplementation(async (_method: unknown, path: unknown) => {
+    if (String(path).startsWith('/containers/json')) {
+      return [{ Id: 'desktop', State: 'running', Labels: manager.names.labels(id, 'desktop', name) }];
+    }
+    if (String(path).includes('/stats?stream=false')) {
+      return {
+        cpu_stats: { cpu_usage: { total_usage: 2_000_000_000 }, system_cpu_usage: 20_000_000_000, online_cpus: 4 },
+        precpu_stats: { cpu_usage: { total_usage: 1_000_000_000 }, system_cpu_usage: 10_000_000_000 },
+        memory_stats: { usage: 2_147_483_648, limit: 4_294_967_296, stats: { inactive_file: 104_857_600 } },
+      };
+    }
+    return [];
+  });
+  const rows = await manager.observe();
+  const row = rows.find(item => item.id === id);
+  // 2 GiB used minus 100 MiB inactive file, against the container's own 4 GiB limit.
+  expect(row).toMatchObject({ status: 'running', memoryBytes: 2_042_626_048, memoryLimitBytes: 4_294_967_296 });
+  expect(row?.cpuPercent).toBe(40);
 });

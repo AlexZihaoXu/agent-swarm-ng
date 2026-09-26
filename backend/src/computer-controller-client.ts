@@ -1,4 +1,4 @@
-export type ComputerObservation = { status: string; cpuPercent: number | null; memoryBytes: number | null };
+export type ComputerObservation = { status: string; cpuPercent: number | null; memoryBytes: number | null; memoryLimitBytes: number | null };
 
 export interface ComputerController {
   create(id: string, name: string): Promise<void>;
@@ -6,6 +6,8 @@ export interface ComputerController {
   observe(): Promise<Map<string, ComputerObservation>>;
   preview(id: string, full?: boolean): Promise<Uint8Array | null>;
   pointer(id: string, x: number, y: number): Promise<void>;
+  start(id: string, name: string): Promise<void>;
+  stop(id: string, name: string): Promise<void>;
 }
 
 /** Internal controller only; the browser cannot choose its Docker endpoint. */
@@ -33,9 +35,15 @@ export class HttpComputerController implements ComputerController {
     const result = new Map<string, ComputerObservation>();
     for (const item of data.computers) {
       if (!item || typeof item !== 'object' || typeof item.id !== 'string' || typeof item.status !== 'string') throw new Error('Invalid computer observation.');
-      result.set(item.id, { status: item.status, cpuPercent: item.cpuPercent ?? null, memoryBytes: item.memoryBytes ?? null });
+      result.set(item.id, { status: item.status, cpuPercent: item.cpuPercent ?? null, memoryBytes: item.memoryBytes ?? null, memoryLimitBytes: item.memoryLimitBytes ?? null });
     }
     return result;
+  }
+  async start(id: string, name: string) {
+    await this.request(`/computers/${encodeURIComponent(id)}/power`, { method: 'POST', body: JSON.stringify({ name, action: 'start' }) }, 60_000);
+  }
+  async stop(id: string, name: string) {
+    await this.request(`/computers/${encodeURIComponent(id)}/power`, { method: 'POST', body: JSON.stringify({ name, action: 'stop' }) }, 45_000);
   }
   async pointer(id: string, x: number, y: number) {
     await this.request(`/computers/${encodeURIComponent(id)}/input`, {
@@ -64,4 +72,10 @@ export class HttpComputerController implements ComputerController {
     if (frame.length < 4 || frame[0] !== 0xff || frame[1] !== 0xd8 || frame.at(-2) !== 0xff || frame.at(-1) !== 0xd9) throw new Error('Computer preview is not a JPEG.');
     return frame;
   }
+}
+
+/** The managed-computer controller is an internal service only; the browser can
+ * never choose its Docker endpoint. Absent URL means computers are unavailable. */
+export function computerControllerFromEnv(url = process.env.COMPUTER_CONTROLLER_URL): ComputerController | null {
+  return url ? new HttpComputerController(url) : null;
 }

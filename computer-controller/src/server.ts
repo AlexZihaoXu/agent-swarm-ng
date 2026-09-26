@@ -51,7 +51,7 @@ Bun.serve({
         await manager.create(input.id, input.name);
         return json({ created: true }, 201);
       }
-      const match = /^\/computers\/([^/]+)(\/preview|\/input)?$/.exec(pathname);
+      const match = /^\/computers\/([^/]+)(\/preview|\/input|\/power)?$/.exec(pathname);
       if (!match) return json({ message: 'Not found.' }, 404);
       const id = decodeURIComponent(match[1]);
       if (request.method === 'DELETE' && !match[2]) {
@@ -59,6 +59,16 @@ Bun.serve({
         if (!input || typeof input !== 'object' || !('name' in input) || typeof input.name !== 'string') throw new ResourceError(400, 'Invalid computer deletion.');
         await manager.remove(id, input.name);
         return json({ deleted: true });
+      }
+      if (request.method === 'POST' && match[2] === '/power') {
+        // Power control keeps the expected name so a renamed or foreign
+        // container is refused by the ownership check, exactly like deletion.
+        const input = await body(request);
+        if (!input || typeof input !== 'object' || !('name' in input) || typeof input.name !== 'string' ||
+            !('action' in input) || (input.action !== 'start' && input.action !== 'stop')) throw new ResourceError(400, 'Invalid power request.');
+        if (input.action === 'start') await manager.start(id, input.name);
+        else await manager.stop(id, input.name);
+        return json({ action: input.action, accepted: true }, 202);
       }
       if (request.method === 'POST' && match[2] === '/input') {
         const input = await body(request);

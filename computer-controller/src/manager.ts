@@ -10,7 +10,7 @@ type Container = {
 type ListedContainer = { Id: string; State: string; Labels: Record<string, string> };
 type Network = { Id: string; Driver: string; Internal: boolean; EnableIPv6: boolean; Labels?: Record<string, string>; Options?: Record<string, string>; IPAM: { Config: { Subnet?: string; Gateway?: string }[] } };
 type Volume = { Name: string; Labels?: Record<string, string> };
-type Statistics = { cpu_stats?: { cpu_usage?: { total_usage?: number }; system_cpu_usage?: number; online_cpus?: number }; precpu_stats?: { cpu_usage?: { total_usage?: number }; system_cpu_usage?: number }; memory_stats?: { usage?: number; stats?: { inactive_file?: number } } };
+type Statistics = { cpu_stats?: { cpu_usage?: { total_usage?: number }; system_cpu_usage?: number; online_cpus?: number }; precpu_stats?: { cpu_usage?: { total_usage?: number }; system_cpu_usage?: number }; memory_stats?: { usage?: number; limit?: number; stats?: { inactive_file?: number } } };
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const PRIVATE_MODE = 'com.docker.network.bridge.gateway_mode_ipv4';
@@ -323,6 +323,51 @@ export class ComputerManager {
     return this.exclusive(() => this.removeOwned(id, name));
   }
 
+  /** Operator power control. Both paths re-check ownership labels first, so a
+   * foreign or renamed container is never touched, and neither one deletes
+   * anything: volumes, network and the platform record always survive. */
+  private async powerOwned(id: string, name: string, action: 'start' | 'stop') {
+    const desktop = await this.container(this.names.desktop(id), id, 'desktop', name);
+    if (!desktop) throw new ResourceError(404, 'Computer has no desktop container to power.');
+    const media = await this.container(this.names.media(id), id, 'media', name);
+    if (action === 'stop') {
+      // The relay fronts the desktop, so it goes first; the filtered gateway
+      // stays up so the bridge keeps its isolated settings.
+      if (media?.State.Running) await this.docker.request('POST', `${this.path('containers', media.Id)}/stop?t=5`);
+      if (desktop.State.Running) await this.docker.request('POST', `${this.path('containers', desktop.Id)}/stop?t=5`);
+      this.previewCache.delete(`${id}:thumb`);
+      this.previewCache.delete(`${id}:full`);
+      return;
+    }
+    if (!this.renderDeviceMatches(desktop)) {
+      throw new ResourceError(409, 'Computer render-device grant differs from the current operator setting.');
+    }
+    const network = await this.network(this.names.privateNetwork(id), id, 'private-network');
+    const subnet = network?.IPAM.Config[0]?.Subnet;
+    if (!network || !subnet) throw new ResourceError(503, 'Computer network is unavailable.');
+    const gateway = await this.container(this.names.gateway(id), id, 'egress', name);
+    if (!gateway) throw new ResourceError(503, 'Computer egress gateway is missing.');
+    await this.ensureNetwork(this.names.egressNetwork, null, 'egress-network');
+    // Never attach a running desktop to a gateway that is still loading its
+    // firewall rules: bring the filtered gateway up first.
+    if (!gateway.State.Running) await this.docker.request('POST', `${this.path('containers', gateway.Id)}/start`);
+    if (!desktop.State.Running) await this.docker.request('POST', `${this.path('containers', desktop.Id)}/start`);
+    const running = await this.container(this.names.desktop(id), id, 'desktop', name);
+    if (running?.State.Running) await this.ensureMedia(id, name, running);
+    this.previewCache.delete(`${id}:thumb`);
+    this.previewCache.delete(`${id}:full`);
+  }
+
+  async start(idRaw: string, nameRaw: string) {
+    const id = validateId(idRaw), name = validateName(nameRaw);
+    return this.exclusive(() => this.powerOwned(id, name, 'start'));
+  }
+
+  async stop(idRaw: string, nameRaw: string) {
+    const id = validateId(idRaw), name = validateName(nameRaw);
+    return this.exclusive(() => this.powerOwned(id, name, 'stop'));
+  }
+
   async resume() {
     return this.exclusive(async () => {
       const rows = await this.listIds();
@@ -379,7 +424,7 @@ export class ComputerManager {
     for (const row of rows) {
       const id = row.Labels['swarm.ng.id'];
       if (!id || !/^\S+$/.test(id)) continue;
-      let cpuPercent: number | null = null, memoryBytes: number | null = null;
+      let cpuPercent: number | null = null, memoryBytes: number | null = null, memoryLimitBytes: number | null = null;
       if (row.State === 'running') {
         try {
           const stats = await this.docker.json<Statistics>('GET', `${this.path('containers', row.Id)}/stats?stream=false`);
@@ -387,9 +432,12 @@ export class ComputerManager {
           const system = (stats.cpu_stats?.system_cpu_usage ?? 0) - (stats.precpu_stats?.system_cpu_usage ?? 0);
           if (system > 0 && cpu >= 0) cpuPercent = Math.round(cpu / system * (stats.cpu_stats?.online_cpus ?? 1) * 1000) / 10;
           if (typeof stats.memory_stats?.usage === 'number') memoryBytes = Math.max(0, stats.memory_stats.usage - (stats.memory_stats.stats?.inactive_file ?? 0));
+          // The dial's denominator comes from the container's own cgroup limit,
+          // so the dashboard never hardcodes (or guesses) the operator quota.
+          if (typeof stats.memory_stats?.limit === 'number' && stats.memory_stats.limit > 0) memoryLimitBytes = stats.memory_stats.limit;
         } catch { /* State stays visible when live stats are temporarily unavailable. */ }
       }
-      computers.push({ id, status: row.State, cpuPercent, memoryBytes });
+      computers.push({ id, status: row.State, cpuPercent, memoryBytes, memoryLimitBytes });
     }
     return computers;
   }

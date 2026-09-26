@@ -9,7 +9,7 @@ import { CodexProvider } from './codex-provider';
 import { registerCodex } from './codex-routes';
 import { ActivityEntrySchema } from './agent-activity';
 import { registerComputerRoutes } from './computer-routes';
-import { HttpComputerController, type ComputerController } from './computer-controller-client';
+import { computerControllerFromEnv, type ComputerController } from './computer-controller-client';
 
 export async function buildApp({ fetcher, endpointStore, database, codex = new CodexProvider(), computerController }: { fetcher?: typeof fetch; endpointStore?: EndpointStore; database?: PlatformStore; codex?: CodexProvider; computerController?: ComputerController | null } = {}) {
   const app = Fastify({ logger: true });
@@ -28,7 +28,7 @@ export async function buildApp({ fetcher, endpointStore, database, codex = new C
   registerModelEndpoints(app, fetcher, endpointStore);
   registerCodex(app, codex);
   registerChat(app, endpointStore, platform, codex);
-  registerComputerRoutes(app, platform, computerController === undefined ? (process.env.COMPUTER_CONTROLLER_URL ? new HttpComputerController(process.env.COMPUTER_CONTROLLER_URL) : null) : computerController);
+  registerComputerRoutes(app, platform, computerController === undefined ? computerControllerFromEnv() : computerController);
 
   await app.ready();
   return app;
