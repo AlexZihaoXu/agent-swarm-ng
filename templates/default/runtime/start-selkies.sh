@@ -10,6 +10,16 @@ case "$id" in *[!0-9a-f-]*) echo 'Invalid managed computer ID' >&2; exit 1;; esa
 runtime=${XDG_RUNTIME_DIR:?}
 encoder=${COMPUTER_STREAM_ENCODER:-h264enc}
 case "$encoder" in h264enc|jpeg) ;; *) echo 'Invalid computer encoder' >&2; exit 1;; esac
+# Selkies parses ANY enum override as the complete published menu, so
+# `--encoder=jpeg` alone advertises a one-item list and every client request to
+# switch is refused. Keep the operator's encoder as the default and first stop,
+# then the rest of the upstream menu, so a secure (HTTPS) viewer can negotiate a
+# hardware H.264 stream while an insecure origin stays on the JPEG fallback its
+# browser can actually decode.
+encoder_menu="$encoder"
+for encoder_candidate in h264enc h265enc vp8enc vp9enc av1enc h264enc-striped jpeg; do
+    [ "$encoder_candidate" = "$encoder" ] || encoder_menu="$encoder_menu,$encoder_candidate"
+done
 child=''
 cleanup() {
     [ -z "$child" ] || { kill "$child" 2>/dev/null || true; wait "$child" 2>/dev/null || true; }
@@ -27,7 +37,7 @@ while :; do
         --ui-sidebar-show-audio-settings=false --ui-sidebar-show-gamepads=false \
         --ui-sidebar-show-webcam=false --ui-sidebar-show-clipboard=false \
         --ui-sidebar-show-files=false --ui-sidebar-show-apps=false \
-        --ui-sidebar-show-sharing=false --encoder="$encoder" --framerate=30 \
+        --ui-sidebar-show-sharing=false --encoder="$encoder_menu" --framerate=30 \
         >> "$runtime/selkies.log" 2>&1 &
     child=$!
     wait "$child" || true

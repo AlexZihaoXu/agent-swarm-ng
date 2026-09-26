@@ -72,7 +72,8 @@ else
     docker build -t "$TEST_X11_IMAGE" -f templates/default/x11.Dockerfile .
 fi
 sh scripts/prepare-selkies-client.sh
-test "$(sha256sum .scratch/selkies-client-web/assets/selkies-core-BbKps5RD.js | cut -d ' ' -f 1)" = 633f8909c4ef14c2a3c178292f4b6d47dbacbf71ccd55060ace4db623b000c52
+test -s .scratch/selkies-client-web/.derivative-hash
+test "$(sha256sum .scratch/selkies-client-web/assets/selkies-core-BbKps5RD.js | cut -d ' ' -f 1)" = "$(cat .scratch/selkies-client-web/.derivative-hash)"
 compose build backend frontend computer-controller
 compose up --no-build -d
 for i in $(seq 1 40); do
