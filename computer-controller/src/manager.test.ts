@@ -1,15 +1,15 @@
 import { expect, it, vi } from 'vitest';
-import { ComputerManager } from './manager';
+import { ComputerManager, desktopEnvironment } from './manager';
 import { DockerApi } from './docker-api';
 
 const id = '4a18018a-4689-4fa5-86ca-4dc080d41fb4';
 const name = 'Work computer';
-function fixture(renderDevice = '') {
+function fixture(renderDevice = '', timezone = '') {
   const resources = new Map<string, unknown>();
   const request = vi.fn(async () => Buffer.alloc(0));
   const execute = vi.fn(async () => Buffer.alloc(0));
   const docker = { optional: async (path: string) => resources.get(path) ?? null, request, json: vi.fn(async () => []), exec: execute } as unknown as DockerApi;
-  const manager = new ComputerManager(docker, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, renderDevice);
+  const manager = new ComputerManager(docker, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, renderDevice, 2, timezone);
   return { manager, resources, request, execute, docker };
 }
 
@@ -164,6 +164,28 @@ it('rejects unbounded or fractional operator CPU quotas before creating Docker r
     expect(() => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '', limit)).toThrow('CPU limit');
   }
   expect(() => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '', 4)).not.toThrow();
+});
+
+it('rejects operator timezones that are not a plain IANA zone name', () => {
+  const make = (timezone: string) => () => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '', 2, timezone);
+  for (const bad of ['../etc/passwd', '/etc/localtime', 'America/../..', 'America/Toronto;reboot', 'Not A Zone', 'America//Toronto', '.', '..']) {
+    expect(make(bad)).toThrow('timezone');
+  }
+  // Absent means "leave the image default"; valid zones must not throw.
+  for (const good of ['', 'America/Toronto', 'Etc/UTC', 'Etc/GMT+5', 'America/Argentina/Buenos_Aires']) {
+    expect(make(good)).not.toThrow();
+  }
+});
+
+it('publishes the operator timezone only to the desktop container', () => {
+  expect(desktopEnvironment(id, '172.25.10.1', '', 'America/Toronto')).toEqual([
+    `COMPUTER_GATEWAY=172.25.10.1`, `COMPUTER_ID=${id}`, 'TZ=America/Toronto', 'COMPUTER_TIMEZONE=America/Toronto',
+  ]);
+  // Absent timezone keeps today's behaviour exactly: the image's own default.
+  expect(desktopEnvironment(id, '172.25.10.1', '', '')).toEqual([`COMPUTER_GATEWAY=172.25.10.1`, `COMPUTER_ID=${id}`]);
+  expect(desktopEnvironment(id, '172.25.10.1', '/dev/dri/renderD128', 'Etc/UTC')).toEqual([
+    `COMPUTER_GATEWAY=172.25.10.1`, `COMPUTER_ID=${id}`, 'COMPUTER_GPU_RENDER_DEVICE=/dev/dri/renderD128', 'TZ=Etc/UTC', 'COMPUTER_TIMEZONE=Etc/UTC',
+  ]);
 });
 
 it('refuses invalid resource IDs and namespaces before calling Docker', async () => {

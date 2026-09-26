@@ -19,6 +19,17 @@ const DEFAULT_GATEWAY_IMAGE = 'agent-swarm-computer-egress:dev';
 const DEFAULT_MEDIA_IMAGE = 'agent-swarm-computer-media:stage2';
 
 /** Owns only its labelled Docker computers; other projects and agent containers are untouchable. */
+/** Desktop container environment: only operator-supplied grants, never
+ * browser input. The guest clock is operator-chosen rather than inherited from
+ * the host, so `timezone` publishes both TZ (for processes started before the
+ * bootstrap) and COMPUTER_TIMEZONE (which the root bootstrap links into
+ * /etc/localtime for the whole desktop session). */
+export function desktopEnvironment(id: string, gateway: string, renderDevice: string, timezone: string) {
+  return [`COMPUTER_GATEWAY=${gateway}`, `COMPUTER_ID=${id}`,
+    ...(renderDevice ? [`COMPUTER_GPU_RENDER_DEVICE=${renderDevice}`] : []),
+    ...(timezone ? [`TZ=${timezone}`, `COMPUTER_TIMEZONE=${timezone}`] : [])];
+}
+
 export class ComputerManager {
   readonly names: ComputerNames;
   private queue: Promise<void> = Promise.resolve();
@@ -34,6 +45,7 @@ export class ComputerManager {
     private readonly maxComputers = 4,
     private readonly renderDevice = '',
     private readonly cpuLimit = 2,
+    private readonly timezone = '',
   ) {
     this.names = new ComputerNames(namespace);
     if (!Number.isInteger(maxComputers) || maxComputers < 1 || maxComputers > 100) throw new Error('Invalid computer limit.');
@@ -41,6 +53,12 @@ export class ComputerManager {
     // or arbitrary host path, may be shared with sudo-capable computers.
     if (renderDevice && !/^\/dev\/dri\/renderD\d{3}$/.test(renderDevice)) throw new Error('Invalid computer render device.');
     if (!Number.isInteger(cpuLimit) || cpuLimit < 1 || cpuLimit > 8) throw new Error('Invalid computer CPU limit.');
+    // An IANA zone name is interpolated into container env and a guest symlink
+    // target, so only plain path segments are accepted: no traversal, no
+    // absolute path, no shell metacharacters. Empty leaves the image default.
+    if (timezone && (timezone.length > 64 || !/^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/.test(timezone))) {
+      throw new Error('Invalid computer timezone.');
+    }
   }
 
   private async exclusive<T>(operation: () => Promise<T>): Promise<T> {
@@ -215,8 +233,7 @@ export class ComputerManager {
     await this.ensureVolume(id, 'workspace');
     await this.docker.request('POST', `/containers/create?name=${encodeURIComponent(computerName)}`, {
       Image: this.image, User: 'root', Cmd: ['/opt/swarm/start-computer.sh'],
-      Labels: this.names.labels(id, 'desktop', name), Env: [`COMPUTER_GATEWAY=${gateway}`, `COMPUTER_ID=${id}`,
-        ...(this.renderDevice ? [`COMPUTER_GPU_RENDER_DEVICE=${this.renderDevice}`] : [])],
+      Labels: this.names.labels(id, 'desktop', name), Env: desktopEnvironment(id, gateway, this.renderDevice, this.timezone),
       HostConfig: {
         Runtime: 'sysbox-runc', NetworkMode: this.names.privateNetwork(id), Dns: ['1.1.1.1'],
         CapDrop: ['ALL'], SecurityOpt: [`seccomp=${this.seccomp}`], Init: true,

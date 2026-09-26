@@ -13,6 +13,16 @@ PY
 # Only an isolated, gateway-less bridge is attached to the computer. There is
 # no unfiltered default route; the gateway sidecar filters outside this namespace.
 ip route replace default via "$gateway"
+# The operator chooses the guest clock; it is never inherited from the host.
+# Only a real zoneinfo entry is linked, and traversal or absolute paths keep the
+# image default, so a bad setting cannot point /etc/localtime at host files.
+case ${COMPUTER_TIMEZONE:-} in
+    ''|*..*|/*) ;;
+    *) if [ -f "/usr/share/zoneinfo/$COMPUTER_TIMEZONE" ]; then
+           ln -snf "/usr/share/zoneinfo/$COMPUTER_TIMEZONE" /etc/localtime
+           printf '%s\n' "$COMPUTER_TIMEZONE" > /etc/timezone
+       fi ;;
+esac
 mkdir -p /run/dbus /run/user/1000
 chown agent:agent /run/user/1000
 chmod 0700 /run/user/1000

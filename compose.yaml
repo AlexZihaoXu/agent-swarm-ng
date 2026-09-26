@@ -55,6 +55,10 @@ services:
       # Opt-in: shares ONLY this DRM render node with each sudo computer.
       COMPUTER_RENDER_DEVICE: ${COMPUTER_RENDER_DEVICE:-}
       COMPUTER_CPU_LIMIT: ${COMPUTER_CPU_LIMIT:-2}
+      # Operator-chosen IANA zone for each guest clock (for example
+      # America/Toronto). Empty inherits the image default (UTC). Existing
+      # computers keep the zone they were created with until they are recreated.
+      COMPUTER_TIMEZONE: ${COMPUTER_TIMEZONE:-}
     init: true
     # Only this narrow internal service has the root-equivalent Docker socket.
     # It has no app database, provider credentials, or published ports.
