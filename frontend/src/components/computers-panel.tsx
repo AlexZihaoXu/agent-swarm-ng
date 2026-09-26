@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import * as ContextMenu from '@radix-ui/react-context-menu';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
@@ -9,6 +10,10 @@ import { ComputerCard, type Computer } from './computer-card';
 import { ComputerViewer } from './computer-viewer';
 import { computerPath } from '@/lib/dashboard-location';
 type ComputerList = { computers: Computer[] };
+
+function MenuIcon({ path, label }: { path: string; label: string }) {
+  return <svg aria-hidden="true" role="img" aria-label={label} viewBox="0 0 24 24" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>;
+}
 
 function ComputerDialog({ children }: { children: ReactNode }) {
   return <Dialog.Portal>
@@ -62,6 +67,10 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
     return () => cancelAnimationFrame(frame);
   }, [viewingId]);
   const [confirmation, setConfirmation] = useState('');
+  const [powerTarget, setPowerTarget] = useState<Computer | null>(null);
+  const [powerBusy, setPowerBusy] = useState(false);
+  const [powerError, setPowerError] = useState('');
+  const [menuTarget, setMenuTarget] = useState<Computer | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const createId = useId();
@@ -105,6 +114,17 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
     finally { setDeleteBusy(false); }
   };
 
+  const submitPower = async (computer: Computer, action: 'start' | 'stop') => {
+    if (powerBusy) return;
+    setPowerBusy(true); setPowerTarget(computer); setPowerError('');
+    try {
+      const result = await api.POST('/api/computers/{id}/power', { params: { path: { id: computer.id } }, body: { action } });
+      if (!result.data || result.error) throw new Error(result.error?.message ?? 'Could not change the computer power state.');
+      refresh();
+    } catch (error) { setPowerError(error instanceof Error ? error.message : 'Could not change the computer power state.'); }
+    finally { setPowerBusy(false); setPowerTarget(null); }
+  };
+
   return <section aria-label="Computers" className="computer-tab-enter flex min-h-0 w-full flex-col">
     {viewing ? <ComputerViewer key={viewing.id} computer={viewing} canManage={Boolean(query.data?.controllerConnected)} onBack={() => { focusGridTab.current = true; onBack(); }} /> : (viewingId || dialog === 'delete' && !selected) && query.isSuccess ? <div className="p-6 text-sm" role="alert">Computer not found. <button type="button" className="cursor-pointer underline" onClick={onBack}>Return to computers</button></div> : <>
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:px-6 md:py-4">
@@ -135,9 +155,50 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
       {query.isError && <div role="alert" className="space-y-3 text-sm"><p>{query.error.message}</p><Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>Retry loading computers</Button></div>}
       {query.isSuccess && !query.data.controllerConnected && <p role="status" className="mb-4 rounded-lg border border-border bg-sidebar p-3 text-sm text-muted-foreground">Computer management is offline. Saved computers remain visible; creation, deletion and previews are unavailable.</p>}
       {query.isSuccess && query.data.controllerConnected && computers.length === 0 && <p role="status" className="py-10 text-center text-sm text-muted-foreground">No computers yet. Create one to get started.</p>}
-      {computers.length > 0 && <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-4 md:gap-5">
-        {computers.map(computer => <ComputerCard key={computer.id} computer={computer} canManage={Boolean(query.data?.controllerConnected)} onOpen={target => onOpen(target.id)} onDelete={target => { setConfirmation(''); setDeleteError(''); onNavigate(`${computerPath(target.id)}/delete`); }} />)}
-      </div>}
+      {computers.length > 0 && <ContextMenu.Root>
+        <ContextMenu.Trigger asChild>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-4 md:gap-5"
+            onContextMenuCapture={event => {
+              const card = (event.target as HTMLElement).closest<HTMLElement>('[data-computer-id]');
+              setMenuTarget(computers.find(computer => computer.id === card?.dataset.computerId) ?? null);
+            }}>
+            {computers.map(computer => <ComputerCard key={computer.id} computer={computer} canManage={Boolean(query.data?.controllerConnected)}
+              busy={powerBusy && powerTarget?.id === computer.id}
+              onOpen={target => onOpen(target.id)}
+              onPower={(target, action) => void submitPower(target, action)} />)}
+          </div>
+        </ContextMenu.Trigger>
+        <ContextMenu.Portal>
+          <ContextMenu.Content className="context-menu-content phone-menu-targets z-50 min-w-56 rounded-lg border border-border bg-background p-1 text-sm shadow-lg"
+            onCloseAutoFocus={event => { if (createOpen || selected !== null) event.preventDefault(); }}>
+            <ContextMenu.Item disabled={!menuTarget || menuTarget.state !== 'running' || !query.data?.controllerConnected}
+              onSelect={() => { if (menuTarget) onOpen(menuTarget.id); }}
+              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
+              <MenuIcon path="M3 5.5h18v13H3zM8 21h8" label="Open desktop" />Open
+            </ContextMenu.Item>
+            <ContextMenu.Item disabled={!menuTarget || !query.data?.controllerConnected || (menuTarget.state !== 'running' && menuTarget.state !== 'exited') || powerBusy}
+              onSelect={() => { if (menuTarget) void submitPower(menuTarget, menuTarget.state === 'running' ? 'stop' : 'start'); }}
+              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
+              <MenuIcon path="M12 3v9M6.5 6.5a8 8 0 1 0 11 0" label="Power" />{menuTarget?.state === 'running' ? 'Power off' : 'Power on'}
+            </ContextMenu.Item>
+            <ContextMenu.Item disabled title="Coming soon: browse and transfer this computer's files"
+              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40">
+              <MenuIcon path="M3 7h6l2 2h10v10H3zM8 13h8" label="Files" />File browser
+            </ContextMenu.Item>
+            <ContextMenu.Item disabled title="Coming soon: per-computer settings"
+              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40">
+              <MenuIcon path="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8M12 2.4v2.4M12 19.2v2.4M4.6 7.8l2 1.2M17.4 15l2 1.2M4.6 16.2l2-1.2M17.4 9l2-1.2M2.4 12h2.4M19.2 12h2.4" label="Settings" />Settings
+            </ContextMenu.Item>
+            <ContextMenu.Separator className="my-1 h-px bg-border" />
+            <div className="px-3 pb-1 pt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">Danger zone</div>
+            <ContextMenu.Item disabled={!menuTarget || !query.data?.controllerConnected}
+              onSelect={() => { setConfirmation(''); setDeleteError(''); if (menuTarget) onNavigate(`${computerPath(menuTarget.id)}/delete`); }}
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-red-400 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
+              <MenuIcon path="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13" label="Remove" />Remove
+            </ContextMenu.Item>
+          </ContextMenu.Content>
+        </ContextMenu.Portal>
+      </ContextMenu.Root>}
     </div>
     </>}
     <Dialog.Root open={selected !== null} onOpenChange={open => { if (!open && !deleteBusy) { setConfirmation(''); onBack(); } }}>

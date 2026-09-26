@@ -26,7 +26,10 @@ test('creates, previews, persists and permanently deletes a real computer throug
       id = data.computers.find((item: { name: string }) => item.name === name)?.id;
       return Boolean(id);
     }).toBe(true);
-    await expect.poll(() => card.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth), { timeout: 35_000 }).toBeGreaterThan(0);
+    // The card crossfades between at most two preview layers; any of them must
+    // eventually carry a decoded desktop frame.
+    await expect.poll(() => card.getByTestId('computer-preview-layer').last()
+      .evaluate((image: HTMLImageElement) => image.naturalWidth), { timeout: 35_000 }).toBeGreaterThan(0);
     await expect(card).toContainText('CPU');
     await expect(card).toContainText('Memory');
     await page.screenshot({ path: '../.scratch/computers-live-desktop.png', animations: 'disabled' });
@@ -170,7 +173,9 @@ test('creates, previews, persists and permanently deletes a real computer throug
     await expect.poll(() => frame.locator('video').evaluate((element: HTMLVideoElement) => element.videoWidth), { timeout: 40_000 }).toBe(1920);
     await page.getByRole('button', { name: 'Back to computers' }).click();
     await expect(card).toBeVisible();
-    await card.getByRole('button', { name: `Delete ${name}` }).click();
+    // Delete now lives in the shared context menu behind the card's trigger.
+    await card.getByRole('button', { name: `Actions for ${name}` }).click();
+    await page.getByRole('menu').getByRole('menuitem', { name: 'Remove' }).click();
     const dialog = page.getByRole('dialog', { name: 'Delete computer' });
     const confirm = dialog.getByLabel('Confirm computer name');
     await confirm.fill(name.toLowerCase());

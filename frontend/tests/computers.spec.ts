@@ -1,6 +1,6 @@
 import { test, expect, type Page } from './fixtures';
 
-type Computer = { id: string; name: string; state: string; createdAt: number; cpuPercent: number | null; memoryBytes: number | null };
+type Computer = { id: string; name: string; state: string; createdAt: number; cpuPercent: number | null; memoryBytes: number | null; memoryLimitBytes?: number | null };
 async function expectCentered(page: Page, dialog: ReturnType<Page['getByRole']>) {
   const box = await dialog.boundingBox();
   const viewport = page.viewportSize();
@@ -35,8 +35,8 @@ async function mockComputers(page: Page, initial: Computer[] = []) {
 
 test('Computers shows a responsive screenshot-first grid with name and CPU/memory below', async ({ page }) => {
   const { previewCount } = await mockComputers(page, [
-    { id: 'alpha', name: 'Research', state: 'running', createdAt: 0, cpuPercent: 12.5, memoryBytes: 268435456 },
-    { id: 'beta', name: 'Offline', state: 'exited', createdAt: 0, cpuPercent: null, memoryBytes: null },
+    { id: 'alpha', name: 'Research', state: 'running', createdAt: 0, cpuPercent: 12.5, memoryBytes: 268435456, memoryLimitBytes: 4294967296 },
+    { id: 'beta', name: 'Offline', state: 'exited', createdAt: 0, cpuPercent: null, memoryBytes: null, memoryLimitBytes: null },
   ]);
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/');
@@ -44,8 +44,14 @@ test('Computers shows a responsive screenshot-first grid with name and CPU/memor
   await expect(page.getByRole('heading', { name: 'Computers' })).toBeVisible();
   const card = page.getByRole('article', { name: 'Research' });
   await expect(card.getByTestId('computer-preview')).toBeVisible();
-  await expect(card).toContainText('CPU 12.5%');
-  await expect(card).toContainText('Memory 256 MiB');
+  // Circular dials: CPU at the left, memory starting at the card's centre.
+  const dials = card.getByTestId('usage-dial');
+  await expect(dials).toHaveCount(2);
+  await expect(dials.nth(0)).toContainText('CPU');
+  await expect(dials.nth(0)).toContainText('12.5%');
+  await expect(dials.nth(1)).toContainText('Memory');
+  await expect(dials.nth(1)).toContainText('256 MB');
+  await expect(dials.nth(1)).toContainText('of 4096 MB');
   await expect(page.getByRole('article', { name: 'Offline' })).toContainText('Stopped');
   await expect.poll(previewCount).toBeGreaterThan(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -77,7 +83,8 @@ test('280px phone keeps the grid, tabs and dialogs reachable without reduced-mot
   await expectCentered(page, dialog);
   await expect(dialog).toHaveCSS('animation-name', 'none');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
-  await card.getByRole('button', { name: /Delete Very long/ }).click();
+  await card.getByRole('button', { name: /Actions for Very long/ }).click();
+  await page.getByRole('menu').getByRole('menuitem', { name: /Remove/ }).click();
   await expect(page.getByRole('dialog', { name: 'Delete computer' }).getByLabel('Confirm computer name')).toBeVisible();
   await expectCentered(page, page.getByRole('dialog', { name: 'Delete computer' }));
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -254,6 +261,93 @@ test('resizing the window re-fits the desktop without a reload', async ({ page }
   expect(new Set(seen.map(box => box.join('x'))).size).toBeGreaterThan(3);
 });
 
+test('computer card offers a shared context menu and power control', async ({ page }) => {
+  const id = '9c1f2a6e-3b4d-4c8a-9e11-2d5f7a9b0c13';
+  const { computers } = await mockComputers(page, [{ id, name: 'Menu desk', state: 'running', createdAt: 0, cpuPercent: 11.1, memoryBytes: 1908874_320, memoryLimitBytes: 4294967296 } as unknown as Computer]);
+  await page.route(new RegExp(`/api/computers/${id}/preview\\?full=1`), route => route.fulfill({
+    status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#523348"/></svg>',
+  }));
+  await page.route(/\/api\/computers\/(?:[^/]+)\/power$/, route => {
+    const body = route.request().postDataJSON();
+    const row = computers.find(item => item.id === id)!;
+    row.state = body.action === 'stop' ? 'exited' : 'running';
+    row.cpuPercent = body.action === 'stop' ? null : 11.1;
+    row.memoryBytes = body.action === 'stop' ? null : 1908874320;
+    row.memoryLimitBytes = body.action === 'stop' ? null : 4294967296;
+    return route.fulfill({ status: 202, json: { accepted: true, action: body.action, desiredState: body.action === 'stop' ? 'stopped' : 'running' } });
+  });
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Computers' }).click();
+  const card = page.getByRole('article', { name: 'Menu desk' });
+  await expect(card).toBeVisible();
+
+  // Dials first: while a menu is open Radix aria-hides the rest of the app.
+  const dials = card.getByTestId('usage-dial');
+  await expect(dials).toHaveCount(2);
+  await expect(dials.nth(0)).toContainText('11.1%');
+  await expect(dials.nth(1)).toContainText('1820 MB');
+  await expect(dials.nth(1)).toContainText('of 4096 MB');
+  // The "..." trigger opens the same menu as a right click.
+  await card.getByRole('button', { name: 'Actions for Menu desk' }).click();
+  const menu = page.getByRole('menu');
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Open' })).toBeEnabled();
+  await expect(menu.getByRole('menuitem', { name: /Power off/ })).toBeEnabled();
+  await expect(menu.getByRole('menuitem', { name: /File browser/ })).toBeDisabled();
+  await expect(menu.getByRole('menuitem', { name: /Settings/ })).toBeDisabled();
+  // "Gray this out" means visibly dimmed, not merely non-interactive.
+  for (const name of [/File browser/, /Settings/]) {
+    const opacity = await menu.getByRole('menuitem', { name }).evaluate(node => Number(getComputedStyle(node).opacity));
+    expect(opacity, `${name} must be dimmed`).toBeLessThan(0.6);
+  }
+  const enabledOpacity = await menu.getByRole('menuitem', { name: 'Open' }).evaluate(node => Number(getComputedStyle(node).opacity));
+  expect(enabledOpacity).toBe(1);
+  await expect(menu).toContainText('Danger zone');
+  await expect(menu.getByRole('menuitem', { name: /Remove/ })).toBeEnabled();
+  await page.keyboard.press('Escape');
+
+  // Right click reaches the identical menu.
+  await card.click({ button: 'right' });
+  await expect(page.getByRole('menu').getByRole('menuitem', { name: /Power off/ })).toBeEnabled();
+
+  // Power off from the menu stops the desktop and flips the card.
+  await page.getByRole('menu').getByRole('menuitem', { name: /Power off/ }).click();
+  await expect(card.getByRole('button', { name: 'Open Menu desk desktop' })).toBeDisabled();
+  await expect(card.getByText('Stopped')).toBeVisible();
+  // A stopped computer offers Power on, and the inline control does the same.
+  await card.getByRole('button', { name: 'Start' }).click();
+  await expect(card.getByText('Running')).toBeVisible();
+});
+
+test('preview crossfades with the two layers always summing to one opacity', async ({ page }) => {
+  const id = 'b7d0c4e2-6a19-4b3e-8f2c-1a9e5d3c7b64';
+  await mockComputers(page, [{ id, name: 'Fade desk', state: 'running', createdAt: 0, cpuPercent: 2, memoryBytes: 104857600, memoryLimitBytes: 4294967296 } as unknown as Computer]);
+  let requests = 0;
+  await page.route(new RegExp(`/api/computers/${id}/preview\\?at=`), route => {
+    requests += 1;
+    return route.fulfill({
+      status: 200, contentType: 'image/svg+xml',
+      body: `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="hsl(${requests * 20} 60% 40%)"/></svg>`,
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Computers' }).click();
+  const card = page.getByRole('article', { name: 'Fade desk' });
+  const layers = card.getByTestId('computer-preview-layer');
+  await expect(layers.first()).toBeVisible();
+  // Sample the two layers repeatedly during a fade.
+  const sums: number[] = [];
+  await expect.poll(async () => {
+    const opacities = await layers.evaluateAll(nodes => nodes.map(node => Number(getComputedStyle(node).opacity)));
+    if (opacities.length === 2) sums.push(Math.round(opacities[0] * 100) / 100 + Math.round(opacities[1] * 100) / 100);
+    return sums.length;
+  }, { timeout: 8000 }).toBeGreaterThan(4);
+  for (const total of sums) expect(Math.abs(total - 1)).toBeLessThanOrEqual(0.02);
+  // At most two layers ever exist, and polling runs at ~2 fps.
+  expect(await layers.count()).toBeLessThanOrEqual(2);
+  expect(requests).toBeGreaterThanOrEqual(3);
+});
+
 test('viewer reports an offline stream and retries its iframe without erasing the computer', async ({ page }) => {
   const id = 'da02f137-8a73-4e93-9d22-95886ca9f9fa';
   const { computers } = await mockComputers(page, [{ id, name: 'Recoverable desk', state: 'running', createdAt: 0, cpuPercent: 2, memoryBytes: 104857600 }]);
@@ -319,7 +413,7 @@ test('keeps saved computers visible but controls disabled when their controller 
   await expect(page.getByRole('article', { name: 'Saved computer' })).toBeVisible();
   await expect(page.getByText('Computer management is offline.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create computer' })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Delete Saved computer' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Actions for Saved computer' })).toBeDisabled();
 });
 
 test('suggests a non-duplicate Workspace-NG default name and keeps an edited name', async ({ page }) => {
@@ -362,7 +456,8 @@ test('creates a computer and requires an exact typed name before destructive del
   await create.getByRole('button', { name: 'Create computer' }).click();
   await expect(page.getByRole('article', { name: 'Test machine' })).toBeVisible();
   expect(computers).toHaveLength(1);
-  await page.getByRole('article', { name: 'Test machine' }).getByRole('button', { name: 'Delete Test machine' }).click();
+  await page.getByRole('article', { name: 'Test machine' }).getByRole('button', { name: 'Actions for Test machine' }).click();
+  await page.getByRole('menu').getByRole('menuitem', { name: /Remove/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Delete computer' });
   await expectCentered(page, dialog);
   await expect(dialog).toContainText('home');
