@@ -483,7 +483,10 @@ export class ComputerManager {
     const id = validateId(idRaw);
     const key = `${id}:${full ? 'full' : 'thumb'}`;
     const cached = this.previewCache.get(key);
-    if (cached && Date.now() - cached.at < 1800) return cached.image;
+    // Grid cards poll every 500 ms. The old 1.8 s TTL returned the same JPEG
+    // for four polls despite unique URLs. Start the thumbnail window when
+    // capture begins so execution time cannot eat into the next poll's budget.
+    if (cached && Date.now() - cached.at < (full ? 1800 : 400)) return cached.image;
     const pending = this.previewPending.get(key);
     if (pending) return pending;
     const work = (async () => {
@@ -491,12 +494,13 @@ export class ComputerManager {
       const container = await this.container(name, id, 'desktop');
       if (!container) return null;
       if (!container.State.Running) return null;
+      const capturedAt = Date.now();
       const encoded = await this.docker.exec(name, ['/opt/swarm/render-preview.sh', ...(full ? ['--full'] : [])], 'agent', 16_000);
       if (encoded.length > (full ? 700 : 256) * 1024) throw new ResourceError(503, 'Preview exceeded its limit.');
       const image = Buffer.from(encoded.toString().trim(), 'base64');
       if (image.length < 4 || image[0] !== 0xff || image[1] !== 0xd8 || image.at(-2) !== 0xff || image.at(-1) !== 0xd9) throw new ResourceError(503, 'Preview is not a JPEG.');
       if (image.length > (full ? 512 : 192) * 1024) throw new ResourceError(503, 'Preview exceeded its limit.');
-      this.previewCache.set(key, { at: Date.now(), image });
+      this.previewCache.set(key, { at: full ? Date.now() : capturedAt, image });
       return image;
     })().finally(() => { this.previewPending.delete(key); });
     this.previewPending.set(key, work);

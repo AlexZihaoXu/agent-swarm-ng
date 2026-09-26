@@ -159,6 +159,29 @@ it('keeps full consent frames separate from the small grid JPEG cache', async ()
   expect(execute).toHaveBeenNthCalledWith(2, manager.names.desktop(id), ['/opt/swarm/render-preview.sh', '--full'], 'agent', 16_000);
 });
 
+it('refreshes grid thumbnails at the 500 ms card cadence but retains the full-preview cache', async () => {
+  const { manager, resources, execute } = fixture();
+  resources.set(`/containers/${manager.names.desktop(id)}/json`, {
+    State: { Running: true }, Config: { Labels: manager.names.labels(id, 'desktop', name) },
+  });
+  let sequence = 0;
+  execute.mockImplementation(async () => Buffer.from(Buffer.from([0xff, 0xd8, ++sequence, 0xff, 0xd9]).toString('base64')));
+  let now = 1_000;
+  const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+  try {
+    const firstThumb = await manager.preview(id);
+    const firstFull = await manager.preview(id, true);
+    now += 300;
+    expect(await manager.preview(id)).toEqual(firstThumb);
+    now += 200; // one card poll after the first image
+    expect(await manager.preview(id)).not.toEqual(firstThumb);
+    expect(await manager.preview(id, true)).toEqual(firstFull);
+    expect(execute).toHaveBeenCalledTimes(3);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
 it('rejects unbounded or fractional operator CPU quotas before creating Docker resources', () => {
   for (const limit of [0, 1.5, 9, Number.NaN, Number.POSITIVE_INFINITY]) {
     expect(() => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '', limit)).toThrow('CPU limit');
