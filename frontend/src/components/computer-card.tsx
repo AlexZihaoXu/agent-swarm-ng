@@ -11,10 +11,9 @@ export type Computer = paths['/api/computers']['get']['responses'][200]['content
 const POLL_MS = 500, FADE_MS = 300;
 const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-export function ComputerCard({ computer, canManage, busy, onOpen, onPower }: {
-  computer: Computer; canManage: boolean; busy: boolean;
+export function ComputerCard({ computer, canManage, onOpen }: {
+  computer: Computer; canManage: boolean;
   onOpen: (computer: Computer) => void;
-  onPower: (computer: Computer, action: 'start' | 'stop') => void;
 }) {
   const card = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
@@ -117,11 +116,6 @@ export function ComputerCard({ computer, canManage, busy, onOpen, onPower }: {
         <div className="min-w-0 flex-1"><UsageDial label="CPU" value={computer.cpuPercent === null ? '—' : `${computer.cpuPercent.toFixed(1)}%`} fraction={cpuFraction} /></div>
         <div className="min-w-0 flex-1"><UsageDial label="Memory" value={memoryMiB === null ? '—' : `${memoryMiB} MB`} caption={limitMiB ? `of ${limitMiB} MB` : undefined} fraction={memoryMiB === null || !limitMiB ? null : memoryMiB / limitMiB} /></div>
       </div>
-      {running || stopped ? <Button type="button" size="sm" variant="outline" disabled={!canManage || busy}
-        onClick={() => onPower(computer, running ? 'stop' : 'start')}
-        className="min-h-11 w-full cursor-pointer px-2 text-xs disabled:cursor-default disabled:opacity-50 md:min-h-9">
-        {busy ? (running ? 'Stopping…' : 'Starting…') : running ? 'Stop' : 'Start'}
-      </Button> : null}
     </div>
   </article>;
 }

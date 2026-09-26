@@ -282,6 +282,7 @@ test('computer card offers a shared context menu and power control', async ({ pa
   await page.getByRole('tab', { name: 'Computers' }).click();
   const card = page.getByRole('article', { name: 'Menu desk' });
   await expect(card).toBeVisible();
+  await expect(card.getByRole('button', { name: /^(Start|Stop)$/ })).toHaveCount(0);
 
   // Dials first: while a menu is open Radix aria-hides the rest of the app.
   const dials = card.getByTestId('usage-dial');
@@ -323,9 +324,13 @@ test('computer card offers a shared context menu and power control', async ({ pa
   await page.getByRole('menu').getByRole('menuitem', { name: /Power off/ }).click();
   await expect(card.getByRole('button', { name: 'Open Menu desk desktop' })).toBeDisabled();
   await expect(card.getByText('Stopped')).toBeVisible();
-  // A stopped computer offers Power on, and the inline control does the same.
-  await card.getByRole('button', { name: 'Start' }).click();
+  await expect(card.getByRole('button', { name: /^(Start|Stop)$/ })).toHaveCount(0);
+  // Power on remains available through the same "..."/right-click menu.
+  await card.getByRole('button', { name: 'Actions for Menu desk' }).click();
+  await expect(page.getByRole('menu').getByRole('menuitem', { name: /Power on/ })).toBeEnabled();
+  await page.getByRole('menu').getByRole('menuitem', { name: /Power on/ }).click();
   await expect(card.getByText('Running')).toBeVisible();
+  await expect(card.getByRole('button', { name: /^(Start|Stop)$/ })).toHaveCount(0);
 });
 
 test('preview dissolves without the breathing brightness dip', async ({ page }) => {

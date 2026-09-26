@@ -67,7 +67,6 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
     return () => cancelAnimationFrame(frame);
   }, [viewingId]);
   const [confirmation, setConfirmation] = useState('');
-  const [powerTarget, setPowerTarget] = useState<Computer | null>(null);
   const [powerBusy, setPowerBusy] = useState(false);
   const [powerError, setPowerError] = useState('');
   const [menuTarget, setMenuTarget] = useState<Computer | null>(null);
@@ -116,13 +115,13 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
 
   const submitPower = async (computer: Computer, action: 'start' | 'stop') => {
     if (powerBusy) return;
-    setPowerBusy(true); setPowerTarget(computer); setPowerError('');
+    setPowerBusy(true); setPowerError('');
     try {
       const result = await api.POST('/api/computers/{id}/power', { params: { path: { id: computer.id } }, body: { action } });
       if (!result.data || result.error) throw new Error(result.error?.message ?? 'Could not change the computer power state.');
       refresh();
     } catch (error) { setPowerError(error instanceof Error ? error.message : 'Could not change the computer power state.'); }
-    finally { setPowerBusy(false); setPowerTarget(null); }
+    finally { setPowerBusy(false); }
   };
 
   return <section aria-label="Computers" className="computer-tab-enter flex min-h-0 w-full flex-col">
@@ -155,6 +154,7 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
       {query.isError && <div role="alert" className="space-y-3 text-sm"><p>{query.error.message}</p><Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>Retry loading computers</Button></div>}
       {query.isSuccess && !query.data.controllerConnected && <p role="status" className="mb-4 rounded-lg border border-border bg-sidebar p-3 text-sm text-muted-foreground">Computer management is offline. Saved computers remain visible; creation, deletion and previews are unavailable.</p>}
       {query.isSuccess && query.data.controllerConnected && computers.length === 0 && <p role="status" className="py-10 text-center text-sm text-muted-foreground">No computers yet. Create one to get started.</p>}
+      {powerError && <p role="alert" className="mb-4 text-sm text-red-400">{powerError}</p>}
       {computers.length > 0 && <ContextMenu.Root>
         <ContextMenu.Trigger asChild>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-4 md:gap-5"
@@ -163,9 +163,7 @@ export function ComputersPanel({ viewingId, dialog, deleteId, onOpen, onNavigate
               setMenuTarget(computers.find(computer => computer.id === card?.dataset.computerId) ?? null);
             }}>
             {computers.map(computer => <ComputerCard key={computer.id} computer={computer} canManage={Boolean(query.data?.controllerConnected)}
-              busy={powerBusy && powerTarget?.id === computer.id}
-              onOpen={target => onOpen(target.id)}
-              onPower={(target, action) => void submitPower(target, action)} />)}
+              onOpen={target => onOpen(target.id)} />)}
           </div>
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
