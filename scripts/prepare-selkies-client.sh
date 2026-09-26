@@ -7,9 +7,11 @@ cd "$root"
 image=agent-swarm-default:stage2
 image_id=$(docker image inspect "$image" --format '{{.Id}}')
 dest="$root/.scratch/selkies-client-web"
+patch_id=$(sha256sum scripts/patch-selkies-http-client.mjs | cut -d ' ' -f 1)
 # The reviewed derivative hash lives only in scripts/patch-selkies-http-client.mjs;
 # this records what the patch verified so a stale scratch tree is rebuilt.
 if [ -f "$dest/.source-image" ] && [ "$(cat "$dest/.source-image")" = "$image_id" ] && [ -f "$dest/assets/index-CPWh3fQ6.js" ] &&
+   [ -f "$dest/.patch-source-hash" ] && [ "$(cat "$dest/.patch-source-hash")" = "$patch_id" ] &&
    [ -f "$dest/.derivative-hash" ] &&
    [ "$(sha256sum "$dest/assets/selkies-core-BbKps5RD.js" 2>/dev/null | cut -d ' ' -f 1)" = "$(cat "$dest/.derivative-hash")" ]; then exit 0; fi
 if [ -e "$dest" ] && { [ -L "$dest" ] || [ ! -f "$dest/.source-image" ]; }; then
@@ -33,5 +35,6 @@ sed -E 's/.*derivative=([0-9a-f]{64}).*/\1/' "$tmp/.patch-report" > "$tmp/.deriv
 rm -f "$tmp/.patch-report"
 test -s "$tmp/.derivative-hash"
 printf '%s\n' "$image_id" > "$tmp/.source-image"
+printf '%s\n' "$patch_id" > "$tmp/.patch-source-hash"
 if [ -d "$dest" ]; then mv "$dest" "$old"; fi
 mv "$tmp" "$dest"

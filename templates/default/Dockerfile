@@ -101,9 +101,10 @@ RUN set -eu \
 COPY runtime/ /opt/swarm/
 RUN chmod 0755 /opt/swarm/*.sh && chmod 0644 /opt/swarm/*.py
 # Operator-built HTTP/LAN variant uses JPEG/createImageBitmap instead of
-# browser-secure-context WebCodecs; the default image retains H.264.
+# browser-secure-context WebCodecs; H.264/H.265 builds retain JPEG as a
+# negotiated HTTP fallback rather than enabling software codecs implicitly.
 ARG COMPUTER_STREAM_ENCODER=h264enc
-RUN case "$COMPUTER_STREAM_ENCODER" in h264enc|jpeg) ;; *) echo 'Unsupported computer encoder' >&2; exit 1;; esac
+RUN case "$COMPUTER_STREAM_ENCODER" in h264enc|h265enc|jpeg) ;; *) echo 'Unsupported computer encoder' >&2; exit 1;; esac
 ENV COMPUTER_STREAM_ENCODER=$COMPUTER_STREAM_ENCODER
 
 # Docker initializes fresh named volumes from these image directories.

@@ -10,7 +10,7 @@ esac
 case "$id" in *[!0-9a-f-]*) echo 'Invalid managed computer ID' >&2; exit 1;; esac
 runtime=${XDG_RUNTIME_DIR:?}
 encoder=${COMPUTER_STREAM_ENCODER:-h264enc}
-case "$encoder" in h264enc|jpeg) ;; *) echo 'Invalid computer encoder' >&2; exit 1;; esac
+case "$encoder" in h264enc|h265enc|jpeg) ;; *) echo 'Invalid computer encoder' >&2; exit 1;; esac
 # Selkies parses ANY enum override as the complete published menu, so
 # `--encoder=jpeg` alone advertises a one-item list and every client request to
 # switch is refused. Keep the operator's encoder as the default and first stop,
@@ -38,8 +38,11 @@ while :; do
         --ui-sidebar-show-audio-settings=false --ui-sidebar-show-gamepads=false \
         --ui-sidebar-show-webcam=false --ui-sidebar-show-clipboard=false \
         --ui-sidebar-show-files=false --ui-sidebar-show-apps=false \
-        --ui-sidebar-show-sharing=false --encoder="$encoder_menu" --framerate=120 --jpeg-quality=50 \
-        --video-crf=20 --video-paintover-crf=18 --video-paintover-burst-frames=2 \
+        --ui-sidebar-show-sharing=false --encoder="$encoder_menu" --framerate=90 --jpeg-quality=50 \
+        --enable-rate-control=true --rate-control-mode=crf --video-crf=25 \
+        --use-paint-over-quality=true --video-paintover-crf=10 --video-paintover-burst-frames=2 \
+        --video-streaming-mode=true --video-fullcolor=false --use-cpu=false \
+        --force-aligned-resolution=false \
         >> "$runtime/selkies.log" 2>&1 &
     child=$!
     wait "$child" || true

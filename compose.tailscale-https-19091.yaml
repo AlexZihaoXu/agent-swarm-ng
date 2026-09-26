@@ -9,22 +9,15 @@
 # the operator accepts the browser warning once. Tailscale already encrypts the
 # transport, so this adds a browser capability, not confidentiality.
 #
-# Computer image: the H.264-default desktop. The guest launcher defaults to
-# `--encoder=h264enc` with CRF 20 / paint-over CRF 18 / burst 2, and publishes
-# the full encoder menu, so each origin negotiates its own: the secure viewer
-# takes hardware VAAPI H.264 (this GPU encodes H.264/HEVC; AV1 is decode-only),
-# while the insecure HTTP viewer requests JPEG stripes because the reviewed
-# client patch transmits an insecure-origin preference too. The JPEG-pinned
-# image stays tagged `agent-swarm-default:jpeg-fallback-20260926`, and the
+# Computer image: the H.265-default desktop (VAAPI HEVC 4:2:0 where browser
+# decoders support it). The reviewed client keeps H.264 as the secure-origin
+# fallback, and the insecure HTTP viewer requests CPU JPEG stripes. Both remain
+# available in the published encoder menu; AV1 hardware encode is unavailable.
+# The JPEG-pinned image stays tagged `agent-swarm-default:jpeg-fallback-20260926`, and the
 # software-AV1 variant `agent-swarm-default:av1-xorg120` remains available.
-# Two fixes make one JPEG-default image serve both origins: the guest launcher
-# publishes the operator encoder plus the full upstream menu (a bare
-# `--encoder=jpeg` publishes a one-item allowed list that blocks every client
-# switch), and the reviewed client patch transmits the secure origin's H.264
-# request through upstream's own codec ladder. Measured on one throwaway
-# computer: HTTP stays `Mode: JPEG` and renders; HTTPS switches the guest to
-# `Encoder: VAAPI | Mode: H264 | VBV: 8000 kbps`. The h264-xorg120 build below
-# stays available as an explicit H.264-default alternative.
+# The guest publishes its default plus the full encoder menu; a bare enum
+# override would lock out fallbacks. The h264-xorg120 build below remains
+# available as a rollback/secure-browser compatibility option.
 services:
   frontend:
     environment:
@@ -47,6 +40,15 @@ services:
       args:
         COMPUTER_X11_BASE: agent-swarm-default:h264-x11
     command: ["true"]
+  computer-h265-xorg120-image:
+    profiles: [computer-images]
+    image: agent-swarm-default:h265-xorg120
+    build:
+      context: .
+      dockerfile: templates/default/xorg120.Dockerfile
+      args:
+        COMPUTER_X11_BASE: agent-swarm-default:h265-x11
+    command: ["true"]
   computer-controller:
     environment:
-      COMPUTER_IMAGE: agent-swarm-default:h264-xorg120
+      COMPUTER_IMAGE: agent-swarm-default:h265-xorg120

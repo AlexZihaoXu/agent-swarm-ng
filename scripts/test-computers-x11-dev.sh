@@ -8,6 +8,7 @@ export COMPUTER_NAMESPACE="$project"
 # GPU proof is opt-in and grants only the single existing render node to the
 # disposable computer. The default no-device gate remains unchanged.
 case "${TEST_RENDER_DEVICE:-}" in ''|/dev/dri/renderD128) ;; *) echo 'Invalid disposable render device' >&2; exit 1;; esac
+case "${TEST_X11_ENCODER:-jpeg}" in jpeg|h265enc) ;; *) echo 'Invalid disposable encoder' >&2; exit 1;; esac
 case "${TEST_DISPLAY_SERVER:-xvfb}" in xvfb|xorg120) ;; *) echo 'Invalid disposable display server' >&2; exit 1;; esac
 export COMPUTER_RENDER_DEVICE="${TEST_RENDER_DEVICE:-}"
 if [ "${TEST_DISPLAY_SERVER:-xvfb}" = xorg120 ]; then
@@ -50,6 +51,7 @@ cleanup() {
         image="$project-$service:latest"
         if [ "$(docker image inspect "$image" --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)" = "$project" ]; then docker image rm "$image" >/dev/null 2>&1 || status=1; fi
     done
+    if [ "${TEST_X11_ENCODER:-jpeg}" = h265enc ]; then docker image rm "$project-stream-h265" >/dev/null 2>&1 || status=1; fi
     if [ -n "$(docker ps -aq --filter "label=swarm.ng.namespace=$project")$(docker volume ls -q --filter "label=swarm.ng.namespace=$project")$(docker network ls -q --filter "label=swarm.ng.namespace=$project")$(docker ps -aq --filter "label=com.docker.compose.project=$project")$(docker volume ls -q --filter "label=com.docker.compose.project=$project")" ]; then status=1; fi
     exit "$status"
 }
@@ -63,10 +65,14 @@ docker build -t agent-swarm-computer-egress:dev -f templates/default/egress.Dock
 docker build -t agent-swarm-computer-media:stage2 -f templates/default/media.Dockerfile templates/default
 docker build -t agent-swarm-default:http-jpeg --build-arg COMPUTER_STREAM_ENCODER=jpeg templates/default
 if [ "${TEST_DISPLAY_SERVER:-xvfb}" = xorg120 ]; then
-    # Build this gate's own X11 base from the freshly compiled JPEG image so a
-    # stale cached base cannot disagree with the controller, and never retag the
-    # http-jpeg-x11 creation image the documented rollback overlay selects.
-    docker build -t "$TEST_X11_BASE" -f templates/default/x11.Dockerfile .
+    # Build this gate's own X11 base from a fresh codec-selected base; never
+    # retag an image selected by the live controller.
+    stream_base=agent-swarm-default:http-jpeg
+    if [ "${TEST_X11_ENCODER:-jpeg}" = h265enc ]; then
+        stream_base="$project-stream-h265"
+        docker build -t "$stream_base" --build-arg COMPUTER_STREAM_ENCODER=h265enc templates/default
+    fi
+    docker build -t "$TEST_X11_BASE" -f templates/default/x11.Dockerfile --build-arg COMPUTER_STREAM_BASE="$stream_base" .
     docker build -t "$TEST_X11_IMAGE" -f templates/default/xorg120.Dockerfile --build-arg COMPUTER_X11_BASE="$TEST_X11_BASE" .
 else
     docker build -t "$TEST_X11_IMAGE" -f templates/default/x11.Dockerfile .
@@ -135,9 +141,20 @@ for attempt in $(seq 1 30); do
     sleep 1
 done
 curl -fsS --max-time 3 "http://127.0.0.1:5173/computers/$id/desktop/api/health" >/dev/null
-docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--framerate=120"'
-docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--jpeg-quality=50"'
-docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--scaling-dpi=96"'
+# Keep the display's 120-Hz virtual mode distinct from the 90-fps stream cap.
+for setting in \
+    '--framerate=90' '--rate-control-mode=crf' '--video-crf=25' \
+    '--use-paint-over-quality=true' '--video-paintover-crf=10' \
+    '--video-paintover-burst-frames=2' '--video-streaming-mode=true' \
+    '--video-fullcolor=false' '--use-cpu=false' '--force-aligned-resolution=false' \
+    '--jpeg-quality=50' '--scaling-dpi=96'; do
+    docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false"' | grep -Fq -- "$setting" || {
+        echo "Missing Selkies setting: $setting" >&2; exit 1;
+    }
+done
+if [ "${TEST_X11_ENCODER:-jpeg}" = h265enc ]; then
+    docker exec "$container" sh -c 'ps -eww -o args | grep "[s]elkies --wayland=false" | grep -q -- "--encoder=h265enc,"'
+fi
 if [ "${TEST_DISPLAY_SERVER:-xvfb}" = xorg120 ]; then
     randr=$(docker exec -u agent -e DISPLAY=:1 "$container" xrandr --current)
     printf '%s\n' "$randr" | head -4
@@ -209,7 +226,34 @@ if [ -n "$COMPUTER_RENDER_DEVICE" ]; then
         -w /work -e TEST_COMPUTER_ID="$id" -e PLAYWRIGHT_BROWSERS_PATH=/browser \
         mcr.microsoft.com/playwright/python:v1.62.0-noble /usr/local/bin/bun scripts/test-computers-x11-gpu-browser.mjs
 fi
+if [ "${TEST_X11_ENCODER:-jpeg}" = h265enc ]; then
+    # HTTP on loopback is a secure context, so this exercises WebCodecs and
+    # proves HEVC-capable clients use H.265 while others retain H.264 fallback.
+    docker run --rm --network host --user "$(id -u):$(id -g)" \
+        --security-opt "seccomp=$PWD/templates/default/security/chromium-seccomp.json" \
+        --security-opt no-new-privileges:true --cap-add SYS_CHROOT \
+        -v "$PWD/frontend/node_modules":/work/frontend/node_modules:ro \
+        -v "$PWD/node_modules":/work/node_modules:ro \
+        -v "$PWD/scripts/test-computers-x11-secure-browser.mjs":/work/scripts/test-computers-x11-secure-browser.mjs:ro \
+        -v "$PWD/.scratch/ms-playwright":/browser:ro -v "$bun_bin":/usr/local/bin/bun:ro \
+        -w /work -e TEST_COMPUTER_ID="$id" -e PLAYWRIGHT_BROWSERS_PATH=/browser \
+        mcr.microsoft.com/playwright/python:v1.62.0-noble /usr/local/bin/bun scripts/test-computers-x11-secure-browser.mjs
+    # The live encoder selection is server-side: HEVC on a supporting client,
+    # otherwise the negotiated hardware H.264 fallback, never JPEG on secure.
+    docker exec "$container" sh -c 'grep "Stream settings active ->" /run/user/1000/selkies.log | tail -1' \
+        | grep -E 'Res: 1920x1080.*FPS: 90\.0.*Encoder: VAAPI.*Mode: H26[45].*CRF: 25'
+fi
 test "$(xft_dpi)" = "$initial_dpi"
+if [ "${TEST_DISPLAY_SERVER:-xvfb}" = xorg120 ]; then
+    # Previously only the pre-viewer mode was checked: force alignment then
+    # silently resized 1920x1080 to 1920x1072 on the first HTTP connection.
+    final_randr=$(docker exec -u agent -e DISPLAY=:1 "$container" xrandr --current)
+    printf 'POST_VIEWER_RANDR\n%s\n' "$final_randr" | head -8
+    printf '%s\n' "$final_randr" | grep -Fq 'current 1920 x 1080'
+    [ "$(printf '%s\n' "$final_randr" | awk '$1 ~ /^[0-9]+x[0-9]+/ && $2 ~ /\*/ {print $1, $2}')" = '1920x1080_120 120.00*+' ] || {
+        echo 'Viewer changed the fixed guest resolution or refresh rate!' >&2; exit 1;
+    }
+fi
 docker exec "$container" sh -c 'grep scaling_dpi /run/user/1000/selkies.log' | grep -Fq "allowed list ['96']"
 if docker exec "$container" sh -c 'grep -q "DPI changed from" /run/user/1000/selkies.log'; then echo 'Browser changed guest DPI!' >&2; exit 1; fi
 echo "Disposable X11 Xft DPI unchanged (${initial_dpi:-unset}) after a 2x-DPR primary browser session; guest remained at 1920x1080."
