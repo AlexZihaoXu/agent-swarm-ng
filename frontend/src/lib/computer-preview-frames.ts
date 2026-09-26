@@ -1,32 +1,43 @@
-// Two-layer linear crossfade for the card preview thumbnails.
+// Two-layer dissolve for the card preview thumbnails.
 //
-// When a new frame is ready, a single progress value `t` runs 0 -> 1: the old
-// layer's opacity is `1 - t` and the new layer's is `t`, so the two always sum
-// to exactly 1 (no additive glow, no dip to black). At most two layers exist.
-// A frame that arrives mid-fade retires the then-topmost layer and restarts the
-// blend from it, which is why the fade is kept shorter than the poll interval.
+// The previous frame stays a fully opaque floor and the newest frame slides its
+// own opacity from 0 to 1 on top of it. When that ramp completes the top frame
+// becomes the new floor and the next frame starts again at 0.
+//
+// This is deliberately NOT a sum-to-one crossfade: fading the old layer out at
+// the same time as the new one fades in dips the composite brightness halfway
+// through every blend, which at 2 fps reads as a breathing light. Keeping the
+// floor at opacity 1 means the brightest moment never drops.
 export type PreviewLayer = { id: number; opacity: number };
 
+/** Floor stays fully opaque; the incoming layer ramps 0 -> 1 over it. */
 export function crossfade(t: number) {
   const progress = t < 0 ? 0 : t > 1 ? 1 : t;
-  return { previous: 1 - progress, current: progress };
+  return { previous: 1, current: progress };
 }
 
 /** Progress the in-flight fade, or start a new one for an incoming frame. */
 export function advanceFrames(layers: PreviewLayer[], id: number, t: number): PreviewLayer[] {
   const { previous, current } = crossfade(t);
   if (layers.some(layer => layer.id === id)) {
+    // A lone frame has no floor beneath it, so it must stay fully opaque while
+    // its own ramp ticks; returning `current` here faded the first thumbnail in
+    // from black, which is the very dip this design exists to avoid.
+    if (layers.length === 1) return [{ ...layers[0], opacity: 1 }];
     return layers.map(layer => ({ ...layer, opacity: layer.id === id ? current : previous }));
   }
-  // Keep the most visible existing layer as the outgoing one; drop the rest so
-  // a slow decode can never pile up layers.
-  const top = layers.reduce<PreviewLayer | null>((best, layer) =>
-    !best || layer.opacity > best.opacity ? layer : best, null);
-  const outgoing = top ? [{ ...top, opacity: previous }] : [];
-  return [...outgoing, { id, opacity: current }];
+  // Layers paint in array order, so the last one is the visible top. A frame
+  // arriving mid-ramp promotes that newest frame to the opaque floor rather
+  // than the older one beneath it; the fade is shorter than the poll interval,
+  // so this is the uncommon case.
+  const top = layers.at(-1) ?? null;
+  // With nothing beneath it, the frame IS the floor: dissolving from black
+  // would dim the very first paint of a card.
+  if (!top) return [{ id, opacity: 1 }];
+  return [{ ...top, opacity: previous }, { id, opacity: current }];
 }
 
-/** Reduced motion snaps: the new frame is fully opaque at once. */
+/** Reduced motion snaps: a single opaque frame, nothing to dissolve. */
 export function settleFrames(id: number): PreviewLayer[] {
   return [{ id, opacity: 1 }];
 }

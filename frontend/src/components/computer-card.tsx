@@ -6,8 +6,8 @@ import type { paths } from '@/api/schema';
 
 export type Computer = paths['/api/computers']['get']['responses'][200]['content']['application/json']['computers'][number];
 
-// 2 fps thumbnails, with the fade comfortably shorter than the poll interval so
-// a crossfade is not normally interrupted mid-flight.
+// 2 fps thumbnails, with the dissolve comfortably shorter than the poll
+// interval so a fade is not normally interrupted mid-ramp.
 const POLL_MS = 500, FADE_MS = 300;
 const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -36,7 +36,7 @@ export function ComputerCard({ computer, canManage, busy, onOpen, onPower }: {
     return () => document.removeEventListener('visibilitychange', changed);
   }, []);
 
-  // Poll a fresh thumbnail, then fade it in over the current one.
+  // Poll a fresh thumbnail, then dissolve it in over the opaque floor.
   useEffect(() => {
     if (!polling) return;
     let cancelled = false, frame = 0;
@@ -91,7 +91,9 @@ export function ComputerCard({ computer, canManage, busy, onOpen, onPower }: {
 
   return <article ref={card} data-computer-id={computer.id} aria-label={computer.name} className="min-w-0 overflow-hidden rounded-xl border border-border bg-sidebar shadow-sm">
     <button type="button" data-testid="computer-preview" aria-label={`Open ${computer.name} desktop`} onClick={() => onOpen(computer)} disabled={!running || !canManage} className="relative block aspect-video w-full overflow-hidden bg-black/55 text-left enabled:cursor-pointer disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-      {/* Two stacked layers whose opacities always sum to 1 during a crossfade. */}
+      {/* At most two layers, in paint order: the previous frame is a fully
+          opaque floor and the newest dissolves over it, so brightness never
+          dips the way a sum-to-one crossfade does. */}
       {polling && layers.map(layer => <img key={layer.id} alt="" aria-hidden="true" data-testid="computer-preview-layer"
         src={`/api/computers/${encodeURIComponent(computer.id)}/preview?at=${layer.id}`}
         style={{ opacity: layer.opacity }}

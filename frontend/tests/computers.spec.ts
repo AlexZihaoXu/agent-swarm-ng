@@ -328,15 +328,23 @@ test('computer card offers a shared context menu and power control', async ({ pa
   await expect(card.getByText('Running')).toBeVisible();
 });
 
-test('preview crossfades with the two layers always summing to one opacity', async ({ page }) => {
+test('preview dissolves without the breathing brightness dip', async ({ page }) => {
+  // Measures the user-visible fault directly: two frames of identical mean
+  // luminance dissolve into each other, so any dip in rendered brightness comes
+  // from the compositing, not the content. A sum-to-one crossfade over the
+  // black card backdrop yields t*new + (1-t)^2*old, a 25% dip at t=0.5 (the
+  // "breathing light"); an opaque floor yields a true (1-t)*old + t*new blend
+  // with no dip at all.
   const id = 'b7d0c4e2-6a19-4b3e-8f2c-1a9e5d3c7b64';
   await mockComputers(page, [{ id, name: 'Fade desk', state: 'running', createdAt: 0, cpuPercent: 2, memoryBytes: 104857600, memoryLimitBytes: 4294967296, cpuCount: 4 } as unknown as Computer]);
   let requests = 0;
   await page.route(new RegExp(`/api/computers/${id}/preview\\?at=`), route => {
     requests += 1;
+    // Same luminance in both frames; only the 2px mark differs, so the two are
+    // distinguishable as separate frames without changing the mean brightness.
     return route.fulfill({
       status: 200, contentType: 'image/svg+xml',
-      body: `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="hsl(${requests * 20} 60% 40%)"/></svg>`,
+      body: `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#808080"/><rect x="${requests % 2 ? 4 : 8}" y="4" width="2" height="2" fill="#000"/></svg>`,
     });
   });
   await page.goto('/');
@@ -344,17 +352,49 @@ test('preview crossfades with the two layers always summing to one opacity', asy
   const card = page.getByRole('article', { name: 'Fade desk' });
   const layers = card.getByTestId('computer-preview-layer');
   await expect(layers.first()).toBeVisible();
-  // Sample the two layers repeatedly during a fade.
-  const sums: number[] = [];
-  await expect.poll(async () => {
-    const opacities = await layers.evaluateAll(nodes => nodes.map(node => Number(getComputedStyle(node).opacity)));
-    if (opacities.length === 2) sums.push(Math.round(opacities[0] * 100) / 100 + Math.round(opacities[1] * 100) / 100);
-    return sums.length;
-  }, { timeout: 8000 }).toBeGreaterThan(4);
-  for (const total of sums) expect(Math.abs(total - 1)).toBeLessThanOrEqual(0.02);
-  // At most two layers ever exist, and polling runs at ~2 fps.
-  expect(await layers.count()).toBeLessThanOrEqual(2);
-  expect(requests).toBeGreaterThanOrEqual(3);
+  const preview = card.getByTestId('computer-preview');
+  const box = await preview.boundingBox();
+  expect(box).toBeTruthy();
+  const luminance = async () => {
+    const png = await page.screenshot({ clip: { x: box!.x + 4, y: box!.y + 4, width: 200, height: 100 }, animations: 'disabled' });
+    return page.evaluate(async data => {
+      const image = await createImageBitmap(await(await fetch(`data:image/png;base64,${data}`)).blob());
+      const c = document.createElement('canvas'); c.width = image.width; c.height = image.height;
+      const ctx = c.getContext('2d');
+      if (!ctx) throw Error('no 2d context for the brightness sample');
+      ctx.drawImage(image, 0, 0); image.close();
+      const { data: rgba } = ctx.getImageData(0, 0, c.width, c.height);
+      let total = 0, count = 0;
+      for (let p = 0; p < rgba.length; p += 4) { total += 0.299 * rgba[p] + 0.587 * rgba[p + 1] + 0.114 * rgba[p + 2]; count += 1; }
+      return Math.round((total / count) * 100) / 100;
+    }, Buffer.from(png).toString('base64'));
+  };
+  const readings: number[] = [];
+  const opacities: Array<{ count: number; floor: number; top: number }> = [];
+  for (let sample = 0; sample < 40; sample += 1) {
+    readings.push(await luminance());
+    const states = await layers.evaluateAll(nodes => [{
+      count: nodes.length,
+      floor: Number(nodes[0]?.style.opacity ?? 1),
+      top: Number(nodes[nodes.length - 1]?.style.opacity ?? 1),
+    }]);
+    if (states.length) opacities.push(states[0]);
+    await page.waitForTimeout(60);
+  }
+  // 1. Brightness never dips: the darkest sample stays within 3% of the
+  //    settled (brightest) reading. 128 grey is the expected plateau.
+  const plateau = Math.max(...readings);
+  const dip = (plateau - Math.min(...readings)) / plateau;
+  expect(dip, `brightness dipped ${(dip * 100).toFixed(1)}%: ${JSON.stringify(readings)}`).toBeLessThan(0.03);
+  expect(plateau, `grey plateau measured ${plateau}, expected ~128`).toBeGreaterThan(120);
+  // 2. The floor layer stays fully opaque throughout, and at most two exist.
+  for (const state of opacities) {
+    expect(state.count, 'never more than two layers').toBeLessThanOrEqual(2);
+    expect(state.floor, `floor dimmed to ${state.floor}: ${JSON.stringify(opacities)}`).toBe(1);
+    expect(state.top).toBeGreaterThanOrEqual(0);
+  }
+  // 3. Frames really were exchanged at ~2 fps.
+  expect(requests).toBeGreaterThanOrEqual(4);
 });
 
 test('viewer reports an offline stream and retries its iframe without erasing the computer', async ({ page }) => {
