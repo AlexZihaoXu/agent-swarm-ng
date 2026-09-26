@@ -1,0 +1,42 @@
+# Opt-in self-signed HTTPS dashboard listener on Tailnet TCP 19091, beside the
+# existing HTTP dashboard on 19090. Combine AFTER compose.yaml +
+# compose.tailscale.yaml + compose.tailscale-http-jpeg.yaml +
+# compose.tailscale-http-jpeg-x11.yaml + compose.tailscale-http-jpeg-xorg120.yaml.
+#
+# Why: browsers only expose WebCodecs on a secure context, so the HTTP origin
+# can never use H.264/H.265. Port 19091 serves the same app over a deliberately
+# untrusted self-signed certificate (provision by scripts/make-self-signed-cert.sh);
+# the operator accepts the browser warning once. Tailscale already encrypts the
+# transport, so this adds a browser capability, not confidentiality.
+#
+# Computer image is deliberately NOT changed here: Selkies' `--encoder` is only the
+# server default, and the pinned client's insecure-origin JPEG pin is applied
+# before the settings socket exists, so the request never reaches the server.
+# Measured on a throwaway `h264-xorg120` computer: the HTTP origin streams H.264
+# it cannot decode (blank canvas, "This session streams h264enc, which this
+# browser cannot decode"), while the HTTPS origin negotiates VAAPI H.264 at
+# 100+ fps with an 8 Mbps VBV cap. One computer image therefore cannot serve
+# both origins. Keep the JPEG image as the creation default so 19090 is
+# unchanged; the H.264 image stays built and tagged for a per-computer choice.
+services:
+  frontend:
+    environment:
+      SITE_ADDRESS_HTTPS: ":19091"
+    ports: !override
+      - "127.0.0.1:19090:19090"
+      - "${TAILSCALE_IP:?Set TAILSCALE_IP to this machine's Tailscale IPv4 address}:19090:19090"
+      - "127.0.0.1:19091:19091"
+      - "${TAILSCALE_IP:?Set TAILSCALE_IP to this machine's Tailscale IPv4 address}:19091:19091"
+    volumes:
+      - ./frontend/Caddyfile.tailnet-dual:/etc/caddy/Caddyfile:ro
+      - ./.local/certs/dashboard-selfsigned.crt:/etc/caddy/dashboard-selfsigned.crt:ro
+      - ./.local/certs/dashboard-selfsigned.key:/etc/caddy/dashboard-selfsigned.key:ro
+  computer-h264-xorg120-image:
+    profiles: [computer-images]
+    image: agent-swarm-default:h264-xorg120
+    build:
+      context: .
+      dockerfile: templates/default/xorg120.Dockerfile
+      args:
+        COMPUTER_X11_BASE: agent-swarm-default:h264-x11
+    command: ["true"]

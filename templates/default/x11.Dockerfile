@@ -1,7 +1,11 @@
-# Opt-in portal-free GNOME/X11 variant for the trusted Tailnet HTTP/JPEG mode.
-# Build the pinned JPEG base image first. A separate tag keeps Wayland rollback
-# possible and preserves cached desktop/tool layers.
-FROM agent-swarm-default:http-jpeg
+# Opt-in portal-free GNOME/X11 variant for the trusted Tailnet viewer.
+# Build the approved encoder-selected base image first. The default base pins
+# CPU JPEG for insecure origins; pass COMPUTER_STREAM_BASE=agent-swarm-default:stage2
+# to build the WebCodecs (H.264-default) variant for the HTTPS listener.
+# A separate tag keeps Wayland rollback possible and preserves cached
+# desktop/tool layers.
+ARG COMPUTER_STREAM_BASE=agent-swarm-default:http-jpeg
+FROM ${COMPUTER_STREAM_BASE}
 USER root
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth x11-utils x11-xserver-utils mesa-vulkan-drivers && rm -rf /var/lib/apt/lists/*
 COPY templates/default/runtime/desktop-session-x11.sh /opt/swarm/desktop-session.sh

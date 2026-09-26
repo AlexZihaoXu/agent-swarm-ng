@@ -1,0 +1,33 @@
+# Dual Tailnet listener: the existing insecure HTTP dashboard on one port and
+# an opt-in self-signed HTTPS origin on another. Both serve the identical app
+# and computer routes; only the browser's security context differs.
+#
+# The HTTPS site exists so browsers expose WebCodecs (isSecureContext), which
+# unlocks the H.264/H.265 stream path. The certificate is deliberately
+# untrusted: Tailscale already encrypts the transport, so this adds a browser
+# capability, not confidentiality. The operator accepts the warning once.
+#
+# No extra backend, no per-computer host port, no UDP, and no public bind:
+# Compose publishes both listeners on loopback and the one Tailnet IPv4 only.
+(app) {
+	encode zstd gzip
+
+	import /etc/caddy/ComputerRoutes
+
+	handle {
+		root * /srv
+		@updates path / /sw.js /index.html /manifest.webmanifest
+		header @updates Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+{$SITE_ADDRESS} {
+	import app
+}
+
+{$SITE_ADDRESS_HTTPS} {
+	tls /etc/caddy/dashboard-selfsigned.crt /etc/caddy/dashboard-selfsigned.key
+	import app
+}
