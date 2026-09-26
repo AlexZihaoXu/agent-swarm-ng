@@ -18,13 +18,19 @@ test('right-click menus share a surface and fade-scale from their anchor, highli
   const submenu = page.getByRole('menu').last();
   await expect(submenu).toHaveCSS('background-color', 'rgb(36, 36, 36)');
   await expect(submenu).toHaveCSS('animation-name', 'dialog-in');
+  // Arm the observer BEFORE closing, otherwise the data-state flip can land in
+  // the gap between the key press and the promise being constructed, and the
+  // 1s fallback resolves 'missing' instead of the real animation name.
   const closeAnimation = page.evaluate(() => new Promise<string>(resolve => {
-    const target = document.querySelector<HTMLElement>('[aria-label="Message actions"]')!;
+    const target = document.querySelector<HTMLElement>('[aria-label="Message actions"]');
+    if (!target) { resolve('absent'); return; }
+    const read = () => getComputedStyle(target).animationName;
+    if (target.dataset.state === 'closed') { resolve(read()); return; }
     const observer = new MutationObserver(() => {
-      if (target.dataset.state === 'closed') { observer.disconnect(); resolve(getComputedStyle(target).animationName); }
+      if (target.dataset.state === 'closed') { observer.disconnect(); resolve(read()); }
     });
     observer.observe(target, { attributes: true, attributeFilter: ['data-state'] });
-    setTimeout(() => { observer.disconnect(); resolve('missing'); }, 1000);
+    setTimeout(() => { observer.disconnect(); resolve('missing'); }, 3000);
   }));
   await page.keyboard.press('Escape');
   expect(await closeAnimation).toBe('dialog-out');
@@ -184,8 +190,13 @@ test.describe('touch', () => {
     await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
     const bubble = page.locator('[data-message-id="avery-0"]');
     await expect(bubble).toHaveCSS('user-select', 'none');
-    const box = (await bubble.boundingBox())!;
-    const x = box.x + box.width / 2, y = box.y + box.height / 2;
+    // A settled, visible bubble: boundingBox() returns null for a detached or
+    // hidden element, which previously surfaced as "Cannot read 'x' of null".
+    await expect(bubble).toBeVisible();
+    await expect(bubble).toHaveCSS('opacity', '1');
+    const box = await bubble.boundingBox();
+    expect(box, 'message bubble has no layout box').toBeTruthy();
+    const x = box!.x + box!.width / 2, y = box!.y + box!.height / 2;
     const client = await page.context().newCDPSession(page);
     const menu = page.getByRole('menu', { name: 'Message actions' });
     let touching = false;
