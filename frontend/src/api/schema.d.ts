@@ -68,6 +68,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{id}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/activity/entry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["readAgentActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agents/{id}/settings": {
         parameters: {
             query?: never;
@@ -624,6 +656,13 @@ export interface components {
             label: string;
             text: string;
             timestamp: number;
+            sequence?: number;
+            revision?: number;
+            /** @description UTF-8 byte offset. Continue using nextOffset, not JavaScript string length. */
+            offset?: number;
+            /** @description Complete text length in UTF-8 bytes; the durable archive is not truncated. */
+            totalLength?: number;
+            nextOffset?: number | null;
         };
     };
     responses: never;
@@ -803,6 +842,138 @@ export interface operations {
             };
             /** @description Default Response */
             504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    listAgentActivity: {
+        parameters: {
+            query?: {
+                before?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        entries: {
+                            id: string;
+                            runId: string;
+                            channelId: string;
+                            kind: "system" | "user" | "assistant" | "thinking" | "tool_call" | "tool_result" | "reminder" | "channel" | "status" | "error";
+                            label: string;
+                            text: string;
+                            timestamp: number;
+                            sequence?: number;
+                            revision?: number;
+                            /** @description UTF-8 byte offset. Continue using nextOffset, not JavaScript string length. */
+                            offset?: number;
+                            /** @description Complete text length in UTF-8 bytes; the durable archive is not truncated. */
+                            totalLength?: number;
+                            nextOffset?: number | null;
+                        }[];
+                        nextCursor: number | null;
+                        contextUsage: {
+                            id: string;
+                            runId: string;
+                            channelId: string;
+                            kind: "system" | "user" | "assistant" | "thinking" | "tool_call" | "tool_result" | "reminder" | "channel" | "status" | "error";
+                            label: string;
+                            text: string;
+                            timestamp: number;
+                            sequence?: number;
+                            revision?: number;
+                            /** @description UTF-8 byte offset. Continue using nextOffset, not JavaScript string length. */
+                            offset?: number;
+                            /** @description Complete text length in UTF-8 bytes; the durable archive is not truncated. */
+                            totalLength?: number;
+                            nextOffset?: number | null;
+                        } | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    readAgentActivity: {
+        parameters: {
+            query: {
+                entryId: string;
+                offset?: number;
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        runId: string;
+                        channelId: string;
+                        kind: "system" | "user" | "assistant" | "thinking" | "tool_call" | "tool_result" | "reminder" | "channel" | "status" | "error";
+                        label: string;
+                        text: string;
+                        timestamp: number;
+                        sequence?: number;
+                        revision?: number;
+                        /** @description UTF-8 byte offset. Continue using nextOffset, not JavaScript string length. */
+                        offset?: number;
+                        /** @description Complete text length in UTF-8 bytes; the durable archive is not truncated. */
+                        totalLength?: number;
+                        nextOffset?: number | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

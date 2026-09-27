@@ -7,6 +7,7 @@ import { createNotificationSound } from '@/lib/notification-sound';
 import { useRunEvents } from '@/use-run-events';
 import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 import { randomUuid } from '@/lib/random-uuid';
+import { useActivityHistory } from '@/use-activity-history';
 
 export type ActivityEntry = components['schemas']['AgentActivityEntry'];
 const activityKinds = new Set(['system', 'user', 'assistant', 'thinking', 'tool_call', 'tool_result', 'reminder', 'channel', 'status', 'error']);
@@ -33,7 +34,7 @@ export function useChat() {
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [typing, setTyping] = useState<Record<string, boolean>>({});
   const [typingTargets, setTypingTargets] = useState<Record<string, string[]>>({});
-  const [activity, setActivity] = useState<Record<string, ActivityEntry[]>>({});
+  const { activity, recordActivity, removeActivity, refreshActivity, loadActivity, expandActivity, retryActivity, activityHistory } = useActivityHistory();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const notification = useRef<ReturnType<typeof createNotificationSound> | null>(null);
   const removedAgents = useRef(new Set<string>());
@@ -165,22 +166,12 @@ export function useChat() {
     setConversations(current => withoutKey(current, channel));
     setDrafts(current => withoutKey(current, channel));
     setBusy(current => withoutKey(current, channel)); setTyping(current => withoutKey(current, channel)); setTypingTargets(current => withoutKey(current, channel));
-    setErrors(current => withoutKey(current, channel)); setActivity(current => withoutKey(current, agent.id));
+    setErrors(current => withoutKey(current, channel)); removeActivity(agent.id);
     setHistoryReady(current => withoutKey(current, channel)); setHistoryLoading(current => withoutKey(current, channel));
     setHistoryFailed(current => withoutKey(current, channel)); setHistoryCursor(current => withoutKey(current, channel));
   }
-  function recordActivity(agentId: string, entry: ActivityEntry, append = false) {
-    if (removedAgents.current.has(agentId)) return;
-    setActivity(current => {
-      const entries = current[agentId] ?? [];
-      const index = entries.findIndex(item => item.id === entry.id);
-      if (index === -1) return { ...current, [agentId]: [...entries, entry] };
-      return { ...current, [agentId]: entries.map((item, i) => i === index ? { ...entry, timestamp: item.timestamp, text: append ? item.text + entry.text : entry.text } : item) };
-    });
-  }
   function recordError(agent: ChatAgent, text: string) {
     setErrors(current => ({ ...current, [agent.channelId]: text }));
-    recordActivity(agent.id, { id: randomUuid(), runId: 'client', channelId: agent.channelId, kind: 'error', label: 'Request error', text, timestamp: Date.now() });
   }
 
   function applyEvent(event: Record<string, any>) {
@@ -198,6 +189,7 @@ export function useChat() {
       setTyping(Object.fromEntries(runs.map(run => [run.channelId, run.typing === true])));
       setTypingTargets(Object.fromEntries(runs.map(run => [run.channelId, Array.isArray(run.typingTargets) ? run.typingTargets.filter(id => typeof id === 'string') : []])));
       void loadAgents(undefined, true);
+      refreshActivity();
       for (const agent of agents) if (loadedHistory.current.has(agent.channelId) || historyRequests.current.has(agent.channelId) || historyLoading[agent.channelId] || historyFailed[agent.channelId]) void loadHistory(agent, false, true);
       return;
     }
@@ -332,12 +324,12 @@ export function useChat() {
       activeRuns.current.delete(channelId);
       requests.current.get(channelId)?.abort(); requests.current.delete(channelId);
       setBusy(value => ({ ...value, [channelId]: false })); setTyping(value => ({ ...value, [channelId]: false }));
-      recordActivity(agent.id, { id: randomUuid(), runId: 'client', channelId, kind: 'status', label: 'Stopped', text: 'Response stopped by the user.', timestamp: Date.now() });
     } catch { recordError(agent, 'Could not stop the backend run. Check the connection and try again.'); }
   }
   const visibleBusy = { ...busy };
   for (const agent of agents) if (peerBusy[agent.id]) visibleBusy[agent.channelId] = true;
   return { agents, conversations, drafts, busy: visibleBusy, typing, typingTargets, activity, errors, addAgent, deleteAgent, editAvatar, send, stop, eventsConnected,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
+    loadActivity, expandActivity, retryActivity, activityHistory,
     setDraft: (channelId: string, text: string) => setDrafts(current => ({ ...current, [channelId]: text })) };
 }

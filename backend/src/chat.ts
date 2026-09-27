@@ -16,6 +16,7 @@ import { registerReactionRoutes } from './reaction-routes';
 import { channelReply, channelReplyContext } from './reply-preview';
 import type { ComputerUseService } from './computer-use/service';
 import type { ScreenshotPool } from './computer-use/image-pool';
+import { registerActivityRoutes } from './activity-routes';
 
 const Thinking = Type.Union(Object.values(ThinkingLevel).map(value => Type.Literal(value)));
 const Selection = Type.Object({
@@ -50,6 +51,7 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
   const runs = new AgentRuns();
   const streams = createRunStreams(runs);
   const broker = new DmBroker(database, store, codex, runs, computers, screenshots);
+  registerActivityRoutes(app, database, broker.activity);
   app.addHook('onListen', async () => { await broker.ready(); });
   const active = new Set<string>(); // Short preparation/deletion locks; inference belongs to runs.
   const preparing = new Map<string, { clientMessageId: string; controller: AbortController; finished: Promise<void> }>();

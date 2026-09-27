@@ -99,6 +99,30 @@
           },
           "timestamp": {
             "type": "number"
+          },
+          "sequence": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "offset": {
+            "description": "UTF-8 byte offset. Continue using nextOffset, not JavaScript string length.",
+            "type": "integer"
+          },
+          "totalLength": {
+            "description": "Complete text length in UTF-8 bytes; the durable archive is not truncated.",
+            "type": "integer"
+          },
+          "nextOffset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       }
@@ -392,6 +416,541 @@
             }
           },
           "504": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/activity": {
+      "get": {
+        "operationId": "listAgentActivity",
+        "parameters": [
+          {
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "entries",
+                    "nextCursor",
+                    "contextUsage"
+                  ],
+                  "properties": {
+                    "entries": {
+                      "maxItems": 30,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "runId",
+                          "channelId",
+                          "kind",
+                          "label",
+                          "text",
+                          "timestamp"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "runId": {
+                            "type": "string"
+                          },
+                          "channelId": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "system"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "user"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "assistant"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "thinking"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "tool_call"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "tool_result"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "reminder"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "channel"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "status"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "error"
+                                ]
+                              }
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "timestamp": {
+                            "type": "number"
+                          },
+                          "sequence": {
+                            "type": "integer"
+                          },
+                          "revision": {
+                            "type": "integer"
+                          },
+                          "offset": {
+                            "description": "UTF-8 byte offset. Continue using nextOffset, not JavaScript string length.",
+                            "type": "integer"
+                          },
+                          "totalLength": {
+                            "description": "Complete text length in UTF-8 bytes; the durable archive is not truncated.",
+                            "type": "integer"
+                          },
+                          "nextOffset": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contextUsage": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "runId",
+                            "channelId",
+                            "kind",
+                            "label",
+                            "text",
+                            "timestamp"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "runId": {
+                              "type": "string"
+                            },
+                            "channelId": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "system"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "user"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "assistant"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "thinking"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "tool_call"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "tool_result"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "reminder"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "channel"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "status"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "error"
+                                  ]
+                                }
+                              ]
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "text": {
+                              "type": "string"
+                            },
+                            "timestamp": {
+                              "type": "number"
+                            },
+                            "sequence": {
+                              "type": "integer"
+                            },
+                            "revision": {
+                              "type": "integer"
+                            },
+                            "offset": {
+                              "description": "UTF-8 byte offset. Continue using nextOffset, not JavaScript string length.",
+                              "type": "integer"
+                            },
+                            "totalLength": {
+                              "description": "Complete text length in UTF-8 bytes; the durable archive is not truncated.",
+                              "type": "integer"
+                            },
+                            "nextOffset": {
+                              "anyOf": [
+                                {
+                                  "type": "integer"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/activity/entry": {
+      "get": {
+        "operationId": "readAgentActivity",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 512,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "entryId",
+            "required": true
+          },
+          {
+            "schema": {
+              "minimum": 0,
+              "maximum": 2147483646,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "offset",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "revision",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "runId",
+                    "channelId",
+                    "kind",
+                    "label",
+                    "text",
+                    "timestamp"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "runId": {
+                      "type": "string"
+                    },
+                    "channelId": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "system"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "user"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "assistant"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "thinking"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "tool_call"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "tool_result"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "reminder"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "channel"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "status"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "error"
+                          ]
+                        }
+                      ]
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "number"
+                    },
+                    "sequence": {
+                      "type": "integer"
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "description": "UTF-8 byte offset. Continue using nextOffset, not JavaScript string length.",
+                      "type": "integer"
+                    },
+                    "totalLength": {
+                      "description": "Complete text length in UTF-8 bytes; the durable archive is not truncated.",
+                      "type": "integer"
+                    },
+                    "nextOffset": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
             "description": "Default Response",
             "content": {
               "application/json": {

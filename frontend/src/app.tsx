@@ -52,8 +52,9 @@ function Avatar({ initials, avatar, small = false, typing = false, ready = false
 const emptyAgent: ChatAgent = { id: '', name: '', initials: '', time: '', channelId: '' };
 
 export function App() {
-  const { agents, conversations, drafts, busy, typing, typingTargets, activity, addAgent, deleteAgent, editAvatar, send, stop, setDraft, eventsConnected,
+  const { agents, conversations, drafts, busy, typing, typingTargets, activity, errors, addAgent, deleteAgent, editAvatar, send, stop, setDraft, eventsConnected,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
+    loadActivity, expandActivity, retryActivity, activityHistory,
   } = useChat();
   const location = useLocation();
   const navigate = useNavigate();
@@ -311,7 +312,7 @@ export function App() {
                   <label htmlFor="agent-dm-conversation" className="hidden whitespace-nowrap text-xs text-muted-foreground md:inline">Chat with</label>
                   <div className="w-[clamp(5.5rem,34vw,8rem)] md:w-36"><Select id="agent-dm-conversation" ariaLabel="Chat with" value={conversationPeer} onValueChange={value => { if (value === 'load-more') void dmConversations.load(dmConversations.failed ? undefined : dmConversations.cursor ?? undefined); else chooseConversation(value); }} options={[{ value: 'you', label: 'You' }, ...peers.map(peer => ({ value: peer.id, label: peer.name === 'You' ? 'You (agent)' : peer.name, icon: <AgentAvatarArt {...(peer.avatar ?? defaultAvatar(peer.id))} size={20} /> })), ...(dmConversations.cursor !== null || dmConversations.failed ? [{ value: 'load-more', label: dmConversations.busy ? 'Loading conversations…' : dmConversations.failed ? 'Retry conversations' : 'More conversations…' }] : [])]} triggerClassName="!h-11 !w-full !justify-between !px-3 !text-sm md:!h-7 md:!min-h-0 md:!px-2 md:!text-xs" contentClassName="min-w-52 md:min-w-0" triggerContent={isPhone ? <><span className="min-w-0 flex-1 truncate">{peer?.name ?? 'You'}</span><svg aria-hidden="true" viewBox="0 0 12 12" className="size-3 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m2 4 4 4 4-4" /></svg></> : <><span className="flex min-w-0 items-center gap-1">{peer && <AgentAvatarArt {...(peer.avatar ?? defaultAvatar(peer.id))} size={20} />}<span className="min-w-0 truncate">{peer?.name ?? 'You'}</span></span><svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="m6 9 6 6 6-6" /></svg></>} /></div>
                 </div>
-                <AgentActivityPanel agent={agent} entries={activity[agent.id] ?? []} open={activityOpen} onOpenChange={setActivityOpen} />
+                <AgentActivityPanel agent={agent} entries={activity[agent.id] ?? []} open={activityOpen} onOpenChange={setActivityOpen} history={activityHistory} loadActivity={loadActivity} expandActivity={expandActivity} retryActivity={retryActivity} requestError={errors[agent.channelId]} />
               </div>
             </header>
 

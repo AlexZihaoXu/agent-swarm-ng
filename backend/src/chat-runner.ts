@@ -7,6 +7,7 @@ import { evaluateInterruption } from './interruption-triage';
 import { formatContextUsage } from './context-usage';
 import { createPublicationTyping } from './publication-typing';
 import { AgentSessionStore } from './agent-session-store';
+import type { ActivityStore } from './activity-store';
 
 export type InboxHooks = {
   prepare?: (messages: ChannelMessage[]) => Promise<ChannelMessage[]>;
@@ -14,13 +15,15 @@ export type InboxHooks = {
   sessionStore?: AgentSessionStore;
   notices?: string[];
   noticesSaved?: () => Promise<void>;
+  activityStore?: ActivityStore;
 };
 
 export async function runChat({ runId, signal, emit, inbox }: RunContext, config: ChatConfiguration, history: ChannelMessage[], message: ChannelMessage,
   publish: (text: string, replyToMessageId?: string) => Promise<object>, accessKey: string, subscriptionRuntime?: ModelRuntime, historyTools: ToolDefinition[] = [], hooks: InboxHooks = {}) {
   const { channel } = config;
   inbox.prepend(message);
-  const activity = createActivityRecorder(channel.agentId, channel.id, accessKey, emit, runId);
+  let activityFailed = false;
+  const activity = createActivityRecorder(channel.agentId, channel.id, accessKey, emit, runId, hooks.activityStore, () => { activityFailed = true; void session?.abort(); });
   const publicationTyping = createPublicationTyping(channel.agentId, emit);
   let published = 0, finalPublished = false;
   let web: Awaited<ReturnType<typeof createWebTools>> | undefined;
@@ -32,12 +35,14 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
   const clearTyping = publicationTyping.clear;
   try {
     signal.throwIfAborted();
+    await activity.start();
     web = await createWebTools();
     signal.throwIfAborted();
     const restored = await hooks.sessionStore?.load(channel.agentId);
     const manager = hooks.sessionStore ? restored ?? SessionManager.inMemory() : undefined;
     session = await createChatSession(config, restored ? [] : history, async (text, toolCallId, final, replyToMessageId) => {
       signal.throwIfAborted();
+      await activity.flush();
       // Publication belongs to the channel, not any connected browser.
       const saved = await publish(text, replyToMessageId);
       publicationTyping.published(toolCallId); published++;
@@ -81,6 +86,7 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
     const lastAssistant = () => [...main.messages].reverse().find(item => item.role === 'assistant');
     while (inbox.hasPending() && !signal.aborted) {
       const batch = await inbox.take(signal);
+      if (activityFailed) throw new Error('Activity persistence failed.');
       if (hooks.prepare) batch.messages = await hooks.prepare(batch.messages);
       if (!batch.messages.length) continue;
       const peerOnly = batch.messages.every(item => item.source);
@@ -98,6 +104,7 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
           }, { triggerTurn: true });
         }
         await checkpoint;
+        await activity.flush();
         if (checkpointFailure) throw checkpointFailure;
         if (!signal.aborted) await hooks.sessionStore?.save(channel.agentId, main.sessionManager);
       }, async (messages, triageSignal) => {
@@ -120,5 +127,7 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
   } finally {
     inbox.close(); clearTyping(); unsubscribe(); signal.removeEventListener('abort', abort); await checkpoint; session?.dispose();
     await web?.close();
+    try { await activity.finish(signal.aborted || activityFailed); }
+    catch { emit({ type: 'error', message: 'Operator activity could not be saved. Published messages remain in chat.' }); }
   }
 }

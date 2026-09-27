@@ -18,6 +18,7 @@ import { createReactionTools } from './reaction-tools';
 import { ReactionCoordinator } from './reaction-coordinator';
 import { channelReply, groupReplyContext, dmReplyContext } from './reply-preview';
 import { AgentSessionStore } from './agent-session-store';
+import { ActivityStore } from './activity-store';
 import { SwarmKnowledgePlugin } from './swarm-knowledge/plugin';
 import type { ComputerUseService } from './computer-use/service';
 import type { ScreenshotPool } from './computer-use/image-pool';
@@ -30,6 +31,7 @@ export class DmBroker {
   readonly groups: GroupStore;
   readonly reactions: ReactionStore;
   readonly sessions: AgentSessionStore;
+  readonly activity: ActivityStore;
   readonly knowledge: SwarmKnowledgePlugin;
   private reactionCoordinator: ReactionCoordinator;
   private starting?: Promise<void>;
@@ -40,11 +42,12 @@ export class DmBroker {
   private linked = new WeakSet<AbortSignal>();
   constructor(private database: PlatformStore, private endpoints: EndpointStore, private codex: CodexProvider, private runs: AgentRuns, private computers?: ComputerUseService, private screenshots?: ScreenshotPool) {
     this.store = new SwarmStore(database); this.groups = new GroupStore(database); this.reactions = new ReactionStore(database); this.sessions = new AgentSessionStore(database);
+    this.activity = new ActivityStore(database);
     this.knowledge = new SwarmKnowledgePlugin(database);
     this.reactionCoordinator = new ReactionCoordinator(database, endpoints, codex, runs, (agentId, input, context) => this.runInbox(agentId, input, context));
   }
   notifyHumanReaction(channelId: string, messageId: string, emoji: string) { return this.reactionCoordinator.offer(channelId, messageId, emoji); }
-  ready() { return this.starting ??= Promise.all([this.store.cancelInterruptedDeliveries(), this.computers?.ready()]).then(() => {}); }
+  ready() { return this.starting ??= (async () => { await this.store.cancelInterruptedDeliveries(); await this.activity.interruptActive(); await this.computers?.ready(); })(); }
   async send(senderId: string, recipientId: string, text: string, callId: string, context: RunContext, inheritedChain?: string, replyToId?: string): Promise<DmReceipt> {
     context.signal.throwIfAborted();
     if (this.closing || this.deleting.has(senderId) || this.deleting.has(recipientId)) throw new Error('DM delivery is unavailable.');
@@ -130,6 +133,7 @@ export class DmBroker {
     this.runs.announce(message.groupId, groupMessageView(message), true);
   }
   async runInbox(agentId: string, incoming: ChannelMessage, context: RunContext) {
+    await this.ready();
     const agent = await this.database.findAgent(agentId);
     if (!agent) throw new Error('Agent no longer exists.');
     const channel = { id: agent.channels[0].id, kind: 'platform-chat' as const, agentId };
@@ -172,6 +176,7 @@ ${preview.text}` : preview.text, timestamp: message.createdAt.getTime(), replyTo
       sessionStore: this.sessions,
       notices: notices.map(notice => notice.text),
       noticesSaved: () => this.computers?.acknowledgeNotices(agentId, notices.map(notice => notice.id)) ?? Promise.resolve(),
+      activityStore: this.activity,
       prepare: async messages => {
         const admitted: ChannelMessage[] = [];
         for (const message of messages) {

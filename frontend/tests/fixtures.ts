@@ -62,6 +62,7 @@ export const test = base.extend({
       }
       return route.fulfill({ json: { avatar: 'avatar' in agent ? agent.avatar : null, allowedDmAgents: agents.filter(peer => (grants.get(id) ?? []).includes(peer.id)).map(({ id, name }) => ({ id, name })) } });
     });
+    await page.route('**/api/agents/*/activity*', route => route.fulfill({ json: { entries: [], nextCursor: null, contextUsage: null } }));
     await page.route('**/api/agents/*/dm-peers*', route => route.fulfill({ json: { peers: [], nextCursor: null } }));
     await page.route('**/api/agents/*/dm-inbox*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));
     await page.route('**/api/agents/*/dms/*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));

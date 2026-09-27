@@ -123,6 +123,10 @@ describe('Pi chat and platform channel boundary', () => {
     await secondDatabase.appendMessage(agent!.channelId, 'assistant', 'Committed without private checkpoint');
     const second = await testApp(secondDatabase);
     try {
+      const restoredActivity = (await second.inject(`/api/agents/${agent!.id}/activity`)).json();
+      expect(JSON.stringify(restoredActivity.entries)).toContain('PRIVATE DIRECT OUTPUT');
+      expect(restoredActivity.entries.some((entry: { label: string }) => entry.label === 'Run ended')).toBe(true);
+      expect(restoredActivity.contextUsage.label).toBe('Context usage');
       const sent = await second.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent!, 'Second task') });
       expect(sent.statusCode).toBe(200);
       const restored = captured.at(-1)!.messages;
@@ -398,6 +402,9 @@ describe('Pi chat and platform channel boundary', () => {
       expect(activity.some(event => event.entry.kind === 'tool_call')).toBe(true);
       expect(activity.some(event => event.entry.kind === 'tool_result')).toBe(true);
       expect(activity.every(event => event.agentId === agent.id)).toBe(true);
+      const saved = (await app.inject(`/api/agents/${agent.id}/activity`)).json().entries;
+      expect(saved).toEqual(activity.reduce((rows: any[], event) => { const at = rows.findIndex(row => row.id === event.entry.id); if (at < 0) rows.push(event.entry); else rows[at] = event.entry; return rows; }, []));
+      expect(new Set(saved.map((entry: { id: string }) => entry.id)).size).toBe(saved.length);
       const events = channelEvents(response.body);
       expect(JSON.stringify(events)).not.toContain('PRIVATE');
       expect(events.map(event => event.type)).toEqual(['typing', 'typing', 'channel_message', 'done']);
@@ -455,6 +462,11 @@ describe('Pi chat and platform channel boundary', () => {
         }
       }
       expect(typing).toMatchObject({ type: 'typing', channelId: agent.channelId, active: true, targets: [mode === 'dm-typing' ? `dm:${[agent.id, 'unavailable-peer'].sort().join(':')}` : agent.channelId], runId: expect.any(String), eventId: expect.any(String) });
+      await vi.waitFor(async () => {
+        const active = (await app.inject(`/api/agents/${agent.id}/activity`)).json().entries;
+        expect(active.some((entry: { label: string }) => entry.label === 'Run active')).toBe(true);
+        expect(JSON.stringify(active)).toContain('PRIVATE DIRECT OUTPUT');
+      });
       release();
       let rest = buffer;
       while (true) { const { value, done } = await reader.read(); if (done) break; rest += decoder.decode(value, { stream: true }); }
@@ -503,6 +515,10 @@ describe('Pi chat and platform channel boundary', () => {
       expect(response.body).toContain('"type":"error"');
       expect(JSON.stringify(channelEvents(response.body))).not.toContain('PRIVATE');
       expect(response.body).not.toContain('!literal-key-$NOT_AN_ENV_LOOKUP');
+      const saved = (await app.inject(`/api/agents/${agent.id}/activity`)).body;
+      expect(saved).not.toContain('!literal-key-$NOT_AN_ENV_LOOKUP');
+      expect(saved).not.toContain('PRIVATE PROVIDER ERROR');
+      expect(saved).toContain('The provider request failed. Check the model connection.');
     } finally { await app.close(); }
   });
 

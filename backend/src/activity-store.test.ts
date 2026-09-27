@@ -1,0 +1,110 @@
+import { beforeAll, expect, it, vi } from 'vitest';
+import { mkdtemp } from 'node:fs/promises';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { prepareDatabase } from './test-database';
+import { PlatformStore } from './platform-store';
+import { ActivityStore, ACTIVITY_CHUNK_SIZE } from './activity-store';
+import { createActivityRecorder } from './agent-activity';
+
+let folder: string;
+beforeAll(async () => { folder = await mkdtemp(join(process.env.SQLITE_TEST_ROOT!, 'activity-')); });
+const config = { name: 'Activity', endpointId: 'fake', model: 'test', thinkingLevel: 'off' as const };
+it('coalesces durable revisions, redacts split credentials, strips images and never publishes chat', async () => {
+  const db = await prepareDatabase(join(folder, 'recorder.db'));
+  try {
+    const agent = await db.createAgent(config), store = new ActivityStore(db), events: any[] = [];
+    const recorder = createActivityRecorder(agent.id, agent.channels[0].id, 'secret-key', event => events.push(event), 'run', store);
+    recorder.record('assistant', 'Output', 'secret-', 'output', true);
+    recorder.record('assistant', 'Output', 'key and text', 'output', true);
+    recorder.record('assistant', 'Output', 'secret-key and final', 'output');
+    recorder.onEvent({ type: 'tool_execution_end', toolName: 'screenshot', result: { content: [{ type: 'image', data: 'BASE64_BYTES' }, { type: 'text', text: '{"imageId":"image-1"}' }] } } as any);
+    await recorder.flush();
+    expect(events).toHaveLength(2);
+    const page = await store.page(agent.id);
+    expect(page.entries[0]).toMatchObject({ text: '[redacted] and final', revision: 3 });
+    expect(JSON.stringify(page)).not.toContain('BASE64_BYTES');
+    expect(JSON.stringify(page)).not.toContain('secret-key');
+    expect(page.entries[1].text).toContain('image-1');
+    expect(await db.client.message.count()).toBe(0);
+    expect(await db.client.agentSession.count()).toBe(0);
+  } finally { await db.close(); }
+});
+it('keeps complete Unicode text behind bounded indexed pages and revision-checked fragments across restart', async () => {
+  const path = join(folder, 'archive.db'); let db = await prepareDatabase(path);
+  const agent = await db.createAgent(config), other = await db.createAgent(config);
+  let store = new ActivityStore(db);
+  const text = '\ufeffzz' + 'x😀'.repeat(ACTIVITY_CHUNK_SIZE) + '\u0000tail';
+  const entry = { id: 'long', runId: 'run', channelId: agent.channels[0].id, kind: 'thinking' as const, label: 'Thinking', timestamp: 123, revision: 1, text };
+  await store.save(agent.id, entry);
+  for (let i = 0; i < 33; i++) await store.save(agent.id, { ...entry, id: `entry-${i}`, text: String(i) });
+  await store.save(other.id, { ...entry, id: 'foreign' });
+  const latest = await store.page(agent.id);
+  expect(latest.entries).toHaveLength(30);
+  const older = await store.page(agent.id, latest.nextCursor!);
+  expect(older.entries).toHaveLength(4);
+  expect(Buffer.byteLength(older.entries[0].text)).toBeLessThanOrEqual(ACTIVITY_CHUNK_SIZE);
+  let restored = older.entries[0].text, offset = older.entries[0].nextOffset;
+  while (offset != null) {
+    const rest = await store.fragment(agent.id, 'long', offset, 1);
+    if (!rest || rest === 'changed') throw new Error('Missing fragment');
+    expect(Buffer.byteLength(rest.text)).toBeLessThanOrEqual(ACTIVITY_CHUNK_SIZE);
+    restored += rest.text; offset = rest.nextOffset;
+  }
+  expect(restored).toBe(text);
+  expect(await store.fragment(other.id, 'long', 0, 1)).toBeNull();
+  await store.save(agent.id, { ...entry, revision: 2, text: 'replacement' });
+  expect(await store.fragment(agent.id, 'long', 0, 1)).toBe('changed');
+  await store.save(agent.id, entry); // stale write must not overwrite a newer revision
+  const plan = await db.client.$queryRawUnsafe<{ detail: string }[]>('EXPLAIN QUERY PLAN SELECT sequence FROM Activity WHERE agentId = ? AND sequence < ? ORDER BY sequence DESC LIMIT 30', agent.id, 1000);
+  expect(plan.map(row => row.detail).join(' ')).toContain('Activity_agentId_sequence_idx');
+  await db.close(); db = new PlatformStore(pathToFileURL(path).href); store = new ActivityStore(db);
+  try {
+    expect(await store.fragment(agent.id, 'long', 0, 2)).toMatchObject({ text: 'replacement' });
+    await db.deleteAgent(agent.id, agent.name);
+    expect((await store.page(agent.id)).entries).toEqual([]);
+    expect((await store.page(other.id)).entries).toHaveLength(1);
+  } finally { await db.close(); }
+});
+it('restores latest context outside the page and marks only active runs interrupted without replay', async () => {
+  const db = await prepareDatabase(join(folder, 'interrupted.db'));
+  try {
+    const agent = await db.createAgent(config), store = new ActivityStore(db);
+    const recorder = createActivityRecorder(agent.id, agent.channels[0].id, '', () => {}, 'run', store);
+    await recorder.start();
+    recorder.record('status', 'Context usage', '12 / 100 tokens', 'context-usage');
+    for (let i = 0; i < 35; i++) recorder.record('tool_result', 'Result', `${i}`);
+    await recorder.flush();
+    expect((await store.page(agent.id)).contextUsage?.text).toBe('12 / 100 tokens');
+    await store.interruptActive();
+    expect(await store.fragment(agent.id, 'run:run-status', 0, 2)).toMatchObject({ label: 'Run interrupted', text: expect.stringContaining('not resumed') });
+    await store.interruptActive();
+    expect(await db.client.activity.count()).toBe(37);
+  } finally { await db.close(); }
+});
+it('checkpoints an active stream on its timer and flushes the final replacement without replay', async () => {
+  const db = await prepareDatabase(join(folder, 'stream.db'));
+  try {
+    const agent = await db.createAgent(config), store = new ActivityStore(db), events: any[] = [];
+    const recorder = createActivityRecorder(agent.id, agent.channels[0].id, '', event => events.push(event), 'run', store);
+    await recorder.start();
+    recorder.record('thinking', 'Thinking', 'partial', 'thought', true);
+    await vi.waitFor(() => expect(events.some(event => event.entry.text === 'partial')).toBe(true));
+    expect(await store.fragment(agent.id, 'run:thought', 0, 1)).toMatchObject({ text: 'partial' });
+    recorder.record('thinking', 'Thinking', ' continued', 'thought', true);
+    recorder.record('thinking', 'Thinking', 'final replacement', 'thought');
+    await recorder.finish();
+    expect(await store.fragment(agent.id, 'run:thought', 0, 3)).toMatchObject({ text: 'final replacement' });
+    await store.interruptActive();
+    expect(await store.fragment(agent.id, 'run:run-status', 0, 2)).toMatchObject({ label: 'Run ended' });
+    expect(events.filter(event => event.entry.id === 'run:thought')).toHaveLength(2);
+  } finally { await db.close(); }
+});
+it('does not emit unsaved activity or leak raw persistence errors when checkpointing fails', async () => {
+  const store = { save: vi.fn().mockRejectedValue(new Error('SECRET storage details')) } as unknown as ActivityStore;
+  const emit = vi.fn(), failed = vi.fn();
+  const recorder = createActivityRecorder('agent', 'channel', '', emit, 'run', store, failed);
+  recorder.record('assistant', 'Output', 'not committed');
+  await expect(recorder.flush()).rejects.toThrow('Operator activity could not be saved.');
+  expect(emit).not.toHaveBeenCalled(); expect(failed).toHaveBeenCalledOnce();
+});

@@ -93,6 +93,28 @@ model Agent {
   computerAssignments ComputerAssignment[]
   computerClaim ComputerClaim?
   computerNotices ComputerNotice[]
+  activity         Activity[]
+}
+
+// Operator-visible traces only; never agent working context or channel publications.
+model Activity {
+  sequence  Int    @id @default(autoincrement())
+  id        String @unique
+  agentId   String
+  runId     String
+  channelId String
+  kind      String
+  label     String
+  text      String
+  timestamp Float
+  revision  Int
+  // Only the run-status entry has lifecycle state; startup interrupts active rows.
+  state     String?
+  agent     Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, sequence])
+  @@index([agentId, label, sequence])
+  @@index([state])
 }
 
 model DmGrant {
