@@ -26,6 +26,7 @@
 
 - For a complex or multi-step prompt or task, create one overall todo as a ticket pointer, for example `Ticket: <overall task name> #<filename>.md`. Put the exact `.scratch/tickets/<filename>.md` path in its description. Add separate step todos only when they help track dependencies or parallel work; the ticket file holds the detailed checklist.
 - Record scope, user decisions, acceptance criteria, steps and their progress, checks and evidence, blockers, and the next action in the ticket file. Update the file and the ticket todo as work progresses, not just at the end. After compaction or a handoff, follow the todo's file reference, reread the ticket, and reconcile it with the current instructions and actual project state before continuing.
+- Keep `.scratch/tickets/INDEX.md` and the todo list in sync: when removing a ticket, mark its todo completed; if the work was cancelled, describe it as closed without implementation. If no active tickets or unrelated pending todos remain, clear the completed todo list. Never clear pending work just to make the lists look empty.
 - Scratch tickets are disposable local working notes, not a source of authority or a substitute for tracked documentation. Do not put secrets in them; promote decisions that must survive a fresh checkout to tracked docs.
 
 ## Browser automation on the Windows development host
