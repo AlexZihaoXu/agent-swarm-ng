@@ -8,13 +8,12 @@ export function AgentChannelSettings({ agentId, screen: screenType, peerId, onNa
   agentId: string; screen: 'channels' | 'swarm' | 'dm'; peerId?: string; onNavigate: (next: 'channels' | 'swarm' | Peer) => void;
   selected: string[]; known: Peer[]; onChange: (ids: string[]) => void; disabled: boolean;
 }) {
-  const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const [query, setQuery] = useState(''), [peers, setPeers] = useState<Peer[]>(known);
   // The saved Channels and Swarm App URLs now lead to the same inline controls.
   const screen: 'swarm' | Peer = screenType === 'dm' ? known.find(peer => peer.id === peerId) ?? peers.find(peer => peer.id === peerId) ?? { id: peerId ?? '', name: 'Agent' } : 'swarm';
   const [cursor, setCursor] = useState<number | null>(null), [busy, setBusy] = useState(true), [error, setError] = useState('');
   const request = useRef<AbortController | null>(null);
-  function navigate(next: typeof screen, back = false) { setDirection(back ? 'back' : 'forward'); onNavigate(next); }
+  function navigate(next: typeof screen) { onNavigate(next); }
   async function load(after?: number) {
     request.current?.abort(); const controller = new AbortController(); request.current = controller;
     setBusy(true); setError('');
@@ -37,12 +36,12 @@ export function AgentChannelSettings({ agentId, screen: screenType, peerId, onNa
       <ol className="flex min-h-11 min-w-0 items-center gap-2 text-sm sm:min-h-0">
         <li className="text-muted-foreground">Channels</li>
         <li aria-hidden="true" className="text-muted-foreground">›</li>
-        <li><button type="button" className="flex min-h-11 items-center whitespace-nowrap text-muted-foreground hover:text-foreground sm:min-h-0" onClick={() => navigate('swarm', true)}>Swarm App</button></li>
+        <li><button type="button" className="flex min-h-11 items-center whitespace-nowrap text-muted-foreground hover:text-foreground sm:min-h-0" onClick={() => navigate('swarm')}>Swarm App</button></li>
         <li aria-hidden="true" className="text-muted-foreground">›</li>
         <li className="min-w-0 truncate" aria-current="page" title={screen.name}>{screen.name}</li>
       </ol>
     </nav>}
-    <div key={page} className={`motion-reduce:animate-none ${direction === 'forward' ? 'animate-[settings-forward_240ms_ease-out]' : 'animate-[settings-back_240ms_ease-out]'}`}>
+    <div key={page}>
       {screen === 'swarm' ? <div className="space-y-4">
         <div><h4 className="text-sm font-semibold">Swarm App</h4><p className="mt-1 text-xs text-muted-foreground">Agent-to-agent direct messages</p></div>
         <div><h5 className="text-sm font-semibold">Allowed DMs</h5><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Choose which agents can chat with this agent. Enabling a connection allows both agents to send and reply. Sends automatically wake recipients and may use their model connection. Changes apply when saved.</p></div>

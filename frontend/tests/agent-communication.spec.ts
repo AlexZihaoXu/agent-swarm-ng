@@ -10,6 +10,20 @@ async function mockDmPeers(page: Page, ids: string[] = ['morgan']) {
   await page.route('**/api/agents/avery/dm-peers*', route => route.fulfill({ json: { peers: sampleAgents.filter(agent => ids.includes(agent.id)).map(agent => ({ id: agent.id, name: agent.name, avatar: agent.avatar ?? null, channelId: agent.channelId })), nextCursor: null } }));
 }
 
+test('Channels and DM transcripts appear without directional entrance motion', async ({ page }) => {
+  await page.goto('/agents/avery');
+  const channels = page.getByRole('region', { name: 'Channels' });
+  const directional = channels.locator('[class*="settings-forward"], [class*="settings-back"]');
+  await expect(channels.getByRole('heading', { name: 'Allowed DMs' })).toBeVisible();
+  await expect(directional).toHaveCount(0);
+  await channels.getByRole('button', { name: 'View DM with Morgan' }).click();
+  await expect(channels.getByRole('region', { name: 'Agent DM transcript' })).toBeVisible();
+  await expect(directional).toHaveCount(0);
+  await channels.getByRole('button', { name: 'Swarm App' }).click();
+  await expect(channels.getByRole('heading', { name: 'Allowed DMs' })).toBeVisible();
+  await expect(directional).toHaveCount(0);
+});
+
 test('keeps appearance and permission drafts across one scroll, transcript inspection, and save', async ({ page }) => {
   const peerMessage = { id: 'dm-one', sequence: 2, conversationId: 'dm:avery:morgan', senderId: 'morgan', recipientId: 'avery', senderName: 'Morgan', recipientName: 'Avery', text: '**Separate peer result**', status: 'completed', timestamp: 1 };
   const live = [peerMessage];
