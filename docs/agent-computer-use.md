@@ -1,6 +1,6 @@
 # Agent computer use
 
-Status: implementation on `feat/agent-computer-use`, pending integration checks and rollout. This capability is separate from human desktop viewing, agent identity and channels. No account/login system is added.
+Status: deployed to the trusted dashboard from `6cfb464` on 2026-09-27. This capability is separate from human desktop viewing, agent identity and channels. No account/login system is added. Computer assignments start empty and are set explicitly by the human.
 
 ## Assignment and control
 
@@ -42,3 +42,5 @@ Browser guidance requested by the owner:
 ## Rollout boundary
 
 Controller, backend and guest runtime scripts all change. Existing desktops do not gain the guest scripts through a backend/frontend deployment alone. Build/test with disposable images first, retain live IDs/volumes and do not silently restart the owner's desktop. See [Computers](computers.md) and [development](development.md) for isolation and deployment gates. Durable operator activity is separate from chat and private session context; its own migration/API is integrated alongside this feature.
+
+The rollout passed 307 TypeScript tests, 11 guest Python tests, 25 focused browser checks, typechecks/build, feature CI, and isolated production migrations/API and real X11/GTK screenshot/Unicode/cancellation checks. After an idle-run preflight and protected app-data backup, the three guest helpers were installed in-place through `docker exec`/tar (Docker cp cannot see this Sysbox guest's `/opt/swarm` mount view). Only backend/frontend/controller containers were recreated; the owner's desktop container, image ID, start time, volumes and running session were unchanged. Future computers use the tested helper-overlay image under the existing H.265 tag. Live read-only capture returned 634×356 from 1920×1080 with no input sent; HTTP19090 and certificate-validated HTTPS19091 remained loopback/Tailnet TCP-only. Existing agent/message/computer/private-session counts were preserved. No real-model desktop action or live desktop input was performed for validation.

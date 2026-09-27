@@ -1,6 +1,6 @@
 # Swarm Knowledge
 
-**Status:** first-party read-only plugin and operator review browser on the feature branch, pending CI/merge/deployment. Every normal product-agent turn explicitly receives its three bounded exploration tools; Pi's default coding tools, resource discovery and host access remain disabled. Temporary decision-only triage forks retain only their decision tool. No backend migration is required.
+**Status:** deployed first-party read-only plugin and operator review browser, including computer-use, action-combo and browser-account/CAPTCHA guides. Every normal product-agent turn explicitly receives its three bounded exploration tools; Pi's default coding tools, resource discovery and host access remain disabled. Temporary decision-only triage forks retain only their decision tool. No backend migration is required.
 
 ## Authoring and hierarchy
 
