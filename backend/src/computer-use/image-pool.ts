@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, stat, writeFile, rename, unlink, utimes } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile, unlink, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ScreenFrame } from './service';
 export type ScreenshotReference = { id: string; agentId: string; mimeType: 'image/jpeg' | 'image/png'; width: number; height: number; bounds: number[] };
@@ -28,14 +28,14 @@ export class ScreenshotPool {
       }
       const id = crypto.randomUUID();
       const path = join(this.directory, `${agentId}_${id}.${frame.mimeType === 'image/png' ? 'png' : 'jpg'}`);
-      const temporary = `${path}.tmp`;
       try {
-        await writeFile(temporary, frame.data, { mode: 0o600, flag: 'wx' });
-        await rename(temporary, path);
-        // Keep a total insertion order even for same-clock-tick writes/restarts.
+        // Publish the random reference only after the write completes. A killed write
+        // leaves an unreferenced file that still counts toward the pool, not an
+        // unbounded .tmp copy outside eviction accounting.
+        await writeFile(path, frame.data, { mode: 0o600, flag: 'wx' });
         const timestamp = new Date(Math.max(Date.now(), Math.ceil(files.at(-1)?.time ?? 0) + 1));
         await utimes(path, timestamp, timestamp);
-      } finally { await unlink(temporary).catch(() => {}); }
+      } catch (error) { await unlink(path).catch(() => {}); throw error; }
       return { id, agentId, mimeType: frame.mimeType, width: frame.width, height: frame.height, bounds: [...frame.bounds] };
     });
     this.queue = operation.catch(() => {}); return operation;

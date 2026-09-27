@@ -6,6 +6,16 @@ import type { ActivityEntry, ChatAgent } from '@/use-chat';
 import type { useActivityHistory } from '@/use-activity-history';
 
 type History = ReturnType<typeof useActivityHistory>;
+function ActivityScreenshot({ agentId, entry }: { agentId: string; entry: ActivityEntry }) {
+  const [unavailable, setUnavailable] = useState(false);
+  if (entry.kind !== 'tool_result' || !/^(glance|look_at) — result$/.test(entry.label)) return null;
+  let reference: { id?: string; agentId?: string };
+  try { reference = JSON.parse(entry.text); } catch { return null; }
+  if (!reference || reference.agentId !== agentId || typeof reference.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(reference.id)) return null;
+  const url = `/api/agents/${encodeURIComponent(agentId)}/screenshots/${reference.id}`;
+  return unavailable ? <p className="mt-2 text-xs text-muted-foreground">Screenshot expired or unavailable; its activity metadata remains.</p>
+    : <a href={url} target="_blank" rel="noopener noreferrer" className="mt-2 block cursor-pointer rounded outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Open recorded screenshot"><img src={url} loading="lazy" alt="Recorded agent view of the computer" onError={() => setUnavailable(true)} className="h-auto w-full rounded border border-border" /></a>;
+}
 export function AgentActivityPanel({ agent, entries, open, onOpenChange, history, loadActivity, expandActivity, retryActivity, requestError }: {
   agent: ChatAgent; entries: ActivityEntry[]; open: boolean; onOpenChange: (open: boolean) => void;
   requestError?: string;
@@ -81,6 +91,7 @@ export function AgentActivityPanel({ agent, entries, open, onOpenChange, history
                     <span className="font-medium">{entry.label}</span>
                     <span className="ml-2 text-[10px] text-muted-foreground">{new Date(entry.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })}</span>
                   </summary>
+                  <ActivityScreenshot agentId={agent.id} entry={entry} />
                   <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{entry.text || '…'}</pre>
                   {entry.nextOffset != null && <Button variant="outline" size="sm" className="mt-2" disabled={history.entryLoading[entry.id]} onClick={() => void expandActivity(agent.id, entry)}>{history.entryLoading[entry.id] ? 'Loading text…' : history.entryFailed[entry.id] ? 'Retry more text' : 'Load more text'}</Button>}
                   {history.entryFailed[entry.id] && <p role="alert" className="mt-1 text-xs text-muted-foreground">Could not load the next text section.</p>}

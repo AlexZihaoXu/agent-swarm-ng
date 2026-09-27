@@ -50,6 +50,33 @@ test('keeps the newer live revision when a delayed snapshot arrives and ignores 
   await expect(panel).not.toContainText('Older live event');
 });
 
+test('restored page can expand again after pagehide aborts an in-flight fragment', async ({ page }) => {
+  let release!: () => void, requests = 0;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route(`**/api/agents/${agent.id}/activity*`, route => route.fulfill({ json: { entries: [{ ...entry('long', 1, 'First'), nextOffset: 5 }], nextCursor: null, contextUsage: null } }));
+  await page.route(`**/api/agents/${agent.id}/activity/entry*`, async route => {
+    if (++requests === 1) await gate;
+    await route.fulfill({ json: { ...entry('long', 1, ' tail'), offset: 5 } }).catch(() => {});
+  });
+  const panel = await open(page);
+  await panel.getByRole('button', { name: 'Load more text' }).click();
+  await expect(panel.getByRole('button', { name: 'Loading text…' })).toBeDisabled();
+  await page.evaluate(() => { window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })); window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })); });
+  await expect(panel.getByRole('button', { name: 'Load more text' })).toBeEnabled();
+  release();
+  await panel.getByRole('button', { name: 'Load more text' }).click();
+  await expect(panel).toContainText('First tail');
+});
+
+test('screenshot references render retained images and label evicted copies', async ({ page }) => {
+  const imageId = '8f9bb21a-a7e6-4e52-853d-b188207fc0f0';
+  await page.route(`**/api/agents/${agent.id}/activity*`, route => route.fulfill({ json: { entries: [{ ...entry('shot', 1, JSON.stringify({ id: imageId, agentId: agent.id, bounds: [0,0,999,999] })), kind: 'tool_result', label: 'glance — result' }], nextCursor: null, contextUsage: null } }));
+  await page.route(`**/api/agents/${agent.id}/screenshots/*`, route => route.fulfill({ status: 404, json: { message: 'Expired' } }));
+  const panel = await open(page);
+  await expect(panel).toContainText('Screenshot expired or unavailable');
+  await expect(panel).toContainText(imageId);
+});
+
 test('retries failed history and text chunks, with replacement on an expansion revision conflict', async ({ page }) => {
   let pages = 0, fragments = 0;
   await page.route(`**/api/agents/${agent.id}/activity*`, route => ++pages === 1 ? route.fulfill({ status: 503, json: { message: 'Unavailable' } }) : route.fulfill({ json: { entries: [{ ...entry('long', 1, 'First section'), nextOffset: 13 }], nextCursor: null, contextUsage: null } }));

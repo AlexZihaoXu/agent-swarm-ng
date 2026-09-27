@@ -10,6 +10,7 @@ import { EndpointStore } from './endpoint-store';
 import { CodexProvider, CODEX_CONNECTION } from './codex-provider';
 import { getModels } from '@earendil-works/pi-ai/compat';
 import { createChatSession, modelCapabilities } from './chat-runtime';
+import { ActivityStore } from './activity-store';
 
 type RequestBody = { tools?: { function: { name: string } }[]; messages: { role: string; content: string | { type: string; text: string }[] }[]; reasoning_effort?: string; model: string };
 let server: Server;
@@ -107,6 +108,28 @@ const channelEvents = (body: string) => eventsFrom(body).filter(event => !['acti
 });
 
 describe('Pi chat and platform channel boundary', () => {
+  it('does not publish when Stop arrives during the activity persistence barrier', async () => {
+    behavior = 'tool'; captured = [];
+    const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
+    const app = await testApp(database);
+    let release!: () => void; let blocked = false;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const original = ActivityStore.prototype.save;
+    const spy = vi.spyOn(ActivityStore.prototype, 'save').mockImplementation(async function(this: ActivityStore, agentId, entry) {
+      if (!blocked && entry.kind === 'tool_call' && entry.label === 'send_message') { blocked = true; await gate; }
+      return original.call(this, agentId, entry);
+    });
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const input = chatPayload(agent);
+      await app.inject({ method: 'POST', url: '/api/chat', headers: { prefer: 'respond-async' }, payload: input });
+      await vi.waitFor(() => expect(blocked).toBe(true), { timeout: 8000 });
+      const stop = app.inject({ method: 'POST', url: `/api/agents/${agent.id}/stop`, payload: { clientMessageId: input.clientMessageId } }).then(response => response);
+      await new Promise(resolve => setTimeout(resolve, 50));
+      release(); await stop;
+      expect(await database.client.message.count({ where: { role: 'assistant' } })).toBe(0);
+    } finally { release(); spy.mockRestore(); await app.close(); }
+  }, 12000);
   it('restores private Pi tool context from SQLite after a completed run and backend restart', async () => {
     behavior = 'tool'; captured = [];
     const path = join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`);

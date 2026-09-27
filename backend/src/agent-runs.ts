@@ -13,6 +13,8 @@ export class AgentRuns {
   private queue = new AgentWorkQueue();
   private listeners = new Set<(event: RunEvent) => void>();
   private closing = false;
+  private lifecycle?: (run: RunState, state: 'queued' | 'completed' | 'failed' | 'cancelled', emit: (event: object) => void) => Promise<void>;
+  setLifecycle(handler: NonNullable<AgentRuns['lifecycle']>) { this.lifecycle = handler; }
   private stops = new Map<string, number>();
   stopVersion(agentId: string) { return this.stops.get(agentId) ?? 0; }
   constructor(private timeoutMs = Number(process.env.AGENT_RUN_TIMEOUT_MS ?? 0)) {
@@ -72,22 +74,29 @@ export class AgentRuns {
     };
     this.runs.set(run.runId, run);
     let detach = () => {};
+    let admission: Promise<void> = Promise.resolve();
     try {
       run.ticket = this.queue.submit(run.agentId, run.runId, async signal => {
+        if (this.lifecycle) await admission;
+        signal.throwIfAborted();
         run.queued = false;
         run.emit({ type: 'run_started', clientMessageId: run.clientMessageId });
         await work({ runId: run.runId, signal, emit: run.emit, inbox: run.inbox });
       }, { ...options, executionTimeoutMs: options.executionTimeoutMs ?? this.timeoutMs });
+      admission = this.lifecycle?.(run, 'queued', run.emit) ?? Promise.resolve();
+      void admission.catch(() => {}); // observed again by work/finalization, including queued cancellation
       run.emit({ type: 'run_queued', clientMessageId: run.clientMessageId, queued: true });
       const abortTicket = () => run.ticket!.cancel();
       const abortRun = () => run.controller.abort();
       run.controller.signal.addEventListener('abort', abortTicket);
       run.ticket.signal.addEventListener('abort', abortRun);
       detach = () => { run.controller.signal.removeEventListener('abort', abortTicket); run.ticket!.signal.removeEventListener('abort', abortRun); };
-      run.finished = run.ticket.finished.then(state => {
+      run.finished = run.ticket.finished.then(async state => {
+        await admission;
+        await this.lifecycle?.(run, state as 'completed' | 'failed' | 'cancelled', run.emit);
         if (state === 'failed') run.emit({ type: 'error', message: 'The agent run failed.' });
         else if (state === 'cancelled') run.emit({ type: 'error', message: 'The agent was stopped or its deadline elapsed.' });
-      }).finally(() => {
+      }).catch(() => { run.emit({ type: 'error', message: 'The agent lifecycle could not be saved. Check backend storage.' }); }).finally(() => {
         detach(); run.inbox.close(); this.runs.delete(run.runId);
         run.emit({ type: 'done', stopped: run.controller.signal.aborted });
       });

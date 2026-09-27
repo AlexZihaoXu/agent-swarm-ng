@@ -1,4 +1,4 @@
-import { ComputerUseError, type ActionReceipt, type ComputerRuntime, type ScreenFrame } from './service';
+import { ComputerUseError, ComputerExecutionError, type ActionReceipt, type ComputerRuntime, type ScreenFrame } from './service';
 const MAX_RESPONSE = 3 * 1024 * 1024;
 
 /** Fixed internal controller origin; requests never contain a guest command or host path. */
@@ -49,7 +49,7 @@ export class HttpComputerRuntime implements ComputerRuntime {
       if (error instanceof ComputerUseError && error.status === 400) return { started: false, completed: 0, error: error.message };
       // Fetch cancellation is not guest cancellation. Fence and join before reporting stop.
       await this.cancel(id);
-      throw new ComputerUseError('Combo interrupted or its result is uncertain. Completed effects remain; take a fresh look rather than repeating it.', 503);
+      throw new ComputerExecutionError('Combo interrupted or its result is uncertain. Input is now settled, but completed effects remain; take a fresh look rather than repeating it.', true);
     }
   }
   async cancel(id: string) {

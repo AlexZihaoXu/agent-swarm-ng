@@ -13,6 +13,7 @@ try{
  await page.goto(`${base}/computers/${id}`);
  const frame=page.frameLocator('iframe[title="Portal-free disposable probe desktop"]');
  await frame.locator('#videoCanvas').waitFor({state:'attached',timeout:35000});
+ await page.getByRole('button',{name:'Enable human desktop input'}).click();
  // The preceding input regression intentionally leaves GNOME Overview open.
  // Select the newly launched Chrome window from that overview before asserting
  // the shader pixels; this is a real remote pointer click, not a CDP page.

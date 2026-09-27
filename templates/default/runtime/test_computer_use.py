@@ -1,6 +1,8 @@
 """Pure validation/executor regressions. Run: python3 -m unittest discover -s templates/default/runtime -p 'test_computer_use.py'."""
 import importlib.util
 import json
+import os
+import select
 from pathlib import Path
 import signal
 import tempfile
@@ -89,6 +91,32 @@ class ExecutionTests(unittest.TestCase):
         signal.setitimer(signal.ITIMER_REAL, 0)
         self.root.stop()
         self.directory.cleanup()
+
+    @unittest.skipUnless(hasattr(os, 'fork'), 'guest capture runs on Linux')
+    def test_hard_killed_capture_leaves_no_named_image(self):
+        read_fd, write_fd = os.pipe()
+        pid = os.fork()
+        if pid == 0:
+            os.close(read_fd)
+            def write_frame(argv, **kwargs):
+                path = next(arg.split('=', 1)[1] for arg in argv if arg.startswith('location='))
+                with open(path, 'wb') as image:
+                    image.write(b'\xff\xd8\xff\xd9')
+                os.write(write_fd, b'1')
+                signal.pause()
+            with patch.object(runtime.subprocess, 'run', write_frame):
+                runtime.capture({'kind': 'glance'}, FakeX11())
+            os._exit(0)
+        os.close(write_fd)
+        try:
+            self.assertTrue(select.select([read_fd], [], [], 5)[0], 'capture did not write')
+            self.assertEqual(os.read(read_fd, 1), b'1')
+            self.assertFalse(list(runtime.ROOT.glob('*.jpg')))
+        finally:
+            os.kill(pid, signal.SIGKILL)
+            os.waitpid(pid, 0)
+            os.close(read_fd)
+        self.assertFalse(list(runtime.ROOT.glob('*.jpg')))
 
     def test_entire_combo_rejected_before_input(self):
         x11 = FakeX11()

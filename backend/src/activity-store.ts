@@ -48,6 +48,17 @@ export class ActivityStore {
     if (revision !== undefined && Number(rows[0].revision) !== revision) return 'changed';
     return view(rows[0], offset);
   }
+  async lifecycle(run: { agentId: string; runId: string; channelId: string }, outcome: 'queued' | 'completed' | 'failed' | 'cancelled') {
+    await this.database.initialize();
+    const id = `${run.runId}:run-status`;
+    const previous = await this.database.client.activity.findUnique({ where: { id } });
+    // The normal recorder owns completed run status. This covers queue/preparation failures.
+    if (previous && previous.state !== 'active') return null;
+    if (outcome === 'queued' && previous) return null;
+    const label = outcome === 'queued' ? 'Run queued' : outcome === 'cancelled' ? 'Run stopped' : outcome === 'failed' ? 'Run failed' : 'Run ended';
+    const text = outcome === 'queued' ? 'Accepted agent work is waiting or preparing.' : outcome === 'cancelled' ? 'Run stopped before or during preparation; committed effects remain.' : outcome === 'failed' ? 'Run failed during preparation or execution. Check the connection and backend status.' : 'Run ended.';
+    return this.save(run.agentId, { id, runId: run.runId, channelId: run.channelId, kind: 'status', label, text, timestamp: previous?.timestamp ?? Date.now(), revision: previous ? previous.revision + 1 : 0, state: outcome === 'queued' ? 'active' : outcome });
+  }
   async interruptActive() {
     await this.database.initialize();
     await this.database.client.activity.updateMany({ where: { state: 'active' }, data: { state: 'interrupted', label: 'Run interrupted', text: 'Backend restarted during this run. Work was not resumed; partial activity remains unfinished.', revision: { increment: 1 } } });

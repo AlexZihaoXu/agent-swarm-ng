@@ -43,6 +43,11 @@ export class DmBroker {
   constructor(private database: PlatformStore, private endpoints: EndpointStore, private codex: CodexProvider, private runs: AgentRuns, private computers?: ComputerUseService, private screenshots?: ScreenshotPool) {
     this.store = new SwarmStore(database); this.groups = new GroupStore(database); this.reactions = new ReactionStore(database); this.sessions = new AgentSessionStore(database);
     this.activity = new ActivityStore(database);
+    this.runs.setLifecycle(async (run, state, emit) => {
+      await this.ready();
+      const entry = await this.activity.lifecycle(run, state);
+      if (entry) emit({ type: 'activity', agentId: run.agentId, append: false, entry });
+    });
     this.knowledge = new SwarmKnowledgePlugin(database);
     this.reactionCoordinator = new ReactionCoordinator(database, endpoints, codex, runs, (agentId, input, context) => this.runInbox(agentId, input, context));
   }

@@ -48,6 +48,7 @@ try{
  if(await page.getByRole('button',{name:/Click the permission dialog/}).count())throw Error('Portal-free viewer still blocks live input with preview overlay');
  const frame=page.frameLocator(`iframe[title="${name} desktop"]`);
  await frame.locator('#videoCanvas').waitFor({state:'attached',timeout:40000});
+ await page.getByRole('button',{name:'Enable human desktop input'}).click();
  // The JPEG canvas is reparented/resized during setup. Use the stable iframe
  // rectangle and 1920x1080 contain geometry instead of fixed page pixels;
  // hiding the global tabs changes the available screen height.

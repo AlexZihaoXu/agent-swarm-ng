@@ -61,6 +61,7 @@ test('creates, previews, persists and permanently deletes a real computer throug
       const childDocument = document.querySelector('iframe')?.contentDocument;
       return Boolean(childDocument?.querySelector('script[src="./assets/index-CPWh3fQ6.js"]'));
     })).toBe(true);
+    await viewer.getByRole('button', { name: 'Enable human desktop input' }).click();
     const preview = page.getByTestId('computer-consent-preview');
     await expect.poll(() => preview.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth), { timeout: 35_000 }).toBe(1920);
     const beforeGrant = await request.get(`/api/computers/${id}/preview?full=1&at=${Date.now()}`);

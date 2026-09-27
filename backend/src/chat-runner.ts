@@ -43,6 +43,7 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
     session = await createChatSession(config, restored ? [] : history, async (text, toolCallId, final, replyToMessageId) => {
       signal.throwIfAborted();
       await activity.flush();
+      signal.throwIfAborted();
       // Publication belongs to the channel, not any connected browser.
       const saved = await publish(text, replyToMessageId);
       publicationTyping.published(toolCallId); published++;

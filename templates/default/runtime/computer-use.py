@@ -148,6 +148,9 @@ def execute(value, x11):
                 x, y = end
             paths.append(path)
         check()
+        # Execution itself cannot continue sending input past the ten-second
+        # wall budget, even if X11/ledger writes run slower than the estimate.
+        signal.setitimer(signal.ITIMER_REAL, 10)
         result['started'] = True
         for index, a in enumerate(value['actions']):
             check()
@@ -202,22 +205,22 @@ def capture(value, x11):
     w, h, _, _ = x11.state()
     geometry = capture_geometry(value, w, h)
     l, t, r, b = geometry.pop('pixels')
-    fd, path = tempfile.mkstemp(dir=ROOT, suffix='.jpg')
-    os.close(fd)
-    try:
+    # Unnamed/unlinked file: SIGKILL cannot leave a JPEG behind in the guest.
+    # GStreamer inherits this descriptor and opens it via its own /proc view.
+    with tempfile.TemporaryFile(dir=ROOT) as output:
+        fd = output.fileno()
         subprocess.run(['gst-launch-1.0', '-q', 'ximagesrc', 'display-name=:1', 'num-buffers=1', 'use-damage=false', '!',
                         'videoconvert', '!', 'videocrop', f'left={l}', f'top={t}', f'right={w-r}', f'bottom={h-b}', '!',
                         'videoscale', '!', f'video/x-raw,width={geometry["width"]},height={geometry["height"]}', '!',
-                        'jpegenc', 'quality=85', '!', 'filesink', f'location={path}'],
-                       check=True, timeout=12, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if os.path.getsize(path) > 2*1024*1024:
+                        'jpegenc', 'quality=85', '!', 'filesink', f'location=/proc/self/fd/{fd}'],
+                       check=True, timeout=12, pass_fds=(fd,), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if os.fstat(fd).st_size > 2*1024*1024:
             raise ValueError('Captured JPEG exceeds 2 MiB; use a smaller crop.')
-        data = Path(path).read_bytes()
+        output.seek(0)
+        data = output.read()
         if not data.startswith(b'\xff\xd8') or not data.endswith(b'\xff\xd9'):
             raise RuntimeError('Guest capture did not produce JPEG.')
         return {**geometry, 'sourceWidth': w, 'sourceHeight': h, 'mimeType': 'image/jpeg', 'data': base64.b64encode(data).decode('ascii')}
-    finally:
-        os.unlink(path)
 
 
 def main():

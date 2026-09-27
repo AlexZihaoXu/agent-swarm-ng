@@ -2,6 +2,8 @@
 
 Status: stage 1 lifecycle/previews and stage 2 interactive desktop passed isolated acceptance and were deployed to the trusted Tailnet dashboard. Stage 2 went live on 2026-09-25 using the existing Tailnet IPv4 **HTTP TCP 19090** with the JPEG/createImageBitmap fallback; browser WebCodecs/H.264 on non-localhost HTTP remains unavailable. The current live computer now uses opt-in GNOME/X11 without that portal dialog; a dedicated sandboxed browser verified actual Tailnet JPEG frames, GNOME cursor, window drag and keyboard input. Allowed Tailnet peers have direct control without a second GNOME grant.
 
+The current feature adds [agent computer use](agent-computer-use.md): explicit per-agent assignments, single-agent claims, screenshot/action-combo tools and human Force release. The human viewer defaults to Input locked, with an explicit Input live toggle that does not revoke an agent's claim. This is separate from the historical human-only milestones below; consult the feature document for rollout status.
+
 ## Terms and ownership
 
 A **computer** is a persistent, shared Ubuntu GNOME environment, independent of agents and chat channels. No agent is assigned to or given tools for one by creating it. Its stable UUID, operator-chosen name, create-idempotency key and lifecycle state are saved in the platform's existing Prisma/SQLite database. Docker containers, named home/workspace volumes and a private network carry matching managed-resource labels. Docker is observed runtime state, not a replacement for the platform identity record.

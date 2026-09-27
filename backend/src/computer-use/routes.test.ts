@@ -10,7 +10,7 @@ it('serves explicit assignments, human release and scoped expiring images withou
   const other = await db.createAgent({ name: 'B', endpointId: 'mock', model: 'mock', thinkingLevel: 'off' });
   const computer = await db.client.computer.create({ data: { name: 'Desk', requestKey: crypto.randomUUID(), state: 'running' } });
   const pool = new ScreenshotPool(join(db.dataDirectory, 'computer-screenshots'));
-  const app = await buildApp({ database: db, computerController: { runtime: { cancel: async () => {} } } as ComputerController });
+  const app = await buildApp({ database: db, computerController: { runtime: { cancel: async () => {} } } as unknown as ComputerController });
   try {
     const put = await app.inject({ method: 'PUT', url: `/api/agents/${agent.id}/computers`, payload: { computerIds: [computer.id] } });
     expect(put.statusCode).toBe(200);

@@ -73,7 +73,14 @@ export function useActivityHistory() {
     setContextUsage(value => { const next = { ...value }; delete next[agentId]; return next; });
   }, []);
   useEffect(() => {
-    const abort = () => { for (const controller of requests.current.values()) controller.abort(); for (const { controller } of fragments.current.values()) controller.abort(); requests.current.clear(); fragments.current.clear(); };
+    const abort = () => {
+      for (const controller of requests.current.values()) controller.abort();
+      for (const { controller } of fragments.current.values()) controller.abort();
+      requests.current.clear(); fragments.current.clear();
+      // A bfcache-restored page reuses this hook. Ownership was cleared above,
+      // so aborted requests' finally clauses cannot clear their loading flags.
+      setLoading({}); setEntryLoading({});
+    };
     window.addEventListener('pagehide', abort);
     return () => { window.removeEventListener('pagehide', abort); abort(); };
   }, []);

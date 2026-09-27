@@ -188,7 +188,7 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
           <span className="text-xs text-muted-foreground">Pan desktop</span>
           <Button type="button" variant="outline" size="sm" aria-label="Pan desktop right" disabled={panOffset >= stream.width - (streamRef.current?.clientWidth ?? 0) - 1} className="min-h-11 min-w-11" onClick={() => streamRef.current?.scrollBy({ left: 240 })}>→</Button>
         </div>}
-        {available === 'offline' && !setupOpen && <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/95 p-5 text-center text-sm">
+        {available === 'offline' && !setupOpen && <div role="alert" className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-background/95 p-5 text-center text-sm">
           <p>Desktop stream unavailable. Your computer and files have not been deleted.</p>
           <Button type="button" variant="outline" onClick={() => { setAvailable('checking'); setViewerKey(key => key + 1); }}>Retry connection</Button>
         </div>}

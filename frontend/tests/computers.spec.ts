@@ -24,6 +24,7 @@ async function mockComputers(page: Page, initial: Computer[] = []) {
   await page.route('**/api/computers/**', route => {
     const path = new URL(route.request().url()).pathname.split('/');
     const id = path[3];
+    if (id === 'control') return route.fulfill({ json: { holders: [] } });
     if (id === 'settings-limits') return route.fulfill({ json: { cpuCores: { min: 1, max: 8, default: 4 }, memoryGiB: { min: 1, max: 16, default: 4 }, timezoneDefault: 'America/Toronto' } });
     if (path[4] === 'preview') { previews++; return route.fulfill({ status: 503, json: { message: 'Preview warming up.' } }); }
     if (path[4] === 'settings' && path[5] === 'replacement' && route.request().method() === 'POST') {
@@ -131,6 +132,8 @@ test('opens a computer on the dashboard port, lets a person click its consent pr
   await expect(page.locator('iframe[title="Work desk desktop"]')).toHaveAttribute('src', `/computers/${id}/desktop/`);
   const preview = page.getByRole('button', { name: /Click the permission dialog/ });
   await expect(preview).toBeVisible();
+  await expect(preview).toBeDisabled();
+  await page.getByRole('button', { name: 'Enable human desktop input' }).click();
   await expect(page.getByTestId('computer-keyboard-target')).toHaveCount(0);
   const previewImage = preview.locator('img');
   await previewImage.evaluate(image => {

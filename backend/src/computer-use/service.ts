@@ -12,6 +12,9 @@ export interface ComputerRuntime {
 export class ComputerUseError extends Error {
   constructor(message: string, readonly status: 400 | 403 | 404 | 409 | 503 = 400) { super(message); }
 }
+export class ComputerExecutionError extends ComputerUseError {
+  constructor(message: string, readonly settled: boolean) { super(message, 503); }
+}
 const knowledge = ' Read Swarm Knowledge swarm/computers/use.';
 type Allowance = { token: string; until: number; remaining: number };
 type Active = { abort: AbortController; finished: Promise<ActionReceipt> };
@@ -129,7 +132,10 @@ export class ComputerUseService {
       const finished = Promise.resolve().then(() => driver.execute(claim.computerId, prepared, abort.signal)).then(receipt => {
         if (!receipt.started && this.allowances.get(agentId) === allowance) allowance.remaining++;
         return receipt;
-      }).catch(error => { this.uncertain.add(claim.computerId); this.allowances.delete(agentId); throw error; })
+      }).catch(error => {
+        if (!(error instanceof ComputerExecutionError && error.settled)) this.uncertain.add(claim.computerId);
+        this.allowances.delete(agentId); throw error;
+      })
         .finally(() => { signal?.removeEventListener('abort', stop); this.active.delete(claim.computerId); });
       // Mark admission before yielding so release always sees and joins this execution.
       this.active.set(claim.computerId, { abort, finished });
