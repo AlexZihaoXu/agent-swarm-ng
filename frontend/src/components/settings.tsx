@@ -165,6 +165,11 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
         <p className="mt-2 text-sm text-muted-foreground">Manage your model connections.</p>
       </header>
       <CodexConnection />
+      <section aria-labelledby="knowledge-title" className="mb-8 rounded-xl border border-border bg-background p-5 sm:p-6">
+        <h3 id="knowledge-title" className="text-sm font-semibold">Swarm Knowledge</h3>
+        <p className="mt-1 text-xs text-muted-foreground">Review the operator-curated, read-only topic hierarchy. Anyone with dashboard access can read these entries.</p>
+        <Button type="button" variant="outline" size="sm" className="mt-4 min-h-11 sm:min-h-0" onClick={() => onNavigate('/settings/knowledge')}>Browse Swarm Knowledge</Button>
+      </section>
       <section aria-labelledby="endpoints-title">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
           <div>

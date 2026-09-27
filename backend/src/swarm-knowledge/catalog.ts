@@ -82,7 +82,13 @@ export class KnowledgeCatalog {
     if (!entry) throw new Error('Knowledge entry not found.');
     const from = bounded(offset, 0, entry.content.length, 'offset'), size = bounded(length, 4000, 6000, 'length');
     const text = entry.content.slice(from, from + size);
-    return { ...this.#summary(entry), text, offset: from, totalCharacters: entry.content.length,
+    const breadcrumbs: { id: string; title: string }[] = [];
+    let ancestor: KnowledgeEntry | undefined = entry;
+    while (ancestor) {
+      breadcrumbs.unshift({ id: ancestor.id, title: ancestor.title });
+      ancestor = ancestor.parentId === null ? undefined : this.#entries.get(ancestor.parentId);
+    }
+    return { ...this.#summary(entry), parentId: entry.parentId, breadcrumbs, text, offset: from, totalCharacters: entry.content.length,
       nextOffset: from + text.length < entry.content.length ? from + text.length : null };
   }
 }

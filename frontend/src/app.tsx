@@ -5,6 +5,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentPanel } from '@/components/agent-panel';
+import { KnowledgeBrowser } from '@/components/knowledge-browser';
 import { EditAgentForm } from '@/components/edit-agent-form';
 import { AgentAvatar, AgentName } from '@/components/chat-identity';
 import { cn } from '@/lib/utils';
@@ -338,8 +339,9 @@ export function App() {
         <Tabs.Content value="computers" className="min-h-0 flex-1 outline-none data-[state=active]:flex">
           <ComputersPanel viewingId={route.kind === 'computer' ? route.computerId ?? null : null} dialog={route.kind === 'computer-new' ? 'new' : route.kind === 'computer-delete' ? 'delete' : route.kind === 'computer-settings' ? 'settings' : null} deleteId={route.kind === 'computer-delete' ? route.computerId ?? null : null} settingsId={route.kind === 'computer-settings' ? route.computerId ?? null : null} onOpen={id => navigate(computerPath(id))} onNavigate={navigate} onBack={() => navigate('/computers')} />
         </Tabs.Content>
-        <Tabs.Content value="settings" forceMount className="phone-tab-enter min-h-0 flex-1 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none data-[state=inactive]:hidden md:pb-0">
-          <Settings route={route} onNavigate={navigate} />
+        <Tabs.Content value="settings" forceMount className={cn('phone-tab-enter min-h-0 flex-1 outline-none data-[state=inactive]:hidden', route.kind === 'knowledge' ? 'overflow-hidden data-[state=active]:flex data-[state=active]:flex-col' : 'overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0')}>
+          <div className={route.kind === 'knowledge' ? 'hidden' : ''}><Settings route={route} onNavigate={navigate} /></div>
+          {route.kind === 'knowledge' && <KnowledgeBrowser id={route.knowledgeId} onNavigate={navigate} />}
         </Tabs.Content>
       </Tabs.Root>
 

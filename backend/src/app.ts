@@ -10,6 +10,7 @@ import { registerCodex } from './codex-routes';
 import { ActivityEntrySchema } from './agent-activity';
 import { registerComputerRoutes } from './computer-routes';
 import { computerControllerFromEnv, type ComputerController } from './computer-controller-client';
+import { registerKnowledgeRoutes } from './swarm-knowledge/routes';
 
 export async function buildApp({ fetcher, endpointStore, database, codex = new CodexProvider(), computerController }: { fetcher?: typeof fetch; endpointStore?: EndpointStore; database?: PlatformStore; codex?: CodexProvider; computerController?: ComputerController | null } = {}) {
   const app = Fastify({ logger: true });
@@ -29,6 +30,7 @@ export async function buildApp({ fetcher, endpointStore, database, codex = new C
   registerCodex(app, codex);
   registerChat(app, endpointStore, platform, codex);
   registerComputerRoutes(app, platform, computerController === undefined ? computerControllerFromEnv() : computerController);
+  registerKnowledgeRoutes(app);
 
   await app.ready();
   return app;
