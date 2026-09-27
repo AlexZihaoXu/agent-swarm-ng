@@ -2,6 +2,9 @@ import { CURRENT_SESSION_VERSION, SessionManager, type FileEntry, type SessionEn
 import type { PlatformStore } from './platform-store';
 import type { Prisma } from './generated/prisma/client';
 import { messageText } from './message-text';
+import { join } from 'node:path';
+import { ScreenshotPool } from './computer-use/image-pool';
+import { hydrateScreenshot, withoutScreenshotBytes } from './computer-use/session-images';
 
 const MAX_HEADER_BYTES = 64 * 1024;
 const MAX_ENTRY_BYTES = 512 * 1024;
@@ -13,7 +16,8 @@ type SessionSnapshot = { header: SessionHeader; sessionId: string; leafId: strin
 
 /** Pi's private working entries. This store never returns channel messages or activity events. */
 export class AgentSessionStore {
-  constructor(private database: PlatformStore) {}
+  private images: ScreenshotPool;
+  constructor(private database: PlatformStore) { this.images = new ScreenshotPool(join(database.dataDirectory, 'computer-screenshots')); }
 
   /** Freeze one completed Pi boundary before another model turn can append to the manager. */
   static capture(session: SessionManager): SessionSnapshot {
@@ -42,7 +46,8 @@ export class AgentSessionStore {
       parent = entry.id;
     }
     if (parent !== record.leafId || record.activeStart && !entries.some(entry => entry.type === 'compaction' && entry.firstKeptEntryId === entries[0].id)) throw new Error('Private agent session is invalid.');
-    const session = SessionManager.inMemory(process.cwd(), { id: record.sessionId }, [header, ...entries] satisfies FileEntry[]);
+    const hydrated = await Promise.all(entries.map(entry => hydrateScreenshot(entry, agentId, this.images)));
+    const session = SessionManager.inMemory(process.cwd(), { id: record.sessionId }, [header, ...hydrated] satisfies FileEntry[]);
     // A channel publication commits before its Pi tool can finish. Restore that committed
     // effect as prior private context if a crash interrupted the next Pi checkpoint.
     const [privateMessages, dms, groups] = await Promise.all([
@@ -74,7 +79,9 @@ export class AgentSessionStore {
 
   /** Append only newly completed entries and advance the active leaf in the same transaction. */
   async save(agentId: string, session: SessionManager | SessionSnapshot, options: { advancePublications?: boolean } = {}): Promise<void> {
-    const { header, sessionId, entries, leafId } = session instanceof SessionManager ? AgentSessionStore.capture(session) : session;
+    const snapshot = session instanceof SessionManager ? AgentSessionStore.capture(session) : session;
+    const { header, sessionId, leafId } = snapshot;
+    const entries = snapshot.entries.map(withoutScreenshotBytes);
     if (header.type !== 'session' || header.version !== CURRENT_SESSION_VERSION || header.id !== sessionId) throw new Error('Invalid private agent session.');
     const headerText = JSON.stringify(header);
     if (Buffer.byteLength(headerText) > MAX_HEADER_BYTES) throw new Error('Private agent session header is too large.');

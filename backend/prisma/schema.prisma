@@ -39,6 +39,36 @@ model Computer {
   timezone   String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  assignments ComputerAssignment[]
+  claim       ComputerClaim?
+}
+
+model ComputerAssignment {
+  agentId String
+  computerId String
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  computer Computer @relation(fields: [computerId], references: [id], onDelete: Cascade)
+  @@id([agentId, computerId])
+  @@index([computerId])
+}
+
+// Durable only to recover/release a claim after backend restart. Not an assignment.
+model ComputerClaim {
+  computerId String @id
+  agentId String @unique
+  token String @unique @default(uuid())
+  claimedAt DateTime @default(now())
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  computer Computer @relation(fields: [computerId], references: [id], onDelete: Cascade)
+}
+
+model ComputerNotice {
+  id String @id @default(uuid())
+  agentId String
+  text String
+  createdAt DateTime @default(now())
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  @@index([agentId, createdAt])
 }
 
 model Agent {
@@ -60,6 +90,9 @@ model Agent {
   reactions        MessageReaction[]
   recentEmojis     AgentEmojiRecent[]
   privateSession   AgentSession?
+  computerAssignments ComputerAssignment[]
+  computerClaim ComputerClaim?
+  computerNotices ComputerNotice[]
 }
 
 model DmGrant {

@@ -1,0 +1,71 @@
+import { afterEach, expect, it } from 'vitest';
+import { join } from 'node:path';
+import { prepareDatabase } from '../test-database';
+import { ComputerUseService, type ComputerRuntime } from './service';
+const closes: Array<() => Promise<void>> = [];
+afterEach(async () => { for (const close of closes.splice(0)) await close(); });
+async function fixture() {
+  const db = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`)); closes.push(() => db.close());
+  const a = await db.createAgent({ name: 'A', endpointId: 'local', model: 'model', thinkingLevel: 'off' });
+  const b = await db.createAgent({ name: 'B', endpointId: 'local', model: 'model', thinkingLevel: 'off' });
+  const computer = await db.client.computer.create({ data: { name: 'Desk', requestKey: crypto.randomUUID(), state: 'running' } });
+  let now = 0, executes = 0, cancels = 0, invalid = false;
+  const runtime: ComputerRuntime = {
+    capture: async () => ({ mimeType: 'image/jpeg', data: Buffer.from([255,216,255,217]), width: 640, height: 360, bounds: [0,0,999,999] }),
+    execute: async () => { executes++; return { started: !invalid, completed: invalid ? 0 : 1, error: invalid ? 'Invalid combo' : null }; },
+    cancel: async () => { cancels++; },
+  };
+  const service = new ComputerUseService(db, runtime, () => now);
+  await service.ready(); await service.assign(a.id, [computer.id]); await service.assign(b.id, [computer.id]);
+  return { db, a, b, computer, service, runtime, time: (n: number) => { now = n; }, invalid: (v: boolean) => { invalid = v; }, counts: () => ({ executes, cancels }) };
+}
+it('separates assignments from one active holder, preserves an old claim when a switch is busy', async () => {
+  const f = await fixture();
+  await f.service.use(f.a.id, 'Desk');
+  await expect(f.service.use(f.b.id, f.computer.id)).rejects.toThrow(/A.*release/);
+  const other = await f.db.client.computer.create({ data: { name: 'Second', requestKey: crypto.randomUUID(), state: 'running' } });
+  await f.service.assign(f.b.id, [f.computer.id, other.id]); await f.service.use(f.b.id, other.id);
+  await expect(f.service.use(f.b.id, 'Desk')).rejects.toThrow(/release/);
+  expect((await f.service.list(f.b.id)).find(c => c.id === other.id)?.current).toBe(true);
+  await f.service.use(f.a.id, null); await f.service.use(f.b.id, 'Desk');
+  expect((await f.service.list(f.a.id))[0].holder?.id).toBe(f.b.id);
+});
+it('grants two combos for thirty real seconds, refunds preflight rejection, invalidates release', async () => {
+  const f = await fixture(); await f.service.use(f.a.id, 'Desk');
+  await expect(f.service.run(f.a.id, {}, new AbortController().signal)).rejects.toThrow(/look/i);
+  await f.service.capture(f.a.id, { mode: 'glance' });
+  f.invalid(true); expect((await f.service.run(f.a.id, {})).started).toBe(false); f.invalid(false);
+  await f.service.run(f.a.id, {}); await f.service.run(f.a.id, {});
+  await expect(f.service.run(f.a.id, {})).rejects.toThrow(/look/i);
+  await f.service.capture(f.a.id, { mode: 'glance' }); f.time(30001);
+  await expect(f.service.run(f.a.id, {})).rejects.toThrow(/look/i);
+  await f.service.capture(f.a.id, { mode: 'glance' }); await f.service.use(f.a.id, null); await f.service.use(f.a.id, 'Desk');
+  await expect(f.service.run(f.a.id, {})).rejects.toThrow(/look/i);
+  expect(f.counts().executes).toBe(3);
+});
+it('revokes access at execution and force release retains assignment and leaves a notice', async () => {
+  const f = await fixture(); await f.service.use(f.a.id, 'Desk');
+  await f.service.forceRelease(f.computer.id);
+  expect((await f.service.list(f.a.id))).toHaveLength(1);
+  expect((await f.service.notices(f.a.id))[0].text).toMatch(/released/);
+  await expect(f.service.capture(f.a.id, { mode: 'glance' })).rejects.toThrow(/use_computer/);
+  await f.service.use(f.a.id, 'Desk'); await f.service.assign(f.a.id, []);
+  await expect(f.service.use(f.a.id, 'Desk')).rejects.toThrow(/assigned/);
+});
+it('restart releases claims, preserves assignments and persists next-turn notices without inference', async () => {
+  const f = await fixture(); await f.service.use(f.a.id, 'Desk');
+  const next = new ComputerUseService(f.db, f.runtime); await next.ready();
+  expect((await next.list(f.a.id))[0].holder).toBeNull();
+  const notes = await next.notices(f.a.id); expect(notes[0].text).toMatch(/restart/);
+  await next.acknowledgeNotices(f.a.id, notes.map(n => n.id)); expect(await next.notices(f.a.id)).toEqual([]);
+});
+it('force release waits for cancellation settlement before transferring a computer', async () => {
+  const f = await fixture(); let finish!: () => void; let entered!: () => void;
+  const begun = new Promise<void>(resolve => { entered = resolve; });
+  f.runtime.execute = async (_id, _request, signal) => { entered(); await new Promise<void>(resolve => { finish = resolve; signal!.addEventListener('abort', () => {}, { once: true }); }); return { started: true, completed: 0, error: 'Stopped' }; };
+  await f.service.use(f.a.id, 'Desk'); await f.service.capture(f.a.id, { mode: 'glance' });
+  const running = f.service.run(f.a.id, {}); await begun;
+  let released = false; const release = f.service.forceRelease(f.computer.id).then(() => { released = true; });
+  await Promise.resolve(); expect(released).toBe(false);
+  finish(); await running; await release; await f.service.use(f.b.id, 'Desk');
+});

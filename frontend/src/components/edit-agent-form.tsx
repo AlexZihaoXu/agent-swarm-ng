@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentAvatarPreview } from '@/components/agent-avatar-preview';
 import { AgentChannelSettings } from '@/components/agent-channel-settings';
+import { AgentComputerSettings } from '@/components/agent-computer-settings';
 import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 import type { ChatAgent } from '@/use-chat';
 import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
@@ -70,6 +71,7 @@ export function EditAgentForm({ agent, route, mobile, onNavigate, onSave, onBack
               <AgentChannelSettings agentId={agent.id} screen={route.channelScreen ?? 'channels'} peerId={route.peerId} onNavigate={next => onNavigate(next === 'channels' ? channels : next === 'swarm' ? `${channels}/swarm` : `${channels}/swarm/dm/${encodeURIComponent(next.id)}`)} selected={allowed} known={known} onChange={ids => { setAllowed(ids); setSaved(false); setError(''); }} disabled={busy || !loaded} />
             </div>
           </section>
+          <AgentComputerSettings key={agent.id} agentId={agent.id} />
           <section ref={avatarSection} aria-label="Avatar" className="space-y-4">
             <div><h3 className="text-lg font-semibold">Avatar</h3><p className="mt-1 text-sm text-muted-foreground">Customize how {agent.name} appears in chats and the sidebar.</p></div>
             <AgentAvatarPreview name={agent.name} value={avatar} onChange={next => { setAvatar(next); setSaved(false); setError(''); }} disabled={busy} collapsible={false} />

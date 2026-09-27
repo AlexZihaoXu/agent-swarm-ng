@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox';
 import type { PlatformStore } from './platform-store';
 import { ComputerStore, ComputerStoreError, type ComputerSettings } from './computer-store';
 import type { ComputerController, ComputerObservation } from './computer-controller-client';
+import type { ComputerUseService } from './computer-use/service';
 
 const idParams = Type.Object({ id: Type.String({ minLength: 1, maxLength: 80 }) });
 const errorSchema = Type.Object({ message: Type.String() });
@@ -42,7 +43,7 @@ function failure(reply: FastifyReply, error: unknown) {
   return unavailable(reply);
 }
 
-export function registerComputerRoutes(app: FastifyInstance, platform: PlatformStore, controller: ComputerController | null) {
+export function registerComputerRoutes(app: FastifyInstance, platform: PlatformStore, controller: ComputerController | null, use?: ComputerUseService) {
   const store = new ComputerStore(platform);
   app.get('/api/computers', {
     schema: { operationId: 'listComputers', response: { 200: Type.Object({ computers: Type.Array(viewSchema), controllerConnected: Type.Boolean() }), ...errors } },
@@ -114,6 +115,8 @@ export function registerComputerRoutes(app: FastifyInstance, platform: PlatformS
     reply.header('Cache-Control', 'no-store');
     if (!controller) return unavailable(reply);
     try {
+      const candidate = await store.get(request.params.id);
+      if (candidate && candidate.name === request.body.confirmation && (await use?.holders())?.some(holder => holder.computerId === candidate.id)) await use?.forceRelease(candidate.id);
       const record = await store.markDeleting(request.params.id, request.body.confirmation);
       await controller.remove(record.id, record.name);
       if (!await store.finalizeDelete(record.id, record.name) && await store.get(record.id)) return unavailable(reply);

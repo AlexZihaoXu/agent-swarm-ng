@@ -4,6 +4,7 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { desktopStreamFit } from '@/lib/computer-fit';
 import type { Computer } from './computer-card';
+import { ComputerControl } from './computer-control';
 
 function initialSetup(id: string) {
   // Only the separate, operator-selected GNOME/X11 image bypasses portal
@@ -17,6 +18,7 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
   const id = computer.id;
   const running = computer.state === 'running' && canManage;
   const [setupOpen, setSetupOpen] = useState(() => initialSetup(id));
+  const [inputEnabled, setInputEnabled] = useState(false);
   const [frame, setFrame] = useState(Date.now());
   const [previewLoaded, setPreviewLoaded] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
@@ -37,6 +39,12 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
   const streamRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const url = `/computers/${encodeURIComponent(id)}/desktop/`;
+  const inputToggleRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { setInputEnabled(false); }, [id, viewerKey]);
+  useEffect(() => {
+    iframeRef.current?.contentWindow?.postMessage({ type: 'swarm:desktop-input', enabled: inputEnabled }, window.location.origin);
+    if (!inputEnabled) iframeRef.current?.blur();
+  }, [inputEnabled, id]);
 
   useEffect(() => {
     if (!running || !setupOpen) return;
@@ -89,7 +97,7 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
   }, [running, url, viewerKey]);
 
   const click = async (x: number, y: number) => {
-    if (clickBusy || !running || !previewLoaded || available === 'offline') return;
+    if (!inputEnabled || clickBusy || !running || !previewLoaded || available === 'offline') return;
     setClickBusy(true); setClickError('');
     try {
       const result = await api.POST('/api/computers/{id}/desktop/input', { params: { path: { id } }, body: { x, y } });
@@ -135,7 +143,7 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
     setSetupOpen(false);
   };
   const sendShortcut = (name: string) => {
-    if (!running || setupOpen || available === 'offline') return;
+    if (!inputEnabled || !running || setupOpen || available === 'offline') return;
     iframeRef.current?.contentWindow?.postMessage({ type: 'swarm:desktop-shortcut', name }, window.location.origin);
   };
 
@@ -151,8 +159,10 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
           <li aria-current="page" className="min-w-0 truncate font-semibold" title={computer.name}>{computer.name}</li>
         </ol>
       </nav>
+      <ComputerControl key={id} computerId={id} />
+      {running && <Button ref={inputToggleRef} type="button" variant={inputEnabled ? 'default' : 'outline'} size="sm" aria-pressed={inputEnabled} aria-label="Enable human desktop input" onClick={() => setInputEnabled(enabled => !enabled)} className="min-h-11 shrink-0 md:min-h-0">{inputEnabled ? 'Input live' : 'Input locked'}</Button>}
       {running && !setupOpen && <DropdownMenu.Root>
-        <DropdownMenu.Trigger asChild><Button type="button" variant="outline" size="sm" aria-label="Remote shortcuts" disabled={available === 'offline'} className="ml-auto min-h-11 shrink-0 gap-2 md:min-h-0">Send keys <span aria-hidden="true">⌄</span></Button></DropdownMenu.Trigger>
+        <DropdownMenu.Trigger asChild><Button type="button" variant="outline" size="sm" aria-label="Remote shortcuts" disabled={!inputEnabled || available === 'offline'} className="ml-auto min-h-11 shrink-0 gap-2 md:min-h-0">Send keys <span aria-hidden="true">⌄</span></Button></DropdownMenu.Trigger>
         <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={5} collisionPadding={12} aria-label="Remote shortcuts" className="z-50 w-56 rounded-lg border border-border bg-background p-1 text-sm shadow-lg motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]">
           {([
             ['new-tab', 'New tab', 'Ctrl+T', '+'],
@@ -170,7 +180,8 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
     <div className="relative flex min-h-0 flex-1 flex-col bg-black pb-[env(safe-area-inset-bottom)] md:pb-0">
       {!running ? <p role="status" className="m-auto px-5 text-center text-sm text-muted-foreground">Desktop unavailable. Its saved files remain until confirmed deletion.</p> : <>
         <div ref={streamRef} onScroll={event => setPanOffset(event.currentTarget.scrollLeft)} className="relative flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden bg-black">
-          <iframe ref={iframeRef} key={`${id}:${viewerKey}`} title={`${computer.name} desktop`} src={url} referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-downloads" allow="fullscreen" style={{ width: stream.width ? `${stream.width}px` : '100%', height: stream.height ? `${stream.height}px` : '100%' }} className="m-auto min-h-0 shrink-0 border-0 bg-black" />
+          <iframe ref={iframeRef} key={`${id}:${viewerKey}`} inert={!inputEnabled} tabIndex={inputEnabled ? 0 : -1} onLoad={() => { setInputEnabled(false); iframeRef.current?.contentWindow?.postMessage({ type: 'swarm:desktop-input', enabled: false }, window.location.origin); }} title={`${computer.name} desktop`} src={url} referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-downloads" allow="fullscreen" style={{ width: stream.width ? `${stream.width}px` : '100%', height: stream.height ? `${stream.height}px` : '100%' }} className={`m-auto min-h-0 shrink-0 border-0 bg-black ${inputEnabled ? '' : 'pointer-events-none'}`} />
+          {!inputEnabled && !setupOpen && <div aria-label="Desktop input locked" className="absolute inset-0 z-[1]" onPointerDown={event => { event.preventDefault(); inputToggleRef.current?.focus(); }} onWheel={event => event.stopPropagation()} />}
         </div>
         {stream.width > (streamRef.current?.clientWidth ?? 0) + 4 && !setupOpen && <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full bg-background/90 p-1 shadow-lg md:bottom-3">
           <Button type="button" variant="outline" size="sm" aria-label="Pan desktop left" disabled={panOffset < 1} className="min-h-11 min-w-11" onClick={() => streamRef.current?.scrollBy({ left: -240 })}>←</Button>
@@ -190,7 +201,7 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
             <Button type="button" variant="outline" size="sm" aria-label="Zoom in desktop preview" disabled={zoom >= 4} onClick={() => setZoom(value => Math.min(4, value + 1))} className="min-h-11 px-3 md:min-h-0">+</Button>
           </div>
           <div ref={scrollRef} className={`min-h-0 flex-1 overflow-auto py-3 ${zoom === 1 ? 'flex items-center justify-center' : ''}`}>
-            <button type="button" aria-label={`Click the permission dialog for ${computer.name}`} data-testid="computer-consent-preview" disabled={!previewLoaded || clickBusy || available === 'offline'} onClick={clickPreview} onKeyDown={moveCursor} onPointerDown={event => { previewPointerStart.current = { x: event.clientX, y: event.clientY }; previewDragged.current = false; setKeyboardTargetVisible(false); }} onPointerMove={movePreviewPointer} onPointerUp={() => { previewPointerStart.current = null; }} onPointerCancel={() => { previewPointerStart.current = null; previewDragged.current = true; }} style={{ width: fitWidth ? `${fitWidth * zoom}px` : '100%' }} className="relative block aspect-video shrink-0 overflow-hidden rounded-lg border border-border bg-black enabled:cursor-pointer disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <button type="button" aria-label={`Click the permission dialog for ${computer.name}`} data-testid="computer-consent-preview" disabled={!inputEnabled || !previewLoaded || clickBusy || available === 'offline'} onClick={clickPreview} onKeyDown={moveCursor} onPointerDown={event => { previewPointerStart.current = { x: event.clientX, y: event.clientY }; previewDragged.current = false; setKeyboardTargetVisible(false); }} onPointerMove={movePreviewPointer} onPointerUp={() => { previewPointerStart.current = null; }} onPointerCancel={() => { previewPointerStart.current = null; previewDragged.current = true; }} style={{ width: fitWidth ? `${fitWidth * zoom}px` : '100%' }} className="relative block aspect-video shrink-0 overflow-hidden rounded-lg border border-border bg-black enabled:cursor-pointer disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <img ref={imageRef} src={`/api/computers/${encodeURIComponent(id)}/preview?full=1&at=${frame}`} alt={`Permission preview of ${computer.name}`} draggable={false} onDragStart={event => event.preventDefault()} onLoad={() => { setPreviewLoaded(true); setPreviewFailed(false); }} onError={() => { setPreviewLoaded(false); setPreviewFailed(true); }} className="h-full w-full select-none object-contain" />
               {previewLoaded && keyboardTargetVisible && <span aria-hidden="true" data-testid="computer-keyboard-target" className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/40 shadow-[0_0_2px_2px_black]" style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%` }} />}
               {!previewLoaded && <span role="status" className="absolute inset-0 flex items-center justify-center text-sm text-white">{previewFailed ? 'Preview unavailable' : 'Loading screen…'}</span>}

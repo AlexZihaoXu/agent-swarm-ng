@@ -14,6 +14,8 @@ import { registerSwarmRoutes } from './swarm-routes';
 import { registerGroupRoutes } from './group-routes';
 import { registerReactionRoutes } from './reaction-routes';
 import { channelReply, channelReplyContext } from './reply-preview';
+import type { ComputerUseService } from './computer-use/service';
+import type { ScreenshotPool } from './computer-use/image-pool';
 
 const Thinking = Type.Union(Object.values(ThinkingLevel).map(value => Type.Literal(value)));
 const Selection = Type.Object({
@@ -44,10 +46,10 @@ function agentView(agent: NonNullable<Awaited<ReturnType<PlatformStore['findAgen
   return { id: agent.id, avatar: agent.avatar ? JSON.parse(agent.avatar) as AgentAvatar : null, createdAt: agent.createdAt.getTime(), name: agent.name, endpointId: agent.endpointId, model: agent.model, thinkingLevel: agent.thinkingLevel, channelId: channel.id, lastMessage: channel.messages[0] ? messageView(channel.messages[0]) : null };
 }
 
-export function registerChat(app: FastifyInstance, store = new EndpointStore(), database = new PlatformStore(), codex = new CodexProvider()) {
+export function registerChat(app: FastifyInstance, store = new EndpointStore(), database = new PlatformStore(), codex = new CodexProvider(), computers?: ComputerUseService, screenshots?: ScreenshotPool) {
   const runs = new AgentRuns();
   const streams = createRunStreams(runs);
-  const broker = new DmBroker(database, store, codex, runs);
+  const broker = new DmBroker(database, store, codex, runs, computers, screenshots);
   app.addHook('onListen', async () => { await broker.ready(); });
   const active = new Set<string>(); // Short preparation/deletion locks; inference belongs to runs.
   const preparing = new Map<string, { clientMessageId: string; controller: AbortController; finished: Promise<void> }>();
@@ -143,6 +145,8 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
       if (!agent) return reply.code(404).send({ message: 'Agent not found.' });
       if (request.body.confirmation !== agent.name) return reply.code(400).send({ message: 'Type the exact agent name to confirm deletion.' });
       await broker.beforeDelete(id);
+      await computers?.releaseAgent(id);
+      await screenshots?.removeAgent(id);
       if (!await database.deleteAgent(id, request.body.confirmation)) return reply.code(404).send({ message: 'Agent not found.' });
       runs.announce(''); // Agent deletion can change membership in several groups.
       return { deleted: true };

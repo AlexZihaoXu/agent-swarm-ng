@@ -11,6 +11,10 @@ import { ActivityEntrySchema } from './agent-activity';
 import { registerComputerRoutes } from './computer-routes';
 import { computerControllerFromEnv, type ComputerController } from './computer-controller-client';
 import { registerKnowledgeRoutes } from './swarm-knowledge/routes';
+import { ComputerUseService } from './computer-use/service';
+import { ScreenshotPool } from './computer-use/image-pool';
+import { registerComputerUseRoutes } from './computer-use/routes';
+import { join } from 'node:path';
 
 export async function buildApp({ fetcher, endpointStore, database, codex = new CodexProvider(), computerController }: { fetcher?: typeof fetch; endpointStore?: EndpointStore; database?: PlatformStore; codex?: CodexProvider; computerController?: ComputerController | null } = {}) {
   const app = Fastify({ logger: true });
@@ -28,8 +32,12 @@ export async function buildApp({ fetcher, endpointStore, database, codex = new C
 
   registerModelEndpoints(app, fetcher, endpointStore);
   registerCodex(app, codex);
-  registerChat(app, endpointStore, platform, codex);
-  registerComputerRoutes(app, platform, computerController === undefined ? computerControllerFromEnv() : computerController);
+  const controller = computerController === undefined ? computerControllerFromEnv() : computerController;
+  const computers = new ComputerUseService(platform, controller?.runtime ?? null);
+  const screenshots = new ScreenshotPool(join(platform.dataDirectory, 'computer-screenshots'));
+  registerChat(app, endpointStore, platform, codex, computers, screenshots);
+  registerComputerRoutes(app, platform, controller, computers);
+  registerComputerUseRoutes(app, computers, screenshots);
   registerKnowledgeRoutes(app);
 
   await app.ready();

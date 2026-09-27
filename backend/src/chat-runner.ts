@@ -12,6 +12,8 @@ export type InboxHooks = {
   prepare?: (messages: ChannelMessage[]) => Promise<ChannelMessage[]>;
   complete?: (messages: ChannelMessage[], failed: boolean) => Promise<void>;
   sessionStore?: AgentSessionStore;
+  notices?: string[];
+  noticesSaved?: () => Promise<void>;
 };
 
 export async function runChat({ runId, signal, emit, inbox }: RunContext, config: ChatConfiguration, history: ChannelMessage[], message: ChannelMessage,
@@ -71,6 +73,11 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
       publicationTyping.onEvent(event);
     });
     const main = session;
+    if (hooks.notices?.length) {
+      await main.sendCustomMessage({ customType: 'computer-release', display: false, content: `Computer control notices (platform state, not a new human request):\n${hooks.notices.join('\n')}` }, { triggerTurn: false });
+      await hooks.sessionStore?.save(channel.agentId, main.sessionManager, { advancePublications: false });
+      await hooks.noticesSaved?.();
+    }
     const lastAssistant = () => [...main.messages].reverse().find(item => item.role === 'assistant');
     while (inbox.hasPending() && !signal.aborted) {
       const batch = await inbox.take(signal);

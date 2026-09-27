@@ -35,6 +35,34 @@
       Object.defineProperty(window, 'sessionStorage', { value: storage(), configurable: false });
     })();
   </script>
+  <!-- Per-view input lock. Unlike a pointer overlay alone this also blocks
+       keyboard, touch, wheel and shortcut paths after iframe focus/reconnect. -->
+  <script>
+    (() => {
+      window.swarmDesktopInputEnabled = false;
+      const block = event => {
+        if (window.swarmDesktopInputEnabled) return;
+        event.preventDefault(); event.stopImmediatePropagation();
+      };
+      for (const kind of ['keydown','keyup','keypress','beforeinput','input','paste','pointerdown','pointerup','pointermove','mousedown','mouseup','mousemove','click','dblclick','contextmenu','wheel','touchstart','touchmove','touchend','dragstart','drop']) {
+        window.addEventListener(kind, block, { capture: true, passive: false });
+      }
+      window.addEventListener('message', event => {
+        if (event.origin !== location.origin || event.source !== window.parent ||
+            event.data?.type !== 'swarm:desktop-input' || typeof event.data.enabled !== 'boolean') return;
+        if (!event.data.enabled && window.swarmDesktopInputEnabled) {
+          const input = window.webrtcInput;
+          input?.resetKeyboard?.();
+          if (input?.buttonMask && typeof input.send === 'function') {
+            input.buttonMask = 0;
+            input.send(`m,${input.x ?? 0},${input.y ?? 0},0,0`);
+          }
+          document.activeElement?.blur?.();
+        }
+        window.swarmDesktopInputEnabled = event.data.enabled;
+      });
+    })();
+  </script>
   <!-- The trusted dashboard can request only these fixed guest key chords.
        Browser-reserved shortcuts cannot be captured on the insecure Tailnet
        HTTP origin; the menu provides an explicit alternative. No guest HTML
@@ -50,7 +78,7 @@
             event.data?.type !== 'swarm:desktop-shortcut' ||
             !Object.hasOwn(shortcuts, event.data.name)) return;
         const input = window.webrtcInput;
-        if (!input?.inputAttached || typeof input.send !== 'function') return;
+        if (!window.swarmDesktopInputEnabled || !input?.inputAttached || typeof input.send !== 'function') return;
         // X11 keysyms: Control_L=65507 and lowercase ASCII t/w/l/r/n.
         // Release both keys even if the target app closes its own tab.
         input.send('kd,65507');

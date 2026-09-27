@@ -19,6 +19,9 @@ import { ReactionCoordinator } from './reaction-coordinator';
 import { channelReply, groupReplyContext, dmReplyContext } from './reply-preview';
 import { AgentSessionStore } from './agent-session-store';
 import { SwarmKnowledgePlugin } from './swarm-knowledge/plugin';
+import type { ComputerUseService } from './computer-use/service';
+import type { ScreenshotPool } from './computer-use/image-pool';
+import { createComputerTools } from './computer-use/tools';
 
 type Job = { senderId: string; rootAgentId: string | null; chainId: string; run: ReturnType<AgentRuns['enqueue']>; cleanup: Promise<void> };
 /** Publishes once, then admits a source-labelled message to the recipient's normal inbox. */
@@ -35,13 +38,13 @@ export class DmBroker {
   private cancelling = new Map<string, Promise<void>>();
   private deleting = new Set<string>();
   private linked = new WeakSet<AbortSignal>();
-  constructor(private database: PlatformStore, private endpoints: EndpointStore, private codex: CodexProvider, private runs: AgentRuns) {
+  constructor(private database: PlatformStore, private endpoints: EndpointStore, private codex: CodexProvider, private runs: AgentRuns, private computers?: ComputerUseService, private screenshots?: ScreenshotPool) {
     this.store = new SwarmStore(database); this.groups = new GroupStore(database); this.reactions = new ReactionStore(database); this.sessions = new AgentSessionStore(database);
     this.knowledge = new SwarmKnowledgePlugin(database);
     this.reactionCoordinator = new ReactionCoordinator(database, endpoints, codex, runs, (agentId, input, context) => this.runInbox(agentId, input, context));
   }
   notifyHumanReaction(channelId: string, messageId: string, emoji: string) { return this.reactionCoordinator.offer(channelId, messageId, emoji); }
-  ready() { return this.starting ??= this.store.cancelInterruptedDeliveries(); }
+  ready() { return this.starting ??= Promise.all([this.store.cancelInterruptedDeliveries(), this.computers?.ready()]).then(() => {}); }
   async send(senderId: string, recipientId: string, text: string, callId: string, context: RunContext, inheritedChain?: string, replyToId?: string): Promise<DmReceipt> {
     context.signal.throwIfAborted();
     if (this.closing || this.deleting.has(senderId) || this.deleting.has(recipientId)) throw new Error('DM delivery is unavailable.');
@@ -151,6 +154,8 @@ ${preview.text}` : preview.text, timestamp: message.createdAt.getTime(), replyTo
     let sources: AgentMessageSource[] = incoming.source ? [incoming.source] : [];
     const chainFor = (recipientId: string) => humanBatch ? undefined : sources.find(source => source.agentId === recipientId)?.chainId ?? inherited;
     const peerTools = createDmTools(this.store, agentId, (recipientId, text, callId, replyToId) => this.send(agentId, recipientId, text, callId, context, chainFor(recipientId), replyToId));
+    const computerTools = this.computers && this.screenshots ? createComputerTools(this.computers, this.screenshots, agentId) : [];
+    const notices = await this.computers?.notices(agentId) ?? [];
     await runChat(context, {
       name: agent.name, model: agent.model, thinkingLevel: agent.thinkingLevel, baseUrl: connection.baseUrl, apiKey: connection.apiKey, channel,
       publishPeer: async (channelId, text, callId, replyToId) => {
@@ -163,8 +168,10 @@ ${preview.text}` : preview.text, timestamp: message.createdAt.getTime(), replyTo
       if (!humanAuthority) throw new Error('Reply to the input’s explicit group or agent-thread channel, not the private human channel.');
       const message = await this.database.appendMessage(channel.id, 'assistant', text, crypto.randomUUID(), replyToId);
       return { id: message.id, sequence: message.sequence, channelId: channel.id, role: message.role, text, timestamp: message.createdAt.getTime(), replyTo: channelReply(message) };
-    }, connection.accessKey, connection.subscriptionRuntime, [...createChatHistoryTools(this.database, channel, agent.name), ...peerTools, ...createGroupTools(this.groups, this.store, channel, () => humanAuthority), ...createReactionTools(this.reactions, channel, () => humanAuthority, (channelId, messageId) => this.runs.reactionsChanged(channelId, messageId)), ...this.knowledge.toolsFor(agentId)], {
+    }, connection.accessKey, connection.subscriptionRuntime, [...createChatHistoryTools(this.database, channel, agent.name), ...peerTools, ...createGroupTools(this.groups, this.store, channel, () => humanAuthority), ...createReactionTools(this.reactions, channel, () => humanAuthority, (channelId, messageId) => this.runs.reactionsChanged(channelId, messageId)), ...this.knowledge.toolsFor(agentId), ...computerTools], {
       sessionStore: this.sessions,
+      notices: notices.map(notice => notice.text),
+      noticesSaved: () => this.computers?.acknowledgeNotices(agentId, notices.map(notice => notice.id)) ?? Promise.resolve(),
       prepare: async messages => {
         const admitted: ChannelMessage[] = [];
         for (const message of messages) {

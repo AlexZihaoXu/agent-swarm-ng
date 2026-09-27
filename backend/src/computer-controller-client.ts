@@ -1,4 +1,6 @@
 import type { ComputerSettings } from './computer-store';
+import { HttpComputerRuntime } from './computer-use/runtime-client';
+import type { ComputerRuntime } from './computer-use/service';
 
 export type ComputerObservation = { status: string; cpuPercent: number | null; memoryBytes: number | null; memoryLimitBytes: number | null; cpuCount: number | null };
 export type ComputerLimits = {
@@ -8,6 +10,7 @@ export type ComputerLimits = {
 };
 
 export interface ComputerController {
+  readonly runtime?: ComputerRuntime;
   limits(): Promise<ComputerLimits>;
   create(id: string, name: string, settings: ComputerSettings): Promise<void>;
   remove(id: string, name: string): Promise<void>;
@@ -22,7 +25,8 @@ export interface ComputerController {
 
 /** Internal controller only; the browser cannot choose its Docker endpoint. */
 export class HttpComputerController implements ComputerController {
-  constructor(private readonly baseUrl: string, private readonly fetcher: typeof fetch = fetch) {}
+  readonly runtime: HttpComputerRuntime;
+  constructor(private readonly baseUrl: string, private readonly fetcher: typeof fetch = fetch) { this.runtime = new HttpComputerRuntime(baseUrl, fetcher); }
 
   private async request(path: string, init: RequestInit = {}, timeout = 10_000) {
     const response = await this.fetcher(new URL(path, this.baseUrl), {

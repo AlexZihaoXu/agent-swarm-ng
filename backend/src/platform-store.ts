@@ -1,6 +1,7 @@
 import { PrismaClient, type Prisma } from './generated/prisma/client';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
-import { databaseUrl } from './database-location';
+import { databaseUrl, databaseFile } from './database-location';
+import { dirname } from 'node:path';
 import { messageText } from './message-text';
 import { encodeAvatar, type AgentAvatar } from './agent-avatar';
 import { channelReplyContext } from './reply-preview';
@@ -13,7 +14,11 @@ type AgentInput = Pick<Prisma.AgentCreateInput, 'name' | 'endpointId' | 'model' 
 export class PlatformStore {
   readonly client: PrismaClient;
   private initialized?: Promise<void>;
-  constructor(url = databaseUrl()) { this.client = new PrismaClient({ adapter: new PrismaLibSql({ url }) }); }
+  readonly dataDirectory: string;
+  constructor(url = databaseUrl()) {
+    this.dataDirectory = dirname(databaseFile(url));
+    this.client = new PrismaClient({ adapter: new PrismaLibSql({ url }) });
+  }
 
   initialize() {
     return this.initialized ??= (async () => {
