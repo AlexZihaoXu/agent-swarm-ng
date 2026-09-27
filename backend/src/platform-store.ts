@@ -49,6 +49,10 @@ export class PlatformStore {
     const agent = await this.client.agent.findUnique({ where: { id }, include: agentSelection });
     return agent ? this.withLatestMessage(agent) : null;
   }
+  async hasAgent(id: string) {
+    await this.initialize();
+    return Boolean(await this.client.agent.findUnique({ where: { id }, select: { id: true } }));
+  }
   private async withLatestMessage(agent: StoredAgent) {
     // Prisma nested take across multiple parents reads all matching SQLite rows, then trims in memory.
     // Use bounded indexed lookups instead, so listing cards never loads entire conversations.

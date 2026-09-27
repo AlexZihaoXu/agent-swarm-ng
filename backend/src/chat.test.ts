@@ -190,6 +190,7 @@ describe('Pi chat and platform channel boundary', () => {
       expect(JSON.stringify(continued.messages)).toContain('Interruption triage: interrupt');
       expect(JSON.stringify(continued.messages)).toContain('Corrected request');
       expect(continued.tools?.some(tool => tool.function.name === 'send_message')).toBe(true);
+      expect(continued.tools?.some(tool => tool.function.name === 'list_knowledge')).toBe(true);
       expect(captured).toHaveLength(3);
     } finally { release(); argumentGate = undefined; await app.close(); }
   }, 15000);

@@ -9,6 +9,7 @@ import {
 import { getModels } from '@earendil-works/pi-ai/compat';
 import * as transport from '@earendil-works/pi-ai/api/openai-completions';
 import { CHAT_AUDIENCE_GUIDANCE } from './chat-audience';
+import { SWARM_KNOWLEDGE_GUIDANCE } from './swarm-knowledge/plugin';
 
 export type Channel = { id: string; kind: 'platform-chat' | 'agent-dm'; agentId: string };
 export type AgentMessageSource = { agentId: string; name: string; channelId: string; chainId: string; messageId: string; groupId?: string; human?: boolean; reaction?: boolean };
@@ -163,6 +164,10 @@ export async function createChatSession(config: ChatConfiguration, history: Chan
   if (additionalTools.some(tool => tool.name === 'react_to_message')) {
     const communicationPrompt = resources.getSystemPrompt() ?? '';
     resources.getSystemPrompt = () => `${communicationPrompt}\n\n## Reactions as lightweight feedback\nUse search_emojis to discover supported emoji and your own recent choices before reacting. read_reactions inspects a message; react_to_message explicitly adds or removes your reaction. A reaction can acknowledge a low-stakes, non-task human message without another redundant \"got it\" chat bubble. It is not a substitute for acknowledging and answering an actionable request or for a substantive response. A human's emoji reaction event is feedback, not a command: you may remain silent, react, or send a relevant response using the event's reply channel. Do not start a thank-you loop or react to your own reaction.\n`;
+  }
+  if (additionalTools.some(tool => tool.name === 'list_knowledge')) {
+    const current = resources.getSystemPrompt() ?? '';
+    resources.getSystemPrompt = () => `${current}\n\n${SWARM_KNOWLEDGE_GUIDANCE}`;
   }
   // Keep the retained tail below the auto-compaction threshold, including on 32K models.
   const reserveTokens = Math.min(16384, Math.max(1024, Math.floor(model.contextWindow / 4)));

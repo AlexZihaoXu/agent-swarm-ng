@@ -76,7 +76,10 @@ it('delivers human and agent group messages through the normal inbox without DM 
     const b = f.captured.find(body => String(body.messages[0]?.content).startsWith('You are B.'))!;
     expect(JSON.stringify(a)).toContain('PRIVATE HUMAN A'); expect(JSON.stringify(a)).not.toContain('PRIVATE HUMAN B');
     expect(JSON.stringify(b)).toContain('PRIVATE HUMAN B'); expect(JSON.stringify(b)).not.toContain('PRIVATE HUMAN A');
-    expect(a.tools?.map(tool => tool.function.name)).toEqual(expect.arrayContaining(['list_chats', 'read_group_messages', 'search_group_messages']));
+    expect(a.tools?.map(tool => tool.function.name)).toEqual(expect.arrayContaining(['list_chats', 'read_group_messages', 'search_group_messages', 'list_knowledge', 'search_knowledge', 'read_knowledge']));
+    expect(b.tools?.map(tool => tool.function.name)).toEqual(expect.arrayContaining(['list_knowledge', 'search_knowledge', 'read_knowledge']));
+    expect(String(a.messages[0]?.content)).toContain('acknowledge');
+    expect(String(a.messages[0]?.content)).toContain('read relevant Swarm Knowledge before substantive work');
     expect(String(a.messages[0]?.content)).toContain('focused assignment');
     expect(JSON.stringify(a.messages)).toContain('Source is the human owner');
     const captured = f.captured.length;
