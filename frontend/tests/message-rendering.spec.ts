@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures';
 
 async function send(page: Page, text: string) {
-  await page.goto('/');
+  await page.goto('/chat/agents/avery');
   await page.getByLabel('Message Avery').fill(text);
   await page.getByRole('button', { name: 'Send message' }).click();
   const messages = page.getByRole('list', { name: 'Messages' }).locator(':scope > li');
@@ -24,7 +24,7 @@ test('renders Markdown formatting, lists, quotes, tables, and chat line breaks',
   await expect(message.getByRole('link', { name: 'Example' })).toHaveAttribute('rel', 'noopener noreferrer');
 });
 
-test('agent cards render compact Markdown without exposing spoilers or nesting controls', async ({ page }) => {
+test('chat list cards render compact Markdown without exposing spoilers or nesting controls', async ({ page }) => {
   await send(page, '**Bold preview** *italic* ~~removed~~ `inline` [Link](https://example.com) ||CARD SECRET||\n\n```cpp\nint main() {}\n```\n\n- [x] Done');
   const row = page.getByRole('button', { name: 'Open conversation with Avery' });
   const preview = row.locator('[data-slot="swap-text"]').last();
@@ -82,7 +82,7 @@ test('does not execute HTML, dangerous links, or automatically fetch remote imag
 
 test('long code and tables scroll inside the message on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/chat');
   await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
   const text = '```text\n' + 'long-code-'.repeat(80) + '\n```\n\n| First | Second |\n| --- | --- |\n| ' + 'long-cell-'.repeat(60) + ' | Value |';
   await page.getByLabel('Message Avery').fill(text);

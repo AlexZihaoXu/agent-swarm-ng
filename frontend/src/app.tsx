@@ -5,6 +5,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentPanel } from '@/components/agent-panel';
+import { EditAgentForm } from '@/components/edit-agent-form';
 import { AgentAvatar, AgentName } from '@/components/chat-identity';
 import { cn } from '@/lib/utils';
 import { useChat, type ChatAgent } from '@/use-chat';
@@ -90,6 +91,10 @@ export function App() {
     if (!route.agentId || agents.some(item => item.id === route.agentId) || agentsLoading || agentsFailed || agentsCursor === null) return;
     void loadAgents(agentsCursor);
   }, [route.agentId, agents, agentsLoading, agentsFailed, agentsCursor]);
+  // Old Agents peer bookmarks now open their conversation in Chat.
+  useEffect(() => {
+    if (route.kind === 'agent-dm' && route.agentId && route.peerId) navigate(chatAgentDmPath(route.agentId, route.peerId), { replace: true });
+  }, [route.kind, route.agentId, route.peerId, navigate]);
   useGroupEvents();
   const deletedGroup = useRef('');
   useEffect(() => {
@@ -230,7 +235,7 @@ export function App() {
         </header>}
 
         <Tabs.Content value={activeTab === 'chat' ? 'chat' : 'agents'} className="min-h-0 flex-1 outline-none data-[state=active]:flex">
-          {activeTab === 'chat' ? <ChatPanel route={route} onNavigate={navigate} agents={agents} conversations={conversations} busy={busy} typingIn={typingIn} selectedAgent={agent.id} selectedGroup={selectedGroup} mobile={mobileConversation} agentsLoading={agentsLoading} agentsFailed={agentsFailed} agentsCursor={agentsCursor} loadAgents={loadAgents} onAgent={(id, real) => { if (real && !agents.some(agent => agent.id === id)) addAgent(real, false); navigate(chatAgentPath(id)); }} onViewAgent={(id, real) => { if (real && !agents.some(agent => agent.id === id)) addAgent(real, false); navigate(agentPath(id)); }} onGroup={group => { navigate(chatGroupPath(group.id)); setActivityOpen(false); }}  /> : <AgentPanel agents={agents} route={route} onNavigate={navigate} onDeleted={() => { focusAgentsAfterDelete.current = true; navigate('/agents'); }} onEditAvatar={editAvatar} onDelete={async (target, confirmation) => {
+          {activeTab === 'chat' ? <ChatPanel route={route} onNavigate={navigate} agents={agents} conversations={conversations} busy={busy} typingIn={typingIn} selectedAgent={agent.id} selectedGroup={selectedGroup} mobile={mobileConversation} agentsLoading={agentsLoading} agentsFailed={agentsFailed} agentsCursor={agentsCursor} loadAgents={loadAgents} onAgent={(id, real) => { if (real && !agents.some(agent => agent.id === id)) addAgent(real, false); navigate(chatAgentPath(id)); }} onViewAgent={(id, real) => { if (real && !agents.some(agent => agent.id === id)) addAgent(real, false); navigate(agentPath(id)); }} onGroup={group => { navigate(chatGroupPath(group.id)); setActivityOpen(false); }}  /> : <AgentPanel agents={agents} route={route} onNavigate={navigate} onDeleted={() => { focusAgentsAfterDelete.current = true; navigate('/agents'); }} onDelete={async (target, confirmation) => {
             await deleteAgent(target, confirmation);
             setReplyTargets(current => { const next = { ...current }; delete next[target.channelId]; return next; });
             if (agent.id === target.id) setActivityOpen(false);
@@ -255,7 +260,7 @@ export function App() {
                     <button
                       type="button"
                       data-agent-id={item.id}
-                      aria-label={`Open conversation with ${item.name}`}
+                      aria-label={`Open settings for ${item.name}`}
                       aria-current={item.id === agent.id ? 'true' : undefined}
                       onClick={() => navigate(agentPath(item.id))}
                       className={cn(
@@ -284,13 +289,16 @@ export function App() {
             </div>
           </AgentPanel>}
 
-          {activeTab === 'chat' && selectedGroup ? <GroupConversation key={selectedGroup} groupId={selectedGroup} modal={route.kind === 'group-edit' ? 'edit' : route.kind === 'group-delete' ? 'delete' : null} returnTo={location.state?.returnTo === '/chat' ? '/chat' : chatGroupPath(selectedGroup)} onNavigate={navigate} mobile={mobileConversation} onBack={() => navigate('/chat')} draft={drafts[`group:${selectedGroup}`] ?? ''} onDraft={text => setDraft(`group:${selectedGroup}`, text)} typingIn={typingIn} /> : agents.length > 0 ? <section aria-label={`Conversation with ${agent.name}`} className={cn(
+          {activeTab === 'agents' ? (agent.id && route.kind !== 'agent-dm' && route.kind !== 'agent-new' && route.kind !== 'agent-delete'
+            ? <EditAgentForm key={agent.id} agent={agent} route={route} mobile={mobileConversation} onNavigate={navigate} onSave={editAvatar} onBack={() => { focusAgentsAfterDelete.current = true; navigate('/agents'); }} />
+            : <section aria-label="No agent selected" className="hidden min-w-0 flex-1 items-center justify-center p-6 text-sm text-muted-foreground md:flex">Select or create an agent to configure.</section>)
+            : selectedGroup ? <GroupConversation key={selectedGroup} groupId={selectedGroup} modal={route.kind === 'group-edit' ? 'edit' : route.kind === 'group-delete' ? 'delete' : null} returnTo={location.state?.returnTo === '/chat' ? '/chat' : chatGroupPath(selectedGroup)} onNavigate={navigate} mobile={mobileConversation} onBack={() => navigate('/chat')} draft={drafts[`group:${selectedGroup}`] ?? ''} onDraft={text => setDraft(`group:${selectedGroup}`, text)} typingIn={typingIn} /> : agents.length > 0 ? <section aria-label={`Conversation with ${agent.name}`} className={cn(
             'phone-detail-enter min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none md:flex',
             activityOpen && 'lg:mr-96',
             mobileConversation ? 'flex' : 'hidden',
           )}>
             <header className="flex min-h-11 shrink-0 flex-nowrap items-center gap-x-1 border-b border-border px-4 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] md:flex-wrap md:gap-x-2 md:gap-y-1.5">
-              {isPhone ? <button type="button" aria-label={activeTab === 'chat' ? 'Back to chats' : 'Back to agents'} title={activeTab === 'chat' ? 'Back to chats' : 'Back to agents'} onClick={() => navigate(activeTab === 'chat' ? '/chat' : '/agents')} className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-1 overflow-hidden text-left outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"><AgentAvatar initials={agent.initials} avatar={agent.avatar} ready={Boolean(agent.real)} typing={selfTyping} working={busy[agent.channelId]} /><span role="heading" aria-level={2} className="min-w-0 truncate text-sm font-semibold" title={agent.name}>{agent.name}</span></button> : <>
+              {isPhone ? <button type="button" aria-label="Back to chats" title="Back to chats" onClick={() => navigate('/chat')} className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-1 overflow-hidden text-left outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"><AgentAvatar initials={agent.initials} avatar={agent.avatar} ready={Boolean(agent.real)} typing={selfTyping} working={busy[agent.channelId]} /><span role="heading" aria-level={2} className="min-w-0 truncate text-sm font-semibold" title={agent.name}>{agent.name}</span></button> : <>
                 <AgentAvatar initials={agent.initials} avatar={agent.avatar} ready={Boolean(agent.real)} typing={selfTyping} working={busy[agent.channelId]} />
                 <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-[1_1_9rem]">
                   {conversationPeer !== 'you' && peer ? <><AgentName name={agent.name} /><AgentExchangeIcon /><AgentAvatar initials={peer.name.slice(0, 2).toUpperCase()} avatar={peer.avatar ?? defaultAvatar(peer.id)} ready={Boolean(peer)} working={busy[peerChannel]} typing={peerTyping} /><span className="min-w-0 truncate text-sm font-semibold" title={peer.name}>{peer.name}</span></> : <AgentName name={agent.name} />}

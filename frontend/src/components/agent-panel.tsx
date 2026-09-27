@@ -4,18 +4,15 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CreateAgentForm } from '@/components/create-agent-form';
 import { DeleteAgentForm } from '@/components/delete-agent-form';
-import { EditAgentForm } from '@/components/edit-agent-form';
-import type { AvatarAppearance } from '@/lib/agent-avatar';
 import type { ChatAgent, RealAgent } from '@/use-chat';
 import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
 
 // Compositions: Kibo context-menu/standard/context-menu-standard-1 and dialog/standard/dialog-standard-1.
-export function AgentPanel({ children, className, agents, route, onNavigate, onDeleted, onCreated, onDelete, onEditAvatar }: { children: ReactNode; className: string; agents: ChatAgent[]; route: DashboardRoute; onNavigate: (path: string) => void; onDeleted: () => void; onCreated: (agent: RealAgent) => void; onDelete: (agent: ChatAgent, confirmation: string) => Promise<void>; onEditAvatar: (agent: ChatAgent, avatar: AvatarAppearance, allowedDmAgentIds: string[]) => Promise<void> }) {
+export function AgentPanel({ children, className, agents, route, onNavigate, onDeleted, onCreated, onDelete }: { children: ReactNode; className: string; agents: ChatAgent[]; route: DashboardRoute; onNavigate: (path: string) => void; onDeleted: () => void; onCreated: (agent: RealAgent) => void; onDelete: (agent: ChatAgent, confirmation: string) => Promise<void> }) {
   const [contextAgent, setContextAgent] = useState<ChatAgent | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const editingAgent = route.kind === 'agent-edit' ? agents.find(item => item.id === route.agentId) : undefined;
   const deletingAgent = route.kind === 'agent-delete' ? agents.find(item => item.id === route.agentId) : undefined;
-  const dialogOpen = route.kind === 'agent-new' || Boolean(editingAgent || deletingAgent);
+  const dialogOpen = route.kind === 'agent-new' || Boolean(deletingAgent);
   const close = () => onNavigate(route.agentId && !window.matchMedia('(max-width: 767px)').matches ? agentPath(route.agentId) : '/agents');
   const panelRef = useRef<HTMLElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -57,10 +54,6 @@ export function AgentPanel({ children, className, agents, route, onNavigate, onD
               <span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center text-lg leading-none text-muted-foreground">+</span>
               Create new agent
             </ContextMenu.Item>
-            {contextAgent && <ContextMenu.Item onSelect={() => onNavigate(`${agentPath(contextAgent.id)}/edit/avatar`)} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted">
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="size-4"><path d="m15 5 4 4M5 15 16 4a2.8 2.8 0 0 1 4 4L9 19l-5 1z" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              Edit agent
-            </ContextMenu.Item>}
             {contextAgent && <ContextMenu.Item onSelect={() => onNavigate(`${agentPath(contextAgent.id)}/delete`)} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-red-400 outline-none data-[highlighted]:bg-muted">
               <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="size-4 shrink-0"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6m4-6v6" /></svg>
               Delete agent
@@ -80,11 +73,11 @@ export function AgentPanel({ children, className, agents, route, onNavigate, onD
             else panelRef.current?.focus();
           }}
         >
-          {editingAgent ? <EditAgentForm key={editingAgent.id} agent={editingAgent} route={route} onNavigate={onNavigate} onSave={onEditAvatar} onDone={close} onBusyChange={setDeleting} /> : <ScrollArea label="Agent editor" viewportTabIndex={-1} viewportClassName="max-h-[calc(90dvh-1rem)] [&>div]:!block"><div className="p-4">
-          {deletingAgent
-            ? <DeleteAgentForm key={deletingAgent.id} agent={deletingAgent} onDelete={onDelete} onBusyChange={setDeleting} onDone={onDeleted} />
-            : <CreateAgentForm onCreated={onCreated} /> }
-          </div></ScrollArea>}
+          <ScrollArea label="Agent editor" viewportTabIndex={-1} viewportClassName="max-h-[calc(90dvh-1rem)] [&>div]:!block"><div className="p-4">
+            {deletingAgent
+              ? <DeleteAgentForm key={deletingAgent.id} agent={deletingAgent} onDelete={onDelete} onBusyChange={setDeleting} onDone={onDeleted} />
+              : <CreateAgentForm onCreated={onCreated} />}
+          </div></ScrollArea>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

@@ -14,7 +14,7 @@ test('restores paginated history and preserves the reading position when older m
     const rows = messages.filter(row => row.sequence < before).slice(-50);
     return route.fulfill({ json: { messages: rows, nextCursor: rows[0].sequence > 1 ? rows[0].sequence : null } });
   });
-  await page.goto('/');
+  await page.goto('/chat/agents/avery');
   const row = page.getByRole('button', { name: 'Open conversation with Saved agent' });
   await expect(row).toContainText('Saved message 120');
   await row.click();
@@ -47,13 +47,14 @@ test('agent pages and history failures can be retried without duplicate cards or
   await page.route('**/api/channels/saved-channel/messages*', route => failHistory
     ? route.fulfill({ status: 503, json: { message: 'Unavailable' } })
     : route.fulfill({ json: { messages: messages.slice(-1), nextCursor: null } }));
-  await page.goto('/');
+  await page.goto('/agents');
   await expect(page.getByRole('button', { name: 'Retry loading agents' })).toBeVisible();
   failAgents = false;
   await page.getByRole('button', { name: 'Retry loading agents' }).click();
   await page.getByRole('button', { name: 'Load more agents' }).click();
-  await expect(page.getByRole('button', { name: 'Open conversation with Second saved agent' })).toHaveCount(1);
-  await page.getByRole('button', { name: 'Open conversation with Saved agent', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Open settings for Second saved agent' })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Open settings for Saved agent', exact: true }).click();
+  await page.getByRole('tablist', { name: 'Main navigation' }).getByRole('tab', { name: 'Chat' }).click();
   await expect(page.getByRole('button', { name: 'Retry loading messages' })).toBeVisible();
   await page.getByLabel('Message Saved agent').fill('Draft');
   await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();

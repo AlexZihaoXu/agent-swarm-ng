@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
 test('private replies retain their draft, follow the selected message and clear only after acknowledgment', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/chat/agents/avery');
   const bubble = page.locator('[data-message-id="avery-0"]');
   await bubble.focus(); await page.keyboard.press('Shift+F10');
   await page.getByRole('menuitem', { name: 'Reply' }).click();
@@ -27,7 +27,7 @@ test('private replies retain their draft, follow the selected message and clear 
 });
 
 test('unsent reply targets stay with their conversation rather than leaking to another chat', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/chat/agents/avery');
   await page.locator('[data-message-id="avery-0"]').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Reply' }).click();
   await page.getByRole('button', { name: 'Open conversation with Morgan' }).click();
@@ -54,7 +54,7 @@ test('group reply preview and target survive a failed send, then publish exactly
     messages.push(message); group.lastMessage = message;
     return route.fulfill({ status: 202, json: { message, duplicate: false } });
   });
-  await page.goto('/'); await page.getByRole('tab', { name: 'Chat' }).click();
+  await page.goto('/chat/agents/avery');
   await page.getByRole('button', { name: 'Open group chat Team' }).click();
   const content = page.getByText('Earlier group topic', { exact: true });
   await content.click({ button: 'right' });
@@ -80,7 +80,7 @@ test.describe('touch reply', () => {
   test.use({ hasTouch: true });
   test('long-press Reply opens the same composer banner on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/');
+    await page.goto('/chat');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
     const bubble = page.locator('[data-message-id="avery-0"]');
     await bubble.dispatchEvent('pointerdown', { pointerType: 'touch', button: 0 });

@@ -4,17 +4,17 @@ import { test, expect } from './fixtures';
 test('main tabs and selected agent survive refresh and browser history', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveURL(/\/agents\/avery$/);
-  await page.getByRole('button', { name: 'Open conversation with Morgan' }).click();
+  await page.getByRole('button', { name: 'Open settings for Morgan' }).click();
   await expect(page).toHaveURL(/\/agents\/morgan$/);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Morgan', exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: 'Settings' }).click();
+  await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
+  await page.getByRole('tablist', { name: 'Main navigation' }).getByRole('tab', { name: 'Settings' }).click();
   await expect(page).toHaveURL(/\/settings$/);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/agents\/morgan$/);
-  await expect(page.getByRole('heading', { name: 'Morgan', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
 });
 
 test('switching Agents and Chat keeps the selected agent on desktop but shows lists on phones', async ({ page }) => {
@@ -50,24 +50,25 @@ test('Settings endpoint editor can be bookmarked without placing unsaved keys in
 test('phone agent location and agent-to-agent conversation restore from a direct path', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/agents/morgan');
-  await expect(page.getByLabel('Message Morgan')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel('Message Morgan')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
   await page.getByRole('button', { name: 'Back to agents' }).click();
   await expect(page).toHaveURL(/\/agents$/);
   await expect(page.getByRole('complementary', { name: 'Agents' })).toBeVisible();
   await page.goBack();
-  await expect(page.getByLabel('Message Morgan')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
 });
 
 test('agent-to-agent DM deep link survives a reload without choosing another peer', async ({ page }) => {
   await page.goto('/agents/avery/dm/morgan');
+  await expect(page).toHaveURL(/\/chat\/agents\/avery\/dm\/morgan$/);
   await expect(page.getByRole('region', { name: 'Agent conversation with Morgan' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('region', { name: 'Agent conversation with Morgan' })).toBeVisible();
   await page.getByRole('combobox', { name: 'Chat with' }).click();
   await page.getByRole('option', { name: 'You', exact: true }).click();
-  await expect(page).toHaveURL(/\/agents\/avery$/);
+  await expect(page).toHaveURL(/\/chat\/agents\/avery$/);
   await page.goBack();
   await expect(page.getByRole('region', { name: 'Agent conversation with Morgan' })).toBeVisible();
 });
@@ -94,11 +95,10 @@ test('computer viewer path restores after reload and Back returns to the grid', 
 });
 
 test('agent editor sections and DM preview have refreshable paths', async ({ page }) => {
-  await page.goto('/agents/morgan');
-  await page.getByRole('button', { name: 'Open conversation with Morgan' }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Edit agent' }).click();
-  await expect(page).toHaveURL(/\/agents\/morgan\/edit\/avatar$/);
-  await page.getByRole('tab', { name: 'Settings', exact: true }).last().click();
+  await page.goto('/agents/morgan/edit/avatar');
+  const editor = page.getByRole('region', { name: 'Settings for Morgan' });
+  await expect(editor).toBeVisible();
+  await editor.getByRole('tab', { name: 'Settings', exact: true }).click();
   await expect(page).toHaveURL(/\/agents\/morgan\/edit\/settings\/channels$/);
   await page.goBack();
   await expect(page).toHaveURL(/\/agents\/morgan\/edit\/avatar$/);
@@ -107,18 +107,18 @@ test('agent editor sections and DM preview have refreshable paths', async ({ pag
   await page.getByRole('button', { name: /Swarm App.*Agent-to-agent direct messages/ }).click();
   await expect(page).toHaveURL(/\/agents\/morgan\/edit\/settings\/channels\/swarm$/);
   await page.reload();
-  await expect(page.getByRole('dialog', { name: 'Edit agent' })).toBeVisible();
+  await expect(editor).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Allowed DMs' })).toBeVisible();
   await page.getByRole('button', { name: 'View DM with Avery' }).click();
   await expect(page).toHaveURL(/\/agents\/morgan\/edit\/settings\/channels\/swarm\/dm\/avery$/);
   await page.reload();
-  await expect(page.getByRole('dialog', { name: 'Edit agent' })).toBeVisible();
+  await expect(editor).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/agents\/morgan\/edit\/settings\/channels\/swarm$/);
   await page.goForward();
   await expect(page).toHaveURL(/\/agents\/morgan\/edit\/settings\/channels\/swarm\/dm\/avery$/);
-  await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page).toHaveURL(/\/agents\/morgan$/);
+  await editor.getByRole('button', { name: 'Discard changes' }).click();
+  await expect(editor).toBeVisible();
 });
 
 test('agent create and delete dialogs reopen by path without preserving destructive text', async ({ page }) => {
@@ -159,7 +159,7 @@ test('computer create and delete dialogs can reopen by path without restoring co
   await expect(page).toHaveURL(/\/computers$/);
 });
 
-test('a deep-linked agent outside the first saved page loads before showing a conversation', async ({ page }) => {
+test('a deep-linked agent outside the first saved page loads before showing settings', async ({ page }) => {
   const agent = { id: 'late-agent', name: 'Late agent', channelId: 'late-channel', createdAt: Date.now(), lastMessage: null };
   const requests: string[] = [];
   await page.route(/\/api\/agents(?:\?.*)?$/, route => {
@@ -169,8 +169,8 @@ test('a deep-linked agent outside the first saved page loads before showing a co
   });
   await page.route('**/api/channels/late-channel/messages*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));
   await page.goto('/agents/late-agent');
-  await expect(page.getByRole('heading', { name: 'Avery', exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('Message Late agent')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Settings for Avery' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Settings for Late agent' })).toBeVisible();
   expect(requests).toContain('1');
   await expect(page).toHaveURL(/\/agents\/late-agent$/);
 });

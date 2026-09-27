@@ -82,12 +82,11 @@ test('phone agent creation and editing expose reachable form and permission cont
   expect((await size(page.getByRole('button', { name: 'Randomize' }))).height).toBeGreaterThanOrEqual(44);
   expect((await size(page.getByLabel('Avatar color'))).height).toBeGreaterThanOrEqual(44);
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
-  await page.getByRole('button', { name: 'Open conversation with Avery' }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Edit agent' }).click();
-  await expect(page.getByRole('dialog', { name: 'Edit agent' })).toBeVisible();
-  expect((await size(page.getByRole('tab', { name: 'Settings' }).last())).height).toBeGreaterThanOrEqual(44);
-  await page.getByRole('dialog').getByRole('tab', { name: 'Settings' }).click();
-  await page.getByRole('button', { name: /Swarm App/ }).click();
+  await page.getByRole('button', { name: 'Open settings for Avery' }).click();
+  const editor = page.getByRole('region', { name: 'Settings for Avery' });
+  await expect(editor).toBeVisible();
+  expect((await size(editor.getByRole('tab', { name: 'Settings' }))).height).toBeGreaterThanOrEqual(44);
+  await editor.getByRole('button', { name: /Swarm App/ }).click();
   await expect(page.getByLabel('Find agents')).toHaveCSS('font-size', '16px');
   expect((await size(page.getByRole('button', { name: 'Save changes' }))).height).toBeGreaterThanOrEqual(44);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
@@ -96,7 +95,7 @@ test('phone agent creation and editing expose reachable form and permission cont
 test('phone emoji picker keeps its search and choices finger-sized', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 640 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/chat');
   await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
   await page.locator('[data-message-id="avery-0"]').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Add reaction' }).click();

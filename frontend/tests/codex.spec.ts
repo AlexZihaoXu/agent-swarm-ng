@@ -48,5 +48,5 @@ test('connected Codex is available for agent creation without an API endpoint', 
   await page.getByRole('option', { name: 'test-codex', exact: true }).click();
   await expect(page.getByLabel('Thinking level')).toContainText('Medium');
   await page.getByRole('button', { name: 'Create agent', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Codex agent', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Settings for Codex agent' })).toBeVisible();
 });

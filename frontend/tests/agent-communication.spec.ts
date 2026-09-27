@@ -1,10 +1,10 @@
 import { test, expect, type Page } from './fixtures';
 import { sampleAgents } from './sample-agents';
 async function openEditor(page: Page) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open conversation with Avery' }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Edit agent', exact: true }).click();
-  return page.getByRole('dialog');
+  await page.goto('/agents/avery');
+  const settings = page.getByRole('region', { name: 'Settings for Avery' });
+  await expect(settings).toBeVisible();
+  return settings;
 }
 async function mockDmPeers(page: Page, ids: string[] = ['morgan']) {
   await page.route('**/api/agents/avery/dm-peers*', route => route.fulfill({ json: { peers: sampleAgents.filter(agent => ids.includes(agent.id)).map(agent => ({ id: agent.id, name: agent.name, avatar: agent.avatar ?? null, channelId: agent.channelId })), nextCursor: null } }));
@@ -16,6 +16,7 @@ test('keeps appearance and permission drafts across fixed tabs, drill-down, tran
   await page.route('**/api/agents/avery/dms/morgan*', route => route.fulfill({ json: new URL(route.request().url()).searchParams.has('before') ? { messages: [{ ...peerMessage, id: 'older', sequence: 1, text: 'Earlier peer context' }], nextCursor: null } : { messages: live, nextCursor: 2 } }));
   const dialog = await openEditor(page);
   await expect(dialog.getByRole('button', { name: 'Avatar', exact: true })).toHaveCount(0);
+  await dialog.getByRole('tab', { name: 'Avatar', exact: true }).click();
   await dialog.getByRole('button', { name: 'Preview Bean', exact: true }).click();
   await dialog.getByRole('tab', { name: 'Settings', exact: true }).click();
   await dialog.getByRole('button', { name: 'Swarm App' }).click();
@@ -30,7 +31,7 @@ test('keeps appearance and permission drafts across fixed tabs, drill-down, tran
   await dialog.screenshot({ path: '../.scratch/agent-communication-settings-desktop.png', animations: 'disabled' });
   await dialog.getByRole('button', { name: 'View DM with Morgan' }).click();
   await expect(dialog.getByRole('region', { name: 'Agent DM transcript' })).toContainText('Separate peer result');
-  await expect(page.getByRole('list', { name: 'Messages' })).not.toContainText('Separate peer result');
+  await expect(page.getByRole('list', { name: 'Messages' })).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Earlier messages' }).click();
   await expect(dialog).toContainText('Earlier peer context');
   live.push({ ...peerMessage, id: 'newer', sequence: 3, text: 'Live peer update' });
@@ -38,10 +39,8 @@ test('keeps appearance and permission drafts across fixed tabs, drill-down, tran
   await expect(dialog).toContainText('Live peer update'); await expect(dialog).toContainText('Earlier peer context');
   await dialog.getByRole('button', { name: 'Swarm App', exact: true }).click();
   await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  await page.getByRole('button', { name: 'Open conversation with Avery' }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Edit agent', exact: true }).click();
-  await dialog.getByRole('tab', { name: 'Settings', exact: true }).click(); await dialog.getByRole('button', { name: 'Swarm App' }).click();
+  await expect(dialog.getByRole('status')).toContainText('Saved');
+  await page.reload();
   await expect(dialog.getByRole('checkbox', { name: 'Morgan', exact: true })).toBeChecked();
 });
 test('keeps paginated existing grants on mobile, supports search and reduced motion, and pins tabs', async ({ page }) => {
@@ -54,7 +53,7 @@ test('keeps paginated existing grants on mobile, supports search and reduced mot
     return route.fulfill({ json: { agents, nextCursor: null } });
   });
   const dialog = await openEditor(page);
-  await dialog.getByRole('tab', { name: 'Settings', exact: true }).click(); await dialog.getByRole('button', { name: 'Swarm App' }).click();
+  await dialog.getByRole('button', { name: 'Swarm App' }).click();
   await expect(dialog.getByRole('checkbox', { name: 'Saved remote peer' })).toBeChecked();
   const tabs = dialog.getByRole('tablist'); const top = (await tabs.boundingBox())!.y;
   await dialog.getByRole('region', { name: 'Agent editor', exact: true }).evaluate(element => { element.scrollTop = 700; });
@@ -66,10 +65,11 @@ test('keeps paginated existing grants on mobile, supports search and reduced mot
   expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   const save = (await dialog.getByRole('button', { name: 'Save changes' }).boundingBox())!; expect(save.y + save.height).toBeLessThan(780);
   await dialog.screenshot({ path: '../.scratch/agent-communication-settings-mobile.png', animations: 'disabled' });
-  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Discard changes', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Back to agents' }).click();
 });
 test('tracks peer work separately from human messages and stops the peer run without chat notifications', async ({ page }) => {
-  await page.goto('/'); await expect(page.getByRole('list', { name: 'Messages' })).toContainText('One step', { ignoreCase: true });
+  await page.goto('/chat/agents/avery'); await expect(page.getByRole('list', { name: 'Messages' })).toContainText('One step', { ignoreCase: true });
   let stopped = '';
   await page.route('**/api/agents/avery/stop', route => { stopped = route.request().postDataJSON().clientMessageId; return route.fulfill({ json: { stopped: true } }); });
   await page.evaluate(() => {
@@ -85,19 +85,20 @@ test('tracks peer work separately from human messages and stops the peer run wit
 
 
 test('one saved connection automatically enables the other agent and either side can remove it', async ({ page }) => {
-  let dialog = await openEditor(page);
-  await dialog.getByRole('tab', { name: 'Settings', exact: true }).click(); await dialog.getByRole('button', { name: 'Swarm App' }).click();
-  await dialog.getByRole('checkbox', { name: 'Morgan', exact: true }).check();
-  await dialog.getByRole('button', { name: 'Save changes' }).click();
-  await page.getByRole('button', { name: 'Open conversation with Morgan' }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Edit agent', exact: true }).click(); dialog = page.getByRole('dialog');
-  await dialog.getByRole('tab', { name: 'Settings', exact: true }).click(); await dialog.getByRole('button', { name: 'Swarm App' }).click();
-  await expect(dialog.getByRole('checkbox', { name: 'Avery', exact: true })).toBeChecked();
-  await dialog.getByRole('checkbox', { name: 'Avery', exact: true }).uncheck(); await dialog.getByRole('button', { name: 'Save changes' }).click();
-  await page.getByRole('button', { name: 'Open conversation with Avery' }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Edit agent', exact: true }).click();
-  await dialog.getByRole('tab', { name: 'Settings', exact: true }).click(); await dialog.getByRole('button', { name: 'Swarm App' }).click();
-  await expect(dialog.getByRole('checkbox', { name: 'Morgan', exact: true })).not.toBeChecked();
+  let settings = await openEditor(page);
+  await settings.getByRole('button', { name: 'Swarm App' }).click();
+  await settings.getByRole('checkbox', { name: 'Morgan', exact: true }).check();
+  await settings.getByRole('button', { name: 'Save changes' }).click();
+  await expect(settings.getByRole('status')).toContainText('Saved');
+  await page.getByRole('button', { name: 'Open settings for Morgan' }).click();
+  settings = page.getByRole('region', { name: 'Settings for Morgan' });
+  await settings.getByRole('button', { name: 'Swarm App' }).click();
+  await expect(settings.getByRole('checkbox', { name: 'Avery', exact: true })).toBeChecked();
+  await settings.getByRole('checkbox', { name: 'Avery', exact: true }).uncheck(); await settings.getByRole('button', { name: 'Save changes' }).click();
+  await page.getByRole('button', { name: 'Open settings for Avery' }).click();
+  settings = page.getByRole('region', { name: 'Settings for Avery' });
+  await settings.getByRole('button', { name: 'Swarm App' }).click();
+  await expect(settings.getByRole('checkbox', { name: 'Morgan', exact: true })).not.toBeChecked();
 });
 
 test('received DMs use decorated chat bubbles, survive refresh, and open the peer conversation', async ({ page }) => {
@@ -106,7 +107,7 @@ test('received DMs use decorated chat bubbles, survive refresh, and open the pee
   let messages = [notice];
   await page.route('**/api/agents/avery/dm-inbox*', route => route.fulfill({ json: { messages, nextCursor: null } }));
   await page.route('**/api/agents/avery/dms/morgan*', route => route.fulfill({ json: { messages: [{ ...notice, text: 'The research is ready. Full peer transcript.', recipientId: 'avery', recipientName: 'Avery' }], nextCursor: null } }));
-  await page.goto('/');
+  await page.goto('/chat/agents/avery');
   const bubble = page.getByRole('article', { name: 'Message received from Morgan' });
   await expect(bubble).toHaveCount(1); await expect(bubble).toContainText('The research is ready.');
   expect(await bubble.evaluate(element => getComputedStyle(element).borderRadius)).toBe(await page.locator('[data-message-id]').first().evaluate(element => getComputedStyle(element).borderRadius));
@@ -122,7 +123,7 @@ test('received DMs use decorated chat bubbles, survive refresh, and open the pee
   expect(await page.evaluate(() => (window as unknown as { notificationAudio: { starts: number } }).notificationAudio.starts)).toBe(0);
   await page.setViewportSize({ width: 360, height: 780 });
   await expect(bubble).toHaveCount(2); // Keep the open desktop conversation on resize.
-  await expect(page.getByRole('complementary', { name: 'Agents' })).toBeHidden();
+  await expect(page.getByRole('complementary', { name: 'Chats' })).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '../.scratch/received-dm-bubble-mobile.png', animations: 'disabled' });
 });
@@ -133,7 +134,7 @@ test.describe('phone peer selector', () => {
   test('touch opens, changes peer, and returns to You without trapping the chat', async ({ page }) => {
     await mockDmPeers(page);
     await page.setViewportSize({ width: 320, height: 640 });
-    await page.goto('/');
+    await page.goto('/chat');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).tap();
     const selector = page.getByRole('combobox', { name: 'Chat with' });
     await expect(selector).toHaveText('You');
@@ -200,7 +201,7 @@ test('Chat with switches the main history, shows agent avatars, and keeps self l
     { id: 'self-dm', sequence: 1, conversationId: 'dm:avery:morgan', senderId: 'avery', recipientId: 'morgan', senderName: 'Avery', recipientName: 'Morgan', text: 'Sent by the selected agent', status: 'completed', timestamp: stamp },
     { id: 'remote-dm', sequence: 2, conversationId: 'dm:avery:morgan', senderId: 'morgan', recipientId: 'avery', senderName: 'Morgan', recipientName: 'Avery', text: 'Reply from the other agent', status: 'completed', timestamp: stamp + 1000 },
   ], nextCursor: null } }));
-  await page.goto('/');
+  await page.goto('/chat/agents/avery');
   const selector = page.getByRole('combobox', { name: 'Chat with' });
   await expect(selector).toHaveText('You'); await expect(selector.locator('svg[data-avatar-shape]')).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Message Avery' }).fill('Keep my human draft');
@@ -230,10 +231,10 @@ test('Chat with switches the main history, shows agent avatars, and keeps self l
   await page.screenshot({ path: '../.scratch/agent-dm-main-view.png', animations: 'disabled' });
   await page.setViewportSize({ width: 360, height: 780 });
   await expect(page.getByRole('region', { name: 'Agent conversation with Morgan' })).toBeVisible();
-  await expect(page.getByRole('complementary', { name: 'Agents' })).toBeHidden();
+  await expect(page.getByRole('complementary', { name: 'Chats' })).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '../.scratch/agent-dm-main-view-mobile.png', animations: 'disabled' });
-  await expect(page.getByRole('button', { name: 'Back to agents' })).toContainText('Avery');
+  await expect(page.getByRole('button', { name: 'Back to chats' })).toContainText('Avery');
   await expect(selector).toHaveText('Morgan');
   await expect(header.locator('[data-slot=agent-exchange-icon]')).toHaveCount(1);
   await selector.click(); await page.getByRole('option', { name: 'You', exact: true }).click();
@@ -245,7 +246,7 @@ test('Chat with switches the main history, shows agent avatars, and keeps self l
 test('typing waits for a routed content stream and appears only in that conversation, including the DM footer', async ({ page }) => {
   await mockDmPeers(page, ['morgan', 'riley']);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.goto('/');
+  await page.goto('/chat/agents/avery');
   const selector = page.getByRole('combobox', { name: 'Chat with' });
   const choose = async (name: string) => { await selector.click(); await page.getByRole('option', { name, exact: true }).click(); };
   let sequence = 0;
@@ -255,13 +256,14 @@ test('typing waits for a routed content stream and appears only in that conversa
   await expect(page.getByText('Avery is typing…')).not.toBeVisible();
   await emit({ type: 'typing', active: true, targets: ['dm:avery:morgan'] });
   await expect(page.getByText('Avery is typing…')).not.toBeVisible();
-  await expect(page.getByTestId('chat-avatar').locator('[data-slot="typing-badge"]')).toHaveCount(0);
+  const selfAvatar = page.getByRole('region', { name: 'Conversation with Avery' }).getByTestId('chat-avatar').first();
+  await expect(selfAvatar.locator('[data-slot="typing-badge"]')).toHaveCount(0);
   await choose('Morgan');
   const footer = page.locator('[aria-label="Agent conversation status"]');
   await expect(footer).toContainText('Avery is typing…');
   await expect(footer.locator('.typing-dot')).toHaveCount(3);
   await expect(footer.locator('.typing-dot').first()).toHaveCSS('animation-name', 'typing-dot');
-  await expect(page.getByTestId('chat-avatar').first().locator('[data-slot="typing-badge"]')).toBeVisible();
+  await expect(selfAvatar.locator('[data-slot="typing-badge"]')).toBeVisible();
   await choose('Riley');
   await expect(page.getByText('Avery is typing…')).not.toBeVisible();
   await choose('Morgan');
@@ -287,7 +289,7 @@ test('typing waits for a routed content stream and appears only in that conversa
 test('Chat with excludes agents without a DM and discovers an outgoing-only conversation', async ({ page }) => {
   let peers: { id: string; name: string; avatar: null; channelId: string }[] = [];
   await page.route('**/api/agents/avery/dm-peers*', route => route.fulfill({ json: { peers, nextCursor: null } }));
-  await page.goto('/');
+  await page.goto('/chat/agents/avery');
   const selector = page.getByRole('combobox', { name: 'Chat with' });
   await selector.click();
   await expect(page.getByRole('option', { name: 'You', exact: true })).toBeVisible();

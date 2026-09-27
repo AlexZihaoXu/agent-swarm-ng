@@ -16,7 +16,7 @@ test('plays the formatted clip only for a new incoming agent message', async ({ 
       { type: 'done' },
     ].map(event => JSON.stringify(event)).join('\n') + '\n' });
   });
-  await page.goto('/');
+  await page.goto('/chat/agents/avery');
   await expect(page.getByRole('heading', { name: 'Avery', exact: true })).toBeVisible();
   expect(await count(page)).toBe(0);
   await page.getByLabel('Message Avery').fill('Hello');

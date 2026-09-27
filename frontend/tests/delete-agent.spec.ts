@@ -20,7 +20,7 @@ test('requires exact typed confirmation, supports cancellation, and persists del
     return route.fulfill({ json: { deleted: true } });
   });
   await page.goto('/');
-  const card = page.getByRole('button', { name: `Open conversation with ${agent.name}`, exact: true });
+  const card = page.getByRole('button', { name: `Open settings for ${agent.name}`, exact: true });
   await card.click();
   await card.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Delete agent', exact: true }).click();
@@ -40,12 +40,12 @@ test('requires exact typed confirmation, supports cancellation, and persists del
   await page.getByLabel('Confirm agent name').fill(agent.name);
   await remove.click();
   await expect(dialog.getByRole('alert')).toContainText('Stop it');
-  await expect(page.getByRole('button', { name: `Open conversation with ${agent.name}`, exact: true, includeHidden: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: `Open settings for ${agent.name}`, exact: true, includeHidden: true })).toBeVisible();
   await remove.click();
   await expect(dialog).toHaveCount(0);
   await expect(card).toHaveCount(0);
   await expect(page.getByRole('complementary', { name: 'Agents', exact: true })).toBeFocused();
-  await expect(page.getByText('Select or create an agent to start chatting.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Select or create an agent to configure.', { exact: true })).toBeVisible();
   await page.reload();
   await expect(card).toHaveCount(0);
   expect(attempts).toBe(2);
@@ -53,16 +53,16 @@ test('requires exact typed confirmation, supports cancellation, and persists del
 
 test('deleting an unselected saved agent does not change selection; last deletion shows an empty state', async ({ page }) => {
   await page.goto('/');
-  const cards = page.getByRole('button', { name: /^Open conversation with / });
+  const cards = page.getByRole('button', { name: /^Open settings for / });
   await expect(cards.first()).toBeVisible();
-  const names = await cards.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')!.replace('Open conversation with ', '')));
+  const names = await cards.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')!.replace('Open settings for ', '')));
   for (const name of [...names.slice(1), names[0]]) {
-    await page.getByRole('button', { name: `Open conversation with ${name}`, exact: true }).click({ button: 'right' });
+    await page.getByRole('button', { name: `Open settings for ${name}`, exact: true }).click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Delete agent', exact: true }).click();
     await page.getByLabel('Confirm agent name').fill(name);
     await page.getByRole('dialog').getByRole('button', { name: 'Delete agent', exact: true }).click();
-    if (name !== names[0]) await expect(page.getByRole('heading', { name: names[0], exact: true })).toBeVisible();
+    if (name !== names[0]) await expect(page.getByRole('region', { name: `Settings for ${names[0]}` })).toBeVisible();
   }
   await expect(cards).toHaveCount(0);
-  await expect(page.getByText('Select or create an agent to start chatting.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Select or create an agent to configure.', { exact: true })).toBeVisible();
 });

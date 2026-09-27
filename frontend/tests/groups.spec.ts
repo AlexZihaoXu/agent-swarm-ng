@@ -6,7 +6,7 @@ test('reaction loading failures are visible and retry without losing conversatio
   await page.route('**/api/chats/*/reactions*', route => failing
     ? route.fulfill({ status: 503, json: { message: 'Temporary failure' } })
     : route.fulfill({ json: { messages: new URL(route.request().url()).searchParams.getAll('ids').map(id => ({ id, reactions: [] })) } }));
-  await page.goto('/');
+  await page.goto('/chat/agents/avery');
   await expect(page.getByText('Could not load reactions.', { exact: false })).toBeVisible({ timeout: 15000 });
   await expect(page.getByRole('list', { name: 'Messages', exact: true })).toBeVisible();
   failing = false;
@@ -96,8 +96,7 @@ for (const mobile of [false, true]) test(`Chat groups preserve Agents, group tim
   await page.screenshot({ path: test.info().outputPath(`chat-group-${mobile ? 'mobile' : 'desktop'}.png`), fullPage: true });
   if (mobile) await page.getByRole('button', { name: 'Back to chats' }).click();
   await page.getByRole('tab', { name: 'Agents', exact: true }).click();
-  if (mobile) {
-    await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
-    await expect(page.getByRole('combobox', { name: 'Chat with' })).toBeVisible();
-  } else await expect(page.getByText('Chat with', { exact: true })).toBeVisible();
+  if (mobile) await page.getByRole('button', { name: 'Open settings for Avery' }).click();
+  await expect(page.getByRole('region', { name: 'Settings for Avery' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Chat with' })).toHaveCount(0);
 });

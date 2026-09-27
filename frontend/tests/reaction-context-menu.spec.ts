@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 
 test('right-click menus share a surface and fade-scale from their anchor, highlighting only the active message', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/chat/agents/avery');
   const bubble = page.locator('[data-message-id="avery-0"]');
   const other = page.locator('[data-message-id="avery-1"]');
   const idleShadow = await bubble.evaluate(element => getComputedStyle(element).boxShadow);
@@ -37,6 +37,7 @@ test('right-click menus share a surface and fade-scale from their anchor, highli
   await expect(menu).toHaveCount(0);
   await expect(bubble).toHaveCSS('box-shadow', idleShadow);
 
+  await page.getByRole('tab', { name: 'Agents', exact: true }).click();
   await page.getByRole('complementary', { name: 'Agents' }).click({ button: 'right', position: { x: 40, y: 350 } });
   const agentMenu = page.getByRole('menu');
   await expect(agentMenu).toHaveCSS('background-color', 'rgb(36, 36, 36)');
@@ -48,7 +49,6 @@ test('right-click menus share a surface and fade-scale from their anchor, highli
   await expect(chatMenu).toHaveCSS('background-color', 'rgb(36, 36, 36)');
   await expect(chatMenu).toHaveCSS('animation-name', 'dialog-in');
   await page.keyboard.press('Escape');
-  await page.getByRole('tab', { name: 'Agents' }).click();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await bubble.click({ button: 'right' });
   await expect(menu).toHaveCSS('animation-name', 'none');
@@ -64,7 +64,7 @@ test('existing reactions have a spaced, larger emoji and a nearby Add reaction p
     if (active) next.push({ emoji, count: 1, mine: true });
     saved.set(id, next); return route.fulfill({ json: { reactions: next } });
   });
-  await page.goto('/');
+  await page.goto('/chat/agents/avery');
   const bubble = page.locator('[data-message-id="avery-0"]');
   const row = bubble.locator('xpath=ancestor::li[1]');
   await expect(row.getByRole('button', { name: 'Add reaction' })).toHaveCount(0);
@@ -112,7 +112,7 @@ test('right-clicking a bubble opens recent reactions, an emoji submenu, and Repl
     if (active) next.push({ emoji, count: 1, mine: true });
     saved.set(id, next); return route.fulfill({ json: { reactions: next } });
   });
-  await page.goto('/');
+  await page.goto('/chat/agents/avery');
   const bubble = page.locator('[data-message-id="avery-0"]');
   const row = bubble.locator('xpath=ancestor::li[1]');
   const idle = await row.evaluate(element => getComputedStyle(element).backgroundColor);
@@ -186,7 +186,7 @@ test.describe('touch', () => {
   test.use({ hasTouch: true });
   test('a real touch with slight finger drift opens the right-click menu', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/');
+    await page.goto('/chat');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
     const bubble = page.locator('[data-message-id="avery-0"]');
     await expect(bubble).toHaveCSS('user-select', 'none');
@@ -267,7 +267,7 @@ test.describe('touch', () => {
       saved.set(id, [{ emoji: '👍', count: 1, mine: true }]);
       return route.fulfill({ json: { reactions: saved.get(id) } });
     });
-    await page.goto('/');
+    await page.goto('/chat');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
     const bubble = page.locator('[data-message-id="avery-0"]');
     await expect(page.getByRole('menu', { name: 'Message actions' })).toHaveCount(0);

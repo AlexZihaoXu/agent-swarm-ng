@@ -3,7 +3,7 @@ import { sampleAgents } from './sample-agents';
 
 test('agent cards keep the same avatar and presence sizes in Chat and Agents', async ({ page }) => {
   await page.goto('/');
-  const agentCard = page.getByRole('complementary', { name: 'Agents' }).getByRole('button', { name: 'Open conversation with Avery' });
+  const agentCard = page.getByRole('complementary', { name: 'Agents' }).getByRole('button', { name: 'Open settings for Avery' });
   const agentFace = await agentCard.locator('span.relative').first().boundingBox();
   const agentDot = await agentCard.locator('[data-slot="online-indicator"]').boundingBox();
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
@@ -63,7 +63,7 @@ test('Chat sidebar context menu creates and edits groups, and navigates from age
   await expect(page.getByRole('menuitem', { name: 'Edit group chat' })).toHaveCount(0);
   await page.getByRole('menuitem', { name: 'View in Agents' }).click();
   await expect(page.getByRole('tab', { name: 'Agents' })).toHaveAttribute('data-state', 'active');
-  await expect(page.getByRole('heading', { name: 'Morgan' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
 });
 
 test('Chat sidebar context menu can create a group from an empty list', async ({ page }) => {

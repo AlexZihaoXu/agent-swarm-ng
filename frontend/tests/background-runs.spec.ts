@@ -25,7 +25,7 @@ async function setup(page: Page) {
     expect(route.request().postDataJSON()).toEqual({ clientMessageId: run.clientMessageId });
     return route.fulfill({ json: { stopped: true } });
   });
-  await page.goto('/');
+  await page.goto('/chat/agents/background-agent');
   await page.getByLabel('Message Background agent').fill('Keep working');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(page.getByRole('list', { name: 'Messages' })).toContainText('Keep working');
@@ -64,7 +64,7 @@ test('refresh reconnects to the existing run, receives its result once, and does
   const backend = await setup(page);
   await page.reload();
   await expect(page.getByRole('button', { name: 'Stop response' })).toBeVisible();
-  await expect(page.getByTestId('chat-avatar').locator('[data-state="working"]')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Conversation with Background' }).getByTestId('chat-avatar').locator('[data-state="working"]')).toBeVisible();
   expect(backend.counts()).toEqual({ starts: 1, stops: 0 });
   const message = { id: 'background-answer', channelId: agent.channelId, sequence: 2, role: 'assistant', text: 'Finished while independent of the dashboard', timestamp: Date.now() };
   backend.messages.push(message);

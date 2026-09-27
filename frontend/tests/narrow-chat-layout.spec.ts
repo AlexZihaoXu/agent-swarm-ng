@@ -8,7 +8,7 @@ for (const width of [700, 320, 280]) test(`narrow ${width}px keeps an active des
   messages[1].text = 'A long outgoing message ' + 'unbroken'.repeat(120);
   messages[2].text = 'A lengthy result ' + 'unbroken'.repeat(60) + '\n\n' + 'Substantial detail '.repeat(100);
   await page.route('**/api/channels/avery/messages*', route => route.fulfill({ json: { messages, nextCursor: null } }));
-  await page.setViewportSize({ width: 900, height: 700 }); await page.emulateMedia({ reducedMotion: 'reduce' }); await page.goto('/');
+  await page.setViewportSize({ width: 900, height: 700 }); await page.emulateMedia({ reducedMotion: 'reduce' }); await page.goto('/chat/agents/avery');
   await expect(page.locator('[data-message-id="avery-2"]')).toBeVisible();
   const assertAllBubblesFit = async (viewportWidth: number) => {
     const clipped = await page.locator('[data-message-id]').evaluateAll(elements => elements.flatMap(element => {
@@ -26,8 +26,8 @@ for (const width of [700, 320, 280]) test(`narrow ${width}px keeps an active des
   const historyViewport = page.getByRole('region', { name: 'Chat history' });
   expect(await historyViewport.evaluate(element => getComputedStyle(element.firstElementChild!).display)).toBe('block');
   expect(await historyViewport.evaluate(element => element.firstElementChild!.clientWidth)).toBeLessThanOrEqual(await historyViewport.evaluate(element => element.clientWidth));
-  await expect(page.getByRole('complementary', { name: 'Agents' })).toBeHidden();
-  const backButton = page.getByRole('button', { name: 'Back to agents' });
+  await expect(page.getByRole('complementary', { name: 'Chats' })).toBeHidden();
+  const backButton = page.getByRole('button', { name: 'Back to chats' });
   await expect(backButton).toContainText('Avery');
   await expect(backButton.locator('svg[data-avatar-shape]')).toHaveCount(1);
   const selector = page.getByRole('combobox', { name: 'Chat with' });
@@ -43,8 +43,8 @@ for (const width of [700, 320, 280]) test(`narrow ${width}px keeps an active des
   await assertAllBubblesFit(width);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
   await page.screenshot({ path: test.info().outputPath(`narrow-${width}.png`), animations: 'disabled' });
-  await page.getByRole('button', { name: 'Back to agents' }).click();
-  await expect(page.getByRole('complementary', { name: 'Agents' })).toBeVisible();
+  await page.getByRole('button', { name: 'Back to chats' }).click();
+  await expect(page.getByRole('complementary', { name: 'Chats' })).toBeVisible();
   const tabs = await bounds(page.getByRole('tablist', { name: 'Main navigation' }));
   expect(tabs.y).toBeGreaterThan(600);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
@@ -88,8 +88,8 @@ test('phone navigation transitions animate only when motion is allowed', async (
   await page.goto('/');
   const agents = page.getByRole('complementary', { name: 'Agents' });
   await expect(agents).toHaveCSS('animation-name', 'phone-list-in');
-  await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
-  await expect(page.getByRole('region', { name: 'Conversation with Avery' })).toHaveCSS('animation-name', 'phone-detail-in');
+  await page.getByRole('button', { name: 'Open settings for Avery' }).click();
+  await expect(page.getByRole('region', { name: 'Settings for Avery' })).toHaveCSS('animation-name', 'phone-detail-in');
   await page.getByRole('button', { name: 'Back to agents' }).click();
   await expect(agents).toHaveCSS('animation-name', 'phone-list-in');
   await page.getByRole('tab', { name: 'Settings' }).click();

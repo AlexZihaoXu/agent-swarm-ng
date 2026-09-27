@@ -28,6 +28,14 @@ async function configure(page: Page, model = 'test-model') {
   await expect(page.getByRole('listbox', { includeHidden: true })).toHaveCount(0);
 }
 
+const chatAvatar = (page: Page) => page.getByRole('region', { name: `Conversation with ${real.name}` }).getByTestId('chat-avatar');
+
+async function createAndOpenChat(page: Page) {
+  await page.getByRole('button', { name: 'Create agent', exact: true }).click();
+  await page.getByRole('tablist', { name: 'Main navigation' }).getByRole('tab', { name: 'Chat' }).click();
+  await expect(page.getByRole('region', { name: `Conversation with ${real.name}` })).toBeVisible();
+}
+
 test('restores a saved agent and published messages after refresh without storing them in the browser', async ({ page }) => {
   let savedMessages: object[] = [];
   await page.route('**/api/channels/*/messages*', route => route.fulfill({ json: { messages: savedMessages, nextCursor: null } }));
@@ -51,9 +59,9 @@ test('restores a saved agent and published messages after refresh without storin
   });
   await configure(page);
   await expect(page.getByLabel('Thinking level')).toBeDisabled();
-  await page.getByRole('button', { name: 'Create agent', exact: true }).click();
+  await createAndOpenChat(page);
   await expect(page.getByRole('heading', { name: real.name, exact: true })).toBeVisible();
-  await expect(page.getByTestId('chat-avatar').locator('[data-slot="online-indicator"]')).toBeVisible();
+  await expect(chatAvatar(page).locator('[data-slot="online-indicator"]')).toBeVisible();
   await expect(page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-slot="online-indicator"]')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open conversation with Avery' }).locator('[data-slot="online-indicator"]')).toHaveCount(1);
   await page.getByLabel(`Message ${real.name}`).fill('Hello');
@@ -100,11 +108,11 @@ async function emitChannel(page: Page, event: object) {
 test('typing is channel-scoped and clears when the tool publishes', async ({ page }) => {
   await installChannelStream(page);
   await configure(page);
-  await page.getByRole('button', { name: 'Create agent', exact: true }).click();
+  await createAndOpenChat(page);
   await page.getByLabel(`Message ${real.name}`).fill('Hello');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(page.getByRole('status')).toHaveText('Agent is working…');
-  const avatar = page.getByTestId('chat-avatar');
+  const avatar = chatAvatar(page);
   const working = avatar.locator('[data-slot="online-indicator"]');
   await expect(working).toHaveAttribute('data-state', 'working');
   await expect(page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-state="working"]')).toBeVisible();
@@ -128,7 +136,7 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await emitChannel(page, { type: 'typing', channelId: real.channelId, active: true, targets: [real.channelId] });
   await expect(page.getByRole('status')).toHaveText('Real agent is typing…');
   await expect(page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-slot="typing-badge"]')).toBeVisible();
-  const badge = page.getByTestId('chat-avatar').locator('[data-slot="typing-badge"]');
+  const badge = chatAvatar(page).locator('[data-slot="typing-badge"]');
   await expect(badge).toBeVisible();
   await expect(badge).toHaveCSS('background-color', 'rgb(45, 212, 191)');
   await expect(badge).toHaveCSS('width', '20px');
@@ -165,7 +173,7 @@ for (const ending of ['error', 'stop'] as const) {
   test(`typing clears on ${ending}`, async ({ page }) => {
     await installChannelStream(page);
     await configure(page);
-    await page.getByRole('button', { name: 'Create agent', exact: true }).click();
+    await createAndOpenChat(page);
     await page.getByLabel(`Message ${real.name}`).fill('Hello');
     await page.getByRole('button', { name: 'Send message' }).click();
     await emitChannel(page, { type: 'typing', channelId: real.channelId, active: true, targets: [real.channelId] });
@@ -179,16 +187,16 @@ for (const ending of ['error', 'stop'] as const) {
     await expect(page.getByText('Real agent is typing…')).not.toBeVisible();
     await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
     await expect(page.locator('[data-slot="typing-badge"]')).toHaveCount(0);
-    await expect(page.getByTestId('chat-avatar').locator('[data-slot="online-indicator"]')).toBeVisible();
-    await expect(page.getByTestId('chat-avatar').locator('.presence-dot')).toHaveCSS('background-color', 'rgb(35, 165, 90)');
-    await expect(page.getByTestId('chat-avatar').locator('.presence-dot')).toHaveCSS('animation-name', 'none');
+    await expect(chatAvatar(page).locator('[data-slot="online-indicator"]')).toBeVisible();
+    await expect(chatAvatar(page).locator('.presence-dot')).toHaveCSS('background-color', 'rgb(35, 165, 90)');
+    await expect(chatAvatar(page).locator('.presence-dot')).toHaveCSS('animation-name', 'none');
   });
 }
 
 test('operator activity streams separately, accumulates while closed, and stays agent-scoped', async ({ page }) => {
   await installChannelStream(page);
   await configure(page);
-  await page.getByRole('button', { name: 'Create agent', exact: true }).click();
+  await createAndOpenChat(page);
   await page.getByLabel(`Message ${real.name}`).fill('Hello');
   await page.getByRole('button', { name: 'Send message' }).click();
   const entry = { id: 'thought', runId: 'run', channelId: real.channelId, kind: 'thinking', label: 'Thinking', text: 'PRIVATE thought ', timestamp: Date.now() };
@@ -223,7 +231,7 @@ test('operator activity streams separately, accumulates while closed, and stays 
 
 test('activity panel fits mobile and closes accessibly', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/chat');
   await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
   const trigger = page.getByRole('button', { name: 'Agent activity', exact: true });
   await trigger.click();
@@ -298,7 +306,7 @@ test('unsaved sends retain their draft and message ID until the backend acknowle
     ].map(event => JSON.stringify(event)).join('\n') + '\n' });
   });
   await configure(page);
-  await page.getByRole('button', { name: 'Create agent', exact: true }).click();
+  await createAndOpenChat(page);
   const input = page.getByLabel(`Message ${real.name}`);
   await input.fill('Save me');
   await page.getByRole('button', { name: 'Send message' }).click();
@@ -320,7 +328,7 @@ test('model failures do not become chat bubbles or diagnostic footer text', asyn
     ].map(event => JSON.stringify(event)).join('\n') + '\n' });
   });
   await configure(page);
-  await page.getByRole('button', { name: 'Create agent', exact: true }).click();
+  await createAndOpenChat(page);
   await page.getByLabel(`Message ${real.name}`).fill('Hello');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();

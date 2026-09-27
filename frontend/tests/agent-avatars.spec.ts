@@ -5,6 +5,7 @@ async function openCreate(page: Page) {
   await page.goto('/');
   await page.getByRole('complementary', { name: 'Agents', exact: true }).click({ button: 'right', position: { x: 40, y: 360 } });
   await page.getByRole('menuitem', { name: 'Create new agent' }).click();
+  await expect(page.getByRole('dialog', { name: 'Create new agent' })).toBeVisible();
 }
 async function select(page: Page, label: string, option: string) {
   await page.getByLabel(label, { exact: true }).click();
@@ -162,29 +163,34 @@ test('motion pauses offscreen, hidden, collapsed and for reduced motion; keyboar
 });
 
 test('existing agents can edit and persist appearance without changing their chat or identity', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' }); await page.goto('/');
-  const card = page.getByRole('button', { name: 'Open conversation with Avery' });
+  await page.emulateMedia({ reducedMotion: 'reduce' }); await page.goto('/chat/agents/avery');
   const beforeMessages = await page.getByRole('list', { name: 'Messages' }).innerText();
-  await card.click({ button: 'right' }); await page.getByRole('menuitem', { name: 'Edit agent', exact: true }).click();
-  await page.getByRole('button', { name: 'Preview Triangle', exact: true }).click();
+  await page.getByRole('tab', { name: 'Agents', exact: true }).click();
+  const settings = page.getByRole('region', { name: 'Settings for Avery' });
+  const card = page.getByRole('button', { name: 'Open settings for Avery' });
+  await settings.getByRole('tab', { name: 'Avatar' }).click();
+  await settings.getByRole('button', { name: 'Preview Triangle', exact: true }).click();
   await select(page, 'Avatar color', 'Apricot'); await select(page, 'Eye shape', 'Circles');
   const seed = await previewArt(page).getAttribute('data-avatar-seed');
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  const header = page.getByTestId('chat-avatar').locator('[data-avatar="current"] svg');
+  await settings.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(settings.getByRole('status')).toContainText('Saved');
+  await expect(card.locator('[data-avatar-shape]')).toHaveAttribute('data-avatar-seed', seed!);
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  const header = page.getByRole('region', { name: 'Conversation with Avery' }).getByTestId('chat-avatar').first().locator('[data-avatar="current"] svg');
   await expect(header).toHaveAttribute('data-avatar-shape', 'triangle');
   await expect(header).toHaveAttribute('data-eye-style', 'round');
-  await expect(card.locator('[data-avatar-shape]')).toHaveAttribute('data-avatar-seed', seed!);
   expect(await page.getByRole('list', { name: 'Messages' }).innerText()).toBe(beforeMessages);
   await page.reload();
   await expect(header).toHaveAttribute('data-avatar-shape', 'triangle');
   await expect(header.locator('path').first()).toHaveAttribute('fill', '#f7ad51');
-  await card.click({ button: 'right' }); await page.getByRole('menuitem', { name: 'Edit agent', exact: true }).click();
-  await page.getByRole('button', { name: 'Randomize', exact: true }).click();
+  await page.getByRole('tab', { name: 'Agents', exact: true }).click();
+  await settings.getByRole('tab', { name: 'Avatar' }).click();
+  await settings.getByRole('button', { name: 'Randomize', exact: true }).click();
   await page.route('**/api/agents/avery/settings', route => route.request().method() === 'PATCH' ? route.fulfill({ status: 503, json: { message: 'Save failed' } }) : route.fallback());
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await expect(page.getByRole('alert')).toHaveText('Save failed');
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await settings.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(settings.getByRole('alert')).toHaveText('Save failed');
+  await settings.getByRole('button', { name: 'Discard changes', exact: true }).click();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await expect(header).toHaveAttribute('data-avatar-seed', seed!);
 });
 
@@ -203,21 +209,24 @@ test('creation sends appearance but never the preview state', async ({ page }) =
   await select(page, 'State preview', 'Typing');
   await select(page, 'Endpoint', 'Fixture'); await select(page, 'Model', 'test-model');
   await page.getByRole('button', { name: 'Create agent', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'New avatar', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Settings for New avatar' })).toBeVisible();
   expect(created?.avatar).toMatchObject({ shape: 'bean', eyeStyle: 'round' });
   expect(created?.avatar).not.toHaveProperty('state');
-  await expect(page.getByTestId('chat-avatar').locator('[data-avatar="current"] svg')).toHaveAttribute('data-avatar-state', 'idle');
+  await expect(page.getByRole('button', { name: 'Open settings for New avatar' }).locator('[data-avatar-state]')).toHaveAttribute('data-avatar-state', 'idle');
 });
 
-test('mobile preview is scrollable without horizontal overflow and unsaved changes cancel', async ({ page }) => {
+test('mobile inline avatar settings scroll without overflow and unsaved changes discard', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 780 }); await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/'); const card = page.getByRole('button', { name: 'Open conversation with Avery' });
+  await page.goto('/agents'); const card = page.getByRole('button', { name: 'Open settings for Avery' });
   const original = defaultAvatar('avery');
-  await card.click({ button: 'right' }); await page.getByRole('menuitem', { name: 'Edit agent', exact: true }).click();
-  await page.getByRole('button', { name: 'Preview Triangle', exact: true }).click(); await select(page, 'Eye shape', 'Circles');
-  const dialog = page.getByRole('dialog'); expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-  await page.getByRole('region', { name: 'Agent editor', exact: true }).evaluate(element => { element.scrollTop = 0; });
-  await dialog.screenshot({ path: '../.scratch/agent-avatar-preview-mobile.png', animations: 'disabled' });
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await card.click();
+  const settings = page.getByRole('region', { name: 'Settings for Avery' });
+  await settings.getByRole('tab', { name: 'Avatar' }).click();
+  await settings.getByRole('button', { name: 'Preview Triangle', exact: true }).click(); await select(page, 'Eye shape', 'Circles');
+  expect(await settings.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await settings.getByRole('region', { name: 'Agent editor' }).evaluate(element => { element.scrollTop = 0; });
+  await settings.screenshot({ path: '../.scratch/agent-avatar-preview-mobile.png', animations: 'disabled' });
+  await settings.getByRole('button', { name: 'Discard changes' }).click();
+  await settings.getByRole('button', { name: 'Back to agents' }).click();
   await expect(card.locator('[data-avatar-shape]')).toHaveAttribute('data-avatar-seed', String(original.seed));
 });

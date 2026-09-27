@@ -27,7 +27,7 @@ test.describe('phone touch scrolling', () => {
     await page.route('**/api/channels/avery/messages*', route => route.fulfill({ json: { messages, nextCursor: null } }));
     await page.setViewportSize({ width: 390, height: 640 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/');
+    await page.goto('/chat');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
     const viewport = page.getByRole('region', { name: 'Chat history' });
     await expect.poll(() => viewport.evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(500);
@@ -67,7 +67,7 @@ test.describe('phone touch scrolling', () => {
   test('a long peer picker and emoji results scroll inside their own menus', async ({ page }) => {
     await page.route('**/api/agents/avery/dm-peers*', route => route.fulfill({ json: { peers: Array.from({ length: 24 }, (_, i) => ({ id: `peer-${i}`, name: `Peer ${i}`, channelId: `peer-channel-${i}`, avatar: null })), nextCursor: null } }));
     await page.setViewportSize({ width: 390, height: 640 });
-    await page.goto('/');
+    await page.goto('/chat');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
     await page.getByRole('combobox', { name: 'Chat with' }).tap();
     const viewport = page.getByRole('listbox').locator('[data-radix-select-viewport]');
@@ -89,7 +89,7 @@ test.describe('phone touch scrolling', () => {
   test('a peer-list failure still exposes the retry choice on phones', async ({ page }) => {
     await page.route('**/api/agents/avery/dm-peers*', route => route.fulfill({ status: 503, json: { message: 'Unavailable' } }));
     await page.setViewportSize({ width: 320, height: 640 });
-    await page.goto('/');
+    await page.goto('/chat');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).tap();
     const trigger = page.getByRole('combobox', { name: 'Chat with' });
     await expect(trigger).toBeVisible();
@@ -99,7 +99,7 @@ test.describe('phone touch scrolling', () => {
 
   test('the selected You button stays wide in one row with the agent at 280–390px', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 640 });
-    await page.goto('/');
+    await page.goto('/chat');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).tap();
     const trigger = page.getByRole('combobox', { name: 'Chat with' });
     for (const width of [390, 320, 280]) {
@@ -108,7 +108,7 @@ test.describe('phone touch scrolling', () => {
       const button = (await trigger.boundingBox())!;
       expect(button.width).toBeGreaterThanOrEqual(width === 280 ? 88 : width === 320 ? 104 : 120);
       expect(button.x + button.width).toBeLessThanOrEqual(width);
-      const owner = page.getByRole('button', { name: 'Back to agents' });
+      const owner = page.getByRole('button', { name: 'Back to chats' });
       await expect(owner).toContainText('Avery');
       await expect(owner.locator('svg[data-avatar-shape]')).toHaveCount(1);
       expect(Math.abs((await owner.boundingBox())!.y - button.y)).toBeLessThan(8);
