@@ -4,7 +4,7 @@ Status: implemented and validated. Feature merge: `a846572`, based on `cd24c34` 
 
 ## Agreed behavior
 
-- **Chat** owns human↔agent conversations, read-only agent↔agent transcripts and groups. **Agents** keeps its sidebar and create/delete controls, but its selected-agent main pane now shows Channels permissions and Avatar in a single left-aligned scroll instead of chat. This changes presentation, not channel grants or saved history.
+- **Chat** owns human↔agent conversations, read-only agent↔agent transcripts and groups. **Agents** keeps its sidebar and create/delete controls, but its selected-agent main pane now shows Channels permissions and Avatar in a single centered, width-bounded scroll instead of chat. This changes presentation, not channel grants or saved history.
 - Chat reuses the existing list/card layout with **Search chats**. Human↔agent DMs reuse the current human chat UI and composer. Agent conversations keep the **Chat with** selector formerly also shown in Agents: choose **You** or a peer with persisted agent DM history without leaving the Chat tab. Peer mode is read-only for the operator; selecting You restores the human composer and draft. Group chat headers do not gain the selector. Agents no longer has a chat selector.
 - Add **Create group chat** (name and selected agents). Group membership authorizes group communication without adding DM connections. The operator is the human participant.
 - Group messages show agent avatars beside their content, adapting the inspected Kibo `scroll-area-layout-3` avatar/name/time composition to the supplied Discord references. Human messages stay right-aligned.

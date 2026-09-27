@@ -189,7 +189,9 @@ test('existing agents can edit and persist appearance without changing their cha
   await page.route('**/api/agents/avery/settings', route => route.request().method() === 'PATCH' ? route.fulfill({ status: 503, json: { message: 'Save failed' } }) : route.fallback());
   await settings.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(settings.getByRole('alert')).toHaveText('Save failed');
+  await expect(settings.getByRole('button', { name: 'Save changes', exact: true })).toBeVisible();
   await settings.getByRole('button', { name: 'Discard changes', exact: true }).click();
+  await expect(settings.getByRole('button', { name: 'Save changes', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await expect(header).toHaveAttribute('data-avatar-seed', seed!);
 });

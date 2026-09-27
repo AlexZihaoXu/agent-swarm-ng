@@ -24,6 +24,33 @@ test('Agents opens selected agent settings directly, keeps Avatar inline, and ha
   await expect(page.getByRole('form', { name: 'Message composer' })).toBeVisible();
 });
 
+test('Save and Discard appear only while avatar or permission changes are unsaved', async ({ page }) => {
+  await page.goto('/agents/avery');
+  const settings = page.getByRole('region', { name: 'Settings for Avery' });
+  const morgan = settings.getByRole('checkbox', { name: 'Morgan' });
+  await expect(morgan).toBeVisible();
+  const save = settings.getByRole('button', { name: 'Save changes' });
+  const discard = settings.getByRole('button', { name: 'Discard changes' });
+  await expect(save).toHaveCount(0);
+  await expect(discard).toHaveCount(0);
+  await morgan.check();
+  await expect(save).toBeVisible();
+  await expect(discard).toBeVisible();
+  await morgan.uncheck();
+  await expect(save).toHaveCount(0);
+  await expect(discard).toHaveCount(0);
+  const shapes = settings.getByRole('group', { name: 'Avatar shape' });
+  const original = await shapes.locator('[aria-pressed="true"]').getAttribute('aria-label');
+  await shapes.getByRole('button', { name: 'Preview Triangle' }).click();
+  await expect(save).toBeVisible();
+  await shapes.getByRole('button', { name: original! }).click();
+  await expect(save).toHaveCount(0);
+  await shapes.getByRole('button', { name: 'Preview Bean' }).click();
+  await discard.click();
+  await expect(save).toHaveCount(0);
+  await expect(discard).toHaveCount(0);
+});
+
 test('inline avatar and DM grants save together, and Discard restores unsaved changes without leaving Agents', async ({ page }) => {
   const updates: Array<{ avatar: { shape: string }; allowedDmAgentIds: string[] }> = [];
   await page.route('**/api/agents/avery/settings', route => {
@@ -32,17 +59,20 @@ test('inline avatar and DM grants save together, and Discard restores unsaved ch
   });
   await page.goto('/agents/avery');
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
+  await expect(settings.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   await settings.getByRole('checkbox', { name: 'Morgan' }).check();
   await settings.getByRole('region', { name: 'Agent editor' }).evaluate(element => { element.scrollTop = element.scrollHeight; });
   await settings.getByRole('button', { name: 'Preview Triangle' }).click();
   await settings.getByRole('button', { name: 'Save changes' }).click();
   await expect(settings.getByRole('status')).toContainText('Saved');
+  await expect(settings.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   expect(updates).toHaveLength(1);
   expect(updates[0].allowedDmAgentIds).toContain('morgan');
   expect(updates[0].avatar.shape).toBe('triangle');
   await settings.getByRole('button', { name: 'Preview Bean' }).click();
   await settings.getByRole('button', { name: 'Discard changes' }).click();
   await expect(settings.getByRole('button', { name: 'Preview Triangle' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(settings.getByRole('button', { name: 'Discard changes' })).toHaveCount(0);
   await expect(page).toHaveURL(/\/agents\/avery$/);
 });
 

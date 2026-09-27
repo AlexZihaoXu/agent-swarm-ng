@@ -17,7 +17,7 @@ Open http://localhost:5173. Vite proxies `/api` to the backend on localhost:3000
 
 Stable dashboard destinations live in the URL, so a refresh or copied link can reopen them and browser Back/Forward tracks navigation:
 
-- `/agents`, `/agents/:id` — agent list and selected agent's left-aligned scrolling Channels/Avatar form. Older `/agents/:id/edit/avatar` and `/edit/settings/channels/...` bookmarks still open the relevant scroll section or DM transcript without restoring section tabs. Old `/agents/:id/dm/:peerId` links redirect to Chat; create/delete dialogs keep their own paths.
+- `/agents`, `/agents/:id` — agent list and selected agent's centered, width-bounded scrolling Channels/Avatar form. Older `/agents/:id/edit/avatar` and `/edit/settings/channels/...` bookmarks still open the relevant scroll section or DM transcript without restoring section tabs. Old `/agents/:id/dm/:peerId` links redirect to Chat; create/delete dialogs keep their own paths.
 - `/chat`, `/chat/agents/:id`, `/chat/agents/:id/dm/:peerId`, `/chat/groups/:id` — chat list, human DM, read-only agent-peer history and group history. Group create/edit/delete dialogs use nested `/chat/groups/...` paths.
 - `/computers`, `/computers/:id` — grid and human desktop viewer; create/delete dialogs use `/computers/new` and `/computers/:id/delete`. This **dashboard route is different from** the locked-down trusted Selkies iframe at `/computers/:id/desktop/`.
 - `/settings`, `/settings/endpoints/new`, `/settings/endpoints/:id` — saved connections and the endpoint editor. The `/` entry redirects to Agents.

@@ -41,8 +41,11 @@ export function EditAgentForm({ agent, route, mobile, onNavigate, onSave, onBack
     })();
     return () => controller.abort();
   }, [agent.id, attempt]);
+  const dirty = avatar.shape !== savedAvatar.shape || avatar.color !== savedAvatar.color || avatar.seed !== savedAvatar.seed ||
+    (avatar.eyeStyle ?? 'pill') !== (savedAvatar.eyeStyle ?? 'pill') ||
+    allowed.length !== savedAllowed.length || allowed.some(id => !savedAllowed.includes(id));
   async function save() {
-    if (busy || !loaded) return;
+    if (busy || !loaded || !dirty) return;
     setBusy(true); setError(''); setSaved(false);
     try {
       await onSave(agent, avatar, allowed);
@@ -53,30 +56,33 @@ export function EditAgentForm({ agent, route, mobile, onNavigate, onSave, onBack
   const discard = () => { setAvatar(savedAvatar); setAllowed(savedAllowed); setError(''); setSaved(false); };
   return <section aria-label={`Settings for ${agent.name}`} className={cn('phone-detail-enter min-h-0 min-w-0 flex-1 flex-col md:motion-safe:animate-[fade-in_160ms_ease-out] md:flex', mobile ? 'flex' : 'hidden')}>
     <form aria-label="Agent settings" onSubmit={event => { event.preventDefault(); void save(); }} className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <header className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] md:px-6 md:py-3">
-        <button type="button" onClick={onBack} aria-label="Back to agents" className="flex min-h-11 shrink-0 items-center rounded-md px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden">‹ <span className="ml-1">Agents</span></button>
-        <div className="min-w-0"><h2 className="truncate text-lg font-semibold">Agent settings</h2><p className="truncate text-xs text-muted-foreground" title={agent.name}>Appearance and channel permissions for {agent.name}</p></div>
+      <header className="shrink-0 border-b border-border">
+        <div className="mx-auto flex min-h-14 w-full max-w-5xl items-center gap-3 px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] md:px-6 md:py-3">
+          <button type="button" onClick={onBack} aria-label="Back to agents" className="flex min-h-11 shrink-0 items-center rounded-md px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden">‹ <span className="ml-1">Agents</span></button>
+          <div className="min-w-0"><h2 className="truncate text-lg font-semibold">Agent settings</h2>{saved ? <p role="status" className="text-xs text-muted-foreground">Saved.</p> : <p className="truncate text-xs text-muted-foreground" title={agent.name}>Appearance and channel permissions for {agent.name}</p>}</div>
+        </div>
       </header>
       <ScrollArea label="Agent editor" viewportTabIndex={-1} className="min-h-0 flex-1" viewportClassName="[&>div]:!block">
-        <div className="w-full max-w-5xl space-y-8 px-4 pb-8 pt-6 md:px-6">
+        <div className="mx-auto w-full max-w-5xl space-y-8 px-4 pb-8 pt-6 md:px-6">
           <section aria-label="Channels" className="space-y-4">
             <div><h3 className="text-lg font-semibold">Channels</h3><p className="mt-1 text-sm text-muted-foreground">Manage this agent's communication permissions.</p></div>
             <div className="rounded-lg border border-border bg-sidebar/30 p-4">
-              <AgentChannelSettings agentId={agent.id} screen={route.channelScreen ?? 'channels'} peerId={route.peerId} onNavigate={next => onNavigate(next === 'channels' ? channels : next === 'swarm' ? `${channels}/swarm` : `${channels}/swarm/dm/${encodeURIComponent(next.id)}`)} selected={allowed} known={known} onChange={ids => { setAllowed(ids); setSaved(false); }} disabled={busy || !loaded} />
+              <AgentChannelSettings agentId={agent.id} screen={route.channelScreen ?? 'channels'} peerId={route.peerId} onNavigate={next => onNavigate(next === 'channels' ? channels : next === 'swarm' ? `${channels}/swarm` : `${channels}/swarm/dm/${encodeURIComponent(next.id)}`)} selected={allowed} known={known} onChange={ids => { setAllowed(ids); setSaved(false); setError(''); }} disabled={busy || !loaded} />
             </div>
           </section>
           <section ref={avatarSection} aria-label="Avatar" className="space-y-4">
             <div><h3 className="text-lg font-semibold">Avatar</h3><p className="mt-1 text-sm text-muted-foreground">Customize how {agent.name} appears in chats and the sidebar.</p></div>
-            <AgentAvatarPreview name={agent.name} value={avatar} onChange={next => { setAvatar(next); setSaved(false); }} disabled={busy} collapsible={false} />
+            <AgentAvatarPreview name={agent.name} value={avatar} onChange={next => { setAvatar(next); setSaved(false); setError(''); }} disabled={busy} collapsible={false} />
           </section>
         </div>
       </ScrollArea>
-      <div className="shrink-0 border-t border-border px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 md:px-6 md:py-4">
-        {loadError ? <p role="alert" className="mb-3 text-sm">Could not load permissions. <button type="button" onClick={() => setAttempt(value => value + 1)} className="inline-flex min-h-11 items-center underline sm:min-h-0">Retry settings</button></p> : !loaded && <p role="status" className="mb-3 text-xs text-muted-foreground">Loading settings…</p>}
-        {error && <p role="alert" className="mb-3 text-sm">{error}</p>}
-        {saved && <p role="status" className="mb-3 text-sm text-muted-foreground">Saved.</p>}
-        <div className="flex justify-end gap-2"><Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={busy || !loaded} onClick={discard}>Discard changes</Button><Button type="submit" size="sm" className="min-h-11 sm:min-h-0" disabled={busy || !loaded}>{busy ? 'Saving…' : 'Save changes'}</Button></div>
-      </div>
+      {(dirty || loadError || !loaded || error) && <div className="shrink-0 border-t border-border motion-safe:animate-[fade-in_160ms_ease-out]">
+        <div className="mx-auto w-full max-w-5xl px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 md:px-6 md:py-4">
+          {loadError ? <p role="alert" className="mb-3 text-sm">Could not load permissions. <button type="button" onClick={() => setAttempt(value => value + 1)} className="inline-flex min-h-11 items-center underline sm:min-h-0">Retry settings</button></p> : !loaded && <p role="status" className="mb-3 text-xs text-muted-foreground">Loading settings…</p>}
+          {error && <p role="alert" className="mb-3 text-sm">{error}</p>}
+          {dirty && <div className="flex justify-end gap-2"><Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={busy || !loaded} onClick={discard}>Discard changes</Button><Button type="submit" size="sm" className="min-h-11 sm:min-h-0" disabled={busy || !loaded}>{busy ? 'Saving…' : 'Save changes'}</Button></div>}
+        </div>
+      </div>}
     </form>
   </section>;
 }

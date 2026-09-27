@@ -54,7 +54,7 @@ test('keeps paginated existing grants on mobile, supports search and reduced mot
   await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(100);
   await expect(dialog.getByRole('heading', { name: 'Avatar' })).toBeVisible();
   await dialog.getByLabel('Find agents').fill('Search');
-  await expect(dialog.getByRole('checkbox', { name: 'Search result' })).toBeVisible();
+  await dialog.getByRole('checkbox', { name: 'Search result' }).check();
   await dialog.getByLabel('Find agents').fill('');
   await expect(dialog.getByRole('checkbox', { name: 'Saved remote peer' })).toBeChecked();
   expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);

@@ -90,6 +90,7 @@ test('phone agent creation and editing expose reachable form and permission cont
   await expect(page.getByLabel('Find agents')).toHaveCSS('font-size', '16px');
   await editor.getByRole('heading', { name: 'Avatar' }).scrollIntoViewIfNeeded();
   expect((await size(editor.getByRole('button', { name: 'Preview Triangle' }))).height).toBeGreaterThanOrEqual(44);
+  await editor.getByRole('button', { name: 'Preview Triangle' }).click();
   expect((await size(page.getByRole('button', { name: 'Save changes' }))).height).toBeGreaterThanOrEqual(44);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
 });

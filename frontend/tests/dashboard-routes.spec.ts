@@ -120,6 +120,7 @@ test('legacy section bookmarks and DM preview have refreshable paths without tab
   await expect(page).toHaveURL(/\/agents\/morgan\/edit\/settings\/channels\/swarm$/);
   await page.goForward();
   await expect(page).toHaveURL(/\/agents\/morgan\/edit\/settings\/channels\/swarm\/dm\/avery$/);
+  await editor.getByRole('button', { name: 'Preview Bean' }).click();
   await editor.getByRole('button', { name: 'Discard changes' }).click();
   await expect(editor).toBeVisible();
 });
