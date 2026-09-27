@@ -589,6 +589,20 @@ export class ComputerManager {
     }
     return computers;
   }
+  /** Fixed guest program only, addressed by inspected immutable ID after label/running checks. */
+  async computerUseExec(idRaw: string, mode: 'state' | 'capture' | 'validate' | 'execute' | 'cancel', input: unknown) {
+    const id = validateId(idRaw);
+    const computer = await this.container(this.names.desktop(id), id, 'desktop');
+    if (!computer) throw new ResourceError(404, 'Computer not found.');
+    if (!computer.State.Running) {
+      // A stopped container has no executing guest process. A later boot has a fresh /run generation.
+      if (mode === 'cancel') return Buffer.from('{"settled":true}');
+      throw new ResourceError(503, 'Computer desktop is unavailable.');
+    }
+    return this.docker.exec(computer.Id, ['/usr/bin/timeout', '--signal=TERM', '--kill-after=2s', '18s',
+      '/usr/bin/python3', '/opt/swarm/computer-use.py', mode, JSON.stringify(input)], 'agent', 23_000, 3 * 1024 * 1024);
+  }
+
   async pointer(idRaw: string, x: number, y: number) {
     const id = validateId(idRaw);
     if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) {

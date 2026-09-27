@@ -98,6 +98,10 @@ RUN set -eu \
     && sed -i 's/^ubuntu /agent /' /etc/sudoers.d/agent \
     && getent passwd agent | grep -q '^agent:x:1000:1000:' \
     && test -z "$(getent passwd ubuntu || true)"
+# Agent computer-use uses only the guest X11 Unix socket and XTEST; no new listener.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libx11-6 libxtst6 \
+    && rm -rf /var/lib/apt/lists/*
 COPY runtime/ /opt/swarm/
 RUN chmod 0755 /opt/swarm/*.sh && chmod 0644 /opt/swarm/*.py
 # Incremental guest toolchain additions stay after the existing desktop and

@@ -40,12 +40,12 @@ export class DockerApi {
     catch (error) { if (error instanceof DockerApiError && error.status === 404) return null; throw error; }
   }
 
-  async exec(container: string, command: string[], user = 'root', timeout = 19_000) {
+  async exec(container: string, command: string[], user = 'root', timeout = 19_000, maxBytes = 768 * 1024) {
     const created = await this.json<{ Id: string }>('POST', `/containers/${encodeURIComponent(container)}/exec`, {
       AttachStdout: true, AttachStderr: true, Tty: false, Cmd: command, User: user,
       Env: ['XDG_RUNTIME_DIR=/run/user/1000'],
     });
-    const raw = await this.request('POST', `/exec/${encodeURIComponent(created.Id)}/start`, { Detach: false, Tty: false }, 768 * 1024, timeout);
+    const raw = await this.request('POST', `/exec/${encodeURIComponent(created.Id)}/start`, { Detach: false, Tty: false }, maxBytes, timeout);
     let offset = 0;
     const stdout: Buffer[] = [];
     while (offset < raw.length) {

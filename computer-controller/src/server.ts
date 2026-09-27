@@ -2,6 +2,8 @@ import { DockerApi, DockerApiError } from './docker-api';
 import { ComputerManager } from './manager';
 import { ResourceError } from './resources';
 import type { ComputerConfiguration } from './computer-configuration';
+import { ComputerUseService } from './computer-use-service';
+import { MAX_USE_BODY } from './computer-use';
 
 process.umask(0o077);
 const docker = new DockerApi();
@@ -16,9 +18,10 @@ const manager = new ComputerManager(docker, process.env.COMPUTER_NAMESPACE ?? 'a
 // Boot-time reconciliation starts only our labelled computers, always after
 // their filtered egress sidecars. No model inference or agent work is replayed.
 await manager.resume();
+const computerUse = new ComputerUseService((id, mode, input) => manager.computerUseExec(id, mode, input));
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 
-async function body(request: Request): Promise<unknown> {
+async function body(request: Request, maxBytes = 4096): Promise<unknown> {
   const reader = request.body?.getReader();
   if (!reader) throw new ResourceError(400, 'A JSON body is required.');
   const chunks: Uint8Array[] = [];
@@ -28,7 +31,7 @@ async function body(request: Request): Promise<unknown> {
       const { value, done } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 4096) throw new ResourceError(400, 'Request is too large.');
+      if (size > maxBytes) throw new ResourceError(400, 'Request is too large.');
       chunks.push(value);
     }
   } finally { reader.releaseLock(); }
@@ -37,7 +40,7 @@ async function body(request: Request): Promise<unknown> {
 }
 
 Bun.serve({
-  hostname: '0.0.0.0', port: Number(process.env.COMPUTER_CONTROLLER_PORT ?? 3101),
+  hostname: '0.0.0.0', port: Number(process.env.COMPUTER_CONTROLLER_PORT ?? 3101), idleTimeout: 60,
   async fetch(request) {
     try {
       const { pathname, searchParams } = new URL(request.url);
@@ -53,6 +56,18 @@ Bun.serve({
         if ('settings' in input && (!input.settings || typeof input.settings !== 'object' || Array.isArray(input.settings))) throw new ResourceError(400, 'Invalid computer settings.');
         await manager.create(input.id, input.name, 'settings' in input ? input.settings as ComputerConfiguration : undefined);
         return json({ created: true }, 201);
+      }
+      const useMatch = /^\/computers\/([^/]+)\/(capture|actions|actions\/validate|actions\/cancel)$/.exec(pathname);
+      if (useMatch) {
+        if (request.method !== 'POST') return json({ message: 'Method not allowed.' }, 405);
+        const id = decodeURIComponent(useMatch[1]);
+        const input = await body(request, MAX_USE_BODY);
+        switch (useMatch[2]) {
+          case 'capture': return json(await computerUse.capture(id, input));
+          case 'actions/validate': return json(await computerUse.validate(id, input));
+          case 'actions': return json(await computerUse.execute(id, input));
+          case 'actions/cancel': return json(await computerUse.cancel(id));
+        }
       }
       const match = /^\/computers\/([^/]+)(\/preview|\/input|\/power|\/settings|\/settings\/replacement)?$/.exec(pathname);
       if (!match) return json({ message: 'Not found.' }, 404);

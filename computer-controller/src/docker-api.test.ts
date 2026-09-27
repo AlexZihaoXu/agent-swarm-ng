@@ -40,3 +40,15 @@ it('never treats a missing or failed Docker resource as a successful exec', asyn
   await expect(client.exec('missing', ['true'])).rejects.toThrow();
   await expect(client.json('GET', '/containers/missing/json')).rejects.toBeInstanceOf(DockerApiError);
 });
+
+it('uses an explicit larger bounded exec envelope for computer-use JPEG JSON only', async () => {
+  const content = 'x'.repeat(800 * 1024);
+  const client = await engine((path, res) => {
+    if (path.endsWith('/exec')) res.end(JSON.stringify({ Id: 'image-exec' }));
+    else if (path.endsWith('/start')) res.end(frame(1, content));
+    else if (path.endsWith('/json')) res.end(JSON.stringify({ ExitCode: 0 }));
+    else res.writeHead(404).end();
+  });
+  await expect(client.exec('owned', ['fixed'])).rejects.toThrow('limit');
+  expect((await client.exec('owned', ['fixed'], 'agent', 19_000, 3 * 1024 * 1024)).length).toBe(content.length);
+});

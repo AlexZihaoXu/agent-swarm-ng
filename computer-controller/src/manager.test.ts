@@ -498,3 +498,24 @@ it('uses the enforced container quota, not the cgroup limit stats reports', asyn
   await manager.observe();
   expect(vi.mocked(docker.json).mock.calls.filter(call => String(call[1]) === '/containers/desktop/json')).toHaveLength(inspects.length);
 });
+
+it('computer-use executes only the fixed bounded guest program against an owned immutable container ID', async () => {
+  const { manager, resources, execute } = fixture();
+  existingRunning(manager, resources);
+  const input = { actions: [{ type: 'keyboard.type', text: '$(touch /host); "' }] };
+  await manager.computerUseExec(id, 'validate', input);
+  expect(execute).toHaveBeenCalledWith('desktop', ['/usr/bin/timeout', '--signal=TERM', '--kill-after=2s', '18s',
+    '/usr/bin/python3', '/opt/swarm/computer-use.py', 'validate', JSON.stringify(input)], 'agent', 23_000, 3 * 1024 * 1024);
+});
+
+it('computer-use rejects foreign and stopped desktops without input, and stopped cancellation is already settled', async () => {
+  const { manager, resources, execute } = fixture();
+  const path = `/containers/${manager.names.desktop(id)}/json`;
+  resources.set(path, { Id: 'foreign', State: { Running: true }, Config: { Labels: {} } });
+  await expect(manager.computerUseExec(id, 'capture', {})).rejects.toMatchObject({ code: 409 });
+  await expect(manager.computerUseExec(id, 'cancel', {})).rejects.toMatchObject({ code: 409 });
+  resources.set(path, { Id: 'stopped', State: { Running: false }, Config: { Labels: manager.names.labels(id, 'desktop') } });
+  await expect(manager.computerUseExec(id, 'execute', {})).rejects.toMatchObject({ code: 503 });
+  expect(JSON.parse((await manager.computerUseExec(id, 'cancel', {})).toString())).toEqual({ settled: true });
+  expect(execute).not.toHaveBeenCalled();
+});
