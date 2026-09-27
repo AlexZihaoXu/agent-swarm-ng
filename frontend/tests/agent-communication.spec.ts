@@ -149,6 +149,47 @@ test.describe('phone peer selector', () => {
     await expect(page.getByRole('form', { name: 'Message composer' })).toBeVisible();
     await expect(menu).toHaveCount(0);
   });
+  test('Chat phone selector stays on Chat and keeps the one-row back header', async ({ page }) => {
+    await mockDmPeers(page);
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.goto('/chat');
+    await page.getByRole('button', { name: 'Open conversation with Avery' }).tap();
+    const selector = page.getByRole('combobox', { name: 'Chat with' });
+    await expect(selector).toHaveText('You');
+    const header = page.getByRole('region', { name: 'Conversation with Avery' }).locator('header').first();
+    await expect(header.locator('[data-slot="agent-exchange-icon"]')).toHaveCount(1);
+    await selector.tap(); await page.getByRole('option', { name: 'Morgan', exact: true }).tap();
+    await expect(page).toHaveURL(/\/chat\/agents\/avery\/dm\/morgan$/);
+    await expect(selector).toHaveText('Morgan');
+    await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: test.info().outputPath('chat-peer-320.png'), animations: 'disabled' });
+    await page.getByRole('button', { name: 'Back to chats' }).tap();
+    await expect(page.getByRole('complementary', { name: 'Chats' })).toBeVisible();
+  });
+});
+
+test('Chat tab keeps peer selection in Chat, preserving the human draft and a direct peer URL', async ({ page }) => {
+  await mockDmPeers(page);
+  await page.route('**/api/agents/avery/dms/morgan*', route => route.fulfill({ json: { messages: [{ id: 'chat-peer', sequence: 1, conversationId: 'dm:avery:morgan', senderId: 'morgan', recipientId: 'avery', senderName: 'Morgan', recipientName: 'Avery', text: 'Peer result in Chat', status: 'completed', timestamp: Date.now() }], nextCursor: null } }));
+  await page.goto('/chat/agents/avery');
+  await expect(page.getByRole('tab', { name: 'Chat', exact: true })).toHaveAttribute('data-state', 'active');
+  const selector = page.getByRole('combobox', { name: 'Chat with' });
+  await expect(selector).toHaveText('You');
+  await page.getByRole('textbox', { name: 'Message Avery' }).fill('Keep the human draft');
+  await selector.click(); await page.getByRole('option', { name: 'Morgan', exact: true }).click();
+  await expect(page).toHaveURL(/\/chat\/agents\/avery\/dm\/morgan$/);
+  await expect(page.getByRole('region', { name: 'Agent conversation with Morgan' })).toContainText('Peer result in Chat');
+  await expect(page.getByRole('form', { name: 'Message composer' })).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath('chat-peer-desktop.png'), animations: 'disabled' });
+  await selector.click(); await page.getByRole('option', { name: 'You', exact: true }).click();
+  await expect(page).toHaveURL(/\/chat\/agents\/avery$/);
+  await expect(page.getByRole('textbox', { name: 'Message Avery' })).toHaveValue('Keep the human draft');
+  await selector.click(); await page.getByRole('option', { name: 'Morgan', exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole('combobox', { name: 'Chat with' })).toHaveText('Morgan');
+  await expect(page.getByRole('tab', { name: 'Chat', exact: true })).toHaveAttribute('data-state', 'active');
+  await expect(page.getByRole('region', { name: 'Agent conversation with Morgan' })).toContainText('Peer result in Chat');
 });
 
 test('Chat with switches the main history, shows agent avatars, and keeps self left with readable sender tints', async ({ page }) => {

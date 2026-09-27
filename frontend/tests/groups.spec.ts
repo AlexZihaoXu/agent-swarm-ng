@@ -52,7 +52,7 @@ for (const mobile of [false, true]) test(`Chat groups preserve Agents, group tim
   await expect(page.getByLabel('Search chats', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open conversation with Avery', exact: true }).click();
   await expect(page.getByLabel('Message Avery')).toBeVisible();
-  await expect(page.getByText('Chat with', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Chat with' })).toBeVisible();
   if (mobile) await page.getByRole('button', { name: 'Back to chats' }).click();
   await page.getByRole('button', { name: 'Create group chat', exact: true }).click();
   const dialog = page.getByRole('dialog');
@@ -61,6 +61,7 @@ for (const mobile of [false, true]) test(`Chat groups preserve Agents, group tim
   await dialog.getByRole('checkbox', { name: 'Morgan', exact: true }).check();
   await dialog.getByRole('button', { name: 'Create group', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Research', exact: true })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Chat with' })).toHaveCount(0);
   await expect(page.locator('[data-message-id="group-1"]')).toHaveAttribute('data-grouped', 'true');
   await expect(page.locator('[data-message-id="group-2"]')).not.toHaveAttribute('data-grouped', 'true');
   const detail = page.locator('[data-message-id="group-1"]');

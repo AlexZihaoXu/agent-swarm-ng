@@ -2,7 +2,7 @@ export type DashboardTab = 'agents' | 'chat' | 'computers' | 'settings';
 export type DashboardRoute = {
   tab: DashboardTab;
   kind: 'root' | 'not-found' | 'agents-list' | 'agent' | 'agent-dm' | 'agent-new' | 'agent-delete' | 'agent-edit' |
-    'chat-list' | 'chat-agent' | 'chat-group' | 'group-new' | 'group-edit' | 'group-delete' |
+    'chat-list' | 'chat-agent' | 'chat-agent-dm' | 'chat-group' | 'group-new' | 'group-edit' | 'group-delete' |
     'computers-list' | 'computer' | 'computer-new' | 'computer-delete' | 'computer-settings' | 'settings' | 'endpoint-new' | 'endpoint';
   agentId?: string;
   peerId?: string;
@@ -17,6 +17,7 @@ const segment = (value: string) => encodeURIComponent(value);
 export const agentPath = (id: string) => `/agents/${segment(id)}`;
 export const agentDmPath = (id: string, peerId: string) => `${agentPath(id)}/dm/${segment(peerId)}`;
 export const chatAgentPath = (id: string) => `/chat/agents/${segment(id)}`;
+export const chatAgentDmPath = (id: string, peerId: string) => `${chatAgentPath(id)}/dm/${segment(peerId)}`;
 export const chatGroupPath = (id: string) => `/chat/groups/${segment(id)}`;
 export const computerPath = (id: string) => `/computers/${segment(id)}`;
 export const endpointPath = (id: string) => `/settings/endpoints/${segment(id)}`;
@@ -50,6 +51,7 @@ export function parseDashboardPath(pathname: string): DashboardRoute {
   if (section === 'chat') {
     if (parts.length === 1) return { tab: 'chat', kind: 'chat-list' };
     if (parts.length === 3 && third && id === 'agents') return { tab: 'chat', kind: 'chat-agent', agentId: third };
+    if (parts.length === 5 && id === 'agents' && fourth === 'dm') return { tab: 'chat', kind: 'chat-agent-dm', agentId: third, peerId: fifth };
     if (id === 'groups') {
       if (parts.length === 3 && third === 'new') return { tab: 'chat', kind: 'group-new' };
       if (parts.length === 3 && third) return { tab: 'chat', kind: 'chat-group', groupId: third };

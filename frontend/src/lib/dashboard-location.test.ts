@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agentDmPath, agentPath, chatAgentPath, chatGroupPath, computerPath, endpointPath, parseDashboardPath } from './dashboard-location';
+import { agentDmPath, agentPath, chatAgentDmPath, chatAgentPath, chatGroupPath, computerPath, endpointPath, parseDashboardPath } from './dashboard-location';
 
 describe('dashboard paths', () => {
   it('resolves stable tabs and nested conversations', () => {
@@ -8,6 +8,7 @@ describe('dashboard paths', () => {
     expect(parseDashboardPath(agentPath('avery'))).toMatchObject({ kind: 'agent', agentId: 'avery' });
     expect(parseDashboardPath(agentDmPath('avery', 'morgan'))).toMatchObject({ kind: 'agent-dm', agentId: 'avery', peerId: 'morgan' });
     expect(parseDashboardPath(chatAgentPath('morgan'))).toMatchObject({ kind: 'chat-agent', agentId: 'morgan' });
+    expect(parseDashboardPath(chatAgentDmPath('avery', 'morgan'))).toMatchObject({ kind: 'chat-agent-dm', tab: 'chat', agentId: 'avery', peerId: 'morgan' });
     expect(parseDashboardPath(chatGroupPath('team'))).toMatchObject({ kind: 'chat-group', groupId: 'team' });
     expect(parseDashboardPath(computerPath('c-1'))).toMatchObject({ kind: 'computer', computerId: 'c-1' });
     expect(parseDashboardPath('/settings')).toMatchObject({ kind: 'settings' });
@@ -25,7 +26,7 @@ describe('dashboard paths', () => {
     expect(parseDashboardPath(endpointPath('ep1'))).toMatchObject({ kind: 'endpoint', endpointId: 'ep1' });
   });
   it('does not treat API/media paths or malformed IDs as dashboard views', () => {
-    for (const value of ['/api/agents', '/computers/c-1/desktop/', '/agents/a%2Fb', '/agents/avery/other', '/chat/groups/team/other', '/settings/secret']) {
+    for (const value of ['/api/agents', '/computers/c-1/desktop/', '/agents/a%2Fb', '/agents/avery/other', '/chat/agents/avery/dm', '/chat/agents/avery/dm/morgan/extra', '/chat/groups/team/other', '/settings/secret']) {
       expect(parseDashboardPath(value).kind).toBe('not-found');
     }
   });

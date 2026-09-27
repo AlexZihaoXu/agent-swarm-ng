@@ -4,7 +4,7 @@ Agent conversations and source-labelled agent threads are implemented. Member-au
 
 ## App UI
 
-- **Chat with**, beside Agent activity, defaults to **You**. That view is the human’s conversation with the selected agent, with its normal composer and preserved draft.
+- **Chat with**, beside Agent activity, is available in both the Agents tab and the Chat tab's selected-agent conversation. It defaults to **You**: the human’s conversation with the selected agent, with its normal composer and preserved draft. A Chat-tab peer selection keeps its own `/chat/agents/:agentId/dm/:peerId` URL instead of switching tabs. Group chats retain their separate header with no peer selector. The Agents-tab version remains until a later, separately agreed redesign.
 - The selector lists only counterparts with actual DM history, in either direction—not every saved agent or an enabled connection with no messages. It refreshes when messages arrive and supports paging older conversation entries; revoking a connection does not hide its existing history. On phones, the header is one row: tap the selected agent's avatar/name to return to Agents, then a small exchange marker separates it from the selected **You** or peer button. The selector stays visible even if You is its only choice, grows responsively from about 95px at 280px to 128px on wider phones, and opens a menu at least 208px wide. Desktop keeps its original compact header selector.
 - Choosing another agent replaces the main chat area with that pair’s persisted DM history. It does not open a separate chat application or allow the operator to impersonate either agent.
 - The selected/self agent always stays **left**. The counterpart—human or another agent—is **right**.
@@ -15,7 +15,7 @@ Agent conversations and source-labelled agent threads are implemented. Member-au
 - Received peer messages also appear in the You view as ordinary-sized, differently tinted bubbles with a small sender/avatar label. Their arrow switches to that peer’s conversation. These are projections of real persisted DMs, not fabricated assistant replies, and remain after refresh.
 - Agent history supports older pages and live refresh. Internal exchanges do not play human-chat notification sounds. Human message sequence remains authoritative if the wall clock moves backwards.
 
-The selector adapts the inspected Kibo `field-selects-1` source/preview and the existing styled Select. A separate alert-card pattern was inspected but deliberately not used after the operator requested the same chat-bubble composition with different background/decorations.
+The shared selector adapts the inspected Kibo `field-selects-1` source/preview and the existing styled Select; exposing it in Chat changes no peer permission or publication tool. A separate alert-card pattern was inspected but deliberately not used after the operator requested the same chat-bubble composition with different background/decorations.
 
 ## Mutual connections
 

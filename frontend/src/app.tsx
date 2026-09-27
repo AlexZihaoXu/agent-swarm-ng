@@ -31,7 +31,7 @@ import { ChatPanel } from '@/components/chat-panel';
 import { GroupConversation } from '@/components/group-conversation';
 import { ChatComposer } from '@/components/chat-composer';
 import { useGroupEvents } from '@/use-groups';
-import { agentDmPath, agentPath, chatAgentPath, chatGroupPath, computerPath, parseDashboardPath } from '@/lib/dashboard-location';
+import { agentDmPath, agentPath, chatAgentDmPath, chatAgentPath, chatGroupPath, computerPath, parseDashboardPath } from '@/lib/dashboard-location';
 
 function Avatar({ initials, avatar, small = false, typing = false, ready = false, working = false }: { initials: string; avatar?: AvatarAppearance; small?: boolean; typing?: boolean; ready?: boolean; working?: boolean }) {
   return (
@@ -117,10 +117,12 @@ export function App() {
   const inbox = useDmInbox(agent.id);
   const dmConversations = useDmConversations(agent.id);
   const [conversation, setConversation] = useState<{ owner: string; peer: string; selected?: { id: string; name: string; avatar?: AvatarAppearance | null; channelId?: string } }>({ owner: '', peer: 'you' });
-  const conversationPeer = route.kind === 'agent-dm' ? route.peerId ?? 'you' : 'you';
+  const conversationPeer = route.kind === 'agent-dm' || route.kind === 'chat-agent-dm' ? route.peerId ?? 'you' : 'you';
   const chooseConversation = (nextPeer: string) => {
     setConversation({ owner: agent.id, peer: nextPeer, selected: peers.find(item => item.id === nextPeer) });
-    navigate(nextPeer === 'you' ? agentPath(agent.id) : agentDmPath(agent.id, nextPeer));
+    navigate(activeTab === 'chat'
+      ? nextPeer === 'you' ? chatAgentPath(agent.id) : chatAgentDmPath(agent.id, nextPeer)
+      : nextPeer === 'you' ? agentPath(agent.id) : agentDmPath(agent.id, nextPeer));
   };
   // Keep an already-open peer visible when the refreshed sidebar is paginated.
   const selectedPeer = conversation.owner === agent.id && conversation.peer === conversationPeer ? conversation.selected : undefined;
@@ -294,12 +296,12 @@ export function App() {
                   {conversationPeer !== 'you' && peer ? <><AgentName name={agent.name} /><AgentExchangeIcon /><AgentAvatar initials={peer.name.slice(0, 2).toUpperCase()} avatar={peer.avatar ?? defaultAvatar(peer.id)} ready={Boolean(peer)} working={busy[peerChannel]} typing={peerTyping} /><span className="min-w-0 truncate text-sm font-semibold" title={peer.name}>{peer.name}</span></> : <AgentName name={agent.name} />}
                 </div>
               </>}
-              {isPhone && activeTab !== 'chat' && <AgentExchangeIcon />}
+              {isPhone && <AgentExchangeIcon />}
               <div className="ml-auto flex shrink-0 items-center gap-1 md:gap-2">
-                {activeTab !== 'chat' && <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <label htmlFor="agent-dm-conversation" className="hidden whitespace-nowrap text-xs text-muted-foreground md:inline">Chat with</label>
                   <div className="w-[clamp(5.5rem,34vw,8rem)] md:w-36"><Select id="agent-dm-conversation" ariaLabel="Chat with" value={conversationPeer} onValueChange={value => { if (value === 'load-more') void dmConversations.load(dmConversations.failed ? undefined : dmConversations.cursor ?? undefined); else chooseConversation(value); }} options={[{ value: 'you', label: 'You' }, ...peers.map(peer => ({ value: peer.id, label: peer.name === 'You' ? 'You (agent)' : peer.name, icon: <AgentAvatarArt {...(peer.avatar ?? defaultAvatar(peer.id))} size={20} /> })), ...(dmConversations.cursor !== null || dmConversations.failed ? [{ value: 'load-more', label: dmConversations.busy ? 'Loading conversations…' : dmConversations.failed ? 'Retry conversations' : 'More conversations…' }] : [])]} triggerClassName="!h-11 !w-full !justify-between !px-3 !text-sm md:!h-7 md:!min-h-0 md:!px-2 md:!text-xs" contentClassName="min-w-52 md:min-w-0" triggerContent={isPhone ? <><span className="min-w-0 flex-1 truncate">{peer?.name ?? 'You'}</span><svg aria-hidden="true" viewBox="0 0 12 12" className="size-3 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m2 4 4 4 4-4" /></svg></> : <><span className="flex min-w-0 items-center gap-1">{peer && <AgentAvatarArt {...(peer.avatar ?? defaultAvatar(peer.id))} size={20} />}<span className="min-w-0 truncate">{peer?.name ?? 'You'}</span></span><svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="m6 9 6 6 6-6" /></svg></>} /></div>
-                </div>}
+                </div>
                 <AgentActivityPanel agent={agent} entries={activity[agent.id] ?? []} open={activityOpen} onOpenChange={setActivityOpen} />
               </div>
             </header>

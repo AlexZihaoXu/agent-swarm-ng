@@ -65,7 +65,10 @@ test('floating phone tabs and one-row conversation headers navigate without a fo
   await expect(tabs).toBeHidden();
   const back = page.getByRole('button', { name: 'Back to chats' });
   await expect(back).toContainText('Avery');
-  await expect(page.getByRole('combobox', { name: 'Chat with' })).toHaveCount(0);
+  const selector = page.getByRole('combobox', { name: 'Chat with' });
+  await expect(selector).toBeVisible();
+  const backBounds = await bounds(back);
+  expect(Math.abs(backBounds.y - (await bounds(selector)).y)).toBeLessThan(8);
   await expect(page.getByRole('region', { name: 'Chat history' })).toBeVisible();
   await page.getByRole('button', { name: 'Back to chats' }).click();
   await expect(tabs).toBeVisible();
