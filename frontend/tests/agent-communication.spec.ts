@@ -10,24 +10,18 @@ async function mockDmPeers(page: Page, ids: string[] = ['morgan']) {
   await page.route('**/api/agents/avery/dm-peers*', route => route.fulfill({ json: { peers: sampleAgents.filter(agent => ids.includes(agent.id)).map(agent => ({ id: agent.id, name: agent.name, avatar: agent.avatar ?? null, channelId: agent.channelId })), nextCursor: null } }));
 }
 
-test('keeps appearance and permission drafts across fixed tabs, drill-down, transcript inspection, and save', async ({ page }) => {
+test('keeps appearance and permission drafts across one scroll, transcript inspection, and save', async ({ page }) => {
   const peerMessage = { id: 'dm-one', sequence: 2, conversationId: 'dm:avery:morgan', senderId: 'morgan', recipientId: 'avery', senderName: 'Morgan', recipientName: 'Avery', text: '**Separate peer result**', status: 'completed', timestamp: 1 };
   const live = [peerMessage];
   await page.route('**/api/agents/avery/dms/morgan*', route => route.fulfill({ json: new URL(route.request().url()).searchParams.has('before') ? { messages: [{ ...peerMessage, id: 'older', sequence: 1, text: 'Earlier peer context' }], nextCursor: null } : { messages: live, nextCursor: 2 } }));
   const dialog = await openEditor(page);
-  await expect(dialog.getByRole('button', { name: 'Avatar', exact: true })).toHaveCount(0);
-  await dialog.getByRole('tab', { name: 'Avatar', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Preview Bean', exact: true }).click();
-  await dialog.getByRole('tab', { name: 'Settings', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Swarm App' }).click();
-  await expect(dialog.getByRole('navigation')).toHaveText('Channels›Swarm App');
+  await expect(dialog.getByRole('tablist', { name: 'Agent editor sections' })).toHaveCount(0);
   await dialog.getByRole('checkbox', { name: 'Morgan', exact: true }).check();
-  await dialog.getByRole('button', { name: 'Channels', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Swarm App' }).click();
+  await dialog.getByRole('heading', { name: 'Avatar' }).scrollIntoViewIfNeeded();
+  await dialog.getByRole('button', { name: 'Preview Bean', exact: true }).click();
   await expect(dialog.getByRole('checkbox', { name: 'Morgan', exact: true })).toBeChecked();
-  await dialog.getByRole('tab', { name: 'Avatar', exact: true }).click();
   await expect(dialog.getByRole('button', { name: 'Preview Bean', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await dialog.getByRole('tab', { name: 'Settings', exact: true }).click();
+  await dialog.getByRole('heading', { name: 'Channels' }).scrollIntoViewIfNeeded();
   await dialog.screenshot({ path: '../.scratch/agent-communication-settings-desktop.png', animations: 'disabled' });
   await dialog.getByRole('button', { name: 'View DM with Morgan' }).click();
   await expect(dialog.getByRole('region', { name: 'Agent DM transcript' })).toContainText('Separate peer result');
@@ -42,8 +36,9 @@ test('keeps appearance and permission drafts across fixed tabs, drill-down, tran
   await expect(dialog.getByRole('status')).toContainText('Saved');
   await page.reload();
   await expect(dialog.getByRole('checkbox', { name: 'Morgan', exact: true })).toBeChecked();
+  await expect(dialog.getByRole('button', { name: 'Preview Bean', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
-test('keeps paginated existing grants on mobile, supports search and reduced motion, and pins tabs', async ({ page }) => {
+test('keeps paginated existing grants on mobile, supports search and reduced motion, and pins Save', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 780 }); await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('**/api/agents/avery/settings', route => route.request().method() === 'GET' ? route.fulfill({ json: { avatar: null, allowedDmAgents: [{ id: 'remote', name: 'Saved remote peer' }] } }) : route.fallback());
   await page.route(/\/api\/agents\?.*/, route => {
@@ -53,11 +48,11 @@ test('keeps paginated existing grants on mobile, supports search and reduced mot
     return route.fulfill({ json: { agents, nextCursor: null } });
   });
   const dialog = await openEditor(page);
-  await dialog.getByRole('button', { name: 'Swarm App' }).click();
   await expect(dialog.getByRole('checkbox', { name: 'Saved remote peer' })).toBeChecked();
-  const tabs = dialog.getByRole('tablist'); const top = (await tabs.boundingBox())!.y;
-  await dialog.getByRole('region', { name: 'Agent editor', exact: true }).evaluate(element => { element.scrollTop = 700; });
-  expect((await tabs.boundingBox())!.y).toBe(top);
+  const editor = dialog.getByRole('region', { name: 'Agent editor', exact: true });
+  await editor.evaluate(element => { element.scrollTop = 700; });
+  await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(100);
+  await expect(dialog.getByRole('heading', { name: 'Avatar' })).toBeVisible();
   await dialog.getByLabel('Find agents').fill('Search');
   await expect(dialog.getByRole('checkbox', { name: 'Search result' })).toBeVisible();
   await dialog.getByLabel('Find agents').fill('');
@@ -86,18 +81,15 @@ test('tracks peer work separately from human messages and stops the peer run wit
 
 test('one saved connection automatically enables the other agent and either side can remove it', async ({ page }) => {
   let settings = await openEditor(page);
-  await settings.getByRole('button', { name: 'Swarm App' }).click();
   await settings.getByRole('checkbox', { name: 'Morgan', exact: true }).check();
   await settings.getByRole('button', { name: 'Save changes' }).click();
   await expect(settings.getByRole('status')).toContainText('Saved');
   await page.getByRole('button', { name: 'Open settings for Morgan' }).click();
   settings = page.getByRole('region', { name: 'Settings for Morgan' });
-  await settings.getByRole('button', { name: 'Swarm App' }).click();
   await expect(settings.getByRole('checkbox', { name: 'Avery', exact: true })).toBeChecked();
   await settings.getByRole('checkbox', { name: 'Avery', exact: true }).uncheck(); await settings.getByRole('button', { name: 'Save changes' }).click();
   await page.getByRole('button', { name: 'Open settings for Avery' }).click();
   settings = page.getByRole('region', { name: 'Settings for Avery' });
-  await settings.getByRole('button', { name: 'Swarm App' }).click();
   await expect(settings.getByRole('checkbox', { name: 'Morgan', exact: true })).not.toBeChecked();
 });
 

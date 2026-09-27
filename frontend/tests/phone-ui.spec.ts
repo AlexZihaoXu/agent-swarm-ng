@@ -85,9 +85,11 @@ test('phone agent creation and editing expose reachable form and permission cont
   await page.getByRole('button', { name: 'Open settings for Avery' }).click();
   const editor = page.getByRole('region', { name: 'Settings for Avery' });
   await expect(editor).toBeVisible();
-  expect((await size(editor.getByRole('tab', { name: 'Settings' }))).height).toBeGreaterThanOrEqual(44);
-  await editor.getByRole('button', { name: /Swarm App/ }).click();
+  await expect(editor.getByRole('tablist', { name: 'Agent editor sections' })).toHaveCount(0);
+  await expect(editor.getByRole('checkbox', { name: 'Morgan' })).toBeVisible();
   await expect(page.getByLabel('Find agents')).toHaveCSS('font-size', '16px');
+  await editor.getByRole('heading', { name: 'Avatar' }).scrollIntoViewIfNeeded();
+  expect((await size(editor.getByRole('button', { name: 'Preview Triangle' }))).height).toBeGreaterThanOrEqual(44);
   expect((await size(page.getByRole('button', { name: 'Save changes' }))).height).toBeGreaterThanOrEqual(44);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
 });

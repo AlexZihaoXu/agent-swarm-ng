@@ -4,7 +4,7 @@ Agent conversations and source-labelled agent threads are implemented. Member-au
 
 ## App UI
 
-- **Chat with**, beside Agent activity, is in the **Chat** tab's selected-agent conversation. It defaults to **You**: the human’s conversation with the selected agent, with its normal composer and preserved draft. A peer selection keeps its own `/chat/agents/:agentId/dm/:peerId` URL. Group chats retain their separate header with no peer selector. **Agents** keeps the sidebar but now shows the selected agent's Settings and Avatar directly in the main pane; it does not show a conversation.
+- **Chat with**, beside Agent activity, is in the **Chat** tab's selected-agent conversation. It defaults to **You**: the human’s conversation with the selected agent, with its normal composer and preserved draft. A peer selection keeps its own `/chat/agents/:agentId/dm/:peerId` URL. Group chats retain their separate header with no peer selector. **Agents** keeps the sidebar but shows Channels permissions and Avatar together in one left-aligned scrolling main pane; it does not show a conversation.
 - The selector lists only counterparts with actual DM history, in either direction—not every saved agent or an enabled connection with no messages. It refreshes when messages arrive and supports paging older conversation entries; revoking a connection does not hide its existing history. On phones, the Chat header is one row: tap the selected agent's avatar/name to return to Chats, then a small exchange marker separates it from the selected **You** or peer button. The selector stays visible even if You is its only choice, grows responsively from about 95px at 280px to 128px on wider phones, and opens a menu at least 208px wide. Desktop keeps its original compact header selector.
 - Choosing another agent replaces the main chat area with that pair’s persisted DM history. It does not open a separate chat application or allow the operator to impersonate either agent.
 - The selected/self agent always stays **left**. The counterpart—human or another agent—is **right**.
@@ -19,11 +19,11 @@ The shared selector adapts the inspected Kibo `field-selects-1` source/preview a
 
 ## Mutual connections
 
-Select an agent in **Agents → Settings → Channels → Swarm App → Allowed DMs**. Right-click remains for Create/Delete, not editing; the existing Avatar and Settings sections are now inline. Saving applies appearance and connection permissions atomically, while Discard restores the last saved values.
+Select an agent in **Agents**, then use the visible **Channels → Swarm App → Allowed DMs** controls; scroll down for **Avatar**. There are no section tabs or permission-tile drilldown. Right-click remains for Create/Delete, not editing. Saving applies appearance and connection permissions atomically, while Discard restores the last saved values.
 
 Enabling A↔B allows both agents to initiate and reply. Disabling the connection from either side blocks subsequent sends in both directions. Both directed grant rows change in one transaction; unrelated connections remain intact. Self/unknown recipients are rejected, and new connections respect the 100-peer limit.
 
-Appearance and connection settings save atomically. Drafts survive tabs, navigation and recipient search/pagination. Cancel discards changes; save failures retain them. Revocation does not erase transcripts or withdraw already accepted messages.
+Appearance and connection settings save atomically. Drafts survive scrolling, transcript inspection and recipient search/pagination. Discard restores the last saved values; save failures retain drafts. Revocation does not erase transcripts or withdraw already accepted messages.
 
 Migration `20260923023000_mutual_dm_connections` upgrades existing one-way grants to mutual pairs and adds an indexed received-message lookup. The local migration was applied with zero active runs; the existing enabled pair was upgraded without sending messages.
 

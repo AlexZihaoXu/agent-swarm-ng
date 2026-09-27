@@ -4,8 +4,9 @@ test('Agents opens selected agent settings directly, keeps Avatar inline, and ha
   await page.goto('/agents/avery');
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
   await expect(settings).toBeVisible();
-  await expect(settings.getByRole('tab', { name: 'Settings', exact: true })).toHaveAttribute('data-state', 'active');
-  await expect(settings.getByRole('button', { name: /Swarm App/ })).toBeVisible();
+  await expect(settings.getByRole('tablist', { name: 'Agent editor sections' })).toHaveCount(0);
+  await expect(settings.getByRole('heading', { name: 'Channels' })).toBeVisible();
+  await expect(settings.getByRole('checkbox', { name: 'Morgan' })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('agents-settings-desktop.png'), animations: 'disabled' });
   await expect(page.getByRole('form', { name: 'Message composer' })).toHaveCount(0);
   await expect(page.getByRole('dialog', { name: 'Edit agent' })).toHaveCount(0);
@@ -13,13 +14,12 @@ test('Agents opens selected agent settings directly, keeps Avatar inline, and ha
   await expect(page.getByRole('menuitem', { name: 'Edit agent' })).toHaveCount(0);
   await expect(page.getByRole('menuitem', { name: 'Delete agent' })).toBeVisible();
   await page.keyboard.press('Escape');
-  await settings.getByRole('tab', { name: 'Avatar' }).click();
-  await expect(page).toHaveURL(/\/agents\/avery\/edit\/avatar$/);
+  await settings.getByRole('region', { name: 'Agent editor' }).evaluate(element => { element.scrollTop = element.scrollHeight; });
+  await expect(settings.getByRole('heading', { name: 'Avatar' })).toBeVisible();
   await expect(settings.getByRole('button', { name: 'Preview Triangle' })).toBeVisible();
   await page.reload();
-  await expect(settings.getByRole('tab', { name: 'Avatar' })).toHaveAttribute('data-state', 'active');
-  await settings.getByRole('tab', { name: 'Settings', exact: true }).click();
-  await expect(settings.getByRole('button', { name: /Swarm App/ })).toBeVisible();
+  await expect(settings.getByRole('heading', { name: 'Channels' })).toBeVisible();
+  await expect(settings.getByRole('heading', { name: 'Avatar' })).toBeVisible();
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await expect(page.getByRole('form', { name: 'Message composer' })).toBeVisible();
 });
@@ -32,9 +32,8 @@ test('inline avatar and DM grants save together, and Discard restores unsaved ch
   });
   await page.goto('/agents/avery');
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
-  await settings.getByRole('button', { name: /Swarm App/ }).click();
   await settings.getByRole('checkbox', { name: 'Morgan' }).check();
-  await settings.getByRole('tab', { name: 'Avatar' }).click();
+  await settings.getByRole('region', { name: 'Agent editor' }).evaluate(element => { element.scrollTop = element.scrollHeight; });
   await settings.getByRole('button', { name: 'Preview Triangle' }).click();
   await settings.getByRole('button', { name: 'Save changes' }).click();
   await expect(settings.getByRole('status')).toContainText('Saved');
@@ -44,7 +43,7 @@ test('inline avatar and DM grants save together, and Discard restores unsaved ch
   await settings.getByRole('button', { name: 'Preview Bean' }).click();
   await settings.getByRole('button', { name: 'Discard changes' }).click();
   await expect(settings.getByRole('button', { name: 'Preview Triangle' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page).toHaveURL(/\/agents\/avery\/edit\/avatar$/);
+  await expect(page).toHaveURL(/\/agents\/avery$/);
 });
 
 test('phone Agents list opens inline settings with Back, while legacy peer links move to Chat', async ({ page }) => {
@@ -53,6 +52,7 @@ test('phone Agents list opens inline settings with Back, while legacy peer links
   await page.getByRole('button', { name: 'Open settings for Avery' }).click();
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
   await expect(settings).toBeVisible();
+  await expect(settings.getByRole('checkbox', { name: 'Morgan' })).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Agents' })).toBeHidden();
   await expect(settings.getByRole('button', { name: 'Back to agents' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

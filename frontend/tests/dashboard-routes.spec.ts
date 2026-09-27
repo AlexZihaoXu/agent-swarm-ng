@@ -94,18 +94,21 @@ test('computer viewer path restores after reload and Back returns to the grid', 
   await expect(page.getByTestId('computer-viewer')).toBeVisible();
 });
 
-test('agent editor sections and DM preview have refreshable paths', async ({ page }) => {
+test('legacy section bookmarks and DM preview have refreshable paths without tabs', async ({ page }) => {
   await page.goto('/agents/morgan/edit/avatar');
   const editor = page.getByRole('region', { name: 'Settings for Morgan' });
   await expect(editor).toBeVisible();
-  await editor.getByRole('tab', { name: 'Settings', exact: true }).click();
-  await expect(page).toHaveURL(/\/agents\/morgan\/edit\/settings\/channels$/);
+  await expect.poll(() => editor.getByRole('region', { name: 'Agent editor' }).evaluate(element => element.scrollTop)).toBeGreaterThan(100);
+  await expect(editor.getByRole('heading', { name: 'Avatar' })).toBeVisible();
+  await page.goto('/agents/morgan/edit/settings/channels');
+  await expect(editor.getByRole('checkbox', { name: 'Avery' })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/agents\/morgan\/edit\/avatar$/);
+  await expect.poll(() => editor.getByRole('region', { name: 'Agent editor' }).evaluate(element => element.scrollTop)).toBeGreaterThan(100);
   await page.goForward();
   await expect(page).toHaveURL(/\/agents\/morgan\/edit\/settings\/channels$/);
-  await page.getByRole('button', { name: /Swarm App.*Agent-to-agent direct messages/ }).click();
-  await expect(page).toHaveURL(/\/agents\/morgan\/edit\/settings\/channels\/swarm$/);
+  await page.goto('/agents/morgan/edit/settings/channels/swarm');
+  await expect(editor.getByRole('checkbox', { name: 'Avery' })).toBeVisible();
   await page.reload();
   await expect(editor).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Allowed DMs' })).toBeVisible();

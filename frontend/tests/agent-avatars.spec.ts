@@ -168,7 +168,7 @@ test('existing agents can edit and persist appearance without changing their cha
   await page.getByRole('tab', { name: 'Agents', exact: true }).click();
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
   const card = page.getByRole('button', { name: 'Open settings for Avery' });
-  await settings.getByRole('tab', { name: 'Avatar' }).click();
+  await settings.getByRole('heading', { name: 'Avatar' }).scrollIntoViewIfNeeded();
   await settings.getByRole('button', { name: 'Preview Triangle', exact: true }).click();
   await select(page, 'Avatar color', 'Apricot'); await select(page, 'Eye shape', 'Circles');
   const seed = await previewArt(page).getAttribute('data-avatar-seed');
@@ -184,7 +184,7 @@ test('existing agents can edit and persist appearance without changing their cha
   await expect(header).toHaveAttribute('data-avatar-shape', 'triangle');
   await expect(header.locator('path').first()).toHaveAttribute('fill', '#f7ad51');
   await page.getByRole('tab', { name: 'Agents', exact: true }).click();
-  await settings.getByRole('tab', { name: 'Avatar' }).click();
+  await settings.getByRole('heading', { name: 'Avatar' }).scrollIntoViewIfNeeded();
   await settings.getByRole('button', { name: 'Randomize', exact: true }).click();
   await page.route('**/api/agents/avery/settings', route => route.request().method() === 'PATCH' ? route.fulfill({ status: 503, json: { message: 'Save failed' } }) : route.fallback());
   await settings.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -221,7 +221,7 @@ test('mobile inline avatar settings scroll without overflow and unsaved changes 
   const original = defaultAvatar('avery');
   await card.click();
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
-  await settings.getByRole('tab', { name: 'Avatar' }).click();
+  await settings.getByRole('heading', { name: 'Avatar' }).scrollIntoViewIfNeeded();
   await settings.getByRole('button', { name: 'Preview Triangle', exact: true }).click(); await select(page, 'Eye shape', 'Circles');
   expect(await settings.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await settings.getByRole('region', { name: 'Agent editor' }).evaluate(element => { element.scrollTop = 0; });
