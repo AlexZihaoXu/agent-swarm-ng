@@ -17,7 +17,7 @@ export const terminalParameters = {
 export const terminalRequest = Type.Union(Object.entries(terminalParameters).map(([operation,schema])=>Type.Object({operation:Type.Literal(operation),...schema.properties},{additionalProperties:false})));
 export type TerminalRequest = Static<typeof terminalRequest>;
 const descriptions = {
-  create:'Create a named persistent tmux terminal (32/computer, names unique ignoring case). Default interactive Bash; optional command runs bash -lc and leaves an exited pane/output when finished. cwd defaults /workspace; ~/ is /home/agent. Returns stable session ID. Fixed 120×36 initial terminal. Does not wait for a command to finish.',
+  create:'Create a named persistent tmux terminal (32/computer, names unique ignoring case). Default interactive Bash; optional command runs bash -lc and leaves an exited pane/output when finished. cwd defaults /workspace; ~/ is /home/agent. Returns stable session ID. Fixed 120×36 terminal; browser viewing does not resize it. Does not wait for a command to finish.',
   list:'List managed tmux sessions on this computer. Shared with other authorized agents and the operator; not private agent memory.',
   view:'Read latest ≤2000 rows/50000 UTF-8 bytes of plain terminal screen/scrollback, with explicit truncation. tmux retains10000 history rows in memory, not a permanent log. This is a snapshot, not incremental stdout/stderr; full-screen applications may redraw it.',
   type:'Paste literal text into a live session (≤32768 UTF-8 bytes); never interpret text as tmux key names. No Enter is appended. Bracketed paste is used where supported; supplied newlines may execute commands. Use press Enter to submit and view to verify. Control keys belong in press.',

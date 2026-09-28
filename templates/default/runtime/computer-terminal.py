@@ -145,7 +145,8 @@ def execute(value):
         command = ['/bin/bash', '-lc', value['command']] if 'command' in value else ['/bin/bash', '-i']
         # Set session label in the same command queue; remain-on-exit is set before even a fast command.
         tmux('new-session', '-d', '-s', 'sw-' + session, '-x', '120', '-y', '36', '-c', cwd.replace('#', '##') + '/.', shlex.join(command),
-             ';', 'set-option', '-t', 'sw-' + session, '@swarm_name', value['name'])
+             ';', 'set-option', '-t', 'sw-' + session, '@swarm_name', value['name'],
+             ';', 'set-window-option', '-t', 'sw-' + session + ':0', 'window-size', 'manual')
         items = sessions()
     else: session = value['session']
     item = next((item for item in items if item['id'] == session), None)

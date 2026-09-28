@@ -42,7 +42,7 @@ The desktop viewer identifies its agent control holder with that agent's configu
 
 ## Persistent terminals
 
-A running computer's card menu also offers **Terminals**: shared guest tmux sessions with bounded live snapshots, create/select, explicit text/key input, interrupt and typed-name deletion confirmation. Closing the view or releasing agent control leaves programs running; power-off ends them. This is separate from the read-only file browser and synchronous core `bash`. See [terminal tools, operator API, lifetime and safety](persistent-terminals.md).
+A running computer's card menu also offers **Terminals**: shared guest tmux sessions with a real fixed120×36 xterm.js PTY view, direct keyboard (never mouse) input, create/select, explicit reserved-key controls, interrupt and typed-name deletion confirmation. Closing the view or releasing agent control leaves programs running; power-off ends them. This is separate from the read-only file browser and synchronous core `bash`. See [terminal tools, operator API, lifetime and safety](persistent-terminals.md).
 
 ## Operator file browser
 

@@ -35,6 +35,6 @@ export default defineConfig(({ mode }) => ({
       .split(',').map(host => host.trim()).filter(Boolean),
     // Avoid transforming partially written files during local edits.
     watch: { awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 25 } },
-    proxy: { '/api': { target: process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:3000' } },
+    proxy: { '/api': { target: process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:3000', ws: true } },
   },
 }));

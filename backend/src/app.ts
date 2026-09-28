@@ -1,5 +1,7 @@
 import Fastify from 'fastify';
 import swagger from '@fastify/swagger';
+import websocket from '@fastify/websocket';
+import { registerTerminalStreams } from './computer-terminal-stream';
 import { Type } from '@sinclair/typebox';
 import { registerModelEndpoints } from './model-endpoints';
 import type { EndpointStore } from './endpoint-store';
@@ -19,6 +21,7 @@ import { join } from 'node:path';
 export async function buildApp({ fetcher, endpointStore, database, codex = new CodexProvider(), computerController }: { fetcher?: typeof fetch; endpointStore?: EndpointStore; database?: PlatformStore; codex?: CodexProvider; computerController?: ComputerController | null } = {}) {
   const app = Fastify({ logger: true });
   const platform = database ?? new PlatformStore();
+  await app.register(websocket,{options:{maxPayload:16384,perMessageDeflate:false}});
   await app.register(swagger, {
     openapi: { info: { title: 'Agent Swarm NG API', version: '0.1.0' }, components: { schemas: { AgentActivityEntry: ActivityEntrySchema } } },
   });
@@ -38,6 +41,7 @@ export async function buildApp({ fetcher, endpointStore, database, codex = new C
   registerChat(app, endpointStore, platform, codex, computers, screenshots);
   registerComputerRoutes(app, platform, controller, computers);
   registerComputerUseRoutes(app, computers, screenshots);
+  registerTerminalStreams(app, computers, controller);
   registerKnowledgeRoutes(app);
 
   await app.ready();

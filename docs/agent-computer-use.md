@@ -41,7 +41,7 @@ Opt-in real runtime check (Linux/Docker with Sysbox and a built desktop image): 
 
 ## Persistent terminals
 
-The eight `terminal_create/list/view/type/press/interrupt/delete/status` tools operate on shared tmux sessions in the same currently claimed guest. They do not change synchronous `bash` semantics. Sessions survive turns, Stop, browser/backend/controller restarts and release/revocation, but end when the computer stops; no automatic restoration or background-job scheduler is provided. Operator **Terminals** opens bounded snapshots and explicit input controls without taking a claim. See [persistent terminal semantics, bounds and rollout](persistent-terminals.md) and Swarm Knowledge `swarm/computers/terminals` before use.
+The eight `terminal_create/list/view/type/press/interrupt/delete/status` tools operate on shared tmux sessions in the same currently claimed guest. They do not change synchronous `bash` semantics. Sessions survive turns, Stop, browser/backend/controller restarts and release/revocation, but end when the computer stops; no automatic restoration or background-job scheduler is provided. Operator **Terminals** opens a fixed-size real PTY emulator with direct keyboard input (no mouse forwarding) without taking a claim. This human keyboard lane is concurrent like human desktop input; agent tools retain their existing claim/cancellation fence. See [persistent terminal semantics, bounds and rollout](persistent-terminals.md) and Swarm Knowledge `swarm/computers/terminals` before use.
 
 ## Images and private sessions
 

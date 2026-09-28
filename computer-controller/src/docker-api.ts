@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { attachExec } from './docker-exec-stream';
 
 export class DockerApiError extends Error {
   constructor(readonly status: number) { super(`Docker operation returned ${status}.`); }
@@ -38,6 +39,15 @@ export class DockerApi {
   async optional<T>(path: string): Promise<T | null> {
     try { return await this.json<T>('GET', path); }
     catch (error) { if (error instanceof DockerApiError && error.status === 404) return null; throw error; }
+  }
+
+  async execStream(container:string,command:string[],signal:AbortSignal,onOutput:(chunk:Buffer)=>void,onEnd:()=>void) {
+    signal.throwIfAborted();
+    const created=await this.json<{Id:string}>('POST',`/containers/${encodeURIComponent(container)}/exec`,{
+      AttachStdin:true,AttachStdout:true,AttachStderr:true,Tty:false,Cmd:command,User:'1000:1000',Env:['XDG_RUNTIME_DIR=/run/user/1000'],
+    });
+    signal.throwIfAborted();
+    return attachExec(this.socketPath,created.Id,signal,onOutput,onEnd);
   }
 
   async exec(container: string, command: string[], user = 'root', timeout = 19_000, maxBytes = 768 * 1024) {
