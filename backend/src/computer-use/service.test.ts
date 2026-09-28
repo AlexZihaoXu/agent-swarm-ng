@@ -19,6 +19,44 @@ async function fixture() {
   await service.ready(); await service.assign(a.id, [computer.id]); await service.assign(b.id, [computer.id]);
   return { db, a, b, computer, service, runtime, time: (n: number) => { now = n; }, invalid: (v: boolean) => { invalid = v; }, counts: () => ({ executes, cancels }) };
 }
+it('requires a current claim for every core tool, never assignment alone, and uses the claim target', async () => {
+  const f = await fixture(); const calls: string[] = [];
+  f.runtime.prepareCore = async (id, request) => { calls.push(id); return request; };
+  f.runtime.core = async () => ({ started: true, settled: true, result: { type: 'text', text: 'guest' } });
+  for (const kind of ['read','edit','write','bash']) await expect(f.service.core(f.a.id, { kind })).rejects.toThrow(/use_computer/);
+  expect(calls).toEqual([]);
+  await f.service.use(f.a.id, 'Desk');
+  for (const kind of ['read','edit','write','bash']) await f.service.core(f.a.id, { kind });
+  expect(calls).toEqual(Array(4).fill(f.computer.id));
+  await expect(f.service.core(f.b.id, { kind: 'read' })).rejects.toThrow(/use_computer/);
+  await f.service.assign(f.a.id, []);
+  await expect(f.service.core(f.a.id, { kind: 'read' })).rejects.toThrow(/use_computer/);
+});
+it('core tools never grant GUI allowance; mutating core work invalidates it', async () => {
+  const f = await fixture(); await f.service.use(f.a.id, 'Desk');
+  f.runtime.prepareCore = async (_id, request) => request;
+  f.runtime.core = async () => ({ started: true, settled: true, result: { type: 'text', text: 'ok' } });
+  await f.service.core(f.a.id, { kind: 'read' });
+  await expect(f.service.run(f.a.id, {})).rejects.toThrow(/look/i);
+  await f.service.capture(f.a.id, {}); await f.service.core(f.a.id, { kind: 'bash' });
+  await expect(f.service.run(f.a.id, {})).rejects.toThrow(/look/i);
+});
+it('joins active core work before transfer, and unknown cancellation retains the claim', async () => {
+  const f = await fixture(); await f.service.use(f.a.id, 'Desk');
+  let enter!: () => void, finish!: () => void;
+  const entered = new Promise<void>(resolve => { enter = resolve; });
+  f.runtime.prepareCore = async (_id, request) => request;
+  f.runtime.core = async (_id, _request, signal) => { enter(); await new Promise<void>(resolve => { finish = resolve; }); expect(signal?.aborted).toBe(true); return { started: true, settled: true, error: 'Cancelled' }; };
+  const running = f.service.core(f.a.id, { kind: 'bash' }); await entered;
+  const release = f.service.forceRelease(f.computer.id);
+  expect((await f.db.client.computerClaim.findUnique({ where: { computerId: f.computer.id } }))?.agentId).toBe(f.a.id);
+  finish(); await running; await release;
+  await f.service.use(f.b.id, 'Desk');
+  f.runtime.cancel = async () => { throw new Error('Unsettled'); };
+  await expect(f.service.forceRelease(f.computer.id)).rejects.toThrow('Unsettled');
+  expect((await f.db.client.computerClaim.findUnique({ where: { computerId: f.computer.id } }))?.agentId).toBe(f.b.id);
+});
+
 it('separates assignments from one active holder, preserves an old claim when a switch is busy', async () => {
   const f = await fixture();
   await f.service.use(f.a.id, 'Desk');

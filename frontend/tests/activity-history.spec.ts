@@ -68,9 +68,9 @@ test('restored page can expand again after pagehide aborts an in-flight fragment
   await expect(panel).toContainText('First tail');
 });
 
-test('screenshot references render retained images and label evicted copies', async ({ page }) => {
+for (const tool of ['glance', 'read']) test(`${tool} image references label evicted copies without losing metadata`, async ({ page }) => {
   const imageId = '8f9bb21a-a7e6-4e52-853d-b188207fc0f0';
-  await page.route(`**/api/agents/${agent.id}/activity*`, route => route.fulfill({ json: { entries: [{ ...entry('shot', 1, JSON.stringify({ id: imageId, agentId: agent.id, bounds: [0,0,999,999] })), kind: 'tool_result', label: 'glance — result' }], nextCursor: null, contextUsage: null } }));
+  await page.route(`**/api/agents/${agent.id}/activity*`, route => route.fulfill({ json: { entries: [{ ...entry('shot', 1, JSON.stringify({ id: imageId, agentId: agent.id, bounds: [0,0,999,999] })), kind: 'tool_result', label: `${tool} — result` }], nextCursor: null, contextUsage: null } }));
   await page.route(`**/api/agents/${agent.id}/screenshots/*`, route => route.fulfill({ status: 404, json: { message: 'Expired' } }));
   const panel = await open(page);
   await expect(panel).toContainText('Screenshot expired or unavailable');

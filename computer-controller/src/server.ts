@@ -4,6 +4,7 @@ import { ResourceError } from './resources';
 import type { ComputerConfiguration } from './computer-configuration';
 import { ComputerUseService } from './computer-use-service';
 import { MAX_USE_BODY } from './computer-use';
+import { ComputerCoreService } from './computer-core-service';
 
 process.umask(0o077);
 const docker = new DockerApi();
@@ -18,6 +19,7 @@ const manager = new ComputerManager(docker, process.env.COMPUTER_NAMESPACE ?? 'a
 // Boot-time reconciliation starts only our labelled computers, always after
 // their filtered egress sidecars. No model inference or agent work is replayed.
 await manager.resume();
+const computerCore = new ComputerCoreService((id, mode, input) => manager.computerCoreExec(id, mode, input));
 const computerUse = new ComputerUseService((id, mode, input) => manager.computerUseExec(id, mode, input));
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 
@@ -40,7 +42,7 @@ async function body(request: Request, maxBytes = 4096): Promise<unknown> {
 }
 
 Bun.serve({
-  hostname: '0.0.0.0', port: Number(process.env.COMPUTER_CONTROLLER_PORT ?? 3101), idleTimeout: 60,
+  hostname: '0.0.0.0', port: Number(process.env.COMPUTER_CONTROLLER_PORT ?? 3101), idleTimeout: 150,
   async fetch(request) {
     try {
       const { pathname, searchParams } = new URL(request.url);
@@ -56,6 +58,14 @@ Bun.serve({
         if ('settings' in input && (!input.settings || typeof input.settings !== 'object' || Array.isArray(input.settings))) throw new ResourceError(400, 'Invalid computer settings.');
         await manager.create(input.id, input.name, 'settings' in input ? input.settings as ComputerConfiguration : undefined);
         return json({ created: true }, 201);
+      }
+      const coreMatch = /^\/computers\/([^/]+)\/core\/(prepare|execute|cancel)$/.exec(pathname);
+      if (coreMatch) {
+        if (request.method !== 'POST') return json({ message: 'Method not allowed.' }, 405);
+        const id = decodeURIComponent(coreMatch[1]), input = await body(request, MAX_USE_BODY);
+        if (coreMatch[2] === 'prepare') return json(await computerCore.prepare(id, input));
+        if (coreMatch[2] === 'execute') return json(await computerCore.execute(id, input));
+        return json(await computerCore.cancel(id));
       }
       const useMatch = /^\/computers\/([^/]+)\/(capture|actions|actions\/validate|actions\/cancel)$/.exec(pathname);
       if (useMatch) {

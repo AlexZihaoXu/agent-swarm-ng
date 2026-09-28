@@ -37,7 +37,7 @@ export function registerComputerUseRoutes(app: FastifyInstance, service: Compute
     try {
       if (!await service.database.client.computer.findUnique({ where: { id: request.params.id } })) return reply.code(404).send({ message: 'Computer not found.' });
       await service.forceRelease(request.params.id); return { released: true };
-    } catch { return reply.code(503).send({ message: 'Could not settle computer input; control has not been transferred. Retry release.' }); }
+    } catch { return reply.code(503).send({ message: 'Could not settle computer operations; control has not been transferred. Retry release. If the runtime was lost, stop the computer before releasing it.' }); }
   });
   app.get<{ Params: { id: string; imageId: string } }>('/api/agents/:id/screenshots/:imageId', {
     schema: { operationId: 'getAgentScreenshot', params: Type.Object({ id: Type.String({ format: 'uuid' }), imageId: Type.String({ format: 'uuid' }) }), response: { 200: Type.String({ format: 'binary' }), ...errors } },

@@ -36,9 +36,9 @@ export function AgentComputerSettings({ agentId }: { agentId: string }) {
     finally { setBusy(false); }
   }
   return <section aria-label="Computers" className="space-y-4">
-    <div><h3 className="text-lg font-semibold">Computers</h3><p className="mt-1 text-sm text-muted-foreground">Choose the desktops this agent may use. Several agents can be assigned; only one agent holds control at a time.</p></div>
+    <div><h3 className="text-lg font-semibold">Computers</h3><p className="mt-1 text-sm text-muted-foreground">Choose the computers this agent may use for desktop, file, and shell tools. Several agents can be assigned; only one agent holds control at a time.</p></div>
     <div className="space-y-4 rounded-lg border border-border bg-sidebar/30 p-4">
-      <p className="text-xs leading-relaxed text-muted-foreground">Assignments save separately from appearance and Channels. Removing access releases the agent's control after any active input stops.</p>
+      <p className="text-xs leading-relaxed text-muted-foreground">Assignments save separately from appearance and Channels. Tools require an active claim and use the guest account's permissions, including configured sudo—not platform-host access. Removing access releases control only after active input and commands settle.</p>
       <fieldset disabled={!loaded || busy} className="space-y-3"><legend className="sr-only">Assigned computers</legend>
         {computers.map(computer => <div key={computer.id} className="flex min-h-11 items-center gap-2 sm:min-h-0">
           <input type="checkbox" id={`computer-${agentId}-${computer.id}`} checked={selected.includes(computer.id)} onChange={event => { setSelected(ids => event.target.checked ? [...ids, computer.id] : ids.filter(id => id !== computer.id)); setStatus(''); }} className="size-4 shrink-0 cursor-pointer rounded border-border accent-foreground disabled:cursor-default focus-visible:ring-2 focus-visible:ring-ring" />

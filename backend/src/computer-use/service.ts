@@ -1,12 +1,15 @@
 import type { PlatformStore } from '../platform-store';
 
 export type ScreenFrame = { mimeType: 'image/jpeg' | 'image/png'; data: Uint8Array; width: number; height: number; bounds: number[] };
+export type CoreReceipt = { started: boolean; settled: true; error?: string; result?: Record<string, any> };
 export type ActionReceipt = { started: boolean; completed: number; error: string | null };
 export interface ComputerRuntime {
   capture(id: string, request: unknown, signal?: AbortSignal): Promise<ScreenFrame>;
   validate?(id: string, request: unknown, signal?: AbortSignal): Promise<unknown>;
   execute(id: string, request: unknown, signal?: AbortSignal): Promise<ActionReceipt>;
-  /** Resolves only once no earlier admitted input can execute, including delayed requests. */
+  prepareCore?(id: string, request: unknown, signal?: AbortSignal): Promise<unknown>;
+  core?(id: string, request: unknown, signal?: AbortSignal): Promise<CoreReceipt>;
+  /** Resolves only once no earlier admitted input or core operation can execute, including delayed requests. */
   cancel(id: string): Promise<void>;
 }
 export class ComputerUseError extends Error {
@@ -17,7 +20,7 @@ export class ComputerExecutionError extends ComputerUseError {
 }
 const knowledge = ' Read Swarm Knowledge swarm/computers/use.';
 type Allowance = { token: string; until: number; remaining: number };
-type Active = { abort: AbortController; finished: Promise<ActionReceipt> };
+type Active = { abort: AbortController; finished: Promise<unknown> };
 
 /** One backend owns admission; SQL uniqueness also protects against duplicate claims. */
 export class ComputerUseService {
@@ -37,7 +40,7 @@ export class ComputerUseService {
       for (const claim of claims) {
         // If cancellation cannot be proved, keep the claim and fail closed until retry.
         await this.driver().cancel(claim.computerId);
-        await this.clearClaim(claim.computerId, `Swarm restarted; your computer ${claim.computer.name} (${claim.computerId}) was released. Assignments remain. Use use_computer and take a fresh screenshot before acting again.`);
+        await this.clearClaim(claim.computerId, `Swarm restarted; your computer ${claim.computer.name} (${claim.computerId}) was released. Assignments remain. Use use_computer before more file/shell work; take a fresh screenshot before GUI input.`);
       }
     }).catch(error => { this.starting = undefined; throw error; });
     return this.starting;
@@ -96,7 +99,7 @@ export class ComputerUseService {
   private async claim(agentId: string) {
     const claim = await this.database.client.computerClaim.findUnique({ where: { agentId }, include: { computer: true } });
     if (!claim || !await this.database.client.computerAssignment.findUnique({ where: { agentId_computerId: { agentId, computerId: claim.computerId } } })) throw new ComputerUseError('First call use_computer for an assigned computer.' + knowledge, 403);
-    if (this.uncertain.has(claim.computerId)) throw new ComputerUseError('Previous input settlement is uncertain. Ask the human to Force release before further input.', 409);
+    if (this.uncertain.has(claim.computerId)) throw new ComputerUseError('Previous computer operation settlement is uncertain. Ask the human to Force release, or stop the computer if release cannot settle, before further operations.', 409);
     if (claim.computer.state !== 'running' || claim.computer.desiredState !== 'running') throw new ComputerUseError('Computer is not running.', 409);
     return claim;
   }
@@ -105,7 +108,7 @@ export class ComputerUseService {
     // Serialize capture with release/admission, but human desktop input remains concurrent by policy.
     return this.exclusive(async () => {
       signal?.throwIfAborted(); const claim = await this.claim(agentId);
-      if (this.active.has(claim.computerId)) throw new ComputerUseError('Wait for the active combo before taking another screenshot.', 409);
+      if (this.active.has(claim.computerId)) throw new ComputerUseError('Wait for the active computer operation before taking another screenshot.', 409);
       const frame = await this.driver().capture(claim.computerId, request, signal);
       signal?.throwIfAborted(); await retain?.(frame); signal?.throwIfAborted();
       this.allowances.set(agentId, { token: claim.token, until: this.now() + 30_000, remaining: 2 });
@@ -121,7 +124,7 @@ export class ComputerUseService {
     await this.ready();
     const admitted = await this.exclusive(async () => {
       signal?.throwIfAborted(); const claim = await this.claim(agentId);
-      if (this.active.has(claim.computerId)) throw new ComputerUseError('A combo is already executing; wait for its result.', 409);
+      if (this.active.has(claim.computerId)) throw new ComputerUseError('Another computer operation is executing; wait for its result.', 409);
       this.allowance(agentId, claim.token);
       const driver = this.driver();
       const prepared = driver.validate ? await driver.validate(claim.computerId, request, signal) : request;
@@ -138,6 +141,38 @@ export class ComputerUseService {
       })
         .finally(() => { signal?.removeEventListener('abort', stop); this.active.delete(claim.computerId); });
       // Mark admission before yielding so release always sees and joins this execution.
+      this.active.set(claim.computerId, { abort, finished });
+      return { finished };
+    });
+    return admitted.finished;
+  }
+  async core(agentId: string, request: unknown, signal?: AbortSignal, retain?: (result: CoreReceipt) => Promise<void>): Promise<CoreReceipt> {
+    await this.ready();
+    const admitted = await this.exclusive(async () => {
+      signal?.throwIfAborted(); const claim = await this.claim(agentId);
+      if (this.active.has(claim.computerId)) throw new ComputerUseError('Another computer operation is executing; wait for its result.', 409);
+      const driver = this.driver();
+      if (!driver.prepareCore || !driver.core) throw new ComputerUseError('Computer core tools are unavailable; update the guest runtime.', 503);
+      let prepared;
+      try { prepared = await driver.prepareCore(claim.computerId, request, signal); }
+      catch (error) {
+        if (error instanceof ComputerUseError && error.status === 503) this.uncertain.add(claim.computerId);
+        throw error;
+      }
+      signal?.throwIfAborted();
+      if ((request as { kind?: string })?.kind !== 'read') this.allowances.delete(agentId);
+      const abort = new AbortController();
+      const stop = () => abort.abort(); signal?.addEventListener('abort', stop, { once: true });
+      if (signal?.aborted) abort.abort();
+      const finished = Promise.resolve().then(() => driver.core!(claim.computerId, prepared, abort.signal)).catch(error => {
+        if (!(error instanceof ComputerExecutionError && error.settled)) this.uncertain.add(claim.computerId);
+        this.allowances.delete(agentId); throw error;
+      }).then(async receipt => {
+        signal?.throwIfAborted();
+        await retain?.(receipt);
+        signal?.throwIfAborted();
+        return receipt;
+      }).finally(() => { signal?.removeEventListener('abort', stop); this.active.delete(claim.computerId); });
       this.active.set(claim.computerId, { abort, finished });
       return { finished };
     });
@@ -162,7 +197,7 @@ export class ComputerUseService {
   }
   async forceRelease(computerId: string) {
     await this.ready();
-    await this.exclusive(() => this.release(computerId, 'The human force released your computer. Use use_computer and take a new screenshot before acting again.'));
+    await this.exclusive(() => this.release(computerId, 'The human force released your computer. Use use_computer again; take a new screenshot before GUI input.'));
   }
   async releaseAgent(agentId: string) {
     await this.ready();

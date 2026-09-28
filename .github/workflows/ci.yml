@@ -21,6 +21,8 @@ jobs:
       - run: bun run api:check
       - run: bun run typecheck
       - run: bun run test
+      - name: Guest computer protocol and file tests
+        run: mkdir -p .scratch && TMPDIR="$PWD/.scratch" PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s templates/default/runtime -p 'test_computer*.py'
       - run: bun run build
       - run: bun x playwright install --with-deps chromium
         working-directory: frontend

@@ -508,6 +508,23 @@ it('computer-use executes only the fixed bounded guest program against an owned 
     '/usr/bin/python3', '/opt/swarm/computer-use.py', 'validate', JSON.stringify(input)], 'agent', 23_000, 3 * 1024 * 1024);
 });
 
+it('core tools run only the fixed root guest supervisor against the owned immutable ID', async () => {
+  const { manager, resources, execute } = fixture(); existingRunning(manager, resources);
+  const input = { kind: 'bash', command: '$(touch /host); "' };
+  await manager.computerCoreExec(id, 'execute', input);
+  expect(execute).toHaveBeenCalledWith('desktop', ['/usr/bin/timeout', '--signal=TERM', '--kill-after=8s', '130s', '/usr/bin/python3', '-I', '/opt/swarm/computer-core.py', 'execute', JSON.stringify(input)], 'root', 145_000, 3 * 1024 * 1024);
+});
+it('core tools reject foreign ownership and admit stopped cancellation without executing a helper', async () => {
+  const { manager, resources, execute } = fixture();
+  const path = `/containers/${manager.names.desktop(id)}/json`;
+  resources.set(path, { Id: 'foreign', State: { Running: true }, Config: { Labels: {} } });
+  await expect(manager.computerCoreExec(id, 'execute', {})).rejects.toMatchObject({ code: 409 });
+  resources.set(path, { Id: 'stopped', State: { Running: false }, Config: { Labels: manager.names.labels(id, 'desktop') } });
+  await expect(manager.computerCoreExec(id, 'execute', {})).rejects.toMatchObject({ code: 503 });
+  expect(JSON.parse((await manager.computerCoreExec(id, 'cancel', {})).toString())).toEqual({ settled: true });
+  expect(execute).not.toHaveBeenCalled();
+});
+
 it('computer-use rejects foreign and stopped desktops without input, and stopped cancellation is already settled', async () => {
   const { manager, resources, execute } = fixture();
   const path = `/containers/${manager.names.desktop(id)}/json`;

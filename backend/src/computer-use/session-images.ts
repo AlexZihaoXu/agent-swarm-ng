@@ -2,7 +2,7 @@ import type { SessionEntry } from '@earendil-works/pi-coding-agent';
 import type { ScreenshotPool, ScreenshotReference } from './image-pool';
 
 function reference(entry: SessionEntry): ScreenshotReference | null {
-  if (entry.type !== 'message' || entry.message.role !== 'toolResult' || !['glance', 'look_at'].includes(entry.message.toolName)) return null;
+  if (entry.type !== 'message' || entry.message.role !== 'toolResult' || !['glance', 'look_at', 'read'].includes(entry.message.toolName)) return null;
   const details = entry.message.details as { computerImage?: ScreenshotReference } | undefined;
   const image = details?.computerImage;
   return image && typeof image.id === 'string' && typeof image.agentId === 'string' ? image : null;

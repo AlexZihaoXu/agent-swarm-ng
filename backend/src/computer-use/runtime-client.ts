@@ -1,4 +1,4 @@
-import { ComputerUseError, ComputerExecutionError, type ActionReceipt, type ComputerRuntime, type ScreenFrame } from './service';
+import { ComputerUseError, ComputerExecutionError, type ActionReceipt, type CoreReceipt, type ComputerRuntime, type ScreenFrame } from './service';
 const MAX_RESPONSE = 3 * 1024 * 1024;
 
 /** Fixed internal controller origin; requests never contain a guest command or host path. */
@@ -52,7 +52,25 @@ export class HttpComputerRuntime implements ComputerRuntime {
       throw new ComputerExecutionError('Combo interrupted or its result is uncertain. Input is now settled, but completed effects remain; take a fresh look rather than repeating it.', true);
     }
   }
+  async prepareCore(id: string, request: unknown, signal?: AbortSignal) {
+    const result = await this.request(id, 'core/prepare', request, signal);
+    if (typeof result.validationToken !== 'string' || !/^[0-9a-f-]{36}$/.test(result.validationToken)) throw new ComputerUseError('Invalid core authorization receipt.', 503);
+    return { ...(request as object), validationToken: result.validationToken };
+  }
+  async core(id: string, request: unknown, signal?: AbortSignal): Promise<CoreReceipt> {
+    try {
+      const result = await this.request(id, 'core/execute', request, signal, 140_000);
+      if (typeof result.started !== 'boolean' || result.settled !== true || (result.error !== undefined && typeof result.error !== 'string') || (!result.error && (!result.result || typeof result.result !== 'object'))) throw new Error('Invalid core operation receipt.');
+      return result as CoreReceipt;
+    } catch (error) {
+      if (error instanceof ComputerUseError && error.status === 400) return { started: false, settled: true, error: error.message };
+      await this.cancel(id);
+      throw new ComputerExecutionError('Core operation interrupted or result uncertain. Processes are settled; effects may remain. Inspect before retrying.', true);
+    }
+  }
   async cancel(id: string) {
+    const core = await this.request(id, 'core/cancel', {}, undefined, 20_000);
+    if (core.settled !== true) throw new Error('Core command cancellation could not be confirmed.');
     const result = await this.request(id, 'actions/cancel', {}, undefined, 20_000);
     if (result.settled !== true) throw new Error('Computer input cancellation could not be confirmed.');
   }

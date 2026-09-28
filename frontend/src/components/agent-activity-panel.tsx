@@ -8,7 +8,7 @@ import type { useActivityHistory } from '@/use-activity-history';
 type History = ReturnType<typeof useActivityHistory>;
 function ActivityScreenshot({ agentId, entry }: { agentId: string; entry: ActivityEntry }) {
   const [unavailable, setUnavailable] = useState(false);
-  if (entry.kind !== 'tool_result' || !/^(glance|look_at) — result$/.test(entry.label)) return null;
+  if (entry.kind !== 'tool_result' || !/^(glance|look_at|read) — result$/.test(entry.label)) return null;
   let reference: { id?: string; agentId?: string };
   try { reference = JSON.parse(entry.text); } catch { return null; }
   if (!reference || reference.agentId !== agentId || typeof reference.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(reference.id)) return null;
