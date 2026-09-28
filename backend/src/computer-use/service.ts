@@ -40,7 +40,7 @@ export class ComputerUseService {
       for (const claim of claims) {
         // If cancellation cannot be proved, keep the claim and fail closed until retry.
         await this.driver().cancel(claim.computerId);
-        await this.clearClaim(claim.computerId, `Swarm restarted; your computer ${claim.computer.name} (${claim.computerId}) was released. Assignments remain. Use use_computer before more file/shell work; take a fresh screenshot before GUI input.`);
+        await this.clearClaim(claim.computerId, `Swarm restarted; your computer ${claim.computer.name} (${claim.computerId}) was released. Assignments remain. Persistent tmux programs may still be running. Use use_computer before more file/shell/terminal work and inspect existing sessions; take a fresh screenshot before GUI input.`);
       }
     }).catch(error => { this.starting = undefined; throw error; });
     return this.starting;
@@ -148,8 +148,23 @@ export class ComputerUseService {
   }
   async core(agentId: string, request: unknown, signal?: AbortSignal, retain?: (result: CoreReceipt) => Promise<void>): Promise<CoreReceipt> {
     await this.ready();
+    return this.performCore(() => this.claim(agentId), request, signal, retain);
+  }
+  /** Trusted human terminal surface: same execution fence, but no agent assignment/claim acquisition. */
+  async operatorTerminal(computerId: string, input: Record<string, unknown>): Promise<CoreReceipt> {
+    await this.ready();
+    return this.performCore(async () => {
+      const computer = await this.database.client.computer.findUnique({ where: { id: computerId }, include: { claim: true } });
+      if (!computer) throw new ComputerUseError('Computer not found.', 404);
+      if (computer.state !== 'running' || computer.desiredState !== 'running') throw new ComputerUseError('Computer is not running.', 409);
+      return { computerId, agentId: computer.claim?.agentId };
+    }, { ...input, kind: 'terminal' });
+  }
+  private async performCore(resolve: () => Promise<{ computerId: string; agentId?: string }>, request: unknown, signal?: AbortSignal, retain?: (result: CoreReceipt) => Promise<void>): Promise<CoreReceipt> {
     const admitted = await this.exclusive(async () => {
-      signal?.throwIfAborted(); const claim = await this.claim(agentId);
+      signal?.throwIfAborted(); const claim = await resolve();
+      if (this.uncertain.has(claim.computerId)) throw new ComputerUseError('Previous computer operation settlement is uncertain; Force release or stop the computer before retrying.', 409);
+      const agentId = claim.agentId;
       if (this.active.has(claim.computerId)) throw new ComputerUseError('Another computer operation is executing; wait for its result.', 409);
       const driver = this.driver();
       if (!driver.prepareCore || !driver.core) throw new ComputerUseError('Computer core tools are unavailable; update the guest runtime.', 503);
@@ -160,13 +175,15 @@ export class ComputerUseService {
         throw error;
       }
       signal?.throwIfAborted();
-      if ((request as { kind?: string })?.kind !== 'read') this.allowances.delete(agentId);
+      const input = request as { kind?: string; operation?: string };
+      const readOnly = input?.kind === 'read' || input?.kind === 'terminal' && ['list','view','status'].includes(input.operation ?? '');
+      if (!readOnly && agentId) this.allowances.delete(agentId);
       const abort = new AbortController();
       const stop = () => abort.abort(); signal?.addEventListener('abort', stop, { once: true });
       if (signal?.aborted) abort.abort();
       const finished = Promise.resolve().then(() => driver.core!(claim.computerId, prepared, abort.signal)).catch(error => {
         if (!(error instanceof ComputerExecutionError && error.settled)) this.uncertain.add(claim.computerId);
-        this.allowances.delete(agentId); throw error;
+        if (agentId) this.allowances.delete(agentId); throw error;
       }).then(async receipt => {
         signal?.throwIfAborted();
         await retain?.(receipt);

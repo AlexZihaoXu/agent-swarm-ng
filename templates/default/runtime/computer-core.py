@@ -19,6 +19,7 @@ import uuid
 
 ROOT = Path('/run/swarm-core-tools')
 stop = False
+ENVIRONMENT = {'PATH': '/home/agent/.local/bin:/usr/local/bin:/usr/bin:/bin', 'HOME': '/home/agent', 'USER': 'agent', 'LOGNAME': 'agent', 'SHELL': '/bin/bash', 'LANG': 'C.UTF-8', 'DISPLAY': ':1', 'XDG_RUNTIME_DIR': '/run/user/1000', 'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/1000/bus'}
 
 
 def atomic(name, data):
@@ -94,8 +95,7 @@ def execute(value, token):
         atomic('active', json.dumps({'pid': os.getpid(), 'start': start_time(os.getpid())}))
         child = None
         try:
-            environment = {'PATH': '/home/agent/.local/bin:/usr/local/bin:/usr/bin:/bin', 'HOME': '/home/agent', 'USER': 'agent', 'LOGNAME': 'agent', 'SHELL': '/bin/bash', 'LANG': 'C.UTF-8', 'DISPLAY': ':1', 'XDG_RUNTIME_DIR': '/run/user/1000', 'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/1000/bus'}
-            child = subprocess.Popen(['/usr/bin/unshare', '--mount', '--pid', '--fork', '--mount-proc', '--kill-child=KILL', '/usr/bin/setpriv', '--reuid=1000', '--regid=1000', '--init-groups', '/usr/bin/python3', '-I', '/opt/swarm/computer-core-worker.py', json.dumps(value, ensure_ascii=False)], cwd='/workspace', env=environment, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            child = subprocess.Popen(['/usr/bin/unshare', '--mount', '--pid', '--fork', '--mount-proc', '--kill-child=KILL', '/usr/bin/setpriv', '--reuid=1000', '--regid=1000', '--init-groups', '/usr/bin/python3', '-I', '/opt/swarm/computer-core-worker.py', json.dumps(value, ensure_ascii=False)], cwd='/workspace', env=ENVIRONMENT, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             os.set_blocking(child.stdout.fileno(), False)
             selector = selectors.DefaultSelector(); selector.register(child.stdout, selectors.EVENT_READ)
             output = bytearray(); error = None
@@ -123,6 +123,27 @@ def execute(value, token):
             raise
 
 
+def execute_terminal(value, token):
+    # Same fence/admission as synchronous core operations, deliberately different lifetime:
+    # only this short tmux request must settle. Existing terminal programs are NOT cancelled.
+    with locked('operation.lock'):
+        if (ROOT / 'active').exists(): raise RuntimeError('Previous operation settlement is unknown.')
+        if token != generation(): return {'started': False, 'settled': True, 'error': 'Stale terminal authorization. Inspect before retrying.'}
+        atomic('active', json.dumps({'pid': os.getpid(), 'start': start_time(os.getpid())}))
+        # No private PID namespace or subreaper: the explicitly authorized tmux server outlives us.
+        # Cancel rotates the generation then joins this lock; a request already started may finish.
+        value.pop('kind', None)
+        child = subprocess.run(['/usr/bin/setpriv', '--reuid=1000', '--regid=1000', '--init-groups',
+                                '/usr/bin/python3', '-I', '/opt/swarm/computer-terminal.py', json.dumps(value)],
+                               cwd='/workspace', env={**ENVIRONMENT, 'TERM': 'xterm-256color'}, stdin=subprocess.DEVNULL,
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=8)
+        if child.returncode or len(child.stdout) > 2 * 1024 * 1024: raise RuntimeError('Terminal request settlement uncertain.')
+        result = json.loads(child.stdout)
+        if not isinstance(result, dict) or not ('result' in result or 'error' in result): raise RuntimeError('Invalid terminal receipt.')
+        (ROOT / 'active').unlink()
+        return {'started': True, 'settled': True, **result}
+
+
 def main():
     if os.getuid() != 0: raise RuntimeError('Supervisor requires the guest root account.')
     os.umask(0o077); ROOT.mkdir(mode=0o700, exist_ok=True)
@@ -144,6 +165,7 @@ def main():
             return {'validationToken': generation()}
     if mode != 'execute' or not isinstance(value, dict): raise ValueError('Invalid core operation.')
     token = value.pop('validationToken', None)
+    if value.get('kind') == 'terminal': return execute_terminal(value, token)
     if value.get('kind') not in ('read', 'edit', 'write', 'bash'): raise ValueError('Unknown core tool.')
     if value['kind'] == 'bash':
         if not isinstance(value.get('command'), str) or not value['command'].strip(): raise ValueError('command must be nonempty.')

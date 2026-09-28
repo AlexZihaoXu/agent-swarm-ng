@@ -40,6 +40,10 @@ The lifecycle/preview milestone did not include agent assignment, console/tmux a
 
 The desktop viewer identifies its agent control holder with that agent's configured animated avatar and “Name is on this computer.” Its Working/Typing/Ready indicator reuses the dashboard's existing run event state, not a new event stream or endpoint-health probe; unavailable state is labelled rather than guessed. Avatar lookup also supports a holder outside the loaded roster page. Force release and the independent human-input toggle retain their existing behavior.
 
+## Persistent terminals
+
+A running computer's card menu also offers **Terminals**: shared guest tmux sessions with bounded live snapshots, create/select, explicit text/key input, interrupt and typed-name deletion confirmation. Closing the view or releasing agent control leaves programs running; power-off ends them. This is separate from the read-only file browser and synchronous core `bash`. See [terminal tools, operator API, lifetime and safety](persistent-terminals.md).
+
 ## Operator file browser
 
 Choose **File browser** from a running computer's card menu. A centered Kibo `dialog-standard-3`-derived modal keeps navigation and footer fixed while its contents scroll. The browser starts in `/home/agent`. Clickable path breadcrumbs use the same shared bordered style as Settings → Swarm Knowledge; an editable path and a case-insensitive folder-name filter remain available. There are no Back/Forward/Up/Refresh buttons, quick-access sidebar or locations dropdown; the file list uses the full width. Click an ancestor breadcrumb to move up, open a folder to move down, or click the current folder breadcrumb to leave a file preview. Narrow screens put size/date beneath filenames.
