@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { BorderedBreadcrumb } from '@/components/ui/bordered-breadcrumb';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { downloadComputerFile, FILE_DOWNLOAD_LIMIT, fileBreadcrumbs, fileSize, listComputerFiles, previewComputerFile, type ComputerFile } from '@/lib/computer-files';
 import type { Computer } from './computer-card';
@@ -17,8 +18,6 @@ function modified(time: number | null) { return time === null ? '—' : new Date
 export function ComputerFileBrowser({ computer, open, connected, onOpenChange }: { computer: Computer; open: boolean; connected: boolean; onOpenChange: (open: boolean) => void }) {
   const client = useQueryClient();
   const [location, setLocation] = useState({ path: home, offset: 0 });
-  const [back, setBack] = useState<string[]>([]);
-  const [forward, setForward] = useState<string[]>([]);
   const [filter, setFilter] = useState(''), [appliedFilter, setAppliedFilter] = useState('');
   const [editingPath, setEditingPath] = useState(false), [pathDraft, setPathDraft] = useState(home);
   const pathInput = useRef<HTMLInputElement>(null);
@@ -31,6 +30,7 @@ export function ComputerFileBrowser({ computer, open, connected, onOpenChange }:
   const preview = useQuery({ queryKey: ['computer-files', computer.id, 'preview', selected?.path], queryFn: ({ signal }) => previewComputerFile(computer.id, selected!.path, signal), enabled: open && available && selected !== null, retry: false, gcTime: 0, refetchOnWindowFocus: false });
   const busy = listing.isFetching || preview.isFetching || downloading !== null;
   const path = listing.data?.path ?? location.path;
+  const crumbs = fileBreadcrumbs(path);
   useEffect(() => {
     if (filter === appliedFilter || busy) return;
     const timer = setTimeout(() => { setAppliedFilter(filter); setLocation(current => ({ ...current, offset: 0 })); }, 250);
@@ -44,22 +44,8 @@ export function ComputerFileBrowser({ computer, open, connected, onOpenChange }:
     }
     return () => { download.current?.abort(); };
   }, [open, available, computer.id, client]);
-  const navigate = (next: string, remember = true) => {
-    if (remember && next !== path) {
-      setBack(previous => [...previous.slice(-49), path]); setForward([]);
-    }
+  const navigate = (next: string) => {
     setSelected(null); setEditingPath(false); setFilter(''); setAppliedFilter(''); setLocation({ path: next, offset: 0 }); setDownloadError(''); setDownloadNotice('');
-  };
-  const goBack = () => {
-    if (selected) { setSelected(null); return; }
-    if (!back.length) return;
-    setForward(previous => [...previous.slice(-49), path]);
-    navigate(back[back.length - 1], false); setBack(previous => previous.slice(0, -1));
-  };
-  const goForward = () => {
-    if (selected || !forward.length) return;
-    setBack(previous => [...previous.slice(-49), path]);
-    navigate(forward[forward.length - 1], false); setForward(previous => previous.slice(0, -1));
   };
   const startDownload = async (file: ComputerFile) => {
     if (download.current || !available || file.type !== 'file') return;
@@ -79,21 +65,15 @@ export function ComputerFileBrowser({ computer, open, connected, onOpenChange }:
           <Dialog.Description className="mt-1 text-xs text-muted-foreground">Files on this computer. Browse, preview text and download.</Dialog.Description>
         </header>
         <div className="shrink-0 space-y-2 border-b border-border px-3 py-2 sm:px-5">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" className="min-h-10" aria-label="Back" disabled={!selected && !back.length || !available || busy} onClick={goBack}>←</Button>
-            <Button variant="outline" size="sm" className="min-h-10" aria-label="Forward" disabled={selected !== null || !forward.length || !available || busy} onClick={goForward}>→</Button>
-            <Button variant="outline" size="sm" className="min-h-10" aria-label="Up one folder" disabled={!listing.data?.parent || !available || busy} onClick={() => listing.data?.parent && navigate(listing.data.parent)}>↑</Button>
-            <Button variant="outline" size="sm" aria-label="Refresh" className="min-h-10 w-10 p-0 sm:w-auto sm:px-3" disabled={!available || busy} onClick={() => { if (selected) void preview.refetch(); else void listing.refetch(); }}><svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 sm:hidden" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1" /></svg><span className="hidden sm:inline">Refresh</span></Button>
-          </div>
           {editingPath ? <form className="flex min-w-0 gap-2" onSubmit={event => { event.preventDefault(); if (pathDraft) navigate(pathDraft); }}><input ref={pathInput} aria-label="Folder path" maxLength={4096} className={`${inputClass} flex-1`} value={pathDraft} onChange={event => setPathDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setEditingPath(false); } }} /><Button type="submit" size="sm" className="min-h-10" disabled={!pathDraft || !available || busy}>Go</Button></form>
-            : <div className="flex min-w-0 items-center gap-2"><nav aria-label="Folder breadcrumbs" className="flex min-h-10 min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm">{fileBreadcrumbs(path).map((crumb, index) => <span key={crumb.path} className="flex shrink-0 items-center gap-1">{index > 1 && <span aria-hidden="true" className="text-muted-foreground">/</span>}<button type="button" disabled={!available || busy} className="cursor-pointer rounded px-1.5 py-2 hover:bg-muted disabled:cursor-default disabled:opacity-50" onClick={() => navigate(crumb.path)}>{crumb.name}</button></span>)}</nav><Button variant="outline" size="sm" className="min-h-10 shrink-0" disabled={!available || busy} onClick={() => { setPathDraft(path); setEditingPath(true); }}>Edit path</Button></div>}
+            : <div className="flex min-w-0 items-center gap-2"><BorderedBreadcrumb label="Folder breadcrumbs" disabled={!available || busy} className="max-h-28 overflow-y-auto" items={crumbs.map((crumb, index) => ({ id: crumb.path, text: crumb.name, current: index === crumbs.length - 1, onSelect: () => navigate(crumb.path) }))} /><Button variant="outline" size="sm" className="min-h-10 shrink-0" disabled={!available || busy} onClick={() => { setPathDraft(path); setEditingPath(true); }}>Edit path</Button></div>}
           {!selected && <input aria-label="Filter this folder" placeholder="Filter this folder…" maxLength={200} value={filter} disabled={!available} onChange={event => setFilter(event.target.value)} className={`${inputClass} w-full`} />}
         </div>
         <div className="flex min-h-0 min-w-0 flex-1">
           <ScrollArea label="Computer files" className="min-h-0 min-w-0 flex-1" viewportClassName="[&>div]:!block [&>div]:w-full [&>div]:min-w-0">
             <div className="min-w-0 p-3 sm:p-4">
               {!available ? <p role="status" className="text-sm text-muted-foreground">{connected ? 'This computer is not running. Power it on from Computers to browse its files.' : 'Computer management is offline. Reconnect before browsing files.'}</p> : selected ? <div className="min-w-0 space-y-3 motion-safe:animate-[fade-in_120ms_ease-out]">
-                <div className="flex min-w-0 flex-wrap items-center justify-between gap-2"><Button size="sm" variant="outline" className="min-h-10" disabled={busy} onClick={() => setSelected(null)}>← Back to folder</Button>{downloadButton(selected)}</div>
+                <div className="flex min-w-0 justify-end">{downloadButton(selected)}</div>
                 <h3 className="break-all text-sm font-medium">{selected.name}</h3>
                 {preview.isPending && <p role="status" className="text-sm text-muted-foreground">Loading preview…</p>}
                 {preview.isError && <p role="alert" className="text-sm text-red-400">{preview.error.message} <button type="button" className="cursor-pointer underline" onClick={() => void preview.refetch()}>Retry preview</button></p>}

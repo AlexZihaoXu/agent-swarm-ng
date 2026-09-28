@@ -4,7 +4,7 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { desktopStreamFit } from '@/lib/computer-fit';
 import type { Computer } from './computer-card';
-import { ComputerControl } from './computer-control';
+import { ComputerControl, type ComputerAgentState } from './computer-control';
 
 function initialSetup(id: string) {
   // Only the separate, operator-selected GNOME/X11 image bypasses portal
@@ -14,7 +14,7 @@ function initialSetup(id: string) {
   catch { return true; }
 }
 
-export function ComputerViewer({ computer, canManage, onBack }: { computer: Computer; canManage: boolean; onBack: () => void }) {
+export function ComputerViewer({ computer, canManage, onBack, agentState }: { computer: Computer; canManage: boolean; onBack: () => void; agentState?: ComputerAgentState }) {
   const id = computer.id;
   const running = computer.state === 'running' && canManage;
   const [setupOpen, setSetupOpen] = useState(() => initialSetup(id));
@@ -159,7 +159,7 @@ export function ComputerViewer({ computer, canManage, onBack }: { computer: Comp
           <li aria-current="page" className="min-w-0 truncate font-semibold" title={computer.name}>{computer.name}</li>
         </ol>
       </nav>
-      <ComputerControl key={id} computerId={id} />
+      <ComputerControl key={id} computerId={id} agentState={agentState} />
       {running && <Button ref={inputToggleRef} type="button" variant={inputEnabled ? 'default' : 'outline'} size="sm" aria-pressed={inputEnabled} aria-label="Enable human desktop input" onClick={() => setInputEnabled(enabled => !enabled)} className="min-h-11 shrink-0 md:min-h-0">{inputEnabled ? 'Input live' : 'Input locked'}</Button>}
       {running && !setupOpen && <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild><Button type="button" variant="outline" size="sm" aria-label="Remote shortcuts" disabled={!inputEnabled || available === 'offline'} className="ml-auto min-h-11 shrink-0 gap-2 md:min-h-0">Send keys <span aria-hidden="true">⌄</span></Button></DropdownMenu.Trigger>

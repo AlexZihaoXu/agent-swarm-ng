@@ -328,7 +328,7 @@ export function useChat() {
   }
   const visibleBusy = { ...busy };
   for (const agent of agents) if (peerBusy[agent.id]) visibleBusy[agent.channelId] = true;
-  return { agents, conversations, drafts, busy: visibleBusy, typing, typingTargets, activity, errors, addAgent, deleteAgent, editAvatar, send, stop, eventsConnected,
+  return { agents, conversations, drafts, busy: visibleBusy, peerBusy, typing, typingTargets, activity, errors, addAgent, deleteAgent, editAvatar, send, stop, eventsConnected,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
     loadActivity, expandActivity, retryActivity, activityHistory,
     setDraft: (channelId: string, text: string) => setDrafts(current => ({ ...current, [channelId]: text })) };

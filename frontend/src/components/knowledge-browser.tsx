@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { operations } from '@/api/schema';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
+import { BorderedBreadcrumb } from '@/components/ui/bordered-breadcrumb';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { knowledgePath } from '@/lib/dashboard-location';
 import { cn } from '@/lib/utils';
@@ -121,10 +122,10 @@ export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: 
             {entryLoading && <p role="status" className="text-sm text-muted-foreground">Loading knowledge entry…</p>}
             {entryError && <div><p role="alert" className="text-sm">{entryError}</p><Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => setEntryAttempt(value => value + 1)}>Retry knowledge entry</Button></div>}
             {selected && <>
-              <nav aria-label="Knowledge path" className="w-fit max-w-full rounded-lg border border-border px-3 py-2"><ol className="flex flex-wrap items-center gap-2 text-xs">
-                <li><button type="button" onClick={() => onNavigate(knowledgePath())} className="text-muted-foreground hover:text-foreground">Knowledge</button></li>
-                {selected.breadcrumbs.map((part, index) => <li key={part.id} className="flex items-center gap-2"><span aria-hidden="true" className="text-muted-foreground">›</span>{index === selected.breadcrumbs.length - 1 ? <span aria-current="page">{part.title}</span> : <button type="button" onClick={() => open(part.id)} className="text-muted-foreground hover:text-foreground">{part.title}</button>}</li>)}
-              </ol></nav>
+              <BorderedBreadcrumb label="Knowledge path" items={[
+                { id: 'knowledge-root', text: 'Knowledge', onSelect: () => onNavigate(knowledgePath()) },
+                ...selected.breadcrumbs.map((part, index) => ({ id: part.id, text: part.title, current: index === selected.breadcrumbs.length - 1, onSelect: index === selected.breadcrumbs.length - 1 ? undefined : () => open(part.id) })),
+              ]} />
               <div><h3 className="text-xl font-semibold">{selected.title}</h3><p className="mt-1 text-sm text-muted-foreground">{selected.summary}</p><p className="mt-2 text-xs text-muted-foreground">Source: {selected.source}</p></div>
               <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{selected.text}</div>
               {moreError && <p role="alert" className="text-sm">{moreError}</p>}

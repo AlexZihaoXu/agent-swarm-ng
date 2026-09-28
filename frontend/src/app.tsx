@@ -52,7 +52,7 @@ function Avatar({ initials, avatar, small = false, typing = false, ready = false
 const emptyAgent: ChatAgent = { id: '', name: '', initials: '', time: '', channelId: '' };
 
 export function App() {
-  const { agents, conversations, drafts, busy, typing, typingTargets, activity, errors, addAgent, deleteAgent, editAvatar, send, stop, setDraft, eventsConnected,
+  const { agents, conversations, drafts, busy, peerBusy, typing, typingTargets, activity, errors, addAgent, deleteAgent, editAvatar, send, stop, setDraft, eventsConnected,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
     loadActivity, expandActivity, retryActivity, activityHistory,
   } = useChat();
@@ -338,7 +338,7 @@ export function App() {
         </Tabs.Content>
 
         <Tabs.Content value="computers" className="min-h-0 flex-1 outline-none data-[state=active]:flex">
-          <ComputersPanel viewingId={route.kind === 'computer' ? route.computerId ?? null : null} dialog={route.kind === 'computer-new' ? 'new' : route.kind === 'computer-delete' ? 'delete' : route.kind === 'computer-settings' ? 'settings' : null} deleteId={route.kind === 'computer-delete' ? route.computerId ?? null : null} settingsId={route.kind === 'computer-settings' ? route.computerId ?? null : null} onOpen={id => navigate(computerPath(id))} onNavigate={navigate} onBack={() => navigate('/computers')} />
+          <ComputersPanel agentState={{ agents, busy, peerBusy, typing, connected: eventsConnected }} viewingId={route.kind === 'computer' ? route.computerId ?? null : null} dialog={route.kind === 'computer-new' ? 'new' : route.kind === 'computer-delete' ? 'delete' : route.kind === 'computer-settings' ? 'settings' : null} deleteId={route.kind === 'computer-delete' ? route.computerId ?? null : null} settingsId={route.kind === 'computer-settings' ? route.computerId ?? null : null} onOpen={id => navigate(computerPath(id))} onNavigate={navigate} onBack={() => navigate('/computers')} />
         </Tabs.Content>
         <Tabs.Content value="settings" forceMount className={cn('phone-tab-enter min-h-0 flex-1 outline-none data-[state=inactive]:hidden', route.kind === 'knowledge' ? 'overflow-hidden data-[state=active]:flex data-[state=active]:flex-col' : 'overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0')}>
           <div className={route.kind === 'knowledge' ? 'hidden' : ''}><Settings route={route} onNavigate={navigate} /></div>

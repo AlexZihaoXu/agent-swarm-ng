@@ -13,7 +13,7 @@ async function setup(page: Page, state = 'running') {
     if (url.pathname.endsWith('/files')) {
       const path = url.searchParams.get('path') || home, filter = url.searchParams.get('filter') || '', offset = Number(url.searchParams.get('offset') || 0);
       if (path === '/denied') return route.fulfill({ status: 403, json: { message: 'Permission denied.' } });
-      const entries = path === home ? [file('src', 'directory'), file('README.md'), file('image.png'), file('x'.repeat(180) + '.txt')] : path === `${home}/src` ? [file('main.ts', 'file', path)] : [];
+      const entries = path === home ? [file('src', 'directory'), file('README.md'), file('image.png'), file('x'.repeat(180) + '.txt')] : path === `${home}/src` ? [file('main.ts', 'file', path)] : path === '/home' ? [file('agent', 'directory', path)] : [];
       return route.fulfill({ json: { path, parent: path === '/' ? null : path.slice(0, path.lastIndexOf('/')) || '/', entries: offset ? [file('later.txt')] : entries.filter(row => row.name.includes(filter)), nextOffset: path === home && !offset && !filter ? 200 : null, truncated: false } });
     }
     if (url.pathname.endsWith('/file-preview')) {
@@ -39,7 +39,7 @@ test('file browser navigates, edits paths, filters and pages without upload or m
   await expect(panel.getByRole('button', { name: /Upload|New folder|Delete|Rename/ })).toHaveCount(0);
   await panel.getByRole('button', { name: /^src\// }).click();
   await expect(panel.getByRole('button', { name: /^main.ts/ })).toBeVisible();
-  await panel.getByRole('button', { name: 'Back', exact: true }).click();
+  await panel.getByRole('navigation', { name: 'Folder breadcrumbs' }).getByRole('button', { name: 'agent', exact: true }).click();
   await panel.getByRole('button', { name: 'Next page' }).click(); await expect(panel.getByRole('button', { name: /^later.txt/ })).toBeVisible();
   await panel.getByRole('button', { name: 'Previous page' }).click();
   await panel.getByLabel('Filter this folder').fill('README');
@@ -48,30 +48,28 @@ test('file browser navigates, edits paths, filters and pages without upload or m
   await panel.getByRole('button', { name: 'Edit path' }).click();
   await panel.getByLabel('Folder path').fill('/denied'); await panel.getByRole('button', { name: 'Go', exact: true }).click();
   await expect(panel.getByRole('alert')).toContainText('Permission denied');
-  await panel.getByRole('button', { name: 'Back', exact: true }).click();
+  await panel.getByRole('button', { name: 'Edit path' }).click();
+  await panel.getByLabel('Folder path').fill(home); await panel.getByRole('button', { name: 'Go', exact: true }).click();
   await expect(panel.getByRole('list', { name: 'Folder entries' })).toContainText('README.md');
   await panel.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Actions for File desk' })).toBeFocused();
 });
-test('starts at home and supports breadcrumb, back and forward navigation without quick access', async ({ page }) => {
+test('starts at home and navigates through breadcrumbs only, including leaving previews', async ({ page }) => {
   const { panel, requests } = await open(page);
   expect(requests.find(url => url.pathname.endsWith('/files'))?.searchParams.get('path')).toBe(home);
+  await expect(panel.getByRole('button', { name: /^(Back|Forward|Up one folder|Refresh)$/ })).toHaveCount(0);
   const crumbs = panel.getByRole('navigation', { name: 'Folder breadcrumbs' });
-  const back = panel.getByRole('button', { name: 'Back', exact: true }), forward = panel.getByRole('button', { name: 'Forward', exact: true });
-  await expect(back).toBeDisabled(); await expect(forward).toBeDisabled();
   await panel.getByRole('button', { name: /^src\// }).click();
   await expect(crumbs.getByRole('button', { name: 'src', exact: true })).toBeVisible();
-  await back.click(); await expect(panel.getByRole('list', { name: 'Folder entries' })).toContainText('README.md');
-  await forward.click(); await expect(panel.getByRole('list', { name: 'Folder entries' })).toContainText('main.ts');
-  await expect(forward).toBeDisabled();
-  await back.click();
+  await crumbs.getByRole('button', { name: 'agent', exact: true }).click();
+  await expect(panel.getByRole('list', { name: 'Folder entries' })).toContainText('README.md');
   await crumbs.getByRole('button', { name: 'home', exact: true }).click();
-  await expect(forward).toBeDisabled(); // A new breadcrumb destination drops the old forward branch.
-  await expect(panel).toContainText('This folder is empty.');
-  await back.click(); await expect(panel.getByRole('list', { name: 'Folder entries' })).toContainText('README.md');
+  await panel.getByRole('button', { name: /^agent\// }).click();
   await panel.getByRole('button', { name: /^README.md/ }).click();
-  await expect(panel.getByLabel('File preview')).toBeVisible(); await expect(forward).toBeDisabled();
-  await back.click(); await expect(forward).toBeEnabled(); // Preview closing does not destroy folder history.
+  await expect(panel.getByLabel('File preview')).toBeVisible();
+  await crumbs.getByRole('button', { name: 'agent', exact: true }).click();
+  await expect(panel.getByLabel('File preview')).toHaveCount(0);
+  await expect(panel.getByRole('list', { name: 'Folder entries' })).toContainText('README.md');
 });
 test('text preview remains inert and readonly; download is an actual named file', async ({ page }) => {
   const { panel } = await open(page);
@@ -84,7 +82,7 @@ test('text preview remains inert and readonly; download is an actual named file'
   const download = await saved; expect(download.suggestedFilename()).toBe('README.md');
   const stream = await download.createReadStream(); let text = ''; for await (const chunk of stream!) text += chunk.toString();
   expect(text).toBe('hello world\n');
-  await panel.getByRole('button', { name: 'Back to folder', exact: false }).click();
+  await panel.getByRole('navigation', { name: 'Folder breadcrumbs' }).getByRole('button', { name: 'agent', exact: true }).click();
   await panel.getByRole('button', { name: /^image.png/ }).click();
   await expect(panel).toContainText('No text preview for this file');
 });

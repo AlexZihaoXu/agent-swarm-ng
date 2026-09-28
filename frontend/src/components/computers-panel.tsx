@@ -11,6 +11,7 @@ import { ComputerCard, type Computer } from './computer-card';
 import { ComputerViewer } from './computer-viewer';
 import { ComputerResourceFields } from './computer-resource-fields';
 import { ComputerFileBrowser } from './computer-file-browser';
+import type { ComputerAgentState } from './computer-control';
 import { computerPath } from '@/lib/dashboard-location';
 type ComputerList = { computers: Computer[] };
 
@@ -27,7 +28,7 @@ function ComputerDialog({ children }: { children: ReactNode }) {
   </Dialog.Portal>;
 }
 
-export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen, onNavigate, onBack }: { viewingId: string | null; dialog: 'new' | 'delete' | 'settings' | null; deleteId: string | null; settingsId: string | null; onOpen: (id: string) => void; onNavigate: (path: string) => void; onBack: () => void }) {
+export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen, onNavigate, onBack, agentState }: { agentState?: ComputerAgentState; viewingId: string | null; dialog: 'new' | 'delete' | 'settings' | null; deleteId: string | null; settingsId: string | null; onOpen: (id: string) => void; onNavigate: (path: string) => void; onBack: () => void }) {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ['computers'], queryFn: async ({ signal }) => {
     const { data, error } = await api.GET('/api/computers', { signal });
@@ -165,7 +166,7 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
   };
 
   return <section aria-label="Computers" className="computer-tab-enter flex min-h-0 w-full flex-col">
-    {viewing ? <ComputerViewer key={viewing.id} computer={viewing} canManage={Boolean(query.data?.controllerConnected)} onBack={() => { focusGridTab.current = true; onBack(); }} /> : (viewingId || dialog === 'delete' && !selected || dialog === 'settings' && !settingsComputer) && query.isSuccess ? <div className="p-6 text-sm" role="alert">Computer not found. <button type="button" className="cursor-pointer underline" onClick={onBack}>Return to computers</button></div> : <>
+    {viewing ? <ComputerViewer key={viewing.id} computer={viewing} agentState={agentState} canManage={Boolean(query.data?.controllerConnected)} onBack={() => { focusGridTab.current = true; onBack(); }} /> : (viewingId || dialog === 'delete' && !selected || dialog === 'settings' && !settingsComputer) && query.isSuccess ? <div className="p-6 text-sm" role="alert">Computer not found. <button type="button" className="cursor-pointer underline" onClick={onBack}>Return to computers</button></div> : <>
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:px-6 md:py-4">
       <div><h2 className="text-lg font-semibold">Computers</h2><p className="text-xs text-muted-foreground">Containerized Ubuntu desktops</p></div>
       <Dialog.Root open={createOpen} onOpenChange={open => { if (createBusy) return; if (open) {
