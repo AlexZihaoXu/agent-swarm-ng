@@ -1,6 +1,7 @@
 import { test, expect, type Page } from './fixtures';
 const id = 'c4a5f16d-0042-4b70-a232-dd65591a2c4c';
-const file = (name: string, type = 'file', parent = '/workspace') => ({ name, path: `${parent}/${name}`, type, size: type === 'directory' ? null : 12, modifiedAt: 1700000000000, isSymlink: false });
+const home = '/home/agent';
+const file = (name: string, type = 'file', parent = home) => ({ name, path: `${parent}/${name}`, type, size: type === 'directory' ? null : 12, modifiedAt: 1700000000000, isSymlink: false });
 async function setup(page: Page, state = 'running') {
   const requests: URL[] = [];
   await page.route('**/api/computers', route => route.fulfill({ json: { controllerConnected: true, computers: [{ id, name: 'File desk', state, createdAt: 0, cpuPercent: 0, memoryBytes: 0 }] } }));
@@ -10,10 +11,10 @@ async function setup(page: Page, state = 'running') {
     if (url.pathname.endsWith('/control')) return route.fulfill({ json: { holders: [] } });
     if (url.pathname.endsWith('/preview')) return route.fulfill({ status: 503, json: { message: 'Warming up' } });
     if (url.pathname.endsWith('/files')) {
-      const path = url.searchParams.get('path') || '/workspace', filter = url.searchParams.get('filter') || '', offset = Number(url.searchParams.get('offset') || 0);
+      const path = url.searchParams.get('path') || home, filter = url.searchParams.get('filter') || '', offset = Number(url.searchParams.get('offset') || 0);
       if (path === '/denied') return route.fulfill({ status: 403, json: { message: 'Permission denied.' } });
-      const entries = path === '/workspace' ? [file('src', 'directory'), file('README.md'), file('image.png'), file('x'.repeat(180) + '.txt')] : path === '/workspace/src' ? [file('main.ts', 'file', path)] : [];
-      return route.fulfill({ json: { path, parent: path === '/' ? null : '/workspace', entries: offset ? [file('later.txt')] : entries.filter(row => row.name.includes(filter)), nextOffset: path === '/workspace' && !offset && !filter ? 200 : null, truncated: false } });
+      const entries = path === home ? [file('src', 'directory'), file('README.md'), file('image.png'), file('x'.repeat(180) + '.txt')] : path === `${home}/src` ? [file('main.ts', 'file', path)] : [];
+      return route.fulfill({ json: { path, parent: path === '/' ? null : path.slice(0, path.lastIndexOf('/')) || '/', entries: offset ? [file('later.txt')] : entries.filter(row => row.name.includes(filter)), nextOffset: path === home && !offset && !filter ? 200 : null, truncated: false } });
     }
     if (url.pathname.endsWith('/file-preview')) {
       const path = url.searchParams.get('path')!, binary = path.endsWith('.png');
@@ -52,6 +53,26 @@ test('file browser navigates, edits paths, filters and pages without upload or m
   await panel.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Actions for File desk' })).toBeFocused();
 });
+test('starts at home and supports breadcrumb, back and forward navigation without quick access', async ({ page }) => {
+  const { panel, requests } = await open(page);
+  expect(requests.find(url => url.pathname.endsWith('/files'))?.searchParams.get('path')).toBe(home);
+  const crumbs = panel.getByRole('navigation', { name: 'Folder breadcrumbs' });
+  const back = panel.getByRole('button', { name: 'Back', exact: true }), forward = panel.getByRole('button', { name: 'Forward', exact: true });
+  await expect(back).toBeDisabled(); await expect(forward).toBeDisabled();
+  await panel.getByRole('button', { name: /^src\// }).click();
+  await expect(crumbs.getByRole('button', { name: 'src', exact: true })).toBeVisible();
+  await back.click(); await expect(panel.getByRole('list', { name: 'Folder entries' })).toContainText('README.md');
+  await forward.click(); await expect(panel.getByRole('list', { name: 'Folder entries' })).toContainText('main.ts');
+  await expect(forward).toBeDisabled();
+  await back.click();
+  await crumbs.getByRole('button', { name: 'home', exact: true }).click();
+  await expect(forward).toBeDisabled(); // A new breadcrumb destination drops the old forward branch.
+  await expect(panel).toContainText('This folder is empty.');
+  await back.click(); await expect(panel.getByRole('list', { name: 'Folder entries' })).toContainText('README.md');
+  await panel.getByRole('button', { name: /^README.md/ }).click();
+  await expect(panel.getByLabel('File preview')).toBeVisible(); await expect(forward).toBeDisabled();
+  await back.click(); await expect(forward).toBeEnabled(); // Preview closing does not destroy folder history.
+});
 test('text preview remains inert and readonly; download is an actual named file', async ({ page }) => {
   const { panel } = await open(page);
   await panel.getByRole('button', { name: /^README.md/ }).click();
@@ -73,7 +94,8 @@ for (const width of [280, 320, 760, 1280]) test(`file modal is contained at ${wi
   const box = await panel.boundingBox(); expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x + box!.width).toBeLessThanOrEqual(width);
   const overflow = await panel.evaluate(element => [...element.querySelectorAll('[data-radix-scroll-area-viewport]')].some(node => node.scrollWidth > node.clientWidth + 1));
   expect(overflow).toBe(false); await expect(panel).toHaveCSS('animation-name', 'none');
-  if (width < 768) await expect(panel.getByLabel('Locations', { exact: true })).toBeVisible();
+  await expect(panel.getByLabel('Locations', { exact: true })).toHaveCount(0);
+  await expect(panel.getByRole('complementary', { name: 'File locations' })).toHaveCount(0);
   if (width === 320 || width === 1280) await panel.screenshot({ path: `../.scratch/file-browser-${width}.png` });
 });
 test('stopped computers cannot open file browser', async ({ page }) => {

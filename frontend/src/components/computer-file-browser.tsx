@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { downloadComputerFile, FILE_DOWNLOAD_LIMIT, fileBreadcrumbs, fileSize, listComputerFiles, previewComputerFile, type ComputerFile } from '@/lib/computer-files';
 import type { Computer } from './computer-card';
 
-const locations = [{ name: 'Workspace', path: '/workspace' }, { name: 'Home', path: '/home/agent' }, { name: 'Downloads', path: '/home/agent/Downloads' }, { name: 'Filesystem /', path: '/' }];
+const home = '/home/agent';
 const inputClass = 'h-10 min-w-0 rounded-md border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring sm:text-sm';
 function FileIcon({ directory }: { directory: boolean }) {
   return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="size-4 shrink-0 text-muted-foreground"><path d={directory ? 'M3 7V5h6l2 2h10v13H3z' : 'M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h6'} /></svg>;
@@ -16,10 +16,11 @@ function modified(time: number | null) { return time === null ? '—' : new Date
 /** Kibo dialog-standard-3 container; owner-approved file-browser body, no nested modal. */
 export function ComputerFileBrowser({ computer, open, connected, onOpenChange }: { computer: Computer; open: boolean; connected: boolean; onOpenChange: (open: boolean) => void }) {
   const client = useQueryClient();
-  const [location, setLocation] = useState({ path: '/workspace', offset: 0 });
+  const [location, setLocation] = useState({ path: home, offset: 0 });
   const [back, setBack] = useState<string[]>([]);
+  const [forward, setForward] = useState<string[]>([]);
   const [filter, setFilter] = useState(''), [appliedFilter, setAppliedFilter] = useState('');
-  const [editingPath, setEditingPath] = useState(false), [pathDraft, setPathDraft] = useState('/workspace');
+  const [editingPath, setEditingPath] = useState(false), [pathDraft, setPathDraft] = useState(home);
   const pathInput = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<ComputerFile | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null), [downloadError, setDownloadError] = useState('');
@@ -44,13 +45,21 @@ export function ComputerFileBrowser({ computer, open, connected, onOpenChange }:
     return () => { download.current?.abort(); };
   }, [open, available, computer.id, client]);
   const navigate = (next: string, remember = true) => {
-    if (remember && next !== path) setBack(previous => [...previous.slice(-49), path]);
+    if (remember && next !== path) {
+      setBack(previous => [...previous.slice(-49), path]); setForward([]);
+    }
     setSelected(null); setEditingPath(false); setFilter(''); setAppliedFilter(''); setLocation({ path: next, offset: 0 }); setDownloadError(''); setDownloadNotice('');
   };
   const goBack = () => {
     if (selected) { setSelected(null); return; }
     if (!back.length) return;
+    setForward(previous => [...previous.slice(-49), path]);
     navigate(back[back.length - 1], false); setBack(previous => previous.slice(0, -1));
+  };
+  const goForward = () => {
+    if (selected || !forward.length) return;
+    setBack(previous => [...previous.slice(-49), path]);
+    navigate(forward[forward.length - 1], false); setForward(previous => previous.slice(0, -1));
   };
   const startDownload = async (file: ComputerFile) => {
     if (download.current || !available || file.type !== 'file') return;
@@ -72,16 +81,15 @@ export function ComputerFileBrowser({ computer, open, connected, onOpenChange }:
         <div className="shrink-0 space-y-2 border-b border-border px-3 py-2 sm:px-5">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" className="min-h-10" aria-label="Back" disabled={!selected && !back.length || !available || busy} onClick={goBack}>←</Button>
+            <Button variant="outline" size="sm" className="min-h-10" aria-label="Forward" disabled={selected !== null || !forward.length || !available || busy} onClick={goForward}>→</Button>
             <Button variant="outline" size="sm" className="min-h-10" aria-label="Up one folder" disabled={!listing.data?.parent || !available || busy} onClick={() => listing.data?.parent && navigate(listing.data.parent)}>↑</Button>
             <Button variant="outline" size="sm" aria-label="Refresh" className="min-h-10 w-10 p-0 sm:w-auto sm:px-3" disabled={!available || busy} onClick={() => { if (selected) void preview.refetch(); else void listing.refetch(); }}><svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 sm:hidden" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1" /></svg><span className="hidden sm:inline">Refresh</span></Button>
-            <select aria-label="Locations" value={locations.some(item => item.path === path) ? path : ''} onChange={event => event.target.value && navigate(event.target.value)} disabled={!available || busy} className={`${inputClass} max-w-full flex-1 md:hidden`}><option value="" disabled>Locations</option>{locations.map(item => <option key={item.path} value={item.path}>{item.name}</option>)}</select>
           </div>
           {editingPath ? <form className="flex min-w-0 gap-2" onSubmit={event => { event.preventDefault(); if (pathDraft) navigate(pathDraft); }}><input ref={pathInput} aria-label="Folder path" maxLength={4096} className={`${inputClass} flex-1`} value={pathDraft} onChange={event => setPathDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setEditingPath(false); } }} /><Button type="submit" size="sm" className="min-h-10" disabled={!pathDraft || !available || busy}>Go</Button></form>
             : <div className="flex min-w-0 items-center gap-2"><nav aria-label="Folder breadcrumbs" className="flex min-h-10 min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm">{fileBreadcrumbs(path).map((crumb, index) => <span key={crumb.path} className="flex shrink-0 items-center gap-1">{index > 1 && <span aria-hidden="true" className="text-muted-foreground">/</span>}<button type="button" disabled={!available || busy} className="cursor-pointer rounded px-1.5 py-2 hover:bg-muted disabled:cursor-default disabled:opacity-50" onClick={() => navigate(crumb.path)}>{crumb.name}</button></span>)}</nav><Button variant="outline" size="sm" className="min-h-10 shrink-0" disabled={!available || busy} onClick={() => { setPathDraft(path); setEditingPath(true); }}>Edit path</Button></div>}
           {!selected && <input aria-label="Filter this folder" placeholder="Filter this folder…" maxLength={200} value={filter} disabled={!available} onChange={event => setFilter(event.target.value)} className={`${inputClass} w-full`} />}
         </div>
         <div className="flex min-h-0 min-w-0 flex-1">
-          <aside aria-label="File locations" className="hidden w-40 shrink-0 border-r border-border bg-sidebar p-3 md:block"><p className="mb-2 px-2 text-[10px] uppercase tracking-wide text-muted-foreground">Locations</p>{locations.map(item => <button type="button" key={item.path} disabled={!available || busy} aria-current={path === item.path ? 'location' : undefined} className={`mb-1 w-full cursor-pointer rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:cursor-default disabled:opacity-50 ${path === item.path ? 'bg-muted font-medium' : ''}`} onClick={() => navigate(item.path)}>{item.name}</button>)}</aside>
           <ScrollArea label="Computer files" className="min-h-0 min-w-0 flex-1" viewportClassName="[&>div]:!block [&>div]:w-full [&>div]:min-w-0">
             <div className="min-w-0 p-3 sm:p-4">
               {!available ? <p role="status" className="text-sm text-muted-foreground">{connected ? 'This computer is not running. Power it on from Computers to browse its files.' : 'Computer management is offline. Reconnect before browsing files.'}</p> : selected ? <div className="min-w-0 space-y-3 motion-safe:animate-[fade-in_120ms_ease-out]">
