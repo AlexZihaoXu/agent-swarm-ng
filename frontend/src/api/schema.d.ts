@@ -2215,6 +2215,17 @@ export interface operations {
                     };
                 };
             };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
         };
     };
     listAgents: {

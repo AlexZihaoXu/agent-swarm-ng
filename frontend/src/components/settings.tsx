@@ -13,6 +13,8 @@ type TestResult =
 
 const inputClass = 'h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10';
 
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
+
 type Endpoint = { id: string; name: string; baseUrl: string; hasApiKey: boolean; saved: boolean };
 
 function EndpointCard({ endpoint, onSaved, onRemove }: { endpoint: Endpoint; onSaved: (value: Endpoint) => void; onRemove: () => void }) {
@@ -25,6 +27,7 @@ function EndpointCard({ endpoint, onSaved, onRemove }: { endpoint: Endpoint; onS
   const [result, setResult] = useState<TestResult>({ state: 'idle' });
   const request = useRef<AbortController | null>(null);
   const testing = result.state === 'testing';
+  const openrouter = baseUrl.trim().replace(/\/+$/, '') === OPENROUTER_URL;
 
   useEffect(() => () => request.current?.abort(), []);
 
@@ -69,7 +72,7 @@ function EndpointCard({ endpoint, onSaved, onRemove }: { endpoint: Endpoint; onS
       <div className="mb-5 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h3 id={`${id}-title`} className="truncate text-sm font-semibold">{name.trim() || 'New endpoint'}</h3>
-          <p className="mt-1 text-xs text-muted-foreground">OpenAI-compatible API</p>
+          <p className="mt-1 text-xs text-muted-foreground">{openrouter ? 'OpenRouter · API credits' : 'OpenAI-compatible API'}</p>
         </div>
         <button type="button" onClick={onRemove} aria-label="Remove endpoint" className="flex size-11 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring sm:size-auto sm:p-2">
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="size-4"><path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" /></svg>
@@ -89,8 +92,9 @@ function EndpointCard({ endpoint, onSaved, onRemove }: { endpoint: Endpoint; onS
           </div>
           <div className="space-y-2">
             <label htmlFor={`${id}-key`} className="block text-sm font-medium">API key</label>
-            <input id={`${id}-key`} type="password" value={apiKey} onChange={event => { setApiKey(event.target.value); setKeyChanged(true); setResult({ state: 'idle' }); }} placeholder={endpoint.hasApiKey && !keyChanged ? 'Saved key — enter to replace' : 'Optional for local servers'} autoComplete="new-password" spellCheck={false} className={inputClass} />
+            <input id={`${id}-key`} type="password" value={apiKey} onChange={event => { setApiKey(event.target.value); setKeyChanged(true); setResult({ state: 'idle' }); }} placeholder={endpoint.hasApiKey && !keyChanged ? 'Saved key — enter to replace' : openrouter ? 'OpenRouter API key' : 'Optional for local servers'} autoComplete="new-password" spellCheck={false} className={inputClass} />
           </div>
+          {openrouter && <p className="text-xs leading-relaxed text-muted-foreground">An OpenRouter API key is required for inference, billed by OpenRouter. Lists tool-capable text/vision models; reasoning support depends on the model.</p>}
           {endpoint.hasApiKey && !keyChanged && <button type="button" className="min-h-11 rounded text-xs text-muted-foreground underline underline-offset-4 sm:min-h-0" onClick={() => { setKeyChanged(true); setApiKey(''); setResult({ state: 'idle' }); }}>Clear saved key</button>}
           <div className="flex flex-wrap items-center gap-3 pt-1">
             <Button type="button" size="sm" className="min-h-11 sm:min-h-0" disabled={testing || saving || !name.trim() || !baseUrl.trim()} onClick={() => void saveEndpoint()}>{saving ? 'Saving…' : 'Save endpoint'}</Button>
@@ -147,6 +151,12 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
     document.getElementById(`endpoint-${route.endpointId}`)?.scrollIntoView({ block: 'nearest' });
   }, [loading, route.kind, route.endpointId, endpoints.length]);
 
+  function addEndpoint(name = '', baseUrl = '') {
+    newEndpointId.current = randomUuid();
+    setEndpoints(current => [...current, { id: newEndpointId.current, name, baseUrl, hasApiKey: false, saved: false }]);
+    onNavigate('/settings/endpoints/new');
+  }
+
   async function removeEndpoint(endpoint: Endpoint) {
     if (endpoint.saved) {
       try {
@@ -174,11 +184,14 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
         <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h3 id="endpoints-title" className="text-sm font-semibold">API endpoints</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Connect an OpenAI-compatible provider or local server.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Connect OpenRouter, another OpenAI-compatible provider, or a local server.</p>
           </div>
-          <Button variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={loading} onClick={() => { newEndpointId.current = randomUuid(); setEndpoints(current => [...current, { id: newEndpointId.current, name: '', baseUrl: '', hasApiKey: false, saved: false }]); onNavigate('/settings/endpoints/new'); }}>
-            <span aria-hidden="true" className="mr-2 text-lg leading-none">+</span>Add endpoint
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={loading} onClick={() => addEndpoint('OpenRouter', OPENROUTER_URL)}>Add OpenRouter</Button>
+            <Button variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={loading} onClick={() => addEndpoint()}>
+              <span aria-hidden="true" className="mr-2 text-lg leading-none">+</span>Add endpoint
+            </Button>
+          </div>
         </div>
         <div className="space-y-4">
           {error && <p role="alert" className="text-sm">{error}</p>}

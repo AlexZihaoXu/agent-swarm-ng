@@ -23,6 +23,8 @@ bun run dev:frontend
 
 Open http://localhost:5173. See [development instructions](docs/development.md) for tests, API generation, and Docker setup.
 
+For OpenRouter, use **Settings → Add OpenRouter**, enter your API key, save, then select that endpoint when creating an agent. [OpenRouter setup](docs/development.md#openrouter-connection) supports tool-capable text/vision models and provider-specific reasoning; usage is billed by OpenRouter, not a ChatGPT subscription.
+
 ## Vision and scope
 
 - **Agents:** persistent, human-like identities with long-term memory, independent of any one session or computer. Pi is the intended harness; agents inherit no coding/host tools. The operator-approved read-only Knowledge plugin is explicitly granted on normal turns; other capabilities require separate grants.

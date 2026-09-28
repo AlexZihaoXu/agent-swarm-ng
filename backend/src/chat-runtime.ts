@@ -4,10 +4,12 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import {
   createProvider, getSupportedThinkingLevels, InMemoryCredentialStore, InMemoryModelsStore,
-  Type, type AssistantMessage, type Model, type ModelThinkingLevel,
+  Type, type Api, type AssistantMessage, type Model, type ModelThinkingLevel,
 } from '@earendil-works/pi-ai';
 import { getModels } from '@earendil-works/pi-ai/compat';
 import * as transport from '@earendil-works/pi-ai/api/openai-completions';
+import * as anthropicTransport from '@earendil-works/pi-ai/api/anthropic-messages';
+import { isOpenRouter, openRouterCatalog, OPENROUTER_URL } from './openrouter';
 import { CHAT_AUDIENCE_GUIDANCE } from './chat-audience';
 import { SWARM_KNOWLEDGE_GUIDANCE } from './swarm-knowledge/plugin';
 import { COMPUTER_USE_GUIDANCE } from './computer-use/tools';
@@ -20,10 +22,15 @@ export type ChatConfiguration = {
   baseUrl: string; apiKey?: string; channel: Channel; publishPeer?: (channelId: string, text: string, callId: string, replyToMessageId?: string) => Promise<string>;
 };
 
-export function modelCapabilities(id: string, provider: 'openai' | 'openai-codex' = 'openai') {
-  const known = getModels(provider).find(model => model.id === id);
-  const levels = known?.reasoning ? getSupportedThinkingLevels(known) : ['off'] as const;
-  return { thinkingLevels: [...levels], reasoning: Boolean(known?.reasoning) };
+function capabilitiesFor(model?: Model<Api>) {
+  const levels = model?.reasoning ? getSupportedThinkingLevels(model) : ['off'] as const;
+  return { thinkingLevels: [...levels], reasoning: Boolean(model?.reasoning) };
+}
+export function modelCapabilities(id: string, provider: 'openai' | 'openai-codex' | 'openrouter' = 'openai') {
+  return capabilitiesFor(getModels(provider).find(model => model.id === id));
+}
+export async function endpointCapabilities(id: string, baseUrl?: string) {
+  return baseUrl && isOpenRouter(baseUrl) ? capabilitiesFor(await openRouterCatalog.model(id)) : modelCapabilities(id);
 }
 
 function transcriptText(message: ChannelMessage, author: string) {
@@ -83,13 +90,15 @@ export function chatResources(name: string, channelId: string, hasWeb: boolean, 
 }
 
 async function createEndpointRuntime(config: ChatConfiguration) {
-  const known = getModels('openai').find(model => model.id === config.model);
-  const capabilities = modelCapabilities(config.model);
+  const openrouter = isOpenRouter(config.baseUrl);
+  if (openrouter && !config.apiKey?.trim()) throw new Error('Add an OpenRouter API key in Settings.');
+  const known = openrouter ? await openRouterCatalog.model(config.model) : getModels('openai').find(model => model.id === config.model);
+  const capabilities = capabilitiesFor(known);
   if (!capabilities.thinkingLevels.includes(config.thinkingLevel)) throw new Error('Unsupported thinking level');
   const base = new URL(config.baseUrl);
   if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash) throw new Error('Invalid endpoint');
   const baseUrl = base.toString().replace(/\/+$/, '');
-  const model: Model<'openai-completions'> = {
+  const model: Model<Api> = openrouter ? known! : {
     id: config.model, name: config.model, api: 'openai-completions', provider: 'swarm-chat', baseUrl,
     reasoning: capabilities.reasoning, thinkingLevelMap: known?.thinkingLevelMap,
     input: known?.input ?? ['text'], contextWindow: known?.contextWindow ?? 32768, maxTokens: 4096,
@@ -99,18 +108,24 @@ async function createEndpointRuntime(config: ChatConfiguration) {
   // Explicit auth closure: supplied keys are literal values, never Pi's !command/$ENV configuration syntax.
   const guardedFetch: typeof fetch = Object.assign(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-    if (url !== `${baseUrl}/chat/completions`) throw new Error('Unexpected inference destination');
+    const destination = openrouter ? `${OPENROUTER_URL}/${model.api === 'anthropic-messages' ? 'messages' : 'chat/completions'}` : `${baseUrl}/chat/completions`;
+    if (url !== destination && !(openrouter && model.api === 'anthropic-messages' && url === `${destination}?beta=true`)) throw new Error('Unexpected inference destination');
     const headers = new Headers(init?.headers);
     if (config.apiKey) headers.set('Authorization', `Bearer ${config.apiKey}`);
     else headers.delete('Authorization');
+    if (openrouter) headers.delete('x-api-key');
     return fetch(input, { ...init, headers, redirect: 'error' });
   }, { preconnect: fetch.preconnect });
   const provider = createProvider({
     id: model.provider, models: [model],
     auth: { apiKey: { name: 'Configured endpoint', resolve: async () => ({ auth: { apiKey: config.apiKey || 'keyless-local-endpoint' } }) } },
     api: {
-      stream: (m, context, options) => transport.stream(m as Model<'openai-completions'>, context, { ...options, fetch: guardedFetch, cacheRetention: 'none', maxRetries: 0 }),
-      streamSimple: (m, context, options) => transport.streamSimple(m as Model<'openai-completions'>, context, { ...options, fetch: guardedFetch, cacheRetention: 'none', maxRetries: 0 }),
+      stream: (m, context, options) => m.api === 'anthropic-messages'
+        ? anthropicTransport.stream(m as Model<'anthropic-messages'>, context, { ...options, fetch: guardedFetch, cacheRetention: 'none', maxRetries: 0 })
+        : transport.stream(m as Model<'openai-completions'>, context, { ...options, fetch: guardedFetch, cacheRetention: 'none', maxRetries: 0 }),
+      streamSimple: (m, context, options) => m.api === 'anthropic-messages'
+        ? anthropicTransport.streamSimple(m as Model<'anthropic-messages'>, context, { ...options, fetch: guardedFetch, cacheRetention: 'none', maxRetries: 0 })
+        : transport.streamSimple(m as Model<'openai-completions'>, context, { ...options, fetch: guardedFetch, cacheRetention: 'none', maxRetries: 0 }),
     },
   });
   const modelRuntime = await ModelRuntime.create({

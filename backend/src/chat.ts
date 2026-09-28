@@ -3,7 +3,7 @@ import { Type, type Static } from '@sinclair/typebox';
 import { EndpointStore } from './endpoint-store';
 import { PlatformStore } from './platform-store';
 import { ThinkingLevel } from './generated/prisma/enums';
-import { modelCapabilities } from './chat-runtime';
+import { endpointCapabilities } from './chat-runtime';
 import { CodexProvider, CODEX_CONNECTION } from './codex-provider';
 import { AgentRuns } from './agent-runs';
 import { createRunStreams } from './run-streams';
@@ -86,8 +86,15 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
     return { stopped: await runs.stop(request.params.id, request.body.clientMessageId) || Boolean(target) };
   });
   app.get<{ Querystring: { model: string; endpointId?: string } }>('/api/agents/model-capabilities', {
-    schema: { operationId: 'getAgentModelCapabilities', querystring: Type.Object({ model: Type.String({ maxLength: 512 }), endpointId: Type.Optional(Type.String({ maxLength: 100 })) }), response: { 200: Type.Object({ thinkingLevels: Type.Array(Thinking), reasoning: Type.Boolean() }) } },
-  }, async request => request.query.endpointId === CODEX_CONNECTION ? codex.capabilities(request.query.model) : modelCapabilities(request.query.model));
+    schema: { operationId: 'getAgentModelCapabilities', querystring: Type.Object({ model: Type.String({ maxLength: 512 }), endpointId: Type.Optional(Type.String({ maxLength: 100 })) }), response: { 200: Type.Object({ thinkingLevels: Type.Array(Thinking), reasoning: Type.Boolean() }), 503: ErrorResponse } },
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    try {
+      if (request.query.endpointId === CODEX_CONNECTION) return await codex.capabilities(request.query.model);
+      const endpoint = (await store.read()).find(row => row.id === request.query.endpointId);
+      return await endpointCapabilities(request.query.model, endpoint?.baseUrl);
+    } catch { return reply.code(503).send({ message: 'Could not load model capabilities. Check the connection and select a tool-capable text model.' }); }
+  });
 
   app.get<{ Querystring: { after?: number; limit?: number; search?: string } }>('/api/agents', {
     schema: { operationId: 'listAgents', querystring: Type.Object({ search: Type.Optional(Type.String({ maxLength: 80 })), after: Type.Optional(Type.Integer({ minimum: 1 })), limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })) }), response: { 200: Type.Object({ agents: Type.Array(Agent), nextCursor: Cursor }) } },
@@ -109,14 +116,17 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
   }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const input = request.body;
-    const capabilities = input.endpointId === CODEX_CONNECTION ? await codex.capabilities(input.model) : modelCapabilities(input.model);
+    const endpoint = input.endpointId === CODEX_CONNECTION ? undefined : (await store.read()).find(row => row.id === input.endpointId);
+    let capabilities;
+    try { capabilities = input.endpointId === CODEX_CONNECTION ? await codex.capabilities(input.model) : await endpointCapabilities(input.model, endpoint?.baseUrl); }
+    catch { return reply.code(400).send({ message: 'Could not load model capabilities. Check the connection and select a tool-capable text model.' }); }
     if (!input.name.trim() || !capabilities.thinkingLevels.includes(input.thinkingLevel)) return reply.code(400).send({ message: 'Choose a name and a supported thinking level.' });
     if (input.endpointId === CODEX_CONNECTION) {
       try {
         const status = await codex.status();
         if (!status.connected || !status.models.includes(input.model)) return reply.code(400).send({ message: 'Connect OpenAI Codex in Settings and select an available model.' });
       } catch { return reply.code(400).send({ message: 'Could not read the OpenAI connection. Reconnect in Settings.' }); }
-    } else if (!(await store.read()).some(endpoint => endpoint.id === input.endpointId)) return reply.code(404).send({ message: 'Save the endpoint in Settings first.' });
+    } else if (!endpoint) return reply.code(404).send({ message: 'Save the endpoint in Settings first.' });
     return agentView(await database.createAgent({ ...input, name: input.name.trim() }));
   });
 

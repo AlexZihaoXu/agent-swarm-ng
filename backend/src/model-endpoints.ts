@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import { EndpointStore, endpointView } from './endpoint-store';
+import { readModelCatalog } from './model-catalog';
+import { isOpenRouter, openRouterCatalog } from './openrouter';
 
 const ConnectionBody = Type.Object({
   baseUrl: Type.String({ minLength: 1, maxLength: 2048 }),
@@ -8,35 +10,6 @@ const ConnectionBody = Type.Object({
   endpointId: Type.Optional(Type.String({ maxLength: 100 })),
 }, { additionalProperties: false });
 const ConnectionError = Type.Object({ message: Type.String() });
-
-async function readModels(response: Response): Promise<string[]> {
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('Missing body');
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > 1_048_576) {
-        await reader.cancel();
-        throw new Error('Response too large');
-      }
-      chunks.push(value);
-    }
-  } finally { reader.releaseLock(); }
-  const payload: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  if (!payload || typeof payload !== 'object' || !('data' in payload) || !Array.isArray(payload.data) || payload.data.length > 1000) {
-    throw new Error('Invalid model list');
-  }
-  return [...new Set(payload.data.map((model: unknown) => {
-    if (!model || typeof model !== 'object' || !('id' in model) || typeof model.id !== 'string' || !model.id.trim() || model.id.length > 512) {
-      throw new Error('Invalid model identifier');
-    }
-    return model.id;
-  }))];
-}
 
 function parseBaseUrl(value: string) {
   const url = new URL(value.trim());
@@ -111,7 +84,9 @@ export function registerModelEndpoints(app: FastifyInstance, fetcher: typeof fet
         await response.body?.cancel();
         return reply.code(502).send({ message: `Endpoint returned HTTP ${response.status}. Check the base URL and API key.` });
       }
-      return { models: await readModels(response) };
+      const openrouter = isOpenRouter(request.body.baseUrl);
+      const rows = await readModelCatalog(response, openrouter ? 4 * 1024 * 1024 : undefined);
+      return { models: openrouter ? openRouterCatalog.remember(rows) : [...new Set(rows.map(row => row.id as string))] };
     } catch (error) {
       if (signal.aborted || (error instanceof Error && error.name === 'TimeoutError')) {
         return reply.code(504).send({ message: 'Connection timed out after 10 seconds.' });
