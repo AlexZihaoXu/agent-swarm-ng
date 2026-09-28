@@ -4,6 +4,7 @@ import type { PlatformStore } from './platform-store';
 import { ComputerStore, ComputerStoreError, type ComputerSettings } from './computer-store';
 import type { ComputerController, ComputerObservation } from './computer-controller-client';
 import type { ComputerUseService } from './computer-use/service';
+import { registerComputerFileRoutes } from './computer-file-routes';
 
 const idParams = Type.Object({ id: Type.String({ minLength: 1, maxLength: 80 }) });
 const errorSchema = Type.Object({ message: Type.String() });
@@ -45,6 +46,7 @@ function failure(reply: FastifyReply, error: unknown) {
 
 export function registerComputerRoutes(app: FastifyInstance, platform: PlatformStore, controller: ComputerController | null, use?: ComputerUseService) {
   const store = new ComputerStore(platform);
+  registerComputerFileRoutes(app, store, controller);
   app.get('/api/computers', {
     schema: { operationId: 'listComputers', response: { 200: Type.Object({ computers: Type.Array(viewSchema), controllerConnected: Type.Boolean() }), ...errors } },
   }, async (_, reply) => {

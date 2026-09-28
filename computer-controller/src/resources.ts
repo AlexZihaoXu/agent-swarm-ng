@@ -3,7 +3,7 @@ export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[
 const NAMESPACE = /^[a-z0-9][a-z0-9-]{0,29}$/;
 
 export class ResourceError extends Error {
-  constructor(readonly code: 400 | 404 | 409 | 503, message: string) { super(message); }
+  constructor(readonly code: 400 | 403 | 404 | 409 | 413 | 429 | 503 | 504, message: string) { super(message); }
 }
 
 export function validateNamespace(namespace: string) {

@@ -10,6 +10,7 @@ import { defaultComputerSettings, parseComputerSettings, type ComputerSettingsDr
 import { ComputerCard, type Computer } from './computer-card';
 import { ComputerViewer } from './computer-viewer';
 import { ComputerResourceFields } from './computer-resource-fields';
+import { ComputerFileBrowser } from './computer-file-browser';
 import { computerPath } from '@/lib/dashboard-location';
 type ComputerList = { computers: Computer[] };
 
@@ -93,6 +94,9 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
   const [powerBusy, setPowerBusy] = useState(false);
   const [powerError, setPowerError] = useState('');
   const [menuTarget, setMenuTarget] = useState<Computer | null>(null);
+  const [filesTarget, setFilesTarget] = useState<Computer | null>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const filesComputer = computers.find(computer => computer.id === filesTarget?.id) ?? filesTarget;
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const createId = useId();
@@ -207,7 +211,7 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content className="context-menu-content phone-menu-targets z-50 min-w-56 rounded-lg border border-border bg-background p-1 text-sm shadow-lg"
-            onCloseAutoFocus={event => { if (createOpen || selected !== null || settingsComputer !== null) event.preventDefault(); }}>
+            onCloseAutoFocus={event => { if (createOpen || selected !== null || settingsComputer !== null || filesOpen) event.preventDefault(); }}>
             <ContextMenu.Item disabled={!menuTarget || menuTarget.state !== 'running' || !query.data?.controllerConnected}
               onSelect={() => { if (menuTarget) onOpen(menuTarget.id); }}
               className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
@@ -218,8 +222,9 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
               className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
               <MenuIcon path="M12 3v9M6.5 6.5a8 8 0 1 0 11 0" label="Power" />{menuTarget?.state === 'running' ? 'Power off' : 'Power on'}
             </ContextMenu.Item>
-            <ContextMenu.Item disabled title="Coming soon: browse and transfer this computer's files"
-              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40">
+            <ContextMenu.Item disabled={!menuTarget || menuTarget.state !== 'running' || !query.data?.controllerConnected || powerBusy}
+              onSelect={() => { if (menuTarget) { setFilesTarget(menuTarget); setFilesOpen(true); } }}
+              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
               <MenuIcon path="M3 7h6l2 2h10v10H3zM8 13h8" label="Files" />File browser
             </ContextMenu.Item>
             <ContextMenu.Item disabled={!menuTarget || !query.data?.controllerConnected || (menuTarget.state !== 'running' && menuTarget.state !== 'exited')}
@@ -275,5 +280,6 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
         </form>
       </ComputerDialog>}
     </Dialog.Root>
+    {filesComputer && <ComputerFileBrowser key={filesComputer.id} computer={filesComputer} open={filesOpen} connected={Boolean(query.data?.controllerConnected) && computers.some(computer => computer.id === filesComputer.id)} onOpenChange={setFilesOpen} />}
   </section>;
 }

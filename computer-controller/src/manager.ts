@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { DockerApi, DockerApiError } from './docker-api';
+import { decodeFileResult, MAX_DOWNLOAD, operatorFilesScript, validateFileQuery, type FileOperation, type FileQuery } from './operator-files';
 import { ComputerNames, ResourceError, validateId, validateName, type ResourceRole } from './resources';
 import { deriveComputerLimits, validateComputerConfiguration, type ComputerConfiguration, type ComputerLimits } from './computer-configuration';
 
@@ -81,6 +82,7 @@ export class ComputerManager {
   private previewCache = new Map<string, { at: number; image: Buffer }>();
   private previewPending = new Map<string, Promise<Buffer | null>>();
   private detectedLimits: ComputerLimits | null = null;
+  private fileOperations = new Set<string>();
   constructor(
     private readonly docker: DockerApi,
     namespace: string,
@@ -589,6 +591,23 @@ export class ComputerManager {
     }
     return computers;
   }
+  /** Operator reads neither acquire nor release agent control. One per guest, two globally. */
+  async operatorFiles(idRaw: string, mode: FileOperation, query: FileQuery) {
+    const id = validateId(idRaw);
+    validateFileQuery(mode, query);
+    if (this.fileOperations.has(id) || this.fileOperations.size >= 2) throw new ResourceError(429, 'File operations are busy. Retry shortly.');
+    this.fileOperations.add(id);
+    try {
+      const computer = await this.container(this.names.desktop(id), id, 'desktop');
+      if (!computer) throw new ResourceError(404, 'Computer not found.');
+      if (!computer.State.Running) throw new ResourceError(409, 'Computer is not running.');
+      const raw = await this.docker.exec(computer.Id,
+        ['/usr/bin/timeout', '--signal=TERM', '--kill-after=2s', '18s', '/usr/bin/python3', '-I', '-c', operatorFilesScript, mode, JSON.stringify(query)],
+        '1000:1000', 23_000, mode === 'download' ? MAX_DOWNLOAD + 1024 * 1024 : 2 * 1024 * 1024);
+      return decodeFileResult(raw, mode);
+    } finally { this.fileOperations.delete(id); }
+  }
+
   /** Fixed guest program only, addressed by inspected immutable ID after label/running checks. */
   async computerUseExec(idRaw: string, mode: 'state' | 'capture' | 'validate' | 'execute' | 'cancel', input: unknown) {
     const id = validateId(idRaw);

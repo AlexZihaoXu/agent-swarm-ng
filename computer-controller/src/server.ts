@@ -5,6 +5,7 @@ import type { ComputerConfiguration } from './computer-configuration';
 import { ComputerUseService } from './computer-use-service';
 import { MAX_USE_BODY } from './computer-use';
 import { ComputerCoreService } from './computer-core-service';
+import { fileAttachment, type FileOperation } from './operator-files';
 
 process.umask(0o077);
 const docker = new DockerApi();
@@ -58,6 +59,21 @@ Bun.serve({
         if ('settings' in input && (!input.settings || typeof input.settings !== 'object' || Array.isArray(input.settings))) throw new ResourceError(400, 'Invalid computer settings.');
         await manager.create(input.id, input.name, 'settings' in input ? input.settings as ComputerConfiguration : undefined);
         return json({ created: true }, 201);
+      }
+      const fileMatch = /^\/computers\/([^/]+)\/(files|file-preview|download)$/.exec(pathname);
+      if (fileMatch) {
+        if (request.method !== 'GET') return json({ message: 'Method not allowed.' }, 405);
+        const mode = fileMatch[2] as FileOperation;
+        const output = await manager.operatorFiles(decodeURIComponent(fileMatch[1]), mode, {
+          path: searchParams.get('path') ?? '',
+          offset: searchParams.has('offset') ? Number(searchParams.get('offset')) : undefined,
+          filter: searchParams.get('filter') ?? undefined,
+        });
+        if (output.bytes !== null) return new Response(new Uint8Array(output.bytes), { headers: {
+          'Content-Type': 'application/octet-stream', 'Content-Disposition': fileAttachment(output.result.name),
+          'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
+        } });
+        return json(output.result);
       }
       const coreMatch = /^\/computers\/([^/]+)\/core\/(prepare|execute|cancel)$/.exec(pathname);
       if (coreMatch) {

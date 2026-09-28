@@ -336,13 +336,8 @@ test('computer card offers a shared context menu and power control', async ({ pa
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: 'Open' })).toBeEnabled();
   await expect(menu.getByRole('menuitem', { name: /Power off/ })).toBeEnabled();
-  await expect(menu.getByRole('menuitem', { name: /File browser/ })).toBeDisabled();
+  await expect(menu.getByRole('menuitem', { name: /File browser/ })).toBeEnabled();
   await expect(menu.getByRole('menuitem', { name: /Settings/ })).toBeEnabled();
-  // "Gray this out" means visibly dimmed, not merely non-interactive.
-  for (const name of [/File browser/]) {
-    const opacity = await menu.getByRole('menuitem', { name }).evaluate(node => Number(getComputedStyle(node).opacity));
-    expect(opacity, `${name} must be dimmed`).toBeLessThan(0.6);
-  }
   const enabledOpacity = await menu.getByRole('menuitem', { name: 'Open' }).evaluate(node => Number(getComputedStyle(node).opacity));
   expect(enabledOpacity).toBe(1);
   await expect(menu).toContainText('Danger zone');
@@ -361,6 +356,7 @@ test('computer card offers a shared context menu and power control', async ({ pa
   // Power on remains available through the same "..."/right-click menu.
   await card.getByRole('button', { name: 'Actions for Menu desk' }).click();
   await expect(page.getByRole('menu').getByRole('menuitem', { name: /Power on/ })).toBeEnabled();
+  await expect(page.getByRole('menu').getByRole('menuitem', { name: /File browser/ })).toBeDisabled();
   await page.getByRole('menu').getByRole('menuitem', { name: /Power on/ }).click();
   await expect(card.getByText('Running')).toBeVisible();
   await expect(card.getByRole('button', { name: /^(Start|Stop)$/ })).toHaveCount(0);

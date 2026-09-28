@@ -1,3 +1,4 @@
+import { fetchComputerFile, type FileOperation, type FileQuery, type FileResult } from './computer-files';
 import type { ComputerSettings } from './computer-store';
 import { HttpComputerRuntime } from './computer-use/runtime-client';
 import type { ComputerRuntime } from './computer-use/service';
@@ -11,6 +12,7 @@ export type ComputerLimits = {
 
 export interface ComputerController {
   readonly runtime?: ComputerRuntime;
+  files?(id: string, mode: FileOperation, query: FileQuery): Promise<FileResult>;
   limits(): Promise<ComputerLimits>;
   create(id: string, name: string, settings: ComputerSettings): Promise<void>;
   remove(id: string, name: string): Promise<void>;
@@ -35,6 +37,9 @@ export class HttpComputerController implements ComputerController {
     });
     if (!response.ok) throw new Error(`Computer controller returned ${response.status}.`);
     return response;
+  }
+  async files(id: string, mode: FileOperation, query: FileQuery) {
+    return fetchComputerFile(this.fetcher, this.baseUrl, id, mode, query);
   }
   async limits(): Promise<ComputerLimits> {
     const response = await this.request('/computers/settings-limits');
