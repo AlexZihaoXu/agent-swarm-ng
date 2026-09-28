@@ -1,3 +1,12 @@
+# Site-wide hardening. The dashboard has no login, so it must not be frameable by another site (clickjacking on
+# one-click actions). The desktop viewer iframe is same-origin, so 'self' still allows it.
+header {
+	X-Frame-Options SAMEORIGIN
+	Content-Security-Policy "frame-ancestors 'self'"
+	Referrer-Policy no-referrer
+	X-Content-Type-Options nosniff
+}
+
 # Shared by production Caddy and the isolated development proxy. The root
 # document and all executable assets come from trusted build-time image bytes,
 # never from the sudo-capable computer's writable filesystem.

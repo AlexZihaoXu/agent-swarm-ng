@@ -1,6 +1,6 @@
 import { test, expect, type Page } from './fixtures';
 const id = 'c4a5f16d-0042-4b70-a232-dd65591a2c4c';
-const home = '/home/agent';
+const home = '/workspace';
 const file = (name: string, type = 'file', parent = home) => ({ name, path: `${parent}/${name}`, type, size: type === 'directory' ? null : 12, modifiedAt: 1700000000000, isSymlink: false });
 async function setup(page: Page, state = 'running') {
   const requests: URL[] = [];
@@ -42,7 +42,7 @@ test('file browser navigates, edits paths, filters and pages without upload or m
   await expect(editPath.locator('svg')).toBeVisible();
   await panel.getByRole('button', { name: /^src\// }).click();
   await expect(panel.getByRole('button', { name: /^main.ts/ })).toBeVisible();
-  await panel.getByRole('navigation', { name: 'Folder breadcrumbs' }).getByRole('button', { name: 'agent', exact: true }).click();
+  await panel.getByRole('navigation', { name: 'Folder breadcrumbs' }).getByRole('button', { name: 'workspace', exact: true }).click();
   await panel.getByRole('button', { name: 'Next page' }).click(); await expect(panel.getByRole('button', { name: /^later.txt/ })).toBeVisible();
   await panel.getByRole('button', { name: 'Previous page' }).click();
   await panel.getByLabel('Filter this folder').fill('README');
@@ -57,20 +57,18 @@ test('file browser navigates, edits paths, filters and pages without upload or m
   await panel.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Actions for File desk' })).toBeFocused();
 });
-test('starts at home and navigates through breadcrumbs only, including leaving previews', async ({ page }) => {
+test('starts in the workspace and navigates through breadcrumbs only, including leaving previews', async ({ page }) => {
   const { panel, requests } = await open(page);
   expect(requests.find(url => url.pathname.endsWith('/files'))?.searchParams.get('path')).toBe(home);
   await expect(panel.getByRole('button', { name: /^(Back|Forward|Up one folder|Refresh)$/ })).toHaveCount(0);
   const crumbs = panel.getByRole('navigation', { name: 'Folder breadcrumbs' });
   await panel.getByRole('button', { name: /^src\// }).click();
   await expect(crumbs.getByRole('button', { name: 'src', exact: true })).toBeVisible();
-  await crumbs.getByRole('button', { name: 'agent', exact: true }).click();
+  await crumbs.getByRole('button', { name: 'workspace', exact: true }).click();
   await expect(panel.getByRole('list', { name: 'Folder entries' })).toContainText('README.md');
-  await crumbs.getByRole('button', { name: 'home', exact: true }).click();
-  await panel.getByRole('button', { name: /^agent\// }).click();
   await panel.getByRole('button', { name: /^README.md/ }).click();
   await expect(panel.getByLabel('File preview')).toBeVisible();
-  await crumbs.getByRole('button', { name: 'agent', exact: true }).click();
+  await crumbs.getByRole('button', { name: 'workspace', exact: true }).click();
   await expect(panel.getByLabel('File preview')).toHaveCount(0);
   await expect(panel.getByRole('list', { name: 'Folder entries' })).toContainText('README.md');
 });
@@ -85,7 +83,7 @@ test('text preview remains inert and readonly; download is an actual named file'
   const download = await saved; expect(download.suggestedFilename()).toBe('README.md');
   const stream = await download.createReadStream(); let text = ''; for await (const chunk of stream!) text += chunk.toString();
   expect(text).toBe('hello world\n');
-  await panel.getByRole('navigation', { name: 'Folder breadcrumbs' }).getByRole('button', { name: 'agent', exact: true }).click();
+  await panel.getByRole('navigation', { name: 'Folder breadcrumbs' }).getByRole('button', { name: 'workspace', exact: true }).click();
   await panel.getByRole('button', { name: /^image.png/ }).click();
   await expect(panel).toContainText('No text preview for this file');
 });

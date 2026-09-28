@@ -618,3 +618,28 @@ describe('Pi chat and platform channel boundary', () => {
     } finally { await app.close(); }
   }, 20000);
 });
+
+describe('agent deletion order', () => {
+  it('keeps the agent and its screenshots when the database delete fails, and removes both once it succeeds', async () => {
+    behavior = 'tool'; captured = [];
+    const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
+    const app = await testApp(database);
+    const { mkdir, writeFile, access } = await import('node:fs/promises');
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const pool = join(database.dataDirectory, 'computer-screenshots');
+      await mkdir(pool, { recursive: true });
+      const file = join(pool, `${agent.id}_${crypto.randomUUID()}.jpg`);
+      await writeFile(file, Buffer.from([255, 216, 255, 217]));
+      const failing = vi.spyOn(PlatformStore.prototype, 'deleteAgent').mockRejectedValueOnce(new Error('disk full'));
+      const failed = await app.inject({ method: 'DELETE', url: `/api/agents/${agent.id}`, payload: { confirmation: configuration.name } });
+      expect(failed.statusCode).toBe(503);
+      failing.mockRestore();
+      expect((await app.inject('/api/agents')).json().agents).toHaveLength(1);
+      await access(file); // the image is still there
+      const ok = await app.inject({ method: 'DELETE', url: `/api/agents/${agent.id}`, payload: { confirmation: configuration.name } });
+      expect(ok.statusCode).toBe(200);
+      await expect(access(file)).rejects.toThrow();
+    } finally { await app.close(); }
+  });
+});

@@ -7,6 +7,7 @@ import { MAX_USE_BODY } from './computer-use';
 import { ComputerCoreService } from './computer-core-service';
 import { fileAttachment, type FileOperation } from './operator-files';
 import { terminalSockets, type TerminalSocket } from './terminal-stream';
+import { authorized } from './auth';
 
 process.umask(0o077);
 const docker = new DockerApi();
@@ -50,6 +51,7 @@ Bun.serve<TerminalSocket>({
   async fetch(request, server) {
     try {
       const { pathname, searchParams } = new URL(request.url);
+      if (!authorized(request, undefined, pathname)) return json({ message: 'Unauthorized.' }, 401);
       if (pathname === '/health' && request.method === 'GET') {
         await docker.request('GET', '/_ping', undefined, 128, 2000);
         return json({ status: 'ok' });

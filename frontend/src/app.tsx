@@ -1,19 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useLocation, useNavigate } from 'react-router';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentPanel } from '@/components/agent-panel';
-import { KnowledgeBrowser } from '@/components/knowledge-browser';
 import { EditAgentForm } from '@/components/edit-agent-form';
 import { AgentAvatar, AgentName } from '@/components/chat-identity';
 import { cn } from '@/lib/utils';
 import { useChat, type ChatAgent } from '@/use-chat';
 import type { ChatMessage } from '@/chat-types';
 import { replyExcerpt } from '@/lib/reply-preview';
-import { SlideUpFadeSwap } from '@/components/ui/slide-up-fade-swap';
-import { renderMessagePreview } from '@/components/message-markdown';
 import { useDmConversations } from '@/use-dm-conversations';
 import { useDmInbox } from '@/use-dm-inbox';
 import { AgentExchangeIcon } from '@/components/agent-exchange-icon';
@@ -22,8 +19,6 @@ import { Select } from '@/components/ui/select';
 import { ConversationMessages } from '@/components/conversation-messages';
 import { isTypingInConversation } from '@/lib/conversation-typing';
 import { conversationTimeline } from '@/lib/conversation-timeline';
-import { Settings } from '@/components/settings';
-import { ComputersPanel } from '@/components/computers-panel';
 import { AgentTypingStatus } from '@/components/agent-typing-status';
 import { AvatarFace, PresenceIndicator } from '@/components/typing-indicator';
 import { AgentActivityPanel } from '@/components/agent-activity-panel';
@@ -34,16 +29,23 @@ import { GroupConversation } from '@/components/group-conversation';
 import { ChatComposer } from '@/components/chat-composer';
 import { useGroupEvents } from '@/use-groups';
 import { useAgentSearch } from '@/use-agent-search';
+import { listTime } from '@/lib/format-time';
+import { SidebarSearch } from '@/components/sidebar-search';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { ConversationRow } from '@/components/conversation-row';
 import { agentDmPath, agentPath, chatAgentDmPath, chatAgentPath, chatGroupPath, computerPath, parseDashboardPath } from '@/lib/dashboard-location';
 
-function Avatar({ initials, avatar, small = false, typing = false, ready = false, working = false }: { initials: string; avatar?: AvatarAppearance; small?: boolean; typing?: boolean; ready?: boolean; working?: boolean }) {
+// Tabs the operator opens less often load on demand, keeping the first download small.
+const Settings = lazy(() => import('@/components/settings').then(module => ({ default: module.Settings })));
+const KnowledgeBrowser = lazy(() => import('@/components/knowledge-browser').then(module => ({ default: module.KnowledgeBrowser })));
+const ComputersPanel = lazy(() => import('@/components/computers-panel').then(module => ({ default: module.ComputersPanel })));
+const loading = <p role="status" className="p-6 text-sm text-muted-foreground">Loading…</p>;
+
+function Avatar({ initials, avatar, typing = false, ready = false, working = false }: { initials: string; avatar?: AvatarAppearance; typing?: boolean; ready?: boolean; working?: boolean }) {
   return (
-    <span aria-hidden="true" className={cn(
-      'relative shrink-0 font-medium text-foreground/75',
-      small ? 'size-7 text-[11px]' : 'size-8 text-xs',
-    )}>
-      <AvatarFace avatarSize={small ? 28 : 32} ready={ready} typing={typing} working={working} size="md">
-        {avatar ? <AgentAvatarArt {...avatar} size={small ? 28 : 32} state={typing ? 'typing' : working ? 'working' : 'idle'} animated /> : <span className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/10">{initials}</span>}
+    <span aria-hidden="true" className="relative size-8 shrink-0 text-xs font-medium text-foreground/75">
+      <AvatarFace avatarSize={32} ready={ready} typing={typing} working={working} size="md">
+        {avatar ? <AgentAvatarArt {...avatar} size={32} state={typing ? 'typing' : working ? 'working' : 'idle'} animated /> : <span className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/10">{initials}</span>}
       </AvatarFace>
       <PresenceIndicator ready={ready} typing={typing} working={working} size="md" />
     </span>
@@ -66,6 +68,18 @@ export function App() {
   const mobileConversation = Boolean(route.agentId || route.groupId);
   const computerViewerOpen = route.kind === 'computer';
   const [isPhone, setIsPhone] = useState(() => window.matchMedia('(max-width: 767px)').matches);
+  // Unsaved agent-settings changes: warn before leaving the page by any in-app route, or by closing the tab.
+  const [unsaved, setUnsaved] = useState<string[]>([]);
+  const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
+  const leave = (action: () => void) => { if (unsaved.length) setPendingLeave(() => action); else action(); };
+  useEffect(() => {
+    if (!unsaved.length) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [unsaved.length]);
+  const [settingsSeen, setSettingsSeen] = useState(false);
+  useEffect(() => { if (activeTab === 'settings') setSettingsSeen(true); }, [activeTab]);
   const pendingTabPath = useRef('');
   const focusAgentsAfterDelete = useRef(false);
   useEffect(() => {
@@ -82,7 +96,7 @@ export function App() {
         : value === 'computers' ? '/computers' : '/settings';
     if (value === activeTab || window.location.pathname === target || pendingTabPath.current === target) return;
     pendingTabPath.current = target;
-    navigate(target);
+    leave(() => { navigate(target); });
   };
   useEffect(() => { pendingTabPath.current = ''; }, [location.pathname]);
   useEffect(() => {
@@ -220,7 +234,7 @@ export function App() {
   }
 
   if (route.kind === 'not-found' || route.agentId && !agentsLoading && !agentsFailed && agentsCursor === null && !agents.some(item => item.id === route.agentId))
-    return <main className="p-8">Page not found. <a href="/agents">Return to agents</a></main>;
+    return <main className="p-8">Page not found. <a href="/agents" className="underline" onClick={event => { event.preventDefault(); navigate('/agents'); }}>Return to agents</a></main>;
 
   return (
     <main className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background">
@@ -247,42 +261,18 @@ export function App() {
             'phone-list-enter min-h-0 w-full shrink-0 flex-col border-border bg-sidebar pb-[calc(5rem+env(safe-area-inset-bottom))] md:flex md:w-72 md:border-r md:pb-0',
             mobileConversation ? 'hidden' : 'flex',
           )}>
-            {/* Search-with-icon composition: Kibo input-group/icons/input-group-icons-1. The + matches the Chat sidebar's create control. */}
-            <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-3">
-              <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-foreground/15 bg-[#262626] px-2.5 focus-within:ring-1 focus-within:ring-ring sm:h-8">
-                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-3.5 shrink-0 text-muted-foreground"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" strokeLinecap="round" /></svg>
-                <input type="search" aria-label="Search agents" placeholder="Search agents" value={search} onChange={event => setSearch(event.target.value)} className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground" />
-              </div>
-              <Button type="button" variant="outline" size="sm" className="size-11 shrink-0 p-0 text-lg sm:size-8" aria-label="Create new agent" title="Create new agent" onClick={() => navigate('/agents/new')}>+</Button>
-            </div>
+            <SidebarSearch label="Search agents" placeholder="Search agents" value={search} onChange={setSearch}
+              action={<Button type="button" variant="outline" size="sm" className="size-11 shrink-0 p-0 text-lg sm:size-8" aria-label="Create new agent" title="Create new agent" onClick={() => navigate('/agents/new')}>+</Button>} />
             <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
               {visibleAgents.length === 0 && !agentsLoading && !agentsFailed && !(searchTerm && (agentSearch.isFetching || agentSearch.isError)) && <p role="status" className="px-2 py-4 text-xs text-muted-foreground">{search.trim() ? 'No agents found.' : 'No agents yet. Use + to create one.'}</p>}
               <ul className="space-y-0.5">
                 {visibleAgents.map(item => {
                   const lastMessage = conversations[item.channelId]?.at(-1);
                   return (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      data-agent-id={item.id}
-                      aria-label={`Open settings for ${item.name}`}
-                      aria-current={item.id === agent.id ? 'true' : undefined}
-                      onClick={() => navigate(agentPath(item.id))}
-                      className={cn(
-                        'flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-                        item.id === agent.id ? 'bg-foreground/10' : 'hover:bg-foreground/5',
-                      )}
-                    >
-                      <Avatar initials={item.initials} avatar={item.avatar} ready={Boolean(item.real)} typing={typingIn(item.channelId, item.channelId)} working={busy[item.channelId]} />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-baseline justify-between gap-2">
-                          <span className="truncate text-sm font-medium">{item.name}</span>
-                          <SlideUpFadeSwap className="shrink-0 text-[11px] text-muted-foreground" text={lastMessage?.time ?? item.time} />
-                        </span>
-                        <SlideUpFadeSwap renderText={renderMessagePreview} className="mt-0.5 block text-xs text-muted-foreground" prefix={lastMessage?.author === 'user' ? 'You: ' : ''} text={lastMessage?.text ?? ''} />
-                      </span>
-                    </button>
-                  </li>
+                    <ConversationRow key={item.id} data={{ 'data-agent-id': item.id }} label={`Open settings for ${item.name}`} selected={item.id === agent.id} onClick={() => leave(() => navigate(agentPath(item.id)))}
+                      avatar={<Avatar initials={item.initials} avatar={item.avatar} ready={Boolean(item.real)} typing={typingIn(item.channelId, item.channelId)} working={busy[item.channelId]} />}
+                      name={item.name} time={listTime(lastMessage?.timestamp ?? item.real?.lastMessage?.timestamp ?? item.real?.createdAt ?? Date.now())}
+                      previewPrefix={lastMessage?.author === 'user' ? 'You: ' : ''} preview={lastMessage?.text ?? ''} />
                   );
                 })}
               </ul>
@@ -290,14 +280,10 @@ export function App() {
                 ? (agentSearch.isFetching || agentSearch.isError || agentSearch.hasNextPage) && <Button variant="outline" size="sm" className="mt-3 w-full" disabled={agentSearch.isFetching} onClick={() => void (agentSearch.isError ? agentSearch.refetch() : agentSearch.fetchNextPage())}>{agentSearch.isFetching ? 'Searching…' : agentSearch.isError ? 'Retry search' : 'Load more matches'}</Button>
                 : (agentsLoading || agentsFailed || agentsCursor !== null) && <Button variant="outline" size="sm" className="mt-3 w-full" disabled={agentsLoading} onClick={() => void loadAgents(agentsCursor ?? undefined)}>{agentsLoading ? 'Loading agents…' : agentsFailed ? 'Retry loading agents' : 'Load more agents'}</Button>}
             </div>
-            <div className="flex shrink-0 items-center gap-2.5 px-4 py-3">
-              <Avatar initials="YO" small />
-              <span className="text-sm font-medium">Your account</span>
-            </div>
           </AgentPanel>}
 
           {activeTab === 'agents' ? (agent.id && route.kind !== 'agent-dm' && route.kind !== 'agent-new'
-            ? <EditAgentForm key={agent.id} agent={agent} route={route} mobile={mobileConversation} onNavigate={navigate} onSave={editAvatar} onModelSaved={applyAgent} onBack={() => { focusAgentsAfterDelete.current = true; navigate('/agents'); }} />
+            ? <EditAgentForm key={agent.id} agent={agent} route={route} mobile={mobileConversation} onNavigate={navigate} onSave={editAvatar} onModelSaved={applyAgent} onUnsavedChange={setUnsaved} onBack={() => leave(() => { focusAgentsAfterDelete.current = true; navigate('/agents'); })} />
             : <section aria-label="No agent selected" className="hidden min-w-0 flex-1 items-center justify-center p-6 text-sm text-muted-foreground md:flex">Select or create an agent to configure.</section>)
             : selectedGroup ? <GroupConversation key={selectedGroup} groupId={selectedGroup} modal={route.kind === 'group-edit' ? 'edit' : route.kind === 'group-delete' ? 'delete' : null} returnTo={location.state?.returnTo === '/chat' ? '/chat' : chatGroupPath(selectedGroup)} onNavigate={navigate} mobile={mobileConversation} onBack={() => navigate('/chat')} draft={drafts[`group:${selectedGroup}`] ?? ''} onDraft={text => setDraft(`group:${selectedGroup}`, text)} typingIn={typingIn} busy={busy} runOf={runOf} onStop={stop} /> : agents.length > 0 ? <section aria-label={`Conversation with ${agent.name}`} className={cn(
             'phone-detail-enter min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none md:flex',
@@ -343,16 +329,21 @@ export function App() {
         </Tabs.Content>
 
         <Tabs.Content value="computers" className="min-h-0 flex-1 outline-none data-[state=active]:flex">
-          <ComputersPanel agentState={{ agents, busy, peerBusy, typing, connected: eventsConnected }} viewingId={route.kind === 'computer' ? route.computerId ?? null : null} dialog={route.kind === 'computer-new' ? 'new' : route.kind === 'computer-delete' ? 'delete' : route.kind === 'computer-settings' ? 'settings' : null} deleteId={route.kind === 'computer-delete' ? route.computerId ?? null : null} settingsId={route.kind === 'computer-settings' ? route.computerId ?? null : null} onOpen={id => navigate(computerPath(id))} onNavigate={navigate} onBack={() => navigate('/computers')} />
+          {activeTab === 'computers' && <Suspense fallback={loading}><ComputersPanel agentState={{ agents, busy, peerBusy, typing, connected: eventsConnected }} viewingId={route.kind === 'computer' ? route.computerId ?? null : null} dialog={route.kind === 'computer-new' ? 'new' : route.kind === 'computer-delete' ? 'delete' : route.kind === 'computer-settings' ? 'settings' : null} deleteId={route.kind === 'computer-delete' ? route.computerId ?? null : null} settingsId={route.kind === 'computer-settings' ? route.computerId ?? null : null} onOpen={id => navigate(computerPath(id))} onNavigate={navigate} onBack={() => navigate('/computers')} /></Suspense>}
         </Tabs.Content>
         <Tabs.Content value="settings" forceMount className={cn('phone-tab-enter min-h-0 flex-1 outline-none data-[state=inactive]:hidden', route.kind === 'knowledge' ? 'overflow-hidden data-[state=active]:flex data-[state=active]:flex-col' : 'overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0')}>
-          <div className={route.kind === 'knowledge' ? 'hidden' : ''}><Settings route={route} onNavigate={navigate} /></div>
-          {route.kind === 'knowledge' && <KnowledgeBrowser id={route.knowledgeId} onNavigate={navigate} />}
+          {/* Settings stays mounted after its first visit so endpoint edits survive switching tabs. */}
+          <Suspense fallback={loading}>
+            {(settingsSeen || activeTab === 'settings') && <div className={route.kind === 'knowledge' ? 'hidden' : ''}><Settings route={route} onNavigate={navigate} /></div>}
+            {route.kind === 'knowledge' && <KnowledgeBrowser id={route.knowledgeId} onNavigate={navigate} />}
+          </Suspense>
         </Tabs.Content>
       </Tabs.Root>
 
+      <ConfirmDialog open={pendingLeave !== null} onOpenChange={open => { if (!open) { setPendingLeave(null); pendingTabPath.current = ''; } }} title="Discard unsaved changes?" confirmLabel="Discard and leave" busyLabel="Leaving…"
+        onConfirm={async () => { pendingLeave?.(); }} description={<>You have not saved your changes to <strong className="text-foreground">{unsaved.join(', ')}</strong>. Leaving this page discards them.</>} />
       {needRefresh && (
-        <aside aria-label="Application update" className="flex shrink-0 flex-wrap items-center gap-3 border-t border-border px-5 py-3 text-sm">
+        <aside aria-label="Application update" className="flex shrink-0 flex-wrap items-center gap-3 border-t border-border px-5 py-3 text-sm max-md:pb-[calc(5rem+env(safe-area-inset-bottom))]">
           <p className="mr-auto">An update is ready.</p>
           <Button size="sm" onClick={() => void updateServiceWorker(true)}>Reload</Button>
           <Button variant="outline" size="sm" onClick={() => setNeedRefresh(false)}>Later</Button>

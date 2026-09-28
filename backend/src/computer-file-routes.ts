@@ -4,9 +4,21 @@ import type { ComputerController } from './computer-controller-client';
 import type { ComputerStore } from './computer-store';
 import { ComputerFileError, computerFilesSchema, computerFilePreviewSchema, fileAttachment, type FileQuery } from './computer-files';
 
+const FILE_WAIT_MS = 3000;
+
 /** Trusted operator surface, deliberately independent of agent assignments/claims. */
 export function registerComputerFileRoutes(app: FastifyInstance, store: ComputerStore, controller: ComputerController | null) {
   const pending = new Set<string>();
+  // Browsing fires a listing and a preview back to back; wait briefly for a slot instead of failing the second one.
+  const acquire = async (id: string) => {
+    const deadline = Date.now() + FILE_WAIT_MS;
+    while (pending.has(id) || pending.size >= 2) {
+      if (Date.now() >= deadline) return false;
+      await new Promise(resolve => setTimeout(resolve, 40));
+    }
+    pending.add(id);
+    return true;
+  };
   const errorSchema = Type.Object({ message: Type.String() });
   const errors = Object.fromEntries([400, 403, 404, 409, 413, 429, 503, 504].map(status => [status, errorSchema]));
   for (const mode of ['files', 'file-preview', 'download'] as const) {
@@ -26,8 +38,7 @@ export function registerComputerFileRoutes(app: FastifyInstance, store: Computer
       },
     }, async (request, reply) => {
       const id = request.params.id;
-      if (pending.has(id) || pending.size >= 2) return reply.code(429).send({ message: 'File operations are busy. Retry shortly.' });
-      pending.add(id);
+      if (!await acquire(id)) return reply.code(429).send({ message: 'File operations are busy. Retry shortly.' });
       let operationFinished = false, responseFinished = false, released = false;
       const release = () => {
         if (operationFinished && responseFinished && !released) { released = true; pending.delete(id); }

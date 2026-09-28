@@ -21,22 +21,24 @@ export function useModelSelection(initial?: { endpointId: string; model: string;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [pristine, setPristine] = useState(Boolean(initial)); // true until the user changes endpoint or model
 
   useEffect(() => {
     const controller = new AbortController();
+    setLoading(true); setLoadFailed(false); setError('');
     void Promise.all([
       api.GET('/api/model-endpoints', { signal: controller.signal }),
       api.GET('/api/providers/openai-codex', { signal: controller.signal }),
     ]).then(([{ data, error: endpointError }, { data: codex }]) => {
       if (controller.signal.aborted) return;
-      if (endpointError && !data) { setLoadFailed(true); setError('Could not load endpoints.'); }
+      if (endpointError && !data) setLoadFailed(true);
       setCodexModels(codex?.connected ? codex.models : []);
       setEndpoints([...(codex?.connected ? [{ id: codexConnection, name: 'OpenAI Codex (ChatGPT)', baseUrl: '' }] : []), ...(data ?? [])]);
       setLoading(false);
-    }).catch(() => { if (!controller.signal.aborted) { setLoadFailed(true); setError('Could not load endpoints.'); setLoading(false); } });
+    }).catch(() => { if (!controller.signal.aborted) { setLoadFailed(true); setLoading(false); } });
     return () => controller.abort();
-  }, []);
+  }, [attempt]);
 
   useEffect(() => {
     setModels([]); if (!pristine) setModel(''); setError('');
@@ -69,9 +71,9 @@ export function useModelSelection(initial?: { endpointId: string; model: string;
   }, [model, endpointId]);
 
   return {
-    endpoints, endpointId, models, model, levels, thinking, loading, error, loadFailed,
+    endpoints, endpointId, models, model, levels, thinking, loading, error: loadFailed ? 'Could not load endpoints.' : error, loadFailed,
     chooseEndpoint: (id: string) => { setPristine(false); setEndpointId(id); },
     chooseModel: (value: string) => { setPristine(false); setModel(value); },
-    setThinking,
+    setThinking, reload: () => setAttempt(value => value + 1),
   };
 }

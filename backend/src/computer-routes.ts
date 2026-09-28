@@ -10,7 +10,7 @@ const idParams = Type.Object({ id: Type.String({ minLength: 1, maxLength: 80 }) 
 const errorSchema = Type.Object({ message: Type.String() });
 const errors = { 400: errorSchema, 404: errorSchema, 409: errorSchema, 503: errorSchema };
 const boundedChoice = Type.Object({ min: Type.Integer(), max: Type.Integer(), default: Type.Integer() });
-const limitsSchema = Type.Object({ cpuCores: boundedChoice, memoryGiB: boundedChoice, timezoneDefault: Type.String() });
+const limitsSchema = Type.Object({ cpuCores: boundedChoice, memoryGiB: boundedChoice, timezoneDefault: Type.String(), maxComputers: Type.Optional(Type.Integer()) });
 const viewSchema = Type.Object({
   id: Type.String(), name: Type.String(), state: Type.String(), createdAt: Type.Number(),
   cpuCores: Type.Union([Type.Integer(), Type.Null()]), memoryGiB: Type.Union([Type.Integer(), Type.Null()]),
@@ -20,6 +20,8 @@ const viewSchema = Type.Object({
   memoryLimitBytes: Type.Union([Type.Number(), Type.Null()]),
   // Docker sums CPU across cores, so the count is needed for an honest fraction.
   cpuCount: Type.Union([Type.Number(), Type.Null()]),
+  // True for GNOME/X11 computers (no screen-share consent step), false for Wayland, null when unknown (controller offline).
+  portalFree: Type.Union([Type.Boolean(), Type.Null()]),
 });
 
 function view(record: { id: string; name: string; state: string; createdAt: Date; cpuCores: number | null; memoryGiB: number | null; timezone: string | null }, observed?: ComputerObservation) {
@@ -32,6 +34,7 @@ function view(record: { id: string; name: string; state: string; createdAt: Date
     state: record.state === 'running' ? (observed?.status ?? 'unavailable') : record.state,
     createdAt: record.createdAt.getTime(), cpuPercent: observed?.cpuPercent ?? null, memoryBytes: observed?.memoryBytes ?? null,
     memoryLimitBytes: observed?.memoryLimitBytes ?? null, cpuCount: observed?.cpuCount ?? null,
+    portalFree: observed?.displayServer ? observed.displayServer === 'x11' : null,
   };
 }
 function unavailable(reply: FastifyReply) {
@@ -65,7 +68,8 @@ export function registerComputerRoutes(app: FastifyInstance, platform: PlatformS
         // without its response. Once the 120s create deadline has elapsed,
         // expose a failed record for exact-name cleanup instead of a permanent
         // 'creating' row that the operator cannot delete.
-        if (Date.now() - record.createdAt.getTime() > 120_000 && await store.markFailed(record.id)) return { ...record, state: 'failed' };
+        // Only conclude that a create failed when the controller actually answered: during an outage nothing is known.
+        if (observed !== null && Date.now() - record.createdAt.getTime() > 120_000 && await store.markFailed(record.id)) return { ...record, state: 'failed' };
         return record;
       }));
       return { computers: reconciled.map(record => view(record, observed?.get(record.id))), controllerConnected: observed !== null };
@@ -122,9 +126,10 @@ export function registerComputerRoutes(app: FastifyInstance, platform: PlatformS
     reply.header('Cache-Control', 'no-store');
     if (!controller) return unavailable(reply);
     try {
-      const candidate = await store.get(request.params.id);
-      if (candidate && candidate.name === request.body.confirmation && (await use?.holders())?.some(holder => holder.computerId === candidate.id)) await use?.forceRelease(candidate.id);
+      // Mark it deleting first: a computer that is not 'running' cannot be claimed, so no agent can take it again
+      // between the release below and the removal.
       const record = await store.markDeleting(request.params.id, request.body.confirmation);
+      if ((await use?.holders())?.some(holder => holder.computerId === record.id)) await use?.forceRelease(record.id);
       await controller.remove(record.id, record.name);
       if (!await store.finalizeDelete(record.id, record.name) && await store.get(record.id)) return unavailable(reply);
       // A concurrent, identically confirmed deletion may already have removed

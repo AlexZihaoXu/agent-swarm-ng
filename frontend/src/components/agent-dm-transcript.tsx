@@ -1,3 +1,4 @@
+import { clockTime } from '@/lib/format-time';
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { api } from '@/api/client';
 import type { paths } from '@/api/schema';
@@ -48,7 +49,7 @@ export function AgentDmTranscript({ agentId, peerId, bubbleView }: { agentId: st
     {(cursor !== null || error) && <div className="px-5 pt-3 text-center"><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void load(error ? undefined : cursor ?? undefined)}>{error ? 'Retry agent conversation' : 'Load earlier messages'}</Button></div>}
     {error && <p role="alert" className="px-5 py-2 text-sm">{error}</p>}
     {!messages.length && <p role="status" className="px-5 py-8 text-center text-sm text-muted-foreground">{busy ? 'Loading conversation…' : 'No messages between these agents yet.'}</p>}
-    {messages.length > 0 && <ConversationMessages agentName={bubbleView.agentName} counterpartName={bubbleView.peerName} time={new Date(messages[0].timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} senderStyles={{ agent: bubbleView.agentAvatar, user: bubbleView.peerAvatar }} messages={messages.map(message => ({ id: message.id, sequence: message.sequence, timestamp: message.timestamp, author: message.senderId === agentId ? 'agent' : 'user', text: message.text, replyTo: message.replyTo ? { id: message.replyTo.id, role: message.replyTo.senderId === agentId ? 'assistant' : 'user', text: message.replyTo.text } : null }))} />}
+    {messages.length > 0 && <ConversationMessages agentName={bubbleView.agentName} counterpartName={bubbleView.peerName} time={clockTime(messages[0].timestamp)} senderStyles={{ agent: bubbleView.agentAvatar, user: bubbleView.peerAvatar }} messages={messages.map(message => ({ id: message.id, sequence: message.sequence, timestamp: message.timestamp, author: message.senderId === agentId ? 'agent' : 'user', text: message.text, replyTo: message.replyTo ? { id: message.replyTo.id, role: message.replyTo.senderId === agentId ? 'assistant' : 'user', text: message.replyTo.text } : null }))} />}
   </section>;
   return <section aria-label="Agent DM transcript" className="space-y-4">
     <p className="text-xs leading-relaxed text-muted-foreground">Messages exchanged by these agents. “Completed” means the input was processed, not that its answer was verified. No interrupted work is replayed after a backend restart.</p>

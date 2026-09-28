@@ -105,4 +105,16 @@ it('propagates safe controller failures and bounds concurrent requests', async (
     resolve(list);
     expect((await pending).statusCode).toBe(200);
   } finally { await app.close(); }
+}, 15000);
+it('lets a second request for the same computer wait for the first instead of failing it', async () => {
+  const { app, files } = await routeFixture();
+  try {
+    files.mockImplementationOnce(() => new Promise(done => setTimeout(() => done(list), 400)));
+    const first = app.inject('/api/computers/id/files?path=/');
+    await vi.waitFor(() => expect(files).toHaveBeenCalledTimes(1));
+    const second = await app.inject('/api/computers/id/files?path=/workspace'); // arrives while the first is running
+    expect(second.statusCode).toBe(200);
+    expect((await first).statusCode).toBe(200);
+    expect(files).toHaveBeenCalledTimes(2);
+  } finally { await app.close(); }
 });

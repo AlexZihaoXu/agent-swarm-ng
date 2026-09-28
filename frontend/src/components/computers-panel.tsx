@@ -43,6 +43,9 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
     if (!data || error) throw new Error(error?.message ?? 'Could not detect computer limits.');
     return data;
   }, enabled: Boolean(query.data?.controllerConnected), staleTime: 60_000 });
+  const maxComputers = limitsQuery.data?.maxComputers;
+  const counted = computers.filter(computer => computer.state !== 'failed').length; // failed records have no container
+  const atLimit = maxComputers !== undefined && counted >= maxComputers;
   const createOpen = dialog === 'new';
   const [name, setName] = useState('');
   const [settingsDraft, setSettingsDraft] = useState<ComputerSettingsDraft | null>(null);
@@ -175,13 +178,13 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
   return <section aria-label="Computers" className="computer-tab-enter flex min-h-0 w-full flex-col">
     {viewing ? <ComputerViewer key={viewing.id} computer={viewing} agentState={agentState} canManage={Boolean(query.data?.controllerConnected)} onBack={() => { focusGridTab.current = true; onBack(); }} /> : (viewingId || dialog === 'delete' && !selected || dialog === 'settings' && !settingsComputer) && query.isSuccess ? <div className="p-6 text-sm" role="alert">Computer not found. <button type="button" className="cursor-pointer underline" onClick={onBack}>Return to computers</button></div> : <>
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:px-6 md:py-4">
-      <div><h2 className="text-lg font-semibold">Computers</h2><p className="text-xs text-muted-foreground">Containerized Ubuntu desktops</p></div>
+      <div><h2 className="text-lg font-semibold">Computers</h2><p className="text-xs text-muted-foreground">Containerized Ubuntu desktops{maxComputers !== undefined && <> · <span data-testid="computer-cap">{counted} of {maxComputers}</span> in use</>}</p></div>
       <Dialog.Root open={createOpen} onOpenChange={open => { if (createBusy) return; if (open) {
         const previous = suggestion.current;
         if (!name.trim() || name === previous) setName(suggestName() ?? name);
         setRequestKey(randomUuid()); setCreateError(''); setSettingsDraft(null); onNavigate('/computers/new');
       } else onBack(); }}>
-        <Dialog.Trigger asChild><Button type="button" size="sm" disabled={!query.data?.controllerConnected} className="min-h-11 md:min-h-0">Create computer</Button></Dialog.Trigger>
+        <Dialog.Trigger asChild><Button type="button" size="sm" disabled={!query.data?.controllerConnected || atLimit} title={atLimit ? `Limit reached (${maxComputers}). Delete a computer to create another.` : undefined} className="min-h-11 md:min-h-0">Create computer</Button></Dialog.Trigger>
         <ComputerDialog>
           <form onSubmit={event => { event.preventDefault(); void submitCreate(); }}>
             <Dialog.Title className="text-lg font-semibold">Create computer</Dialog.Title>
@@ -222,34 +225,34 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
             onCloseAutoFocus={event => { if (createOpen || selected !== null || settingsComputer !== null || filesOpen || terminalsOpen) event.preventDefault(); }}>
             <ContextMenu.Item disabled={!menuTarget || menuTarget.state !== 'running' || !query.data?.controllerConnected}
               onSelect={() => { if (menuTarget) onOpen(menuTarget.id); }}
-              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
+              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:opacity-50">
               <MenuIcon path="M3 5.5h18v13H3zM8 21h8" label="Open desktop" />Open
             </ContextMenu.Item>
             <ContextMenu.Item disabled={!menuTarget || !query.data?.controllerConnected || (menuTarget.state !== 'running' && menuTarget.state !== 'exited') || powerBusy}
               onSelect={() => { if (!menuTarget) return; if (menuTarget.state === 'running') setPowerOffTarget(menuTarget); else void submitPower(menuTarget, 'start'); }}
-              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
+              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:opacity-50">
               <MenuIcon path="M12 3v9M6.5 6.5a8 8 0 1 0 11 0" label="Power" />{menuTarget?.state === 'running' ? 'Power off' : 'Power on'}
             </ContextMenu.Item>
             <ContextMenu.Item disabled={!menuTarget || menuTarget.state !== 'running' || !query.data?.controllerConnected || powerBusy}
               onSelect={() => { if (menuTarget) { setFilesTarget(menuTarget); setFilesOpen(true); } }}
-              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
+              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:opacity-50">
               <MenuIcon path="M3 7h6l2 2h10v10H3zM8 13h8" label="Files" />File browser
             </ContextMenu.Item>
             <ContextMenu.Item disabled={!menuTarget || menuTarget.state !== 'running' || !query.data?.controllerConnected || powerBusy}
               onSelect={() => { if (menuTarget) { setTerminalsTarget(menuTarget); setTerminalsOpen(true); } }}
-              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
+              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:opacity-50">
               <MenuIcon path="m4 6 6 6-6 6M13 18h7" label="Terminal" />Terminals
             </ContextMenu.Item>
             <ContextMenu.Item disabled={!menuTarget || !query.data?.controllerConnected || (menuTarget.state !== 'running' && menuTarget.state !== 'exited')}
               onSelect={() => { setEditDraft(null); setSettingsError(''); setReplaceConfirmed(false); if (menuTarget) onNavigate(`${computerPath(menuTarget.id)}/settings`); }}
-              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
+              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:opacity-50">
               <MenuIcon path="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8M12 2.4v2.4M12 19.2v2.4M4.6 7.8l2 1.2M17.4 15l2 1.2M4.6 16.2l2-1.2M17.4 9l2-1.2M2.4 12h2.4M19.2 12h2.4" label="Settings" />Settings
             </ContextMenu.Item>
             <ContextMenu.Separator className="my-1 h-px bg-border" />
             <div className="px-3 pb-1 pt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">Danger zone</div>
             <ContextMenu.Item disabled={!menuTarget || !query.data?.controllerConnected}
               onSelect={() => { setConfirmation(''); setDeleteError(''); if (menuTarget) onNavigate(`${computerPath(menuTarget.id)}/delete`); }}
-              className="flex items-center gap-2 rounded-md px-3 py-2 text-red-400 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-red-400 outline-none data-[highlighted]:bg-muted data-[disabled]:opacity-50">
               <MenuIcon path="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13" label="Remove" />Remove
             </ContextMenu.Item>
           </ContextMenu.Content>

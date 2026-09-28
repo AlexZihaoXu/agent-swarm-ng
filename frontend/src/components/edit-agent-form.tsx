@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -10,11 +10,12 @@ import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 import type { ChatAgent, RealAgent } from '@/use-chat';
 import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { cn } from '@/lib/utils';
+import type { SettingsSection } from '@/lib/settings-sections';
 
 // Kibo's spacious section-form layout adapted to a left-aligned, scrollable
 // detail pane. Channel permissions and avatar appearance save together.
-export function EditAgentForm({ agent, route, mobile, onNavigate, onSave, onModelSaved, onBack }: {
-  agent: ChatAgent; onModelSaved: (agent: RealAgent) => void; route: DashboardRoute; mobile: boolean; onNavigate: (path: string) => void;
+export function EditAgentForm({ agent, route, mobile, onNavigate, onSave, onModelSaved, onBack, onUnsavedChange }: {
+  agent: ChatAgent; onModelSaved: (agent: RealAgent) => void; onUnsavedChange: (labels: string[]) => void; route: DashboardRoute; mobile: boolean; onNavigate: (path: string) => void;
   onSave: (agent: ChatAgent, avatar: AvatarAppearance, allowedDmAgentIds: string[]) => Promise<void>;
   onBack: () => void;
 }) {
@@ -52,12 +53,39 @@ export function EditAgentForm({ agent, route, mobile, onNavigate, onSave, onMode
     try {
       await onSave(agent, avatar, allowed);
       setSavedAvatar(avatar); setSavedAllowed([...allowed]); setSaved(true);
-    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not save agent settings.'); }
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not save agent settings.'); throw failure; }
     finally { setBusy(false); }
   }
-  const discard = () => { setAvatar(savedAvatar); setAllowed(savedAllowed); setError(''); setSaved(false); };
+  const discardOwn = () => { setAvatar(savedAvatar); setAllowed(savedAllowed); setError(''); setSaved(false); };
+  // Every part of the page (this form, Model, Computers) registers here, so there is one Save, one Discard and one leave warning.
+  const sections = useRef(new Map<string, SettingsSection>());
+  const [sectionTick, setSectionTick] = useState(0);
+  const register = useCallback((name: string, section?: SettingsSection) => {
+    if (section) sections.current.set(name, section); else sections.current.delete(name);
+    setSectionTick(value => value + 1);
+  }, []);
+  const latestOwn = useRef({ save, discard: discardOwn });
+  latestOwn.current = { save, discard: discardOwn };
+  useEffect(() => {
+    register('own', { label: 'Channels and avatar', dirty, save: () => latestOwn.current.save(), discard: () => latestOwn.current.discard() });
+    return () => register('own');
+  }, [dirty, register]);
+  const order = ['own', 'model', 'computers']; // fixed order, so the summary does not depend on which section mounted first
+  const unsaved = [...sections.current.entries()].filter(([, section]) => section.dirty).sort(([a], [b]) => order.indexOf(a) - order.indexOf(b)).map(([, section]) => section);
+  const unsavedKey = unsaved.map(section => section.label).join('|');
+  useEffect(() => { onUnsavedChange(unsavedKey ? unsavedKey.split('|') : []); return () => onUnsavedChange([]); }, [unsavedKey]);
+  const [savingAll, setSavingAll] = useState(false), [allError, setAllError] = useState('');
+  async function saveAll() {
+    if (savingAll) return;
+    setSavingAll(true); setAllError('');
+    try { for (const section of unsaved) await section.save(); }
+    catch (failure) { setAllError(failure instanceof Error ? failure.message : 'Could not save every change.'); }
+    finally { setSavingAll(false); }
+  }
+  const discard = () => { for (const section of unsaved) section.discard(); setAllError(''); };
+  void sectionTick;
   return <section aria-label={`Settings for ${agent.name}`} className={cn('phone-detail-enter min-h-0 min-w-0 flex-1 flex-col md:motion-safe:animate-[fade-in_160ms_ease-out] md:flex', mobile ? 'flex' : 'hidden')}>
-    <form aria-label="Agent settings" onSubmit={event => { event.preventDefault(); void save(); }} className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <form aria-label="Agent settings" onSubmit={event => { event.preventDefault(); void saveAll(); }} className="flex min-h-0 min-w-0 flex-1 flex-col">
       <header className="shrink-0 border-b border-border">
         <div className="mx-auto flex min-h-14 w-full max-w-5xl items-center gap-3 px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] md:px-6 md:py-3">
           <button type="button" onClick={onBack} aria-label="Back to agents" className="flex min-h-11 shrink-0 items-center rounded-md px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden">‹ <span className="ml-1">Agents</span></button>
@@ -72,8 +100,8 @@ export function EditAgentForm({ agent, route, mobile, onNavigate, onSave, onMode
               <AgentChannelSettings agentId={agent.id} screen={route.channelScreen ?? 'channels'} peerId={route.peerId} onNavigate={next => onNavigate(next === 'channels' ? channels : next === 'swarm' ? `${channels}/swarm` : `${channels}/swarm/dm/${encodeURIComponent(next.id)}`)} selected={allowed} known={known} onChange={ids => { setAllowed(ids); setSaved(false); setError(''); }} disabled={busy || !loaded} />
             </div>
           </section>
-          {agent.real && <AgentModelSettings key={`model:${agent.id}`} agent={{ ...agent, real: agent.real }} onSaved={onModelSaved} />}
-          <AgentComputerSettings key={agent.id} agentId={agent.id} />
+          {agent.real && <AgentModelSettings key={`model:${agent.id}`} agent={{ ...agent, real: agent.real }} onSaved={onModelSaved} register={register} />}
+          <AgentComputerSettings key={agent.id} agentId={agent.id} register={register} />
           <section ref={avatarSection} aria-label="Avatar" className="space-y-4">
             <div><h3 className="text-lg font-semibold">Avatar</h3><p className="mt-1 text-sm text-muted-foreground">Customize how {agent.name} appears in chats and the sidebar.</p></div>
             <AgentAvatarPreview name={agent.name} value={avatar} onChange={next => { setAvatar(next); setSaved(false); setError(''); }} disabled={busy} collapsible={false} />
@@ -84,11 +112,16 @@ export function EditAgentForm({ agent, route, mobile, onNavigate, onSave, onMode
           </section>
         </div>
       </ScrollArea>
-      {(dirty || loadError || !loaded || error) && <div className="shrink-0 border-t border-border motion-safe:animate-[fade-in_160ms_ease-out]">
+      {(unsaved.length > 0 || loadError || !loaded || error || allError) && <div className="shrink-0 border-t border-border motion-safe:animate-[fade-in_160ms_ease-out]">
         <div className="mx-auto w-full max-w-5xl px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 md:px-6 md:py-4">
           {loadError ? <p role="alert" className="mb-3 text-sm">Could not load permissions. <button type="button" onClick={() => setAttempt(value => value + 1)} className="inline-flex min-h-11 items-center underline sm:min-h-0">Retry settings</button></p> : !loaded && <p role="status" className="mb-3 text-xs text-muted-foreground">Loading settings…</p>}
           {error && <p role="alert" className="mb-3 text-sm">{error}</p>}
-          {dirty && <div className="flex justify-end gap-2"><Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={busy || !loaded} onClick={discard}>Discard changes</Button><Button type="submit" size="sm" className="min-h-11 sm:min-h-0" disabled={busy || !loaded}>{busy ? 'Saving…' : 'Save changes'}</Button></div>}
+          {allError && allError !== error && <p role="alert" className="mb-3 text-sm">{allError}</p>}
+          {unsaved.length > 0 && <div className="flex flex-wrap items-center justify-end gap-2">
+            {unsaved.length > 1 || unsaved[0].label !== 'Channels and avatar' ? <p role="status" className="mr-auto text-xs text-muted-foreground">Unsaved: {unsaved.map(section => section.label).join(', ')}</p> : null}
+            <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-0" disabled={busy || savingAll || !loaded} onClick={discard}>Discard changes</Button>
+            <Button type="submit" size="sm" className="min-h-11 sm:min-h-0" disabled={busy || savingAll || !loaded}>{busy || savingAll ? 'Saving…' : 'Save changes'}</Button>
+          </div>}
         </div>
       </div>}
     </form>

@@ -7,7 +7,7 @@ test('saved agents keep the sidebar and open inline settings; Chat owns messages
   await expect(page.getByRole('tablist', { name: 'Main navigation' }).getByRole('tab')).toHaveText(['Agents', 'Chat', 'Computers', 'Settings']);
   await expect(page.getByRole('tab', { name: 'Agents', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('region', { name: 'Settings for Avery' })).toBeVisible();
-  await expect(page.getByText('Your account', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create new agent' })).toBeVisible();
   await expect(page.getByRole('form', { name: 'Message composer' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Open settings for Morgan' }).click();
   await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
@@ -293,5 +293,5 @@ test('mobile can move between agent list and inline settings without overflow', 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole('button', { name: 'Back to agents' }).click();
   await expect(page.getByRole('button', { name: 'Open settings for Avery' })).toBeVisible();
-  await expect(page.getByText('Your account', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create new agent' })).toBeVisible();
 });

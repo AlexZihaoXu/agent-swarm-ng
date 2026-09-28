@@ -133,7 +133,7 @@ test('opens a computer on the dashboard port, lets a person click its consent pr
   const preview = page.getByRole('button', { name: /Click the permission dialog/ });
   await expect(preview).toBeVisible();
   await expect(preview).toBeDisabled();
-  await page.getByRole('button', { name: 'Enable human desktop input' }).click();
+  await page.getByRole('button', { name: /human desktop input/ }).click();
   await expect(page.getByTestId('computer-keyboard-target')).toHaveCount(0);
   const previewImage = preview.locator('img');
   await previewImage.evaluate(image => {

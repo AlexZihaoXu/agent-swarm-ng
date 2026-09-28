@@ -1,13 +1,15 @@
+import { controllerHeaders } from './controller-auth';
 import { fetchComputerFile, type FileOperation, type FileQuery, type FileResult } from './computer-files';
 import type { ComputerSettings } from './computer-store';
 import { HttpComputerRuntime } from './computer-use/runtime-client';
 import type { ComputerRuntime } from './computer-use/service';
 
-export type ComputerObservation = { status: string; cpuPercent: number | null; memoryBytes: number | null; memoryLimitBytes: number | null; cpuCount: number | null };
+export type ComputerObservation = { status: string; cpuPercent: number | null; memoryBytes: number | null; memoryLimitBytes: number | null; cpuCount: number | null; displayServer?: 'x11' | 'wayland' };
 export type ComputerLimits = {
   cpuCores: { min: number; max: number; default: number };
   memoryGiB: { min: number; max: number; default: number };
   timezoneDefault: string;
+  maxComputers?: number;
 };
 
 export interface ComputerController {
@@ -39,7 +41,7 @@ export class HttpComputerController implements ComputerController {
   private async request(path: string, init: RequestInit = {}, timeout = 10_000) {
     const response = await this.fetcher(new URL(path, this.baseUrl), {
       ...init, signal: AbortSignal.timeout(timeout), redirect: 'error',
-      headers: { ...(init.body ? { 'content-type': 'application/json' } : {}), ...init.headers },
+      headers: { ...controllerHeaders(), ...(init.body ? { 'content-type': 'application/json' } : {}), ...init.headers },
     });
     if (!response.ok) {
       let message = `Computer controller returned ${response.status}.`;
@@ -54,7 +56,7 @@ export class HttpComputerController implements ComputerController {
   terminalSocket(id:string,session:string) {
     const url=new URL(`/computers/${encodeURIComponent(id)}/terminals/${encodeURIComponent(session)}/stream`,this.baseUrl);
     url.protocol=url.protocol==='https:'?'wss:':'ws:';
-    return new WebSocket(url);
+    return new WebSocket(url, { headers: controllerHeaders() } as unknown as string[]);
   }
   async files(id: string, mode: FileOperation, query: FileQuery) {
     return fetchComputerFile(this.fetcher, this.baseUrl, id, mode, query);
@@ -67,7 +69,8 @@ export class HttpComputerController implements ComputerController {
       typeof data.cpuCores !== 'object' || typeof data.memoryGiB !== 'object' ||
       !('max' in data.cpuCores) || !('max' in data.memoryGiB) ||
       typeof data.cpuCores.max !== 'number' || typeof data.memoryGiB.max !== 'number') throw new Error('Invalid computer capacity.');
-    return data as ComputerLimits;
+    const max = (data as { maxComputers?: unknown }).maxComputers;
+    return { ...(data as ComputerLimits), maxComputers: typeof max === 'number' && Number.isInteger(max) && max > 0 ? max : undefined };
   }
   async create(id: string, name: string, settings: ComputerSettings) {
     await this.request('/computers', { method: 'POST', body: JSON.stringify({ id, name, settings }) }, 120_000);
@@ -82,7 +85,7 @@ export class HttpComputerController implements ComputerController {
     const result = new Map<string, ComputerObservation>();
     for (const item of data.computers) {
       if (!item || typeof item !== 'object' || typeof item.id !== 'string' || typeof item.status !== 'string') throw new Error('Invalid computer observation.');
-      result.set(item.id, { status: item.status, cpuPercent: item.cpuPercent ?? null, memoryBytes: item.memoryBytes ?? null, memoryLimitBytes: item.memoryLimitBytes ?? null, cpuCount: item.cpuCount ?? null });
+      result.set(item.id, { status: item.status, cpuPercent: item.cpuPercent ?? null, memoryBytes: item.memoryBytes ?? null, memoryLimitBytes: item.memoryLimitBytes ?? null, cpuCount: item.cpuCount ?? null, displayServer: item.displayServer === 'x11' || item.displayServer === 'wayland' ? item.displayServer : undefined });
     }
     return result;
   }
@@ -105,7 +108,7 @@ export class HttpComputerController implements ComputerController {
   }
   async preview(id: string, full = false) {
     const path = `/computers/${encodeURIComponent(id)}/preview${full ? '?full=1' : ''}`;
-    const response = await this.fetcher(new URL(path, this.baseUrl), { signal: AbortSignal.timeout(16_000), redirect: 'error' });
+    const response = await this.fetcher(new URL(path, this.baseUrl), { signal: AbortSignal.timeout(16_000), redirect: 'error', headers: controllerHeaders() });
     if (response.status === 404 || response.status === 503) return null;
     if (!response.ok || response.headers.get('content-type')?.split(';')[0] !== 'image/jpeg') throw new Error('Computer preview is unavailable.');
     const reader = response.body?.getReader();

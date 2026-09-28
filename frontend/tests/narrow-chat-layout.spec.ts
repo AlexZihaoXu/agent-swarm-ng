@@ -57,7 +57,8 @@ test('floating phone tabs and one-row conversation headers navigate without a fo
   expect((await bounds(tabs)).y).toBeGreaterThan(760);
   expect(await tabs.locator('xpath=..').evaluate(element => getComputedStyle(element).position)).toBe('fixed');
   expect(await tabs.locator('xpath=..').evaluate(element => getComputedStyle(element).borderTopWidth)).toBe('0px');
-  expect((await bounds(page.getByText('Your account'))).y + (await bounds(page.getByText('Your account'))).height).toBeLessThan((await bounds(tabs)).y);
+  const lastRow = page.getByRole('button', { name: /^Open settings for / }).last();
+  expect((await bounds(lastRow)).y + (await bounds(lastRow)).height).toBeLessThan((await bounds(tabs)).y); // the list clears the floating tabs
   await page.screenshot({ path: test.info().outputPath('phone-agent-list.png'), animations: 'disabled' });
   await page.getByRole('tab', { name: 'Chat' }).click();
   await expect(page.getByRole('complementary', { name: 'Chats' })).toBeVisible();

@@ -6,6 +6,7 @@
 # desktop/tool layers.
 ARG COMPUTER_STREAM_BASE=agent-swarm-default:http-jpeg
 FROM ${COMPUTER_STREAM_BASE}
+LABEL swarm.ng.display-server="x11"
 USER root
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth x11-utils x11-xserver-utils mesa-vulkan-drivers && rm -rf /var/lib/apt/lists/*
 COPY templates/default/runtime/desktop-session-x11.sh /opt/swarm/desktop-session.sh

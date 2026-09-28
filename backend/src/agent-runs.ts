@@ -61,10 +61,6 @@ export class AgentRuns {
       try { listener(event); } catch { this.listeners.delete(listener); }
     }
   }
-  start(identity: RunIdentity, work: (context: RunContext) => Promise<void>) {
-    if (this.has(identity.agentId)) throw new Error('Agent is unavailable');
-    return this.enqueue(identity, work);
-  }
   enqueue(identity: RunIdentity, work: (context: RunContext) => Promise<void>, options: { queueTimeoutMs?: number; executionTimeoutMs?: number } = {}) {
     if (this.closing) throw new Error('Agent is unavailable');
     const run: Run = { ...identity, humanOwned: identity.inputSource !== 'agent', runId: crypto.randomUUID(), typing: false, queued: true, controller: new AbortController(), finished: Promise.resolve(), inbox: new MessageInbox(), emit: () => {} };

@@ -3,7 +3,6 @@ import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import remarkSpoiler from 'remark-inline-spoiler';
-import rehypeHighlight from 'rehype-highlight';
 import { toString } from 'hast-util-to-string';
 import type { Parent, PhrasingContent } from 'mdast';
 import { Button } from '@/components/ui/button';
@@ -86,7 +85,25 @@ const previewComponents: Components = {
 
 export function renderMessagePreview(text: string) { return <MessageMarkdown text={text} preview />; }
 
+// The syntax highlighter (and its language grammars) is large, so it loads the first time a message actually has a code block.
+type Highlighter = typeof import('rehype-highlight').default;
+let highlighter: Highlighter | undefined;
+let highlighterLoading: Promise<Highlighter> | undefined;
+const hasCode = (text: string) => text.includes('```') || text.includes('~~~');
+function useHighlighter(text: string, enabled: boolean) {
+  const [plugin, setPlugin] = useState<Highlighter | undefined>(highlighter);
+  useEffect(() => {
+    if (plugin || !enabled || !hasCode(text)) return;
+    let cancelled = false;
+    highlighterLoading ??= import('rehype-highlight').then(module => (highlighter = module.default));
+    void highlighterLoading.then(loaded => { if (!cancelled) setPlugin(() => loaded); }).catch(() => { highlighterLoading = undefined; });
+    return () => { cancelled = true; };
+  }, [plugin, enabled, text]);
+  return plugin;
+}
+
 export const MessageMarkdown = memo(function MessageMarkdown({ text, preview = false }: { text: string; preview?: boolean }) {
+  const highlight = useHighlighter(text, !preview);
   const Wrapper = preview ? 'span' : 'div';
   return <Wrapper className={preview ? 'message-preview' : 'message-markdown'}>
     <Markdown skipHtml urlTransform={safeUrl} remarkPlugins={[remarkGfm, remarkBreaks, remarkSpoiler]}
@@ -94,7 +111,7 @@ export const MessageMarkdown = memo(function MessageMarkdown({ text, preview = f
         type: 'element', tagName: 'span', properties: { dataSpoiler: true },
         children: 'children' in node ? state.all(node) : [],
       }) } }}
-      rehypePlugins={preview ? [] : [[rehypeHighlight, { detect: false, ignoreMissing: true }]]} components={preview ? previewComponents : components}>
+      rehypePlugins={preview || !highlight ? [] : [[highlight, { detect: false, ignoreMissing: true }]]} components={preview ? previewComponents : components}>
       {text}
     </Markdown>
   </Wrapper>;

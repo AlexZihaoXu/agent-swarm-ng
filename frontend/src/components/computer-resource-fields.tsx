@@ -17,12 +17,12 @@ function NumberField({ label, unit, value, min, max, onChange, disabled }: {
         primitives and bounded values rather than its demo-only state. */}
     <div className="flex gap-2">
       <Button type="button" variant="outline" size="sm" aria-label={`Decrease ${label}`} disabled={disabled || !valid || parsed <= min}
-        onClick={() => onChange(String(Math.max(min, parsed - 1)))} className="min-h-11 min-w-11 cursor-pointer px-2 disabled:cursor-default">−</Button>
+        onClick={() => onChange(String(Math.max(min, parsed - 1)))} className="min-h-11 min-w-11 cursor-pointer px-2">−</Button>
       <input id={id} type="number" inputMode="numeric" min={min} max={max} step={1} value={value} disabled={disabled}
         onChange={event => onChange(event.target.value)}
         className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-sidebar px-3 text-center text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50" />
       <Button type="button" variant="outline" size="sm" aria-label={`Increase ${label}`} disabled={disabled || !valid || parsed >= max}
-        onClick={() => onChange(String(Math.min(max, parsed + 1)))} className="min-h-11 min-w-11 cursor-pointer px-2 disabled:cursor-default">+</Button>
+        onClick={() => onChange(String(Math.min(max, parsed + 1)))} className="min-h-11 min-w-11 cursor-pointer px-2">+</Button>
     </div>
     <p className="text-xs text-muted-foreground">{min}–{max} {unit} available for one computer</p>
   </div>;

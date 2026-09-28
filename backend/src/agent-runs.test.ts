@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AgentRuns } from './agent-runs';
+import { startRun } from './start-run';
 
 const identity = { agentId: 'agent', channelId: 'channel', clientMessageId: 'message' };
 describe('backend-owned agent runs', () => {
@@ -16,7 +17,7 @@ describe('backend-owned agent runs', () => {
     const gate = new Promise<void>(resolve => { finish = resolve; });
     const events: object[] = [];
     const detach = runs.subscribe(event => events.push(event));
-    const run = runs.start(identity, async ({ emit, signal }) => {
+    const run = startRun(runs, identity, async ({ emit, signal }) => {
       emit({ type: 'typing', active: true, targets: ['dm:agent:peer'] });
       await gate;
       expect(signal.aborted).toBe(false);
@@ -25,7 +26,7 @@ describe('backend-owned agent runs', () => {
     await Promise.resolve();
     detach();
     expect(runs.snapshot()).toEqual([{ ...identity, runId: run.runId, typing: true, typingTargets: ['dm:agent:peer'] }]);
-    expect(() => runs.start(identity, async () => {})).toThrow();
+    expect(() => startRun(runs, identity, async () => {})).toThrow();
     const resumed: object[] = [];
     runs.subscribe(event => resumed.push(event));
     finish(); await run.finished;
@@ -34,7 +35,7 @@ describe('backend-owned agent runs', () => {
   });
   it('accepts messages into the same run and changes the admission epoch on explicit Stop', async () => {
     const runs = new AgentRuns(); const inference = vi.fn();
-    const run = runs.start(identity, async ({ inbox, signal }) => {
+    const run = startRun(runs, identity, async ({ inbox, signal }) => {
       inbox.add({ role: 'user', text: 'hi' });
       await inbox.take(signal);
       inference();
@@ -56,7 +57,7 @@ describe('backend-owned agent runs', () => {
   it('queues distinct conversations without leaking messages between their inboxes', async () => {
     const runs = new AgentRuns(); let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
-    const human = runs.start(identity, async () => gate);
+    const human = startRun(runs, identity, async () => gate);
     let received: string[] = [];
     const dm = runs.enqueue({ ...identity, channelId: 'dm:a:b', clientMessageId: 'dm-message' }, async ({ inbox, signal }) => {
       inbox.prepend({ role: 'user', text: 'original DM' });
@@ -73,7 +74,7 @@ describe('backend-owned agent runs', () => {
 
   it('stops queued conversation work without waiting for another active conversation', async () => {
     const runs = new AgentRuns(); let release!: () => void;
-    const active = runs.start(identity, async () => new Promise<void>(resolve => { release = resolve; }));
+    const active = startRun(runs, identity, async () => new Promise<void>(resolve => { release = resolve; }));
     await Promise.resolve(); const work = vi.fn(async () => {});
     const queued = runs.enqueue({ ...identity, channelId: 'dm:a:b', clientMessageId: 'queued' }, work);
     expect(await runs.stop(identity.agentId, 'queued')).toBe(true);
@@ -87,7 +88,7 @@ describe('backend-owned agent runs', () => {
     try {
       const runs = new AgentRuns(100);
       let stopped = false;
-      const run = runs.start(identity, async ({ signal }) => {
+      const run = startRun(runs, identity, async ({ signal }) => {
         await new Promise<void>(resolve => signal.addEventListener('abort', () => { stopped = true; resolve(); }, { once: true }));
       });
       await Promise.resolve();
@@ -102,7 +103,7 @@ describe('backend-owned agent runs', () => {
   it('stops only the identified request, and shutdown waits for cleanup', async () => {
     const runs = new AgentRuns();
     let cleaned = false;
-    const run = runs.start(identity, async ({ signal }) => {
+    const run = startRun(runs, identity, async ({ signal }) => {
       await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
       cleaned = true;
     });
@@ -113,6 +114,6 @@ describe('backend-owned agent runs', () => {
     await run.finished;
     expect(cleaned).toBe(true);
     expect(runs.has('agent')).toBe(false);
-    expect(() => runs.start(identity, async () => {})).toThrow();
+    expect(() => startRun(runs, identity, async () => {})).toThrow();
   });
 });

@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { buildApp } from './app';
 import { prepareDatabase } from './test-database';
@@ -257,4 +257,87 @@ it('reports the controller\'s own refusal and leaves no stray record when a crea
     expect(missing.json().message).toBe('Build the approved computer images before creating computers.');
     expect((await database.client.computer.findMany()).map(row => row.state)).toEqual(['failed']); // may have partially created: kept for cleanup
   } finally { await app.close(); await new Promise(resolve => server.close(resolve)); }
+});
+
+it('does not fail a slow create while the controller is unreachable', async () => {
+  const { app, database, controller } = await fixture();
+  try {
+    const partial = (await new ComputerStore(database).reserve('Slow', crypto.randomUUID())).computer;
+    await database.client.computer.update({ where: { id: partial.id }, data: { createdAt: new Date(Date.now() - 180_000) } });
+    const outage = vi.spyOn(controller, 'observe').mockRejectedValue(new Error('controller down'));
+    const during = (await app.inject({ method: 'GET', url: '/api/computers' })).json();
+    expect(during.controllerConnected).toBe(false);
+    expect(during.computers[0]).toMatchObject({ id: partial.id, state: 'creating' }); // unknown, not failed
+    outage.mockRestore();
+    const after = (await app.inject({ method: 'GET', url: '/api/computers' })).json();
+    expect(after.computers[0]).toMatchObject({ id: partial.id, state: 'failed' }); // controller answered and has no such container
+  } finally { await app.close(); await database.close(); }
+});
+
+it('marks a computer as deleting before releasing its holder, so nobody can claim it in between', async () => {
+  const { database, controller } = await fixture();
+  const states: string[] = [];
+  const runtime = { async cancel(id: string) { states.push((await database.client.computer.findUnique({ where: { id } }))!.state); }, capture: async () => { throw new Error('unused'); }, execute: async () => { throw new Error('unused'); } };
+  const app = await buildApp({ database, computerController: { ...controller, runtime } });
+  try {
+    const created = (await app.inject({ method: 'POST', url: '/api/computers', payload: { name: 'Held', requestKey: crypto.randomUUID() } })).json();
+    const agent = await database.createAgent({ name: 'Holder', endpointId: 'e', model: 'm', thinkingLevel: 'off' });
+    await database.client.computerAssignment.create({ data: { agentId: agent.id, computerId: created.id } });
+    await database.client.computerClaim.create({ data: { agentId: agent.id, computerId: created.id } });
+    const removed = await app.inject({ method: 'DELETE', url: `/api/computers/${created.id}`, payload: { confirmation: 'Held' } });
+    expect(removed.statusCode).toBe(200);
+    expect(states).toContain('deleting'); // the release ran while the computer could no longer be claimed
+    expect(states.every(state => state === 'deleting')).toBe(true);
+    expect(await database.client.computerClaim.count()).toBe(0);
+  } finally { await app.close(); }
+});
+
+it('sends the shared secret on every controller call, HTTP and WebSocket, and omits it when none is configured', async () => {
+  const { createServer } = await import('node:http');
+  const { HttpComputerController } = await import('./computer-controller-client');
+  const { fetchComputerFile } = await import('./computer-files');
+  const seen: { what: string; token: string | undefined }[] = [];
+  const server = createServer((request, response) => {
+    seen.push({ what: `${request.method} ${request.url}`, token: request.headers['x-controller-token'] as string | undefined });
+    response.setHeader('content-type', request.url?.includes('preview') ? 'image/jpeg' : 'application/json');
+    response.end(request.url?.includes('preview') ? Buffer.from([0xff, 0xd8, 0xff, 0xd9]) : JSON.stringify({ computers: [], started: true, settled: true, valid: true, validationToken: 'x' }));
+  });
+  server.on('upgrade', (request, socket) => { seen.push({ what: 'UPGRADE', token: request.headers['x-controller-token'] as string | undefined }); socket.destroy(); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const previous = process.env.COMPUTER_CONTROLLER_TOKEN;
+  try {
+    process.env.COMPUTER_CONTROLLER_TOKEN = 'shared-secret';
+    const controller = new HttpComputerController(base);
+    const id = '4a18018a-4689-4fa5-86ca-4dc080d41fb4';
+    await controller.observe(); await controller.preview(id);
+    await controller.runtime.cancel(id).catch(() => {});
+    await fetchComputerFile(fetch, base, id, 'files', { path: '/workspace' }).catch(() => {});
+    const socket = controller.terminalSocket!(id, id); socket.onerror = () => {};
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(seen.length).toBeGreaterThanOrEqual(5);
+    expect(seen.map(entry => entry.token)).toEqual(seen.map(() => 'shared-secret'));
+    expect(seen.map(entry => entry.what.split(' ')[0])).toEqual(expect.arrayContaining(['GET', 'POST', 'UPGRADE']));
+    seen.length = 0; delete process.env.COMPUTER_CONTROLLER_TOKEN;
+    await new HttpComputerController(base).observe();
+    expect(seen[0].token).toBeUndefined();
+  } finally { if (previous === undefined) delete process.env.COMPUTER_CONTROLLER_TOKEN; else process.env.COMPUTER_CONTROLLER_TOKEN = previous; server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+});
+
+it('tells the dashboard which computers are portal-free X11 and what the computer cap is', async () => {
+  const { app, database, observed, controller } = await fixture();
+  try {
+    const store = new ComputerStore(database);
+    const x11 = (await store.reserve('X11 desk', crypto.randomUUID())).computer, wayland = (await store.reserve('Wayland desk', crypto.randomUUID())).computer;
+    await store.markRunning(x11.id); await store.markRunning(wayland.id);
+    const base = { status: 'running', cpuPercent: 1, memoryBytes: 1, memoryLimitBytes: 4_294_967_296, cpuCount: 2 };
+    observed.set(x11.id, { ...base, displayServer: 'x11' }); observed.set(wayland.id, { ...base, displayServer: 'wayland' });
+    const listed = (await app.inject({ method: 'GET', url: '/api/computers' })).json().computers as { id: string; portalFree: boolean | null }[];
+    expect(listed.find(row => row.id === x11.id)!.portalFree).toBe(true);
+    expect(listed.find(row => row.id === wayland.id)!.portalFree).toBe(false);
+    vi.spyOn(controller, 'observe').mockRejectedValue(new Error('down'));
+    expect((await app.inject({ method: 'GET', url: '/api/computers' })).json().computers.every((row: { portalFree: unknown }) => row.portalFree === null)).toBe(true); // unknown offline
+    vi.spyOn(controller, 'limits').mockResolvedValue({ cpuCores: { min: 1, max: 8, default: 2 }, memoryGiB: { min: 1, max: 16, default: 4 }, timezoneDefault: 'UTC', maxComputers: 4 });
+    expect((await app.inject({ method: 'GET', url: '/api/computers/settings-limits' })).json().maxComputers).toBe(4);
+  } finally { await app.close(); await database.close(); }
 });

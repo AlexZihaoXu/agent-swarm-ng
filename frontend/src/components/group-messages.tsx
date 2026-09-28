@@ -1,3 +1,4 @@
+import { clockTime } from '@/lib/format-time';
 import { Fragment } from 'react';
 import { AgentAvatarArt } from '@/components/agent-avatar-art';
 import { MessageMarkdown } from '@/components/message-markdown';
@@ -8,7 +9,7 @@ import { MessageReactions, useMessageReactions, ReactionLoadError } from '@/comp
 import { MessageReply } from '@/components/message-reply';
 import type { GroupChat, GroupMessage } from '@/use-groups';
 
-const clock = (timestamp: number) => new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const clock = clockTime;
 // Kibo scroll-area-layout-3, adapted to the requested adjacent-author blocks and time gutter.
 export function GroupMessages({ messages, members, onReply }: { messages: GroupMessage[]; members: GroupChat['members']; onReply?: (message: GroupMessage) => void }) {
   const channelId = messages.length ? `group:${messages[0].groupId}` : undefined;

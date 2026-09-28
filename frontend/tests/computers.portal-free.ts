@@ -54,7 +54,7 @@ test('trusted desktop shortcut menu sends reserved chords without opening a brow
   await expect(viewer.locator('iframe')).toHaveCount(1);
   const frame = page.frameLocator('iframe[title="Test X11 desk desktop"]');
   await expect(frame.locator('#videoCanvas')).toBeAttached();
-  await viewer.getByRole('button', { name: 'Enable human desktop input' }).click();
+  await viewer.getByRole('button', { name: /human desktop input/ }).click();
   await expect(viewer.getByRole('button', { name: 'Remote shortcuts' })).toBeVisible({ timeout: 4000 });
   await viewer.getByRole('button', { name: 'Remote shortcuts' }).click();
   await page.getByRole('menuitem', { name: /New tab.*Ctrl\+T/ }).click();

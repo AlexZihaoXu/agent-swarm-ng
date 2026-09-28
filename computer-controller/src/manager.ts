@@ -9,7 +9,14 @@ type Container = {
   HostConfig?: { Devices?: { PathOnHost: string; PathInContainer: string; CgroupPermissions: string }[] | null; NanoCpus?: number; Memory?: number };
   NetworkSettings: { Networks: Record<string, { IPAddress: string; Aliases?: string[] | null; DNSNames?: string[] }> };
 };
-type ListedContainer = { Id: string; State: string; Labels: Record<string, string> };
+type ListedContainer = { Id: string; State: string; Image?: string; Labels: Record<string, string> };
+export type DisplayServer = 'x11' | 'wayland';
+/** Images built from x11.Dockerfile carry a label; older images are recognized by the tags this project gave them. */
+export function displayServerOf(row: Pick<ListedContainer, 'Image' | 'Labels'>): DisplayServer {
+  const labelled = row.Labels?.['swarm.ng.display-server'];
+  if (labelled === 'x11' || labelled === 'wayland') return labelled;
+  return /(^|[-:_])(x11|xorg\d*)([-_]|$)/i.test(row.Image ?? '') ? 'x11' : 'wayland';
+}
 type Network = { Id: string; Driver: string; Internal: boolean; EnableIPv6: boolean; Labels?: Record<string, string>; Options?: Record<string, string>; IPAM: { Config: { Subnet?: string; Gateway?: string }[] } };
 type Volume = { Name: string; Labels?: Record<string, string> };
 type Statistics = { cpu_stats?: { cpu_usage?: { total_usage?: number }; system_cpu_usage?: number; online_cpus?: number }; precpu_stats?: { cpu_usage?: { total_usage?: number }; system_cpu_usage?: number }; memory_stats?: { usage?: number; limit?: number; stats?: { inactive_file?: number } } };
@@ -114,7 +121,7 @@ export class ComputerManager {
   async limits() {
     if (this.detectedLimits) return this.detectedLimits;
     const info = await this.docker.json<{ NCPU?: number; MemTotal?: number }>('GET', '/info', undefined, 256 * 1024);
-    this.detectedLimits = deriveComputerLimits(info, this.cpuLimit, this.timezone);
+    this.detectedLimits = { ...deriveComputerLimits(info, this.cpuLimit, this.timezone), maxComputers: this.maxComputers };
     return this.detectedLimits;
   }
 
@@ -587,7 +594,7 @@ export class ComputerManager {
       // read 250%. The count lets the dashboard draw an honest fraction.
       // A replacement prepared while powered off is Docker's `created` state;
       // for the dashboard it is powered off and can be started normally.
-      return { id, status: row.State === 'created' ? 'exited' : row.State, cpuPercent, memoryBytes, memoryLimitBytes, cpuCount };
+      return { id, status: row.State === 'created' ? 'exited' : row.State, cpuPercent, memoryBytes, memoryLimitBytes, cpuCount, displayServer: displayServerOf(row) };
     }));
     return computers.filter((item): item is NonNullable<typeof item> => item !== null);
   }

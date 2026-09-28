@@ -18,7 +18,7 @@ Reread `AGENTS.md`, `docs/vision.md`, the Kibo entry guide, development/security
 | History/search | Channel/member checks, indexed cursors, bounded fragments, literal match snippets | Corrected model-facing envelopes to identify the actual originating group/DM channel instead of the receiving agent's private channel. Added regression coverage. |
 | Agent DMs | Mutual grants, live checks, shared budgets, recipient context isolation and browser transcript/typing tests | Retained; groups do not grant DMs. |
 | Group chats and discovery | Membership edits, transactional publication/fan-out, audience guidance and shared normal inbox | HTTP-confirmed sends now refresh the chat-list preview even without a live event. Added desktop/mobile regression assertions. |
-| Reactions | Bound identity, membership/own-channel checks, idempotence, cascades, no inference wake-up | Added a visible read-failure/retry state. Reaction feedback is distinguished from text answers in the prompt. |
+| Reactions | Bound identity, membership/own-channel checks, idempotence, cascades. A new human reaction is triaged by one small model call and may start a normal agent turn (later change; see [Chat and groups](chat-and-groups.md)) | Added a visible read-failure/retry state. Reaction feedback is distinguished from text answers in the prompt. |
 | Settings/API endpoints | Saved/tested connections, URL restrictions, generic errors, secret omission in responses; endpoint tests | Retained. Loopback-only trusted-admin deployment remains required. |
 | ChatGPT subscription/models | Native OAuth/Responses, isolated auth/cache, scoped refresh, dynamic thinking metadata and failure retention | Verified model metadata separately from inference; no paid-API fallback or developer inference used. |
 | Navigation/accessibility | Main tabs, creation/member selection, keyboard/mobile layout | Updated stale two-tab/direct-child bubble assertions without weakening their animation/layout checks; disabled member labels no longer advertise clickability. |
@@ -28,12 +28,12 @@ Reread `AGENTS.md`, `docs/vision.md`, the Kibo entry guide, development/security
 
 ## Evidence
 
-- `proc_160`: generated API drift check, backend/frontend typechecks, **126 unit/integration tests across 30 files**, production build and whitespace checks passed.
-- `proc_159`: updated Ubuntu workspace build, package/default-theme/font checks, tool versions, writable workspace/home and tmux checks passed. Production and development Compose configurations also validate.
-- Earlier `proc_154`: nonroot production-backend Docker smoke passed group publication, normal-inbox context isolation, reactions, persistence and restart cancellation without replay.
+- generated API drift check, backend/frontend typechecks, **126 unit/integration tests across 30 files**, production build and whitespace checks passed.
+- updated Ubuntu workspace build, package/default-theme/font checks, tool versions, writable workspace/home and tmux checks passed. Production and development Compose configurations also validate.
+- nonroot production-backend Docker smoke passed group publication, normal-inbox context isolation, reactions, persistence and restart cancellation without replay.
 - Windows browser launches remain paused. Browser checks use a dedicated nonroot Linux container, the repository's Chromium seccomp profile, `no-new-privileges`, Chromium sandbox enabled, one worker, zero retries and first-failure stop. Namespace/PID/network and Seccomp-BPF protections were observed; Yama protection was unavailable.
-- `proc_163`: **all 72 application browser tests passed** in the sandboxed nonroot Linux container, including the original long-code/table mobile regression, reaction retry, group preview without live events, animations, typing, notifications and keyboard workflows. The separate sandbox probe passed in `proc_161`. Desktop/mobile group screenshots were inspected and emoji rendering confirmed after installing the font.
-- Final frontend typecheck/build passed again with the mobile-width fix (`proc_163`). Whitespace and generated-contract checks are clean.
+- **all 72 application browser tests passed** in the sandboxed nonroot Linux container, including the original long-code/table mobile regression, reaction retry, group preview without live events, animations, typing, notifications and keyboard workflows. Desktop/mobile group screenshots were inspected and emoji rendering confirmed after installing the font.
+- Final frontend typecheck/build passed again with the mobile-width fix. Whitespace and generated-contract checks are clean.
 
 ## Boundaries still requiring separate care
 

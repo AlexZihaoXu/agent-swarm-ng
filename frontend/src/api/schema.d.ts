@@ -340,22 +340,6 @@ export interface paths {
         patch: operations["updateChatAgent"];
         trace?: never;
     };
-    "/api/agents/{id}/avatar": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["updateAgentAvatar"];
-        trace?: never;
-    };
     "/api/chat": {
         parameters: {
             query?: never;
@@ -2672,79 +2656,6 @@ export interface operations {
             };
         };
     };
-    updateAgentAvatar: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    avatar: {
-                        shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
-                        color: string;
-                        eyeStyle?: "pill" | "round";
-                        seed: number;
-                    };
-                };
-            };
-        };
-        responses: {
-            /** @description Default Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        avatar: {
-                            shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
-                            color: string;
-                            eyeStyle?: "pill" | "round";
-                            seed: number;
-                        };
-                    };
-                };
-            };
-            /** @description Default Response */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        message: string;
-                    };
-                };
-            };
-            /** @description Default Response */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        message: string;
-                    };
-                };
-            };
-            /** @description Default Response */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        message: string;
-                    };
-                };
-            };
-        };
-    };
     sendChannelMessage: {
         parameters: {
             query?: never;
@@ -3238,6 +3149,7 @@ export interface operations {
                             memoryBytes: number | null;
                             memoryLimitBytes: number | null;
                             cpuCount: number | null;
+                            portalFree: boolean | null;
                         }[];
                         controllerConnected: boolean;
                     };
@@ -3327,6 +3239,7 @@ export interface operations {
                         memoryBytes: number | null;
                         memoryLimitBytes: number | null;
                         cpuCount: number | null;
+                        portalFree: boolean | null;
                     };
                 };
             };
@@ -3348,6 +3261,7 @@ export interface operations {
                         memoryBytes: number | null;
                         memoryLimitBytes: number | null;
                         cpuCount: number | null;
+                        portalFree: boolean | null;
                     };
                 };
             };
@@ -3424,6 +3338,7 @@ export interface operations {
                             default: number;
                         };
                         timezoneDefault: string;
+                        maxComputers?: number;
                     };
                 };
             };
@@ -3661,6 +3576,7 @@ export interface operations {
                         memoryBytes: number | null;
                         memoryLimitBytes: number | null;
                         cpuCount: number | null;
+                        portalFree: boolean | null;
                     };
                 };
             };
@@ -3749,6 +3665,7 @@ export interface operations {
                         memoryBytes: number | null;
                         memoryLimitBytes: number | null;
                         cpuCount: number | null;
+                        portalFree: boolean | null;
                     };
                 };
             };

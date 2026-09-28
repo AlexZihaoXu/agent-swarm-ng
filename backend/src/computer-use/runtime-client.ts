@@ -1,3 +1,4 @@
+import { controllerHeaders } from '../controller-auth';
 import { ComputerUseError, ComputerExecutionError, type ActionReceipt, type CoreReceipt, type ComputerRuntime, type ScreenFrame } from './service';
 const MAX_RESPONSE = 3 * 1024 * 1024;
 
@@ -6,7 +7,7 @@ export class HttpComputerRuntime implements ComputerRuntime {
   constructor(private url: string, private fetcher: typeof fetch = fetch) {}
   private async request(id: string, path: string, input: unknown, signal?: AbortSignal, timeout = 20_000): Promise<Record<string, any>> {
     const response = await this.fetcher(new URL(`/computers/${encodeURIComponent(id)}/${path}`, this.url), {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+      method: 'POST', headers: { 'content-type': 'application/json', ...controllerHeaders() }, body: JSON.stringify(input),
       redirect: 'error', signal: AbortSignal.any([AbortSignal.timeout(timeout), ...(signal ? [signal] : [])]),
     });
     const reader = response.body?.getReader(); if (!reader) throw new Error('Controller response unavailable.');

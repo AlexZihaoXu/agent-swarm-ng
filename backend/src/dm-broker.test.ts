@@ -6,6 +6,7 @@ import { prepareDatabase } from './test-database';
 import { EndpointStore } from './endpoint-store';
 import { CodexProvider } from './codex-provider';
 import { AgentRuns } from './agent-runs';
+import { startRun } from './start-run';
 import { DmBroker } from './dm-broker';
 import { buildApp } from './app';
 import { ComputerUseService, type ComputerRuntime } from './computer-use/service';
@@ -257,7 +258,7 @@ it('runs the reaction decision branch while the agent has a busy main execution,
   const gate = new Promise<void>(resolve => { release = resolve; });
   try {
     const message = await f.database.appendMessage(f.a.channels[0].id, 'assistant', 'Needs review');
-    const main = f.runs.start({ agentId: f.a.id, channelId: f.a.channels[0].id, clientMessageId: crypto.randomUUID() }, async () => { await gate; });
+    const main = startRun(f.runs, { agentId: f.a.id, channelId: f.a.channels[0].id, clientMessageId: crypto.randomUUID() }, async () => { await gate; });
     await f.broker.reactions.set(f.a.channels[0].id, message.id, '❓', true);
     await f.broker.notifyHumanReaction(f.a.channels[0].id, message.id, '❓');
     await vi.waitFor(() => expect(f.captured.some(body => body.tools?.some(tool => tool.function.name === 'reaction_decision'))).toBe(true), { timeout: 10000 });
@@ -328,7 +329,7 @@ it('delivers source-labelled agent threads through the normal inbox and queues u
   try {
     await f.database.appendMessage(f.a.channels[0].id, 'user', 'PRIVATE HUMAN A');
     await f.database.appendMessage(f.b.channels[0].id, 'user', 'PRIVATE HUMAN B');
-    const root = f.runs.start({ agentId: f.a.id, channelId: `other-work:${f.a.id}`, clientMessageId: crypto.randomUUID() }, async context => {
+    const root = startRun(f.runs, { agentId: f.a.id, channelId: `other-work:${f.a.id}`, clientMessageId: crypto.randomUUID() }, async context => {
       await f.broker.send(f.a.id, f.b.id, 'question', 'send', context);
       expect((await f.broker.send(f.a.id, f.b.id, 'question', 'send', context)).duplicate).toBe(true);
       await gate;
@@ -349,7 +350,7 @@ it('delivers source-labelled agent threads through the normal inbox and queues u
 it('bounds an automatic reply loop with one shared eight-message chain', async () => {
   const f = await fixture(true);
   try {
-    f.runs.start({ agentId: f.a.id, channelId: f.a.channels[0].id, clientMessageId: crypto.randomUUID() }, async context => { await f.broker.send(f.a.id, f.b.id, 'question', 'send', context); });
+    startRun(f.runs, { agentId: f.a.id, channelId: f.a.channels[0].id, clientMessageId: crypto.randomUUID() }, async context => { await f.broker.send(f.a.id, f.b.id, 'question', 'send', context); });
     await f.idle();
     expect(await f.database.client.dmMessage.count()).toBe(8);
     expect(f.captured.length).toBeLessThanOrEqual(9);
@@ -381,7 +382,7 @@ it('enforces mutual revocation before a recipient replies rather than relying on
   let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
   const f = await fixture(false, gate);
   try {
-    f.runs.start({ agentId: f.a.id, channelId: f.a.channels[0].id, clientMessageId: crypto.randomUUID() }, async context => { await f.broker.send(f.a.id, f.b.id, 'question', 'send', context); });
+    startRun(f.runs, { agentId: f.a.id, channelId: f.a.channels[0].id, clientMessageId: crypto.randomUUID() }, async context => { await f.broker.send(f.a.id, f.b.id, 'question', 'send', context); });
     await vi.waitFor(() => expect(f.captured).toHaveLength(1), { timeout: 10000 });
     await f.broker.store.updateSettings(f.b.id, { allowedDmAgentIds: [] });
     release(); await f.idle();
@@ -393,7 +394,7 @@ it('cancels descendant work before deleting its origin, without a late publicati
   let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
   const f = await fixture(false, gate);
   try {
-    const root = f.runs.start({ agentId: f.a.id, channelId: f.a.channels[0].id, clientMessageId: crypto.randomUUID() }, async context => { await f.broker.send(f.a.id, f.b.id, 'question', 'send', context); });
+    const root = startRun(f.runs, { agentId: f.a.id, channelId: f.a.channels[0].id, clientMessageId: crypto.randomUUID() }, async context => { await f.broker.send(f.a.id, f.b.id, 'question', 'send', context); });
     await root.finished;
     await vi.waitFor(() => expect(f.captured).toHaveLength(1), { timeout: 10000 });
     await f.broker.beforeDelete(f.a.id);

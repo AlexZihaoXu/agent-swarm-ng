@@ -2,7 +2,7 @@
 
 **NG means Next Gen.** Repository: [AlexZihaoXu/agent-swarm-ng](https://github.com/AlexZihaoXu/agent-swarm-ng).
 
-![Status: Scaffold](https://img.shields.io/badge/status-scaffold-yellow)
+![Status: Active development](https://img.shields.io/badge/status-active_development-blue)
 ![Language: TypeScript](https://img.shields.io/badge/language-TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Deployment: Docker Compose](https://img.shields.io/badge/deployment-Docker_Compose-2496ED?logo=docker&logoColor=white)
 
@@ -85,7 +85,7 @@ agent-swarm-ng/
 
 Root Compose files run the platform; the backend requests fixed-template computer creation through an internal controller. Computer use requires an explicit per-agent assignment plus an active claim. `templates/default/compose.yaml` provides a standalone workspace with persistent home and workspace volumes. Keep tests beside their code where supported. Add no shared packages or separate services without a concrete need.
 
-The default image uses **Ubuntu 24.04 LTS with Ubuntu GNOME**, retaining Ubuntu’s appearance—not substituting XFCE. Preserve the standard Ubuntu appearance: visual defaults, wallpapers, Yaru themes/icons, fonts, and icon-rendering support are essentials—not bloat. Include desktop/session essentials, terminal, file manager, and settings; exclude office apps, games, email clients, media apps, and other bundled extras. Avoid the full `ubuntu-desktop` installation. The image and GNOME compositor were smoke-tested; the managed runtime boots a headless session and serves on-demand preview frames. The stage-1 image and lifecycle were deployed to the trusted Tailnet on 2026-09-24; the live computer API and existing saved data were checked. The live Tailnet browser video/input flow passed a sandboxed Chromium acceptance check; actual phone devices remain unvalidated.
+The default image uses **Ubuntu 24.04 LTS with Ubuntu GNOME**, retaining Ubuntu’s appearance—not substituting XFCE. Preserve the standard Ubuntu appearance: visual defaults, wallpapers, Yaru themes/icons, fonts, and icon-rendering support are essentials—not bloat. Include desktop/session essentials, terminal, file manager, and settings; exclude office apps, games, email clients, media apps, and other bundled extras. Avoid the full `ubuntu-desktop` installation. The image and GNOME compositor were smoke-tested; the managed runtime boots a headless session and serves on-demand preview frames.
 
 The workspace includes Chrome, VS Code, Git/curl, gcc/g++, ffmpeg, Node.js/npm with nvm available, Bun, Python/uv, tmux, and an unauthenticated Pi CLI. Installing Pi in the guest does not grant product agents computer tools or copy host Pi credentials. Separate named volumes retain `/home/agent` and `/workspace` across container replacement; deletion of their data is explicit. tmux preserves sessions across client disconnections, not container restarts. See [workspace setup and checks](docs/development.md#workspace-tools-and-persistence).
 
@@ -122,7 +122,7 @@ Two modes, using Compose overrides rather than profiles:
 - **`compose.yaml`** — production configuration with built images, no source mounts or hot reload.
 - **`compose.dev.yaml`** — development overrides with source mounts and frontend/backend hot reload where supported.
 
-Compose configurations are scaffolded. Authentication is not implemented; ports bind to loopback by default. Do not expose publicly.
+Authentication is not implemented: the API only accepts IP addresses, `localhost` and names listed in `ALLOWED_HOSTS`, and ports bind to loopback by default. Do not expose publicly. Use `scripts/compose.sh --list` for the supported stacks.
 
 ```sh
 # Build approved managed images directly: Compose project labels baked into
@@ -144,7 +144,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 
 ## Project status
 
-The platform includes persisted agent and computer identities, chat history, endpoint preferences, generated API types, tests, and Compose files. Long-term memory, external channels, general resource-permission groups, platform user authentication remain unimplemented; agent computer assignments/control are described in [Agent computer use](docs/agent-computer-use.md). Browser-native human desktop control passed isolated and live Tailnet HTTP/JPEG E2E on 2026-09-25 using GNOME/X11 without a portal prompt; no app-level login or second GNOME consent restricts allowed Tailnet peers. Computer lifecycle/previews were deployed on 2026-09-24; see [Computers](docs/computers.md). Accepted runs continue without an open dashboard. Completed Pi working context has private SQLite checkpoints; new operator traces persist separately, while interrupted runs do not resume after a backend restart. Restart releases computer claims and queues a notice for each affected agent's next normal turn. Platform and standalone workspace data use separate persistent storage; neither is the future long-term memory system.
+The platform includes persisted agent and computer identities, chat history, endpoint preferences, generated API types, tests, and Compose files. Long-term memory, external channels, general resource-permission groups and platform user authentication remain unimplemented; agent computer assignments/control are described in [Agent computer use](docs/agent-computer-use.md) and computers in [Computers](docs/computers.md). No app-level login or second GNOME consent restricts allowed Tailnet peers. Accepted runs continue without an open dashboard. Completed Pi working context has private SQLite checkpoints; new operator traces persist separately (pruned after `ACTIVITY_RETENTION_DAYS`, default 30), while interrupted runs do not resume after a backend restart. Restart releases computer claims and queues a notice for each affected agent's next normal turn. Platform and standalone workspace data use separate persistent storage; neither is the future long-term memory system. Dated rollout notes and benchmarks are in [docs/history.md](docs/history.md).
 
 Validate Docker/Sysbox, the chosen HTTP/JPEG or optional trusted HTTPS transport, long-lived streams, and host-specific GPU/latency trade-offs on each deployment host before relying on them.
 

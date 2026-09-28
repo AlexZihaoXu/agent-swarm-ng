@@ -1,3 +1,7 @@
+# COMPUTER_VIEWER=off builds a chat-only dashboard without the desktop image (the desktop viewer shows "unavailable").
+# With the default (on), the pinned Selkies browser client is copied from the approved desktop image.
+ARG COMPUTER_VIEWER=on
+ARG SELKIES_SOURCE_IMAGE=agent-swarm-default:stage2
 FROM node:22-bookworm-slim AS base
 COPY --from=oven/bun:1.3.6 /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /app
@@ -20,10 +24,16 @@ RUN bun run build
 
 # Keep the pinned browser-client adaptation independent of app source changes
 # so both package extraction and the audited HTTP/JPEG patch cache separately.
-FROM node:22-bookworm-slim AS trusted-selkies-client
-COPY --from=agent-swarm-default:stage2 /opt/selkies/lib/python3.12/site-packages/selkies/selkies_web /srv/selkies
+FROM ${SELKIES_SOURCE_IMAGE} AS selkies-source
+FROM node:22-bookworm-slim AS trusted-selkies-client-on
+COPY --from=selkies-source /opt/selkies/lib/python3.12/site-packages/selkies/selkies_web /srv/selkies
 COPY scripts/patch-selkies-http-client.mjs /tmp/patch-selkies-http-client.mjs
 RUN node /tmp/patch-selkies-http-client.mjs /srv/selkies
+
+FROM node:22-bookworm-slim AS trusted-selkies-client-off
+RUN mkdir -p /srv/selkies
+
+FROM trusted-selkies-client-${COMPUTER_VIEWER} AS trusted-selkies-client
 
 FROM caddy:2-alpine AS production
 COPY frontend/Caddyfile /etc/caddy/Caddyfile

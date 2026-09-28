@@ -164,21 +164,6 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
     finally { active.delete(id); }
   });
 
-  app.patch<{ Params: { id: string }; Body: { avatar: AgentAvatar } }>('/api/agents/:id/avatar', {
-    schema: { operationId: 'updateAgentAvatar', params: Type.Object({ id: Type.String({ minLength: 1, maxLength: 100 }) }), body: Type.Object({ avatar: AvatarSchema }, { additionalProperties: false }), response: { 200: Type.Object({ avatar: AvatarSchema }), 404: ErrorResponse, 409: ErrorResponse, 503: ErrorResponse } },
-  }, async (request, reply) => {
-    reply.header('Cache-Control', 'no-store');
-    const id = request.params.id;
-    if (closing) return reply.code(503).send({ message: 'The backend is shutting down.' });
-    if (active.has(id)) return reply.code(409).send({ message: 'The agent is being updated. Try again shortly.' });
-    active.add(id);
-    try {
-      if (!await database.updateAvatar(id, request.body.avatar)) return reply.code(404).send({ message: 'Agent not found.' });
-      return { avatar: { ...request.body.avatar, color: request.body.avatar.color.toLowerCase() } };
-    } catch { return reply.code(503).send({ message: 'Could not save the avatar. Try again.' }); }
-    finally { active.delete(id); }
-  });
-
   app.delete<{ Params: { id: string }; Body: { confirmation: string } }>('/api/agents/:id', {
     schema: { operationId: 'deleteChatAgent', params: Type.Object({ id: Type.String({ minLength: 1, maxLength: 100 }) }), body: Type.Object({ confirmation: Type.String({ minLength: 1, maxLength: 80 }) }, { additionalProperties: false }), response: { 200: Type.Object({ deleted: Type.Boolean() }), 400: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 503: ErrorResponse } },
   }, async (request, reply) => {
@@ -191,9 +176,10 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
       if (!agent) return reply.code(404).send({ message: 'Agent not found.' });
       if (request.body.confirmation !== agent.name) return reply.code(400).send({ message: 'Type the exact agent name to confirm deletion.' });
       await broker.beforeDelete(id);
-      await computers?.releaseAgent(id);
-      await screenshots?.removeAgent(id);
+      await computers?.releaseAgent(id); // settles outstanding input; the claim row would cascade with the agent anyway
+      // Delete the record before its files: if this fails the agent is still whole, and leftover images only expire from the pool.
       if (!await database.deleteAgent(id, request.body.confirmation)) return reply.code(404).send({ message: 'Agent not found.' });
+      await screenshots?.removeAgent(id).catch(() => {});
       runs.announce(''); // Agent deletion can change membership in several groups.
       return { deleted: true };
     } catch { return reply.code(503).send({ message: 'Could not delete the agent. Try again.' }); }

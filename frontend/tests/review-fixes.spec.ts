@@ -71,12 +71,15 @@ test('an agent can be renamed and moved to another model without recreating it',
   const model = page.getByRole('region', { name: 'Model' });
   await expect(model.getByLabel('Name')).toHaveValue('Avery');
   await expect(model.getByRole('combobox', { name: 'Model' })).toContainText('m1'); // current choice is preserved on load
-  await expect(model.getByRole('button', { name: 'Save model settings' })).toHaveCount(0);
+  const settings = page.getByRole('region', { name: 'Settings for Avery' });
+  await expect(settings.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   await model.getByLabel('Name').fill('Avery Prime');
   await model.getByRole('combobox', { name: 'Model' }).click();
   await page.getByRole('option', { name: 'm2' }).click();
-  await model.getByRole('button', { name: 'Save model settings' }).click();
+  await expect(settings.getByText('Unsaved: Model')).toBeVisible();
+  await settings.getByRole('button', { name: 'Save changes' }).click();
   await expect(model.getByText('Saved. The next turn uses these settings.')).toBeVisible();
+  await expect(settings.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   expect(patches).toEqual([{ name: 'Avery Prime', model: 'm2' }]);
   await expect(page.getByRole('button', { name: 'Open settings for Avery Prime' })).toBeVisible();
 });
@@ -112,4 +115,39 @@ test('a group with nobody working offers no Stop button', async ({ page }) => {
   await page.goto('/chat/groups/team');
   await expect(page.getByLabel('Message Research team')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Stop response' })).toHaveCount(0);
+});
+
+test('one Save covers every section, and leaving with unsaved changes asks first', async ({ page }) => {
+  const puts: unknown[] = [], patches: unknown[] = [];
+  const agents = sampleAgents.map(agent => ({ ...structuredClone(agent), endpointId: 'ep-1', model: 'm1' }));
+  await page.route(/\/api\/agents(?:\?.*)?$/, route => route.request().method() === 'GET' ? route.fulfill({ json: { agents, nextCursor: null } }) : route.fallback());
+  await page.route('**/api/model-endpoints', route => route.fulfill({ json: [{ id: 'ep-1', name: 'Local server', baseUrl: 'http://127.0.0.1:1/v1', hasApiKey: false }] }));
+  await page.route('**/api/model-endpoints/test', route => route.fulfill({ json: { models: ['m1', 'm2'] } }));
+  await page.route('**/api/agents/model-capabilities*', route => route.fulfill({ json: { thinkingLevels: ['off'], reasoning: false } }));
+  await page.route('**/api/computers', route => route.fulfill({ json: { controllerConnected: true, computers: [{ id: 'c1', name: 'Desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0, memoryLimitBytes: null, cpuCount: null }] } }));
+  await page.route('**/api/agents/avery/computers', route => { if (route.request().method() === 'PUT') { puts.push(route.request().postDataJSON()); return route.fulfill({ json: { saved: true } }); } return route.fulfill({ json: { computers: [] } }); });
+  await page.route('**/api/agents/avery', route => { if (route.request().method() !== 'PATCH') return route.fallback(); patches.push(route.request().postDataJSON()); Object.assign(agents[0], route.request().postDataJSON()); return route.fulfill({ json: agents[0] }); });
+  await page.goto('/agents/avery');
+  const settings = page.getByRole('region', { name: 'Settings for Avery' });
+  await settings.getByRole('checkbox', { name: 'Desk' }).check();
+  await settings.getByLabel('Name').fill('Avery Two');
+  await expect(settings.getByText('Unsaved: Model, Computers')).toBeVisible();
+  // Leaving asks first; keep editing changes nothing.
+  await page.getByRole('button', { name: 'Open settings for Morgan' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Discard unsaved changes?' });
+  await expect(dialog).toContainText('Model, Computers');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page).toHaveURL(/\/agents\/avery$/);
+  await expect(settings.getByLabel('Name')).toHaveValue('Avery Two');
+  // One Save writes both sections.
+  await settings.getByRole('button', { name: 'Save changes' }).click();
+  await expect.poll(() => puts.length + patches.length).toBe(2);
+  expect(puts).toEqual([{ computerIds: ['c1'] }]);
+  expect(patches).toEqual([{ name: 'Avery Two' }]);
+  await expect(settings.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
+  // With nothing unsaved, navigation is immediate; with new edits, Discard and leave goes ahead.
+  await settings.getByLabel('Name').fill('Changed again');
+  await page.getByRole('button', { name: 'Open settings for Morgan' }).click();
+  await page.getByRole('dialog', { name: 'Discard unsaved changes?' }).getByRole('button', { name: 'Discard and leave' }).click();
+  await expect(page).toHaveURL(/\/agents\/morgan$/);
 });

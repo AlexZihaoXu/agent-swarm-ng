@@ -147,3 +147,29 @@ it('does not emit unsaved activity or leak raw persistence errors when checkpoin
   await expect(recorder.flush()).rejects.toThrow('Operator activity could not be saved.');
   expect(emit).not.toHaveBeenCalled(); expect(failed).toHaveBeenCalledOnce();
 });
+
+it('prunes old activity, keeps unfinished runs and the newest context reading, and marks the gap once', async () => {
+  const db = await prepareDatabase(join(folder, 'prune.db'));
+  try {
+    const first = await db.createAgent(config), second = await db.createAgent({ ...config, name: 'Other' }), store = new ActivityStore(db);
+    const day = 86_400_000, now = Date.now();
+    const save = (agentId: string, id: string, ageDays: number, extra: Partial<{ label: string; state: string }> = {}) =>
+      store.save(agentId, { id, runId: 'r', channelId: 'c', kind: 'status', label: extra.label ?? 'Event', text: id, timestamp: now - ageDays * day, revision: 1, state: extra.state ?? 'complete' } as any);
+    await save(first.id, 'old-a', 45); await save(first.id, 'old-b', 40); await save(first.id, 'old-active', 50, { state: 'active' });
+    await save(first.id, 'old-context', 44, { label: 'Context usage' }); await save(first.id, 'newest-context', 41, { label: 'Context usage' });
+    await save(first.id, 'recent', 2);
+    await save(second.id, 'other-recent', 1);
+    expect(await store.prune(0)).toBe(0); // disabled
+    expect(await store.prune(30, now)).toBe(3); // old-a, old-b, old-context
+    let ids = (await store.page(first.id)).entries.map(entry => entry.id);
+    expect(ids).toEqual(['retention:' + first.id, 'old-active', 'newest-context', 'recent']); // marker sorts first; sequence order otherwise
+    expect((await store.page(first.id)).entries[0]).toMatchObject({ label: 'History pruned', text: expect.stringContaining('older than 30 days') });
+    expect((await store.page(second.id)).entries.map(entry => entry.id)).toEqual(['other-recent']); // untouched agent has no marker
+    expect((await store.page(first.id)).contextUsage?.id).toBe('newest-context');
+    await save(first.id, 'old-c', 35);
+    expect(await store.prune(30, now)).toBe(1);
+    ids = (await store.page(first.id)).entries.map(entry => entry.id);
+    expect(ids.filter(id => id.startsWith('retention:'))).toHaveLength(1); // replaced, not duplicated
+    expect(await store.prune(30, now)).toBe(0);
+  } finally { await db.close(); }
+});

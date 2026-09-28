@@ -12,7 +12,8 @@ test('computer assignments save separately and restore after refresh', async ({ 
   const assignment = page.getByRole('region', { name: 'Computers', exact: true });
   await expect(assignment.getByRole('checkbox', { name: desk.name })).toBeVisible();
   await assignment.getByRole('checkbox', { name: desk.name }).check();
-  await assignment.getByRole('button', { name: 'Save computer assignments' }).click();
+  await expect(assignment.getByRole('button', { name: /Save computer/ })).toHaveCount(0); // one Save for the whole page
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(assignment.getByRole('status')).toContainText('saved');
   await page.reload();
   await expect(page.getByRole('checkbox', { name: desk.name })).toBeChecked();
@@ -43,7 +44,7 @@ for (const rosterLoaded of [true, false]) test(`viewer shows controlling avatar 
   await expect(presence).toContainText('Ready'); await expect(art).toHaveAttribute('data-avatar-state', 'idle');
   await page.setViewportSize({ width: 320, height: 720 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const input = page.getByRole('button', { name: 'Enable human desktop input' });
+  const input = page.getByRole('button', { name: /human desktop input/ });
   await expect(input).toHaveText('Input locked');
   await expect(page.getByRole('button', { name: 'Remote shortcuts' })).toBeDisabled();
   await expect(page.locator('iframe')).toHaveAttribute('inert', '');

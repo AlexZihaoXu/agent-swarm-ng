@@ -4,6 +4,8 @@
 	import /etc/caddy/ComputerRoutes
 
 	handle {
+		# Baseline CSP for the application pages only (this replaces the site-wide frame-ancestors-only header, so it repeats it).
+		header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob: data:; worker-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
 		root * /srv
 		@updates path / /sw.js /index.html /manifest.webmanifest
 		header @updates Cache-Control "no-cache"

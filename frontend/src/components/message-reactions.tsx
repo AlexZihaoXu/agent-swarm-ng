@@ -140,6 +140,7 @@ export function MessageReactions({ channelId, messageId, reactions = [], childre
           </ContextMenu.SubContent></ContextMenu.Portal>
         </ContextMenu.Sub>
         <ContextMenu.Item disabled={!onReply || pending} onSelect={() => { replyChosen.current = true; onReply?.(); }} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-not-allowed data-[disabled]:text-muted-foreground data-[disabled]:opacity-40"><ReplyIcon />Reply</ContextMenu.Item>
+        <p className="px-2 pb-1 pt-1.5 text-[11px] leading-snug text-muted-foreground">An agent may respond to a reaction, which uses its model.</p>
       </ContextMenu.Content></ContextMenu.Portal>
     </ContextMenu.Root>
     {reactions.length > 0 && <div aria-label="Message reactions" className="ml-2 mt-1 flex flex-wrap items-center gap-1">{reactions.map(reaction => <Button key={reaction.emoji} type="button" size="sm" variant="outline" aria-pressed={reaction.mine} aria-label={`${choices.find(item => item.value === reaction.emoji)?.label ?? reaction.emoji}: ${reaction.count} reaction${reaction.count === 1 ? '' : 's'}`} disabled={pending} onClick={() => void change(reaction.emoji as Emoji)} className={cn('min-h-11 gap-1 rounded-md px-3 text-xs sm:min-h-0 sm:h-7 sm:px-1.5', reaction.mine && 'border-primary/50 bg-primary/10')}><span aria-hidden="true" className="text-base leading-none">{reaction.emoji}</span><span>{reaction.count}</span></Button>)}

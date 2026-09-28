@@ -1,3 +1,26 @@
+import { isIP } from 'node:net';
+
+function privateIPv4(value: string) {
+  const [a, b] = value.split('.').map(Number);
+  return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) || (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
+}
+/** Loopback, private, link-local, metadata, tailnet and single-label (internal service) hosts are never "public". */
+export function isNonPublicHost(hostname: string) {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  if (isIP(host) === 4) return privateIPv4(host);
+  if (isIP(host) === 6) {
+    const groups = host.includes('::') ? (() => { const [head, tail] = host.split('::'); const h = head ? head.split(':') : [], t = tail ? tail.split(':') : []; return [...h, ...Array(8 - h.length - t.length).fill('0'), ...t]; })() : host.split(':');
+    const words = groups.map(group => parseInt(group || '0', 16));
+    if (words.slice(0, 5).every(word => word === 0) && (words[5] === 0xffff || words[5] === 0)) {
+      if (words[6] === 0 && words[7] <= 1) return true; // :: and ::1
+      return privateIPv4(`${words[6] >> 8}.${words[6] & 255}.${words[7] >> 8}.${words[7] & 255}`); // IPv4-mapped/compatible
+    }
+    return (words[0] & 0xfe00) === 0xfc00 || (words[0] & 0xffc0) === 0xfe80 || (words[0] & 0xff00) === 0xff00;
+  }
+  return !host.includes('.') || ['localhost', 'local', 'internal', 'lan', 'home.arpa', 'localdomain'].some(suffix => host === suffix || host.endsWith(`.${suffix}`));
+}
+
 export const webToolNames = ['web_search', 'source_check', 'fetch_content', 'get_search_content'] as const;
 export type WebToolName = typeof webToolNames[number];
 
@@ -27,7 +50,7 @@ export function validateWebCall(name: string, value: unknown): asserts value is 
     for (const value of urls) {
       if (typeof value !== 'string') throw new Error('Invalid URL.');
       const url = new URL(value);
-      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Only public HTTP(S) URLs are granted.');
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || isNonPublicHost(url.hostname)) throw new Error('Only public HTTP(S) URLs are granted.');
     }
   }
 }

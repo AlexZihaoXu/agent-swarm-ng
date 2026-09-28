@@ -567,3 +567,20 @@ it('samples running computers concurrently so listing time does not grow per com
   expect(rows.every(row => row.cpuPercent === 10 && row.cpuCount === 2)).toBe(true);
   expect(Date.now() - started).toBeLessThan(900); // sequential sampling would take about 1200 ms
 });
+
+it('reports each computer\'s display server from its image label, falling back to the project\'s image tags', async () => {
+  const { displayServerOf } = await import('./manager');
+  expect(displayServerOf({ Image: 'agent-swarm-default:stage2', Labels: {} })).toBe('wayland');
+  expect(displayServerOf({ Image: 'agent-swarm-default:http-jpeg', Labels: {} })).toBe('wayland');
+  expect(displayServerOf({ Image: 'agent-swarm-default:h265-stage2', Labels: {} })).toBe('wayland');
+  for (const image of ['agent-swarm-default:http-jpeg-x11', 'agent-swarm-default:h265-xorg120', 'agent-swarm-default:xorg120-120-candidate', 'agent-swarm-default:h264-x11']) expect(displayServerOf({ Image: image, Labels: {} }), image).toBe('x11');
+  expect(displayServerOf({ Image: 'agent-swarm-default:whatever', Labels: { 'swarm.ng.display-server': 'x11' } })).toBe('x11'); // label wins
+  expect(displayServerOf({ Image: 'agent-swarm-default:h265-xorg120', Labels: { 'swarm.ng.display-server': 'wayland' } })).toBe('wayland');
+  expect(displayServerOf({ Labels: {} })).toBe('wayland');
+});
+
+it('advertises the configured computer cap with the host limits', async () => {
+  const { manager, docker } = fixture();
+  vi.mocked(docker.json).mockImplementation(async () => ({ NCPU: 16, MemTotal: 34_359_738_368 }));
+  expect(await manager.limits()).toMatchObject({ maxComputers: 4, cpuCores: { max: 8 } });
+});

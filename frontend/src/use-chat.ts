@@ -8,6 +8,7 @@ import { useRunEvents } from '@/use-run-events';
 import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 import { randomUuid } from '@/lib/random-uuid';
 import { useActivityHistory } from '@/use-activity-history';
+import { clockTime } from '@/lib/format-time';
 
 export type ActivityEntry = components['schemas']['AgentActivityEntry'];
 const activityKinds = new Set(['system', 'user', 'assistant', 'thinking', 'tool_call', 'tool_result', 'reminder', 'channel', 'status', 'error']);
@@ -17,7 +18,7 @@ type SavedMessage = paths['/api/channels/{channelId}/messages']['get']['response
 type Run = { runId: string; agentId: string; channelId: string; clientMessageId: string; typing?: boolean; typingTargets?: string[] };
 const asMessage = (message: SavedMessage): ChatMessage => ({ id: message.id, sequence: message.sequence, author: message.role === 'user' ? 'user' : 'agent', text: message.text, timestamp: message.timestamp, time: clock(message.timestamp), replyTo: message.replyTo });
 export const asAgent = (real: RealAgent): ChatAgent => ({ avatar: real.avatar ?? defaultAvatar(real.id), id: real.id, name: real.name, initials: real.name.slice(0, 2).toUpperCase(), time: clock(real.lastMessage?.timestamp ?? real.createdAt), channelId: real.channelId, real });
-const clock = (timestamp = Date.now()) => new Date(timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s+/g, ' ');
+const clock = (timestamp = Date.now()) => clockTime(timestamp);
 function withoutKey<T>(record: Record<string, T>, key: string) { const next = { ...record }; delete next[key]; return next; }
 function remember(set: Set<string>, key: string) {
   if (set.has(key)) return true;

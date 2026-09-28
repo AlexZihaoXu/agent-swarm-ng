@@ -12,6 +12,10 @@ services:
       AGENT_RUN_TIMEOUT_MS: ${AGENT_RUN_TIMEOUT_MS:-0}
       # Host names (besides IP addresses and localhost) allowed to reach the unauthenticated API; blocks DNS rebinding.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      # Days of operator activity to keep (0 keeps everything).
+      ACTIVITY_RETENTION_DAYS: ${ACTIVITY_RETENTION_DAYS:-30}
+      # Shared secret for the internal computer controller; empty disables the check.
+      COMPUTER_CONTROLLER_TOKEN: ${COMPUTER_CONTROLLER_TOKEN:-}
       COMPUTER_CONTROLLER_URL: http://computer-controller:3101
     init: true
     volumes:
@@ -54,6 +58,9 @@ services:
       dockerfile: computer-controller/Dockerfile
     environment:
       COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-agent-swarm-ng}
+      # Most computers that can exist at once.
+      COMPUTER_MAX_COUNT: ${COMPUTER_MAX_COUNT:-4}
+      COMPUTER_CONTROLLER_TOKEN: ${COMPUTER_CONTROLLER_TOKEN:-}
       # Opt-in: shares ONLY this DRM render node with each sudo computer.
       COMPUTER_RENDER_DEVICE: ${COMPUTER_RENDER_DEVICE:-}
       COMPUTER_CPU_LIMIT: ${COMPUTER_CPU_LIMIT:-2}
@@ -79,6 +86,8 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       target: production
+      args:
+        COMPUTER_VIEWER: ${COMPUTER_VIEWER:-on}
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
     networks:

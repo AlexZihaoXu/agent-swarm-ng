@@ -1,3 +1,4 @@
+import { controllerHeaders } from './controller-auth';
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 
@@ -49,7 +50,7 @@ export async function fetchComputerFile(fetcher: typeof fetch, baseUrl: string, 
   url.searchParams.set('path', query.path);
   if (query.offset !== undefined) url.searchParams.set('offset', String(query.offset));
   if (query.filter !== undefined) url.searchParams.set('filter', query.filter);
-  const response = await fetcher(url, { signal: AbortSignal.timeout(28_000), redirect: 'error' });
+  const response = await fetcher(url, { signal: AbortSignal.timeout(28_000), redirect: 'error', headers: controllerHeaders() });
   if (!response.ok) {
     await response.body?.cancel();
     // Controller errors are mapped, not reflected: no raw guest/Docker/host details.

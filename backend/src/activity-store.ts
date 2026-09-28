@@ -23,6 +23,11 @@ function textChunk(bytes: Uint8Array | null, totalLength: number, offset = 0) {
 export function activityTextPreview(text: string) { const bytes = new TextEncoder().encode(text); return textChunk(bytes, bytes.length); }
 const view = ({ bytes, ...row }: Row, offset = 0): ActivityEntry => ({ ...row, sequence: Number(row.sequence), revision: Number(row.revision), ...textChunk(bytes, Number(row.totalLength), offset) });
 
+// Rows that must survive pruning: unfinished runs, the retention marker itself, and the newest context reading per agent.
+const KEEP = `(state IS NULL OR state NOT IN ('active','streaming','pending','running')) AND id NOT LIKE 'retention:%'
+  AND NOT (label = 'Context usage' AND sequence = (SELECT MAX(newer.sequence) FROM Activity newer WHERE newer.agentId = Activity.agentId AND newer.label = 'Context usage'))`;
+export const DEFAULT_ACTIVITY_RETENTION_DAYS = 30;
+
 /** Trusted operator archive. No agent tool exposes this store. */
 export class ActivityStore {
   constructor(private database: PlatformStore) {}
@@ -70,5 +75,26 @@ export class ActivityStore {
     await this.database.client.activity.updateMany({ where: { state: 'active' }, data: { state: 'interrupted', label: 'Run interrupted', text: 'Backend restarted during this run. Work was not resumed; partial activity remains unfinished.', revision: { increment: 1 } } });
     // Preserve the actual partial evidence; only its completion state changes on restart.
     await this.database.client.activity.updateMany({ where: { state: { in: ['streaming','pending','running'] } }, data: { state: 'interrupted', revision: { increment: 1 } } });
+  }
+  /**
+   * Delete entries older than `retentionDays` (0 disables). Each affected agent gets one marker entry that sorts as the
+   * oldest, so the inspector says truthfully that earlier history was removed. Returns how many entries were deleted.
+   */
+  async prune(retentionDays: number, now = Date.now()) {
+    if (!Number.isFinite(retentionDays) || retentionDays <= 0) return 0;
+    await this.database.initialize();
+    const cutoff = now - retentionDays * 86_400_000;
+    return this.database.client.$transaction(async tx => {
+      const doomed = await tx.$queryRawUnsafe<{ agentId: string; last: number }[]>(`SELECT agentId, MAX(sequence) AS last FROM Activity WHERE timestamp < ? AND ${KEEP} GROUP BY agentId`, cutoff);
+      if (!doomed.length) return 0;
+      const removed = await tx.$executeRawUnsafe(`DELETE FROM Activity WHERE timestamp < ? AND ${KEEP}`, cutoff);
+      const text = `Entries older than ${retentionDays} day${retentionDays === 1 ? '' : 's'} were removed on ${new Date(now).toISOString().slice(0, 10)}. Newer history is unchanged.`;
+      for (const { agentId, last } of doomed) {
+        await tx.$executeRawUnsafe('DELETE FROM Activity WHERE agentId = ? AND id = ?', agentId, `retention:${agentId}`);
+        // A negative sequence (minus a row that just existed, so it is unique) sorts before all real entries.
+        await tx.$executeRawUnsafe(`INSERT INTO Activity (sequence, id, agentId, runId, channelId, kind, label, text, timestamp, revision, state) VALUES (?, ?, ?, 'retention', 'retention', 'status', 'History pruned', ?, ?, 1, 'complete')`, -Number(last), `retention:${agentId}`, agentId, text, cutoff);
+      }
+      return Number(removed);
+    });
   }
 }
