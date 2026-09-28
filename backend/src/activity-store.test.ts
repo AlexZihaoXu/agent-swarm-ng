@@ -10,6 +10,22 @@ import { createActivityRecorder } from './agent-activity';
 let folder: string;
 beforeAll(async () => { folder = await mkdtemp(join(process.env.SQLITE_TEST_ROOT!, 'activity-')); });
 const config = { name: 'Activity', endpointId: 'fake', model: 'test', thinkingLevel: 'off' as const };
+it('persists empty streaming entries and reads empty or exhausted fragments without breaking the archive', async () => {
+  const db = await prepareDatabase(join(folder, 'empty.db'));
+  try {
+    const agent = await db.createAgent(config), store = new ActivityStore(db);
+    const recorder = createActivityRecorder(agent.id, agent.channels[0].id, '', () => {}, 'empty-run', store);
+    recorder.record('thinking', 'Thinking', '', 'thought');
+    await recorder.flush();
+    expect((await store.page(agent.id)).entries[0]).toMatchObject({ text: '', totalLength: 0, nextOffset: null });
+    expect(await store.fragment(agent.id, 'empty-run:thought', 0)).toMatchObject({ text: '', nextOffset: null });
+    recorder.record('thinking', 'Thinking', 'continued', 'thought', true);
+    await recorder.flush();
+    expect((await store.page(agent.id)).entries[0].text).toBe('continued');
+    expect(await store.fragment(agent.id, 'empty-run:thought', 9)).toMatchObject({ text: '', nextOffset: null });
+    expect(await store.fragment(agent.id, 'empty-run:thought', 100)).toMatchObject({ text: '', nextOffset: null });
+  } finally { await db.close(); }
+});
 it('coalesces durable revisions, redacts split credentials, strips images and never publishes chat', async () => {
   const db = await prepareDatabase(join(folder, 'recorder.db'));
   try {

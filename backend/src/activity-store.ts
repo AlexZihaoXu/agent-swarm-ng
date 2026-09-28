@@ -4,11 +4,17 @@ import type { ActivityEntry } from './agent-activity';
 export const ACTIVITY_CHUNK_SIZE = 6000;
 export const ACTIVITY_PAGE_SIZE = 30;
 export type ActivitySnapshot = ActivityEntry & { revision: number; state?: string };
-type Row = Omit<ActivityEntry, 'text'> & { sequence: number; revision: number; totalLength: number; bytes: Uint8Array };
+type Row = Omit<ActivityEntry, 'text'> & { sequence: number; revision: number; totalLength: number; bytes: Uint8Array | null };
 // Byte offsets avoid SQLite TEXT length/substr stopping at embedded NUL. Only complete
 // UTF-8 characters cross the wire; callers continue from nextOffset, never JS string.length.
 const columns = 'id, sequence, runId, channelId, kind, label, timestamp, revision, length(CAST(text AS BLOB)) AS totalLength';
-function textChunk(bytes: Uint8Array, totalLength: number, offset = 0) {
+function textChunk(bytes: Uint8Array | null, totalLength: number, offset = 0) {
+  // libSQL returns NULL for a zero-length BLOB substring (empty text or EOF).
+  // That is a valid empty fragment, not a missing activity entry.
+  if (bytes === null) {
+    if (offset < totalLength) throw new Error('Activity text fragment is unavailable.');
+    bytes = new Uint8Array(0);
+  }
   let end = Math.min(bytes.length, ACTIVITY_CHUNK_SIZE);
   if (end < bytes.length) while (end > 0 && (bytes[end] & 0xc0) === 0x80) end--;
   const next = offset + end;
