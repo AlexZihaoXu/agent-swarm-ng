@@ -548,6 +548,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/computers/{id}/terminals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["computerTerminal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agents/{id}/computers": {
         parameters: {
             query?: never;
@@ -3768,6 +3784,161 @@ export interface operations {
             };
             /** @description Default Response */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    computerTerminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    operation: "create";
+                    name: string;
+                    command?: string;
+                    cwd?: string;
+                } | {
+                    /** @enum {string} */
+                    operation: "list";
+                } | {
+                    /** @enum {string} */
+                    operation: "view";
+                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    session: string;
+                } | {
+                    /** @enum {string} */
+                    operation: "type";
+                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    session: string;
+                    text: string;
+                } | {
+                    /** @enum {string} */
+                    operation: "press";
+                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    session: string;
+                    key: "Enter" | "Tab" | "BTab" | "Escape" | "BSpace" | "Delete" | "Insert" | "Space" | "Up" | "Down" | "Left" | "Right" | "Home" | "End" | "PageUp" | "PageDown" | "F1" | "F2" | "F3" | "F4" | "F5" | "F6" | "F7" | "F8" | "F9" | "F10" | "F11" | "F12" | "C-a" | "M-a" | "C-b" | "M-b" | "C-c" | "M-c" | "C-d" | "M-d" | "C-e" | "M-e" | "C-f" | "M-f" | "C-g" | "M-g" | "C-h" | "M-h" | "C-i" | "M-i" | "C-j" | "M-j" | "C-k" | "M-k" | "C-l" | "M-l" | "C-m" | "M-m" | "C-n" | "M-n" | "C-o" | "M-o" | "C-p" | "M-p" | "C-q" | "M-q" | "C-r" | "M-r" | "C-s" | "M-s" | "C-t" | "M-t" | "C-u" | "M-u" | "C-v" | "M-v" | "C-w" | "M-w" | "C-x" | "M-x" | "C-y" | "M-y" | "C-z" | "M-z";
+                } | {
+                    /** @enum {string} */
+                    operation: "interrupt";
+                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    session: string;
+                } | {
+                    /** @enum {string} */
+                    operation: "delete";
+                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    session: string;
+                } | {
+                    /** @enum {string} */
+                    operation: "status";
+                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    session: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        type: "terminal";
+                        sessions?: {
+                            id: string;
+                            name: string;
+                            alive: boolean;
+                            exitCode: number | null;
+                            exitSignal?: string | null;
+                            createdAt: number;
+                            columns: number;
+                            rows: number;
+                            cwd?: string;
+                            currentCommand?: string;
+                        }[];
+                        session?: {
+                            id: string;
+                            name: string;
+                            alive: boolean;
+                            exitCode: number | null;
+                            exitSignal?: string | null;
+                            createdAt: number;
+                            columns: number;
+                            rows: number;
+                            cwd?: string;
+                            currentCommand?: string;
+                        };
+                        text?: string;
+                        truncated?: boolean;
+                        note?: string;
+                        accepted?: boolean;
+                        deleted?: boolean;
+                        sessionId?: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

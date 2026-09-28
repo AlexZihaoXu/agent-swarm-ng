@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import { ComputerUseError, type ComputerUseService } from './service';
 import type { ScreenshotPool } from './image-pool';
+import { registerComputerTerminalRoutes } from '../computer-terminal-routes';
 const params = Type.Object({ id: Type.String({ format: 'uuid' }) });
 const error = Type.Object({ message: Type.String() });
 const errors = { 400: error, 403: error, 404: error, 409: error, 503: error };
@@ -9,6 +10,7 @@ const holder = Type.Object({ id: Type.String(), name: Type.String() });
 const computer = Type.Object({ id: Type.String(), name: Type.String(), state: Type.String(), holder: Type.Union([holder, Type.Null()]), current: Type.Boolean() });
 
 export function registerComputerUseRoutes(app: FastifyInstance, service: ComputerUseService, images: ScreenshotPool) {
+  registerComputerTerminalRoutes(app, service);
   app.get<{ Params: { id: string } }>('/api/agents/:id/computers', {
     schema: { operationId: 'getAgentComputers', params, response: { 200: Type.Object({ computers: Type.Array(computer) }), ...errors } },
   }, async (request, reply) => {

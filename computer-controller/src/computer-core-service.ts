@@ -1,5 +1,6 @@
 import { ResourceError } from './resources';
 import { jpegDimensions } from './computer-use-service';
+import { validateTerminal, terminalResult } from './computer-terminal';
 const fail = (message: string): never => { throw new ResourceError(400, message); };
 const uncertain = (): never => { throw new ResourceError(503, 'Computer core operation settlement is uncertain. Do not transfer control.'); };
 export type CoreMode = 'prepare' | 'execute' | 'cancel';
@@ -7,6 +8,10 @@ export function validateCore(input: unknown, prepared = false): Record<string, a
   if (!input || typeof input !== 'object' || Array.isArray(input)) return fail('Expected a core tool request.');
   const value = input as Record<string, any>;
   if (Buffer.byteLength(JSON.stringify(value)) > 65536) fail('Request exceeds 64 KiB.');
+  if (value.kind === 'terminal') {
+    if (prepared && (typeof value.validationToken !== 'string' || !/^[0-9a-f-]{36}$/.test(value.validationToken))) fail('Prepare the request before execution.');
+    return validateTerminal(value, prepared);
+  }
   const fields: Record<string, string[]> = { read: ['path','offset','limit'], write: ['path','content'], edit: ['path','edits'], bash: ['command','cwd','timeout'] };
   if (typeof value.kind !== 'string' || !Object.hasOwn(fields, value.kind)) fail('Unknown core tool.');
   if (Object.keys(value).some(key => !['kind', ...(prepared ? ['validationToken'] : []), ...fields[value.kind]].includes(key))) fail('Unknown core tool field.');
@@ -74,6 +79,7 @@ export class ComputerCoreService {
     }
     const result = value.result;
     if (!value.started || !result || typeof result !== 'object') uncertain();
+    if (request.kind === 'terminal') return { started: true, settled: true, result: terminalResult(result, request.operation, request.session) };
     if (result.type === 'image') {
       if (request.kind !== 'read' || !['image/png','image/jpeg'].includes(result.mimeType) || typeof result.data !== 'string' || result.data.length > 2_796_204 || !/^[A-Za-z0-9+/]+={0,2}$/.test(result.data)) uncertain();
       const bytes = Buffer.from(result.data, 'base64');

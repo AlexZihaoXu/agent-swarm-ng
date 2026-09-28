@@ -1,7 +1,7 @@
 import { ComputerUseError, ComputerExecutionError, type ActionReceipt, type CoreReceipt, type ComputerRuntime, type ScreenFrame } from './service';
 const MAX_RESPONSE = 3 * 1024 * 1024;
 
-/** Fixed internal controller origin; requests never contain a guest command or host path. */
+/** Fixed internal controller origin; commands target only the inspected authorized guest, never the host. */
 export class HttpComputerRuntime implements ComputerRuntime {
   constructor(private url: string, private fetcher: typeof fetch = fetch) {}
   private async request(id: string, path: string, input: unknown, signal?: AbortSignal, timeout = 20_000): Promise<Record<string, any>> {
@@ -65,7 +65,7 @@ export class HttpComputerRuntime implements ComputerRuntime {
     } catch (error) {
       if (error instanceof ComputerUseError && error.status === 400) return { started: false, settled: true, error: error.message };
       await this.cancel(id);
-      throw new ComputerExecutionError('Core operation interrupted or result uncertain. Processes are settled; effects may remain. Inspect before retrying.', true);
+      throw new ComputerExecutionError('Core operation interrupted or result uncertain. Request delivery is settled; persistent terminal programs and other effects may remain. Inspect before retrying.', true);
     }
   }
   async cancel(id: string) {

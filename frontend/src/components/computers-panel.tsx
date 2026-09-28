@@ -11,6 +11,7 @@ import { ComputerCard, type Computer } from './computer-card';
 import { ComputerViewer } from './computer-viewer';
 import { ComputerResourceFields } from './computer-resource-fields';
 import { ComputerFileBrowser } from './computer-file-browser';
+import { ComputerTerminals } from './computer-terminals';
 import type { ComputerAgentState } from './computer-control';
 import { computerPath } from '@/lib/dashboard-location';
 type ComputerList = { computers: Computer[] };
@@ -97,6 +98,9 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
   const [menuTarget, setMenuTarget] = useState<Computer | null>(null);
   const [filesTarget, setFilesTarget] = useState<Computer | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [terminalsTarget, setTerminalsTarget] = useState<Computer | null>(null);
+  const [terminalsOpen, setTerminalsOpen] = useState(false);
+  const terminalsComputer = computers.find(computer => computer.id === terminalsTarget?.id) ?? terminalsTarget;
   const filesComputer = computers.find(computer => computer.id === filesTarget?.id) ?? filesTarget;
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -212,7 +216,7 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content className="context-menu-content phone-menu-targets z-50 min-w-56 rounded-lg border border-border bg-background p-1 text-sm shadow-lg"
-            onCloseAutoFocus={event => { if (createOpen || selected !== null || settingsComputer !== null || filesOpen) event.preventDefault(); }}>
+            onCloseAutoFocus={event => { if (createOpen || selected !== null || settingsComputer !== null || filesOpen || terminalsOpen) event.preventDefault(); }}>
             <ContextMenu.Item disabled={!menuTarget || menuTarget.state !== 'running' || !query.data?.controllerConnected}
               onSelect={() => { if (menuTarget) onOpen(menuTarget.id); }}
               className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
@@ -227,6 +231,11 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
               onSelect={() => { if (menuTarget) { setFilesTarget(menuTarget); setFilesOpen(true); } }}
               className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
               <MenuIcon path="M3 7h6l2 2h10v10H3zM8 13h8" label="Files" />File browser
+            </ContextMenu.Item>
+            <ContextMenu.Item disabled={!menuTarget || menuTarget.state !== 'running' || !query.data?.controllerConnected || powerBusy}
+              onSelect={() => { if (menuTarget) { setTerminalsTarget(menuTarget); setTerminalsOpen(true); } }}
+              className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
+              <MenuIcon path="m4 6 6 6-6 6M13 18h7" label="Terminal" />Terminals
             </ContextMenu.Item>
             <ContextMenu.Item disabled={!menuTarget || !query.data?.controllerConnected || (menuTarget.state !== 'running' && menuTarget.state !== 'exited')}
               onSelect={() => { setEditDraft(null); setSettingsError(''); setReplaceConfirmed(false); if (menuTarget) onNavigate(`${computerPath(menuTarget.id)}/settings`); }}
@@ -281,6 +290,7 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
         </form>
       </ComputerDialog>}
     </Dialog.Root>
+    {terminalsComputer && <ComputerTerminals key={terminalsComputer.id} computer={terminalsComputer} open={terminalsOpen} connected={Boolean(query.data?.controllerConnected) && computers.some(computer => computer.id === terminalsComputer.id)} onOpenChange={setTerminalsOpen} />}
     {filesComputer && <ComputerFileBrowser key={filesComputer.id} computer={filesComputer} open={filesOpen} connected={Boolean(query.data?.controllerConnected) && computers.some(computer => computer.id === filesComputer.id)} onOpenChange={setFilesOpen} />}
   </section>;
 }

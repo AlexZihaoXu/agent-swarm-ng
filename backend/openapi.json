@@ -9456,6 +9456,945 @@
         }
       }
     },
+    "/api/computers/{id}/terminals": {
+      "post": {
+        "operationId": "computerTerminal",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "operation",
+                      "name"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "create"
+                        ]
+                      },
+                      "name": {
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,47}$",
+                        "type": "string"
+                      },
+                      "command": {
+                        "minLength": 1,
+                        "maxLength": 32768,
+                        "type": "string"
+                      },
+                      "cwd": {
+                        "minLength": 1,
+                        "maxLength": 4096,
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "operation"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "list"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "operation",
+                      "session"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "view"
+                        ]
+                      },
+                      "session": {
+                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "operation",
+                      "session",
+                      "text"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "type"
+                        ]
+                      },
+                      "session": {
+                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "type": "string"
+                      },
+                      "text": {
+                        "minLength": 1,
+                        "maxLength": 32768,
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "operation",
+                      "session",
+                      "key"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "press"
+                        ]
+                      },
+                      "session": {
+                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "type": "string"
+                      },
+                      "key": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "Enter"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "Tab"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "BTab"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "Escape"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "BSpace"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "Delete"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "Insert"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "Space"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "Up"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "Down"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "Left"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "Right"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "Home"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "End"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "PageUp"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "PageDown"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "F1"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "F2"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "F3"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "F4"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "F5"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "F6"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "F7"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "F8"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "F9"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "F10"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "F11"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "F12"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-a"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-a"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-b"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-b"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-c"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-c"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-d"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-d"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-e"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-e"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-f"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-f"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-g"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-g"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-h"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-h"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-i"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-i"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-j"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-j"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-k"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-k"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-l"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-l"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-m"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-m"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-n"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-n"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-o"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-o"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-p"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-p"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-q"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-q"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-r"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-r"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-s"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-s"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-t"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-t"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-u"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-u"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-v"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-v"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-w"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-w"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-x"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-x"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-y"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-y"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "C-z"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "M-z"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "operation",
+                      "session"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "interrupt"
+                        ]
+                      },
+                      "session": {
+                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "operation",
+                      "session"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "delete"
+                        ]
+                      },
+                      "session": {
+                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "operation",
+                      "session"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "status"
+                        ]
+                      },
+                      "session": {
+                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "terminal"
+                      ]
+                    },
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "alive",
+                          "exitCode",
+                          "createdAt",
+                          "columns",
+                          "rows"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "alive": {
+                            "type": "boolean"
+                          },
+                          "exitCode": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "exitSignal": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "integer"
+                          },
+                          "columns": {
+                            "type": "integer"
+                          },
+                          "rows": {
+                            "type": "integer"
+                          },
+                          "cwd": {
+                            "type": "string"
+                          },
+                          "currentCommand": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "session": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "name",
+                        "alive",
+                        "exitCode",
+                        "createdAt",
+                        "columns",
+                        "rows"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "alive": {
+                          "type": "boolean"
+                        },
+                        "exitCode": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "exitSignal": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "integer"
+                        },
+                        "columns": {
+                          "type": "integer"
+                        },
+                        "rows": {
+                          "type": "integer"
+                        },
+                        "cwd": {
+                          "type": "string"
+                        },
+                        "currentCommand": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "accepted": {
+                      "type": "boolean"
+                    },
+                    "deleted": {
+                      "type": "boolean"
+                    },
+                    "sessionId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agents/{id}/computers": {
       "get": {
         "operationId": "getAgentComputers",
