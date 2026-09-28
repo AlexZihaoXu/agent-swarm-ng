@@ -7,7 +7,7 @@ export type ActivitySnapshot = ActivityEntry & { revision: number; state?: strin
 type Row = Omit<ActivityEntry, 'text'> & { sequence: number; revision: number; totalLength: number; bytes: Uint8Array | null };
 // Byte offsets avoid SQLite TEXT length/substr stopping at embedded NUL. Only complete
 // UTF-8 characters cross the wire; callers continue from nextOffset, never JS string.length.
-const columns = 'id, sequence, runId, channelId, kind, label, timestamp, revision, length(CAST(text AS BLOB)) AS totalLength';
+const columns = 'id, sequence, runId, channelId, kind, label, timestamp, revision, state, length(CAST(text AS BLOB)) AS totalLength';
 function textChunk(bytes: Uint8Array | null, totalLength: number, offset = 0) {
   // libSQL returns NULL for a zero-length BLOB substring (empty text or EOF).
   // That is a valid empty fragment, not a missing activity entry.
@@ -30,7 +30,7 @@ export class ActivityStore {
     await this.database.initialize();
     await this.database.client.$executeRawUnsafe(`INSERT INTO Activity (id, agentId, runId, channelId, kind, label, text, timestamp, revision, state)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET text=excluded.text, label=excluded.label, revision=excluded.revision, state=excluded.state
+      ON CONFLICT(id) DO UPDATE SET text=excluded.text, kind=excluded.kind, label=excluded.label, revision=excluded.revision, state=excluded.state
       WHERE Activity.agentId=excluded.agentId AND Activity.revision < excluded.revision`,
     entry.id, agentId, entry.runId, entry.channelId, entry.kind, entry.label, entry.text, entry.timestamp, entry.revision, entry.state ?? null);
     const saved = await this.fragment(agentId, entry.id, 0);
@@ -68,5 +68,7 @@ export class ActivityStore {
   async interruptActive() {
     await this.database.initialize();
     await this.database.client.activity.updateMany({ where: { state: 'active' }, data: { state: 'interrupted', label: 'Run interrupted', text: 'Backend restarted during this run. Work was not resumed; partial activity remains unfinished.', revision: { increment: 1 } } });
+    // Preserve the actual partial evidence; only its completion state changes on restart.
+    await this.database.client.activity.updateMany({ where: { state: { in: ['streaming','pending','running'] } }, data: { state: 'interrupted', revision: { increment: 1 } } });
   }
 }

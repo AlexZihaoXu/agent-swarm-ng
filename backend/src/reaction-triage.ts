@@ -3,18 +3,21 @@ import { getSupportedThinkingLevels, Type } from '@earendil-works/pi-ai';
 import { chatResources, createChatSession, type ChatConfiguration, type ChannelMessage } from './chat-runtime';
 
 import { runTriageTurns, TRIAGE_MAX_TOKENS, TRIAGE_TIMEOUT_MS } from './triage-turns';
+import type { ActivityTrace } from './activity-events';
 
 export type ReactionDecision = { action: 'ignore' | 'engage'; reason: string };
 const ignored = { action: 'ignore' as const, reason: 'No actionable decision was made.' };
 
 /** Ephemeral, decision-only model branch. It cannot publish, react, or read another channel. */
-export async function evaluateReaction(config: ChatConfiguration, history: ChannelMessage[], notice: string, signal: AbortSignal, subscriptionRuntime?: ModelRuntime): Promise<ReactionDecision> {
+export async function evaluateReaction(config: ChatConfiguration, history: ChannelMessage[], notice: string, signal: AbortSignal, subscriptionRuntime?: ModelRuntime, trace?: ActivityTrace): Promise<ReactionDecision> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TRIAGE_TIMEOUT_MS);
   const combined = AbortSignal.any([signal, controller.signal]);
   let base: Awaited<ReturnType<typeof createChatSession>> | undefined;
   let fork: Awaited<ReturnType<typeof createAgentSession>>['session'] | undefined;
   let decision: ReactionDecision | undefined;
+  let detach = () => {};
+  let phase = 'creating fork';
   const abort = () => { void fork?.abort(); };
   try {
     combined.throwIfAborted();
@@ -33,9 +36,11 @@ export async function evaluateReaction(config: ChatConfiguration, history: Chann
     }));
     if (fork.sessionFile || fork.agent.state.tools.length !== 1 || fork.agent.state.tools[0].name !== tool.name) throw new Error('Unsafe reaction triage grant');
     fork.agent.state.messages = structuredClone(base.messages);
+    detach = trace?.attach(fork) ?? detach;
     combined.addEventListener('abort', abort, { once: true }); combined.throwIfAborted();
+    phase = 'evaluating';
     const failure = await runTriageTurns(fork, `Human reaction to classify (not a request):\n${notice}\nSubmit a valid reaction_decision.`, tool.name, () => Boolean(decision), combined);
     return !combined.aborted && decision ? decision : { action: 'ignore', reason: failure };
-  } catch { return ignored; }
-  finally { clearTimeout(timeout); combined.removeEventListener('abort', abort); await fork?.abort(); fork?.dispose(); base?.dispose(); }
+  } catch { trace?.record('error', 'Fork failed', JSON.stringify({ phase, cancelled: combined.aborted, note: 'Raw provider/initialization errors are withheld.' })); return ignored; }
+  finally { clearTimeout(timeout); combined.removeEventListener('abort', abort); await fork?.abort(); detach(); trace?.close(); fork?.dispose(); base?.dispose(); }
 }

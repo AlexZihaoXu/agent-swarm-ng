@@ -25,5 +25,9 @@ export function reconcileActivityPage(current: ActivityEntry[], page: ActivityEn
   const baseline = new Map(beforeRequest.map(entry => [entry.id, entry.revision]));
   // A reconnect starts a new bounded window, but retains all events received while it loaded.
   const live = current.filter(entry => !baseline.has(entry.id) || baseline.get(entry.id) !== entry.revision);
-  return mergeActivity(page, live);
+  // Keep already-expanded text for overlapping unchanged entries. Starting from the
+  // new previews alone silently collapsed those entries on every reconnect.
+  const revisions = new Map(page.map(entry => [entry.id, entry.revision]));
+  const overlapping = current.filter(entry => revisions.has(entry.id) && revisions.get(entry.id) === entry.revision);
+  return mergeActivity(mergeActivity(overlapping, page), live);
 }

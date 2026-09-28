@@ -652,10 +652,11 @@ export interface components {
             id: string;
             runId: string;
             channelId: string;
-            kind: "system" | "user" | "assistant" | "thinking" | "tool_call" | "tool_result" | "reminder" | "channel" | "status" | "error";
+            kind: "system" | "user" | "assistant" | "thinking" | "tool_call" | "tool_result" | "reminder" | "channel" | "status" | "error" | "metadata";
             label: string;
             text: string;
             timestamp: number;
+            state?: string | null;
             sequence?: number;
             revision?: number;
             /** @description UTF-8 byte offset. Continue using nextOffset, not JavaScript string length. */
@@ -877,10 +878,11 @@ export interface operations {
                             id: string;
                             runId: string;
                             channelId: string;
-                            kind: "system" | "user" | "assistant" | "thinking" | "tool_call" | "tool_result" | "reminder" | "channel" | "status" | "error";
+                            kind: "system" | "user" | "assistant" | "thinking" | "tool_call" | "tool_result" | "reminder" | "channel" | "status" | "error" | "metadata";
                             label: string;
                             text: string;
                             timestamp: number;
+                            state?: string | null;
                             sequence?: number;
                             revision?: number;
                             /** @description UTF-8 byte offset. Continue using nextOffset, not JavaScript string length. */
@@ -894,10 +896,11 @@ export interface operations {
                             id: string;
                             runId: string;
                             channelId: string;
-                            kind: "system" | "user" | "assistant" | "thinking" | "tool_call" | "tool_result" | "reminder" | "channel" | "status" | "error";
+                            kind: "system" | "user" | "assistant" | "thinking" | "tool_call" | "tool_result" | "reminder" | "channel" | "status" | "error" | "metadata";
                             label: string;
                             text: string;
                             timestamp: number;
+                            state?: string | null;
                             sequence?: number;
                             revision?: number;
                             /** @description UTF-8 byte offset. Continue using nextOffset, not JavaScript string length. */
@@ -947,10 +950,11 @@ export interface operations {
                         id: string;
                         runId: string;
                         channelId: string;
-                        kind: "system" | "user" | "assistant" | "thinking" | "tool_call" | "tool_result" | "reminder" | "channel" | "status" | "error";
+                        kind: "system" | "user" | "assistant" | "thinking" | "tool_call" | "tool_result" | "reminder" | "channel" | "status" | "error" | "metadata";
                         label: string;
                         text: string;
                         timestamp: number;
+                        state?: string | null;
                         sequence?: number;
                         revision?: number;
                         /** @description UTF-8 byte offset. Continue using nextOffset, not JavaScript string length. */

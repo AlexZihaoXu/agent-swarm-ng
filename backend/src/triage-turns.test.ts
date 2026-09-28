@@ -3,10 +3,11 @@ import { createServer, type Server } from 'node:http';
 import { createChatSession } from './chat-runtime';
 import { evaluateInterruption } from './interruption-triage';
 import { evaluateReaction } from './reaction-triage';
+import { createActivityRecorder } from './agent-activity';
 
 type Step = 'raw' | 'invalid' | 'blank' | 'historical' | 'truncated' | 'valid' | 'error';
 let server: Server, baseUrl: string;
-let steps: Step[], requests: any[], cancel: (() => void) | undefined;
+let steps: Step[], requests: any[], traces: any[], cancel: (() => void) | undefined;
 beforeAll(async () => {
   server = createServer(async (request, response) => {
     const chunks = []; for await (const chunk of request) chunks.push(chunk);
@@ -32,7 +33,8 @@ beforeAll(async () => {
 afterAll(async () => { await new Promise<void>(resolve => server.close(() => resolve())); });
 
 async function evaluate(kind: 'interruption' | 'reaction', sequence: Step[], abortFirst = false) {
-  steps = sequence; requests = [];
+  steps = sequence; requests = []; traces = [];
+  const activity = createActivityRecorder('agent', 'channel', '', event => traces.push(event), 'test-run');
   const controller = new AbortController(); cancel = abortFirst ? () => controller.abort() : undefined;
   const config = { name: 'Triage test', endpointId: 'mock', model: 'test-model', thinkingLevel: 'off' as const, baseUrl, channel: { id: 'channel', agentId: 'agent', kind: 'platform-chat' as const } };
   const history = [{ role: 'user' as const, text: 'Original task' }];
@@ -41,8 +43,8 @@ async function evaluate(kind: 'interruption' | 'reaction', sequence: Step[], abo
   const before = structuredClone(main.messages);
   try {
     const result = kind === 'interruption'
-      ? await evaluateInterruption(main, 'channel', [{ role: 'user', text: 'Correction: change the task.' }], controller.signal)
-      : await evaluateReaction(config, history, 'Human reacted with a question mark.', controller.signal);
+      ? await evaluateInterruption(main, 'channel', [{ role: 'user', text: 'Correction: change the task.' }], controller.signal, activity.branch('Interruption triage'))
+      : await evaluateReaction(config, history, 'Human reacted with a question mark.', controller.signal, undefined, activity.branch('Reaction triage'));
     expect(main.messages).toEqual(before); expect(publish).not.toHaveBeenCalled();
     expect(requests.every(body => body.tools.length === 1 && body.tools[0].function.name === (kind === 'interruption' ? 'triage_decision' : 'reaction_decision'))).toBe(true);
     expect(JSON.stringify(result)).not.toContain('PRIVATE'); expect(JSON.stringify(result)).not.toContain('secret-token');
@@ -53,6 +55,11 @@ for (const kind of ['interruption', 'reaction'] as const) {
   it(`${kind}: corrects prose, invalid arguments, forbidden tools and truncated output in the same private fork`, async () => {
     const result = await evaluate(kind, ['raw', 'invalid', 'blank', 'historical', 'truncated', 'valid']);
     expect(requests).toHaveLength(6);
+    expect(JSON.stringify(traces)).toContain('PRIVATE FORK OUTPUT');
+    expect(JSON.stringify(traces)).toContain('Model response details');
+    expect(JSON.stringify(traces)).toContain('Provider request');
+    expect(JSON.stringify(traces)).toContain('Provider HTTP response');
+    expect(JSON.stringify(traces)).toContain('Triage correction');
     expect(result.action).toBe(kind === 'interruption' ? 'interrupt' : 'engage');
     const context = JSON.stringify(requests.at(-1).messages);
     expect(context).toContain('Triage correction'); expect(context).toContain('Original task');
@@ -71,6 +78,8 @@ for (const kind of ['interruption', 'reaction'] as const) {
   it(`${kind}: does not retry provider failures or expose raw errors`, async () => {
     const result = await evaluate(kind, ['error']);
     expect(requests).toHaveLength(1); expect(result.reason).toContain('provider request failed');
+    expect(JSON.stringify(traces)).not.toContain('secret-token');
+    expect(JSON.stringify(traces)).toContain('Model request error');
   });
   it(`${kind}: cancellation prevents another correction turn`, async () => {
     await evaluate(kind, ['raw'], true); expect(requests).toHaveLength(1);

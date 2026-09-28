@@ -15,6 +15,11 @@ it('expands Unicode fragments once, preserves expansion on duplicate previews an
   expect(mergeActivity(expanded, [entry(2, 'new')])[0].text).toBe('new');
   expect(mergeActivity(expanded, [entry(2, 'stale fragment', { offset: 4 })])).toEqual(expanded);
 });
+it('preserves expanded text in overlapping entries when reconnect refreshes the bounded window', () => {
+  const expanded = entry(2, 'expanded text', { nextOffset: 13, totalLength: 20 });
+  const preview = entry(2, 'expanded', { nextOffset: 8, totalLength: 20 });
+  expect(reconcileActivityPage([expanded], [preview], [expanded])[0]).toEqual(expanded);
+});
 it('restores completed/active history chronologically and preserves races while bounding a reconnect window', () => {
   const old = entry(1, 'old', { id: 'old', sequence: 1 });
   const newer = entry(1, 'new', { id: 'new', sequence: 2 });

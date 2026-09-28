@@ -36,7 +36,7 @@ it('coalesces durable revisions, redacts split credentials, strips images and ne
     recorder.record('assistant', 'Output', 'secret-key and final', 'output');
     recorder.onEvent({ type: 'tool_execution_end', toolName: 'screenshot', result: { content: [{ type: 'image', data: 'BASE64_BYTES' }, { type: 'text', text: '{"imageId":"image-1"}' }] } } as any);
     await recorder.flush();
-    expect(events).toHaveLength(2);
+    expect(events).toHaveLength(3);
     const page = await store.page(agent.id);
     expect(page.entries[0]).toMatchObject({ text: '[redacted] and final', revision: 3 });
     expect(JSON.stringify(page)).not.toContain('BASE64_BYTES');
@@ -44,6 +44,29 @@ it('coalesces durable revisions, redacts split credentials, strips images and ne
     expect(page.entries[1].text).toContain('image-1');
     expect(await db.client.message.count()).toBe(0);
     expect(await db.client.agentSession.count()).toBe(0);
+  } finally { await db.close(); }
+});
+it('marks unfinished records interrupted without replacing their captured evidence', async () => {
+  const db = await prepareDatabase(join(folder, 'partial-state.db'));
+  try {
+    const agent = await db.createAgent(config), store = new ActivityStore(db);
+    const recorder = createActivityRecorder(agent.id, agent.channels[0].id, '', () => {}, 'partial-run', store);
+    recorder.record('thinking', 'Thinking', 'Evidence before restart', 'thinking', false, 'streaming');
+    await recorder.flush(); await store.interruptActive();
+    expect(await store.fragment(agent.id, 'partial-run:thinking', 0)).toMatchObject({ text: 'Evidence before restart', state: 'interrupted' });
+  } finally { await db.close(); }
+});
+it('does not publish or persist a known credential prefix between streaming checkpoints', async () => {
+  const db = await prepareDatabase(join(folder, 'stream-redaction.db'));
+  try {
+    const agent = await db.createAgent(config), store = new ActivityStore(db), events: any[] = [];
+    const recorder = createActivityRecorder(agent.id, agent.channels[0].id, 'private-key', event => events.push(event), 'secret-run', store);
+    recorder.record('assistant', 'Output', 'prefix private-', 'text', false, 'streaming'); await recorder.flush();
+    expect(JSON.stringify(events)).not.toContain('private-');
+    recorder.close('interrupted'); await recorder.flush();
+    expect(JSON.stringify(await store.page(agent.id))).not.toContain('private-');
+    recorder.record('assistant', 'Output', 'prefix private-key suffix', 'text', false, 'complete'); await recorder.flush();
+    expect((await store.page(agent.id)).entries[0].text).toBe('prefix [redacted] suffix');
   } finally { await db.close(); }
 });
 it('keeps complete Unicode text behind bounded indexed pages and revision-checked fragments across restart', async () => {
@@ -95,7 +118,7 @@ it('restores latest context outside the page and marks only active runs interrup
     await store.interruptActive();
     expect(await store.fragment(agent.id, 'run:run-status', 0, 2)).toMatchObject({ label: 'Run interrupted', text: expect.stringContaining('not resumed') });
     await store.interruptActive();
-    expect(await db.client.activity.count()).toBe(37);
+    expect(await db.client.activity.count()).toBe(38);
   } finally { await db.close(); }
 });
 it('checkpoints an active stream on its timer and flushes the final replacement without replay', async () => {

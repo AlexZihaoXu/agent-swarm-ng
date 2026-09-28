@@ -45,13 +45,17 @@ export class DmBroker {
     this.activity = new ActivityStore(database);
     this.runs.setLifecycle(async (run, state, emit) => {
       await this.ready();
+      if (state === 'queued') {
+        const admission = await this.activity.save(run.agentId, { id: `${run.runId}:admission`, runId: run.runId, channelId: run.channelId, kind: 'metadata', label: 'Run admission', text: JSON.stringify({ initiatingClientMessageId: run.clientMessageId, delivery: run.inputSource === 'agent' ? 'internal delivery' : 'direct human request', acceptedAt: Date.now() }), timestamp: Date.now(), revision: 1, state: 'complete' });
+        emit({ type: 'activity', agentId: run.agentId, append: false, entry: admission });
+      }
       const entry = await this.activity.lifecycle(run, state);
       if (entry) emit({ type: 'activity', agentId: run.agentId, append: false, entry });
     });
     this.knowledge = new SwarmKnowledgePlugin(database);
-    this.reactionCoordinator = new ReactionCoordinator(database, endpoints, codex, runs, (agentId, input, context) => this.runInbox(agentId, input, context));
+    this.reactionCoordinator = new ReactionCoordinator(database, endpoints, codex, runs, (agentId, input, context) => this.runInbox(agentId, input, context), { store: this.activity, emit: (agentId, entry) => runs.activity(agentId, entry) });
   }
-  notifyHumanReaction(channelId: string, messageId: string, emoji: string) { return this.reactionCoordinator.offer(channelId, messageId, emoji); }
+  async notifyHumanReaction(channelId: string, messageId: string, emoji: string) { await this.ready(); return this.reactionCoordinator.offer(channelId, messageId, emoji); }
   ready() { return this.starting ??= (async () => { await this.store.cancelInterruptedDeliveries(); await this.activity.interruptActive(); await this.computers?.ready(); })(); }
   async send(senderId: string, recipientId: string, text: string, callId: string, context: RunContext, inheritedChain?: string, replyToId?: string): Promise<DmReceipt> {
     context.signal.throwIfAborted();

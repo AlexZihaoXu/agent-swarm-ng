@@ -199,6 +199,13 @@ export async function createChatSession(config: ChatConfiguration, history: Chan
     sessionManager: manager,
     settingsManager: SettingsManager.inMemory({ compaction: { enabled: Boolean(restoredManager), reserveTokens, keepRecentTokens }, retry: { enabled: false }, transport: 'sse' }),
   });
+  // Pi's core only flags thrown errors by default. Preserve explicit failures returned
+  // by our tools without discarding their structured receipts/stdout/image metadata.
+  const afterToolCall = session.agent.afterToolCall;
+  session.agent.afterToolCall = async (context, signal) => {
+    const result = await afterToolCall?.(context, signal);
+    return (context.result as { isError?: boolean }).isError === true ? { ...result, isError: true } : result;
+  };
   const active = session.agent.state.tools.map(tool => tool.name);
   const granted = ['send_message', ...additionalTools.map(tool => tool.name)];
   if (session.sessionFile || active.length !== granted.length || active.some(name => !granted.includes(name))) {

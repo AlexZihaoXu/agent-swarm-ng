@@ -29,6 +29,9 @@ it('custom core tools override Pi host builtins and require the current claim; i
     await service.use(agent.id,'Desk');
     for(const [name,args] of calls) expect(JSON.stringify(await invoke(name,args))).toContain('GUEST RESULT');
     expect(run.mock.calls.every(([id])=>id===computer.id)).toBe(true);expect(await readFile(host,'utf8')).toBe('HOST SENTINEL');
+    const failed = { content: [{ type: 'text' as const, text: '{"exitCode":7,"stderr":"failure"}' }], details: { receipt: 'retained' }, isError: true };
+    const normalized = await session.agent.afterToolCall!({ toolCall: { id: 'failed', name: 'bash' }, args: {}, result: failed, isError: false } as any);
+    expect(normalized?.isError).toBe(true); // SDK otherwise treats a returned isError property as success.
     const image=await invoke('read',{path:'picture.jpg'});
     expect(image.content.some(block=>block.type==='image')).toBe(true);
     expect(JSON.stringify(image.content[0])).toContain('not a desktop screenshot');

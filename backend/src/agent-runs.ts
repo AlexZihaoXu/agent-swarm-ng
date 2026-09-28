@@ -1,6 +1,7 @@
 import { MessageInbox } from './message-inbox';
 import { AgentWorkQueue, type WorkTicket } from './agent-work-queue';
 import type { ChannelMessage } from './chat-runtime';
+import type { ActivityEntry } from './agent-activity';
 export type RunIdentity = { agentId: string; channelId: string; clientMessageId: string; inputSource?: 'agent' };
 export type RunState = RunIdentity & { runId: string; typing: boolean; typingTargets?: string[]; queued?: boolean };
 export type RunEvent = Record<string, unknown> & { type: string; eventId: string; runId: string; agentId: string; channelId: string };
@@ -50,6 +51,10 @@ export class AgentRuns {
   }
   reactionsChanged(channelId: string, messageId: string) {
     this.broadcast({ type: 'reactions_updated', messageId, eventId: crypto.randomUUID(), runId: 'platform', agentId: 'human', channelId });
+  }
+  /** Standalone advisory branches are observable without pretending they are main chat runs. */
+  activity(agentId: string, entry: ActivityEntry) {
+    this.broadcast({ type: 'activity', agentId, channelId: entry.channelId, runId: entry.runId, eventId: `activity:${entry.id}:${entry.revision}`, append: false, entry });
   }
   private broadcast(event: RunEvent) {
     for (const listener of this.listeners) {

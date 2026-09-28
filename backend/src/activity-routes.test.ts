@@ -20,7 +20,7 @@ it('serves no-store operator pages/fragments with ownership, bounds, retries and
     expect((await db.client.activity.findUnique({ where: { id: 'run:run-status' } }))?.state).toBe('active');
     const page = await app.inject(`/api/agents/${agent.id}/activity`);
     expect(page.statusCode).toBe(200); expect(page.headers['cache-control']).toBe('no-store');
-    expect(page.json().entries[1]).toMatchObject({ text: 'x'.repeat(6000), nextOffset: 6000, revision: 1 });
+    expect(page.json().entries.find((entry: {id:string}) => entry.id === 'run:output')).toMatchObject({ text: 'x'.repeat(6000), nextOffset: 6000, revision: 1 });
     const fragment = await app.inject(`/api/agents/${agent.id}/activity/entry?entryId=run:output&offset=6000&revision=1`);
     expect(fragment.json()).toMatchObject({ text: 'x'.repeat(1000), offset: 6000, nextOffset: null });
     expect((await app.inject(`/api/agents/${agent.id}/activity/entry?entryId=run:output&revision=2`)).statusCode).toBe(409);

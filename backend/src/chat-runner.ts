@@ -22,10 +22,11 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
   publish: (text: string, replyToMessageId?: string) => Promise<object>, accessKey: string, subscriptionRuntime?: ModelRuntime, historyTools: ToolDefinition[] = [], hooks: InboxHooks = {}) {
   const { channel } = config;
   inbox.prepend(message);
-  let activityFailed = false;
+  let activityFailed = false, runFailed = false;
+  let phase = 'initialization';
   const activity = createActivityRecorder(channel.agentId, channel.id, accessKey, emit, runId, hooks.activityStore, () => { activityFailed = true; void session?.abort(); });
   const publicationTyping = createPublicationTyping(channel.agentId, emit);
-  let published = 0, finalPublished = false;
+  let published = 0, finalPublished = false, lastStopReason: string | undefined;
   let web: Awaited<ReturnType<typeof createWebTools>> | undefined;
   let session: Awaited<ReturnType<typeof createChatSession>> | undefined;
   let unsubscribe = () => {};
@@ -36,10 +37,13 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
   try {
     signal.throwIfAborted();
     await activity.start();
+    phase = 'loading web tools';
     web = await createWebTools();
     signal.throwIfAborted();
+    phase = 'restoring private context';
     const restored = await hooks.sessionStore?.load(channel.agentId);
     const manager = hooks.sessionStore ? restored ?? SessionManager.inMemory() : undefined;
+    phase = 'creating agent session';
     session = await createChatSession(config, restored ? [] : history, async (text, toolCallId, final, replyToMessageId) => {
       signal.throwIfAborted();
       await activity.flush();
@@ -54,17 +58,17 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
     if (hooks.sessionStore && !restored && session.sessionManager.getEntries().length) await hooks.sessionStore.save(channel.agentId, session.sessionManager);
     signal.addEventListener('abort', abort, { once: true });
     signal.throwIfAborted();
-    activity.record('system', 'System prompt', session.agent.state.systemPrompt);
+    phase = 'running';
+    const detachActivity = activity.attach(session);
     const reportContext = () => activity.record('status', 'Context usage', formatContextUsage(session!.getContextUsage()), 'context-usage');
     reportContext();
-    unsubscribe = session.subscribe(event => {
-      // OAuth tokens can rotate during long runs. Never expose provider error bodies.
-      if (event.type === 'message_end' && event.message.role === 'assistant' && event.message.errorMessage) {
-        const cancelled = event.message.stopReason === 'aborted';
-        activity.record(cancelled ? 'status' : 'error', cancelled ? 'Generation stopped' : 'Model request error', cancelled ? 'Generation cancelled; committed effects remain.' : 'The provider request failed. Check the model connection.');
+    const detachSession = session.subscribe(event => {
+      if (event.type === 'message_end') {
+        // Recovery can remove truncated/error responses from working context.
+        // Preserve the observed outcome instead of inferring it from that context.
+        if (event.message.role === 'assistant') lastStopReason = event.message.stopReason;
+        reportContext();
       }
-      else activity.onEvent(event);
-      if (event.type === 'message_end') reportContext();
       if (hooks.sessionStore && !signal.aborted && (event.type === 'turn_end' && event.message.role === 'assistant' && !['aborted', 'error'].includes(event.message.stopReason) || event.type === 'compaction_end' && event.result && !event.aborted)) {
         // Capture the completed boundary now; a later provider turn may already be streaming
         // by the time the queued SQLite write acquires its short transaction.
@@ -78,24 +82,25 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
       }
       publicationTyping.onEvent(event);
     });
+    unsubscribe = () => { detachSession(); detachActivity(); };
     const main = session;
     if (hooks.notices?.length) {
       await main.sendCustomMessage({ customType: 'computer-release', display: false, content: `Computer control notices (platform state, not a new human request):\n${hooks.notices.join('\n')}` }, { triggerTurn: false });
       await hooks.sessionStore?.save(channel.agentId, main.sessionManager, { advancePublications: false });
       await hooks.noticesSaved?.();
     }
-    const lastAssistant = () => [...main.messages].reverse().find(item => item.role === 'assistant');
+    const stopReason = (): string | undefined => lastStopReason;
     while (inbox.hasPending() && !signal.aborted) {
       const batch = await inbox.take(signal);
       if (activityFailed) throw new Error('Activity persistence failed.');
       if (hooks.prepare) batch.messages = await hooks.prepare(batch.messages);
       if (!batch.messages.length) continue;
       const peerOnly = batch.messages.every(item => item.source);
-      published = 0; finalPublished = false;
+      published = 0; finalPublished = false; lastStopReason = undefined;
       if (batch.note) await main.sendCustomMessage({ customType: 'interruption-decision', display: false, content: batch.note }, { triggerTurn: false });
       const interrupted = await inbox.during(async () => {
         await main.prompt(batch.messages.map(item => channelInput(channel.id, item.text, item)).join('\n\n'), { expandPromptTemplates: false });
-        if (!peerOnly && !finalPublished && !signal.aborted && !main.isStreaming && lastAssistant()?.stopReason === 'stop') {
+        if (!peerOnly && !finalPublished && !signal.aborted && !main.isStreaming && stopReason() === 'stop') {
           clearTyping();
           await main.sendCustomMessage({
             customType: 'channel-delivery-reminder', display: false,
@@ -110,25 +115,31 @@ export async function runChat({ runId, signal, emit, inbox }: RunContext, config
         if (!signal.aborted) await hooks.sessionStore?.save(channel.agentId, main.sessionManager);
       }, async (messages, triageSignal) => {
         activity.record('status', 'Interruption triage', 'Evaluating new messages in a temporary full-context fork.');
-        const decision = await evaluateInterruption(main, channel.id, messages, triageSignal);
-        if (!triageSignal.aborted) activity.record('status', 'Triage decision', `${decision.action}: ${decision.reason}`);
+        const decision = await evaluateInterruption(main, channel.id, messages, triageSignal, activity.branch('Interruption triage'));
+        activity.record('status', triageSignal.aborted ? 'Triage discarded' : 'Triage decision', triageSignal.aborted ? 'Fork cancelled or superseded; its decision was not applied.' : `${decision.action}: ${decision.reason}`);
         return decision;
       }, async () => { await main.abort(); }, signal);
       clearTyping(); reportContext();
-      if (!interrupted && (signal.aborted || ['error', 'aborted'].includes(lastAssistant()?.stopReason ?? '') || (!peerOnly && !published && lastAssistant()?.stopReason !== 'stop'))) emit({ type: 'error', message: 'The agent could not finish its response. It may have been stopped, timed out, or encountered a model error.' });
-      await hooks.complete?.(batch.messages, signal.aborted || ['error', 'aborted'].includes(lastAssistant()?.stopReason ?? ''));
-      const missingFinal = !peerOnly && !interrupted && published > 0 && !finalPublished && !signal.aborted && lastAssistant()?.stopReason === 'stop';
+      if (!interrupted && (signal.aborted || ['error', 'aborted'].includes(stopReason() ?? '') || (!peerOnly && !published && stopReason() !== 'stop'))) emit({ type: 'error', message: 'The agent could not finish its response. It may have been stopped, timed out, or encountered a model error.' });
+      await hooks.complete?.(batch.messages, signal.aborted || ['error', 'aborted'].includes(stopReason() ?? ''));
+      const missingFinal = !peerOnly && !interrupted && published > 0 && !finalPublished && !signal.aborted && stopReason() === 'stop';
       if (missingFinal) emit({ type: 'error', message: 'The agent acknowledged the request but did not deliver a final reply.' });
-      activity.record('status', signal.aborted ? 'Stopped' : interrupted ? 'Interrupted for new messages' : missingFinal ? 'Final reply missing' : 'Turn complete', peerOnly ? 'Agent-thread inputs processed.' : published ? `${published} channel message(s) published.` : 'No channel message published.');
+      const providerFailed = !interrupted && !signal.aborted && ['error', 'aborted'].includes(stopReason() ?? '');
+      const incomplete = !interrupted && !finalPublished && ['length', 'pending'].includes(stopReason() ?? '');
+      runFailed ||= providerFailed || missingFinal || incomplete;
+      if (incomplete && !peerOnly && published > 0) emit({ type: 'error', message: 'The model response ended before a final reply was delivered.' });
+      activity.record(providerFailed || missingFinal || incomplete ? 'error' : 'status', signal.aborted ? 'Stopped' : interrupted ? 'Interrupted for new messages' : missingFinal ? 'Final reply missing' : providerFailed ? 'Turn failed' : incomplete ? 'Turn incomplete' : 'Turn ended', peerOnly ? 'Agent-thread inputs processed.' : published ? `${published} channel message(s) published.` : 'No channel message published.');
     }
     inbox.close();
   } catch {
+    runFailed = !signal.aborted;
+    activity.record('metadata', 'Run failure context', JSON.stringify({ phase, checkpointFailed: Boolean(checkpointFailure), activityFailed, cancelled: signal.aborted }));
     activity.record('error', signal.aborted ? 'Stopped' : 'Request failed', signal.aborted ? 'The agent run was stopped.' : checkpointFailure ? 'The private agent session could not be saved. Published messages remain in chat.' : 'The model request failed. Check the endpoint and model configuration.');
     emit({ type: 'error', message: signal.aborted ? 'The agent was stopped.' : checkpointFailure ? 'The private agent session could not be saved. Published messages remain in chat.' : 'The model request failed. Check the endpoint, model, and tool-calling support.' });
   } finally {
     inbox.close(); clearTyping(); unsubscribe(); signal.removeEventListener('abort', abort); await checkpoint; session?.dispose();
     await web?.close();
-    try { await activity.finish(signal.aborted || activityFailed); }
+    try { await activity.finish(signal.aborted, runFailed || activityFailed); }
     catch { emit({ type: 'error', message: 'Operator activity could not be saved. Published messages remain in chat.' }); }
   }
 }

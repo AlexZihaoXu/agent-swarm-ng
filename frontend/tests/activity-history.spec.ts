@@ -77,6 +77,29 @@ for (const tool of ['glance', 'read']) test(`${tool} image references label evic
   await expect(panel).toContainText(imageId);
 });
 
+for (const width of [280, 320, 390, 760]) test(`activity stays within the narrow panel at ${width}px with long metadata`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  await page.route('**/api/agents', route => route.fulfill({ json: { agents: sampleAgents.map(value => value.id === agent.id ? { ...value, name: 'A'.repeat(80) } : value), nextCursor: null } }));
+  const long = { ...entry('long', 1, JSON.stringify({ stdout: 'x'.repeat(2800), command: 'some/very/long/path/'.repeat(40) })), label: 'tool_name_'.repeat(20), kind: 'tool_result', state: 'complete', channelId: 'channel-'.repeat(15), runId: 'run-'.repeat(30), nextOffset: 3500, totalLength: 9000 };
+  const meta = { ...entry('meta', 2, 'Detailed metadata value'), kind: 'metadata', label: 'Model response details', state: 'complete' };
+  await page.route(`**/api/agents/${agent.id}/activity*`, route => route.fulfill({ json: { entries: [long, meta], nextCursor: 1, contextUsage: null } }));
+  const panel = await open(page);
+  await expect(panel).toContainText('Partial view');
+  const metadata = panel.locator('details[data-activity-kind="metadata"]');
+  await expect(metadata).not.toHaveAttribute('open', '');
+  await metadata.locator('summary').click(); await expect(metadata).toContainText('Detailed metadata value');
+  const geometry = await panel.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const viewport = element.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+    return { left: rect.left, right: rect.right, window: innerWidth, viewportWidth: viewport.clientWidth, contentWidth: viewport.scrollWidth,
+      escaped: [...element.querySelectorAll('header, details, summary, pre, button')].filter(node => node.getBoundingClientRect().right > rect.right + 1 || node.getBoundingClientRect().left < rect.left - 1).map(node => node.tagName) };
+  });
+  expect(geometry.left).toBeGreaterThanOrEqual(0); expect(geometry.right).toBeLessThanOrEqual(geometry.window);
+  expect(geometry.contentWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
+  expect(geometry.escaped).toEqual([]);
+  if (width === 320) await panel.screenshot({ path: '../.scratch/activity-review-320.png' });
+});
+
 test('retries failed history and text chunks, with replacement on an expansion revision conflict', async ({ page }) => {
   let pages = 0, fragments = 0;
   await page.route(`**/api/agents/${agent.id}/activity*`, route => ++pages === 1 ? route.fulfill({ status: 503, json: { message: 'Unavailable' } }) : route.fulfill({ json: { entries: [{ ...entry('long', 1, 'First section'), nextOffset: 13 }], nextCursor: null, contextUsage: null } }));

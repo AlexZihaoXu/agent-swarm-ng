@@ -16,7 +16,7 @@ type RequestBody = { tools?: { function: { name: string } }[]; messages: { role:
 let server: Server;
 let baseUrl: string;
 let folder: string;
-let behavior: 'tool' | 'raw' | 'wrong-channel' | 'after-reminder' | 'http-error' | 'publication-error' | 'research' | 'ack-raw' | 'ack-silent' | 'history' | 'triage-interrupt' | 'multipart' | 'dm-typing' = 'tool';
+let behavior: 'tool' | 'raw' | 'wrong-channel' | 'after-reminder' | 'http-error' | 'publication-error' | 'research' | 'ack-raw' | 'ack-silent' | 'history' | 'triage-interrupt' | 'multipart' | 'dm-typing' | 'truncated' = 'tool';
 let captured: RequestBody[] = [];
 let authorization: string | undefined;
 let argumentGate: Promise<void> | undefined;
@@ -35,7 +35,7 @@ beforeAll(async () => {
     const hasTool = body.messages.some(message => message.role === 'tool');
     const reminded = JSON.stringify(body.messages).includes('Automatic channel reminder:');
     const acknowledgmentCase = behavior === 'ack-raw' || behavior === 'ack-silent';
-    const shouldPublish = behavior === 'dm-typing' ? !hasTool : acknowledgmentCase ? !hasTool || (behavior === 'ack-raw' && reminded) : behavior !== 'raw' && !(behavior === 'publication-error' && hasTool) && (behavior !== 'after-reminder' || reminded);
+    const shouldPublish = behavior === 'dm-typing' ? !hasTool : acknowledgmentCase ? !hasTool || (behavior === 'ack-raw' && reminded) : behavior !== 'raw' && behavior !== 'truncated' && !(behavior === 'publication-error' && hasTool) && (behavior !== 'after-reminder' || reminded);
     if (request.url !== '/v1/chat/completions') { response.writeHead(404).end(); return; }
     const system = body.messages.find(message => message.role === 'system')?.content;
     const channelId = (typeof system === 'string' ? system : '').match(/channel is ([\w-]+)\./)?.[1];
@@ -69,7 +69,7 @@ beforeAll(async () => {
         chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(split) } }] });
       } else chunk({ tool_calls: [{ index: 0, function: { arguments: args } }] });
     }
-    chunk({}, shouldPublish ? 'tool_calls' : 'stop');
+    chunk({}, behavior === 'truncated' ? 'length' : shouldPublish ? 'tool_calls' : 'stop');
     response.end('data: [DONE]\n\n');
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -528,8 +528,8 @@ describe('Pi chat and platform channel boundary', () => {
     } finally { await app.close(); }
   });
 
-  it('does not remind after a failed model request', async () => {
-    behavior = 'http-error'; captured = [];
+  it.each(['http-error', 'truncated'] as const)('records an unsuccessful model request without reminding (%s)', async mode => {
+    behavior = mode; captured = [];
     const app = await testApp();
     try {
       const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
@@ -541,7 +541,8 @@ describe('Pi chat and platform channel boundary', () => {
       const saved = (await app.inject(`/api/agents/${agent.id}/activity`)).body;
       expect(saved).not.toContain('!literal-key-$NOT_AN_ENV_LOOKUP');
       expect(saved).not.toContain('PRIVATE PROVIDER ERROR');
-      expect(saved).toContain('The provider request failed. Check the model connection.');
+      if (mode === 'http-error') expect(saved).toContain('The provider request failed. Check the model connection.');
+      expect(saved).toContain('Run failed');
     } finally { await app.close(); }
   });
 

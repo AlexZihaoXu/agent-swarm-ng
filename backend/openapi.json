@@ -88,6 +88,12 @@
                 "enum": [
                   "error"
                 ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "metadata"
+                ]
               }
             ]
           },
@@ -99,6 +105,16 @@
           },
           "timestamp": {
             "type": "number"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "sequence": {
             "type": "integer"
@@ -558,6 +574,12 @@
                                 "enum": [
                                   "error"
                                 ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "metadata"
+                                ]
                               }
                             ]
                           },
@@ -569,6 +591,16 @@
                           },
                           "timestamp": {
                             "type": "number"
+                          },
+                          "state": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "sequence": {
                             "type": "integer"
@@ -691,6 +723,12 @@
                                   "enum": [
                                     "error"
                                   ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "metadata"
+                                  ]
                                 }
                               ]
                             },
@@ -702,6 +740,16 @@
                             },
                             "timestamp": {
                               "type": "number"
+                            },
+                            "state": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             },
                             "sequence": {
                               "type": "integer"
@@ -891,6 +939,12 @@
                           "enum": [
                             "error"
                           ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "metadata"
+                          ]
                         }
                       ]
                     },
@@ -902,6 +956,16 @@
                     },
                     "timestamp": {
                       "type": "number"
+                    },
+                    "state": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "sequence": {
                       "type": "integer"
