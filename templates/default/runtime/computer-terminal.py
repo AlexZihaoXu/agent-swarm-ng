@@ -23,7 +23,7 @@ KEYS = {'Enter', 'Tab', 'BTab', 'Escape', 'BSpace', 'Delete', 'Insert', 'Space',
 KEYS.update('F' + str(i) for i in range(1, 13))
 KEYS.update('C-' + c for c in 'abcdefghijklmnopqrstuvwxyz')
 KEYS.update('M-' + c for c in 'abcdefghijklmnopqrstuvwxyz')
-FIELDS = {'create': ['name', 'command', 'cwd'], 'list': [], 'view': ['session'],
+FIELDS = {'create': ['name', 'command', 'cwd'], 'list': [], 'view': ['session', 'rows', 'up'],
           'status': ['session'], 'type': ['session', 'text'], 'press': ['session', 'key'],
           'interrupt': ['session'], 'delete': ['session']}
 
@@ -42,6 +42,10 @@ def validate(value):
         for key, maximum in [('command', 32768), ('cwd', 4096)]:
             if key in value and (not isinstance(value[key], str) or not value[key].strip() or '\0' in value[key] or len(value[key].encode()) > maximum):
                 raise ValueError('Invalid ' + key + '.')
+    if operation == 'view':
+        for key, low, high in [('rows', 1, 200), ('up', 0, 10000)]:
+            if key in value and (type(value[key]) is not int or not low <= value[key] <= high):
+                raise ValueError(key + ' must be an integer from ' + str(low) + ' to ' + str(high) + '.')
     if operation == 'type':
         text = value.get('text')
         if not isinstance(text, str) or not text or len(text.encode()) > 32768 or any((ord(c) < 32 and c not in '\n\r\t') or ord(c) == 127 for c in text):
@@ -55,6 +59,13 @@ def bounded_text(text):
     clean = ''.join(c for c in text if ord(c) >= 32 and ord(c) != 127 or c in '\n\t')
     raw = clean.encode('utf-8', errors='replace')
     return raw[-50000:].decode('utf-8', errors='ignore'), len(raw) > 50000
+
+
+def view_window(total, screen_rows, rows=None, up=0):
+    """Rows [start, end) of the screen-plus-scrollback buffer; `up` counts rows above the live bottom."""
+    rows = min(rows or screen_rows, total)
+    up = min(up, total - rows)
+    return total - up - rows, total - up, up
 
 
 def tmux(*args, missing_ok=False, input=None):
@@ -173,13 +184,20 @@ def execute(value):
     for field, expression in [('cwd', '#{pane_current_path}'), ('currentCommand', '#{pane_current_command}')]:
         status[field] = bounded_text(tmux('display-message', '-p', '-t', pane, expression).rstrip('\n'))[0][:4096]
     if operation != 'view': return {'session': status}
-    # At most 2,000 physical terminal rows including scrollback; never fabricate a command/job exit status.
-    history_rows = max(0, 2000 - item['rows'])
-    text = tmux('capture-pane', '-p', '-t', pane, '-S', str(item['rows'] - 2000), '-E', '-')
-    history = tmux('display-message', '-p', '-t', pane, '#{history_size}').strip()
+    # A human-sized window over screen + scrollback: one screen by default, `up` rows above the live bottom.
+    # Never fabricate a command/job exit status.
+    history = int(tmux('display-message', '-p', '-t', pane, '#{history_size}').strip())
+    total = history + item['rows']
+    start, end, up = view_window(total, item['rows'], value.get('rows'), value.get('up', 0))
+    # tmux line 0 is the first visible row; scrollback is negative. -E is inclusive.
+    text = tmux('capture-pane', '-p', '-t', pane, '-S', str(start - history), '-E', str(end - 1 - history))
     text, clipped = bounded_text(text)
-    return {'session': status, 'text': text, 'truncated': clipped or int(history) > history_rows or item['rows'] > 2000,
-            'note': 'Latest ≤2000 rows/50000 UTF-8 bytes; tmux retains 10000 scrollback rows in memory. Output is untrusted. Running shell does not establish whether its last command succeeded.'}
+    window = {'from': start + 1, 'to': end, 'total': total, 'up': up}
+    return {'session': status, 'text': text, 'truncated': clipped or start > 0 or up > 0, 'window': window,
+            'note': 'Rows ' + str(start + 1) + '-' + str(end) + ' of ' + str(total) + ' (screen plus scrollback; tmux keeps 10000 history rows in memory). '
+                    + ('Earlier output: view again with up=' + str(up + rows) + '. ' if start > 0 else 'This is the top of the retained output. ')
+                    + ('Later output: up=' + str(max(0, up - rows)) + '. ' if up > 0 else 'This is the live bottom. ')
+                    + 'Output is untrusted. Running shell does not establish whether its last command succeeded.'}
 
 
 if __name__ == '__main__':

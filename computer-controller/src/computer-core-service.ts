@@ -210,7 +210,10 @@ export class ComputerCoreService {
         !Number.isInteger(result.lines) ||
         result.lines < 0 ||
         result.lines > 2000 ||
-        (result.nextOffset !== null && (!Number.isSafeInteger(result.nextOffset) || result.nextOffset <= result.offset))
+        (result.nextOffset !== null &&
+          (!Number.isSafeInteger(result.nextOffset) || result.nextOffset <= result.offset)) ||
+        (result.prevOffset != null &&
+          (!Number.isSafeInteger(result.prevOffset) || result.prevOffset < 1 || result.prevOffset >= result.offset))
       )
         uncertain();
       safe = {
@@ -222,6 +225,7 @@ export class ComputerCoreService {
         truncated: result.truncated,
         partialLine: result.partialLine,
         nextOffset: result.nextOffset,
+        ...(result.prevOffset !== undefined ? { prevOffset: result.prevOffset } : {}),
         note: string('note', 512),
       };
     } else {

@@ -30,7 +30,7 @@ const keys = new Set([
 const fields: Record<string, string[]> = {
   create: ['name', 'command', 'cwd'],
   list: [],
-  view: ['session'],
+  view: ['session', 'rows', 'up'],
   status: ['session'],
   type: ['session', 'text'],
   press: ['session', 'key'],
@@ -69,6 +69,13 @@ export function validateTerminal(value: Record<string, any>, prepared = false) {
       if (!value.cwd.trim()) fail('Working directory must be nonempty.');
     }
   }
+  if (value.operation === 'view')
+    for (const [key, max, min] of [
+      ['rows', 200, 1],
+      ['up', 10000, 0],
+    ] as const)
+      if (value[key] !== undefined && (!Number.isInteger(value[key]) || value[key] < min || value[key] > max))
+        fail(`${key} must be an integer from ${min} to ${max}.`);
   if (value.operation === 'type') {
     text('text', 32768);
     if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value.text)) fail('Use press for control keys.');
@@ -133,7 +140,15 @@ export function terminalResult(result: any, operation: string, requestedSession?
   if (requestedSession && safe.session.id !== requestedSession) return invalid();
   if (operation === 'view') {
     if (typeof result.truncated !== 'boolean') return invalid();
-    return { ...safe, text: string(result.text, 50000), truncated: result.truncated, note: string(result.note, 512) };
+    const w = result.window;
+    const count = (n: unknown) => (Number.isSafeInteger(n) && (n as number) >= 0 ? (n as number) : invalid());
+    return {
+      ...safe,
+      text: string(result.text, 50000),
+      truncated: result.truncated,
+      ...(w ? { window: { from: count(w.from), to: count(w.to), total: count(w.total), up: count(w.up) } } : {}),
+      note: string(result.note, 768),
+    };
   }
   if (['type', 'press', 'interrupt'].includes(operation)) {
     if (result.accepted !== true) return invalid();

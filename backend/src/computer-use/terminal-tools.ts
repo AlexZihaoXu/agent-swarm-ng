@@ -36,7 +36,23 @@ export const terminalParameters = {
     { additionalProperties: false },
   ),
   list: Type.Object({}, { additionalProperties: false }),
-  view: Type.Object(target, { additionalProperties: false }),
+  view: Type.Object(
+    {
+      ...target,
+      rows: Type.Optional(
+        Type.Integer({ minimum: 1, maximum: 200, description: 'Rows to show (default: one 36-row screen).' }),
+      ),
+      up: Type.Optional(
+        Type.Integer({
+          minimum: 0,
+          maximum: 10000,
+          description:
+            'Scroll position: rows above the live bottom (default 0 = bottom). Use the value the result suggests.',
+        }),
+      ),
+    },
+    { additionalProperties: false },
+  ),
   type: Type.Object(
     { ...target, text: Type.String({ minLength: 1, maxLength: 32768 }) },
     { additionalProperties: false },
@@ -59,7 +75,7 @@ const descriptions = {
   create:
     'Create a named persistent tmux terminal (32/computer, names unique ignoring case). Default interactive Bash; optional command runs bash -lc and leaves an exited pane/output when finished. cwd defaults /workspace; ~/ is /home/agent. Returns stable session ID. Fixed 120×36 terminal; browser viewing does not resize it. Does not wait for a command to finish.',
   list: 'List managed tmux sessions on this computer. Shared with other authorized agents and the operator; not private agent memory.',
-  view: 'Read latest ≤2000 rows/50000 UTF-8 bytes of plain terminal screen/scrollback, with explicit truncation. tmux retains10000 history rows in memory, not a permanent log. This is a snapshot, not incremental stdout/stderr; full-screen applications may redraw it.',
+  view: 'Look at the terminal like a human: by default the current 36-row screen at the live bottom. Scroll with up (rows above the bottom) and rows (window size ≤200); the result reports the row range, total rows, and the up value for earlier or later output. Plain text ≤50000 UTF-8 bytes. tmux retains 10000 history rows in memory, not a permanent log. A snapshot, not incremental stdout/stderr; full-screen applications may redraw it.',
   type: 'Paste literal text into a live session (≤32768 UTF-8 bytes); never interpret text as tmux key names. No Enter is appended. Bracketed paste is used where supported; supplied newlines may execute commands. Use press Enter to submit and view to verify. Control keys belong in press.',
   press:
     'Send one enumerated tmux key: Enter, Tab/BTab, Escape, BSpace, Delete/Insert, Space, arrows, Home/End/PageUp/PageDown, F1..F12, C-a..C-z, M-a..M-z. No raw tmux commands or arbitrary targets.',

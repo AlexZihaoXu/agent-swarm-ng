@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 
 MAX_TEXT = 50000
+DEFAULT_LINES = 200  # one page; agents ask for more (<=2000) or page with offset/prevOffset/nextOffset
 MAX_FILE = 16 * 1024 * 1024
 MAX_IMAGE = 2 * 1024 * 1024
 
@@ -50,7 +51,7 @@ def image(path, head):
 
 
 def read(path, value):
-    offset, limit = value.get('offset', 1), value.get('limit', 2000)
+    offset, limit = value.get('offset', 1), value.get('limit', DEFAULT_LINES)
     if type(offset) is not int or offset < 1 or type(limit) is not int or not 1 <= limit <= 2000:
         raise ValueError('offset is a positive line number; limit must be 1..2000.')
     if not stat.S_ISREG(path.stat().st_mode):
@@ -81,7 +82,7 @@ def read(path, value):
     if b'\0' in output: raise ValueError('Binary file is not a supported image or UTF-8 text.')
     encoded = output.decode('utf-8', errors='replace').encode('utf-8')
     if len(encoded) > MAX_TEXT: partial = more = True
-    return {'type': 'text', 'path': str(path), 'text': encoded[:MAX_TEXT].decode('utf-8', errors='ignore'), 'offset': offset, 'lines': count, 'truncated': more, 'partialLine': partial, 'nextOffset': offset + count if more and not partial else None, 'note': 'A partial long line requires bounded bash extraction; UTF-8 decoding replaces invalid bytes.' if partial else ''}
+    return {'type': 'text', 'path': str(path), 'text': encoded[:MAX_TEXT].decode('utf-8', errors='ignore'), 'offset': offset, 'lines': count, 'truncated': more, 'partialLine': partial, 'nextOffset': offset + count if more and not partial else None, 'prevOffset': max(1, offset - limit) if offset > 1 else None, 'note': 'A partial long line requires bounded bash extraction; UTF-8 decoding replaces invalid bytes.' if partial else ''}
 
 
 def snapshot(path):
