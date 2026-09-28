@@ -5,7 +5,9 @@ async function testEndpoint(fetcher: typeof fetch, body: Record<string, unknown>
   const app = await buildApp({ fetcher });
   try {
     return await app.inject({ method: 'POST', url: '/api/model-endpoints/test', payload: body });
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 }
 
 const body = { baseUrl: 'https://models.example/v1/', apiKey: 'test-secret' };
@@ -18,7 +20,11 @@ describe('OpenAI-compatible endpoint connection test', () => {
     expect(response.json()).toEqual({ models: ['model-a', 'model-b'] });
     const [url, options] = fetcher.mock.calls[0];
     expect(String(url)).toBe('https://models.example/v1/models');
-    expect(options).toMatchObject({ method: 'GET', redirect: 'error', headers: { Authorization: 'Bearer test-secret' } });
+    expect(options).toMatchObject({
+      method: 'GET',
+      redirect: 'error',
+      headers: { Authorization: 'Bearer test-secret' },
+    });
     expect(options.signal).toBeInstanceOf(AbortSignal);
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.body).not.toContain('test-secret');
@@ -31,7 +37,13 @@ describe('OpenAI-compatible endpoint connection test', () => {
     expect(fetcher.mock.calls[0][1].headers).not.toHaveProperty('Authorization');
   });
 
-  it.each(['file:///etc/passwd', 'ftp://example.com', 'https://user:password@example.com/v1', 'https://example.com/v1?key=secret', 'not a URL'])('rejects invalid base URL %s without fetching', async baseUrl => {
+  it.each([
+    'file:///etc/passwd',
+    'ftp://example.com',
+    'https://user:password@example.com/v1',
+    'https://example.com/v1?key=secret',
+    'not a URL',
+  ])('rejects invalid base URL %s without fetching', async baseUrl => {
     const fetcher = vi.fn();
     const response = await testEndpoint(fetcher as unknown as typeof fetch, { baseUrl });
     expect(response.statusCode).toBe(400);
@@ -46,10 +58,13 @@ describe('OpenAI-compatible endpoint connection test', () => {
     expect(response.body).not.toContain('test-secret');
   });
 
-  it.each([{ choices: [] }, { data: [{ name: 'missing id' }] }, { data: 'invalid' }])('rejects malformed model list %j', async data => {
-    const fetcher = vi.fn().mockResolvedValue(Response.json(data));
-    expect((await testEndpoint(fetcher as unknown as typeof fetch, body)).statusCode).toBe(502);
-  });
+  it.each([{ choices: [] }, { data: [{ name: 'missing id' }] }, { data: 'invalid' }])(
+    'rejects malformed model list %j',
+    async data => {
+      const fetcher = vi.fn().mockResolvedValue(Response.json(data));
+      expect((await testEndpoint(fetcher as unknown as typeof fetch, body)).statusCode).toBe(502);
+    },
+  );
 
   it('bounds the response body', async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response('x'.repeat(1_048_577)));

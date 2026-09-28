@@ -26,54 +26,110 @@ export function useModelSelection(initial?: { endpointId: string; model: string;
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true); setLoadFailed(false); setError('');
+    setLoading(true);
+    setLoadFailed(false);
+    setError('');
     void Promise.all([
       api.GET('/api/model-endpoints', { signal: controller.signal }),
       api.GET('/api/providers/openai-codex', { signal: controller.signal }),
-    ]).then(([{ data, error: endpointError }, { data: codex }]) => {
-      if (controller.signal.aborted) return;
-      if (endpointError && !data) setLoadFailed(true);
-      setCodexModels(codex?.connected ? codex.models : []);
-      setEndpoints([...(codex?.connected ? [{ id: codexConnection, name: 'OpenAI Codex (ChatGPT)', baseUrl: '' }] : []), ...(data ?? [])]);
-      setLoading(false);
-    }).catch(() => { if (!controller.signal.aborted) { setLoadFailed(true); setLoading(false); } });
+    ])
+      .then(([{ data, error: endpointError }, { data: codex }]) => {
+        if (controller.signal.aborted) return;
+        if (endpointError && !data) setLoadFailed(true);
+        setCodexModels(codex?.connected ? codex.models : []);
+        setEndpoints([
+          ...(codex?.connected ? [{ id: codexConnection, name: 'OpenAI Codex (ChatGPT)', baseUrl: '' }] : []),
+          ...(data ?? []),
+        ]);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setLoadFailed(true);
+          setLoading(false);
+        }
+      });
     return () => controller.abort();
   }, [attempt]);
 
   useEffect(() => {
-    setModels([]); if (!pristine) setModel(''); setError('');
+    setModels([]);
+    if (!pristine) setModel('');
+    setError('');
     const endpoint = endpoints.find(item => item.id === endpointId);
     if (!endpoint) return;
-    if (endpoint.id === codexConnection) { setModels(codexModels); setLoading(false); return; }
+    if (endpoint.id === codexConnection) {
+      setModels(codexModels);
+      setLoading(false);
+      return;
+    }
     const controller = new AbortController();
     setLoading(true);
-    void api.POST('/api/model-endpoints/test', { body: { endpointId, baseUrl: endpoint.baseUrl }, signal: controller.signal }).then(({ data, error: testError }) => {
-      if (controller.signal.aborted) return;
-      if (testError || !data) setError(testError?.message ?? 'Could not list models.');
-      else setModels(data.models);
-    }).catch(() => { if (!controller.signal.aborted) setError('Could not list models.'); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    void api
+      .POST('/api/model-endpoints/test', { body: { endpointId, baseUrl: endpoint.baseUrl }, signal: controller.signal })
+      .then(({ data, error: testError }) => {
+        if (controller.signal.aborted) return;
+        if (testError || !data) setError(testError?.message ?? 'Could not list models.');
+        else setModels(data.models);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setError('Could not list models.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
     return () => controller.abort();
   }, [endpointId, endpoints, codexModels]);
 
   useEffect(() => {
-    setLevels([]); if (!pristine) setThinking('off');
+    setLevels([]);
+    if (!pristine) setThinking('off');
     if (!model) return;
     const controller = new AbortController();
-    void api.GET('/api/agents/model-capabilities', { params: { query: { model, endpointId } }, signal: controller.signal }).then(({ data }) => {
-      if (controller.signal.aborted) return;
-      if (!data) { setError('Could not check model capabilities.'); return; }
-      setLevels(data.thinkingLevels);
-      setThinking(current => pristine && data.thinkingLevels.includes(current) ? current
-        : data.thinkingLevels.includes('off') ? 'off' : data.thinkingLevels.includes('medium') ? 'medium' : data.thinkingLevels[0]);
-    }).catch(() => { if (!controller.signal.aborted) setError('Could not check model capabilities.'); });
+    void api
+      .GET('/api/agents/model-capabilities', { params: { query: { model, endpointId } }, signal: controller.signal })
+      .then(({ data }) => {
+        if (controller.signal.aborted) return;
+        if (!data) {
+          setError('Could not check model capabilities.');
+          return;
+        }
+        setLevels(data.thinkingLevels);
+        setThinking(current =>
+          pristine && data.thinkingLevels.includes(current)
+            ? current
+            : data.thinkingLevels.includes('off')
+              ? 'off'
+              : data.thinkingLevels.includes('medium')
+                ? 'medium'
+                : data.thinkingLevels[0],
+        );
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setError('Could not check model capabilities.');
+      });
     return () => controller.abort();
   }, [model, endpointId]);
 
   return {
-    endpoints, endpointId, models, model, levels, thinking, loading, error: loadFailed ? 'Could not load endpoints.' : error, loadFailed,
-    chooseEndpoint: (id: string) => { setPristine(false); setEndpointId(id); },
-    chooseModel: (value: string) => { setPristine(false); setModel(value); },
-    setThinking, reload: () => setAttempt(value => value + 1),
+    endpoints,
+    endpointId,
+    models,
+    model,
+    levels,
+    thinking,
+    loading,
+    error: loadFailed ? 'Could not load endpoints.' : error,
+    loadFailed,
+    chooseEndpoint: (id: string) => {
+      setPristine(false);
+      setEndpointId(id);
+    },
+    chooseModel: (value: string) => {
+      setPristine(false);
+      setModel(value);
+    },
+    setThinking,
+    reload: () => setAttempt(value => value + 1),
   };
 }

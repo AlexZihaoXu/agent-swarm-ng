@@ -8,7 +8,8 @@ it('grants read-only knowledge tools to a server-bound agent and rechecks existe
   const plugin = new SwarmKnowledgePlugin(store);
   const tools = plugin.toolsFor('agent-a');
   expect(tools.map(tool => tool.name)).toEqual(['list_knowledge', 'search_knowledge', 'read_knowledge']);
-  const call = (name: string, args: object = {}) => tools.find(tool => tool.name === name)!.execute('call', args as never, undefined, undefined, undefined as never);
+  const call = (name: string, args: object = {}) =>
+    tools.find(tool => tool.name === name)!.execute('call', args as never, undefined, undefined, undefined as never);
   expect(((await call('list_knowledge')).details as any).entries[0].id).toBe('swarm');
   exists = false;
   await expect(call('read_knowledge', { id: 'swarm' })).rejects.toThrow('not granted');

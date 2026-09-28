@@ -11,7 +11,9 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:5173', browserName: 'chromium' },
   webServer: [
     {
-      command: `rm -rf "${data}" && bun run --cwd ../backend start`, url: 'http://127.0.0.1:3000/api/health', reuseExistingServer: false,
+      command: `rm -rf "${data}" && bun run --cwd ../backend start`,
+      url: 'http://127.0.0.1:3000/api/health',
+      reuseExistingServer: false,
       env: { DATABASE_URL: `file:${data}/platform.db`, COMPUTER_CONTROLLER_URL: '' },
     },
     { command: 'bun run dev', url: 'http://127.0.0.1:5173', reuseExistingServer: false },

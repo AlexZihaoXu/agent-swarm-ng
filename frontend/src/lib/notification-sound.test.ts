@@ -3,10 +3,16 @@ import { createNotificationSound } from './notification-sound';
 
 afterEach(() => vi.unstubAllGlobals());
 function audio() {
-  const start = vi.fn(), stop = vi.fn(), decode = vi.fn(async () => ({})), close = vi.fn(async () => {});
+  const start = vi.fn(),
+    stop = vi.fn(),
+    decode = vi.fn(async () => ({})),
+    close = vi.fn(async () => {});
   class Context {
-    state = 'suspended'; destination = {};
-    resume = vi.fn(async () => { this.state = 'running'; });
+    state = 'suspended';
+    destination = {};
+    resume = vi.fn(async () => {
+      this.state = 'running';
+    });
     close = close;
     decodeAudioData = decode;
     createGain = () => ({ gain: { value: 1 }, connect: vi.fn() });

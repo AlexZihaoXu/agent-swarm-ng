@@ -8,10 +8,22 @@ import type { ComputerController, ComputerObservation } from './computer-control
 function controller(observed: Map<string, ComputerObservation>, calls: string[]): ComputerController {
   const noop = async () => {};
   return {
-    create: noop, remove: noop, updateResources: noop, replaceStopped: noop, preview: async () => null, pointer: noop, start: noop,
-    limits: async () => ({ cpuCores: { min: 1, max: 8, default: 4 }, memoryGiB: { min: 1, max: 16, default: 4 }, timezoneDefault: 'America/Toronto' }),
+    create: noop,
+    remove: noop,
+    updateResources: noop,
+    replaceStopped: noop,
+    preview: async () => null,
+    pointer: noop,
+    start: noop,
+    limits: async () => ({
+      cpuCores: { min: 1, max: 8, default: 4 },
+      memoryGiB: { min: 1, max: 16, default: 4 },
+      timezoneDefault: 'America/Toronto',
+    }),
     observe: async () => observed,
-    async stop(id) { calls.push(`stop:${id}`); },
+    async stop(id) {
+      calls.push(`stop:${id}`);
+    },
   };
 }
 
@@ -27,15 +39,26 @@ describe('stopped-computer reconciliation', () => {
       await store.markRunning(running.computer.id);
       await store.setDesiredState(stopped.computer.id, 'stopped');
       const observed = new Map<string, ComputerObservation>([
-        [stopped.computer.id, { status: 'running', cpuPercent: 5, memoryBytes: 1, memoryLimitBytes: 4_294_967_296, cpuCount: 4 }],
-        [running.computer.id, { status: 'running', cpuPercent: 5, memoryBytes: 1, memoryLimitBytes: 4_294_967_296, cpuCount: 4 }],
-        [halfBuilt.computer.id, { status: 'running', cpuPercent: 5, memoryBytes: 1, memoryLimitBytes: 4_294_967_296, cpuCount: 4 }],
+        [
+          stopped.computer.id,
+          { status: 'running', cpuPercent: 5, memoryBytes: 1, memoryLimitBytes: 4_294_967_296, cpuCount: 4 },
+        ],
+        [
+          running.computer.id,
+          { status: 'running', cpuPercent: 5, memoryBytes: 1, memoryLimitBytes: 4_294_967_296, cpuCount: 4 },
+        ],
+        [
+          halfBuilt.computer.id,
+          { status: 'running', cpuPercent: 5, memoryBytes: 1, memoryLimitBytes: 4_294_967_296, cpuCount: 4 },
+        ],
       ]);
       const calls: string[] = [];
       const result = await reconcileStoppedComputers(store, controller(observed, calls));
       expect(calls).toEqual([`stop:${stopped.computer.id}`]);
       expect(result).toMatchObject({ considered: 1, stopped: 1, failed: 0 });
-    } finally { await database.close(); }
+    } finally {
+      await database.close();
+    }
   });
 
   it('reports a controller failure without throwing, so startup still completes', async () => {
@@ -45,11 +68,23 @@ describe('stopped-computer reconciliation', () => {
       const record = await store.reserve('Off desk', crypto.randomUUID());
       await store.markRunning(record.computer.id);
       await store.setDesiredState(record.computer.id, 'stopped');
-      const failing = controller(new Map([[record.computer.id, { status: 'running', cpuPercent: 1, memoryBytes: 1, memoryLimitBytes: 4_294_967_296, cpuCount: 4 }]]), []);
-      failing.stop = async () => { throw new Error('controller offline'); };
+      const failing = controller(
+        new Map([
+          [
+            record.computer.id,
+            { status: 'running', cpuPercent: 1, memoryBytes: 1, memoryLimitBytes: 4_294_967_296, cpuCount: 4 },
+          ],
+        ]),
+        [],
+      );
+      failing.stop = async () => {
+        throw new Error('controller offline');
+      };
       const result = await reconcileStoppedComputers(store, failing);
       expect(result).toMatchObject({ considered: 1, stopped: 0, failed: 1 });
-    } finally { await database.close(); }
+    } finally {
+      await database.close();
+    }
   });
 });
 
@@ -61,16 +96,31 @@ describe('stopped-computer watcher', () => {
       const off = await store.reserve('Kept off', crypto.randomUUID());
       await store.markRunning(off.computer.id);
       await store.setDesiredState(off.computer.id, 'stopped');
-      const observed = new Map<string, ComputerObservation>([[off.computer.id, { status: 'exited', cpuPercent: null, memoryBytes: null, memoryLimitBytes: null, cpuCount: null }]]);
+      const observed = new Map<string, ComputerObservation>([
+        [
+          off.computer.id,
+          { status: 'exited', cpuPercent: null, memoryBytes: null, memoryLimitBytes: null, cpuCount: null },
+        ],
+      ]);
       const calls: string[] = [];
       const fake = controller(observed, calls);
       const stopWatching = watchStoppedComputers(() => reconcileStoppedComputers(store, fake), 50);
       try {
         await new Promise(resolve => setTimeout(resolve, 200));
         expect(calls).toEqual([]); // nothing to correct while it stays off
-        observed.set(off.computer.id, { status: 'running', cpuPercent: 1, memoryBytes: 1, memoryLimitBytes: 1, cpuCount: 1 }); // controller restarts and revives it
+        observed.set(off.computer.id, {
+          status: 'running',
+          cpuPercent: 1,
+          memoryBytes: 1,
+          memoryLimitBytes: 1,
+          cpuCount: 1,
+        }); // controller restarts and revives it
         await vi.waitFor(() => expect(calls).toEqual([`stop:${off.computer.id}`]), { timeout: 2000 });
-      } finally { stopWatching(); }
-    } finally { await database.close(); }
+      } finally {
+        stopWatching();
+      }
+    } finally {
+      await database.close();
+    }
   });
 });

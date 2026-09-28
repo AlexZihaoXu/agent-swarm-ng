@@ -11,5 +11,10 @@ export function listTime(timestamp: number, now: Date = new Date(), locale?: str
   if (days === 1) return 'Yesterday';
   if (days > 1 && days < 7) return new Date(timestamp).toLocaleDateString(locale, { weekday: 'short' });
   const date = new Date(timestamp);
-  return date.toLocaleDateString(locale, date.getFullYear() === now.getFullYear() ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
+  return date.toLocaleDateString(
+    locale,
+    date.getFullYear() === now.getFullYear()
+      ? { month: 'short', day: 'numeric' }
+      : { month: 'short', day: 'numeric', year: 'numeric' },
+  );
 }

@@ -1,16 +1,38 @@
 import { test, expect, type Page } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
-const real = { id: 'real-agent', name: 'Real agent', endpointId: 'saved-endpoint', model: 'test-model', thinkingLevel: 'off', channelId: 'platform-channel', createdAt: Date.now(), lastMessage: null };
+const real = {
+  id: 'real-agent',
+  name: 'Real agent',
+  endpointId: 'saved-endpoint',
+  model: 'test-model',
+  thinkingLevel: 'off',
+  channelId: 'platform-channel',
+  createdAt: Date.now(),
+  lastMessage: null,
+};
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/api/model-endpoints', route => route.fulfill({ json: [{ id: 'saved-endpoint', name: 'Test endpoint', baseUrl: 'http://test.invalid/v1', hasApiKey: true }] }));
-  await page.route('**/api/model-endpoints/test', route => route.fulfill({ json: { models: ['test-model', 'gpt-5'] } }));
-  await page.route('**/api/agents/model-capabilities?*', route => route.fulfill({ json: route.request().url().includes('gpt-5') ? { thinkingLevels: ['off', 'low', 'medium', 'high'], reasoning: true } : { thinkingLevels: ['off'], reasoning: false } }));
-  const saved: typeof real[] = sampleAgents.map(agent => ({ ...agent, lastMessage: null }));
+  await page.route('**/api/model-endpoints', route =>
+    route.fulfill({
+      json: [{ id: 'saved-endpoint', name: 'Test endpoint', baseUrl: 'http://test.invalid/v1', hasApiKey: true }],
+    }),
+  );
+  await page.route('**/api/model-endpoints/test', route =>
+    route.fulfill({ json: { models: ['test-model', 'gpt-5'] } }),
+  );
+  await page.route('**/api/agents/model-capabilities?*', route =>
+    route.fulfill({
+      json: route.request().url().includes('gpt-5')
+        ? { thinkingLevels: ['off', 'low', 'medium', 'high'], reasoning: true }
+        : { thinkingLevels: ['off'], reasoning: false },
+    }),
+  );
+  const saved: (typeof real)[] = sampleAgents.map(agent => ({ ...agent, lastMessage: null }));
   await page.route('**/api/agents', route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: { agents: saved, nextCursor: null } });
-    const created = { ...real, ...route.request().postDataJSON() }; saved.push(created);
+    const created = { ...real, ...route.request().postDataJSON() };
+    saved.push(created);
     return route.fulfill({ json: created });
   });
   await page.route('**/api/channels/*/messages*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));
@@ -18,7 +40,9 @@ test.beforeEach(async ({ page }) => {
 
 async function configure(page: Page, model = 'test-model') {
   await page.goto('/');
-  await page.getByRole('complementary', { name: 'Agents', exact: true }).click({ button: 'right', position: { x: 40, y: 360 } });
+  await page
+    .getByRole('complementary', { name: 'Agents', exact: true })
+    .click({ button: 'right', position: { x: 40, y: 360 } });
   await page.getByRole('menuitem', { name: 'Create new agent' }).click();
   await page.getByLabel('Agent name', { exact: true }).fill(real.name);
   await page.getByLabel('Endpoint', { exact: true }).click();
@@ -28,7 +52,8 @@ async function configure(page: Page, model = 'test-model') {
   await expect(page.getByRole('listbox', { includeHidden: true })).toHaveCount(0);
 }
 
-const chatAvatar = (page: Page) => page.getByRole('region', { name: `Conversation with ${real.name}` }).getByTestId('chat-avatar');
+const chatAvatar = (page: Page) =>
+  page.getByRole('region', { name: `Conversation with ${real.name}` }).getByTestId('chat-avatar');
 
 async function createAndOpenChat(page: Page) {
   await page.getByRole('button', { name: 'Create agent', exact: true }).click();
@@ -36,40 +61,83 @@ async function createAndOpenChat(page: Page) {
   await expect(page.getByRole('region', { name: `Conversation with ${real.name}` })).toBeVisible();
 }
 
-test('restores a saved agent and published messages after refresh without storing them in the browser', async ({ page }) => {
+test('restores a saved agent and published messages after refresh without storing them in the browser', async ({
+  page,
+}) => {
   let savedMessages: object[] = [];
-  await page.route('**/api/channels/*/messages*', route => route.fulfill({ json: { messages: savedMessages, nextCursor: null } }));
+  await page.route('**/api/channels/*/messages*', route =>
+    route.fulfill({ json: { messages: savedMessages, nextCursor: null } }),
+  );
   await page.route('**/api/chat', async route => {
     const body = route.request().postDataJSON();
     expect(body.agentId).toBe(real.id);
     expect(body).not.toHaveProperty('history');
     savedMessages = [
-      { id: body.clientMessageId, sequence: 1, role: 'user', channelId: real.channelId, text: body.message, timestamp: Date.now() },
-      { id: 'published', sequence: 2, role: 'assistant', channelId: real.channelId, text: '**Published** response', timestamp: Date.now() },
+      {
+        id: body.clientMessageId,
+        sequence: 1,
+        role: 'user',
+        channelId: real.channelId,
+        text: body.message,
+        timestamp: Date.now(),
+      },
+      {
+        id: 'published',
+        sequence: 2,
+        role: 'assistant',
+        channelId: real.channelId,
+        text: '**Published** response',
+        timestamp: Date.now(),
+      },
     ];
     expect(body).not.toHaveProperty('apiKey');
-    await route.fulfill({ contentType: 'application/x-ndjson', body: [
-      { type: 'user_message', ...savedMessages[0] },
-      { type: 'thinking', text: 'PRIVATE THINKING' },
-      { type: 'text_delta', text: 'PRIVATE DIRECT OUTPUT' },
-      { type: 'channel_message', channelId: 'wrong-channel', id: 'wrong', text: 'WRONG CHANNEL', timestamp: Date.now() },
-      { type: 'channel_message', channelId: real.channelId, id: 'published', text: '**Published** response', timestamp: Date.now() },
-      { type: 'done' },
-    ].map(event => JSON.stringify(event)).join('\n') + '\n' });
+    await route.fulfill({
+      contentType: 'application/x-ndjson',
+      body:
+        [
+          { type: 'user_message', ...savedMessages[0] },
+          { type: 'thinking', text: 'PRIVATE THINKING' },
+          { type: 'text_delta', text: 'PRIVATE DIRECT OUTPUT' },
+          {
+            type: 'channel_message',
+            channelId: 'wrong-channel',
+            id: 'wrong',
+            text: 'WRONG CHANNEL',
+            timestamp: Date.now(),
+          },
+          {
+            type: 'channel_message',
+            channelId: real.channelId,
+            id: 'published',
+            text: '**Published** response',
+            timestamp: Date.now(),
+          },
+          { type: 'done' },
+        ]
+          .map(event => JSON.stringify(event))
+          .join('\n') + '\n',
+    });
   });
   await configure(page);
   await expect(page.getByLabel('Thinking level')).toBeDisabled();
   await createAndOpenChat(page);
   await expect(page.getByRole('heading', { name: real.name, exact: true })).toBeVisible();
   await expect(chatAvatar(page).locator('[data-slot="online-indicator"]')).toBeVisible();
-  await expect(page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-slot="online-indicator"]')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Open conversation with Avery' }).locator('[data-slot="online-indicator"]')).toHaveCount(1);
+  await expect(
+    page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-slot="online-indicator"]'),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Open conversation with Avery' }).locator('[data-slot="online-indicator"]'),
+  ).toHaveCount(1);
   await page.getByLabel(`Message ${real.name}`).fill('Hello');
   await page.getByRole('button', { name: 'Send message' }).click();
   const messages = page.getByRole('list', { name: 'Messages' });
   await expect(messages.locator('li')).toHaveCount(2);
   await expect(messages).toContainText('Published response');
-  const preview = page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-slot="swap-text"]').last();
+  const preview = page
+    .getByRole('button', { name: `Open conversation with ${real.name}` })
+    .locator('[data-slot="swap-text"]')
+    .last();
   await expect(preview.locator('strong')).toHaveText('Published');
   await expect(preview).toHaveAttribute('data-prefix', '');
   await expect(messages).not.toContainText('PRIVATE');
@@ -90,19 +158,38 @@ async function installChannelStream(page: Page) {
       const url = input instanceof Request ? input.url : String(input);
       if (!url.endsWith('/api/chat')) return original(input, init);
       const signal = input instanceof Request ? input.signal : init?.signal;
-      return Promise.resolve(new Response(new ReadableStream({ async start(controller) {
-        scope.emitChannelEvent = event => controller.enqueue(new TextEncoder().encode(JSON.stringify(event) + '\n'));
-        scope.finishChannel = () => controller.close();
-        signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')), { once: true });
-        const body = input instanceof Request ? await input.clone().json() : JSON.parse(String(init?.body));
-        scope.emitChannelEvent({ type: 'user_message', channelId, id: body.clientMessageId, text: body.message, timestamp: Date.now() });
-      } }), { headers: { 'Content-Type': 'application/x-ndjson' } }));
+      return Promise.resolve(
+        new Response(
+          new ReadableStream({
+            async start(controller) {
+              scope.emitChannelEvent = event =>
+                controller.enqueue(new TextEncoder().encode(JSON.stringify(event) + '\n'));
+              scope.finishChannel = () => controller.close();
+              signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')), {
+                once: true,
+              });
+              const body = input instanceof Request ? await input.clone().json() : JSON.parse(String(init?.body));
+              scope.emitChannelEvent({
+                type: 'user_message',
+                channelId,
+                id: body.clientMessageId,
+                text: body.message,
+                timestamp: Date.now(),
+              });
+            },
+          }),
+          { headers: { 'Content-Type': 'application/x-ndjson' } },
+        ),
+      );
     };
   }, real.channelId);
 }
 
 async function emitChannel(page: Page, event: object) {
-  await page.evaluate(event => (window as unknown as { emitChannelEvent: (event: object) => void }).emitChannelEvent(event), event);
+  await page.evaluate(
+    event => (window as unknown as { emitChannelEvent: (event: object) => void }).emitChannelEvent(event),
+    event,
+  );
 }
 
 test('typing is channel-scoped and clears when the tool publishes', async ({ page }) => {
@@ -115,8 +202,12 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   const avatar = chatAvatar(page);
   const working = avatar.locator('[data-slot="online-indicator"]');
   await expect(working).toHaveAttribute('data-state', 'working');
-  await expect(page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-state="working"]')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Open conversation with Avery' }).locator('[data-slot="online-indicator"]')).toHaveAttribute('data-state', 'ready');
+  await expect(
+    page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-state="working"]'),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Open conversation with Avery' }).locator('[data-slot="online-indicator"]'),
+  ).toHaveAttribute('data-state', 'ready');
   const dot = working.locator('.presence-dot');
   await expect(dot).toHaveCSS('background-color', 'rgb(45, 212, 191)');
   await expect(dot).toHaveCSS('animation-name', 'presence-pulse');
@@ -135,7 +226,9 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await expect(page.getByRole('status')).toHaveText('Agent is working…');
   await emitChannel(page, { type: 'typing', channelId: real.channelId, active: true, targets: [real.channelId] });
   await expect(page.getByRole('status')).toHaveText('Real agent is typing…');
-  await expect(page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-slot="typing-badge"]')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: `Open conversation with ${real.name}` }).locator('[data-slot="typing-badge"]'),
+  ).toBeVisible();
   const badge = chatAvatar(page).locator('[data-slot="typing-badge"]');
   await expect(badge).toBeVisible();
   await expect(badge).toHaveCSS('background-color', 'rgb(45, 212, 191)');
@@ -157,7 +250,13 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await page.getByRole('button', { name: `Open conversation with ${real.name}` }).click();
   await expect(page.getByRole('status')).toHaveText('Real agent is typing…');
   await emitChannel(page, { type: 'typing', channelId: real.channelId, active: false });
-  await emitChannel(page, { type: 'channel_message', channelId: real.channelId, id: 'delivered', text: 'Finished message', timestamp: Date.now() });
+  await emitChannel(page, {
+    type: 'channel_message',
+    channelId: real.channelId,
+    id: 'delivered',
+    text: 'Finished message',
+    timestamp: Date.now(),
+  });
   await expect(page.getByRole('status')).toHaveText('Agent is working…');
   await emitChannel(page, { type: 'done' });
   await page.evaluate(() => (window as unknown as { finishChannel: () => void }).finishChannel());
@@ -199,7 +298,15 @@ test('operator activity streams separately, accumulates while closed, and stays 
   await createAndOpenChat(page);
   await page.getByLabel(`Message ${real.name}`).fill('Hello');
   await page.getByRole('button', { name: 'Send message' }).click();
-  const entry = { id: 'thought', runId: 'run', channelId: real.channelId, kind: 'thinking', label: 'Thinking', text: 'PRIVATE thought ', timestamp: Date.now() };
+  const entry = {
+    id: 'thought',
+    runId: 'run',
+    channelId: real.channelId,
+    kind: 'thinking',
+    label: 'Thinking',
+    text: 'PRIVATE thought ',
+    timestamp: Date.now(),
+  };
   await emitChannel(page, { type: 'activity', agentId: real.id, append: true, entry });
   await expect(page.getByText('PRIVATE thought ', { exact: true })).not.toBeVisible();
   await page.getByRole('button', { name: 'Agent activity', exact: true }).click();
@@ -208,9 +315,17 @@ test('operator activity streams separately, accumulates while closed, and stays 
   await emitChannel(page, { type: 'activity', agentId: real.id, append: true, entry: { ...entry, text: 'continued' } });
   await expect(panel.locator('[data-activity-kind="thinking"]')).toHaveCount(1);
   await expect(panel).toContainText('PRIVATE thought continued');
-  await emitChannel(page, { type: 'activity', agentId: 'other-agent', entry: { ...entry, text: 'OTHER AGENT SECRET' } });
+  await emitChannel(page, {
+    type: 'activity',
+    agentId: 'other-agent',
+    entry: { ...entry, text: 'OTHER AGENT SECRET' },
+  });
   await expect(panel).not.toContainText('OTHER AGENT SECRET');
-  await emitChannel(page, { type: 'activity', agentId: real.id, entry: { ...entry, id: 'call', kind: 'tool_call', label: 'send_message', text: '{"text":"Draft message"}' } });
+  await emitChannel(page, {
+    type: 'activity',
+    agentId: real.id,
+    entry: { ...entry, id: 'call', kind: 'tool_call', label: 'send_message', text: '{"text":"Draft message"}' },
+  });
   await expect(panel).toContainText('Draft message');
   const chat = page.getByRole('list', { name: 'Messages' });
   await expect(chat).not.toContainText('PRIVATE');
@@ -262,7 +377,11 @@ test('select menus visibly highlight hovered options and animate with reduced-mo
 test('styled selects support keyboard selection, dismissal, and long lists on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const lastModel = 'provider-' + 'long-model-name-'.repeat(6);
-  await page.route('**/api/model-endpoints/test', route => route.fulfill({ json: { models: ['test-model', ...Array.from({ length: 40 }, (_, i) => `model-${i}`), lastModel] } }));
+  await page.route('**/api/model-endpoints/test', route =>
+    route.fulfill({
+      json: { models: ['test-model', ...Array.from({ length: 40 }, (_, i) => `model-${i}`), lastModel] },
+    }),
+  );
   await configure(page);
   const model = page.getByLabel('Model', { exact: true });
   await model.focus();
@@ -298,12 +417,25 @@ test('allows supported thinking levels in creation', async ({ page }) => {
 test('unsaved sends retain their draft and message ID until the backend acknowledges persistence', async ({ page }) => {
   const ids: string[] = [];
   await page.route('**/api/chat', route => {
-    const body = route.request().postDataJSON(); ids.push(body.clientMessageId);
+    const body = route.request().postDataJSON();
+    ids.push(body.clientMessageId);
     if (ids.length === 1) return route.fulfill({ status: 503, json: { message: 'Storage unavailable' } });
-    return route.fulfill({ contentType: 'application/x-ndjson', body: [
-      { type: 'user_message', channelId: real.channelId, id: body.clientMessageId, text: body.message, timestamp: Date.now() },
-      { type: 'done' },
-    ].map(event => JSON.stringify(event)).join('\n') + '\n' });
+    return route.fulfill({
+      contentType: 'application/x-ndjson',
+      body:
+        [
+          {
+            type: 'user_message',
+            channelId: real.channelId,
+            id: body.clientMessageId,
+            text: body.message,
+            timestamp: Date.now(),
+          },
+          { type: 'done' },
+        ]
+          .map(event => JSON.stringify(event))
+          .join('\n') + '\n',
+    });
   });
   await configure(page);
   await createAndOpenChat(page);
@@ -322,10 +454,23 @@ test('unsaved sends retain their draft and message ID until the backend acknowle
 test('model failures do not become chat bubbles or diagnostic footer text', async ({ page }) => {
   await page.route('**/api/chat', route => {
     const body = route.request().postDataJSON();
-    return route.fulfill({ contentType: 'application/x-ndjson', body: [
-      { type: 'user_message', channelId: real.channelId, id: body.clientMessageId, text: body.message, timestamp: Date.now() },
-      { type: 'error', message: 'Agent did not publish a channel message.' }, { type: 'done' },
-    ].map(event => JSON.stringify(event)).join('\n') + '\n' });
+    return route.fulfill({
+      contentType: 'application/x-ndjson',
+      body:
+        [
+          {
+            type: 'user_message',
+            channelId: real.channelId,
+            id: body.clientMessageId,
+            text: body.message,
+            timestamp: Date.now(),
+          },
+          { type: 'error', message: 'Agent did not publish a channel message.' },
+          { type: 'done' },
+        ]
+          .map(event => JSON.stringify(event))
+          .join('\n') + '\n',
+    });
   });
   await configure(page);
   await createAndOpenChat(page);

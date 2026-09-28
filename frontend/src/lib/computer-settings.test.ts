@@ -20,7 +20,12 @@ describe('computer settings form', () => {
       { cpuCores: '8.5', memoryGiB: '4', timezone: 'America/Toronto' },
       { cpuCores: '4', memoryGiB: '17', timezone: 'America/Toronto' },
       { cpuCores: '4', memoryGiB: '4', timezone: 'Not/A/Zone' },
-    ]) expect(parseComputerSettings(draft, limits)).toBeNull();
-    expect(parseComputerSettings({ cpuCores: '2', memoryGiB: '6', timezone: 'Etc/UTC' }, limits)).toEqual({ cpuCores: 2, memoryGiB: 6, timezone: 'Etc/UTC' });
+    ])
+      expect(parseComputerSettings(draft, limits)).toBeNull();
+    expect(parseComputerSettings({ cpuCores: '2', memoryGiB: '6', timezone: 'Etc/UTC' }, limits)).toEqual({
+      cpuCores: 2,
+      memoryGiB: 6,
+      timezone: 'Etc/UTC',
+    });
   });
 });

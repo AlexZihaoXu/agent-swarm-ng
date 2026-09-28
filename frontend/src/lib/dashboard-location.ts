@@ -1,9 +1,31 @@
 export type DashboardTab = 'agents' | 'chat' | 'computers' | 'settings';
 export type DashboardRoute = {
   tab: DashboardTab;
-  kind: 'root' | 'not-found' | 'agents-list' | 'agent' | 'agent-dm' | 'agent-new' | 'agent-delete' | 'agent-edit' |
-    'chat-list' | 'chat-agent' | 'chat-agent-dm' | 'chat-group' | 'group-new' | 'group-edit' | 'group-delete' |
-    'computers-list' | 'computer' | 'computer-new' | 'computer-delete' | 'computer-settings' | 'settings' | 'knowledge' | 'endpoint-new' | 'endpoint';
+  kind:
+    | 'root'
+    | 'not-found'
+    | 'agents-list'
+    | 'agent'
+    | 'agent-dm'
+    | 'agent-new'
+    | 'agent-delete'
+    | 'agent-edit'
+    | 'chat-list'
+    | 'chat-agent'
+    | 'chat-agent-dm'
+    | 'chat-group'
+    | 'group-new'
+    | 'group-edit'
+    | 'group-delete'
+    | 'computers-list'
+    | 'computer'
+    | 'computer-new'
+    | 'computer-delete'
+    | 'computer-settings'
+    | 'settings'
+    | 'knowledge'
+    | 'endpoint-new'
+    | 'endpoint';
   agentId?: string;
   peerId?: string;
   groupId?: string;
@@ -22,16 +44,25 @@ export const chatAgentDmPath = (id: string, peerId: string) => `${chatAgentPath(
 export const chatGroupPath = (id: string) => `/chat/groups/${segment(id)}`;
 export const computerPath = (id: string) => `/computers/${segment(id)}`;
 export const endpointPath = (id: string) => `/settings/endpoints/${segment(id)}`;
-export const knowledgePath = (id?: string) => id ? `/settings/knowledge/${id.split('/').map(segment).join('/')}` : '/settings/knowledge';
+export const knowledgePath = (id?: string) =>
+  id ? `/settings/knowledge/${id.split('/').map(segment).join('/')}` : '/settings/knowledge';
 
 export function parseDashboardPath(pathname: string): DashboardRoute {
   const missing: DashboardRoute = { tab: 'agents', kind: 'not-found' };
   if (pathname === '/') return { tab: 'agents', kind: 'root' };
   if (!pathname.startsWith('/')) return missing;
   let parts: string[];
-  try { parts = pathname.replace(/\/$/, '').slice(1).split('/').map(decodeURIComponent); }
-  catch { return missing; }
-  if (parts.some(value => !value || value.length > 100 || /[/\\\u0000-\u001f]/.test(value) || value === '.' || value === '..')) return missing;
+  try {
+    parts = pathname.replace(/\/$/, '').slice(1).split('/').map(decodeURIComponent);
+  } catch {
+    return missing;
+  }
+  if (
+    parts.some(
+      value => !value || value.length > 100 || /[/\\\u0000-\u001f]/.test(value) || value === '.' || value === '..',
+    )
+  )
+    return missing;
   const [section, id, third, fourth, fifth, sixth, seventh] = parts;
   if (section === 'agents') {
     if (parts.length === 1) return { tab: 'agents', kind: 'agents-list' };
@@ -40,12 +71,23 @@ export function parseDashboardPath(pathname: string): DashboardRoute {
     if (parts.length === 4 && third === 'dm') return { tab: 'agents', kind: 'agent-dm', agentId: id, peerId: fourth };
     if (parts.length === 3 && third === 'delete') return { tab: 'agents', kind: 'agent-delete', agentId: id };
     if (third === 'edit') {
-      if (parts.length === 4 && fourth === 'avatar') return { tab: 'agents', kind: 'agent-edit', agentId: id, editorTab: 'avatar' };
+      if (parts.length === 4 && fourth === 'avatar')
+        return { tab: 'agents', kind: 'agent-edit', agentId: id, editorTab: 'avatar' };
       if (fourth === 'settings' && fifth === 'channels') {
-        if (parts.length === 5) return { tab: 'agents', kind: 'agent-edit', agentId: id, editorTab: 'settings', channelScreen: 'channels' };
+        if (parts.length === 5)
+          return { tab: 'agents', kind: 'agent-edit', agentId: id, editorTab: 'settings', channelScreen: 'channels' };
         if (sixth === 'swarm') {
-          if (parts.length === 6) return { tab: 'agents', kind: 'agent-edit', agentId: id, editorTab: 'settings', channelScreen: 'swarm' };
-          if (parts.length === 8 && seventh === 'dm') return { tab: 'agents', kind: 'agent-edit', agentId: id, editorTab: 'settings', channelScreen: 'dm', peerId: parts[7] };
+          if (parts.length === 6)
+            return { tab: 'agents', kind: 'agent-edit', agentId: id, editorTab: 'settings', channelScreen: 'swarm' };
+          if (parts.length === 8 && seventh === 'dm')
+            return {
+              tab: 'agents',
+              kind: 'agent-edit',
+              agentId: id,
+              editorTab: 'settings',
+              channelScreen: 'dm',
+              peerId: parts[7],
+            };
         }
       }
     }
@@ -53,7 +95,8 @@ export function parseDashboardPath(pathname: string): DashboardRoute {
   if (section === 'chat') {
     if (parts.length === 1) return { tab: 'chat', kind: 'chat-list' };
     if (parts.length === 3 && third && id === 'agents') return { tab: 'chat', kind: 'chat-agent', agentId: third };
-    if (parts.length === 5 && id === 'agents' && fourth === 'dm') return { tab: 'chat', kind: 'chat-agent-dm', agentId: third, peerId: fifth };
+    if (parts.length === 5 && id === 'agents' && fourth === 'dm')
+      return { tab: 'chat', kind: 'chat-agent-dm', agentId: third, peerId: fifth };
     if (id === 'groups') {
       if (parts.length === 3 && third === 'new') return { tab: 'chat', kind: 'group-new' };
       if (parts.length === 3 && third) return { tab: 'chat', kind: 'chat-group', groupId: third };
@@ -66,11 +109,17 @@ export function parseDashboardPath(pathname: string): DashboardRoute {
     if (parts.length === 2 && id === 'new') return { tab: 'computers', kind: 'computer-new' };
     if (parts.length === 2) return { tab: 'computers', kind: 'computer', computerId: id };
     if (parts.length === 3 && third === 'delete') return { tab: 'computers', kind: 'computer-delete', computerId: id };
-    if (parts.length === 3 && third === 'settings') return { tab: 'computers', kind: 'computer-settings', computerId: id };
+    if (parts.length === 3 && third === 'settings')
+      return { tab: 'computers', kind: 'computer-settings', computerId: id };
   }
   if (section === 'settings') {
     if (parts.length === 1) return { tab: 'settings', kind: 'settings' };
-    if (id === 'knowledge' && parts.length >= 2) return { tab: 'settings', kind: 'knowledge', knowledgeId: parts.length > 2 ? parts.slice(2).join('/') : undefined };
+    if (id === 'knowledge' && parts.length >= 2)
+      return {
+        tab: 'settings',
+        kind: 'knowledge',
+        knowledgeId: parts.length > 2 ? parts.slice(2).join('/') : undefined,
+      };
     if (parts.length === 3 && id === 'endpoints' && third === 'new') return { tab: 'settings', kind: 'endpoint-new' };
     if (parts.length === 3 && id === 'endpoints') return { tab: 'settings', kind: 'endpoint', endpointId: third };
   }

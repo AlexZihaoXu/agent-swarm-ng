@@ -16,7 +16,11 @@ const MEMORY_POLICY_MAX_GIB = 16;
 /** Docker-host capacity bounds UI choices; policy caps avoid advertising the
  * entire host as one computer's budget. The operator's existing limits remain
  * the defaults, clamped only if this host is smaller. */
-export function deriveComputerLimits(host: { NCPU?: number; MemTotal?: number }, operatorCpu: number, operatorTimezone: string): ComputerLimits {
+export function deriveComputerLimits(
+  host: { NCPU?: number; MemTotal?: number },
+  operatorCpu: number,
+  operatorTimezone: string,
+): ComputerLimits {
   if (!Number.isFinite(host.NCPU) || !Number.isFinite(host.MemTotal) || host.NCPU! < 1 || host.MemTotal! < GiB) {
     throw new ResourceError(503, 'Docker host capacity is unavailable.');
   }
@@ -42,10 +46,17 @@ export function validateComputerConfiguration(input: unknown, limits: ComputerLi
   if (!Number.isInteger(memoryGiB) || (memoryGiB as number) < 1 || (memoryGiB as number) > limits.memoryGiB.max) {
     throw new ResourceError(400, 'Computer memory limit exceeds the host or policy capacity.');
   }
-  if (typeof timezone !== 'string' || timezone.length > 64 || !/^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/.test(timezone)) {
+  if (
+    typeof timezone !== 'string' ||
+    timezone.length > 64 ||
+    !/^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/.test(timezone)
+  ) {
     throw new ResourceError(400, 'Invalid computer timezone.');
   }
-  try { new Intl.DateTimeFormat('en', { timeZone: timezone }); }
-  catch { throw new ResourceError(400, 'Unknown computer timezone.'); }
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: timezone });
+  } catch {
+    throw new ResourceError(400, 'Unknown computer timezone.');
+  }
   return { cpuCores: cpuCores as number, memoryGiB: memoryGiB as number, timezone };
 }

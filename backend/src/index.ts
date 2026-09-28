@@ -13,7 +13,7 @@ const app = await buildApp({ database });
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     stopPowerWatch();
-    void app.close().catch((error) => {
+    void app.close().catch(error => {
       app.log.error(error);
       process.exitCode = 1;
     });
@@ -34,6 +34,12 @@ stopPowerWatch = watchStoppedComputers(() => reconcileStoppedComputers(powerStor
 // Bound the operator activity archive. ACTIVITY_RETENTION_DAYS=0 keeps everything.
 const retentionDays = Number(process.env.ACTIVITY_RETENTION_DAYS ?? DEFAULT_ACTIVITY_RETENTION_DAYS);
 const activityStore = new ActivityStore(database);
-const prune = () => activityStore.prune(retentionDays).then(removed => { if (removed) app.log.info({ removed, retentionDays }, 'Pruned old operator activity'); }).catch(error => app.log.error(error, 'Activity pruning failed'));
+const prune = () =>
+  activityStore
+    .prune(retentionDays)
+    .then(removed => {
+      if (removed) app.log.info({ removed, retentionDays }, 'Pruned old operator activity');
+    })
+    .catch(error => app.log.error(error, 'Activity pruning failed'));
 void prune();
 setInterval(() => void prune(), 6 * 3_600_000).unref();

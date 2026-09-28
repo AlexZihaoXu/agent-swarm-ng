@@ -45,7 +45,11 @@ export function watchStoppedComputers(reconcile: () => Promise<unknown>, interva
   const timer = setInterval(() => {
     if (busy) return;
     busy = true;
-    void reconcile().catch(() => {}).finally(() => { busy = false; });
+    void reconcile()
+      .catch(() => {})
+      .finally(() => {
+        busy = false;
+      });
   }, intervalMs);
   timer.unref?.();
   return () => clearInterval(timer);

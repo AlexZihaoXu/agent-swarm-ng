@@ -22,15 +22,29 @@ it('serves only bounded, read-only catalog pages for operator review', async () 
     expect(found.json().matches[0]).not.toHaveProperty('content');
     const first = await app.inject({ method: 'GET', url: '/api/knowledge/entry?id=swarm%2Fchannels&length=12' });
     expect(first.statusCode).toBe(200);
-    expect(first.json()).toMatchObject({ id: 'swarm/channels', parentId: 'swarm', source: 'docs/vision.md', nextOffset: 12,
-      breadcrumbs: [{ id: 'swarm', title: 'Swarm concepts' }, { id: 'swarm/channels', title: 'Channels' }] });
+    expect(first.json()).toMatchObject({
+      id: 'swarm/channels',
+      parentId: 'swarm',
+      source: 'docs/vision.md',
+      nextOffset: 12,
+      breadcrumbs: [
+        { id: 'swarm', title: 'Swarm concepts' },
+        { id: 'swarm/channels', title: 'Channels' },
+      ],
+    });
     expect(first.json().text).toHaveLength(12);
-    const rest = await app.inject({ method: 'GET', url: `/api/knowledge/entry?id=swarm%2Fchannels&offset=${first.json().nextOffset}` });
+    const rest = await app.inject({
+      method: 'GET',
+      url: `/api/knowledge/entry?id=swarm%2Fchannels&offset=${first.json().nextOffset}`,
+    });
     expect(rest.statusCode).toBe(200);
     expect(rest.json().nextOffset).toBeNull();
     expect((await app.inject({ method: 'GET', url: '/api/knowledge/entry?id=missing' })).statusCode).toBe(404);
     expect((await app.inject({ method: 'GET', url: '/api/knowledge/search?query=%20' })).statusCode).toBe(400);
     expect((await app.inject({ method: 'POST', url: '/api/knowledge', payload: {} })).statusCode).toBe(404);
     expect((await app.inject({ method: 'DELETE', url: '/api/knowledge/entry?id=swarm' })).statusCode).toBe(404);
-  } finally { await app.close(); await database.close(); }
+  } finally {
+    await app.close();
+    await database.close();
+  }
 });

@@ -9,12 +9,16 @@ describe('backend-owned agent runs', () => {
     const events: object[] = [];
     runs.subscribe(event => events.push(event));
     runs.groupDeleted('group-id');
-    expect(events).toEqual([expect.objectContaining({ type: 'group_deleted', groupId: 'group-id', channelId: 'group:group-id' })]);
+    expect(events).toEqual([
+      expect.objectContaining({ type: 'group_deleted', groupId: 'group-id', channelId: 'group:group-id' }),
+    ]);
   });
   it('keeps working without listeners and exposes its current state to reconnecting clients', async () => {
     const runs = new AgentRuns();
     let finish!: () => void;
-    const gate = new Promise<void>(resolve => { finish = resolve; });
+    const gate = new Promise<void>(resolve => {
+      finish = resolve;
+    });
     const events: object[] = [];
     const detach = runs.subscribe(event => events.push(event));
     const run = startRun(runs, identity, async ({ emit, signal }) => {
@@ -25,16 +29,25 @@ describe('backend-owned agent runs', () => {
     });
     await Promise.resolve();
     detach();
-    expect(runs.snapshot()).toEqual([{ ...identity, runId: run.runId, typing: true, typingTargets: ['dm:agent:peer'] }]);
+    expect(runs.snapshot()).toEqual([
+      { ...identity, runId: run.runId, typing: true, typingTargets: ['dm:agent:peer'] },
+    ]);
     expect(() => startRun(runs, identity, async () => {})).toThrow();
     const resumed: object[] = [];
     runs.subscribe(event => resumed.push(event));
-    finish(); await run.finished;
-    expect(resumed).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'channel_message', text: 'Finished offline' }), expect.objectContaining({ type: 'done', runId: run.runId })]));
+    finish();
+    await run.finished;
+    expect(resumed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'channel_message', text: 'Finished offline' }),
+        expect.objectContaining({ type: 'done', runId: run.runId }),
+      ]),
+    );
     expect(runs.snapshot()).toEqual([]);
   });
   it('accepts messages into the same run and changes the admission epoch on explicit Stop', async () => {
-    const runs = new AgentRuns(); const inference = vi.fn();
+    const runs = new AgentRuns();
+    const inference = vi.fn();
     const run = startRun(runs, identity, async ({ inbox, signal }) => {
       inbox.add({ role: 'user', text: 'hi' });
       await inbox.take(signal);
@@ -42,7 +55,11 @@ describe('backend-owned agent runs', () => {
     });
     await Promise.resolve();
     const revision = runs.stopVersion(identity.agentId);
-    const joined = runs.offer(identity.agentId, { role: 'user', text: 'task' }, { type: 'user_message', text: 'task', channelId: identity.channelId });
+    const joined = runs.offer(
+      identity.agentId,
+      { role: 'user', text: 'task' },
+      { type: 'user_message', text: 'task', channelId: identity.channelId },
+    );
     expect(joined?.runId).toBe(run.runId);
     expect(joined?.clientMessageId).toBe(identity.clientMessageId);
     expect(await runs.stop(identity.agentId, 'stale')).toBe(false);
@@ -55,32 +72,57 @@ describe('backend-owned agent runs', () => {
   });
 
   it('queues distinct conversations without leaking messages between their inboxes', async () => {
-    const runs = new AgentRuns(); let release!: () => void;
-    const gate = new Promise<void>(resolve => { release = resolve; });
+    const runs = new AgentRuns();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
     const human = startRun(runs, identity, async () => gate);
     let received: string[] = [];
-    const dm = runs.enqueue({ ...identity, channelId: 'dm:a:b', clientMessageId: 'dm-message' }, async ({ inbox, signal }) => {
-      inbox.prepend({ role: 'user', text: 'original DM' });
-      received = (await inbox.take(signal)).messages.map(message => message.text);
-    });
+    const dm = runs.enqueue(
+      { ...identity, channelId: 'dm:a:b', clientMessageId: 'dm-message' },
+      async ({ inbox, signal }) => {
+        inbox.prepend({ role: 'user', text: 'original DM' });
+        received = (await inbox.take(signal)).messages.map(message => message.text);
+      },
+    );
     await Promise.resolve();
     expect(runs.snapshot().find(run => run.runId === dm.runId)?.queued).toBe(true);
-    expect(runs.offer(identity.agentId, { role: 'user', text: 'wrong channel' }, { channelId: 'other' })).toBeUndefined();
-    expect(runs.offer(identity.agentId, { role: 'user', text: 'follow-up DM' }, { channelId: 'dm:a:b' })?.runId).toBe(dm.runId);
-    release(); await human.finished; await dm.finished;
+    expect(
+      runs.offer(identity.agentId, { role: 'user', text: 'wrong channel' }, { channelId: 'other' }),
+    ).toBeUndefined();
+    expect(runs.offer(identity.agentId, { role: 'user', text: 'follow-up DM' }, { channelId: 'dm:a:b' })?.runId).toBe(
+      dm.runId,
+    );
+    release();
+    await human.finished;
+    await dm.finished;
     expect(received).toEqual(['original DM', 'follow-up DM']);
     expect(runs.snapshot()).toEqual([]);
   });
 
   it('stops queued conversation work without waiting for another active conversation', async () => {
-    const runs = new AgentRuns(); let release!: () => void;
-    const active = startRun(runs, identity, async () => new Promise<void>(resolve => { release = resolve; }));
-    await Promise.resolve(); const work = vi.fn(async () => {});
+    const runs = new AgentRuns();
+    let release!: () => void;
+    const active = startRun(
+      runs,
+      identity,
+      async () =>
+        new Promise<void>(resolve => {
+          release = resolve;
+        }),
+    );
+    await Promise.resolve();
+    const work = vi.fn(async () => {});
     const queued = runs.enqueue({ ...identity, channelId: 'dm:a:b', clientMessageId: 'queued' }, work);
     expect(await runs.stop(identity.agentId, 'queued')).toBe(true);
-    await queued.finished; expect(work).not.toHaveBeenCalled(); expect(runs.has(identity.agentId)).toBe(true);
+    await queued.finished;
+    expect(work).not.toHaveBeenCalled();
+    expect(runs.has(identity.agentId)).toBe(true);
     expect(runs.stopVersion(identity.agentId)).toBe(0);
-    release(); await active.finished; await runs.shutdown();
+    release();
+    await active.finished;
+    await runs.shutdown();
   });
 
   it('honors an explicitly configured deadline without requiring a dashboard', async () => {
@@ -89,7 +131,16 @@ describe('backend-owned agent runs', () => {
       const runs = new AgentRuns(100);
       let stopped = false;
       const run = startRun(runs, identity, async ({ signal }) => {
-        await new Promise<void>(resolve => signal.addEventListener('abort', () => { stopped = true; resolve(); }, { once: true }));
+        await new Promise<void>(resolve =>
+          signal.addEventListener(
+            'abort',
+            () => {
+              stopped = true;
+              resolve();
+            },
+            { once: true },
+          ),
+        );
       });
       await Promise.resolve();
       await vi.advanceTimersByTimeAsync(100);
@@ -97,7 +148,9 @@ describe('backend-owned agent runs', () => {
       expect(stopped).toBe(true);
       expect(runs.snapshot()).toEqual([]);
       expect(() => new AgentRuns(-1)).toThrow('AGENT_RUN_TIMEOUT_MS');
-    } finally { vi.useRealTimers(); }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('stops only the identified request, and shutdown waits for cleanup', async () => {

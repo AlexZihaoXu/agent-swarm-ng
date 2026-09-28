@@ -1,9 +1,12 @@
 import type { KnowledgeEntry } from '../catalog';
 export const computerTerminals = {
-  id:'swarm/computers/terminals',parentId:'swarm/computers',title:'Persistent tmux terminals',
-  summary:'Create, inspect and interact with persistent shared guest terminals; lifetime, literal input, keys and output bounds.',
-  source:'docs/persistent-terminals.md',
-  content:`Terminal tools require your CURRENT assignment and use_computer claim at execution, including list/view/status. They act as uid1000 inside that guest, with its configured permissions including sudo, never on the platform host. Sessions are shared computer resources, not private agent memory. Humans can operate them concurrently without taking your claim. Await each computer operation.
+  id: 'swarm/computers/terminals',
+  parentId: 'swarm/computers',
+  title: 'Persistent tmux terminals',
+  summary:
+    'Create, inspect and interact with persistent shared guest terminals; lifetime, literal input, keys and output bounds.',
+  source: 'docs/persistent-terminals.md',
+  content: `Terminal tools require your CURRENT assignment and use_computer claim at execution, including list/view/status. They act as uid1000 inside that guest, with its configured permissions including sudo, never on the platform host. Sessions are shared computer resources, not private agent memory. Humans can operate them concurrently without taking your claim. Await each computer operation.
 
 terminal_create({name,command?,cwd?}) starts an interactive Bash shell by default. Optional command runs bash -lc; completion retains the exited pane and its output. It returns a stable session ID immediately, not a completed task. Names are unique ignoring case, 1..48 ASCII letters/digits/hyphens/underscores, starting with a letter/digit. At most32 sessions per computer. cwd defaults /workspace; ~/ means /home/agent. Fixed size120 columns×36 rows; browser viewing never resizes it. No host environment/provider credentials are inherited. Commands/text <=32768 UTF-8 bytes, total request <=64KiB.
 

@@ -1,7 +1,9 @@
 import { expect, it } from 'vitest';
 import { formatContextUsage } from './context-usage';
 it('formats estimated main-session context against the configured window', () => {
-  expect(formatContextUsage({ tokens: 8192, contextWindow: 32768, percent: 25 })).toContain('≈ 8,192 / 32,768 tokens · 25.0%');
+  expect(formatContextUsage({ tokens: 8192, contextWindow: 32768, percent: 25 })).toContain(
+    '≈ 8,192 / 32,768 tokens · 25.0%',
+  );
   expect(formatContextUsage({ tokens: 8192, contextWindow: 32768, percent: 25 })).toContain('not cumulative billing');
 });
 it('does not invent zero usage for unknown data or clamp over-capacity context', () => {

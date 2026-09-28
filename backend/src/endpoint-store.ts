@@ -14,7 +14,11 @@ export class EndpointStore {
   async read(): Promise<SavedEndpoint[]> {
     try {
       const data: unknown = JSON.parse(await readFile(this.path, 'utf8'));
-      if (!Array.isArray(data) || !data.every(row => row && ['id', 'name', 'baseUrl', 'apiKey'].every(key => typeof row[key] === 'string'))) throw new Error();
+      if (
+        !Array.isArray(data) ||
+        !data.every(row => row && ['id', 'name', 'baseUrl', 'apiKey'].every(key => typeof row[key] === 'string'))
+      )
+        throw new Error();
       return data;
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return [];
@@ -39,7 +43,9 @@ export class EndpointStore {
     const rows = await this.update(current => {
       const previous = current.find(row => row.id === input.id);
       const endpoint: SavedEndpoint = {
-        id: input.id, name: input.name, baseUrl: input.baseUrl,
+        id: input.id,
+        name: input.name,
+        baseUrl: input.baseUrl,
         // Never silently carry a saved credential to a different URL.
         apiKey: input.apiKey ?? (previous?.baseUrl === input.baseUrl ? previous.apiKey : ''),
       };
@@ -48,5 +54,7 @@ export class EndpointStore {
     return rows.find(row => row.id === input.id)!;
   }
 
-  async remove(id: string) { await this.update(rows => rows.filter(row => row.id !== id)); }
+  async remove(id: string) {
+    await this.update(rows => rows.filter(row => row.id !== id));
+  }
 }

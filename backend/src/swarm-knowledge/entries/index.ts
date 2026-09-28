@@ -7,4 +7,13 @@ import { computerFiles } from './computer-files';
 import { computerTerminals } from './computer-terminals';
 
 // Explicit imports make the curated tree reviewable. No filesystem scanning or agent writes.
-export const swarmKnowledge = new KnowledgeCatalog([swarm, channels, computers, computerUse, computerActions, computerBrowser, computerFiles, computerTerminals]);
+export const swarmKnowledge = new KnowledgeCatalog([
+  swarm,
+  channels,
+  computers,
+  computerUse,
+  computerActions,
+  computerBrowser,
+  computerFiles,
+  computerTerminals,
+]);

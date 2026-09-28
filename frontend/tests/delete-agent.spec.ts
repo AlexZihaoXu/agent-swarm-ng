@@ -4,18 +4,30 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/model-endpoints', route => route.fulfill({ json: [] }));
 });
 
-const agent = { id: 'delete-agent', name: 'Delete me', endpointId: 'endpoint', model: 'test-model', thinkingLevel: 'off', channelId: 'delete-channel', createdAt: Date.now(), lastMessage: null };
+const agent = {
+  id: 'delete-agent',
+  name: 'Delete me',
+  endpointId: 'endpoint',
+  model: 'test-model',
+  thinkingLevel: 'off',
+  channelId: 'delete-channel',
+  createdAt: Date.now(),
+  lastMessage: null,
+};
 
 test('requires exact typed confirmation, supports cancellation, and persists deletion', async ({ page }) => {
   let deleted = false;
   let attempts = 0;
-  await page.route('**/api/agents', route => route.fulfill({ json: { agents: deleted ? [] : [agent], nextCursor: null } }));
+  await page.route('**/api/agents', route =>
+    route.fulfill({ json: { agents: deleted ? [] : [agent], nextCursor: null } }),
+  );
   await page.route('**/api/channels/*/messages*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));
   await page.route(`**/api/agents/${agent.id}`, async route => {
     attempts++;
     expect(route.request().method()).toBe('DELETE');
     expect(route.request().postDataJSON()).toEqual({ confirmation: agent.name });
-    if (attempts === 1) return route.fulfill({ status: 409, json: { message: 'The agent is responding. Stop it before deleting.' } });
+    if (attempts === 1)
+      return route.fulfill({ status: 409, json: { message: 'The agent is responding. Stop it before deleting.' } });
     deleted = true;
     return route.fulfill({ json: { deleted: true } });
   });
@@ -40,7 +52,9 @@ test('requires exact typed confirmation, supports cancellation, and persists del
   await page.getByLabel('Confirm agent name').fill(agent.name);
   await remove.click();
   await expect(dialog.getByRole('alert')).toContainText('Stop it');
-  await expect(page.getByRole('button', { name: `Open settings for ${agent.name}`, exact: true, includeHidden: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: `Open settings for ${agent.name}`, exact: true, includeHidden: true }),
+  ).toBeVisible();
   await remove.click();
   await expect(dialog).toHaveCount(0);
   await expect(card).toHaveCount(0);
@@ -51,11 +65,15 @@ test('requires exact typed confirmation, supports cancellation, and persists del
   expect(attempts).toBe(2);
 });
 
-test('deleting an unselected saved agent does not change selection; last deletion shows an empty state', async ({ page }) => {
+test('deleting an unselected saved agent does not change selection; last deletion shows an empty state', async ({
+  page,
+}) => {
   await page.goto('/');
   const cards = page.getByRole('button', { name: /^Open settings for / });
   await expect(cards.first()).toBeVisible();
-  const names = await cards.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')!.replace('Open settings for ', '')));
+  const names = await cards.evaluateAll(elements =>
+    elements.map(element => element.getAttribute('aria-label')!.replace('Open settings for ', '')),
+  );
   for (const name of [...names.slice(1), names[0]]) {
     await page.getByRole('button', { name: `Open settings for ${name}`, exact: true }).click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Delete agent', exact: true }).click();

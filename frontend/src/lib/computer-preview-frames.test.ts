@@ -19,25 +19,58 @@ describe('crossfade', () => {
 
 describe('advanceFrames', () => {
   it('starts a fade with the old frame opaque and the new one invisible', () => {
-    expect(advanceFrames([{ id: 1, opacity: 1 }], 2, 0)).toEqual([{ id: 1, opacity: 1 }, { id: 2, opacity: 0 }]);
+    expect(advanceFrames([{ id: 1, opacity: 1 }], 2, 0)).toEqual([
+      { id: 1, opacity: 1 },
+      { id: 2, opacity: 0 },
+    ]);
   });
 
   it('slides only the new layer, leaving the floor at 1 (no breathing dip)', () => {
-    const mid = advanceFrames([{ id: 1, opacity: 1 }, { id: 2, opacity: 0 }], 2, 0.4);
-    expect(mid).toEqual([{ id: 1, opacity: 1 }, { id: 2, opacity: 0.4 }]);
+    const mid = advanceFrames(
+      [
+        { id: 1, opacity: 1 },
+        { id: 2, opacity: 0 },
+      ],
+      2,
+      0.4,
+    );
+    expect(mid).toEqual([
+      { id: 1, opacity: 1 },
+      { id: 2, opacity: 0.4 },
+    ]);
     // At least one layer is always fully opaque, so the composite never dims.
     expect(Math.max(...mid.map(layer => layer.opacity))).toBe(1);
   });
 
   it('finishes by holding the new frame at full opacity', () => {
-    const done = advanceFrames([{ id: 1, opacity: 1 }, { id: 2, opacity: 0.8 }], 2, 1);
-    expect(done).toEqual([{ id: 1, opacity: 1 }, { id: 2, opacity: 1 }]);
+    const done = advanceFrames(
+      [
+        { id: 1, opacity: 1 },
+        { id: 2, opacity: 0.8 },
+      ],
+      2,
+      1,
+    );
+    expect(done).toEqual([
+      { id: 1, opacity: 1 },
+      { id: 2, opacity: 1 },
+    ]);
   });
 
   it('promotes the top frame to the floor when a frame arrives mid-ramp', () => {
-    const arrived = advanceFrames([{ id: 1, opacity: 1 }, { id: 2, opacity: 0.6 }], 3, 0);
+    const arrived = advanceFrames(
+      [
+        { id: 1, opacity: 1 },
+        { id: 2, opacity: 0.6 },
+      ],
+      3,
+      0,
+    );
     // Frame 2 (the newest, topmost) becomes the opaque floor; frame 1 is dropped.
-    expect(arrived).toEqual([{ id: 2, opacity: 1 }, { id: 3, opacity: 0 }]);
+    expect(arrived).toEqual([
+      { id: 2, opacity: 1 },
+      { id: 3, opacity: 0 },
+    ]);
     expect(Math.max(...arrived.map(layer => layer.opacity))).toBe(1);
   });
 

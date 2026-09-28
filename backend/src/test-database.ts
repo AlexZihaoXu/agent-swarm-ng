@@ -12,7 +12,9 @@ export async function prepareDatabase(path: string) {
     for (const name of (await readdir(root)).filter(name => name !== 'migration_lock.toml').sort()) {
       await client.executeMultiple(await readFile(new URL(`${name}/migration.sql`, root), 'utf8'));
     }
-  } finally { client.close(); }
+  } finally {
+    client.close();
+  }
   const store = new PlatformStore(url);
   await store.initialize();
   return store;

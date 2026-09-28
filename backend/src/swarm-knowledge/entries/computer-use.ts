@@ -1,7 +1,9 @@
 import type { KnowledgeEntry } from '../catalog';
 
 export const computerUse = {
-  id: 'swarm/computers/use', parentId: 'swarm/computers', title: 'Using an assigned computer',
+  id: 'swarm/computers/use',
+  parentId: 'swarm/computers',
+  title: 'Using an assigned computer',
   summary: 'Claim, observe, act, verify and release; sharing, human override and restart notices.',
   source: 'docs/agent-computer-use.md',
   content: `Computers are shared guest desktops, separate from agents and chat channels. The human assigns computers in each agent's settings. Assignment grants eligibility, not a claim: use list_computers({}) to discover your assigned IDs/names and current holders, then use_computer({"computer":"Desk name or ID"}) to claim one. At most one agent holds each computer, and each agent selects one current computer. A human may use it concurrently; do not assume the pointer, focus or screen is unchanged.
@@ -18,7 +20,9 @@ Before browser work read swarm/computers/browser; for screenshots and action exa
 } satisfies KnowledgeEntry;
 
 export const computerActions = {
-  id: 'swarm/computers/actions', parentId: 'swarm/computers', title: 'Screenshots and action combos',
+  id: 'swarm/computers/actions',
+  parentId: 'swarm/computers',
+  title: 'Screenshots and action combos',
   summary: 'Normalized coordinates, adjusted crop bounds, action grammar, speed and duration budgets.',
   source: 'docs/agent-computer-use.md',
   content: `glance({"quality":"low"}) captures the WHOLE screen. low (default) uses 33% of source width/height, medium 50%, high 75%, full 100% (native dimensions). Low is for orientation/layout, NOT accurate reading or diagnosing fine details. Use high for broad readable context; choose glance({"quality":"full"}) for exact text/details spread across the screen, or look_at for a specific region. If text or an error is unclear, increase detail or crop the relevant area; if still unclear, deliberately zoom the application or report the uncertainty. Do not guess, repeat low-resolution screenshots for the same unreadable detail, or claim an issue is absent/fixed without inspecting it clearly. After relevant input, verify the actual application outcome with a fresh adequately detailed screenshot; dispatched input is not proof of task success. Full images retain existing JPEG/frame-size limits; use a crop if a full frame exceeds them.
@@ -37,7 +41,9 @@ Screenshot copies share a 50 MB disk pool: at its threshold at least the oldest 
 } satisfies KnowledgeEntry;
 
 export const computerBrowser = {
-  id: 'swarm/computers/browser', parentId: 'swarm/computers', title: 'Browser accounts and CAPTCHA',
+  id: 'swarm/computers/browser',
+  parentId: 'swarm/computers',
+  title: 'Browser accounts and CAPTCHA',
   summary: 'Report a blocking CAPTCHA before one default attempt; get informed approval for signed-in Google use.',
   source: 'docs/agent-computer-use.md',
   content: `When a CAPTCHA blocks browser progress, immediately REPORT the situation to the human through an authorized channel before trying it. Use send_message with final:false so you can continue after the report. By default you may make ONE attempt, then immediately report the outcome whether it succeeded or failed. Do not try again unless the human explicitly authorizes further attempts. Do not treat every new puzzle or reload of the same blocking challenge as a fresh allowance; do not loop, rotate identities/IPs, switch solvers or use another route to evade the attempt limit. If no authorized human-publication route is available, do not attempt it until you can report. This rule reduces unwanted account/IP restrictions; a failed challenge is not permission to work around the limit.

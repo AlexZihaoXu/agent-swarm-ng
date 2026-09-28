@@ -40,7 +40,9 @@ test('Settings endpoint editor can be bookmarked without placing unsaved keys in
   await expect(page.getByLabel('API key')).toHaveValue('');
   await page.getByRole('button', { name: 'Remove endpoint' }).click();
   await expect(page).toHaveURL(/\/settings$/);
-  await page.route('**/api/model-endpoints', route => route.fulfill({ json: [{ id: 'saved-1', name: 'Local', baseUrl: 'http://localhost:11434/v1', hasApiKey: false }] }));
+  await page.route('**/api/model-endpoints', route =>
+    route.fulfill({ json: [{ id: 'saved-1', name: 'Local', baseUrl: 'http://localhost:11434/v1', hasApiKey: false }] }),
+  );
   await page.goto('/settings/endpoints/saved-1');
   await expect(page.getByRole('heading', { name: 'Local' })).toBeVisible();
   await page.reload();
@@ -75,11 +77,19 @@ test('agent-to-agent DM deep link survives a reload without choosing another pee
 
 test('computer viewer path restores after reload and Back returns to the grid', async ({ page }) => {
   const id = '7ad66d47-c09d-478b-96be-8c734ac555eb';
-  await page.route(/\/api\/computers(?:\?.*)?$/, route => route.fulfill({ json: { controllerConnected: true, computers: [
-    { id, name: 'Test X11 desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0 },
-  ] } }));
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({
+      json: {
+        controllerConnected: true,
+        computers: [{ id, name: 'Test X11 desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0 }],
+      },
+    }),
+  );
   await page.route(`**/computers/${id}/desktop/api/health`, route => route.fulfill({ json: { status: 'ok' } }));
-  await page.route(url => new URL(url).pathname === `/computers/${id}/desktop/`, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><canvas id="videoCanvas"></canvas>' }));
+  await page.route(
+    url => new URL(url).pathname === `/computers/${id}/desktop/`,
+    route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><canvas id="videoCanvas"></canvas>' }),
+  );
   await page.goto('/computers');
   await expect(page.getByRole('heading', { name: 'Computers', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open Test X11 desk desktop' }).click();
@@ -98,13 +108,17 @@ test('legacy section bookmarks and DM preview have refreshable paths without tab
   await page.goto('/agents/morgan/edit/avatar');
   const editor = page.getByRole('region', { name: 'Settings for Morgan' });
   await expect(editor).toBeVisible();
-  await expect.poll(() => editor.getByRole('region', { name: 'Agent editor' }).evaluate(element => element.scrollTop)).toBeGreaterThan(100);
+  await expect
+    .poll(() => editor.getByRole('region', { name: 'Agent editor' }).evaluate(element => element.scrollTop))
+    .toBeGreaterThan(100);
   await expect(editor.getByRole('heading', { name: 'Avatar' })).toBeVisible();
   await page.goto('/agents/morgan/edit/settings/channels');
   await expect(editor.getByRole('checkbox', { name: 'Avery' })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/agents\/morgan\/edit\/avatar$/);
-  await expect.poll(() => editor.getByRole('region', { name: 'Agent editor' }).evaluate(element => element.scrollTop)).toBeGreaterThan(100);
+  await expect
+    .poll(() => editor.getByRole('region', { name: 'Agent editor' }).evaluate(element => element.scrollTop))
+    .toBeGreaterThan(100);
   await page.goForward();
   await expect(page).toHaveURL(/\/agents\/morgan\/edit\/settings\/channels$/);
   await page.goto('/agents/morgan/edit/settings/channels/swarm');
@@ -144,9 +158,14 @@ test('agent create and delete dialogs reopen by path without preserving destruct
 
 test('computer create and delete dialogs can reopen by path without restoring confirmation text', async ({ page }) => {
   const id = '7ad66d47-c09d-478b-96be-8c734ac555eb';
-  await page.route(/\/api\/computers(?:\?.*)?$/, route => route.fulfill({ json: { controllerConnected: true, computers: [
-    { id, name: 'Test X11 desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0 },
-  ] } }));
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({
+      json: {
+        controllerConnected: true,
+        computers: [{ id, name: 'Test X11 desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0 }],
+      },
+    }),
+  );
   await page.goto('/computers/new');
   await expect(page.getByRole('dialog', { name: 'Create computer' })).toBeVisible();
   await page.reload();
@@ -164,14 +183,29 @@ test('computer create and delete dialogs can reopen by path without restoring co
 });
 
 test('a deep-linked agent outside the first saved page loads before showing settings', async ({ page }) => {
-  const agent = { id: 'late-agent', name: 'Late agent', channelId: 'late-channel', createdAt: Date.now(), lastMessage: null };
+  const agent = {
+    id: 'late-agent',
+    name: 'Late agent',
+    channelId: 'late-channel',
+    createdAt: Date.now(),
+    lastMessage: null,
+  };
   const requests: string[] = [];
   await page.route(/\/api\/agents(?:\?.*)?$/, route => {
     const after = new URL(route.request().url()).searchParams.get('after');
     requests.push(after ?? 'first');
-    return route.fulfill({ json: after ? { agents: [agent], nextCursor: null } : { agents: [{ id: 'avery', name: 'Avery', channelId: 'agent-avery', createdAt: 1, lastMessage: null }], nextCursor: 1 } });
+    return route.fulfill({
+      json: after
+        ? { agents: [agent], nextCursor: null }
+        : {
+            agents: [{ id: 'avery', name: 'Avery', channelId: 'agent-avery', createdAt: 1, lastMessage: null }],
+            nextCursor: 1,
+          },
+    });
   });
-  await page.route('**/api/channels/late-channel/messages*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));
+  await page.route('**/api/channels/late-channel/messages*', route =>
+    route.fulfill({ json: { messages: [], nextCursor: null } }),
+  );
   await page.goto('/agents/late-agent');
   await expect(page.getByRole('region', { name: 'Settings for Avery' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Settings for Late agent' })).toBeVisible();
@@ -183,12 +217,18 @@ test('invalid resource URLs never silently open another resource', async ({ page
   await page.goto('/agents/missing-agent');
   await expect(page.getByText('Page not found.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Avery', exact: true })).toHaveCount(0);
-  await page.route(/\/api\/computers(?:\?.*)?$/, route => route.fulfill({ json: { controllerConnected: true, computers: [] } }));
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({ json: { controllerConnected: true, computers: [] } }),
+  );
   await page.goto('/computers/missing-computer');
   await expect(page.getByRole('alert')).toContainText('Computer not found.');
   await expect(page).toHaveURL(/\/computers\/missing-computer$/);
-  await page.route('**/api/groups/missing-group', route => route.fulfill({ status: 404, json: { message: 'Group not found.' } }));
-  await page.route('**/api/groups/missing-group/messages*', route => route.fulfill({ status: 404, json: { message: 'Group not found.' } }));
+  await page.route('**/api/groups/missing-group', route =>
+    route.fulfill({ status: 404, json: { message: 'Group not found.' } }),
+  );
+  await page.route('**/api/groups/missing-group/messages*', route =>
+    route.fulfill({ status: 404, json: { message: 'Group not found.' } }),
+  );
   await page.goto('/chat/groups/missing-group');
   await expect(page).toHaveURL(/\/chat(?:\/agents\/avery)?$/);
   await expect(page.getByRole('region', { name: /Group conversation:/ })).toHaveCount(0);
@@ -198,7 +238,9 @@ test('group conversation path restores without opening a different chat', async 
   const group = { id: 'team', name: 'Research', createdAt: Date.now(), lastMessage: null, members: [] };
   await page.route(/\/api\/groups(?:\?.*)?$/, route => route.fulfill({ json: { groups: [group], nextCursor: null } }));
   await page.route('**/api/groups/team', route => route.fulfill({ json: group }));
-  await page.route('**/api/groups/team/messages*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));
+  await page.route('**/api/groups/team/messages*', route =>
+    route.fulfill({ json: { messages: [], nextCursor: null } }),
+  );
   await page.goto('/chat/groups/team');
   await expect(page.getByRole('heading', { name: 'Research', exact: true })).toBeVisible();
   await page.reload();

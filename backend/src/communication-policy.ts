@@ -6,6 +6,12 @@ export const liveChainWhere = {
   OR: [{ rootAgentId: { not: null } }, { origin: 'human', rootGroupId: { not: null } }],
 } satisfies Prisma.DmChainWhereInput;
 
-export function isLiveChain(chain: { cancelled: boolean; rootAgentId: string | null; origin: string; rootGroupId: string | null } | null) {
-  return Boolean(chain && !chain.cancelled && (chain.rootAgentId !== null || chain.origin === 'human' && chain.rootGroupId !== null));
+export function isLiveChain(
+  chain: { cancelled: boolean; rootAgentId: string | null; origin: string; rootGroupId: string | null } | null,
+) {
+  return Boolean(
+    chain &&
+    !chain.cancelled &&
+    (chain.rootAgentId !== null || (chain.origin === 'human' && chain.rootGroupId !== null)),
+  );
 }

@@ -3,11 +3,15 @@ import { sampleAgents } from './sample-agents';
 
 test('agent cards keep the same avatar and presence sizes in Chat and Agents', async ({ page }) => {
   await page.goto('/');
-  const agentCard = page.getByRole('complementary', { name: 'Agents' }).getByRole('button', { name: 'Open settings for Avery' });
+  const agentCard = page
+    .getByRole('complementary', { name: 'Agents' })
+    .getByRole('button', { name: 'Open settings for Avery' });
   const agentFace = await agentCard.locator('span.relative').first().boundingBox();
   const agentDot = await agentCard.locator('[data-slot="online-indicator"]').boundingBox();
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
-  const chatCard = page.getByRole('complementary', { name: 'Chats' }).getByRole('button', { name: 'Open conversation with Avery' });
+  const chatCard = page
+    .getByRole('complementary', { name: 'Chats' })
+    .getByRole('button', { name: 'Open conversation with Avery' });
   const chatFace = await chatCard.getByTestId('chat-avatar').boundingBox();
   const chatDot = await chatCard.locator('[data-slot="online-indicator"]').boundingBox();
   expect(chatFace?.width).toBe(agentFace?.width);
@@ -18,15 +22,22 @@ test('agent cards keep the same avatar and presence sizes in Chat and Agents', a
 
 test('Chat sidebar context menu creates and edits groups, and navigates from agent DMs', async ({ page }) => {
   let group = {
-    id: 'team', name: 'Research', createdAt: Date.now(), lastMessage: null,
-    members: sampleAgents.slice(0, 1).map(agent => ({ id: agent.id, name: agent.name, avatar: null, channelId: agent.channelId })),
+    id: 'team',
+    name: 'Research',
+    createdAt: Date.now(),
+    lastMessage: null,
+    members: sampleAgents
+      .slice(0, 1)
+      .map(agent => ({ id: agent.id, name: agent.name, avatar: null, channelId: agent.channelId })),
   };
   await page.route(/\/api\/groups(?:\?.*)?$/, route => route.fulfill({ json: { groups: [group], nextCursor: null } }));
   await page.route('**/api/groups/team', route => {
     if (route.request().method() === 'PATCH') group = { ...group, name: route.request().postDataJSON().name };
     return route.fulfill({ json: group });
   });
-  await page.route('**/api/groups/team/messages*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));
+  await page.route('**/api/groups/team/messages*', route =>
+    route.fulfill({ json: { messages: [], nextCursor: null } }),
+  );
   await page.goto('/');
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   const sidebar = page.getByRole('complementary', { name: 'Chats' });
@@ -71,14 +82,23 @@ test('Chat sidebar context menu can create a group from an empty list', async ({
   await page.route(/\/api\/groups(?:\?.*)?$/, route => {
     if (route.request().method() === 'POST') {
       const body = route.request().postDataJSON();
-      group = { id: 'new-group', name: body.name, createdAt: Date.now(), lastMessage: null,
-        members: sampleAgents.filter(agent => body.agentIds.includes(agent.id)).map(agent => ({ id: agent.id, name: agent.name, avatar: null, channelId: agent.channelId })) };
+      group = {
+        id: 'new-group',
+        name: body.name,
+        createdAt: Date.now(),
+        lastMessage: null,
+        members: sampleAgents
+          .filter(agent => body.agentIds.includes(agent.id))
+          .map(agent => ({ id: agent.id, name: agent.name, avatar: null, channelId: agent.channelId })),
+      };
       return route.fulfill({ json: group });
     }
     return route.fulfill({ json: { groups: group ? [group] : [], nextCursor: null } });
   });
   await page.route('**/api/groups/new-group', route => route.fulfill({ json: group }));
-  await page.route('**/api/groups/new-group/messages*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));
+  await page.route('**/api/groups/new-group/messages*', route =>
+    route.fulfill({ json: { messages: [], nextCursor: null } }),
+  );
   await page.goto('/');
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByRole('complementary', { name: 'Chats' }).click({ button: 'right', position: { x: 40, y: 350 } });

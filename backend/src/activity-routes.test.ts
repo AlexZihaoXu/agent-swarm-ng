@@ -19,15 +19,28 @@ it('serves no-store operator pages/fragments with ownership, bounds, retries and
   try {
     expect((await db.client.activity.findUnique({ where: { id: 'run:run-status' } }))?.state).toBe('active');
     const page = await app.inject(`/api/agents/${agent.id}/activity`);
-    expect(page.statusCode).toBe(200); expect(page.headers['cache-control']).toBe('no-store');
-    expect(page.json().entries.find((entry: {id:string}) => entry.id === 'run:output')).toMatchObject({ text: 'x'.repeat(6000), nextOffset: 6000, revision: 1 });
-    const fragment = await app.inject(`/api/agents/${agent.id}/activity/entry?entryId=run:output&offset=6000&revision=1`);
+    expect(page.statusCode).toBe(200);
+    expect(page.headers['cache-control']).toBe('no-store');
+    expect(page.json().entries.find((entry: { id: string }) => entry.id === 'run:output')).toMatchObject({
+      text: 'x'.repeat(6000),
+      nextOffset: 6000,
+      revision: 1,
+    });
+    const fragment = await app.inject(
+      `/api/agents/${agent.id}/activity/entry?entryId=run:output&offset=6000&revision=1`,
+    );
     expect(fragment.json()).toMatchObject({ text: 'x'.repeat(1000), offset: 6000, nextOffset: null });
-    expect((await app.inject(`/api/agents/${agent.id}/activity/entry?entryId=run:output&revision=2`)).statusCode).toBe(409);
+    expect((await app.inject(`/api/agents/${agent.id}/activity/entry?entryId=run:output&revision=2`)).statusCode).toBe(
+      409,
+    );
     expect((await app.inject('/api/agents/foreign/activity/entry?entryId=run:output')).statusCode).toBe(404);
     expect((await app.inject('/api/agents/foreign/activity')).statusCode).toBe(404);
     expect((await app.inject(`/api/agents/${agent.id}/activity?before=-1`)).statusCode).toBe(400);
-    expect((await app.inject(`/api/agents/${agent.id}/activity/entry?entryId=run:output&offset=-1`)).statusCode).toBe(400);
+    expect((await app.inject(`/api/agents/${agent.id}/activity/entry?entryId=run:output&offset=-1`)).statusCode).toBe(
+      400,
+    );
     expect((await app.inject(`/api/channels/${agent.channels[0].id}/messages`)).json().messages).toEqual([]);
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });

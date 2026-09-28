@@ -7,7 +7,9 @@ import { prepareDatabase } from './test-database';
 import { PlatformStore } from './platform-store';
 
 let folder: string;
-beforeAll(async () => { folder = await mkdtemp(join(process.env.SQLITE_TEST_ROOT!, 'store-')); });
+beforeAll(async () => {
+  folder = await mkdtemp(join(process.env.SQLITE_TEST_ROOT!, 'store-'));
+});
 
 const config = { name: 'Durable', endpointId: 'endpoint', model: 'test', thinkingLevel: 'off' as const };
 
@@ -26,13 +28,16 @@ describe('Prisma SQLite platform records', () => {
     try {
       expect((await store.findAgent(agent.id))?.channels[0].id).toBe(channel.id);
       expect((await store.messages(channel.id)).messages.map(row => row.text)).toEqual(['Hello', 'Published reply']);
-    } finally { await store.close(); }
+    } finally {
+      await store.close();
+    }
   });
 
   it('saves only same-channel reply targets and returns previews when the parent is outside the page', async () => {
     const store = await prepareDatabase(join(folder, 'replies.db'));
     try {
-      const agent = await store.createAgent(config), other = await store.createAgent(config);
+      const agent = await store.createAgent(config),
+        other = await store.createAgent(config);
       const channelId = agent.channels[0].id;
       const parent = await store.appendMessage(channelId, 'assistant', 'A prior answer');
       const foreign = await store.appendMessage(other.channels[0].id, 'assistant', 'Private answer');
@@ -41,42 +46,71 @@ describe('Prisma SQLite platform records', () => {
       expect(reply.replyToId).toBe(parent.id);
       expect(reply.replyTo?.text).toBe('A prior answer');
       expect((await store.messages(channelId, undefined, 1)).messages[0].replyTo?.id).toBe(parent.id);
-      await expect(store.appendMessage(channelId, 'user', 'No', crypto.randomUUID(), foreign.id)).rejects.toThrow('Reply target not found');
-      await expect(store.appendMessage(channelId, 'user', 'No', crypto.randomUUID(), 'missing')).rejects.toThrow('Reply target not found');
+      await expect(store.appendMessage(channelId, 'user', 'No', crypto.randomUUID(), foreign.id)).rejects.toThrow(
+        'Reply target not found',
+      );
+      await expect(store.appendMessage(channelId, 'user', 'No', crypto.randomUUID(), 'missing')).rejects.toThrow(
+        'Reply target not found',
+      );
       expect(await store.client.message.count({ where: { channelId } })).toBe(54);
       await store.client.message.delete({ where: { id: parent.id } });
-      expect((await store.messages(channelId, undefined, 1)).messages[0]).toMatchObject({ id: reply.id, replyToId: null, replyTo: null });
-    } finally { await store.close(); }
+      expect((await store.messages(channelId, undefined, 1)).messages[0]).toMatchObject({
+        id: reply.id,
+        replyToId: null,
+        replyTo: null,
+      });
+    } finally {
+      await store.close();
+    }
   });
 
   it('uses channel-scoped keyset pages without overlap or ordering by tied timestamps', async () => {
     const store = await prepareDatabase(join(folder, 'pages.db'));
     try {
-      const first = await store.createAgent(config); const other = await store.createAgent(config);
+      const first = await store.createAgent(config);
+      const other = await store.createAgent(config);
       const channelId = first.channels[0].id;
       for (let i = 0; i < 5; i++) await store.appendMessage(channelId, 'user', String(i));
       await store.appendMessage(other.channels[0].id, 'user', 'Other channel');
-      const plan = await store.client.$queryRawUnsafe<{ detail: string }[]>('EXPLAIN QUERY PLAN SELECT * FROM Message WHERE channelId = ? AND sequence < ? ORDER BY sequence DESC LIMIT 50', channelId, 100);
+      const plan = await store.client.$queryRawUnsafe<{ detail: string }[]>(
+        'EXPLAIN QUERY PLAN SELECT * FROM Message WHERE channelId = ? AND sequence < ? ORDER BY sequence DESC LIMIT 50',
+        channelId,
+        100,
+      );
       expect(plan.map(row => row.detail).join(' ')).toContain('Message_channelId_sequence_idx');
       const latest = await store.messages(channelId, undefined, 2);
       await store.appendMessage(channelId, 'user', 'Arrived between pages');
       const older = await store.messages(channelId, latest.nextCursor!, 2);
       const oldest = await store.messages(channelId, older.nextCursor!, 2);
-      expect([...oldest.messages, ...older.messages, ...latest.messages].map(row => row.text)).toEqual(['0', '1', '2', '3', '4']);
+      expect([...oldest.messages, ...older.messages, ...latest.messages].map(row => row.text)).toEqual([
+        '0',
+        '1',
+        '2',
+        '3',
+        '4',
+      ]);
       expect(oldest.nextCursor).toBeNull();
       const page = await store.listAgents(undefined, 1);
       expect((await store.listAgents(page.nextCursor!, 1)).agents.map(row => row.id)).toEqual([other.id]);
-    } finally { await store.close(); }
+    } finally {
+      await store.close();
+    }
   });
 
   it('bounds model context without deleting display history and rejects duplicate message IDs', async () => {
     const store = await prepareDatabase(join(folder, 'context.db'));
     try {
-      const agent = await store.createAgent(config); const channelId = agent.channels[0].id;
+      const agent = await store.createAgent(config);
+      const channelId = agent.channels[0].id;
       for (let i = 0; i < 105; i++) await store.appendMessage(channelId, 'user', String(i));
       const recent = await store.context(channelId);
       expect(recent).toHaveLength(8);
-      expect(recent[0]).toMatchObject({ id: expect.any(String), sequence: expect.any(Number), timestamp: expect.any(Number), text: '97' });
+      expect(recent[0]).toMatchObject({
+        id: expect.any(String),
+        sequence: expect.any(Number),
+        timestamp: expect.any(Number),
+        text: '97',
+      });
       const beforeIncoming = await store.context(channelId, recent.at(-1)!.id);
       expect(beforeIncoming).toHaveLength(8);
       expect(beforeIncoming[0].text).toBe('96');
@@ -94,7 +128,9 @@ describe('Prisma SQLite platform records', () => {
       const queuedContext = await store.context(channelId, saved.id, saved.sequence);
       expect(queuedContext.at(-1)?.text).toBe('Preceding turn finished');
       expect(queuedContext.some(message => message.text === 'Once' || message.text === 'Queued follow-up')).toBe(false);
-    } finally { await store.close(); }
+    } finally {
+      await store.close();
+    }
   });
 
   it('keeps its busy timeout after transactions and waits for a competing writer instead of failing', async () => {
@@ -105,15 +141,24 @@ describe('Prisma SQLite platform records', () => {
       await store.appendMessage(agent.channels[0].id, 'user', 'first'); // interactive transaction: the client swaps its connection
       expect(await store.client.$queryRawUnsafe('PRAGMA busy_timeout')).toEqual([{ timeout: 5000 }]);
       // The native driver blocks its thread while waiting, so the rival writer must live in another process.
-      const holder = spawn('bun', ['-e', `import { createClient } from '@libsql/client';
+      const holder = spawn(
+        'bun',
+        [
+          '-e',
+          `import { createClient } from '@libsql/client';
         const c = createClient({ url: ${JSON.stringify(pathToFileURL(resolve(path)).href)} });
-        const t = await c.transaction('write'); console.log('locked'); await new Promise(r => setTimeout(r, 1200)); await t.commit(); c.close();`], { cwd: resolve(__dirname, '..') });
+        const t = await c.transaction('write'); console.log('locked'); await new Promise(r => setTimeout(r, 1200)); await t.commit(); c.close();`,
+        ],
+        { cwd: resolve(__dirname, '..') },
+      );
       const exited = new Promise(resolvePromise => holder.once('exit', resolvePromise));
       await new Promise(resolvePromise => holder.stdout.once('data', resolvePromise)); // wait until the lock is held
       const started = Date.now();
       await store.appendMessage(agent.channels[0].id, 'user', 'second'); // must wait, not throw SQLITE_BUSY
       expect(Date.now() - started).toBeGreaterThanOrEqual(400);
       await exited;
-    } finally { await store.close(); }
+    } finally {
+      await store.close();
+    }
   });
 });

@@ -40,8 +40,12 @@ it('saves incremental private entries in SQLite and restores them across databas
       expect(await reopened.client.agentSessionEntry.count()).toBe(0);
       expect(await reopened.client.agentSession.count()).toBe(0);
       expect(await reopened.client.agent.count()).toBe(1);
-    } finally { await reopened.close(); }
-  } finally { await database.close(); }
+    } finally {
+      await reopened.close();
+    }
+  } finally {
+    await database.close();
+  }
 });
 
 it('saves the completed boundary even if the live Pi manager starts another turn before SQLite writes', async () => {
@@ -58,7 +62,9 @@ it('saves the completed boundary even if the live Pi manager starts another turn
     expect(JSON.stringify(interrupted.buildSessionContext().messages)).toContain('Published after the frozen boundary');
     await sessions.save(agent.id, manager); // Provider is idle, so it is safe to advance publication cursors.
     expect((await sessions.load(agent.id))!.getEntries()).toHaveLength(2);
-  } finally { await database.close(); }
+  } finally {
+    await database.close();
+  }
 });
 
 it('keeps the previous checkpoint if a new snapshot is oversized or from a divergent session', async () => {
@@ -73,7 +79,9 @@ it('keeps the previous checkpoint if a new snapshot is oversized or from a diver
     first.appendMessage({ role: 'user', content: 'x'.repeat(1024 * 1024), timestamp: 2 });
     await expect(sessions.save(agent.id, first)).rejects.toThrow('too large');
     expect((await sessions.load(agent.id))!.getEntries()).toHaveLength(1);
-  } finally { await database.close(); }
+  } finally {
+    await database.close();
+  }
 });
 
 it('fails closed on a corrupt private checkpoint instead of silently starting a new Pi session', async () => {
@@ -82,9 +90,14 @@ it('fails closed on a corrupt private checkpoint instead of silently starting a 
     const session = SessionManager.inMemory();
     session.appendMessage({ role: 'user', content: 'Protected prior context', timestamp: 1 });
     await sessions.save(agent.id, session);
-    await database.client.agentSessionEntry.update({ where: { agentId_position: { agentId: agent.id, position: 0 } }, data: { payload: '{"type":"message","id":"wrong","parentId":null}' } });
+    await database.client.agentSessionEntry.update({
+      where: { agentId_position: { agentId: agent.id, position: 0 } },
+      data: { payload: '{"type":"message","id":"wrong","parentId":null}' },
+    });
     await expect(sessions.load(agent.id)).rejects.toThrow('Private agent session is invalid');
-  } finally { await database.close(); }
+  } finally {
+    await database.close();
+  }
 });
 
 it('reconciles committed private, group and DM publications missed by a Pi checkpoint once', async () => {
@@ -100,14 +113,25 @@ it('reconciles committed private, group and DM publications missed by a Pi check
     await groups.publishAgent(group.id, agent.id, 'Saved group answer', human.message.chainId, 'reply');
     const swarm = new SwarmStore(database);
     await swarm.updateSettings(agent.id, { allowedDmAgentIds: [other.id] });
-    await swarm.send({ senderId: agent.id, recipientId: other.id, chainId: human.message.chainId, deliveryKey: 'saved-dm', text: 'Saved peer answer' });
+    await swarm.send({
+      senderId: agent.id,
+      recipientId: other.id,
+      chainId: human.message.chainId,
+      deliveryKey: 'saved-dm',
+      text: 'Saved peer answer',
+    });
     const restored = (await sessions.load(agent.id))!;
     const context = JSON.stringify(restored.buildSessionContext().messages);
-    for (const text of ['Saved private answer', 'Saved group answer', 'Saved peer answer']) expect(context).toContain(text);
+    for (const text of ['Saved private answer', 'Saved group answer', 'Saved peer answer'])
+      expect(context).toContain(text);
     expect(restored.getEntries().filter(entry => entry.type === 'custom_message')).toHaveLength(1);
     await sessions.save(agent.id, restored);
-    expect((await sessions.load(agent.id))!.getEntries().filter(entry => entry.type === 'custom_message')).toHaveLength(1);
-  } finally { await database.close(); }
+    expect((await sessions.load(agent.id))!.getEntries().filter(entry => entry.type === 'custom_message')).toHaveLength(
+      1,
+    );
+  } finally {
+    await database.close();
+  }
 });
 
 it('persists a completed compaction as one consistent private checkpoint', async () => {
@@ -120,7 +144,13 @@ it('persists a completed compaction as one consistent private checkpoint', async
     session.appendCompaction('Old detail summarized', kept, 100);
     await sessions.save(agent.id, session);
     const restored = (await sessions.load(agent.id))!;
-    expect(restored.buildSessionContext().messages.map(message => message.role === 'user' ? message.content : message.role === 'compactionSummary' ? message.summary : '')).toEqual(['Old detail summarized', 'Retained detail']);
+    expect(
+      restored
+        .buildSessionContext()
+        .messages.map(message =>
+          message.role === 'user' ? message.content : message.role === 'compactionSummary' ? message.summary : '',
+        ),
+    ).toEqual(['Old detail summarized', 'Retained detail']);
     expect(restored.getEntries()).toHaveLength(2); // Only the retained active path is loaded.
     expect(await database.client.agentSessionEntry.count({ where: { agentId: agent.id } })).toBe(3); // Older entry remains archived.
     const next = restored.appendMessage({ role: 'user', content: 'Next turn', timestamp: 3 });
@@ -129,8 +159,16 @@ it('persists a completed compaction as one consistent private checkpoint', async
     restored.appendCompaction('Earlier work summarized again', next, 120);
     await sessions.save(agent.id, restored);
     const later = (await sessions.load(agent.id))!;
-    expect(later.buildSessionContext().messages.map(message => message.role === 'user' ? message.content : message.role === 'compactionSummary' ? message.summary : '')).toEqual(['Earlier work summarized again', 'Next turn']);
+    expect(
+      later
+        .buildSessionContext()
+        .messages.map(message =>
+          message.role === 'user' ? message.content : message.role === 'compactionSummary' ? message.summary : '',
+        ),
+    ).toEqual(['Earlier work summarized again', 'Next turn']);
     expect(later.getEntries()).toHaveLength(2);
     expect(await database.client.agentSessionEntry.count({ where: { agentId: agent.id } })).toBe(5);
-  } finally { await database.close(); }
+  } finally {
+    await database.close();
+  }
 });

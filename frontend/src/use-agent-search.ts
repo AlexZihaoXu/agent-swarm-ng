@@ -6,14 +6,26 @@ import { asAgent, type ChatAgent } from '@/use-chat';
 export function useAgentSearch(search: string, loaded: ChatAgent[]) {
   const term = search.trim();
   const query = useInfiniteQuery({
-    queryKey: ['chat-agent-search', term], enabled: Boolean(term), initialPageParam: undefined as number | undefined,
+    queryKey: ['chat-agent-search', term],
+    enabled: Boolean(term),
+    initialPageParam: undefined as number | undefined,
     queryFn: async ({ pageParam, signal }) => {
-      const { data, error } = await api.GET('/api/agents', { params: { query: { search: term, after: pageParam } }, signal });
+      const { data, error } = await api.GET('/api/agents', {
+        params: { query: { search: term, after: pageParam } },
+        signal,
+      });
       if (error || !data) throw new Error('Could not search agents.');
       return data;
     },
     getNextPageParam: page => page.nextCursor ?? undefined,
   });
-  const matches = query.data?.pages.flatMap(page => page.agents).map(real => loaded.find(agent => agent.id === real.id) ?? asAgent(real)) ?? [];
-  return { term, query, agents: term ? matches.filter(agent => agent.name.toLowerCase().includes(term.toLowerCase())) : loaded };
+  const matches =
+    query.data?.pages
+      .flatMap(page => page.agents)
+      .map(real => loaded.find(agent => agent.id === real.id) ?? asAgent(real)) ?? [];
+  return {
+    term,
+    query,
+    agents: term ? matches.filter(agent => agent.name.toLowerCase().includes(term.toLowerCase())) : loaded,
+  };
 }

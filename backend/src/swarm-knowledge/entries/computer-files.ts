@@ -1,6 +1,8 @@
 import type { KnowledgeEntry } from '../catalog';
 export const computerFiles = {
-  id: 'swarm/computers/files', parentId: 'swarm/computers', title: 'Guest files and synchronous commands',
+  id: 'swarm/computers/files',
+  parentId: 'swarm/computers',
+  title: 'Guest files and synchronous commands',
   summary: 'read/edit/write/bash on the currently claimed computer: paths, bounds, cancellation and image reading.',
   source: 'docs/agent-computer-use.md',
   content: `These custom tools act only in the computer you currently hold through use_computer. Assignment alone is insufficient; every call rechecks assignment and control. There is no platform-host filesystem/shell access and no transfer of provider/developer credentials. Another agent's claim cannot be bypassed by supplying a computer ID or path. Release/revocation cancels and settles outstanding operations before transfer; uncertain settlement keeps the claim held.

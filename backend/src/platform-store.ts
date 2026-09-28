@@ -9,7 +9,9 @@ import { channelReplyContext } from './reply-preview';
 export const channelReplyInclude = { replyTo: { select: { id: true, role: true, text: true } } } as const;
 const agentSelection = { channels: { where: { kind: 'platform-chat' }, take: 1 } };
 type StoredAgent = Prisma.AgentGetPayload<{ include: typeof agentSelection }>;
-type AgentInput = Pick<Prisma.AgentCreateInput, 'name' | 'endpointId' | 'model' | 'thinkingLevel'> & { avatar?: AgentAvatar };
+type AgentInput = Pick<Prisma.AgentCreateInput, 'name' | 'endpointId' | 'model' | 'thinkingLevel'> & {
+  avatar?: AgentAvatar;
+};
 
 export class PlatformStore {
   readonly client: PrismaClient;
@@ -22,22 +24,36 @@ export class PlatformStore {
   }
 
   initialize() {
-    return this.initialized ??= (async () => {
+    return (this.initialized ??= (async () => {
       await this.client.$queryRawUnsafe('PRAGMA journal_mode=WAL');
       await this.client.$executeRawUnsafe('PRAGMA foreign_keys=ON');
-    })();
+    })());
   }
-  async close() { await this.client.$disconnect(); }
+  async close() {
+    await this.client.$disconnect();
+  }
 
   async createAgent(input: AgentInput) {
     await this.initialize();
-    return this.withLatestMessage(await this.client.agent.create({ data: { ...input, avatar: input.avatar ? encodeAvatar(input.avatar) : undefined, channels: { create: { kind: 'platform-chat' } } }, include: agentSelection }));
+    return this.withLatestMessage(
+      await this.client.agent.create({
+        data: {
+          ...input,
+          avatar: input.avatar ? encodeAvatar(input.avatar) : undefined,
+          channels: { create: { kind: 'platform-chat' } },
+        },
+        include: agentSelection,
+      }),
+    );
   }
   async updateAvatar(id: string, avatar: AgentAvatar) {
     await this.initialize();
     return (await this.client.agent.updateMany({ where: { id }, data: { avatar: encodeAvatar(avatar) } })).count > 0;
   }
-  async updateAgent(id: string, data: { name: string; endpointId: string; model: string; thinkingLevel: AgentInput['thinkingLevel'] }) {
+  async updateAgent(
+    id: string,
+    data: { name: string; endpointId: string; model: string; thinkingLevel: AgentInput['thinkingLevel'] },
+  ) {
     await this.initialize();
     return this.withLatestMessage(await this.client.agent.update({ where: { id }, data, include: agentSelection }));
   }
@@ -48,10 +64,21 @@ export class PlatformStore {
   }
   async listAgents(after?: number, limit = 100, search?: string) {
     await this.initialize();
-    const rows = await this.client.agent.findMany({ where: { ...(after ? { sequence: { gt: after } } : {}), ...(search?.trim() ? { name: { contains: search.trim() } } : {}) }, orderBy: { sequence: 'asc' }, take: limit + 1, include: agentSelection });
+    const rows = await this.client.agent.findMany({
+      where: {
+        ...(after ? { sequence: { gt: after } } : {}),
+        ...(search?.trim() ? { name: { contains: search.trim() } } : {}),
+      },
+      orderBy: { sequence: 'asc' },
+      take: limit + 1,
+      include: agentSelection,
+    });
     const more = rows.length > limit;
     const agents = rows.slice(0, limit);
-    return { agents: await Promise.all(agents.map(agent => this.withLatestMessage(agent))), nextCursor: more ? agents.at(-1)!.sequence : null };
+    return {
+      agents: await Promise.all(agents.map(agent => this.withLatestMessage(agent))),
+      nextCursor: more ? agents.at(-1)!.sequence : null,
+    };
   }
   async findAgent(id: string) {
     await this.initialize();
@@ -65,9 +92,17 @@ export class PlatformStore {
   private async withLatestMessage(agent: StoredAgent) {
     // Prisma nested take across multiple parents reads all matching SQLite rows, then trims in memory.
     // Use bounded indexed lookups instead, so listing cards never loads entire conversations.
-    const channels = await Promise.all(agent.channels.map(async channel => ({ ...channel,
-      messages: await this.client.message.findMany({ where: { channelId: channel.id }, orderBy: { sequence: 'desc' }, take: 1, include: channelReplyInclude }),
-    })));
+    const channels = await Promise.all(
+      agent.channels.map(async channel => ({
+        ...channel,
+        messages: await this.client.message.findMany({
+          where: { channelId: channel.id },
+          orderBy: { sequence: 'desc' },
+          take: 1,
+          include: channelReplyInclude,
+        }),
+      })),
+    );
     return { ...agent, channels };
   }
   async hasChannel(id: string) {
@@ -76,15 +111,27 @@ export class PlatformStore {
   }
   async messages(channelId: string, before?: number, limit = 50) {
     await this.initialize();
-    const rows = await this.client.message.findMany({ where: { channelId, ...(before ? { sequence: { lt: before } } : {}) }, orderBy: { sequence: 'desc' }, take: limit + 1, include: channelReplyInclude });
+    const rows = await this.client.message.findMany({
+      where: { channelId, ...(before ? { sequence: { lt: before } } : {}) },
+      orderBy: { sequence: 'desc' },
+      take: limit + 1,
+      include: channelReplyInclude,
+    });
     const more = rows.length > limit;
     const messages = rows.slice(0, limit).reverse();
     return { messages, nextCursor: more ? messages[0].sequence : null };
   }
-  async appendMessage(channelId: string, role: 'user' | 'assistant', text: string, id: string = crypto.randomUUID(), replyToId?: string) {
+  async appendMessage(
+    channelId: string,
+    role: 'user' | 'assistant',
+    text: string,
+    id: string = crypto.randomUUID(),
+    replyToId?: string,
+  ) {
     await this.initialize();
     return this.client.$transaction(async tx => {
-      if (replyToId && !await tx.message.findFirst({ where: { id: replyToId, channelId }, select: { id: true } })) throw new Error('Reply target not found in this channel.');
+      if (replyToId && !(await tx.message.findFirst({ where: { id: replyToId, channelId }, select: { id: true } })))
+        throw new Error('Reply target not found in this channel.');
       return tx.message.create({ data: { id, channelId, role, text, replyToId }, include: channelReplyInclude });
     });
   }
@@ -94,13 +141,33 @@ export class PlatformStore {
   }
   async context(channelId: string, excludeMessageId?: string, pendingAfterSequence?: number) {
     await this.initialize();
-    const messages = pendingAfterSequence === undefined ? (await this.messages(channelId, undefined, excludeMessageId ? 9 : 8)).messages
-      : (await this.client.message.findMany({ where: { channelId, OR: [{ role: 'assistant' }, { sequence: { lt: pendingAfterSequence } }] }, orderBy: { sequence: 'desc' }, take: 8, include: channelReplyInclude })).reverse();
-    const agent = messages.some(message => message.replyTo) ? await this.client.channel.findUnique({ where: { id: channelId }, select: { agent: { select: { name: true } } } }) : null;
-    return messages.filter(message => message.id !== excludeMessageId).slice(-8).map(message => ({
-      id: message.id, sequence: message.sequence, role: message.role, timestamp: message.createdAt.getTime(),
-      replyTo: channelReplyContext(message, agent?.agent.name ?? 'Agent'),
-      ...messageText(message.text),
-    }));
+    const messages =
+      pendingAfterSequence === undefined
+        ? (await this.messages(channelId, undefined, excludeMessageId ? 9 : 8)).messages
+        : (
+            await this.client.message.findMany({
+              where: { channelId, OR: [{ role: 'assistant' }, { sequence: { lt: pendingAfterSequence } }] },
+              orderBy: { sequence: 'desc' },
+              take: 8,
+              include: channelReplyInclude,
+            })
+          ).reverse();
+    const agent = messages.some(message => message.replyTo)
+      ? await this.client.channel.findUnique({
+          where: { id: channelId },
+          select: { agent: { select: { name: true } } },
+        })
+      : null;
+    return messages
+      .filter(message => message.id !== excludeMessageId)
+      .slice(-8)
+      .map(message => ({
+        id: message.id,
+        sequence: message.sequence,
+        role: message.role,
+        timestamp: message.createdAt.getTime(),
+        replyTo: channelReplyContext(message, agent?.agent.name ?? 'Agent'),
+        ...messageText(message.text),
+      }));
   }
 }

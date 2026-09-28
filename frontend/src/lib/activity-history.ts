@@ -10,17 +10,28 @@ export function mergeActivity(entries: ActivityEntry[], incoming: ActivityEntry[
       if (entry.revision < previous.revision) continue;
       if (entry.revision === previous.revision) {
         const length = new TextEncoder().encode(previous.text).length;
-        if (entry.offset === length && entry.offset > 0) result.set(entry.id, { ...entry, offset: 0, text: previous.text + entry.text });
+        if (entry.offset === length && entry.offset > 0)
+          result.set(entry.id, { ...entry, offset: 0, text: previous.text + entry.text });
         continue; // duplicate event or stale preview must not discard an expanded fragment
       }
     }
     if ((entry.offset ?? 0) > 0) continue; // a changed revision must restart at the first fragment
-    result.set(entry.id, { ...entry, text: append && entry.revision === undefined && previous ? previous.text + entry.text : entry.text });
+    result.set(entry.id, {
+      ...entry,
+      text: append && entry.revision === undefined && previous ? previous.text + entry.text : entry.text,
+    });
   }
-  return [...result.values()].sort((a, b) => (a.sequence ?? Infinity) - (b.sequence ?? Infinity) || a.timestamp - b.timestamp || a.id.localeCompare(b.id));
+  return [...result.values()].sort(
+    (a, b) =>
+      (a.sequence ?? Infinity) - (b.sequence ?? Infinity) || a.timestamp - b.timestamp || a.id.localeCompare(b.id),
+  );
 }
 
-export function reconcileActivityPage(current: ActivityEntry[], page: ActivityEntry[], beforeRequest?: ActivityEntry[]): ActivityEntry[] {
+export function reconcileActivityPage(
+  current: ActivityEntry[],
+  page: ActivityEntry[],
+  beforeRequest?: ActivityEntry[],
+): ActivityEntry[] {
   if (!beforeRequest) return mergeActivity(current, page);
   const baseline = new Map(beforeRequest.map(entry => [entry.id, entry.revision]));
   // A reconnect starts a new bounded window, but retains all events received while it loaded.

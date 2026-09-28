@@ -1,12 +1,31 @@
 import { readFileSync } from 'node:fs';
 import { DockerApi, DockerApiError } from './docker-api';
-import { decodeFileResult, MAX_DOWNLOAD, operatorFilesScript, validateFileQuery, type FileOperation, type FileQuery } from './operator-files';
+import {
+  decodeFileResult,
+  MAX_DOWNLOAD,
+  operatorFilesScript,
+  validateFileQuery,
+  type FileOperation,
+  type FileQuery,
+} from './operator-files';
 import { ComputerNames, ResourceError, validateId, validateName, type ResourceRole } from './resources';
-import { deriveComputerLimits, validateComputerConfiguration, type ComputerConfiguration, type ComputerLimits } from './computer-configuration';
+import {
+  deriveComputerLimits,
+  validateComputerConfiguration,
+  type ComputerConfiguration,
+  type ComputerLimits,
+} from './computer-configuration';
 
 type Container = {
-  Id: string; Image?: string; Config: { Labels?: Record<string, string>; Env?: string[] }; State: { Running: boolean; Status: string };
-  HostConfig?: { Devices?: { PathOnHost: string; PathInContainer: string; CgroupPermissions: string }[] | null; NanoCpus?: number; Memory?: number };
+  Id: string;
+  Image?: string;
+  Config: { Labels?: Record<string, string>; Env?: string[] };
+  State: { Running: boolean; Status: string };
+  HostConfig?: {
+    Devices?: { PathOnHost: string; PathInContainer: string; CgroupPermissions: string }[] | null;
+    NanoCpus?: number;
+    Memory?: number;
+  };
   NetworkSettings: { Networks: Record<string, { IPAddress: string; Aliases?: string[] | null; DNSNames?: string[] }> };
 };
 type ListedContainer = { Id: string; State: string; Image?: string; Labels: Record<string, string> };
@@ -17,9 +36,21 @@ export function displayServerOf(row: Pick<ListedContainer, 'Image' | 'Labels'>):
   if (labelled === 'x11' || labelled === 'wayland') return labelled;
   return /(^|[-:_])(x11|xorg\d*)([-_]|$)/i.test(row.Image ?? '') ? 'x11' : 'wayland';
 }
-type Network = { Id: string; Driver: string; Internal: boolean; EnableIPv6: boolean; Labels?: Record<string, string>; Options?: Record<string, string>; IPAM: { Config: { Subnet?: string; Gateway?: string }[] } };
+type Network = {
+  Id: string;
+  Driver: string;
+  Internal: boolean;
+  EnableIPv6: boolean;
+  Labels?: Record<string, string>;
+  Options?: Record<string, string>;
+  IPAM: { Config: { Subnet?: string; Gateway?: string }[] };
+};
 type Volume = { Name: string; Labels?: Record<string, string> };
-type Statistics = { cpu_stats?: { cpu_usage?: { total_usage?: number }; system_cpu_usage?: number; online_cpus?: number }; precpu_stats?: { cpu_usage?: { total_usage?: number }; system_cpu_usage?: number }; memory_stats?: { usage?: number; limit?: number; stats?: { inactive_file?: number } } };
+type Statistics = {
+  cpu_stats?: { cpu_usage?: { total_usage?: number }; system_cpu_usage?: number; online_cpus?: number };
+  precpu_stats?: { cpu_usage?: { total_usage?: number }; system_cpu_usage?: number };
+  memory_stats?: { usage?: number; limit?: number; stats?: { inactive_file?: number } };
+};
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const PRIVATE_MODE = 'com.docker.network.bridge.gateway_mode_ipv4';
@@ -34,7 +65,8 @@ const DEFAULT_MEDIA_IMAGE = 'agent-swarm-computer-media:stage2';
  * 63 characters, never empty. Anything unusable falls back to a stable
  * ID-derived name. */
 export function computerHostname(name: string, id: string) {
-  const slug = name.toLowerCase()
+  const slug = name
+    .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 63)
@@ -48,32 +80,61 @@ export function computerHostname(name: string, id: string) {
  * bootstrap) and COMPUTER_TIMEZONE (which the root bootstrap links into
  * /etc/localtime for the whole desktop session). */
 export function desktopEnvironment(id: string, gateway: string, renderDevice: string, timezone: string) {
-  return [`COMPUTER_GATEWAY=${gateway}`, `COMPUTER_ID=${id}`,
+  return [
+    `COMPUTER_GATEWAY=${gateway}`,
+    `COMPUTER_ID=${id}`,
     ...(renderDevice ? [`COMPUTER_GPU_RENDER_DEVICE=${renderDevice}`] : []),
-    ...(timezone ? [`TZ=${timezone}`, `COMPUTER_TIMEZONE=${timezone}`] : [])];
+    ...(timezone ? [`TZ=${timezone}`, `COMPUTER_TIMEZONE=${timezone}`] : []),
+  ];
 }
 
 /** Desktop container create body: one place so the operator-supplied fields
  * (hostname, grants, mounts) are directly testable without Docker seeding. */
 export function desktopCreateBody(input: {
-  image: string; labels: Record<string, string>; env: string[]; hostname: string;
-  privateNetwork: string; seccomp: string; renderDevice: string; cpuLimit: number; memoryGiB: number;
-  homeVolume: string; workspaceVolume: string;
+  image: string;
+  labels: Record<string, string>;
+  env: string[];
+  hostname: string;
+  privateNetwork: string;
+  seccomp: string;
+  renderDevice: string;
+  cpuLimit: number;
+  memoryGiB: number;
+  homeVolume: string;
+  workspaceVolume: string;
 }) {
   return {
     // Hostname is a top-level Config field, NOT part of HostConfig: Docker
     // silently ignores it there and falls back to the container's short ID.
-    Image: input.image, User: 'root', Cmd: ['/opt/swarm/start-computer.sh'],
-    Labels: input.labels, Env: input.env, Hostname: input.hostname, Domainname: '',
+    Image: input.image,
+    User: 'root',
+    Cmd: ['/opt/swarm/start-computer.sh'],
+    Labels: input.labels,
+    Env: input.env,
+    Hostname: input.hostname,
+    Domainname: '',
     HostConfig: {
-      Runtime: 'sysbox-runc', NetworkMode: input.privateNetwork, Dns: ['1.1.1.1'],
-      CapDrop: ['ALL'], SecurityOpt: [`seccomp=${input.seccomp}`], Init: true,
-      ...(input.renderDevice ? { Devices: [{ PathOnHost: input.renderDevice, PathInContainer: input.renderDevice, CgroupPermissions: 'rwm' }] } : {}),
-      Tmpfs: { '/run': 'rw,nosuid,size=64m' }, ShmSize: 256 * 1024 * 1024,
+      Runtime: 'sysbox-runc',
+      NetworkMode: input.privateNetwork,
+      Dns: ['1.1.1.1'],
+      CapDrop: ['ALL'],
+      SecurityOpt: [`seccomp=${input.seccomp}`],
+      Init: true,
+      ...(input.renderDevice
+        ? {
+            Devices: [
+              { PathOnHost: input.renderDevice, PathInContainer: input.renderDevice, CgroupPermissions: 'rwm' },
+            ],
+          }
+        : {}),
+      Tmpfs: { '/run': 'rw,nosuid,size=64m' },
+      ShmSize: 256 * 1024 * 1024,
       // Match the tested policy explicitly: RAM plus an equal host-swap
       // allowance. Docker's implicit default can differ across hosts.
       NanoCpus: input.cpuLimit * 1_000_000_000,
-      Memory: input.memoryGiB * 1024 ** 3, MemorySwap: input.memoryGiB * 2 * 1024 ** 3, PidsLimit: 1024,
+      Memory: input.memoryGiB * 1024 ** 3,
+      MemorySwap: input.memoryGiB * 2 * 1024 ** 3,
+      PidsLimit: 1024,
       RestartPolicy: { Name: 'no' },
       Mounts: [
         { Type: 'volume', Source: input.homeVolume, Target: '/home/agent' },
@@ -93,7 +154,10 @@ export class ComputerManager {
   constructor(
     private readonly docker: DockerApi,
     namespace: string,
-    private readonly seccomp: string = readFileSync(new URL('../../templates/default/security/chromium-seccomp.json', import.meta.url), 'utf8'),
+    private readonly seccomp: string = readFileSync(
+      new URL('../../templates/default/security/chromium-seccomp.json', import.meta.url),
+      'utf8',
+    ),
     private readonly image = DEFAULT_IMAGE,
     private readonly gatewayImage = DEFAULT_GATEWAY_IMAGE,
     private readonly mediaImage = DEFAULT_MEDIA_IMAGE,
@@ -103,10 +167,12 @@ export class ComputerManager {
     private readonly timezone = '',
   ) {
     this.names = new ComputerNames(namespace);
-    if (!Number.isInteger(maxComputers) || maxComputers < 1 || maxComputers > 100) throw new Error('Invalid computer limit.');
+    if (!Number.isInteger(maxComputers) || maxComputers < 1 || maxComputers > 100)
+      throw new Error('Invalid computer limit.');
     // Only an operator-selected DRM render node, never a card/modeset device
     // or arbitrary host path, may be shared with sudo-capable computers.
-    if (renderDevice && !/^\/dev\/dri\/renderD\d{3}$/.test(renderDevice)) throw new Error('Invalid computer render device.');
+    if (renderDevice && !/^\/dev\/dri\/renderD\d{3}$/.test(renderDevice))
+      throw new Error('Invalid computer render device.');
     if (!Number.isInteger(cpuLimit) || cpuLimit < 1 || cpuLimit > 8) throw new Error('Invalid computer CPU limit.');
     // An IANA zone name is interpolated into container env and a guest symlink
     // target, so only plain path segments are accepted: no traversal, no
@@ -121,14 +187,21 @@ export class ComputerManager {
   async limits() {
     if (this.detectedLimits) return this.detectedLimits;
     const info = await this.docker.json<{ NCPU?: number; MemTotal?: number }>('GET', '/info', undefined, 256 * 1024);
-    this.detectedLimits = { ...deriveComputerLimits(info, this.cpuLimit, this.timezone), maxComputers: this.maxComputers };
+    this.detectedLimits = {
+      ...deriveComputerLimits(info, this.cpuLimit, this.timezone),
+      maxComputers: this.maxComputers,
+    };
     return this.detectedLimits;
   }
 
   private async waitDesktopReady(name: string) {
     for (let attempt = 0; attempt < 80; attempt++) {
-      try { await this.docker.exec(name, ['test', '-f', '/run/user/1000/desktop-ready'], 'agent', 4000); return; }
-      catch { await delay(500); }
+      try {
+        await this.docker.exec(name, ['test', '-f', '/run/user/1000/desktop-ready'], 'agent', 4000);
+        return;
+      } catch {
+        await delay(500);
+      }
     }
     throw new ResourceError(503, 'Computer desktop did not become ready.');
   }
@@ -136,16 +209,28 @@ export class ComputerManager {
   private async exclusive<T>(operation: () => Promise<T>): Promise<T> {
     const previous = this.queue;
     let done!: () => void;
-    this.queue = new Promise<void>(resolve => { done = resolve; });
+    this.queue = new Promise<void>(resolve => {
+      done = resolve;
+    });
     await previous;
-    try { return await operation(); } finally { done(); }
+    try {
+      return await operation();
+    } finally {
+      done();
+    }
   }
-  private path(kind: string, name: string) { return `/${kind}/${encodeURIComponent(name)}`; }
+  private path(kind: string, name: string) {
+    return `/${kind}/${encodeURIComponent(name)}`;
+  }
   private renderDeviceMatches(computer: Container) {
     const devices = computer.HostConfig?.Devices ?? [];
     if (!this.renderDevice) return devices.length === 0;
-    return devices.length === 1 && devices[0].PathOnHost === this.renderDevice &&
-      devices[0].PathInContainer === this.renderDevice && devices[0].CgroupPermissions === 'rwm';
+    return (
+      devices.length === 1 &&
+      devices[0].PathOnHost === this.renderDevice &&
+      devices[0].PathInContainer === this.renderDevice &&
+      devices[0].CgroupPermissions === 'rwm'
+    );
   }
   private async container(name: string, id: string, role: ResourceRole, displayName?: string) {
     const value = await this.docker.optional<Container>(`${this.path('containers', name)}/json`);
@@ -166,28 +251,49 @@ export class ComputerManager {
     let result = await this.network(name, id, role);
     if (!result) {
       await this.docker.request('POST', '/networks/create', {
-        Name: name, CheckDuplicate: true, Driver: 'bridge', Internal: role === 'private-network', EnableIPv6: false,
-        Labels: this.names.labels(id, role), Options: role === 'private-network' ? { [PRIVATE_MODE]: 'isolated' } : {},
+        Name: name,
+        CheckDuplicate: true,
+        Driver: 'bridge',
+        Internal: role === 'private-network',
+        EnableIPv6: false,
+        Labels: this.names.labels(id, role),
+        Options: role === 'private-network' ? { [PRIVATE_MODE]: 'isolated' } : {},
       });
       result = await this.network(name, id, role);
     }
-    if (!result || result.Driver !== 'bridge' || result.Internal !== (role === 'private-network') || result.EnableIPv6 || (role === 'private-network' && (result.Options?.[PRIVATE_MODE] !== 'isolated' || Boolean(result.IPAM.Config[0]?.Gateway && result.IPAM.Config[0]?.Gateway !== 'invalid IP')))) throw new ResourceError(409, 'Computer network has unsafe settings.');
+    if (
+      !result ||
+      result.Driver !== 'bridge' ||
+      result.Internal !== (role === 'private-network') ||
+      result.EnableIPv6 ||
+      (role === 'private-network' &&
+        (result.Options?.[PRIVATE_MODE] !== 'isolated' ||
+          Boolean(result.IPAM.Config[0]?.Gateway && result.IPAM.Config[0]?.Gateway !== 'invalid IP')))
+    )
+      throw new ResourceError(409, 'Computer network has unsafe settings.');
     return result;
   }
   private async mediaNetwork() {
     // This shared bridge is created by Compose for Caddy, not by computers.
     // Never attach a media relay to an arbitrary operator-supplied network.
     const network = await this.docker.optional<Network>(this.path('networks', this.names.mediaNetwork));
-    if (!network || network.Driver !== 'bridge' || !network.Internal || network.EnableIPv6 ||
-        network.Options?.[PRIVATE_MODE] !== 'isolated' ||
-        Boolean(network.IPAM.Config[0]?.Gateway && network.IPAM.Config[0].Gateway !== 'invalid IP') ||
-        network.Labels?.['com.docker.compose.project'] !== this.names.namespace) {
+    if (
+      !network ||
+      network.Driver !== 'bridge' ||
+      !network.Internal ||
+      network.EnableIPv6 ||
+      network.Options?.[PRIVATE_MODE] !== 'isolated' ||
+      Boolean(network.IPAM.Config[0]?.Gateway && network.IPAM.Config[0].Gateway !== 'invalid IP') ||
+      network.Labels?.['com.docker.compose.project'] !== this.names.namespace
+    ) {
       throw new ResourceError(503, 'Isolated dashboard media network is unavailable.');
     }
     return network;
   }
   private async approvedImage(image: string) {
-    const inspected = await this.docker.optional<{ Config?: { Labels?: Record<string, string> | null } }>(`${this.path('images', image)}/json`);
+    const inspected = await this.docker.optional<{ Config?: { Labels?: Record<string, string> | null } }>(
+      `${this.path('images', image)}/json`,
+    );
     if (!inspected) throw new ResourceError(503, 'Build the approved computer images before creating computers.');
     // Docker merges image labels into new container labels. A shared image
     // built under a disposable Compose project would falsely mark a live
@@ -199,7 +305,7 @@ export class ComputerManager {
     const name = this.names.volume(id, role);
     if (await this.volume(name, id, role)) return;
     await this.docker.request('POST', '/volumes/create', { Name: name, Labels: this.names.labels(id, role) });
-    if (!await this.volume(name, id, role)) throw new ResourceError(503, 'Computer volume was not created.');
+    if (!(await this.volume(name, id, role))) throw new ResourceError(503, 'Computer volume was not created.');
   }
   private async ensureGateway(id: string, name: string, subnet: string, network: Network) {
     const gatewayName = this.names.gateway(id);
@@ -207,11 +313,18 @@ export class ComputerManager {
     if (!gateway) {
       await this.approvedImage(this.gatewayImage);
       await this.docker.request('POST', `/containers/create?name=${encodeURIComponent(gatewayName)}`, {
-        Image: this.gatewayImage, Labels: this.names.labels(id, 'egress', name), Env: [`COMPUTER_SUBNET=${subnet}`],
+        Image: this.gatewayImage,
+        Labels: this.names.labels(id, 'egress', name),
+        Env: [`COMPUTER_SUBNET=${subnet}`],
         HostConfig: {
-          NetworkMode: this.names.egressNetwork, CapDrop: ['ALL'], CapAdd: ['NET_ADMIN'],
-          SecurityOpt: ['no-new-privileges:true'], Tmpfs: { '/tmp': 'rw,nosuid,size=16m' },
-          Memory: 128 * 1024 * 1024, PidsLimit: 128, RestartPolicy: { Name: 'no' },
+          NetworkMode: this.names.egressNetwork,
+          CapDrop: ['ALL'],
+          CapAdd: ['NET_ADMIN'],
+          SecurityOpt: ['no-new-privileges:true'],
+          Tmpfs: { '/tmp': 'rw,nosuid,size=16m' },
+          Memory: 128 * 1024 * 1024,
+          PidsLimit: 128,
+          RestartPolicy: { Name: 'no' },
         },
       });
       gateway = await this.container(gatewayName, id, 'egress', name);
@@ -220,8 +333,13 @@ export class ComputerManager {
     if (!gateway.State.Running) await this.docker.request('POST', `${this.path('containers', gatewayName)}/start`);
     let ready = false;
     for (let attempt = 0; attempt < 40; attempt++) {
-      try { await this.docker.exec(gatewayName, ['test', '-f', '/tmp/ready'], 'root', 4000); ready = true; break; }
-      catch { await delay(250); }
+      try {
+        await this.docker.exec(gatewayName, ['test', '-f', '/tmp/ready'], 'root', 4000);
+        ready = true;
+        break;
+      } catch {
+        await delay(250);
+      }
     }
     if (!ready) throw new ResourceError(503, 'Computer egress did not become ready.');
     if (!gateway.NetworkSettings.Networks[this.names.privateNetwork(id)]) {
@@ -229,7 +347,8 @@ export class ComputerManager {
     }
     gateway = await this.container(gatewayName, id, 'egress', name);
     const address = gateway?.NetworkSettings.Networks[this.names.privateNetwork(id)]?.IPAddress;
-    if (!address || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(address)) throw new ResourceError(503, 'Computer egress address is unavailable.');
+    if (!address || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(address))
+      throw new ResourceError(503, 'Computer egress address is unavailable.');
     return address;
   }
 
@@ -238,33 +357,52 @@ export class ComputerManager {
     const privateNetwork = this.names.privateNetwork(id);
     const target = computer.NetworkSettings.Networks[privateNetwork]?.IPAddress;
     const subnet = mediaNetwork.IPAM.Config[0]?.Subnet;
-    if (!target || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(target)) throw new ResourceError(503, 'Computer private address is unavailable.');
-    if (!subnet || !/^\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}$/.test(subnet)) throw new ResourceError(503, 'Media bridge subnet is unavailable.');
+    if (!target || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(target))
+      throw new ResourceError(503, 'Computer private address is unavailable.');
+    if (!subnet || !/^\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}$/.test(subnet))
+      throw new ResourceError(503, 'Media bridge subnet is unavailable.');
     const mediaName = this.names.media(id);
     let relay = await this.container(mediaName, id, 'media', name);
     if (!relay) {
       await this.approvedImage(this.mediaImage);
       await this.docker.request('POST', `/containers/create?name=${encodeURIComponent(mediaName)}`, {
-        Image: this.mediaImage, Labels: this.names.labels(id, 'media', name),
+        Image: this.mediaImage,
+        Labels: this.names.labels(id, 'media', name),
         Env: [`COMPUTER_PRIVATE_IP=${target}`, `COMPUTER_MEDIA_SUBNET=${subnet}`],
         HostConfig: {
-          NetworkMode: this.names.mediaNetwork, CapDrop: ['ALL'],
-          SecurityOpt: ['no-new-privileges:true'], ReadonlyRootfs: true,
-          Memory: 64 * 1024 * 1024, PidsLimit: 64, RestartPolicy: { Name: 'no' },
+          NetworkMode: this.names.mediaNetwork,
+          CapDrop: ['ALL'],
+          SecurityOpt: ['no-new-privileges:true'],
+          ReadonlyRootfs: true,
+          Memory: 64 * 1024 * 1024,
+          PidsLimit: 64,
+          RestartPolicy: { Name: 'no' },
         },
-        NetworkingConfig: { EndpointsConfig: {
-          [this.names.mediaNetwork]: { Aliases: [this.names.mediaAlias(id)] },
-        } },
+        NetworkingConfig: {
+          EndpointsConfig: {
+            [this.names.mediaNetwork]: { Aliases: [this.names.mediaAlias(id)] },
+          },
+        },
       });
       relay = await this.container(mediaName, id, 'media', name);
     }
     const mediaEndpoint = relay?.NetworkSettings.Networks[this.names.mediaNetwork];
-    if (!relay || !mediaEndpoint || !mediaNetwork.Id ||
-        ![...(mediaEndpoint.Aliases ?? []), ...(mediaEndpoint.DNSNames ?? [])].includes(this.names.mediaAlias(id))) {
+    if (
+      !relay ||
+      !mediaEndpoint ||
+      !mediaNetwork.Id ||
+      ![...(mediaEndpoint.Aliases ?? []), ...(mediaEndpoint.DNSNames ?? [])].includes(this.names.mediaAlias(id))
+    ) {
       throw new ResourceError(503, 'Computer media relay lacks its approved dashboard alias.');
     }
-    if (![`COMPUTER_PRIVATE_IP=${target}`, `COMPUTER_MEDIA_SUBNET=${subnet}`].every(value => relay.Config.Env?.includes(value)) ||
-        Object.keys(relay.NetworkSettings.Networks).some(network => network !== this.names.mediaNetwork && network !== privateNetwork)) {
+    if (
+      ![`COMPUTER_PRIVATE_IP=${target}`, `COMPUTER_MEDIA_SUBNET=${subnet}`].every(value =>
+        relay.Config.Env?.includes(value),
+      ) ||
+      Object.keys(relay.NetworkSettings.Networks).some(
+        network => network !== this.names.mediaNetwork && network !== privateNetwork,
+      )
+    ) {
       // A stale target can forward another computer's screen after Docker
       // reassigns addresses. Never reuse or start an altered relay.
       throw new ResourceError(409, 'Computer media relay has an unsafe target or network.');
@@ -278,22 +416,32 @@ export class ComputerManager {
   }
 
   private async createOwned(id: string, name: string, requested?: ComputerConfiguration) {
-    const settings = requested ?? { cpuCores: this.cpuLimit, memoryGiB: 4, timezone: this.timezone || 'America/Toronto' };
+    const settings = requested ?? {
+      cpuCores: this.cpuLimit,
+      memoryGiB: 4,
+      timezone: this.timezone || 'America/Toronto',
+    };
     const computerName = this.names.desktop(id);
     const existing = await this.container(computerName, id, 'desktop', name);
     if (existing) {
-      if (!this.renderDeviceMatches(existing)) throw new ResourceError(409, 'Computer render-device grant differs from the current operator setting.');
-      if (requested && (existing.HostConfig?.NanoCpus !== settings.cpuCores * 1_000_000_000 ||
-        existing.HostConfig?.Memory !== settings.memoryGiB * 1024 ** 3 ||
-        !existing.Config.Env?.includes(`TZ=${settings.timezone}`))) {
+      if (!this.renderDeviceMatches(existing))
+        throw new ResourceError(409, 'Computer render-device grant differs from the current operator setting.');
+      if (
+        requested &&
+        (existing.HostConfig?.NanoCpus !== settings.cpuCores * 1_000_000_000 ||
+          existing.HostConfig?.Memory !== settings.memoryGiB * 1024 ** 3 ||
+          !existing.Config.Env?.includes(`TZ=${settings.timezone}`))
+      ) {
         throw new ResourceError(409, 'Existing computer settings differ from the saved create request.');
       }
-      if (!existing.State.Running) throw new ResourceError(409, 'Computer is stopped; automatic restart is not enabled.');
+      if (!existing.State.Running)
+        throw new ResourceError(409, 'Computer is stopped; automatic restart is not enabled.');
       const gateway = await this.container(this.names.gateway(id), id, 'egress', name);
       const network = await this.network(this.names.privateNetwork(id), id, 'private-network');
       const home = await this.volume(this.names.volume(id, 'home'), id, 'home');
       const workspace = await this.volume(this.names.volume(id, 'workspace'), id, 'workspace');
-      if (!gateway?.State.Running || !network || !home || !workspace) throw new ResourceError(503, 'Computer resources are incomplete.');
+      if (!gateway?.State.Running || !network || !home || !workspace)
+        throw new ResourceError(503, 'Computer resources are incomplete.');
       await this.ensureMedia(id, name, existing);
       return;
     }
@@ -304,20 +452,29 @@ export class ComputerManager {
     const egress = await this.ensureNetwork(this.names.egressNetwork, null, 'egress-network');
     const privateNetwork = await this.ensureNetwork(this.names.privateNetwork(id), id, 'private-network');
     const subnet = privateNetwork.IPAM.Config[0]?.Subnet;
-    if (!subnet || !/^\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}$/.test(subnet)) throw new ResourceError(503, 'Computer subnet is unavailable.');
+    if (!subnet || !/^\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}$/.test(subnet))
+      throw new ResourceError(503, 'Computer subnet is unavailable.');
     if (!egress.Id) throw new ResourceError(503, 'Public egress network is unavailable.');
     const gateway = await this.ensureGateway(id, name, subnet, privateNetwork);
     await this.ensureVolume(id, 'home');
     await this.ensureVolume(id, 'workspace');
-    await this.docker.request('POST', `/containers/create?name=${encodeURIComponent(computerName)}`,
+    await this.docker.request(
+      'POST',
+      `/containers/create?name=${encodeURIComponent(computerName)}`,
       desktopCreateBody({
-        image: this.image, labels: this.names.labels(id, 'desktop', name),
+        image: this.image,
+        labels: this.names.labels(id, 'desktop', name),
         env: desktopEnvironment(id, gateway, this.renderDevice, settings.timezone),
         hostname: computerHostname(name, id),
-        privateNetwork: this.names.privateNetwork(id), seccomp: this.seccomp,
-        renderDevice: this.renderDevice, cpuLimit: settings.cpuCores, memoryGiB: settings.memoryGiB,
-        homeVolume: this.names.volume(id, 'home'), workspaceVolume: this.names.volume(id, 'workspace'),
-      }));
+        privateNetwork: this.names.privateNetwork(id),
+        seccomp: this.seccomp,
+        renderDevice: this.renderDevice,
+        cpuLimit: settings.cpuCores,
+        memoryGiB: settings.memoryGiB,
+        homeVolume: this.names.volume(id, 'home'),
+        workspaceVolume: this.names.volume(id, 'workspace'),
+      }),
+    );
     await this.docker.request('POST', `${this.path('containers', computerName)}/start`);
     await this.waitDesktopReady(computerName);
     const computer = await this.container(computerName, id, 'desktop', name);
@@ -326,7 +483,8 @@ export class ComputerManager {
   }
 
   async create(idRaw: string, nameRaw: string, requested?: ComputerConfiguration) {
-    const id = validateId(idRaw), name = validateName(nameRaw);
+    const id = validateId(idRaw),
+      name = validateName(nameRaw);
     const settings = requested ? validateComputerConfiguration(requested, await this.limits()) : undefined;
     // Never erase a computer or its persistent volumes on a failed/retried
     // create. A partial resource remains visible through its failed DB record;
@@ -337,8 +495,13 @@ export class ComputerManager {
   /** Docker can change resource caps on a running Sysbox computer without a
    * desktop restart. Recheck ownership and host capacity at execution time;
    * this never changes guest environment, volumes, devices or networks. */
-  async updateResources(idRaw: string, nameRaw: string, requested: Pick<ComputerConfiguration, 'cpuCores' | 'memoryGiB'>) {
-    const id = validateId(idRaw), name = validateName(nameRaw);
+  async updateResources(
+    idRaw: string,
+    nameRaw: string,
+    requested: Pick<ComputerConfiguration, 'cpuCores' | 'memoryGiB'>,
+  ) {
+    const id = validateId(idRaw),
+      name = validateName(nameRaw);
     const limits = await this.limits();
     const settings = validateComputerConfiguration({ ...requested, timezone: limits.timezoneDefault }, limits);
     return this.exclusive(async () => {
@@ -358,70 +521,112 @@ export class ComputerManager {
    * and checked; named data volumes/network stay intact throughout. A stale
    * relay must be removed before the next start binds it to the new private IP. */
   async replaceStopped(idRaw: string, nameRaw: string, requested: ComputerConfiguration) {
-    const id = validateId(idRaw), name = validateName(nameRaw);
+    const id = validateId(idRaw),
+      name = validateName(nameRaw);
     const settings = validateComputerConfiguration(requested, await this.limits());
     return this.exclusive(async () => {
       const canonical = this.names.desktop(id);
       const old = await this.container(canonical, id, 'desktop', name);
       if (!old) throw new ResourceError(404, 'Computer not found.');
       if (old.State.Running) throw new ResourceError(409, 'Power off this computer before changing its timezone.');
-      if (!old.Image || !this.renderDeviceMatches(old)) throw new ResourceError(409, 'Computer image or render grant is unavailable for replacement.');
+      if (!old.Image || !this.renderDeviceMatches(old))
+        throw new ResourceError(409, 'Computer image or render grant is unavailable for replacement.');
       const gateway = await this.container(this.names.gateway(id), id, 'egress', name);
       const network = await this.network(this.names.privateNetwork(id), id, 'private-network');
       const home = await this.volume(this.names.volume(id, 'home'), id, 'home');
       const workspace = await this.volume(this.names.volume(id, 'workspace'), id, 'workspace');
-      if (!gateway?.State.Running || !network || !home || !workspace) throw new ResourceError(503, 'Computer resources are incomplete.');
+      if (!gateway?.State.Running || !network || !home || !workspace)
+        throw new ResourceError(503, 'Computer resources are incomplete.');
       const privateAddress = gateway.NetworkSettings.Networks[this.names.privateNetwork(id)]?.IPAddress;
       if (!privateAddress) throw new ResourceError(503, 'Computer egress address is unavailable.');
       const relay = await this.container(this.names.media(id), id, 'media', name);
       if (relay?.State.Running) throw new ResourceError(409, 'Computer media relay must be stopped first.');
       await this.approvedImage(old.Image);
-      const nextName = `${canonical}-settings-next`, previousName = `${canonical}-settings-previous`;
-      if (await this.container(nextName, id, 'desktop', name) || await this.container(previousName, id, 'desktop', name)) {
+      const nextName = `${canonical}-settings-next`,
+        previousName = `${canonical}-settings-previous`;
+      if (
+        (await this.container(nextName, id, 'desktop', name)) ||
+        (await this.container(previousName, id, 'desktop', name))
+      ) {
         throw new ResourceError(409, 'An incomplete computer settings replacement needs operator recovery.');
       }
-      let createdId: string | null = null, oldRenamed = false;
+      let createdId: string | null = null,
+        oldRenamed = false;
       try {
-        const created = await this.docker.json<{ Id: string }>('POST', `/containers/create?name=${encodeURIComponent(nextName)}`,
+        const created = await this.docker.json<{ Id: string }>(
+          'POST',
+          `/containers/create?name=${encodeURIComponent(nextName)}`,
           desktopCreateBody({
-            image: old.Image, labels: this.names.labels(id, 'desktop', name),
+            image: old.Image,
+            labels: this.names.labels(id, 'desktop', name),
             env: desktopEnvironment(id, privateAddress, this.renderDevice, settings.timezone),
-            hostname: computerHostname(name, id), privateNetwork: this.names.privateNetwork(id), seccomp: this.seccomp,
-            renderDevice: this.renderDevice, cpuLimit: settings.cpuCores, memoryGiB: settings.memoryGiB,
-            homeVolume: home.Name, workspaceVolume: workspace.Name,
-          }));
+            hostname: computerHostname(name, id),
+            privateNetwork: this.names.privateNetwork(id),
+            seccomp: this.seccomp,
+            renderDevice: this.renderDevice,
+            cpuLimit: settings.cpuCores,
+            memoryGiB: settings.memoryGiB,
+            homeVolume: home.Name,
+            workspaceVolume: workspace.Name,
+          }),
+        );
         createdId = created.Id;
         if (!createdId) throw new ResourceError(503, 'Replacement container ID is unavailable.');
-        await this.docker.request('POST', `${this.path('containers', old.Id)}/rename?name=${encodeURIComponent(previousName)}`);
+        await this.docker.request(
+          'POST',
+          `${this.path('containers', old.Id)}/rename?name=${encodeURIComponent(previousName)}`,
+        );
         oldRenamed = true;
-        await this.docker.request('POST', `${this.path('containers', createdId)}/rename?name=${encodeURIComponent(canonical)}`);
+        await this.docker.request(
+          'POST',
+          `${this.path('containers', createdId)}/rename?name=${encodeURIComponent(canonical)}`,
+        );
         const replacement = await this.container(canonical, id, 'desktop', name);
-        if (!replacement || replacement.State.Running || replacement.HostConfig?.NanoCpus !== settings.cpuCores * 1_000_000_000 ||
-            replacement.HostConfig?.Memory !== settings.memoryGiB * 1024 ** 3 ||
-            !replacement.Config.Env?.includes(`TZ=${settings.timezone}`)) throw new ResourceError(503, 'Replacement computer settings could not be verified.');
+        if (
+          !replacement ||
+          replacement.State.Running ||
+          replacement.HostConfig?.NanoCpus !== settings.cpuCores * 1_000_000_000 ||
+          replacement.HostConfig?.Memory !== settings.memoryGiB * 1024 ** 3 ||
+          !replacement.Config.Env?.includes(`TZ=${settings.timezone}`)
+        )
+          throw new ResourceError(503, 'Replacement computer settings could not be verified.');
         if (relay) await this.docker.request('DELETE', `${this.path('containers', relay.Id)}?v=false`);
-        try { await this.docker.request('DELETE', `${this.path('containers', old.Id)}?v=false`); }
-        catch (error) {
+        try {
+          await this.docker.request('DELETE', `${this.path('containers', old.Id)}?v=false`);
+        } catch (error) {
           // An Engine timeout may mean DELETE succeeded but its response was
           // lost. Never roll back by deleting the new computer if the old one
           // is already gone; its named volumes remain mounted by the new one.
           let oldStillPresent: Container | null;
-          try { oldStillPresent = await this.container(previousName, id, 'desktop', name); }
-          catch {
+          try {
+            oldStillPresent = await this.container(previousName, id, 'desktop', name);
+          } catch {
             // Unknown delete outcome: keep both labelled containers and let
             // an operator inspect them instead of risking the only good copy.
-            createdId = null; oldRenamed = false;
-            throw new ResourceError(503, 'Computer replacement needs operator recovery after an uncertain Docker deletion.');
+            createdId = null;
+            oldRenamed = false;
+            throw new ResourceError(
+              503,
+              'Computer replacement needs operator recovery after an uncertain Docker deletion.',
+            );
           }
           if (oldStillPresent) throw error;
         }
-        createdId = null; oldRenamed = false;
+        createdId = null;
+        oldRenamed = false;
         this.quotas.delete(old.Id);
-        this.previewCache.delete(`${id}:thumb`); this.previewCache.delete(`${id}:full`);
+        this.previewCache.delete(`${id}:thumb`);
+        this.previewCache.delete(`${id}:full`);
       } catch (error) {
         // Best-effort rollback never deletes either named data volume.
-        if (createdId) await this.docker.request('DELETE', `${this.path('containers', createdId)}?force=true&v=false`).catch(() => {});
-        if (oldRenamed) await this.docker.request('POST', `${this.path('containers', old.Id)}/rename?name=${encodeURIComponent(canonical)}`).catch(() => {});
+        if (createdId)
+          await this.docker
+            .request('DELETE', `${this.path('containers', createdId)}?force=true&v=false`)
+            .catch(() => {});
+        if (oldRenamed)
+          await this.docker
+            .request('POST', `${this.path('containers', old.Id)}/rename?name=${encodeURIComponent(canonical)}`)
+            .catch(() => {});
         throw error;
       }
     });
@@ -445,7 +650,8 @@ export class ComputerManager {
     this.previewCache.delete(`${id}:full`);
   }
   async remove(idRaw: string, nameRaw: string) {
-    const id = validateId(idRaw), name = validateName(nameRaw);
+    const id = validateId(idRaw),
+      name = validateName(nameRaw);
     return this.exclusive(() => this.removeOwned(id, name));
   }
 
@@ -488,12 +694,14 @@ export class ComputerManager {
   }
 
   async start(idRaw: string, nameRaw: string) {
-    const id = validateId(idRaw), name = validateName(nameRaw);
+    const id = validateId(idRaw),
+      name = validateName(nameRaw);
     return this.exclusive(() => this.powerOwned(id, name, 'start'));
   }
 
   async stop(idRaw: string, nameRaw: string) {
-    const id = validateId(idRaw), name = validateName(nameRaw);
+    const id = validateId(idRaw),
+      name = validateName(nameRaw);
     return this.exclusive(() => this.powerOwned(id, name, 'stop'));
   }
 
@@ -505,14 +713,16 @@ export class ComputerManager {
         const name = row.Labels['swarm.ng.name'];
         try {
           if (!id || !name) continue;
-          validateId(id); validateName(name);
+          validateId(id);
+          validateName(name);
           const desktop = await this.container(this.names.desktop(id), id, 'desktop', name);
           if (!desktop) continue;
           if (!this.renderDeviceMatches(desktop)) {
             // Revoking the operator's GPU grant must take effect when this
             // controller restarts. Stop only the owned computer; preserve its
             // volumes and refuse to restart with stale host-device access.
-            if (desktop.State.Running) await this.docker.request('POST', `${this.path('containers', desktop.Id)}/stop?t=5`);
+            if (desktop.State.Running)
+              await this.docker.request('POST', `${this.path('containers', desktop.Id)}/stop?t=5`);
             console.error('Computer render-device setting changed; owned desktop stopped:', id);
             continue;
           }
@@ -530,7 +740,8 @@ export class ComputerManager {
           await this.ensureNetwork(this.names.egressNetwork, null, 'egress-network');
           await this.ensureGateway(id, name, subnet, network);
           const latest = await this.container(this.names.desktop(id), id, 'desktop', name);
-          if (latest && !latest.State.Running) await this.docker.request('POST', `${this.path('containers', latest.Id)}/start`);
+          if (latest && !latest.State.Running)
+            await this.docker.request('POST', `${this.path('containers', latest.Id)}/start`);
           const running = await this.container(this.names.desktop(id), id, 'desktop', name);
           if (running?.State.Running) await this.ensureMedia(id, name, running);
         } catch (error) {
@@ -542,10 +753,19 @@ export class ComputerManager {
   }
 
   private async listIds() {
-    const filters = encodeURIComponent(JSON.stringify({ label: ['swarm.ng.managed=computer', `swarm.ng.namespace=${this.names.namespace}`, 'swarm.ng.role=desktop'] }));
+    const filters = encodeURIComponent(
+      JSON.stringify({
+        label: ['swarm.ng.managed=computer', `swarm.ng.namespace=${this.names.namespace}`, 'swarm.ng.role=desktop'],
+      }),
+    );
     const rows = await this.docker.json<ListedContainer[]>('GET', `/containers/json?all=1&filters=${filters}`);
     if (rows.length > 100) throw new ResourceError(503, 'Too many managed computers.');
-    return rows.filter(row => row.Labels?.['swarm.ng.role'] === 'desktop' && row.Labels?.['swarm.ng.namespace'] === this.names.namespace && row.Labels?.['swarm.ng.managed'] === 'computer');
+    return rows.filter(
+      row =>
+        row.Labels?.['swarm.ng.role'] === 'desktop' &&
+        row.Labels?.['swarm.ng.namespace'] === this.names.namespace &&
+        row.Labels?.['swarm.ng.managed'] === 'computer',
+    );
   }
   /** Enforced container quotas, cached per Docker container id. Recreation
    * produces a new id, so the cache cannot serve a stale quota. */
@@ -555,11 +775,18 @@ export class ComputerManager {
     if (cached) return cached;
     const quota = { memory: null as number | null, cpuCount: null as number | null };
     try {
-      const info = await this.docker.json<{ HostConfig?: { Memory?: number; NanoCpus?: number } }>('GET', `${this.path('containers', containerId)}/json`);
+      const info = await this.docker.json<{ HostConfig?: { Memory?: number; NanoCpus?: number } }>(
+        'GET',
+        `${this.path('containers', containerId)}/json`,
+      );
       // 0 means "no limit configured"; report null rather than an infinite dial.
-      if (typeof info.HostConfig?.Memory === 'number' && info.HostConfig.Memory > 0) quota.memory = info.HostConfig.Memory;
-      if (typeof info.HostConfig?.NanoCpus === 'number' && info.HostConfig.NanoCpus > 0) quota.cpuCount = info.HostConfig.NanoCpus / 1_000_000_000;
-    } catch { /* Dials stay empty when the quota cannot be read. */ }
+      if (typeof info.HostConfig?.Memory === 'number' && info.HostConfig.Memory > 0)
+        quota.memory = info.HostConfig.Memory;
+      if (typeof info.HostConfig?.NanoCpus === 'number' && info.HostConfig.NanoCpus > 0)
+        quota.cpuCount = info.HostConfig.NanoCpus / 1_000_000_000;
+    } catch {
+      /* Dials stay empty when the quota cannot be read. */
+    }
     this.quotas.set(containerId, quota);
     return quota;
   }
@@ -571,48 +798,87 @@ export class ComputerManager {
     const alive = new Set(rows.map(row => row.Id));
     for (const cached of this.quotas.keys()) if (!alive.has(cached)) this.quotas.delete(cached);
     // Docker's non-streaming stats call takes about a second per container, so sample all computers concurrently.
-    const computers = await Promise.all(rows.map(async row => {
-      const id = row.Labels['swarm.ng.id'];
-      if (!id || !/^\S+$/.test(id)) return null;
-      let cpuPercent: number | null = null, memoryBytes: number | null = null, memoryLimitBytes: number | null = null, cpuCount: number | null = null;
-      if (row.State === 'running') {
-        try {
-          const stats = await this.docker.json<Statistics>('GET', `${this.path('containers', row.Id)}/stats?stream=false`);
-          const cpu = (stats.cpu_stats?.cpu_usage?.total_usage ?? 0) - (stats.precpu_stats?.cpu_usage?.total_usage ?? 0);
-          const system = (stats.cpu_stats?.system_cpu_usage ?? 0) - (stats.precpu_stats?.system_cpu_usage ?? 0);
-          if (system > 0 && cpu >= 0) cpuPercent = Math.round(cpu / system * (stats.cpu_stats?.online_cpus ?? 1) * 1000) / 10;
-          if (typeof stats.memory_stats?.usage === 'number') memoryBytes = Math.max(0, stats.memory_stats.usage - (stats.memory_stats.stats?.inactive_file ?? 0));
-          // Sysbox nests the desktop, so the stats payload reports the parent
-          // cgroup's limit (host memory) rather than the quota Docker enforces.
-          // The enforced HostConfig.Memory is the honest denominator.
-          const quota = await this.containerQuota(row.Id);
-          memoryLimitBytes = quota.memory;
-          cpuCount = quota.cpuCount;
-        } catch { /* State stays visible when live stats are temporarily unavailable. */ }
-      }
-      // Docker reports CPU as the sum across cores, so a 4-CPU computer can
-      // read 250%. The count lets the dashboard draw an honest fraction.
-      // A replacement prepared while powered off is Docker's `created` state;
-      // for the dashboard it is powered off and can be started normally.
-      return { id, status: row.State === 'created' ? 'exited' : row.State, cpuPercent, memoryBytes, memoryLimitBytes, cpuCount, displayServer: displayServerOf(row) };
-    }));
+    const computers = await Promise.all(
+      rows.map(async row => {
+        const id = row.Labels['swarm.ng.id'];
+        if (!id || !/^\S+$/.test(id)) return null;
+        let cpuPercent: number | null = null,
+          memoryBytes: number | null = null,
+          memoryLimitBytes: number | null = null,
+          cpuCount: number | null = null;
+        if (row.State === 'running') {
+          try {
+            const stats = await this.docker.json<Statistics>(
+              'GET',
+              `${this.path('containers', row.Id)}/stats?stream=false`,
+            );
+            const cpu =
+              (stats.cpu_stats?.cpu_usage?.total_usage ?? 0) - (stats.precpu_stats?.cpu_usage?.total_usage ?? 0);
+            const system = (stats.cpu_stats?.system_cpu_usage ?? 0) - (stats.precpu_stats?.system_cpu_usage ?? 0);
+            if (system > 0 && cpu >= 0)
+              cpuPercent = Math.round((cpu / system) * (stats.cpu_stats?.online_cpus ?? 1) * 1000) / 10;
+            if (typeof stats.memory_stats?.usage === 'number')
+              memoryBytes = Math.max(0, stats.memory_stats.usage - (stats.memory_stats.stats?.inactive_file ?? 0));
+            // Sysbox nests the desktop, so the stats payload reports the parent
+            // cgroup's limit (host memory) rather than the quota Docker enforces.
+            // The enforced HostConfig.Memory is the honest denominator.
+            const quota = await this.containerQuota(row.Id);
+            memoryLimitBytes = quota.memory;
+            cpuCount = quota.cpuCount;
+          } catch {
+            /* State stays visible when live stats are temporarily unavailable. */
+          }
+        }
+        // Docker reports CPU as the sum across cores, so a 4-CPU computer can
+        // read 250%. The count lets the dashboard draw an honest fraction.
+        // A replacement prepared while powered off is Docker's `created` state;
+        // for the dashboard it is powered off and can be started normally.
+        return {
+          id,
+          status: row.State === 'created' ? 'exited' : row.State,
+          cpuPercent,
+          memoryBytes,
+          memoryLimitBytes,
+          cpuCount,
+          displayServer: displayServerOf(row),
+        };
+      }),
+    );
     return computers.filter((item): item is NonNullable<typeof item> => item !== null);
   }
   /** Operator reads neither acquire nor release agent control. One per guest, two globally. */
   async operatorFiles(idRaw: string, mode: FileOperation, query: FileQuery) {
     const id = validateId(idRaw);
     validateFileQuery(mode, query);
-    if (this.fileOperations.has(id) || this.fileOperations.size >= 2) throw new ResourceError(429, 'File operations are busy. Retry shortly.');
+    if (this.fileOperations.has(id) || this.fileOperations.size >= 2)
+      throw new ResourceError(429, 'File operations are busy. Retry shortly.');
     this.fileOperations.add(id);
     try {
       const computer = await this.container(this.names.desktop(id), id, 'desktop');
       if (!computer) throw new ResourceError(404, 'Computer not found.');
       if (!computer.State.Running) throw new ResourceError(409, 'Computer is not running.');
-      const raw = await this.docker.exec(computer.Id,
-        ['/usr/bin/timeout', '--signal=TERM', '--kill-after=2s', '18s', '/usr/bin/python3', '-I', '-c', operatorFilesScript, mode, JSON.stringify(query)],
-        '1000:1000', 23_000, mode === 'download' ? MAX_DOWNLOAD + 1024 * 1024 : 2 * 1024 * 1024);
+      const raw = await this.docker.exec(
+        computer.Id,
+        [
+          '/usr/bin/timeout',
+          '--signal=TERM',
+          '--kill-after=2s',
+          '18s',
+          '/usr/bin/python3',
+          '-I',
+          '-c',
+          operatorFilesScript,
+          mode,
+          JSON.stringify(query),
+        ],
+        '1000:1000',
+        23_000,
+        mode === 'download' ? MAX_DOWNLOAD + 1024 * 1024 : 2 * 1024 * 1024,
+      );
       return decodeFileResult(raw, mode);
-    } finally { this.fileOperations.delete(id); }
+    } finally {
+      this.fileOperations.delete(id);
+    }
   }
 
   /** Fixed guest program only, addressed by inspected immutable ID after label/running checks. */
@@ -625,18 +891,45 @@ export class ComputerManager {
       if (mode === 'cancel') return Buffer.from('{"settled":true}');
       throw new ResourceError(503, 'Computer desktop is unavailable.');
     }
-    return this.docker.exec(computer.Id, ['/usr/bin/timeout', '--signal=TERM', '--kill-after=2s', '18s',
-      '/usr/bin/python3', '/opt/swarm/computer-use.py', mode, JSON.stringify(input)], 'agent', 23_000, 3 * 1024 * 1024);
+    return this.docker.exec(
+      computer.Id,
+      [
+        '/usr/bin/timeout',
+        '--signal=TERM',
+        '--kill-after=2s',
+        '18s',
+        '/usr/bin/python3',
+        '/opt/swarm/computer-use.py',
+        mode,
+        JSON.stringify(input),
+      ],
+      'agent',
+      23_000,
+      3 * 1024 * 1024,
+    );
   }
 
   /** Human-only PTY attachment: fixed helper/uid, bound to the inspected immutable guest. */
-  async terminalStream(idRaw:string,session:string,signal:AbortSignal,onOutput:(chunk:Buffer)=>void,onEnd:()=>void) {
-    const id=validateId(idRaw);validateId(session);
-    const computer=await this.container(this.names.desktop(id),id,'desktop');
-    if(!computer)throw new ResourceError(404,'Computer not found.');
-    if(!computer.State.Running)throw new ResourceError(409,'Computer is not running.');
+  async terminalStream(
+    idRaw: string,
+    session: string,
+    signal: AbortSignal,
+    onOutput: (chunk: Buffer) => void,
+    onEnd: () => void,
+  ) {
+    const id = validateId(idRaw);
+    validateId(session);
+    const computer = await this.container(this.names.desktop(id), id, 'desktop');
+    if (!computer) throw new ResourceError(404, 'Computer not found.');
+    if (!computer.State.Running) throw new ResourceError(409, 'Computer is not running.');
     signal.throwIfAborted();
-    return this.docker.execStream(computer.Id,['/usr/bin/python3','-I','/opt/swarm/computer-terminal-viewer.py',session],signal,onOutput,onEnd);
+    return this.docker.execStream(
+      computer.Id,
+      ['/usr/bin/python3', '-I', '/opt/swarm/computer-terminal-viewer.py', session],
+      signal,
+      onOutput,
+      onEnd,
+    );
   }
 
   /** Fixed root supervisor drops all file/shell work to the guest account; never a host command. */
@@ -648,8 +941,23 @@ export class ComputerManager {
       if (mode === 'cancel') return Buffer.from('{"settled":true}');
       throw new ResourceError(503, 'Computer is not running.');
     }
-    return this.docker.exec(computer.Id, ['/usr/bin/timeout', '--signal=TERM', '--kill-after=8s', '130s',
-      '/usr/bin/python3', '-I', '/opt/swarm/computer-core.py', mode, JSON.stringify(input)], 'root', 145_000, 3 * 1024 * 1024);
+    return this.docker.exec(
+      computer.Id,
+      [
+        '/usr/bin/timeout',
+        '--signal=TERM',
+        '--kill-after=8s',
+        '130s',
+        '/usr/bin/python3',
+        '-I',
+        '/opt/swarm/computer-core.py',
+        mode,
+        JSON.stringify(input),
+      ],
+      'root',
+      145_000,
+      3 * 1024 * 1024,
+    );
   }
 
   async pointer(idRaw: string, x: number, y: number) {
@@ -680,14 +988,22 @@ export class ComputerManager {
       if (!container) return null;
       if (!container.State.Running) return null;
       const capturedAt = Date.now();
-      const encoded = await this.docker.exec(name, ['/opt/swarm/render-preview.sh', ...(full ? ['--full'] : [])], 'agent', 16_000);
+      const encoded = await this.docker.exec(
+        name,
+        ['/opt/swarm/render-preview.sh', ...(full ? ['--full'] : [])],
+        'agent',
+        16_000,
+      );
       if (encoded.length > (full ? 700 : 256) * 1024) throw new ResourceError(503, 'Preview exceeded its limit.');
       const image = Buffer.from(encoded.toString().trim(), 'base64');
-      if (image.length < 4 || image[0] !== 0xff || image[1] !== 0xd8 || image.at(-2) !== 0xff || image.at(-1) !== 0xd9) throw new ResourceError(503, 'Preview is not a JPEG.');
+      if (image.length < 4 || image[0] !== 0xff || image[1] !== 0xd8 || image.at(-2) !== 0xff || image.at(-1) !== 0xd9)
+        throw new ResourceError(503, 'Preview is not a JPEG.');
       if (image.length > (full ? 512 : 192) * 1024) throw new ResourceError(503, 'Preview exceeded its limit.');
       this.previewCache.set(key, { at: full ? Date.now() : capturedAt, image });
       return image;
-    })().finally(() => { this.previewPending.delete(key); });
+    })().finally(() => {
+      this.previewPending.delete(key);
+    });
     this.previewPending.set(key, work);
     return work;
   }

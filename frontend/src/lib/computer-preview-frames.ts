@@ -34,7 +34,10 @@ export function advanceFrames(layers: PreviewLayer[], id: number, t: number): Pr
   // With nothing beneath it, the frame IS the floor: dissolving from black
   // would dim the very first paint of a card.
   if (!top) return [{ id, opacity: 1 }];
-  return [{ ...top, opacity: previous }, { id, opacity: current }];
+  return [
+    { ...top, opacity: previous },
+    { id, opacity: current },
+  ];
 }
 
 /** Reduced motion snaps: a single opaque frame, nothing to dissolve. */

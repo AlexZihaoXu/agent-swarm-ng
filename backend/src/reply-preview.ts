@@ -9,12 +9,31 @@ export function channelReply(row: { replyTo: { id: string; role: 'user' | 'assis
   return row.replyTo ? { id: row.replyTo.id, role: row.replyTo.role, text: replyExcerpt(row.replyTo.text) } : null;
 }
 
-export function groupReply(row: { replyTo: { id: string; role: 'user' | 'assistant'; authorId: string | null; authorName: string; text: string } | null }) {
-  return row.replyTo ? { id: row.replyTo.id, role: row.replyTo.role, authorId: row.replyTo.authorId, authorName: row.replyTo.authorName, text: replyExcerpt(row.replyTo.text) } : null;
+export function groupReply(row: {
+  replyTo: { id: string; role: 'user' | 'assistant'; authorId: string | null; authorName: string; text: string } | null;
+}) {
+  return row.replyTo
+    ? {
+        id: row.replyTo.id,
+        role: row.replyTo.role,
+        authorId: row.replyTo.authorId,
+        authorName: row.replyTo.authorName,
+        text: replyExcerpt(row.replyTo.text),
+      }
+    : null;
 }
 
-export function dmReply(row: { replyTo: { id: string; senderId: string; sender: { name: string }; text: string } | null }) {
-  return row.replyTo ? { id: row.replyTo.id, senderId: row.replyTo.senderId, senderName: row.replyTo.sender.name, text: replyExcerpt(row.replyTo.text) } : null;
+export function dmReply(row: {
+  replyTo: { id: string; senderId: string; sender: { name: string }; text: string } | null;
+}) {
+  return row.replyTo
+    ? {
+        id: row.replyTo.id,
+        senderId: row.replyTo.senderId,
+        senderName: row.replyTo.sender.name,
+        text: replyExcerpt(row.replyTo.text),
+      }
+    : null;
 }
 
 export function channelReplyContext(row: Parameters<typeof channelReply>[0], agentName: string) {

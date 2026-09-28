@@ -4,7 +4,12 @@ import { defaultAvatar } from '../src/lib/agent-avatar';
 test('saved agents keep the sidebar and open inline settings; Chat owns messages', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(36, 36, 36)');
-  await expect(page.getByRole('tablist', { name: 'Main navigation' }).getByRole('tab')).toHaveText(['Agents', 'Chat', 'Computers', 'Settings']);
+  await expect(page.getByRole('tablist', { name: 'Main navigation' }).getByRole('tab')).toHaveText([
+    'Agents',
+    'Chat',
+    'Computers',
+    'Settings',
+  ]);
   await expect(page.getByRole('tab', { name: 'Agents', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('region', { name: 'Settings for Avery' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create new agent' })).toBeVisible();
@@ -17,7 +22,9 @@ test('saved agents keep the sidebar and open inline settings; Chat owns messages
 
 test('agent panel context menu opens the creation form', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('complementary', { name: 'Agents', exact: true }).click({ button: 'right', position: { x: 50, y: 350 } });
+  await page
+    .getByRole('complementary', { name: 'Agents', exact: true })
+    .click({ button: 'right', position: { x: 50, y: 350 } });
   const create = page.getByRole('menuitem', { name: 'Create new agent' });
   await expect(create).toBeVisible();
   await expect(create).toHaveCSS('cursor', 'pointer');
@@ -56,12 +63,20 @@ test('chat identity animates and settles on the latest selected agent', async ({
   const nextName = page.getByRole('heading', { name: 'Morgan', exact: true }).locator('[data-slot="swap-text"]');
   await expect(nextName).toHaveText('Morgan');
   const avatar = page.locator('section[aria-label^="Conversation with "]').getByTestId('chat-avatar').first();
-  await expect(avatar.locator('[data-avatar="current"] svg')).toHaveAttribute('data-avatar-seed', String(defaultAvatar('morgan').seed));
+  await expect(avatar.locator('[data-avatar="current"] svg')).toHaveAttribute(
+    'data-avatar-seed',
+    String(defaultAvatar('morgan').seed),
+  );
   await expect(avatar.locator('[data-avatar="previous"]')).toHaveCSS('opacity', '0');
   await page.getByRole('button', { name: 'Open conversation with Riley' }).click();
   await page.getByRole('button', { name: 'Open conversation with Quinn' }).click();
-  await expect(page.getByRole('heading', { name: 'Quinn', exact: true }).locator('[data-slot="swap-text"]')).toHaveText('Quinn');
-  await expect(avatar.locator('[data-avatar="current"] svg')).toHaveAttribute('data-avatar-seed', String(defaultAvatar('quinn').seed));
+  await expect(page.getByRole('heading', { name: 'Quinn', exact: true }).locator('[data-slot="swap-text"]')).toHaveText(
+    'Quinn',
+  );
+  await expect(avatar.locator('[data-avatar="current"] svg')).toHaveAttribute(
+    'data-avatar-seed',
+    String(defaultAvatar('quinn').seed),
+  );
   await expect(avatar.locator('[data-avatar="previous"]')).toHaveCSS('opacity', '0');
 });
 
@@ -82,10 +97,15 @@ test('messages enter in order with overlapping timing and respect reduced motion
   const messages = page.getByRole('list', { name: 'Messages' }).locator('[data-message-id]');
   await expect(messages).toHaveCount(3);
   await expect(messages.first()).toHaveCSS('animation-name', 'message-in, fade-in');
-  const timing = await messages.evaluateAll(elements => elements.map(element => {
-    const style = getComputedStyle(element);
-    return { delay: parseFloat(style.animationDelay), duration: Math.max(...style.animationDuration.split(',').map(value => parseFloat(value))) };
-  }));
+  const timing = await messages.evaluateAll(elements =>
+    elements.map(element => {
+      const style = getComputedStyle(element);
+      return {
+        delay: parseFloat(style.animationDelay),
+        duration: Math.max(...style.animationDuration.split(',').map(value => parseFloat(value))),
+      };
+    }),
+  );
   const timestamp = page.getByRole('region', { name: 'Conversation with Avery' }).getByText('3:23 AM', { exact: true });
   await expect(timestamp).toHaveCSS('animation-name', 'message-in, fade-in');
   expect(await timestamp.evaluate(element => parseFloat(getComputedStyle(element).animationDelay))).toBe(0);
@@ -118,7 +138,9 @@ test('composer sends through the API with Enter or the button and rejects blank 
   await expect(messages.last()).toContainText('Hello from the preview');
   await expect(messages.last()).toHaveCSS('animation-delay', '0s');
   await expect(input).toHaveValue('');
-  await expect(page.getByRole('button', { name: 'Open conversation with Avery' })).toContainText('Hello from the preview');
+  await expect(page.getByRole('button', { name: 'Open conversation with Avery' })).toContainText(
+    'Hello from the preview',
+  );
   await input.fill('Another message');
   await send.click();
   await expect(messages).toHaveCount(5);
@@ -168,7 +190,10 @@ test('drafts and sent messages stay with their agent, with multiline input', asy
   await expect(avery).toHaveValue('First line\na');
   await avery.press('Enter');
   await expect(page.getByRole('list', { name: 'Messages' })).not.toContainText('Only for Morgan');
-  await expect(page.getByRole('list', { name: 'Messages' }).locator('[data-message-id]').last()).toHaveCSS('white-space', 'pre-wrap');
+  await expect(page.getByRole('list', { name: 'Messages' }).locator('[data-message-id]').last()).toHaveCSS(
+    'white-space',
+    'pre-wrap',
+  );
   await page.getByRole('button', { name: 'Open conversation with Morgan' }).click();
   await expect(page.getByRole('list', { name: 'Messages' })).toContainText('Only for Morgan');
 });
@@ -197,8 +222,15 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     });
     await page.getByLabel('Message Avery').fill(Array.from({ length: 8 }, () => 'Another preview line').join('\n'));
     await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(viewport).toHaveAttribute('data-requested-scroll-behavior', reducedMotion === 'reduce' ? 'instant' : 'smooth');
-    await expect.poll(() => viewport.evaluate(element => Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop))).toBeLessThan(2);
+    await expect(viewport).toHaveAttribute(
+      'data-requested-scroll-behavior',
+      reducedMotion === 'reduce' ? 'instant' : 'smooth',
+    );
+    await expect
+      .poll(() =>
+        viewport.evaluate(element => Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop)),
+      )
+      .toBeLessThan(2);
   });
 }
 

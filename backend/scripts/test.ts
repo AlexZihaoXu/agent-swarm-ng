@@ -8,7 +8,10 @@ const folder = await mkdtemp(join(root, '.scratch/sqlite-tests-'));
 try {
   const args = process.argv.slice(2).filter(arg => arg !== '--');
   const child = Bun.spawn(['bun', 'run', 'vitest', 'run', ...args], {
-    cwd: root, env: { ...process.env, SQLITE_TEST_ROOT: folder, DATABASE_URL: pathToFileURL(join(folder, 'default.db')).href }, stdout: 'inherit', stderr: 'inherit',
+    cwd: root,
+    env: { ...process.env, SQLITE_TEST_ROOT: folder, DATABASE_URL: pathToFileURL(join(folder, 'default.db')).href },
+    stdout: 'inherit',
+    stderr: 'inherit',
   });
   process.exitCode = await child.exited;
 } finally {

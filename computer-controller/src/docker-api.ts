@@ -2,7 +2,9 @@ import http from 'node:http';
 import { attachExec } from './docker-exec-stream';
 
 export class DockerApiError extends Error {
-  constructor(readonly status: number) { super(`Docker operation returned ${status}.`); }
+  constructor(readonly status: number) {
+    super(`Docker operation returned ${status}.`);
+  }
 }
 
 /** Fixed-path Docker Engine calls over the local Unix socket, never browser URLs. */
@@ -12,17 +14,29 @@ export class DockerApi {
   async request(method: string, path: string, body?: unknown, maxBytes = 4 * 1024 * 1024, timeout = 30_000) {
     const encoded = body === undefined ? undefined : Buffer.from(JSON.stringify(body));
     const response = await new Promise<{ status: number; data: Buffer }>((resolve, reject) => {
-      const req = http.request({ socketPath: this.socketPath, path: `/v1.44${path}`, method, headers: encoded ? { 'Content-Type': 'application/json', 'Content-Length': encoded.length } : {}, timeout }, res => {
-        const chunks: Buffer[] = [];
-        let size = 0;
-        res.on('data', (chunk: Buffer) => {
-          size += chunk.length;
-          if (size > maxBytes) { res.destroy(new Error('Docker response exceeded its limit.')); return; }
-          chunks.push(chunk);
-        });
-        res.on('error', reject);
-        res.on('end', () => resolve({ status: res.statusCode ?? 503, data: Buffer.concat(chunks) }));
-      });
+      const req = http.request(
+        {
+          socketPath: this.socketPath,
+          path: `/v1.44${path}`,
+          method,
+          headers: encoded ? { 'Content-Type': 'application/json', 'Content-Length': encoded.length } : {},
+          timeout,
+        },
+        res => {
+          const chunks: Buffer[] = [];
+          let size = 0;
+          res.on('data', (chunk: Buffer) => {
+            size += chunk.length;
+            if (size > maxBytes) {
+              res.destroy(new Error('Docker response exceeded its limit.'));
+              return;
+            }
+            chunks.push(chunk);
+          });
+          res.on('error', reject);
+          res.on('end', () => resolve({ status: res.statusCode ?? 503, data: Buffer.concat(chunks) }));
+        },
+      );
       req.on('error', reject);
       req.on('timeout', () => req.destroy(new Error('Docker operation timed out.')));
       req.end(encoded);
@@ -37,25 +51,51 @@ export class DockerApi {
   }
 
   async optional<T>(path: string): Promise<T | null> {
-    try { return await this.json<T>('GET', path); }
-    catch (error) { if (error instanceof DockerApiError && error.status === 404) return null; throw error; }
+    try {
+      return await this.json<T>('GET', path);
+    } catch (error) {
+      if (error instanceof DockerApiError && error.status === 404) return null;
+      throw error;
+    }
   }
 
-  async execStream(container:string,command:string[],signal:AbortSignal,onOutput:(chunk:Buffer)=>void,onEnd:()=>void) {
+  async execStream(
+    container: string,
+    command: string[],
+    signal: AbortSignal,
+    onOutput: (chunk: Buffer) => void,
+    onEnd: () => void,
+  ) {
     signal.throwIfAborted();
-    const created=await this.json<{Id:string}>('POST',`/containers/${encodeURIComponent(container)}/exec`,{
-      AttachStdin:true,AttachStdout:true,AttachStderr:true,Tty:false,Cmd:command,User:'1000:1000',Env:['XDG_RUNTIME_DIR=/run/user/1000'],
+    const created = await this.json<{ Id: string }>('POST', `/containers/${encodeURIComponent(container)}/exec`, {
+      AttachStdin: true,
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: false,
+      Cmd: command,
+      User: '1000:1000',
+      Env: ['XDG_RUNTIME_DIR=/run/user/1000'],
     });
     signal.throwIfAborted();
-    return attachExec(this.socketPath,created.Id,signal,onOutput,onEnd);
+    return attachExec(this.socketPath, created.Id, signal, onOutput, onEnd);
   }
 
   async exec(container: string, command: string[], user = 'root', timeout = 19_000, maxBytes = 768 * 1024) {
     const created = await this.json<{ Id: string }>('POST', `/containers/${encodeURIComponent(container)}/exec`, {
-      AttachStdout: true, AttachStderr: true, Tty: false, Cmd: command, User: user,
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: false,
+      Cmd: command,
+      User: user,
       Env: ['XDG_RUNTIME_DIR=/run/user/1000'],
     });
-    const raw = await this.request('POST', `/exec/${encodeURIComponent(created.Id)}/start`, { Detach: false, Tty: false }, maxBytes, timeout);
+    const raw = await this.request(
+      'POST',
+      `/exec/${encodeURIComponent(created.Id)}/start`,
+      { Detach: false, Tty: false },
+      maxBytes,
+      timeout,
+    );
     let offset = 0;
     const stdout: Buffer[] = [];
     while (offset < raw.length) {

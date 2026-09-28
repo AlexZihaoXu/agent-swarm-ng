@@ -15,7 +15,11 @@ export async function createWebTools() {
   const directory = await mkdtemp(join(root, 'turn-'));
   await writeFile(join(directory, 'web-search.json'), JSON.stringify(webConfig), { mode: 0o600 });
   const child = fork(fileURLToPath(new URL('./web-worker.ts', import.meta.url)), [], {
-    execPath: 'bun', execArgv: [], cwd: directory, env: webEnvironment(directory), stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+    execPath: 'bun',
+    execArgv: [],
+    cwd: directory,
+    env: webEnvironment(directory),
+    stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
   });
   let closed = false;
   const pending = new Map<string, { resolve: (result: Result) => void; reject: (error: Error) => void }>();
@@ -27,11 +31,21 @@ export async function createWebTools() {
     pending.clear();
   };
   const exited = new Promise<void>(resolveExit => {
-    child.once('exit', () => { fail(); resolveExit(); });
-    child.once('error', () => { fail(); resolveExit(); });
+    child.once('exit', () => {
+      fail();
+      resolveExit();
+    });
+    child.once('error', () => {
+      fail();
+      resolveExit();
+    });
   });
   const close = async () => {
-    if (!closed) { closed = true; child.kill(); fail(); }
+    if (!closed) {
+      closed = true;
+      child.kill();
+      fail();
+    }
     await exited;
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   };
@@ -40,8 +54,10 @@ export async function createWebTools() {
       rejectReady = reject;
       const timer = setTimeout(() => reject(new Error('Web tools did not start.')), 30000);
       child.on('message', (message: { tools?: Descriptor[]; id?: string; result?: Result; error?: string }) => {
-        if (message.tools) { clearTimeout(timer); resolveReady(message.tools); }
-        else if (message.id) {
+        if (message.tools) {
+          clearTimeout(timer);
+          resolveReady(message.tools);
+        } else if (message.id) {
           const request = pending.get(message.id);
           pending.delete(message.id);
           if (message.error) request?.reject(new Error(message.error));
@@ -51,32 +67,51 @@ export async function createWebTools() {
       child.once('exit', () => clearTimeout(timer));
       child.once('error', () => clearTimeout(timer));
     });
-    if (descriptors.length !== webToolNames.length || descriptors.some(tool => !webToolNames.includes(tool.name as typeof webToolNames[number]))) throw new Error('Unexpected web tools.');
+    if (
+      descriptors.length !== webToolNames.length ||
+      descriptors.some(tool => !webToolNames.includes(tool.name as (typeof webToolNames)[number]))
+    )
+      throw new Error('Unexpected web tools.');
     const tools = descriptors.map(descriptor => {
-      const parameters = structuredClone(descriptor.parameters) as typeof descriptor.parameters & { properties?: Record<string, unknown> };
-      for (const key of ['proxy', 'auth', 'answerModel', 'model', 'timestamp', 'frames', 'forceClone', 'prompt']) delete parameters.properties?.[key];
+      const parameters = structuredClone(descriptor.parameters) as typeof descriptor.parameters & {
+        properties?: Record<string, unknown>;
+      };
+      for (const key of ['proxy', 'auth', 'answerModel', 'model', 'timestamp', 'frames', 'forceClone', 'prompt'])
+        delete parameters.properties?.[key];
       if (parameters.properties?.provider) parameters.properties.provider = { type: 'string', enum: ['exa'] };
       if (parameters.properties?.workflow) parameters.properties.workflow = { type: 'string', enum: ['none'] };
       return defineTool({
-        ...descriptor, parameters,
+        ...descriptor,
+        parameters,
         async execute(_toolCallId, args, signal) {
           validateWebCall(descriptor.name, args);
           if (closed || signal?.aborted) throw new Error('Web request cancelled.');
           const id = crypto.randomUUID();
-          const abort = () => { void close().catch(() => {}); };
+          const abort = () => {
+            void close().catch(() => {});
+          };
           const timer = setTimeout(abort, 60000);
           signal?.addEventListener('abort', abort, { once: true });
           try {
             return await new Promise<Result>((resolveResult, reject) => {
               pending.set(id, { resolve: resolveResult, reject });
               child.send({ id, name: descriptor.name, args }, error => {
-                if (error) { pending.delete(id); reject(new Error('Web request could not start.')); }
+                if (error) {
+                  pending.delete(id);
+                  reject(new Error('Web request could not start.'));
+                }
               });
             });
-          } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
+          } finally {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', abort);
+          }
         },
       });
     });
     return { tools, close };
-  } catch (error) { await close(); throw error; }
+  } catch (error) {
+    await close();
+    throw error;
+  }
 }

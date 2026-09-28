@@ -4,7 +4,8 @@
 import { chromium } from '../frontend/node_modules/@playwright/test/index.mjs';
 
 const id = process.env.TEST_COMPUTER_ID;
-if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id ?? '')) throw Error('Bound disposable computer UUID required');
+if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id ?? ''))
+  throw Error('Bound disposable computer UUID required');
 const base = 'http://127.0.0.1:5173';
 const browser = await chromium.launch({ headless: true, chromiumSandbox: true });
 try {
@@ -19,7 +20,8 @@ try {
   let state;
   for (let i = 0; i < 45; i++) {
     state = await frame.locator('body').evaluate(() => ({
-      secure: isSecureContext, decoder: typeof VideoDecoder,
+      secure: isSecureContext,
+      decoder: typeof VideoDecoder,
       attached: !!window.webrtcInput?.inputAttached,
       videoWidth: document.querySelector('#videoStream')?.videoWidth ?? 0,
       videoHeight: document.querySelector('#videoStream')?.videoHeight ?? 0,
@@ -29,8 +31,11 @@ try {
   }
   console.log('SECURE_CODEC', JSON.stringify({ ...state, errors }));
   if (!state.secure || state.decoder === 'undefined') throw Error('localhost did not expose WebCodecs');
-  if (!state.attached || state.videoWidth !== 1920 || state.videoHeight !== 1080) throw Error('WebCodecs desktop did not decode the fixed 1920x1080 guest');
+  if (!state.attached || state.videoWidth !== 1920 || state.videoHeight !== 1080)
+    throw Error('WebCodecs desktop did not decode the fixed 1920x1080 guest');
   // The server's final Stream settings active log is authoritative for codec;
   // the client stats history is empty unless its inspector is explicitly open.
   if (errors.length) throw Error(`Browser errors: ${JSON.stringify(errors)}`);
-} finally { await browser.close(); }
+} finally {
+  await browser.close();
+}

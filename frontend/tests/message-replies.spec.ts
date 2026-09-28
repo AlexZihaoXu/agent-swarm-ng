@@ -1,10 +1,13 @@
 import { test, expect } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
-test('private replies retain their draft, follow the selected message and clear only after acknowledgment', async ({ page }) => {
+test('private replies retain their draft, follow the selected message and clear only after acknowledgment', async ({
+  page,
+}) => {
   await page.goto('/chat/agents/avery');
   const bubble = page.locator('[data-message-id="avery-0"]');
-  await bubble.focus(); await page.keyboard.press('Shift+F10');
+  await bubble.focus();
+  await page.keyboard.press('Shift+F10');
   await page.getByRole('menuitem', { name: 'Reply' }).click();
   const composer = page.getByRole('form', { name: 'Message composer' });
   await expect(composer.getByLabel('Replying to Avery')).toContainText('Hey! What would you like to work on?');
@@ -20,7 +23,9 @@ test('private replies retain their draft, follow the selected message and clear 
   expect((await request).postDataJSON().replyToMessageId).toBe('avery-0');
   const sent = page.getByRole('list', { name: 'Messages' }).getByText('I will keep this draft', { exact: true });
   await expect(sent).toBeVisible();
-  await expect(sent.locator('xpath=ancestor::*[@data-message-id][1]').getByLabel('In reply to Avery')).toContainText('Hey! What would you like to work on?');
+  await expect(sent.locator('xpath=ancestor::*[@data-message-id][1]').getByLabel('In reply to Avery')).toContainText(
+    'Hey! What would you like to work on?',
+  );
   await expect(composer.getByLabel('Replying to Avery')).toHaveCount(0);
   await page.getByRole('button', { name: 'Open conversation with Morgan' }).click();
   await expect(page.getByRole('form', { name: 'Message composer' }).getByLabel('Replying to Avery')).toHaveCount(0);
@@ -41,17 +46,56 @@ test('unsent reply targets stay with their conversation rather than leaking to a
 });
 
 test('group reply preview and target survive a failed send, then publish exactly once', async ({ page }) => {
-  const group = { id: 'team', name: 'Team', createdAt: Date.now(), members: [{ id: sampleAgents[0].id, name: 'Avery', avatar: null, channelId: sampleAgents[0].channelId }], lastMessage: null as any };
-  const messages: any[] = [{ id: 'group-parent', sequence: 1, groupId: 'team', role: 'assistant', authorId: 'avery', authorName: 'Avery', authorAvatar: null, text: 'Earlier group topic', timestamp: Date.now(), replyTo: null }];
-  let fail = true; const posted: any[] = [];
+  const group = {
+    id: 'team',
+    name: 'Team',
+    createdAt: Date.now(),
+    members: [{ id: sampleAgents[0].id, name: 'Avery', avatar: null, channelId: sampleAgents[0].channelId }],
+    lastMessage: null as any,
+  };
+  const messages: any[] = [
+    {
+      id: 'group-parent',
+      sequence: 1,
+      groupId: 'team',
+      role: 'assistant',
+      authorId: 'avery',
+      authorName: 'Avery',
+      authorAvatar: null,
+      text: 'Earlier group topic',
+      timestamp: Date.now(),
+      replyTo: null,
+    },
+  ];
+  let fail = true;
+  const posted: any[] = [];
   await page.route(/\/api\/groups(?:\?.*)?$/, route => route.fulfill({ json: { groups: [group], nextCursor: null } }));
   await page.route('**/api/groups/team', route => route.fulfill({ json: group }));
   await page.route('**/api/groups/team/messages*', route => {
     if (route.request().method() !== 'POST') return route.fulfill({ json: { messages, nextCursor: null } });
-    const body = route.request().postDataJSON(); posted.push(body);
+    const body = route.request().postDataJSON();
+    posted.push(body);
     if (fail) return route.fulfill({ status: 503, json: { message: 'Try again.' } });
-    const message = { id: body.clientMessageId, sequence: 2, groupId: 'team', role: 'user', authorId: null, authorName: 'You', authorAvatar: null, text: body.message, timestamp: Date.now(), replyTo: { id: messages[0].id, role: 'assistant', authorId: 'avery', authorName: 'Avery', text: messages[0].text } };
-    messages.push(message); group.lastMessage = message;
+    const message = {
+      id: body.clientMessageId,
+      sequence: 2,
+      groupId: 'team',
+      role: 'user',
+      authorId: null,
+      authorName: 'You',
+      authorAvatar: null,
+      text: body.message,
+      timestamp: Date.now(),
+      replyTo: {
+        id: messages[0].id,
+        role: 'assistant',
+        authorId: 'avery',
+        authorName: 'Avery',
+        text: messages[0].text,
+      },
+    };
+    messages.push(message);
+    group.lastMessage = message;
     return route.fulfill({ status: 202, json: { message, duplicate: false } });
   });
   await page.goto('/chat/agents/avery');

@@ -1,6 +1,8 @@
 import { test, expect } from './fixtures';
 
-test('agent configuration keeps its width, centers inside the main pane, and scrolls without tabs', async ({ page }) => {
+test('agent configuration keeps its width, centers inside the main pane, and scrolls without tabs', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1920, height: 900 });
   await page.goto('/agents/avery');
   const pane = page.getByRole('region', { name: 'Settings for Avery' });
@@ -11,13 +13,16 @@ test('agent configuration keeps its width, centers inside the main pane, and scr
   await expect(channels).toBeVisible();
   await expect(pane.getByRole('checkbox', { name: 'Morgan' })).toBeVisible();
   await expect(avatar).toBeVisible();
-  const paneBox = (await pane.boundingBox())!, sectionBox = (await pane.getByRole('region', { name: 'Channels' }).boundingBox())!;
+  const paneBox = (await pane.boundingBox())!,
+    sectionBox = (await pane.getByRole('region', { name: 'Channels' }).boundingBox())!;
   expect(sectionBox.x - paneBox.x).toBeGreaterThan(200);
   expect(Math.abs(sectionBox.x + sectionBox.width / 2 - paneBox.x - paneBox.width / 2)).toBeLessThan(3);
   await expect(pane.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   expect((await avatar.boundingBox())!.y).toBeGreaterThan((await channels.boundingBox())!.y);
   await page.screenshot({ path: test.info().outputPath('agent-scroll-desktop-top.png'), animations: 'disabled' });
-  await editor.evaluate(element => { element.scrollTop = element.scrollHeight; });
+  await editor.evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+  });
   await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(100);
   await expect(pane.getByRole('button', { name: 'Preview Triangle' })).toBeVisible();
   await pane.getByRole('button', { name: 'Preview Triangle' }).click();

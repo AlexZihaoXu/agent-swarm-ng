@@ -14,8 +14,10 @@ const sha256 = text => createHash('sha256').update(text).digest('hex');
 if (sha256(original) !== '3a2199dfa2535eb0ad077e6413df11ef57b944e802209788d140c2194e2e1519') {
   throw new Error('Pinned Selkies client changed; review upstream before updating the HTTP patch.');
 }
-const oldGuard = 'function Io(){return ga(),window.isSecureContext?(window.VideoDecoder===void 0?(console.warn(`VideoDecoder API unavailable: the stream is pinned to the jpeg encoder.`),Lo()):console.log(`Pre-flight checks passed: Secure context and VideoDecoder API are available.`),!0):(console.error(`FATAL: Not in a secure context. WebCodecs require HTTPS.`),q&&(q.textContent=`Error: This application requires a secure connection (HTTPS). Please check the URL.`,q.classList.remove(`hidden`)),kr&&kr.classList.add(`hidden`),!1)}';
-const jpegGuard = 'function Io(){ga();if(!window.isSecureContext){if(typeof createImageBitmap!==`function`){console.error(`JPEG decode unavailable on HTTP.`);return !1}console.warn(`HTTP origin: using JPEG fallback without WebCodecs.`);Lo();return !0}return window.VideoDecoder===void 0?(console.warn(`VideoDecoder API unavailable: the stream is pinned to the jpeg encoder.`),Lo()):console.log(`Pre-flight checks passed: Secure context and VideoDecoder API are available.`),!0}';
+const oldGuard =
+  'function Io(){return ga(),window.isSecureContext?(window.VideoDecoder===void 0?(console.warn(`VideoDecoder API unavailable: the stream is pinned to the jpeg encoder.`),Lo()):console.log(`Pre-flight checks passed: Secure context and VideoDecoder API are available.`),!0):(console.error(`FATAL: Not in a secure context. WebCodecs require HTTPS.`),q&&(q.textContent=`Error: This application requires a secure connection (HTTPS). Please check the URL.`,q.classList.remove(`hidden`)),kr&&kr.classList.add(`hidden`),!1)}';
+const jpegGuard =
+  'function Io(){ga();if(!window.isSecureContext){if(typeof createImageBitmap!==`function`){console.error(`JPEG decode unavailable on HTTP.`);return !1}console.warn(`HTTP origin: using JPEG fallback without WebCodecs.`);Lo();return !0}return window.VideoDecoder===void 0?(console.warn(`VideoDecoder API unavailable: the stream is pinned to the jpeg encoder.`),Lo()):console.log(`Pre-flight checks passed: Secure context and VideoDecoder API are available.`),!0}';
 const oldAudio = 'async function De(){if(N!==`primary`)';
 const httpAudio = 'async function De(){if(!window.isSecureContext)return;if(N!==`primary`)';
 // Both origins negotiate their own encoder against one server default. This is
@@ -34,7 +36,8 @@ const httpAudio = 'async function De(){if(!window.isSecureContext)return;if(N!==
 // per page load keeps a deliberate later sidebar choice authoritative; a
 // missing hardware table defers rather than consuming the one-shot flag.
 const oldUpgrade = 'typeof window.encoder==`string`&&ia(window.encoder,e.settings.encoder)';
-const secureUpgrade = 'typeof window.encoder==`string`&&ia(window.encoder,e.settings.encoder),(()=>{try{let n=e.settings&&e.settings.encoder;if(!n||typeof n.value!=`string`||n.locked===!0||window.__swarmEncoderAsked)return;let secure=window.isSecureContext&&typeof VideoDecoder!=`u`,have=String(n.value),allowed=Array.isArray(n.allowed)?n.allowed:[];if(secure&&have===`h265enc`)return;if(secure&&!allowed.includes(`h264enc`)&&!Yi)return;let want=secure?(allowed.includes(`h264enc`)?`h264enc`:ea()||`jpeg`):`jpeg`;if(have===want||!allowed.includes(want))return;window.__swarmEncoderAsked=!0,Wi=want,V=want,Ir(`encoder`,want),si=!1,ri=null,ii=0,ai=0,oi=null,wi(),console.warn(`[Selkies] ${secure?`secure`:`insecure`} origin: switching from ${have} to ${want}.`),aa(`${secure?`secure`:`insecure`} origin prefers ${want}`)}catch(n){console.warn(`[Selkies] encoder preference was not sent:`,n)}})()';
+const secureUpgrade =
+  'typeof window.encoder==`string`&&ia(window.encoder,e.settings.encoder),(()=>{try{let n=e.settings&&e.settings.encoder;if(!n||typeof n.value!=`string`||n.locked===!0||window.__swarmEncoderAsked)return;let secure=window.isSecureContext&&typeof VideoDecoder!=`u`,have=String(n.value),allowed=Array.isArray(n.allowed)?n.allowed:[];if(secure&&have===`h265enc`)return;if(secure&&!allowed.includes(`h264enc`)&&!Yi)return;let want=secure?(allowed.includes(`h264enc`)?`h264enc`:ea()||`jpeg`):`jpeg`;if(have===want||!allowed.includes(want))return;window.__swarmEncoderAsked=!0,Wi=want,V=want,Ir(`encoder`,want),si=!1,ri=null,ii=0,ai=0,oi=null,wi(),console.warn(`[Selkies] ${secure?`secure`:`insecure`} origin: switching from ${have} to ${want}.`),aa(`${secure?`secure`:`insecure`} origin prefers ${want}`)}catch(n){console.warn(`[Selkies] encoder preference was not sent:`,n)}})()';
 for (const needle of [oldGuard, oldAudio, oldUpgrade]) {
   if (original.split(needle).length !== 2) throw new Error('Pinned Selkies patch anchor changed; review upstream.');
 }
@@ -43,16 +46,37 @@ for (const needle of [oldGuard, oldAudio, oldUpgrade]) {
 // a global capture flag. Suppress the duplicate local CSS/canvas cursor. The
 // wrapper opts in; other uses of this pinned client retain upstream behavior.
 const cursorPatches = [
-  ['async updateServerCursor(e){', 'async updateServerCursor(e){if(window.__swarmNativeCursor===!0){this.cursorDiv.style.display=`none`;this.element.style.setProperty(`cursor`,`none`,`important`);return}', 1],
-  ['Rt&&l&&l.readyState===WebSocket.OPEN&&(l.send(`SET_NATIVE_CURSOR_RENDERING,1`)', '(Rt||window.__swarmNativeCursor===!0)&&l&&l.readyState===WebSocket.OPEN&&(l.send(`SET_NATIVE_CURSOR_RENDERING,1`)', 1],
+  [
+    'async updateServerCursor(e){',
+    'async updateServerCursor(e){if(window.__swarmNativeCursor===!0){this.cursorDiv.style.display=`none`;this.element.style.setProperty(`cursor`,`none`,`important`);return}',
+    1,
+  ],
+  [
+    'Rt&&l&&l.readyState===WebSocket.OPEN&&(l.send(`SET_NATIVE_CURSOR_RENDERING,1`)',
+    '(Rt||window.__swarmNativeCursor===!0)&&l&&l.readyState===WebSocket.OPEN&&(l.send(`SET_NATIVE_CURSOR_RENDERING,1`)',
+    1,
+  ],
   ['this.send(`p,0`)', 'this.send(window.__swarmNativeCursor===!0?`p,1`:`p,0`)', 2],
-  ['this.send(`SET_NATIVE_CURSOR_RENDERING,0`)', 'this.send(window.__swarmNativeCursor===!0?`SET_NATIVE_CURSOR_RENDERING,1`:`SET_NATIVE_CURSOR_RENDERING,0`)', 1],
-  ['l.send(`SET_NATIVE_CURSOR_RENDERING,0`)', 'l.send(window.__swarmNativeCursor===!0?`SET_NATIVE_CURSOR_RENDERING,1`:`SET_NATIVE_CURSOR_RENDERING,0`)', 1],
-  ['O.sendDataChannelMessage(`SET_NATIVE_CURSOR_RENDERING,0`)', 'O.sendDataChannelMessage(window.__swarmNativeCursor===!0?`SET_NATIVE_CURSOR_RENDERING,1`:`SET_NATIVE_CURSOR_RENDERING,0`)', 1],
+  [
+    'this.send(`SET_NATIVE_CURSOR_RENDERING,0`)',
+    'this.send(window.__swarmNativeCursor===!0?`SET_NATIVE_CURSOR_RENDERING,1`:`SET_NATIVE_CURSOR_RENDERING,0`)',
+    1,
+  ],
+  [
+    'l.send(`SET_NATIVE_CURSOR_RENDERING,0`)',
+    'l.send(window.__swarmNativeCursor===!0?`SET_NATIVE_CURSOR_RENDERING,1`:`SET_NATIVE_CURSOR_RENDERING,0`)',
+    1,
+  ],
+  [
+    'O.sendDataChannelMessage(`SET_NATIVE_CURSOR_RENDERING,0`)',
+    'O.sendDataChannelMessage(window.__swarmNativeCursor===!0?`SET_NATIVE_CURSOR_RENDERING,1`:`SET_NATIVE_CURSOR_RENDERING,0`)',
+    1,
+  ],
 ];
 let patched = original.replace(oldGuard, jpegGuard).replace(oldAudio, httpAudio).replace(oldUpgrade, secureUpgrade);
 for (const [needle, replacement, count] of cursorPatches) {
-  if (patched.split(needle).length !== count + 1) throw new Error('Pinned native-cursor anchor changed; review upstream.');
+  if (patched.split(needle).length !== count + 1)
+    throw new Error('Pinned native-cursor anchor changed; review upstream.');
   patched = patched.replaceAll(needle, replacement);
 }
 if (sha256(patched) !== '07b52a31119a1c361151df55d069a92913c05054c4abc750ba6249eb05692e6f') {
@@ -62,4 +86,6 @@ writeFileSync(path, patched);
 // Consumers (prepare-selkies-client.sh and the disposable gates) read this one
 // pin instead of restating the literal, so a reviewed patch update is a
 // single-file change.
-console.log(`Pinned Selkies client patched for HTTP/JPEG, secure WebCodecs and real streamed cursor. derivative=${sha256(patched)}`);
+console.log(
+  `Pinned Selkies client patched for HTTP/JPEG, secure WebCodecs and real streamed cursor. derivative=${sha256(patched)}`,
+);

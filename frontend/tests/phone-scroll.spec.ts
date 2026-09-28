@@ -9,7 +9,10 @@ async function swipeUp(page: Page, x: number, y: number) {
     active = true;
     for (let step = 1; step <= 5; step++) {
       await page.waitForTimeout(45);
-      await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - step * 32, id: 1 }] });
+      await client.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y: y - step * 32, id: 1 }],
+      });
     }
     await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     active = false;
@@ -22,32 +25,65 @@ async function swipeUp(page: Page, x: number, y: number) {
 test.describe('phone touch scrolling', () => {
   test.use({ hasTouch: true });
 
-  test('swiping over a message scrolls history without opening its menu or jumping on new publications', async ({ page }) => {
-    const messages = Array.from({ length: 45 }, (_, index) => ({ ...sampleHistory.avery[0], id: `scroll-${index}`, sequence: index + 1, role: index % 2 ? 'user' : 'assistant', text: `Message ${index} with enough content to make the history scrollable.`, timestamp: Date.now() + index * 1000 }));
-    await page.route('**/api/channels/avery/messages*', route => route.fulfill({ json: { messages, nextCursor: null } }));
+  test('swiping over a message scrolls history without opening its menu or jumping on new publications', async ({
+    page,
+  }) => {
+    const messages = Array.from({ length: 45 }, (_, index) => ({
+      ...sampleHistory.avery[0],
+      id: `scroll-${index}`,
+      sequence: index + 1,
+      role: index % 2 ? 'user' : 'assistant',
+      text: `Message ${index} with enough content to make the history scrollable.`,
+      timestamp: Date.now() + index * 1000,
+    }));
+    await page.route('**/api/channels/avery/messages*', route =>
+      route.fulfill({ json: { messages, nextCursor: null } }),
+    );
     await page.setViewportSize({ width: 390, height: 640 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/chat');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
     const viewport = page.getByRole('region', { name: 'Chat history' });
     await expect.poll(() => viewport.evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(500);
-    await viewport.evaluate(el => { el.scrollTop = 0; });
+    await viewport.evaluate(el => {
+      el.scrollTop = 0;
+    });
     const first = (await page.locator('[data-message-id="scroll-0"]').boundingBox())!;
     await swipeUp(page, first.x + first.width / 2, first.y + first.height / 2);
     await expect.poll(() => viewport.evaluate(el => el.scrollTop)).toBeGreaterThan(30);
     await expect(page.getByRole('menu', { name: 'Message actions' })).toHaveCount(0);
     const readingPosition = await viewport.evaluate(el => el.scrollTop);
-    await page.evaluate(() => (window as unknown as { emitAgentEvent: (event: object) => void }).emitAgentEvent({ type: 'channel_message', eventId: 'new-while-reading', agentId: 'avery', channelId: 'avery', id: 'new-while-reading', sequence: 46, text: 'New publication while reading older content', timestamp: Date.now() }));
+    await page.evaluate(() =>
+      (window as unknown as { emitAgentEvent: (event: object) => void }).emitAgentEvent({
+        type: 'channel_message',
+        eventId: 'new-while-reading',
+        agentId: 'avery',
+        channelId: 'avery',
+        id: 'new-while-reading',
+        sequence: 46,
+        text: 'New publication while reading older content',
+        timestamp: Date.now(),
+      }),
+    );
     await expect(page.locator('[data-message-id="new-while-reading"]')).toHaveCount(1);
     await expect.poll(() => viewport.evaluate(el => el.scrollTop)).toBeLessThan(readingPosition + 30);
   });
 
   test('agent list, chat list and Settings still accept native vertical swipes', async ({ page }) => {
-    const agents = Array.from({ length: 30 }, (_, index) => ({ ...sampleAgents[0], id: `peer-${index}`, name: `Agent ${index}`, channelId: `channel-${index}`, lastMessage: null }));
+    const agents = Array.from({ length: 30 }, (_, index) => ({
+      ...sampleAgents[0],
+      id: `peer-${index}`,
+      name: `Agent ${index}`,
+      channelId: `channel-${index}`,
+      lastMessage: null,
+    }));
     await page.route(/\/api\/agents(?:\?.*)?$/, route => route.fulfill({ json: { agents, nextCursor: null } }));
     await page.setViewportSize({ width: 390, height: 640 });
     await page.goto('/');
-    for (const [tab, label] of [['Agents', 'Agents'], ['Chat', 'Chats']] as const) {
+    for (const [tab, label] of [
+      ['Agents', 'Agents'],
+      ['Chat', 'Chats'],
+    ] as const) {
       if (tab === 'Chat') await page.getByRole('tab', { name: tab }).click();
       const list = page.getByRole('complementary', { name: label }).locator('[class*="overflow-y-auto"]').first();
       await expect.poll(() => list.evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(300);
@@ -65,7 +101,19 @@ test.describe('phone touch scrolling', () => {
   });
 
   test('a long peer picker and emoji results scroll inside their own menus', async ({ page }) => {
-    await page.route('**/api/agents/avery/dm-peers*', route => route.fulfill({ json: { peers: Array.from({ length: 24 }, (_, i) => ({ id: `peer-${i}`, name: `Peer ${i}`, channelId: `peer-channel-${i}`, avatar: null })), nextCursor: null } }));
+    await page.route('**/api/agents/avery/dm-peers*', route =>
+      route.fulfill({
+        json: {
+          peers: Array.from({ length: 24 }, (_, i) => ({
+            id: `peer-${i}`,
+            name: `Peer ${i}`,
+            channelId: `peer-channel-${i}`,
+            avatar: null,
+          })),
+          nextCursor: null,
+        },
+      }),
+    );
     await page.setViewportSize({ width: 390, height: 640 });
     await page.goto('/chat');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
@@ -87,7 +135,9 @@ test.describe('phone touch scrolling', () => {
   });
 
   test('a peer-list failure still exposes the retry choice on phones', async ({ page }) => {
-    await page.route('**/api/agents/avery/dm-peers*', route => route.fulfill({ status: 503, json: { message: 'Unavailable' } }));
+    await page.route('**/api/agents/avery/dm-peers*', route =>
+      route.fulfill({ status: 503, json: { message: 'Unavailable' } }),
+    );
     await page.setViewportSize({ width: 320, height: 640 });
     await page.goto('/chat');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).tap();

@@ -4,7 +4,12 @@ import type { Computer } from './generated/prisma/client';
 export type ComputerSettings = { cpuCores: number; memoryGiB: number; timezone: string };
 
 export class ComputerStoreError extends Error {
-  constructor(readonly code: 'missing' | 'confirmation' | 'conflict' | 'invalid', message: string) { super(message); }
+  constructor(
+    readonly code: 'missing' | 'confirmation' | 'conflict' | 'invalid',
+    message: string,
+  ) {
+    super(message);
+  }
 }
 
 /** Private platform identity. Docker is observed state, not a second identity store. */
@@ -14,21 +19,34 @@ export class ComputerStore {
   async reserve(rawName: string, requestKey: string, settings?: ComputerSettings) {
     await this.platform.initialize();
     const name = rawName.trim();
-    if (!name || name.length > 80 || /[\u0000-\u001f\u007f]/.test(name)) throw new ComputerStoreError('invalid', 'Computer name must be 1–80 printable characters.');
-    if (settings && (!Number.isInteger(settings.cpuCores) || settings.cpuCores < 1 || settings.cpuCores > 8 ||
-      !Number.isInteger(settings.memoryGiB) || settings.memoryGiB < 1 || settings.memoryGiB > 16 ||
-      !/^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/.test(settings.timezone) || settings.timezone.length > 64)) {
+    if (!name || name.length > 80 || /[\u0000-\u001f\u007f]/.test(name))
+      throw new ComputerStoreError('invalid', 'Computer name must be 1–80 printable characters.');
+    if (
+      settings &&
+      (!Number.isInteger(settings.cpuCores) ||
+        settings.cpuCores < 1 ||
+        settings.cpuCores > 8 ||
+        !Number.isInteger(settings.memoryGiB) ||
+        settings.memoryGiB < 1 ||
+        settings.memoryGiB > 16 ||
+        !/^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/.test(settings.timezone) ||
+        settings.timezone.length > 64)
+    ) {
       throw new ComputerStoreError('invalid', 'Invalid computer settings.');
     }
     if (settings) {
-      try { new Intl.DateTimeFormat('en', { timeZone: settings.timezone }); }
-      catch { throw new ComputerStoreError('invalid', 'Unknown computer timezone.'); }
+      try {
+        new Intl.DateTimeFormat('en', { timeZone: settings.timezone });
+      } catch {
+        throw new ComputerStoreError('invalid', 'Unknown computer timezone.');
+      }
     }
     const existing = await this.platform.client.computer.findUnique({ where: { requestKey } });
     if (existing) return { computer: this.sameRequest(existing, name, settings), created: false };
     try {
       const computer = await this.platform.client.$transaction(async tx => {
-        if (await tx.computer.count() >= 100) throw new ComputerStoreError('conflict', 'Computer record limit reached. Delete unused computers first.');
+        if ((await tx.computer.count()) >= 100)
+          throw new ComputerStoreError('conflict', 'Computer record limit reached. Delete unused computers first.');
         // Names are how an operator confirms a deletion, so keep them unambiguous.
         // SQLite has no case-insensitive index here, so compare the bounded roster.
         const taken = await tx.computer.findMany({ select: { name: true } });
@@ -46,9 +64,17 @@ export class ComputerStore {
     }
   }
 
-  private sameRequest<T extends { name: string; cpuCores?: number | null; memoryGiB?: number | null; timezone?: string | null }>(computer: T, name: string, settings?: ComputerSettings) {
-    if (computer.name !== name) throw new ComputerStoreError('conflict', 'This create request was used with a different name.');
-    if (settings && (computer.cpuCores !== settings.cpuCores || computer.memoryGiB !== settings.memoryGiB || computer.timezone !== settings.timezone)) {
+  private sameRequest<
+    T extends { name: string; cpuCores?: number | null; memoryGiB?: number | null; timezone?: string | null },
+  >(computer: T, name: string, settings?: ComputerSettings) {
+    if (computer.name !== name)
+      throw new ComputerStoreError('conflict', 'This create request was used with a different name.');
+    if (
+      settings &&
+      (computer.cpuCores !== settings.cpuCores ||
+        computer.memoryGiB !== settings.memoryGiB ||
+        computer.timezone !== settings.timezone)
+    ) {
       throw new ComputerStoreError('conflict', 'This create request was used with different settings.');
     }
     return computer;
@@ -59,7 +85,8 @@ export class ComputerStore {
    * owned desktop it finds. */
   async setDesiredState(id: string, desired: 'running' | 'stopped') {
     await this.platform.initialize();
-    if (desired !== 'running' && desired !== 'stopped') throw new ComputerStoreError('invalid', 'Unknown computer power state.');
+    if (desired !== 'running' && desired !== 'stopped')
+      throw new ComputerStoreError('invalid', 'Unknown computer power state.');
     const record = await this.platform.client.computer.findUnique({ where: { id } });
     if (!record) throw new ComputerStoreError('missing', 'Computer not found.');
     if (record.state === 'deleting' || record.state === 'failed') {
@@ -71,11 +98,15 @@ export class ComputerStore {
   /** Resource changes can apply live; keep the persisted request aligned with
    * the controller after its Docker update succeeds. Timezone is deliberately
    * untouched because container Env is immutable without replacement. */
-  private async updateSavedSettings(id: string, settings: Pick<ComputerSettings, 'cpuCores' | 'memoryGiB'> & { timezone?: string }) {
+  private async updateSavedSettings(
+    id: string,
+    settings: Pick<ComputerSettings, 'cpuCores' | 'memoryGiB'> & { timezone?: string },
+  ) {
     await this.platform.initialize();
     const record = await this.get(id);
     if (!record) throw new ComputerStoreError('missing', 'Computer not found.');
-    if (record.state !== 'running') throw new ComputerStoreError('conflict', 'Computer cannot change resources before creation completes.');
+    if (record.state !== 'running')
+      throw new ComputerStoreError('conflict', 'Computer cannot change resources before creation completes.');
     const updated = await this.platform.client.computer.updateMany({ where: { id, state: 'running' }, data: settings });
     if (updated.count !== 1) throw new ComputerStoreError('conflict', 'Computer changed while updating settings.');
     return (await this.get(id))!;
@@ -94,7 +125,14 @@ export class ComputerStore {
   /** Identities the operator explicitly powered off, for startup reconciliation. */
   async stoppedIds() {
     await this.platform.initialize();
-    return (await this.platform.client.computer.findMany({ where: { desiredState: 'stopped' }, select: { id: true }, orderBy: { sequence: 'asc' }, take: 100 })).map(record => record.id);
+    return (
+      await this.platform.client.computer.findMany({
+        where: { desiredState: 'stopped' },
+        select: { id: true },
+        orderBy: { sequence: 'asc' },
+        take: 100,
+      })
+    ).map(record => record.id);
   }
 
   async get(id: string) {
@@ -109,7 +147,10 @@ export class ComputerStore {
 
   async markRunning(id: string) {
     await this.platform.initialize();
-    return (await this.platform.client.computer.updateMany({ where: { id, state: 'creating' }, data: { state: 'running' } })).count === 1;
+    return (
+      (await this.platform.client.computer.updateMany({ where: { id, state: 'creating' }, data: { state: 'running' } }))
+        .count === 1
+    );
   }
 
   /** Drop a reservation the controller refused before creating anything (limit reached, invalid settings). */
@@ -120,23 +161,34 @@ export class ComputerStore {
 
   async markFailed(id: string) {
     await this.platform.initialize();
-    return (await this.platform.client.computer.updateMany({ where: { id, state: 'creating' }, data: { state: 'failed' } })).count === 1;
+    return (
+      (await this.platform.client.computer.updateMany({ where: { id, state: 'creating' }, data: { state: 'failed' } }))
+        .count === 1
+    );
   }
 
   async markDeleting(id: string, confirmation: string): Promise<Computer> {
     await this.platform.initialize();
     const record = await this.get(id);
     if (!record) throw new ComputerStoreError('missing', 'Computer not found.');
-    if (record.name !== confirmation) throw new ComputerStoreError('confirmation', 'Type the computer name exactly to confirm deletion.');
-    if (record.state === 'creating') throw new ComputerStoreError('conflict', 'Computer is being created. Wait for it to finish before deleting.');
+    if (record.name !== confirmation)
+      throw new ComputerStoreError('confirmation', 'Type the computer name exactly to confirm deletion.');
+    if (record.state === 'creating')
+      throw new ComputerStoreError('conflict', 'Computer is being created. Wait for it to finish before deleting.');
     if (record.state === 'deleting') return record;
-    const updated = await this.platform.client.computer.updateMany({ where: { id, name: confirmation, state: record.state }, data: { state: 'deleting' } });
+    const updated = await this.platform.client.computer.updateMany({
+      where: { id, name: confirmation, state: record.state },
+      data: { state: 'deleting' },
+    });
     if (updated.count !== 1) return this.markDeleting(id, confirmation);
     return (await this.get(id))!;
   }
 
   async finalizeDelete(id: string, confirmation: string) {
     await this.platform.initialize();
-    return (await this.platform.client.computer.deleteMany({ where: { id, name: confirmation, state: 'deleting' } })).count === 1;
+    return (
+      (await this.platform.client.computer.deleteMany({ where: { id, name: confirmation, state: 'deleting' } }))
+        .count === 1
+    );
   }
 }

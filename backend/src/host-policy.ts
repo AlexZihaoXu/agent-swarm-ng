@@ -7,12 +7,23 @@ import { isIP } from 'node:net';
  */
 export function hostname(header: string | undefined) {
   if (!header) return null;
-  try { return new URL(`http://${header}`).hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, ''); }
-  catch { return null; }
+  try {
+    return new URL(`http://${header}`).hostname
+      .toLowerCase()
+      .replace(/^\[|\]$/g, '')
+      .replace(/\.$/, '');
+  } catch {
+    return null;
+  }
 }
 
 export function allowedHosts(configured = process.env.ALLOWED_HOSTS ?? '') {
-  const extra = new Set(configured.split(',').map(entry => hostname(entry.trim())).filter((entry): entry is string => Boolean(entry)));
+  const extra = new Set(
+    configured
+      .split(',')
+      .map(entry => hostname(entry.trim()))
+      .filter((entry): entry is string => Boolean(entry)),
+  );
   return (header: string | undefined) => {
     const name = hostname(header);
     if (!name) return false;
