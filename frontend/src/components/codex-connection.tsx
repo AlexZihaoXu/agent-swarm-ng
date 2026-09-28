@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
+import { settingsCard } from '@/lib/styles';
 
 type Connection = {
   connected: boolean;
@@ -58,85 +59,95 @@ export function CodexConnection() {
   }
   const pending = connection && ['starting', 'waiting'].includes(connection.login.state);
   return (
-    <section aria-labelledby="codex-title" className="mb-8 rounded-xl border border-border bg-background p-5 sm:p-6">
-      <h3 id="codex-title" className="text-sm font-semibold">
-        OpenAI Codex
-      </h3>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Use your ChatGPT Plus or Pro subscription. No API key required.
-      </p>
-      <p role="status" className="mt-5 text-sm">
-        {!connection
-          ? 'Loading connection…'
-          : connection.connected
-            ? 'Connected to ChatGPT'
-            : pending
-              ? 'Waiting for sign-in…'
-              : 'Not connected'}
-      </p>
-      {connection?.login.state === 'waiting' && connection.login.userCode && (
-        <div className="mt-4 space-y-3">
-          {/* Same labeled-field composition as the endpoint settings (Kibo field-basic-inputs-4). */}
-          <label htmlFor="codex-device-code" className="block text-sm font-medium">
-            One-time sign-in code
-          </label>
-          <input
-            id="codex-device-code"
-            readOnly
-            value={connection.login.userCode}
-            onFocus={event => event.target.select()}
-            className="h-10 w-full rounded-lg border border-border bg-sidebar px-3 font-mono text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          />
-          <a
-            href="https://auth.openai.com/codex/device"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-11 items-center rounded text-sm underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
-          >
-            Open OpenAI sign-in
-          </a>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            Enter this code on OpenAI’s page. If needed, enable device code login in ChatGPT → Settings → Security. This
-            page updates automatically.
-          </p>
-        </div>
-      )}
-      {(error || connection?.login.message) && (
-        <p role="alert" className="mt-4 text-sm">
-          {error || connection?.login.message}
+    <section aria-labelledby="codex-title" className="space-y-4">
+      <div>
+        <h3 id="codex-title" className="text-lg font-semibold">
+          OpenAI Codex
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Use your ChatGPT Plus or Pro subscription. No API key required.
         </p>
-      )}
-      <div className="mt-5 flex flex-wrap gap-3">
-        {connection && (
-          <Button
-            size="sm"
-            variant={connection.connected || pending ? 'outline' : 'default'}
-            className="min-h-11 sm:min-h-0"
-            disabled={busy}
-            onClick={() => void change(pending ? 'cancel' : connection.connected ? 'disconnect' : 'connect')}
-          >
-            {busy ? 'Updating…' : pending ? 'Cancel sign-in' : connection.connected ? 'Disconnect' : 'Connect ChatGPT'}
-          </Button>
-        )}
-        {error && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="min-h-11 sm:min-h-0"
-            disabled={busy}
-            onClick={() => {
-              setError('');
-              setRevision(value => value + 1);
-            }}
-          >
-            Retry
-          </Button>
-        )}
       </div>
-      <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-        Subscription limits apply and are shared by agents using this account. Credentials stay on the backend. API
-        endpoints below use separate billing.
-      </p>
+      <div className={settingsCard}>
+        <p role="status" className="text-sm">
+          {!connection
+            ? 'Loading connection…'
+            : connection.connected
+              ? 'Connected to ChatGPT'
+              : pending
+                ? 'Waiting for sign-in…'
+                : 'Not connected'}
+        </p>
+        {connection?.login.state === 'waiting' && connection.login.userCode && (
+          <div className="mt-4 space-y-3">
+            {/* Same labeled-field composition as the endpoint settings (Kibo field-basic-inputs-4). */}
+            <label htmlFor="codex-device-code" className="block text-sm font-medium">
+              One-time sign-in code
+            </label>
+            <input
+              id="codex-device-code"
+              readOnly
+              value={connection.login.userCode}
+              onFocus={event => event.target.select()}
+              className="h-10 w-full rounded-lg border border-border bg-sidebar px-3 font-mono text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <a
+              href="https://auth.openai.com/codex/device"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center rounded text-sm underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
+            >
+              Open OpenAI sign-in
+            </a>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Enter this code on OpenAI’s page. If needed, enable device code login in ChatGPT → Settings → Security.
+              This page updates automatically.
+            </p>
+          </div>
+        )}
+        {(error || connection?.login.message) && (
+          <p role="alert" className="mt-4 text-sm">
+            {error || connection?.login.message}
+          </p>
+        )}
+        <div className="mt-5 flex flex-wrap gap-3">
+          {connection && (
+            <Button
+              size="sm"
+              variant={connection.connected || pending ? 'outline' : 'default'}
+              className="min-h-11 sm:min-h-0"
+              disabled={busy}
+              onClick={() => void change(pending ? 'cancel' : connection.connected ? 'disconnect' : 'connect')}
+            >
+              {busy
+                ? 'Updating…'
+                : pending
+                  ? 'Cancel sign-in'
+                  : connection.connected
+                    ? 'Disconnect'
+                    : 'Connect ChatGPT'}
+            </Button>
+          )}
+          {error && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="min-h-11 sm:min-h-0"
+              disabled={busy}
+              onClick={() => {
+                setError('');
+                setRevision(value => value + 1);
+              }}
+            >
+              Retry
+            </Button>
+          )}
+        </div>
+        <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+          Subscription limits apply and are shared by agents using this account. Credentials stay on the backend. API
+          endpoints below use separate billing.
+        </p>
+      </div>
     </section>
   );
 }

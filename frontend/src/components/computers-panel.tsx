@@ -13,6 +13,7 @@ import { ComputerResourceFields } from './computer-resource-fields';
 import { ComputerFileBrowser } from './computer-file-browser';
 import { ComputerTerminals } from './computer-terminals';
 import { ConfirmDialog } from './confirm-dialog';
+import { PageHeader } from './page-header';
 import type { ComputerAgentState } from './computer-control';
 import { computerPath } from '@/lib/dashboard-location';
 type ComputerList = { computers: Computer[] };
@@ -284,7 +285,7 @@ export function ComputersPanel({
   };
 
   return (
-    <section aria-label="Computers" className="computer-tab-enter flex min-h-0 w-full flex-col">
+    <section aria-label="Computers" className="flex min-h-0 w-full flex-col">
       {viewing ? (
         <ComputerViewer
           key={viewing.id}
@@ -306,10 +307,10 @@ export function ComputersPanel({
         </div>
       ) : (
         <>
-          <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:px-6 md:py-4">
-            <div>
-              <h2 className="text-lg font-semibold">Computers</h2>
-              <p className="text-xs text-muted-foreground">
+          <PageHeader
+            title="Computers"
+            description={
+              <>
                 Containerized Ubuntu desktops
                 {maxComputers !== undefined && (
                   <>
@@ -321,111 +322,115 @@ export function ComputersPanel({
                     in use
                   </>
                 )}
-              </p>
-            </div>
-            <Dialog.Root
-              open={createOpen}
-              onOpenChange={open => {
-                if (createBusy) return;
-                if (open) {
-                  const previous = suggestion.current;
-                  if (!name.trim() || name === previous) setName(suggestName() ?? name);
-                  setRequestKey(randomUuid());
-                  setCreateError('');
-                  setSettingsDraft(null);
-                  onNavigate('/computers/new');
-                } else onBack();
-              }}
-            >
-              <Dialog.Trigger asChild>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={!query.data?.controllerConnected || atLimit}
-                  title={atLimit ? `Limit reached (${maxComputers}). Delete a computer to create another.` : undefined}
-                  className="min-h-11 md:min-h-0"
-                >
-                  Create computer
-                </Button>
-              </Dialog.Trigger>
-              <ComputerDialog>
-                <form
-                  onSubmit={event => {
-                    event.preventDefault();
-                    void submitCreate();
-                  }}
-                >
-                  <Dialog.Title className="text-lg font-semibold">Create computer</Dialog.Title>
-                  <Dialog.Description className="mt-2 text-sm text-muted-foreground">
-                    Create a separate Ubuntu desktop with a persistent home and workspace.
-                  </Dialog.Description>
-                  <label htmlFor={createId} className="mt-5 block text-sm font-medium">
-                    Computer name
-                  </label>
-                  <input
-                    id={createId}
-                    autoFocus
-                    maxLength={80}
-                    value={name}
-                    disabled={createBusy}
-                    onChange={event => setName(event.target.value)}
-                    className="mt-2 h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10 sm:text-sm"
-                  />
-                  {limitsQuery.isError && (
-                    <p role="alert" className="mt-4 text-sm text-red-400">
-                      {limitsQuery.error.message}{' '}
-                      <button
-                        type="button"
-                        className="cursor-pointer underline"
-                        onClick={() => void limitsQuery.refetch()}
-                      >
-                        Retry
-                      </button>
-                    </p>
-                  )}
-                  {!limitsQuery.isError && !limitsQuery.data && (
-                    <p role="status" className="mt-4 text-sm text-muted-foreground">
-                      Detecting host limits…
-                    </p>
-                  )}
-                  {limitsQuery.data && formSettings && (
-                    <ComputerResourceFields
-                      limits={limitsQuery.data}
-                      value={formSettings}
-                      onChange={setSettingsDraft}
+              </>
+            }
+            action={
+              <Dialog.Root
+                open={createOpen}
+                onOpenChange={open => {
+                  if (createBusy) return;
+                  if (open) {
+                    const previous = suggestion.current;
+                    if (!name.trim() || name === previous) setName(suggestName() ?? name);
+                    setRequestKey(randomUuid());
+                    setCreateError('');
+                    setSettingsDraft(null);
+                    onNavigate('/computers/new');
+                  } else onBack();
+                }}
+              >
+                <Dialog.Trigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!query.data?.controllerConnected || atLimit}
+                    title={
+                      atLimit ? `Limit reached (${maxComputers}). Delete a computer to create another.` : undefined
+                    }
+                    className="min-h-11 md:min-h-0"
+                  >
+                    Create computer
+                  </Button>
+                </Dialog.Trigger>
+                <ComputerDialog>
+                  <form
+                    onSubmit={event => {
+                      event.preventDefault();
+                      void submitCreate();
+                    }}
+                  >
+                    <Dialog.Title className="text-lg font-semibold">Create computer</Dialog.Title>
+                    <Dialog.Description className="mt-2 text-sm text-muted-foreground">
+                      Create a separate Ubuntu desktop with a persistent home and workspace.
+                    </Dialog.Description>
+                    <label htmlFor={createId} className="mt-5 block text-sm font-medium">
+                      Computer name
+                    </label>
+                    <input
+                      id={createId}
+                      autoFocus
+                      maxLength={80}
+                      value={name}
                       disabled={createBusy}
+                      onChange={event => setName(event.target.value)}
+                      className="mt-2 h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10 sm:text-sm"
                     />
-                  )}
-                  {createError && (
-                    <p role="alert" className="mt-4 text-sm text-red-400">
-                      {createError}
-                    </p>
-                  )}
-                  <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                    <Dialog.Close asChild>
+                    {limitsQuery.isError && (
+                      <p role="alert" className="mt-4 text-sm text-red-400">
+                        {limitsQuery.error.message}{' '}
+                        <button
+                          type="button"
+                          className="cursor-pointer underline"
+                          onClick={() => void limitsQuery.refetch()}
+                        >
+                          Retry
+                        </button>
+                      </p>
+                    )}
+                    {!limitsQuery.isError && !limitsQuery.data && (
+                      <p role="status" className="mt-4 text-sm text-muted-foreground">
+                        Detecting host limits…
+                      </p>
+                    )}
+                    {limitsQuery.data && formSettings && (
+                      <ComputerResourceFields
+                        limits={limitsQuery.data}
+                        value={formSettings}
+                        onChange={setSettingsDraft}
+                        disabled={createBusy}
+                      />
+                    )}
+                    {createError && (
+                      <p role="alert" className="mt-4 text-sm text-red-400">
+                        {createError}
+                      </p>
+                    )}
+                    <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                      <Dialog.Close asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="min-h-11 sm:min-h-0"
+                          disabled={createBusy}
+                        >
+                          Cancel
+                        </Button>
+                      </Dialog.Close>
                       <Button
-                        type="button"
-                        variant="outline"
+                        type="submit"
                         size="sm"
                         className="min-h-11 sm:min-h-0"
-                        disabled={createBusy}
+                        disabled={createBusy || !name.trim() || !parsedSettings}
                       >
-                        Cancel
+                        {createBusy ? 'Creating…' : 'Create computer'}
                       </Button>
-                    </Dialog.Close>
-                    <Button
-                      type="submit"
-                      size="sm"
-                      className="min-h-11 sm:min-h-0"
-                      disabled={createBusy || !name.trim() || !parsedSettings}
-                    >
-                      {createBusy ? 'Creating…' : 'Create computer'}
-                    </Button>
-                  </div>
-                </form>
-              </ComputerDialog>
-            </Dialog.Root>
-          </header>
+                    </div>
+                  </form>
+                </ComputerDialog>
+              </Dialog.Root>
+            }
+          />
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pb-6">
             {query.isPending && (
               <p role="status" className="text-sm text-muted-foreground">

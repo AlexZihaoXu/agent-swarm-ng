@@ -150,6 +150,14 @@ export function App() {
   useEffect(() => {
     if (activeTab === 'settings') setSettingsSeen(true);
   }, [activeTab]);
+  // Tab content enters from the side its tab sits on (see .tab-enter).
+  const tabOrder = ['agents', 'chat', 'computers', 'settings'];
+  const previousTab = useRef(activeTab);
+  const tabShift = useRef(0);
+  if (previousTab.current !== activeTab) {
+    tabShift.current = Math.sign(tabOrder.indexOf(activeTab) - tabOrder.indexOf(previousTab.current)) * 16;
+    previousTab.current = activeTab;
+  }
   const pendingTabPath = useRef('');
   const focusAgentsAfterDelete = useRef(false);
   useEffect(() => {
@@ -436,7 +444,12 @@ export function App() {
   return (
     <main className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background">
       <h1 className="sr-only">Agent Swarm NG</h1>
-      <Tabs.Root value={activeTab} onValueChange={changeTab} className="flex min-h-0 flex-1 flex-col">
+      <Tabs.Root
+        value={activeTab}
+        onValueChange={changeTab}
+        className="flex min-h-0 flex-1 flex-col"
+        style={{ '--tab-shift': `${tabShift.current}px` } as React.CSSProperties}
+      >
         {!computerViewerOpen && (
           <header
             className={cn(
@@ -471,8 +484,9 @@ export function App() {
         )}
 
         <Tabs.Content
+          key={activeTab === 'chat' ? 'chat' : 'agents'}
           value={activeTab === 'chat' ? 'chat' : 'agents'}
-          className="min-h-0 flex-1 outline-none data-[state=active]:flex"
+          className="tab-enter min-h-0 flex-1 outline-none data-[state=active]:flex"
         >
           {activeTab === 'chat' ? (
             <ChatPanel
@@ -897,7 +911,7 @@ export function App() {
               </ScrollArea>
 
               {conversationPeer === 'you' ? (
-                <div className="shrink-0 pl-[calc(1.5rem+env(safe-area-inset-left))] pr-[calc(1.5rem+env(safe-area-inset-right))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:px-5 sm:pb-3">
+                <div className="mx-auto w-full max-w-4xl shrink-0 pl-[calc(1.5rem+env(safe-area-inset-left))] pr-[calc(1.5rem+env(safe-area-inset-right))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:px-5 sm:pb-3">
                   <div className="w-full">
                     <div className="mb-1 flex h-5 min-w-0 items-center px-2">
                       <AgentTypingStatus
@@ -970,7 +984,7 @@ export function App() {
           )}
         </Tabs.Content>
 
-        <Tabs.Content value="computers" className="min-h-0 flex-1 outline-none data-[state=active]:flex">
+        <Tabs.Content value="computers" className="tab-enter min-h-0 flex-1 outline-none data-[state=active]:flex">
           {activeTab === 'computers' && (
             <Suspense fallback={loading}>
               <ComputersPanel
@@ -998,7 +1012,7 @@ export function App() {
           value="settings"
           forceMount
           className={cn(
-            'phone-tab-enter min-h-0 flex-1 outline-none data-[state=inactive]:hidden',
+            'tab-enter min-h-0 flex-1 outline-none data-[state=inactive]:hidden',
             route.kind === 'knowledge'
               ? 'overflow-hidden data-[state=active]:flex data-[state=active]:flex-col'
               : 'overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0',

@@ -43,7 +43,7 @@ export function ConversationMessages({
   const timeline = conversationTimeline(messages, notices);
 
   return (
-    <div className="w-full px-4 py-5 sm:px-5">
+    <div className="mx-auto w-full max-w-4xl px-4 py-5 sm:px-5">
       <p className="message-enter mb-5 origin-bottom text-center text-xs text-muted-foreground">{time}</p>
       <ReactionLoadError
         failed={Boolean(reactionChannel) && reactions.isError}

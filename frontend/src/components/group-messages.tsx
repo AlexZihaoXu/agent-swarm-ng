@@ -26,7 +26,7 @@ export function GroupMessages({
     messages.map(message => message.id),
   );
   return (
-    <ol aria-label="Messages" aria-live="polite" aria-relevant="additions" className="py-3">
+    <ol aria-label="Messages" aria-live="polite" aria-relevant="additions" className="mx-auto max-w-4xl py-3">
       {reactions.isError && (
         <li>
           <ReactionLoadError failed retry={() => void reactions.refetch()} />
