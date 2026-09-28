@@ -13,6 +13,9 @@
        stripe path. At exact 1:1 sizing image-rendering has no effect, so a
        blanket auto is safe for both. */
     #videoCanvas, #videoWorkerCanvas, #videoStream { image-rendering: auto !important; }
+    /* The shared video includes the guest's actual cursor, even for locked
+       observers. Do not paint a second viewer-local pointer over the stream. */
+    #overlayInput { cursor: none !important; }
   </style>
   <!-- This trusted, same-origin client needs WebCodecs. Its per-view ephemeral
        Web Storage keeps Selkies UI preferences out of dashboard persistence;
@@ -40,6 +43,7 @@
   <script>
     (() => {
       window.swarmDesktopInputEnabled = false;
+      window.__swarmNativeCursor = true;
       const block = event => {
         if (window.swarmDesktopInputEnabled) return;
         event.preventDefault(); event.stopImmediatePropagation();

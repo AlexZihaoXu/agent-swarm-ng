@@ -68,14 +68,11 @@ try{
  console.log('NO_PORTAL_VISIBLE_DESKTOP',JSON.stringify(capabilities));
  const cursor=await frame.locator('body').evaluate(()=>{
   const input=window.webrtcInput;
-  const css=input?.element?.style.cursor??'';
-  const hotspot=css.match(/^url\("data:image\/png;base64,[A-Za-z0-9+/=]+"\) (\d+) (\d+), default$/);
-  return {attached:!!input,remotePNG:css.startsWith('url("data:image/png;base64,'),
-    hotspot:hotspot?[Number(hotspot[1]),Number(hotspot[2])]:null,
-    browserCursor:input?.use_browser_cursors??null};
+  return {attached:!!input,native:window.__swarmNativeCursor===true,
+    localCursor:input?.element?getComputedStyle(input.element).cursor:null};
  });
  console.log('REMOTE_CURSOR',JSON.stringify(cursor));
- if(!cursor.attached||!cursor.browserCursor||!cursor.remotePNG||!cursor.hotspot||cursor.hotspot.some(n=>n<0||n>128))throw Error('GNOME cursor image/hotspot not applied');
+ if(!cursor.attached||!cursor.native||cursor.localCursor!=='none')throw Error('Streamed cursor mode or local-cursor suppression not applied');
  // GNOME Shell dock Files icon at the fixed monitor coordinate 35x68.
  await page.mouse.click(...point(35,68));
  let before;

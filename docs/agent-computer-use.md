@@ -10,7 +10,7 @@ A blocked agent asks the current holder to release via an already-permitted conv
 
 A Swarm backend restart cancels/settles persisted claims, releases them, clears screenshot allowances and leaves an agent-facing notice for each affected agent's **next normal turn**. It does not automatically wake inference or replay interrupted work. Browser refresh merely reattaches observation and does not release claims. Revoking an assignment releases active control; deleting an agent cascades its assignments/claim and archive.
 
-The human viewer starts **Input locked** each time it opens/reconnects. The toggle only enables/disables human pointer/keyboard/touch/shortcut input; it does not stop video, release an agent or revoke assignments. This adapts the v2 idea, not its overlay-only implementation: the trusted iframe also gates input events and shortcut messages after focus.
+The human viewer starts **Input locked** each time it opens/reconnects. The actual guest cursor is composed into the shared video stream, so locked observers can see agent/remote pointer motion. All trusted viewers use that same cursor mode, with the duplicate local CSS/canvas cursor suppressed; unlocking or detaching one viewer does not turn off another viewer's cursor. The toggle only enables/disables human pointer/keyboard/touch/shortcut input; it does not stop video, release an agent or revoke assignments. This adapts the v2 idea, not its overlay-only implementation: the trusted iframe also gates input events and shortcut messages after focus.
 
 ## Observe, act, verify
 

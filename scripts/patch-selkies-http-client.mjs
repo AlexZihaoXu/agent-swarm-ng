@@ -38,12 +38,28 @@ const secureUpgrade = 'typeof window.encoder==`string`&&ia(window.encoder,e.sett
 for (const needle of [oldGuard, oldAudio, oldUpgrade]) {
   if (original.split(needle).length !== 2) throw new Error('Pinned Selkies patch anchor changed; review upstream.');
 }
-const patched = original.replace(oldGuard, jpegGuard).replace(oldAudio, httpAudio).replace(oldUpgrade, secureUpgrade);
-if (sha256(patched) !== '305d517b3574066788ac3f8592f35204852bac87dd75e278cd7ee581642877f1') {
+// The stream is shared across viewers. Keep its REAL guest cursor composited
+// for every trusted viewer rather than letting lock/unlock clients fight over
+// a global capture flag. Suppress the duplicate local CSS/canvas cursor. The
+// wrapper opts in; other uses of this pinned client retain upstream behavior.
+const cursorPatches = [
+  ['async updateServerCursor(e){', 'async updateServerCursor(e){if(window.__swarmNativeCursor===!0){this.cursorDiv.style.display=`none`;this.element.style.setProperty(`cursor`,`none`,`important`);return}', 1],
+  ['Rt&&l&&l.readyState===WebSocket.OPEN&&(l.send(`SET_NATIVE_CURSOR_RENDERING,1`)', '(Rt||window.__swarmNativeCursor===!0)&&l&&l.readyState===WebSocket.OPEN&&(l.send(`SET_NATIVE_CURSOR_RENDERING,1`)', 1],
+  ['this.send(`p,0`)', 'this.send(window.__swarmNativeCursor===!0?`p,1`:`p,0`)', 2],
+  ['this.send(`SET_NATIVE_CURSOR_RENDERING,0`)', 'this.send(window.__swarmNativeCursor===!0?`SET_NATIVE_CURSOR_RENDERING,1`:`SET_NATIVE_CURSOR_RENDERING,0`)', 1],
+  ['l.send(`SET_NATIVE_CURSOR_RENDERING,0`)', 'l.send(window.__swarmNativeCursor===!0?`SET_NATIVE_CURSOR_RENDERING,1`:`SET_NATIVE_CURSOR_RENDERING,0`)', 1],
+  ['O.sendDataChannelMessage(`SET_NATIVE_CURSOR_RENDERING,0`)', 'O.sendDataChannelMessage(window.__swarmNativeCursor===!0?`SET_NATIVE_CURSOR_RENDERING,1`:`SET_NATIVE_CURSOR_RENDERING,0`)', 1],
+];
+let patched = original.replace(oldGuard, jpegGuard).replace(oldAudio, httpAudio).replace(oldUpgrade, secureUpgrade);
+for (const [needle, replacement, count] of cursorPatches) {
+  if (patched.split(needle).length !== count + 1) throw new Error('Pinned native-cursor anchor changed; review upstream.');
+  patched = patched.replaceAll(needle, replacement);
+}
+if (sha256(patched) !== '07b52a31119a1c361151df55d069a92913c05054c4abc750ba6249eb05692e6f') {
   throw new Error('Unexpected trusted client derivative; refuse to serve it.');
 }
 writeFileSync(path, patched);
 // Consumers (prepare-selkies-client.sh and the disposable gates) read this one
 // pin instead of restating the literal, so a reviewed patch update is a
 // single-file change.
-console.log(`Pinned Selkies client patched for JPEG-only insecure origins; secure WebCodecs path retained. derivative=${sha256(patched)}`);
+console.log(`Pinned Selkies client patched for HTTP/JPEG, secure WebCodecs and real streamed cursor. derivative=${sha256(patched)}`);
