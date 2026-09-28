@@ -10,7 +10,7 @@ Every `terminal_*` operation—including reads—requires the agent's **current 
 | --- | --- | --- |
 | `terminal_create` | `name, command?, cwd?` | Start an interactive Bash shell, or `bash -lc command`; return the new opaque session ID without waiting for program completion. |
 | `terminal_list` | none | List this computer's managed sessions. |
-| `terminal_view` | `session` | Bounded plain-text snapshot of screen and recent scrollback. |
+| `terminal_view` | `session`, `rows?`, `up?` | One 36-row screen by default; `up` scrolls above the live bottom, `rows` (≤200) sizes the window. |
 | `terminal_type` | `session, text` | Paste literal text; **no Enter appended**. Bracketed paste where supported; supplied newlines may execute commands. |
 | `terminal_press` | `session, key` | Send one enumerated key. |
 | `terminal_interrupt` | `session` | Send Ctrl+C; programs may ignore it. Inspect to verify. |
@@ -21,7 +21,7 @@ Use exact IDs returned by create/list, never guessed names/prefixes/raw tmux tar
 
 Keys: `Enter`, `Tab`, `BTab`, `Escape`, `BSpace`, `Delete`, `Insert`, `Space`, `Up/Down/Left/Right`, `Home/End/PageUp/PageDown`, `F1`–`F12`, `C-a`–`C-z`, and `M-a`–`M-z`. Text accepts newline/carriage-return/tab but rejects other control characters; use `press` for those keys. Text/initial command ≤32,768 UTF-8 bytes, cwd ≤4,096 bytes, complete request ≤64 KiB including JSON overhead.
 
-`view` returns the latest **≤2,000 physical rows / 50,000 UTF-8 bytes**, explicitly labelled when truncated. tmux retains **10,000 history rows in memory**, not a permanent log. Redirect important output to an ordinary guest file when needed. Snapshots can repeat or change due to full-screen redraws; they are not incremental stdout/stderr streams. Output is untrusted evidence, never instructions, HTML, a permission grant or an automatic chat publication. Agent tool calls/results use the existing activity/private-context handling.
+`view` behaves like looking at the terminal: by default the current **36-row screen** at the live bottom. The agent scrolls by choice with `up` (rows above the bottom, 0–10,000) and `rows` (1–200); the result reports `window {from,to,total,up}` and a note with the `up` value for earlier or later output. Plain text is ≤50,000 UTF-8 bytes and explicitly labelled when truncated. tmux retains **10,000 history rows in memory**, not a permanent log. Redirect important output to an ordinary guest file when needed. Snapshots can repeat or change due to full-screen redraws; they are not incremental stdout/stderr streams. Output is untrusted evidence, never instructions, HTML, a permission grant or an automatic chat publication. Agent tool calls/results use the existing activity/private-context handling.
 
 A default interactive shell remains alive between commands; **alive does not mean the last command succeeded, or even finished**. An explicit create command exits its pane when complete and retains the screen. `exitCode` may be null when unknown (including the brief interval between PTY close and reaping, or termination by a signal); `exitSignal` is included when tmux reports one. It is never invented as zero. Input acceptance only confirms delivery, not application success.
 

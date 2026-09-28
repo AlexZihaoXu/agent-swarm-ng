@@ -24,8 +24,12 @@ class FileTests(unittest.TestCase):
     def test_read_is_bounded_and_has_explicit_line_continuation(self):
         self.call('write', path='a', content='abc\n'*3000)
         result=self.call('read', path='a')
+        self.assertEqual(result['lines'],200); self.assertEqual(result['nextOffset'],201)
+        self.assertIsNone(result['prevOffset']); self.assertTrue(result['truncated'])
+        result=self.call('read', path='a', limit=2000)
         self.assertEqual(result['lines'],2000); self.assertEqual(result['nextOffset'],2001)
-        self.assertTrue(result['truncated'])
+        result=self.call('read', path='a', offset=401)
+        self.assertEqual(result['prevOffset'],201); self.assertEqual(self.call('read', path='a', offset=50, limit=100)['prevOffset'],1)
         result=self.call('read',path='a',offset=3001)
         self.assertEqual(result['text'],''); self.assertIsNone(result['nextOffset'])
     def test_long_lines_and_binary_are_not_unbounded(self):

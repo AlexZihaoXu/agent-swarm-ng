@@ -4,6 +4,8 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { randomUuid } from '@/lib/random-uuid';
+import { PageHeader } from '@/components/page-header';
+import { settingsCard } from '@/lib/styles';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { endpointPath, type DashboardRoute } from '@/lib/dashboard-location';
 
@@ -97,7 +99,7 @@ function EndpointCard({
   }
 
   return (
-    <section aria-labelledby={`${id}-title`} className="rounded-xl border border-border bg-background p-5 sm:p-6">
+    <section aria-labelledby={`${id}-title`} className={settingsCard}>
       <div className="mb-5 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h3 id={`${id}-title`} className="truncate text-sm font-semibold">
@@ -356,109 +358,113 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-5 pb-8 pt-[calc(2rem+env(safe-area-inset-top))] sm:px-8 md:py-10">
-      <header className="mb-8">
-        <h2 className="text-xl font-semibold">Settings</h2>
-        <p className="mt-2 text-sm text-muted-foreground">Manage your model connections.</p>
-      </header>
-      <CodexConnection />
-      <section
-        aria-labelledby="knowledge-title"
-        className="mb-8 rounded-xl border border-border bg-background p-5 sm:p-6"
-      >
-        <h3 id="knowledge-title" className="text-sm font-semibold">
-          Swarm Knowledge
-        </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Review the operator-curated, read-only topic hierarchy. Anyone with dashboard access can read these entries.
-        </p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="mt-4 min-h-11 sm:min-h-0"
-          onClick={() => onNavigate('/settings/knowledge')}
-        >
-          Browse Swarm Knowledge
-        </Button>
-      </section>
-      <section aria-labelledby="endpoints-title">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <PageHeader title="Settings" description="Manage your model connections." width="max-w-3xl" sticky />
+      <div className="mx-auto w-full max-w-3xl space-y-8 px-4 pb-8 pt-6 md:px-6 md:pb-10">
+        <CodexConnection />
+        <section aria-labelledby="knowledge-title" className="space-y-4">
           <div>
-            <h3 id="endpoints-title" className="text-sm font-semibold">
-              API endpoints
+            <h3 id="knowledge-title" className="text-lg font-semibold">
+              Swarm Knowledge
             </h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Connect OpenRouter, another OpenAI-compatible provider, or a local server.
+            <p className="mt-1 text-sm text-muted-foreground">
+              Review the operator-curated, read-only topic hierarchy. Anyone with dashboard access can read these
+              entries.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className={settingsCard}>
             <Button
+              type="button"
               variant="outline"
               size="sm"
               className="min-h-11 sm:min-h-0"
-              disabled={loading}
-              onClick={() => addEndpoint('OpenRouter', OPENROUTER_URL)}
+              onClick={() => onNavigate('/settings/knowledge')}
             >
-              Add OpenRouter
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="min-h-11 sm:min-h-0"
-              disabled={loading}
-              onClick={() => addEndpoint()}
-            >
-              <span aria-hidden="true" className="mr-2 text-lg leading-none">
-                +
-              </span>
-              Add endpoint
+              Browse Swarm Knowledge
             </Button>
           </div>
-        </div>
-        <div className="space-y-4">
-          {error && (
-            <p role="alert" className="text-sm">
-              {error}
-            </p>
-          )}
-          {loading && (
-            <p role="status" className="text-sm text-muted-foreground">
-              Loading endpoints…
-            </p>
-          )}
-          {!loading && endpoints.length === 0 && (
-            <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center">
-              <p className="text-sm font-medium">No endpoints yet</p>
-              <p className="mt-2 text-xs text-muted-foreground">Add a connection to check its available models.</p>
+        </section>
+        <section aria-labelledby="endpoints-title" className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h3 id="endpoints-title" className="text-lg font-semibold">
+                API endpoints
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Connect OpenRouter, another OpenAI-compatible provider, or a local server.
+              </p>
             </div>
-          )}
-          {route.kind === 'endpoint' && !loading && !error && !endpoints.some(item => item.id === route.endpointId) && (
-            <p role="alert" className="text-sm">
-              Endpoint not found.{' '}
-              <button type="button" className="cursor-pointer underline" onClick={() => onNavigate('/settings')}>
-                Return to settings
-              </button>
-            </p>
-          )}
-          {endpoints.map(endpoint => (
-            <div key={endpoint.id} id={`endpoint-${endpoint.id}`}>
-              <EndpointCard
-                endpoint={endpoint}
-                onSaved={saved => {
-                  setEndpoints(current => current.map(item => (item.id === endpoint.id ? saved : item)));
-                  onNavigate(endpointPath(saved.id));
-                }}
-                onRemove={() => removeEndpoint(endpoint)}
-              />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-11 sm:min-h-0"
+                disabled={loading}
+                onClick={() => addEndpoint('OpenRouter', OPENROUTER_URL)}
+              >
+                Add OpenRouter
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-11 sm:min-h-0"
+                disabled={loading}
+                onClick={() => addEndpoint()}
+              >
+                <span aria-hidden="true" className="mr-2 text-lg leading-none">
+                  +
+                </span>
+                Add endpoint
+              </Button>
             </div>
-          ))}
-        </div>
-        <p className="mt-5 text-xs leading-relaxed text-muted-foreground">
-          Save endpoints to keep them after restart. Keys are stored on the backend, never in browser storage. Changing
-          a saved URL clears its key unless you enter a replacement. Use HTTPS for remote providers.
-        </p>
-      </section>
+          </div>
+          <div className="space-y-4">
+            {error && (
+              <p role="alert" className="text-sm">
+                {error}
+              </p>
+            )}
+            {loading && (
+              <p role="status" className="text-sm text-muted-foreground">
+                Loading endpoints…
+              </p>
+            )}
+            {!loading && endpoints.length === 0 && (
+              <div className="rounded-lg border border-dashed border-border px-6 py-12 text-center">
+                <p className="text-sm font-medium">No endpoints yet</p>
+                <p className="mt-2 text-xs text-muted-foreground">Add a connection to check its available models.</p>
+              </div>
+            )}
+            {route.kind === 'endpoint' &&
+              !loading &&
+              !error &&
+              !endpoints.some(item => item.id === route.endpointId) && (
+                <p role="alert" className="text-sm">
+                  Endpoint not found.{' '}
+                  <button type="button" className="cursor-pointer underline" onClick={() => onNavigate('/settings')}>
+                    Return to settings
+                  </button>
+                </p>
+              )}
+            {endpoints.map(endpoint => (
+              <div key={endpoint.id} id={`endpoint-${endpoint.id}`}>
+                <EndpointCard
+                  endpoint={endpoint}
+                  onSaved={saved => {
+                    setEndpoints(current => current.map(item => (item.id === endpoint.id ? saved : item)));
+                    onNavigate(endpointPath(saved.id));
+                  }}
+                  onRemove={() => removeEndpoint(endpoint)}
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Save endpoints to keep them after restart. Keys are stored on the backend, never in browser storage.
+            Changing a saved URL clears its key unless you enter a replacement. Use HTTPS for remote providers.
+          </p>
+        </section>
+      </div>
     </div>
   );
 }

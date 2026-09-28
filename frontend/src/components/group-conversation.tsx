@@ -244,7 +244,7 @@ export function GroupConversation({
           <p className="p-6 text-center text-sm text-muted-foreground">Start a conversation with this group.</p>
         )}
       </ScrollArea>
-      <div className="shrink-0 pl-[calc(1.5rem+env(safe-area-inset-left))] pr-[calc(1.5rem+env(safe-area-inset-right))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:px-5 sm:pb-3">
+      <div className="mx-auto w-full max-w-4xl shrink-0 pl-[calc(1.5rem+env(safe-area-inset-left))] pr-[calc(1.5rem+env(safe-area-inset-right))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:px-5 sm:pb-3">
         {error && (
           <p role="alert" className="mb-2 text-xs text-red-400">
             {error}

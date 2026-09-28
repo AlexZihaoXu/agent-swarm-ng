@@ -28,6 +28,19 @@ class TerminalValidation(unittest.TestCase):
         for text in ('\0', '\x1b[31m', 'a' * 33000):
             with self.assertRaises(ValueError): terminal.validate(dict(target, operation='type', text=text))
 
+    def test_view_scrolls_by_rows_above_the_live_bottom(self):
+        session = {'operation': 'view', 'session': '12345678-1234-1234-1234-123456789abc'}
+        terminal.validate(dict(session, rows=200, up=10000))
+        for extra in ({'rows': 0}, {'rows': 201}, {'up': -1}, {'up': 10001}, {'rows': True}, {'up': '3'}):
+            with self.assertRaises(ValueError): terminal.validate(dict(session, **extra))
+        # 100 history rows + a 36-row screen = 136 buffer rows.
+        self.assertEqual(terminal.view_window(136, 36), (100, 136, 0))
+        self.assertEqual(terminal.view_window(136, 36, up=36), (64, 100, 36))
+        self.assertEqual(terminal.view_window(136, 36, rows=10, up=5), (121, 131, 5))
+        self.assertEqual(terminal.view_window(136, 36, up=10000), (0, 36, 100))
+        self.assertEqual(terminal.view_window(136, 36, rows=200), (0, 136, 0))
+        self.assertEqual(terminal.view_window(36, 36, up=5), (0, 36, 0))
+
     def test_text_is_inert_and_byte_bounded(self):
         text, truncated = terminal.bounded_text('😀' * 20000 + '\n<html>\x1b\x00')
         self.assertTrue(truncated)

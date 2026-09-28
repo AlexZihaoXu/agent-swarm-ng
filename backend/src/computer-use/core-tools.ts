@@ -54,7 +54,7 @@ export function createCoreTools(
     ),
   };
   const descriptions = {
-    read: 'Read UTF-8 text (1-based lines; default/max2000 lines,50KB) or PNG/JPEG/GIF/WebP/BMP images (first frame,≤4096px/axis,16M pixels,2MiB returned image). Truncation/nextOffset are explicit; a partial long line needs bounded bash extraction. File images are not desktop observations and do not renew screenshot allowance.',
+    read: 'Read UTF-8 text like a page on screen: 1-based lines, default 200 lines per call (limit up to 2000, 50KB max). Scroll down with nextOffset and up with prevOffset, or choose any offset or PNG/JPEG/GIF/WebP/BMP images (first frame,≤4096px/axis,16M pixels,2MiB returned image). Truncation/nextOffset are explicit; a partial long line needs bounded bash extraction. File images are not desktop observations and do not renew screenshot allowance.',
     write:
       'Create/overwrite UTF-8 text and create missing parent directories. Atomic replacement per file; new files private, existing mode retained. Request≤64KiB. Invalidates desktop screenshot allowance; inspect effects before retrying a failed operation.',
     edit: 'Apply 1–100 exact replacements to one UTF-8 file≤16MiB. Every oldText must match exactly once in the ORIGINAL file; matches cannot overlap. Validates all before atomic replacement; detects observed concurrent changes but does not lock human editors. Request≤64KiB. Invalidates screenshot allowance.',

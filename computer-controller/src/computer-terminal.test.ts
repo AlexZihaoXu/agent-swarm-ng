@@ -9,6 +9,7 @@ it.each([
   ...['view', 'status', 'interrupt', 'delete'].map(operation => ({ operation, session: id })),
   { operation: 'type', session: id, text: 'hello\n世界; kill-server' },
   { operation: 'press', session: id, key: 'C-c' },
+  { operation: 'view', session: id, rows: 200, up: 10000 },
 ])('accepts bounded terminal request %#', input =>
   expect(validateCore({ kind: 'terminal', ...input })).toMatchObject(input),
 );
@@ -23,6 +24,12 @@ it.each([
   { operation: 'press', session: id, key: 'run-shell' },
   { operation: 'constructor' },
   { operation: 'list', validationToken: id },
+  ...[{ rows: 0 }, { rows: 201 }, { up: -1 }, { up: 10001 }, { rows: 1.5 }, { up: '3' }].map(extra => ({
+    operation: 'view',
+    session: id,
+    ...extra,
+  })),
+  { operation: 'status', session: id, up: 1 },
 ])('rejects malformed/cross-scope terminal request %#', input =>
   expect(() => validateCore({ kind: 'terminal', ...input })).toThrow(),
 );
@@ -55,6 +62,21 @@ it('whitelists bounded terminal replies, not guest-controlled extras', () => {
     terminalResult({ type: 'terminal', session: { ...session, alive: false, exitSignal: 'TERM' } }, 'status', id)
       .session,
   ).toMatchObject({ exitSignal: 'TERM' });
+});
+it('passes only a validated scroll window through a view reply', () => {
+  const window = { from: 65, to: 100, total: 136, up: 36 };
+  expect(
+    terminalResult(
+      { type: 'terminal', session, text: 'rows', truncated: true, window: { ...window, x: 1 }, note: 'n' },
+      'view',
+    ),
+  ).toMatchObject({ window });
+  expect(() =>
+    terminalResult(
+      { type: 'terminal', session, text: '', truncated: true, window: { ...window, up: -1 }, note: 'n' },
+      'view',
+    ),
+  ).toThrow();
 });
 it('terminal requests reuse one-use core authorization and cancellation fencing', async () => {
   const exec = vi.fn(async (_id, mode) =>

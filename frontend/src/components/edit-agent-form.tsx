@@ -10,6 +10,7 @@ import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 import type { ChatAgent, RealAgent } from '@/use-chat';
 import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/page-header';
 import type { SettingsSection } from '@/lib/settings-sections';
 
 // Kibo's spacious section-form layout adapted to a left-aligned, scrollable
@@ -166,8 +167,10 @@ export function EditAgentForm({
         }}
         className="flex min-h-0 min-w-0 flex-1 flex-col"
       >
-        <header className="shrink-0 border-b border-border">
-          <div className="mx-auto flex min-h-14 w-full max-w-5xl items-center gap-3 px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] md:px-6 md:py-3">
+        <PageHeader
+          width="max-w-5xl"
+          title="Agent settings"
+          leading={
             <button
               type="button"
               onClick={onBack}
@@ -176,20 +179,17 @@ export function EditAgentForm({
             >
               ‹ <span className="ml-1">Agents</span>
             </button>
-            <div className="min-w-0">
-              <h2 className="truncate text-lg font-semibold">Agent settings</h2>
-              {saved ? (
-                <p role="status" className="text-xs text-muted-foreground">
-                  Saved.
-                </p>
-              ) : (
-                <p className="truncate text-xs text-muted-foreground" title={agent.name}>
-                  Appearance and channel permissions for {agent.name}
-                </p>
-              )}
-            </div>
-          </div>
-        </header>
+          }
+          description={
+            saved ? (
+              <p role="status">Saved.</p>
+            ) : (
+              <p className="truncate" title={agent.name}>
+                Name, model, channels, computers and appearance for {agent.name}
+              </p>
+            )
+          }
+        />
         <ScrollArea
           label="Agent editor"
           viewportTabIndex={-1}

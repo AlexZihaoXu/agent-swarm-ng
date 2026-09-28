@@ -114,7 +114,7 @@ test('phone navigation transitions animate only when motion is allowed', async (
   await expect(agents).toHaveCSS('animation-name', 'phone-list-in');
   await page.getByRole('tab', { name: 'Settings' }).click();
   const settings = page.getByRole('tabpanel', { name: 'Settings' });
-  await expect(settings).toHaveCSS('animation-name', 'fade-in');
+  await expect(settings).toHaveCSS('animation-name', 'tab-in');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(settings).toHaveCSS('animation-name', 'none');
 });

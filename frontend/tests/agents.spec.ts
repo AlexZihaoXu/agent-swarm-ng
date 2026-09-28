@@ -220,6 +220,15 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await expect(dot).toHaveCSS('animation-name', 'none');
   await page.screenshot({ path: '../.scratch/aqua-working-status.png' });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+  // Re-enabling motion restarts the tab entrance; measure once it has settled.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter(a => (a as CSSAnimation).animationName === 'tab-in')
+        .map(a => a.finished.catch(() => undefined)),
+    ),
+  );
   const dotBox = (await working.boundingBox())!;
   await expect(avatar.locator('[data-slot="avatar-face"]')).not.toHaveCSS('mask-image', 'none');
   await emitChannel(page, { type: 'typing', channelId: 'wrong-channel', active: true, targets: ['wrong-channel'] });

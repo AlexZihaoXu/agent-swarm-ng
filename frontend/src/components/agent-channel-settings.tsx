@@ -128,6 +128,8 @@ export function AgentChannelSettings({
                 type="search"
                 value={query}
                 maxLength={80}
+                placeholder="Search by name"
+                autoComplete="off"
                 onChange={event => setQuery(event.target.value)}
                 className="h-11 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9"
               />

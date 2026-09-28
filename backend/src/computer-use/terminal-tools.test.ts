@@ -86,3 +86,13 @@ it('requires a current claim for all eight tools; operator access neither acquir
     await db.close();
   }
 });
+
+it('terminal_view accepts a bounded scroll window and rejects anything larger', async () => {
+  const { Value } = await import('@sinclair/typebox/value');
+  const { terminalParameters } = await import('./terminal-tools');
+  const session = crypto.randomUUID();
+  for (const extra of [{}, { rows: 1 }, { rows: 200, up: 10000 }, { up: 0 }])
+    expect(Value.Check(terminalParameters.view, { session, ...extra })).toBe(true);
+  for (const extra of [{ rows: 0 }, { rows: 201 }, { up: -1 }, { up: 10001 }, { rows: 1.5 }, { scroll: 'up' }])
+    expect(Value.Check(terminalParameters.view, { session, ...extra })).toBe(false);
+});
