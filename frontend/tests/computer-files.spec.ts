@@ -37,6 +37,9 @@ async function open(page: Page) {
 test('file browser navigates, edits paths, filters and pages without upload or mutations', async ({ page }) => {
   const { panel, requests } = await open(page);
   await expect(panel.getByRole('button', { name: /Upload|New folder|Delete|Rename/ })).toHaveCount(0);
+  const editPath = panel.getByRole('button', { name: 'Edit path', exact: true });
+  await expect(editPath).toHaveText(''); await expect(editPath).toHaveAttribute('title', 'Edit path');
+  await expect(editPath.locator('svg')).toBeVisible();
   await panel.getByRole('button', { name: /^src\// }).click();
   await expect(panel.getByRole('button', { name: /^main.ts/ })).toBeVisible();
   await panel.getByRole('navigation', { name: 'Folder breadcrumbs' }).getByRole('button', { name: 'agent', exact: true }).click();
