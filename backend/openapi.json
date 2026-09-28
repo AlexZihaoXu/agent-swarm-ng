@@ -9765,6 +9765,18 @@
                         "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
                         "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
                         "type": "string"
+                      },
+                      "rows": {
+                        "minimum": 1,
+                        "maximum": 200,
+                        "description": "Rows to show (default: one 36-row screen).",
+                        "type": "integer"
+                      },
+                      "up": {
+                        "minimum": 0,
+                        "maximum": 10000,
+                        "description": "Scroll position: rows above the live bottom (default 0 = bottom). Use the value the result suggests.",
+                        "type": "integer"
                       }
                     }
                   },
@@ -10521,6 +10533,29 @@
                     },
                     "truncated": {
                       "type": "boolean"
+                    },
+                    "window": {
+                      "type": "object",
+                      "required": [
+                        "from",
+                        "to",
+                        "total",
+                        "up"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "integer"
+                        },
+                        "to": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "up": {
+                          "type": "integer"
+                        }
+                      }
                     },
                     "note": {
                       "type": "string"

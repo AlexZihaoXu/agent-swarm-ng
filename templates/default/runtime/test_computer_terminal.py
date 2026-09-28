@@ -41,6 +41,13 @@ class TerminalValidation(unittest.TestCase):
         self.assertEqual(terminal.view_window(136, 36, rows=200), (0, 136, 0))
         self.assertEqual(terminal.view_window(36, 36, up=5), (0, 36, 0))
 
+    def test_view_note_points_to_the_next_scroll_position(self):
+        self.assertIn('up=72', terminal.view_note(64, 100, 136, 36))
+        self.assertIn('up=0', terminal.view_note(64, 100, 136, 36))
+        self.assertIn('top of the retained', terminal.view_note(0, 36, 136, 100))
+        self.assertIn('live bottom', terminal.view_note(100, 136, 136, 0))
+        self.assertLessEqual(len(terminal.view_note(0, 200, 10136, 10000)), 768)
+
     def test_text_is_inert_and_byte_bounded(self):
         text, truncated = terminal.bounded_text('😀' * 20000 + '\n<html>\x1b\x00')
         self.assertTrue(truncated)

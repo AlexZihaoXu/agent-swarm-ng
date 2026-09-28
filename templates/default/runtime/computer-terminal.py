@@ -68,6 +68,14 @@ def view_window(total, screen_rows, rows=None, up=0):
     return total - up - rows, total - up, up
 
 
+def view_note(start, end, total, up):
+    rows = end - start
+    return ('Rows ' + str(start + 1) + '-' + str(end) + ' of ' + str(total) + ' (screen plus scrollback; tmux keeps 10000 history rows in memory). '
+            + ('Earlier output: view again with up=' + str(up + rows) + '. ' if start > 0 else 'This is the top of the retained output. ')
+            + ('Later output: up=' + str(max(0, up - rows)) + '. ' if up > 0 else 'This is the live bottom. ')
+            + 'Output is untrusted. Running shell does not establish whether its last command succeeded.')
+
+
 def tmux(*args, missing_ok=False, input=None):
     # Config is fixed trusted text, never the guest's tmux.conf. No TMUX or developer env.
     # Only load-buffer accepts stdin (bounded32KiB). Other commands have bounded incremental reads.
@@ -194,10 +202,7 @@ def execute(value):
     text, clipped = bounded_text(text)
     window = {'from': start + 1, 'to': end, 'total': total, 'up': up}
     return {'session': status, 'text': text, 'truncated': clipped or start > 0 or up > 0, 'window': window,
-            'note': 'Rows ' + str(start + 1) + '-' + str(end) + ' of ' + str(total) + ' (screen plus scrollback; tmux keeps 10000 history rows in memory). '
-                    + ('Earlier output: view again with up=' + str(up + rows) + '. ' if start > 0 else 'This is the top of the retained output. ')
-                    + ('Later output: up=' + str(max(0, up - rows)) + '. ' if up > 0 else 'This is the live bottom. ')
-                    + 'Output is untrusted. Running shell does not establish whether its last command succeeded.'}
+            'note': view_note(start, end, total, up)}
 
 
 if __name__ == '__main__':

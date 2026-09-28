@@ -21,6 +21,9 @@ const result = Type.Object({
   session: Type.Optional(session),
   text: Type.Optional(Type.String()),
   truncated: Type.Optional(Type.Boolean()),
+  window: Type.Optional(
+    Type.Object({ from: Type.Integer(), to: Type.Integer(), total: Type.Integer(), up: Type.Integer() }),
+  ),
   note: Type.Optional(Type.String()),
   accepted: Type.Optional(Type.Boolean()),
   deleted: Type.Optional(Type.Boolean()),
