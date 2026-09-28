@@ -138,7 +138,9 @@ test('phone emoji picker keeps its search and choices finger-sized', async ({ pa
   await expect(search).toHaveCSS('font-size', '16px');
   expect((await size(search)).height).toBeGreaterThanOrEqual(44);
   await search.fill('fire');
-  const menuBox = (await page.getByRole('menu', { name: 'Message actions' }).boundingBox())!;
+  // Popper repositions after the results re-render; wait for it to settle inside the viewport.
+  await expect.poll(async () => (await menu.boundingBox())!.x).toBeGreaterThanOrEqual(0);
+  const menuBox = (await menu.boundingBox())!;
   expect(menuBox.x).toBeGreaterThanOrEqual(0);
   expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(320);
   expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(640);
