@@ -97,7 +97,13 @@
        templates/default/Dockerfile. Its core has one SHA-checked frontend-only
        HTTP/JPEG preflight patch; the secure WebCodecs path is unchanged. No
        executable bytes come from container sudo. Only bounded WS/JSON is proxied. -->
-  <script type="module" crossorigin src="./assets/index-CPWh3fQ6.js"></script>
+  <!-- The upstream filename is pinned, but our reviewed derivative changes.
+       Version its import explicitly: browsers may retain the original vendor
+       filename with heuristic caching even after refreshing the dashboard. -->
+  <script type="importmap">
+    {"imports":{"./assets/selkies-core-BbKps5RD.js":"./assets/selkies-core-BbKps5RD.js?swarm-revision=07b52a31119a1c361151df55d069a92913c05054c4abc750ba6249eb05692e6f"}}
+  </script>
+  <script type="module" crossorigin src="./assets/index-CPWh3fQ6.js?swarm-revision=07b52a31119a1c361151df55d069a92913c05054c4abc750ba6249eb05692e6f"></script>
   <link rel="stylesheet" crossorigin href="./assets/index-D97fjY6g.css" />
 </head>
 <body><div id="app"></div><div id="root"></div><div id="touch-gamepad-host"></div></body>

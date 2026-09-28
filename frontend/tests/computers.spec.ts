@@ -129,7 +129,7 @@ test('opens a computer on the dashboard port, lets a person click its consent pr
   await page.getByRole('article', { name: 'Work desk' }).getByRole('button', { name: 'Open Work desk desktop' }).click();
   await expect(tabs).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Computer location' })).toContainText('Work desk');
-  await expect(page.locator('iframe[title="Work desk desktop"]')).toHaveAttribute('src', `/computers/${id}/desktop/`);
+  await expect(page.locator('iframe[title="Work desk desktop"]')).toHaveAttribute('src', `/computers/${id}/desktop/?viewer=streamed-cursor-v2`);
   const preview = page.getByRole('button', { name: /Click the permission dialog/ });
   await expect(preview).toBeVisible();
   await expect(preview).toBeDisabled();
@@ -493,7 +493,7 @@ test('viewer reports an offline stream and retries its iframe without erasing th
   let loads = 0;
   await page.addInitScript(computerId => localStorage.setItem(`computer-consent:${computerId}`, 'yes'), id);
   await page.route(`**/computers/${id}/desktop/api/health`, route => route.fulfill({ status: healthy ? 200 : 503, json: { status: healthy ? 'ok' : 'unavailable' } }));
-  await page.route(`**/computers/${id}/desktop/`, route => {
+  await page.route(url => new URL(url).pathname === `/computers/${id}/desktop/`, route => {
     loads++;
     return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Trusted desktop</title><video></video>' });
   });

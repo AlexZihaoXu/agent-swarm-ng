@@ -3,6 +3,7 @@
 # never from the sudo-capable computer's writable filesystem.
 @computerDesktopRoot path_regexp computerDesktopRoot ^/computers/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/desktop/$
 handle @computerDesktopRoot {
+	header Cache-Control "no-cache"
 	root * /srv
 	rewrite * /desktop-frame.html
 	file_server
@@ -10,6 +11,7 @@ handle @computerDesktopRoot {
 
 @computerAsset path_regexp computerAsset ^/computers/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/desktop/(assets/[A-Za-z0-9._-]+\.(?:js|css)|jsdb/[a-z0-9_-]+/[A-Za-z0-9._-]+\.json|icon(?:-[0-9]+)?\.png|selkies\.svg|favicon\.ico|manifest\.json)$
 handle @computerAsset {
+	header Cache-Control "no-cache"
 	root * /srv/selkies
 	rewrite * /{re.computerAsset.1}
 	file_server

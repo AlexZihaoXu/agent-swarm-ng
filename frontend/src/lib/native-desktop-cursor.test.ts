@@ -2,6 +2,14 @@ import { expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 const source = readFileSync(new URL('../../../scripts/patch-selkies-http-client.mjs', import.meta.url), 'utf8');
+it('versions the mutable vendor derivative so a cached pre-cursor client cannot hide the remote pointer', () => {
+  const html = readFileSync(new URL('../../public/desktop-frame.html', import.meta.url), 'utf8');
+  const pin = source.match(/sha256\(patched\) !== '([a-f0-9]{64})'/)![1];
+  const imports = JSON.parse(html.match(/<script type="importmap">\s*([\s\S]*?)\s*<\/script>/)![1]).imports;
+  expect(imports['./assets/selkies-core-BbKps5RD.js']).toBe(`./assets/selkies-core-BbKps5RD.js?swarm-revision=${pin}`);
+  expect(html).toContain(`src="./assets/index-CPWh3fQ6.js?swarm-revision=${pin}"`);
+  expect(html.indexOf('type="importmap"')).toBeLessThan(html.indexOf('type="module"'));
+});
 const rules = runInNewContext(source.match(/const cursorPatches = (\[[\s\S]*?\n\]);/)![1]) as [string,string,number][];
 it('requests the real composited cursor on stream initialization, independently of input lock', () => {
   const code = rules.find(([needle]) => needle.startsWith('Rt&&'))![1] + ')';

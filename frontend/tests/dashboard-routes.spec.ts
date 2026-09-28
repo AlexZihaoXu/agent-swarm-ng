@@ -79,7 +79,7 @@ test('computer viewer path restores after reload and Back returns to the grid', 
     { id, name: 'Test X11 desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0 },
   ] } }));
   await page.route(`**/computers/${id}/desktop/api/health`, route => route.fulfill({ json: { status: 'ok' } }));
-  await page.route(`**/computers/${id}/desktop/`, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><canvas id="videoCanvas"></canvas>' }));
+  await page.route(url => new URL(url).pathname === `/computers/${id}/desktop/`, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><canvas id="videoCanvas"></canvas>' }));
   await page.goto('/computers');
   await expect(page.getByRole('heading', { name: 'Computers', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open Test X11 desk desktop' }).click();

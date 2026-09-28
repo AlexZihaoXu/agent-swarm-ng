@@ -8,7 +8,7 @@ test('portal-free computer opens directly into a live same-origin viewer', async
     { id, name: 'Test X11 desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0 },
   ] } }));
   await page.route(`**/computers/${id}/desktop/api/health`, route => route.fulfill({ json: { status: 'ok' } }));
-  await page.route(`**/computers/${id}/desktop/`, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Trusted desktop</title><canvas id="videoCanvas"></canvas>' }));
+  await page.route(url => new URL(url).pathname === `/computers/${id}/desktop/`, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Trusted desktop</title><canvas id="videoCanvas"></canvas>' }));
   await page.goto('/');
   const tabs = page.getByRole('tablist', { name: 'Main navigation' });
   await page.getByRole('tab', { name: 'Computers' }).click();
@@ -45,7 +45,7 @@ test('trusted desktop shortcut menu sends reserved chords without opening a brow
   // Use the real trusted inline bridge, but stub the pinned streamer module so
   // this mocked UI test never connects to a real computer or changes one.
   const html = await (await page.request.get('/desktop-frame.html')).text();
-  await page.route(`**/computers/${id}/desktop/`, route => route.fulfill({ contentType: 'text/html', body: html
+  await page.route(url => new URL(url).pathname === `/computers/${id}/desktop/`, route => route.fulfill({ contentType: 'text/html', body: html
     .replace(/<script type="module"[^>]+><\/script>/, '')
     .replace('</body>', '<canvas id="videoCanvas"></canvas><script>window.__keys=[];window.webrtcInput={inputAttached:true,send(key){window.__keys.push(key)}};</script></body>') }));
   await page.goto('/computers/' + id);
