@@ -150,6 +150,17 @@ export class ComputerUseService {
     await this.ready();
     return this.performCore(() => this.claim(agentId), request, signal, retain);
   }
+  /** Human viewer keyboard is concurrent like desktop input; agent tool fences remain unchanged. */
+  async operatorTerminalKeyboard(computerId:string,send:()=>void) {
+    await this.ready();
+    await this.exclusive(async()=>{
+      const computer=await this.database.client.computer.findUnique({where:{id:computerId},include:{claim:true}});
+      if(!computer)throw new ComputerUseError('Computer not found.',404);
+      if(computer.state!=='running'||computer.desiredState!=='running')throw new ComputerUseError('Computer is not running.',409);
+      if(computer.claim)this.allowances.delete(computer.claim.agentId);
+      send();
+    });
+  }
   /** Trusted human terminal surface: same execution fence, but no agent assignment/claim acquisition. */
   async operatorTerminal(computerId: string, input: Record<string, unknown>): Promise<CoreReceipt> {
     await this.ready();

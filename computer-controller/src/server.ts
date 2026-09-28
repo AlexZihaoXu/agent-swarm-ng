@@ -6,6 +6,7 @@ import { ComputerUseService } from './computer-use-service';
 import { MAX_USE_BODY } from './computer-use';
 import { ComputerCoreService } from './computer-core-service';
 import { fileAttachment, type FileOperation } from './operator-files';
+import { terminalSockets, type TerminalSocket } from './terminal-stream';
 
 process.umask(0o077);
 const docker = new DockerApi();
@@ -20,6 +21,7 @@ const manager = new ComputerManager(docker, process.env.COMPUTER_NAMESPACE ?? 'a
 // Boot-time reconciliation starts only our labelled computers, always after
 // their filtered egress sidecars. No model inference or agent work is replayed.
 await manager.resume();
+const terminals=terminalSockets(manager);
 const computerCore = new ComputerCoreService((id, mode, input) => manager.computerCoreExec(id, mode, input));
 const computerUse = new ComputerUseService((id, mode, input) => manager.computerUseExec(id, mode, input));
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -42,9 +44,10 @@ async function body(request: Request, maxBytes = 4096): Promise<unknown> {
   catch { throw new ResourceError(400, 'Invalid JSON.'); }
 }
 
-Bun.serve({
+Bun.serve<TerminalSocket>({
+  websocket:terminals.handlers,
   hostname: '0.0.0.0', port: Number(process.env.COMPUTER_CONTROLLER_PORT ?? 3101), idleTimeout: 150,
-  async fetch(request) {
+  async fetch(request, server) {
     try {
       const { pathname, searchParams } = new URL(request.url);
       if (pathname === '/health' && request.method === 'GET') {
@@ -59,6 +62,13 @@ Bun.serve({
         if ('settings' in input && (!input.settings || typeof input.settings !== 'object' || Array.isArray(input.settings))) throw new ResourceError(400, 'Invalid computer settings.');
         await manager.create(input.id, input.name, 'settings' in input ? input.settings as ComputerConfiguration : undefined);
         return json({ created: true }, 201);
+      }
+      const terminalMatch=/^\/computers\/([^/]+)\/terminals\/([^/]+)\/stream$/.exec(pathname);
+      if(terminalMatch){
+        if(request.method!=='GET'||request.headers.get('upgrade')?.toLowerCase()!=='websocket')return json({message:'WebSocket required.'},400);
+        const data=terminals.reserve(decodeURIComponent(terminalMatch[1]),decodeURIComponent(terminalMatch[2]));
+        if(server.upgrade(request,{data}))return;
+        data.opening=false;terminals.release(data);return json({message:'Terminal upgrade failed.'},400);
       }
       const fileMatch = /^\/computers\/([^/]+)\/(files|file-preview|download)$/.exec(pathname);
       if (fileMatch) {

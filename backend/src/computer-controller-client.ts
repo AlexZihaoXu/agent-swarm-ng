@@ -13,6 +13,7 @@ export type ComputerLimits = {
 export interface ComputerController {
   readonly runtime?: ComputerRuntime;
   files?(id: string, mode: FileOperation, query: FileQuery): Promise<FileResult>;
+  terminalSocket?(id:string,session:string):WebSocket;
   limits(): Promise<ComputerLimits>;
   create(id: string, name: string, settings: ComputerSettings): Promise<void>;
   remove(id: string, name: string): Promise<void>;
@@ -37,6 +38,11 @@ export class HttpComputerController implements ComputerController {
     });
     if (!response.ok) throw new Error(`Computer controller returned ${response.status}.`);
     return response;
+  }
+  terminalSocket(id:string,session:string) {
+    const url=new URL(`/computers/${encodeURIComponent(id)}/terminals/${encodeURIComponent(session)}/stream`,this.baseUrl);
+    url.protocol=url.protocol==='https:'?'wss:':'ws:';
+    return new WebSocket(url);
   }
   async files(id: string, mode: FileOperation, query: FileQuery) {
     return fetchComputerFile(this.fetcher, this.baseUrl, id, mode, query);

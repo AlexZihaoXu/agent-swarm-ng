@@ -90,6 +90,21 @@ it.each(['agent-swarm-default:stage2', 'agent-swarm-computer-egress:dev', 'agent
   },
 );
 
+it('opens terminal streams only through the fixed helper in an inspected owned running guest', async () => {
+  const { manager, resources, docker } = fixture();
+  existingRunning(manager, resources);
+  const stream=vi.fn(async()=>({write:()=>{},close:()=>{}}));docker.execStream=stream;
+  const signal=new AbortController().signal,output=()=>{},end=()=>{};
+  await manager.terminalStream(id,id,signal,output,end);
+  expect(stream).toHaveBeenCalledWith('desktop',['/usr/bin/python3','-I','/opt/swarm/computer-terminal-viewer.py',id],signal,output,end);
+  const row=resources.get(`/containers/${manager.names.desktop(id)}/json`) as any;
+  row.State.Running=false;await expect(manager.terminalStream(id,id,signal,output,end)).rejects.toMatchObject({code:409});
+  row.State.Running=true;row.Config.Labels['swarm.ng.namespace']='foreign';
+  await expect(manager.terminalStream(id,id,signal,output,end)).rejects.toMatchObject({code:409});
+  await expect(manager.terminalStream(id,'../host',signal,output,end)).rejects.toThrow();
+  expect(stream).toHaveBeenCalledTimes(1);
+});
+
 it('uses a canonical DNS alias shorter than one label for isolated media relays', () => {
   const { manager } = fixture();
   expect(manager.names.mediaAlias(id)).toBe(`computer-${id}`);

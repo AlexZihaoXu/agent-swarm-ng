@@ -622,6 +622,16 @@ export class ComputerManager {
       '/usr/bin/python3', '/opt/swarm/computer-use.py', mode, JSON.stringify(input)], 'agent', 23_000, 3 * 1024 * 1024);
   }
 
+  /** Human-only PTY attachment: fixed helper/uid, bound to the inspected immutable guest. */
+  async terminalStream(idRaw:string,session:string,signal:AbortSignal,onOutput:(chunk:Buffer)=>void,onEnd:()=>void) {
+    const id=validateId(idRaw);validateId(session);
+    const computer=await this.container(this.names.desktop(id),id,'desktop');
+    if(!computer)throw new ResourceError(404,'Computer not found.');
+    if(!computer.State.Running)throw new ResourceError(409,'Computer is not running.');
+    signal.throwIfAborted();
+    return this.docker.execStream(computer.Id,['/usr/bin/python3','-I','/opt/swarm/computer-terminal-viewer.py',session],signal,onOutput,onEnd);
+  }
+
   /** Fixed root supervisor drops all file/shell work to the guest account; never a host command. */
   async computerCoreExec(idRaw: string, mode: 'prepare' | 'execute' | 'cancel', input: unknown) {
     const id = validateId(idRaw);
