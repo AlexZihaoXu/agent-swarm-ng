@@ -589,5 +589,7 @@ describe('Pi chat and platform channel boundary', () => {
       expect((await second.inject('/api/channels/missing/messages')).statusCode).toBe(404);
       expect((await second.inject({ method: 'POST', url: '/api/chat', payload: chatPayload({ id: 'missing' }) })).statusCode).toBe(404);
     } finally { await second.close(); }
-  });
+    // Two real 1.5-second debounce windows plus SDK/SQLite restart I/O need
+    // headroom on shared CI runners; all persistence assertions remain intact.
+  }, 15000);
 });
