@@ -26,6 +26,11 @@ export interface ComputerController {
   replaceStopped(id: string, name: string, settings: ComputerSettings): Promise<void>;
 }
 
+/** A rejection the controller itself explained (its ResourceError messages are operator-safe). */
+export class ControllerError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
+}
+
 /** Internal controller only; the browser cannot choose its Docker endpoint. */
 export class HttpComputerController implements ComputerController {
   readonly runtime: HttpComputerRuntime;
@@ -36,7 +41,14 @@ export class HttpComputerController implements ComputerController {
       ...init, signal: AbortSignal.timeout(timeout), redirect: 'error',
       headers: { ...(init.body ? { 'content-type': 'application/json' } : {}), ...init.headers },
     });
-    if (!response.ok) throw new Error(`Computer controller returned ${response.status}.`);
+    if (!response.ok) {
+      let message = `Computer controller returned ${response.status}.`;
+      try {
+        const body: unknown = JSON.parse(new TextDecoder().decode((await response.arrayBuffer()).slice(0, 4096)));
+        if (body && typeof body === 'object' && 'message' in body && typeof body.message === 'string' && body.message.trim()) message = body.message.slice(0, 200);
+      } catch { /* keep the generic message */ }
+      throw new ControllerError(response.status, message);
+    }
     return response;
   }
   terminalSocket(id:string,session:string) {

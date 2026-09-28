@@ -17,9 +17,15 @@ import { ComputerUseService } from './computer-use/service';
 import { ScreenshotPool } from './computer-use/image-pool';
 import { registerComputerUseRoutes } from './computer-use/routes';
 import { join } from 'node:path';
+import { allowedHosts } from './host-policy';
 
 export async function buildApp({ fetcher, endpointStore, database, codex = new CodexProvider(), computerController }: { fetcher?: typeof fetch; endpointStore?: EndpointStore; database?: PlatformStore; codex?: CodexProvider; computerController?: ComputerController | null } = {}) {
   const app = Fastify({ logger: true });
+  const hostAllowed = allowedHosts();
+  // Runs for every route, including WebSocket upgrades.
+  app.addHook('onRequest', async (request, reply) => {
+    if (!hostAllowed(request.headers.host)) return reply.code(403).send({ message: 'This host name is not allowed. Add it to ALLOWED_HOSTS.' });
+  });
   const platform = database ?? new PlatformStore();
   await app.register(websocket,{options:{maxPayload:16384,perMessageDeflate:false}});
   await app.register(swagger, {
@@ -33,7 +39,7 @@ export async function buildApp({ fetcher, endpointStore, database, codex = new C
     },
   }, async () => ({ status: 'ok' as const }));
 
-  registerModelEndpoints(app, fetcher, endpointStore);
+  registerModelEndpoints(app, fetcher, endpointStore, async id => { await platform.initialize(); return platform.client.agent.count({ where: { endpointId: id } }); });
   registerCodex(app, codex);
   const controller = computerController === undefined ? computerControllerFromEnv() : computerController;
   const computers = new ComputerUseService(platform, controller?.runtime ?? null);

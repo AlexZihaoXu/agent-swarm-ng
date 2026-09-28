@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { api } from '@/api/client';
-import { asAgent, type ChatAgent, type RealAgent } from '@/use-chat';
+import { type ChatAgent, type RealAgent } from '@/use-chat';
+import { useAgentSearch } from '@/use-agent-search';
 import type { ChatMessage } from '@/chat-types';
 import { useGroups, type GroupChat } from '@/use-groups';
 import { AgentAvatar } from '@/components/chat-identity';
@@ -40,13 +39,7 @@ export function ChatPanel({ route, onNavigate, agents, conversations, busy, typi
     return () => cancelAnimationFrame(frame);
   }, [route.kind]);
   const groups = useGroups(search.trim());
-  const matches = useInfiniteQuery({ queryKey: ['chat-agent-search', search.trim()], enabled: Boolean(search.trim()), initialPageParam: undefined as number | undefined,
-    queryFn: async ({ pageParam, signal }) => {
-      const { data, error } = await api.GET('/api/agents', { params: { query: { search: search.trim(), after: pageParam } }, signal });
-      if (error || !data) throw new Error('Could not search chats.'); return data;
-    }, getNextPageParam: page => page.nextCursor ?? undefined,
-  });
-  const people = search.trim() ? (matches.data?.pages.flatMap(page => page.agents).map(real => agents.find(agent => agent.id === real.id) ?? asAgent(real)) ?? []) : agents;
+  const { query: matches, agents: people } = useAgentSearch(search, agents);
   const items = [
     ...people.map(agent => ({ kind: 'dm' as const, id: agent.id, name: agent.name, timestamp: conversations[agent.channelId]?.at(-1)?.timestamp ?? agent.real?.lastMessage?.timestamp ?? agent.real?.createdAt ?? 0, agent })),
     ...(groups.data?.pages.flatMap(page => page.groups) ?? []).map(group => ({ kind: 'group' as const, id: group.id, name: group.name, timestamp: group.lastMessage?.timestamp ?? group.createdAt, group })),

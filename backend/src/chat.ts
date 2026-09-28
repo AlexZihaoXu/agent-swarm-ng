@@ -111,23 +111,57 @@ export function registerChat(app: FastifyInstance, store = new EndpointStore(), 
     const page = await database.messages(request.params.channelId, request.query.before, request.query.limit);
     return { messages: page.messages.map(messageView), nextCursor: page.nextCursor };
   });
+  /** Shared by create and edit: the endpoint, model and thinking level must be usable together right now. */
+  async function checkSelection(input: { endpointId: string; model: string; thinkingLevel: Static<typeof Selection>['thinkingLevel'] }): Promise<{ status: 400 | 404; message: string } | null> {
+    const endpoint = input.endpointId === CODEX_CONNECTION ? undefined : (await store.read()).find(row => row.id === input.endpointId);
+    let capabilities;
+    try { capabilities = input.endpointId === CODEX_CONNECTION ? await codex.capabilities(input.model) : await endpointCapabilities(input.model, endpoint?.baseUrl); }
+    catch { return { status: 400, message: 'Could not load model capabilities. Check the connection and select a tool-capable text model.' }; }
+    if (!capabilities.thinkingLevels.includes(input.thinkingLevel)) return { status: 400, message: 'Choose a name and a supported thinking level.' };
+    if (input.endpointId === CODEX_CONNECTION) {
+      try {
+        const status = await codex.status();
+        if (!status.connected || !status.models.includes(input.model)) return { status: 400, message: 'Connect OpenAI Codex in Settings and select an available model.' };
+      } catch { return { status: 400, message: 'Could not read the OpenAI connection. Reconnect in Settings.' }; }
+    } else if (!endpoint) return { status: 404, message: 'Save the endpoint in Settings first.' };
+    return null;
+  }
   app.post<{ Body: Static<typeof Selection> }>('/api/agents', {
     schema: { operationId: 'createChatAgent', body: Selection, response: { 200: Agent, 400: ErrorResponse, 404: ErrorResponse } },
   }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const input = request.body;
-    const endpoint = input.endpointId === CODEX_CONNECTION ? undefined : (await store.read()).find(row => row.id === input.endpointId);
-    let capabilities;
-    try { capabilities = input.endpointId === CODEX_CONNECTION ? await codex.capabilities(input.model) : await endpointCapabilities(input.model, endpoint?.baseUrl); }
-    catch { return reply.code(400).send({ message: 'Could not load model capabilities. Check the connection and select a tool-capable text model.' }); }
-    if (!input.name.trim() || !capabilities.thinkingLevels.includes(input.thinkingLevel)) return reply.code(400).send({ message: 'Choose a name and a supported thinking level.' });
-    if (input.endpointId === CODEX_CONNECTION) {
-      try {
-        const status = await codex.status();
-        if (!status.connected || !status.models.includes(input.model)) return reply.code(400).send({ message: 'Connect OpenAI Codex in Settings and select an available model.' });
-      } catch { return reply.code(400).send({ message: 'Could not read the OpenAI connection. Reconnect in Settings.' }); }
-    } else if (!endpoint) return reply.code(404).send({ message: 'Save the endpoint in Settings first.' });
+    if (!input.name.trim()) return reply.code(400).send({ message: 'Choose a name and a supported thinking level.' });
+    const problem = await checkSelection(input);
+    if (problem) return reply.code(problem.status).send({ message: problem.message });
     return agentView(await database.createAgent({ ...input, name: input.name.trim() }));
+  });
+
+  app.patch<{ Params: { id: string }; Body: Partial<Pick<Static<typeof Selection>, 'name' | 'endpointId' | 'model' | 'thinkingLevel'>> }>('/api/agents/:id', {
+    schema: {
+      operationId: 'updateChatAgent', params: Type.Object({ id: Type.String({ minLength: 1, maxLength: 100 }) }),
+      body: Type.Object({ name: Type.Optional(Selection.properties.name), endpointId: Type.Optional(Selection.properties.endpointId), model: Type.Optional(Selection.properties.model), thinkingLevel: Type.Optional(Thinking) }, { additionalProperties: false, minProperties: 1 }),
+      response: { 200: Agent, 400: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 503: ErrorResponse },
+    },
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const id = request.params.id;
+    if (closing) return reply.code(503).send({ message: 'The backend is shutting down.' });
+    // The same short lock as deletion: a turn in flight already captured its model and name.
+    if (active.has(id) || runs.has(id)) return reply.code(409).send({ message: 'The agent is responding. Stop it and wait for the turn to finish before changing it.' });
+    active.add(id);
+    try {
+      const record = await database.findAgent(id);
+      if (!record) return reply.code(404).send({ message: 'Agent not found.' });
+      const next = { name: (request.body.name ?? record.name).trim(), endpointId: request.body.endpointId ?? record.endpointId, model: request.body.model ?? record.model, thinkingLevel: request.body.thinkingLevel ?? record.thinkingLevel };
+      if (!next.name) return reply.code(400).send({ message: 'Choose a name.' });
+      if (next.endpointId !== record.endpointId || next.model !== record.model || next.thinkingLevel !== record.thinkingLevel) {
+        const problem = await checkSelection(next);
+        if (problem) return reply.code(problem.status === 404 ? 400 : problem.status).send({ message: problem.message });
+      }
+      return agentView(await database.updateAgent(id, next));
+    } catch { return reply.code(503).send({ message: 'Could not update the agent. Try again.' }); }
+    finally { active.delete(id); }
   });
 
   app.patch<{ Params: { id: string }; Body: { avatar: AgentAvatar } }>('/api/agents/:id/avatar', {

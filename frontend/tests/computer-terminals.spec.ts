@@ -78,3 +78,20 @@ test('create, reserved-key controls and deliberate deletion remain available',as
  expect(requests.filter(r=>r.operation==='delete')).toHaveLength(1);
 });
 test('stopped computers do not offer terminal execution',async({page})=>{await setup(page,'exited');await expect(page.getByRole('menuitem',{name:'Terminals',exact:true})).toHaveAttribute('data-disabled','');});
+test('controls stay usable while the session list refreshes in the background',async({page})=>{
+ const {panel,requests}=await open(page);
+ await page.route('**/api/computers/*/terminals',async route=>{
+  if(route.request().postDataJSON()?.operation==='list')await new Promise(resolve=>setTimeout(resolve,700));
+  return route.fallback();
+ });
+ const interrupt=panel.getByRole('button',{name:'Interrupt',exact:true});
+ await expect(interrupt).toBeEnabled();
+ // Polls run every 2 s and now take 700 ms: sample across several cycles. The button must never be disabled by a refresh.
+ let disabled=0;
+ for(let i=0;i<40;i++){if(await interrupt.isDisabled())disabled++;await page.waitForTimeout(100);}
+ expect(disabled).toBe(0);
+ await interrupt.click();
+ await expect.poll(()=>requests.filter(r=>r.operation==='interrupt').length).toBe(1);
+ // Choosing another terminal keeps the panel populated instead of blanking to "Loading terminals…".
+ await expect(panel.getByText('Loading terminals…')).toHaveCount(0);
+});

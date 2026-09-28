@@ -17,14 +17,14 @@ export class PlatformStore {
   readonly dataDirectory: string;
   constructor(url = databaseUrl()) {
     this.dataDirectory = dirname(databaseFile(url));
-    this.client = new PrismaClient({ adapter: new PrismaLibSql({ url }) });
+    // `timeout` (busy timeout) applies at every connection creation. A PRAGMA would be lost when libSQL swaps its connection after a transaction.
+    this.client = new PrismaClient({ adapter: new PrismaLibSql({ url, timeout: 5000 }) });
   }
 
   initialize() {
     return this.initialized ??= (async () => {
       await this.client.$queryRawUnsafe('PRAGMA journal_mode=WAL');
       await this.client.$executeRawUnsafe('PRAGMA foreign_keys=ON');
-      await this.client.$executeRawUnsafe('PRAGMA busy_timeout=5000');
     })();
   }
   async close() { await this.client.$disconnect(); }
@@ -36,6 +36,10 @@ export class PlatformStore {
   async updateAvatar(id: string, avatar: AgentAvatar) {
     await this.initialize();
     return (await this.client.agent.updateMany({ where: { id }, data: { avatar: encodeAvatar(avatar) } })).count > 0;
+  }
+  async updateAgent(id: string, data: { name: string; endpointId: string; model: string; thinkingLevel: AgentInput['thinkingLevel'] }) {
+    await this.initialize();
+    return this.withLatestMessage(await this.client.agent.update({ where: { id }, data, include: agentSelection }));
   }
   async deleteAgent(id: string, name: string) {
     await this.initialize();

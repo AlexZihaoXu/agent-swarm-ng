@@ -51,6 +51,9 @@ for (const rosterLoaded of [true, false]) test(`viewer shows controlling avatar 
   await expect(page.getByRole('button', { name: 'Remote shortcuts' })).toBeEnabled();
   if (!rosterLoaded) await page.getByTestId('computer-viewer').screenshot({ path: '../.scratch/controller-avatar-320.png' });
   await page.getByRole('button', { name: 'Force release', exact: true }).click();
+  const confirm = page.getByRole('dialog', { name: 'Force release computer' });
+  await expect(confirm).toContainText('takes control from them now');
+  await confirm.getByRole('button', { name: 'Force release', exact: true }).click();
   await expect(page.getByText('No agent holds control')).toBeVisible();
   await expect(input).toHaveText('Input live');
   await page.reload(); await expect(input).toHaveText('Input locked');

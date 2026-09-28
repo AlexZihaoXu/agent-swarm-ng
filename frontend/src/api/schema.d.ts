@@ -324,6 +324,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteChatAgent"];
+        options?: never;
+        head?: never;
+        patch: operations["updateChatAgent"];
+        trace?: never;
+    };
     "/api/agents/{id}/avatar": {
         parameters: {
             query?: never;
@@ -338,22 +354,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["updateAgentAvatar"];
-        trace?: never;
-    };
-    "/api/agents/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["deleteChatAgent"];
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/chat": {
@@ -850,6 +850,17 @@ export interface operations {
                 content: {
                     "application/json": {
                         removed: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
                     };
                 };
             };
@@ -2485,7 +2496,7 @@ export interface operations {
             };
         };
     };
-    updateAgentAvatar: {
+    deleteChatAgent: {
         parameters: {
             query?: never;
             header?: never;
@@ -2497,12 +2508,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    avatar: {
-                        shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
-                        color: string;
-                        eyeStyle?: "pill" | "round";
-                        seed: number;
-                    };
+                    confirmation: string;
                 };
             };
         };
@@ -2514,12 +2520,18 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        avatar: {
-                            shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
-                            color: string;
-                            eyeStyle?: "pill" | "round";
-                            seed: number;
-                        };
+                        deleted: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
                     };
                 };
             };
@@ -2558,7 +2570,7 @@ export interface operations {
             };
         };
     };
-    deleteChatAgent: {
+    updateChatAgent: {
         parameters: {
             query?: never;
             header?: never;
@@ -2570,7 +2582,10 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    confirmation: string;
+                    name?: string;
+                    endpointId?: string;
+                    model?: string;
+                    thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
                 };
             };
         };
@@ -2582,7 +2597,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        deleted: boolean;
+                        name: string;
+                        endpointId: string;
+                        model: string;
+                        thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+                        avatar?: {
+                            shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                            color: string;
+                            eyeStyle?: "pill" | "round";
+                            seed: number;
+                        } | null;
+                        id: string;
+                        channelId: string;
+                        createdAt: number;
+                        lastMessage: {
+                            id: string;
+                            sequence: number;
+                            channelId: string;
+                            role: "user" | "assistant";
+                            text: string;
+                            timestamp: number;
+                            replyTo: {
+                                id: string;
+                                role: "user" | "assistant";
+                                text: string;
+                            } | null;
+                        } | null;
                     };
                 };
             };
@@ -2594,6 +2634,79 @@ export interface operations {
                 content: {
                     "application/json": {
                         message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    updateAgentAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    avatar: {
+                        shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                        color: string;
+                        eyeStyle?: "pill" | "round";
+                        seed: number;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        avatar: {
+                            shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                            color: string;
+                            eyeStyle?: "pill" | "round";
+                            seed: number;
+                        };
                     };
                 };
             };

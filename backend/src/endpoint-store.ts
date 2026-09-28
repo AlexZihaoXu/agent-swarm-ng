@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { databaseFile } from './database-location';
 import { randomUUID } from 'node:crypto';
 
 export type SavedEndpoint = { id: string; name: string; baseUrl: string; apiKey: string };
@@ -8,7 +8,8 @@ export const endpointView = ({ apiKey, ...endpoint }: SavedEndpoint) => ({ ...en
 
 export class EndpointStore {
   private queue: Promise<unknown> = Promise.resolve();
-  constructor(private path = fileURLToPath(new URL('../../.local/endpoints.json', import.meta.url))) {}
+  // Saved API keys live beside the database, so DATABASE_URL relocates both (tests and dev runs never touch the real keys).
+  constructor(private path = join(dirname(databaseFile()), 'endpoints.json')) {}
 
   async read(): Promise<SavedEndpoint[]> {
     try {

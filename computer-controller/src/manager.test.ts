@@ -551,3 +551,19 @@ it('computer-use rejects foreign and stopped desktops without input, and stopped
   expect(JSON.parse((await manager.computerUseExec(id, 'cancel', {})).toString())).toEqual({ settled: true });
   expect(execute).not.toHaveBeenCalled();
 });
+
+it('samples running computers concurrently so listing time does not grow per computer', async () => {
+  const { manager, docker } = fixture();
+  const ids = ['1', '2', '3', '4'].map(n => `4a18018a-4689-4fa5-86ca-4dc080d41f${n}${n}`);
+  vi.mocked(docker.json).mockImplementation(async (_method: unknown, path: unknown) => {
+    const p = String(path);
+    if (p.startsWith('/containers/json')) return ids.map(value => ({ Id: `c-${value}`, State: 'running', Labels: manager.names.labels(value, 'desktop', name) }));
+    if (p.includes('/stats?stream=false')) { await new Promise(resolve => setTimeout(resolve, 300)); return { cpu_stats: { cpu_usage: { total_usage: 2 }, system_cpu_usage: 20, online_cpus: 1 }, precpu_stats: { cpu_usage: { total_usage: 1 }, system_cpu_usage: 10 }, memory_stats: { usage: 1024 } }; }
+    return { Id: 'x', HostConfig: { Memory: 4_294_967_296, NanoCpus: 2_000_000_000 } };
+  });
+  const started = Date.now();
+  const rows = await manager.observe();
+  expect(rows.map(row => row.id)).toEqual(ids); // order preserved
+  expect(rows.every(row => row.cpuPercent === 10 && row.cpuCount === 2)).toBe(true);
+  expect(Date.now() - started).toBeLessThan(900); // sequential sampling would take about 1200 ms
+});

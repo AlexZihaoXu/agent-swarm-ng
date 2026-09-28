@@ -232,3 +232,29 @@ it('retains failed and deleting records for safe retry after controller failures
     expect(calls).toEqual([]);
   } finally { await app.close(); await database.close(); }
 });
+
+it('reports the controller\'s own refusal and leaves no stray record when a create is rejected before anything exists', async () => {
+  const { createServer } = await import('node:http');
+  const { HttpComputerController } = await import('./computer-controller-client');
+  let refusal = { status: 409, message: 'Computer limit reached.' };
+  const server = createServer((request, response) => {
+    response.setHeader('content-type', 'application/json');
+    if (request.url === '/computers/settings-limits') return void response.end(JSON.stringify({ cpuCores: { min: 1, max: 8, default: 2 }, memoryGiB: { min: 1, max: 16, default: 4 }, timezoneDefault: 'UTC' }));
+    if (request.url === '/computers' && request.method === 'GET') return void response.end(JSON.stringify({ computers: [] }));
+    response.statusCode = refusal.status; response.end(JSON.stringify({ message: refusal.message }));
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
+  const app = await buildApp({ database, computerController: new HttpComputerController(`http://127.0.0.1:${(server.address() as { port: number }).port}`) });
+  try {
+    const capped = await app.inject({ method: 'POST', url: '/api/computers', payload: { name: 'Fifth', requestKey: crypto.randomUUID() } });
+    expect(capped.statusCode).toBe(409);
+    expect(capped.json().message).toBe('Computer limit reached.');
+    expect(await database.client.computer.count()).toBe(0); // the name is not held by a failed record
+    refusal = { status: 503, message: 'Build the approved computer images before creating computers.' };
+    const missing = await app.inject({ method: 'POST', url: '/api/computers', payload: { name: 'NoImages', requestKey: crypto.randomUUID() } });
+    expect(missing.statusCode).toBe(503);
+    expect(missing.json().message).toBe('Build the approved computer images before creating computers.');
+    expect((await database.client.computer.findMany()).map(row => row.state)).toEqual(['failed']); // may have partially created: kept for cleanup
+  } finally { await app.close(); await new Promise(resolve => server.close(resolve)); }
+});

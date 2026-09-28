@@ -34,3 +34,19 @@ export async function reconcileStoppedComputers(store: ComputerStore, controller
   }
   return summary;
 }
+
+/**
+ * The controller revives every owned desktop whenever it restarts, and it cannot see the operator's intent.
+ * Re-apply that intent periodically so a controller-only restart cannot leave a powered-off computer running.
+ * Returns a function that stops the watcher.
+ */
+export function watchStoppedComputers(reconcile: () => Promise<unknown>, intervalMs = 30_000) {
+  let busy = false;
+  const timer = setInterval(() => {
+    if (busy) return;
+    busy = true;
+    void reconcile().catch(() => {}).finally(() => { busy = false; });
+  }, intervalMs);
+  timer.unref?.();
+  return () => clearInterval(timer);
+}

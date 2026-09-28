@@ -350,6 +350,9 @@ test('computer card offers a shared context menu and power control', async ({ pa
 
   // Power off from the menu stops the desktop and flips the card.
   await page.getByRole('menu').getByRole('menuitem', { name: /Power off/ }).click();
+  const confirmOff = page.getByRole('dialog', { name: 'Power off computer' });
+  await expect(confirmOff).toContainText('Open programs and every terminal session end');
+  await confirmOff.getByRole('button', { name: 'Power off', exact: true }).click();
   await expect(card.getByRole('button', { name: 'Open Menu desk desktop' })).toBeDisabled();
   await expect(card.getByText('Stopped')).toBeVisible();
   await expect(card.getByRole('button', { name: /^(Start|Stop)$/ })).toHaveCount(0);

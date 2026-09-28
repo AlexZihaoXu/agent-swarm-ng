@@ -8,9 +8,10 @@ import { CodexProvider } from './codex-provider';
 import { AgentRuns } from './agent-runs';
 import { DmBroker } from './dm-broker';
 import { buildApp } from './app';
+import { ComputerUseService, type ComputerRuntime } from './computer-use/service';
 
 type Body = { model: string; tools?: { function: { name: string } }[]; messages: { role: string; content: unknown }[] };
-async function fixture(loop = false, gate?: Promise<void>, reactionGate?: Promise<void>) {
+async function fixture(loop = false, gate?: Promise<void>, reactionGate?: Promise<void>, computers?: (database: Awaited<ReturnType<typeof prepareDatabase>>) => ComputerUseService) {
   const captured: Body[] = []; let peerTarget = '';
   const server = createServer(async (request, response) => {
     const chunks = []; for await (const chunk of request) chunks.push(chunk);
@@ -47,8 +48,8 @@ async function fixture(loop = false, gate?: Promise<void>, reactionGate?: Promis
   const a = await database.createAgent({ name: 'A', endpointId: 'mock', model: 'test-model', thinkingLevel: 'off' });
   const b = await database.createAgent({ name: 'B', endpointId: 'mock', model: 'test-model', thinkingLevel: 'off' });
   peerTarget = b.id;
-  const runs = new AgentRuns(), codex = new CodexProvider(), broker = new DmBroker(database, endpoints, codex, runs);
-  await broker.ready();
+  const runs = new AgentRuns(), codex = new CodexProvider(), broker = new DmBroker(database, endpoints, codex, runs, computers?.(database));
+  if (!computers) await broker.ready();
   await broker.store.updateSettings(a.id, { allowedDmAgentIds: [b.id] });
   const idle = () => vi.waitFor(() => expect(runs.snapshot()).toHaveLength(0), { timeout: 30000 });
   const close = async (closeDatabase = true) => {
@@ -424,3 +425,40 @@ it('exposes atomic settings and inspectable transcripts without granting an HTTP
     expect(await f.database.client.message.count()).toBe(0);
   } finally { await app.close(); await f.close(false); }
 }, 20000);
+
+it('keeps agent chat working when the computer controller is unreachable at startup with a saved claim', async () => {
+  let controllerUp = false;
+  const runtime = { cancel: async () => { if (!controllerUp) throw new Error('controller down'); }, capture: async () => { throw new Error('unused'); }, execute: async () => { throw new Error('unused'); } } as ComputerRuntime;
+  let computers!: ComputerUseService;
+  const f = await fixture(false, undefined, undefined, database => (computers = new ComputerUseService(database, runtime)));
+  try {
+    const computer = await f.database.client.computer.create({ data: { name: 'C', requestKey: crypto.randomUUID(), state: 'running' } });
+    await f.database.client.computerClaim.create({ data: { computerId: computer.id, agentId: f.a.id } });
+    await f.broker.ready().catch(() => undefined); // backend boot with the controller down
+    const group = await f.broker.groups.create('Shared', [f.a.id, f.b.id]);
+    await f.broker.sendHumanGroup(group.id, 'Contribute', crypto.randomUUID());
+    await f.idle();
+    const texts = (await f.broker.groups.history(group.id)).messages.map(message => message.text);
+    expect(texts).toEqual(expect.arrayContaining(['Group answer by A', 'Group answer by B']));
+    // Once the controller recovers, the stale claim is released as before.
+    controllerUp = true;
+    await computers.ready();
+    expect(await f.database.client.computerClaim.count()).toBe(0);
+  } finally { await f.close(); }
+}, 60000);
+
+it('does not apply the short peer deadline to a human-authored group message, but still bounds agent-originated work', async () => {
+  const f = await fixture();
+  try {
+    const enqueue = vi.spyOn(f.runs, 'enqueue');
+    const group = await f.broker.groups.create('Shared', [f.a.id, f.b.id]);
+    await f.broker.sendHumanGroup(group.id, 'Take your time', crypto.randomUUID());
+    await f.idle();
+    const fromHuman = enqueue.mock.calls.filter(call => call[0].inputSource === undefined);
+    const fromAgent = enqueue.mock.calls.filter(call => call[0].inputSource === 'agent');
+    expect(fromHuman.length).toBe(2);
+    for (const call of fromHuman) expect(call[2]).toBeUndefined(); // falls back to AGENT_RUN_TIMEOUT_MS (0 = no deadline)
+    expect(fromAgent.length).toBeGreaterThan(0);
+    for (const call of fromAgent) expect(call[2]).toEqual({ queueTimeoutMs: 300000, executionTimeoutMs: 90000 });
+  } finally { await f.close(); }
+}, 60000);

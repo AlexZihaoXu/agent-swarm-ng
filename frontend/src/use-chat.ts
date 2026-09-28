@@ -152,6 +152,10 @@ export function useChat() {
     setAgents(current => current.some(item => item.id === agent.id) ? current : [...current, agent]);
     return agent;
   }
+  /** Apply a saved change (name, model, ...) returned by the API without reloading the roster. */
+  function applyAgent(real: RealAgent) {
+    setAgents(current => current.map(item => item.id === real.id ? asAgent(real) : item));
+  }
   async function deleteAgent(agent: ChatAgent, confirmation: string) {
     if (confirmation !== agent.name) throw new Error('Type the exact agent name to confirm deletion.');
     const { error, response } = await api.DELETE('/api/agents/{id}', { params: { path: { id: agent.id } }, body: { confirmation } });
@@ -328,7 +332,7 @@ export function useChat() {
   }
   const visibleBusy = { ...busy };
   for (const agent of agents) if (peerBusy[agent.id]) visibleBusy[agent.channelId] = true;
-  return { agents, conversations, drafts, busy: visibleBusy, peerBusy, typing, typingTargets, activity, errors, addAgent, deleteAgent, editAvatar, send, stop, eventsConnected,
+  return { agents, conversations, drafts, busy: visibleBusy, peerBusy, typing, typingTargets, activity, errors, addAgent, applyAgent, runOf: (channelId: string) => activeRuns.current.get(channelId), deleteAgent, editAvatar, send, stop, eventsConnected,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
     loadActivity, expandActivity, retryActivity, activityHistory,
     setDraft: (channelId: string, text: string) => setDrafts(current => ({ ...current, [channelId]: text })) };

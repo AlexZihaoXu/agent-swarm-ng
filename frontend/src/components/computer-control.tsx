@@ -5,6 +5,7 @@ import { defaultAvatar } from '@/lib/agent-avatar';
 import type { ChatAgent } from '@/use-chat';
 import { AgentAvatar } from './chat-identity';
 import { Button } from './ui/button';
+import { ConfirmDialog } from './confirm-dialog';
 
 export type ComputerAgentState = { agents: ChatAgent[]; busy: Record<string, boolean>; typing: Record<string, boolean>; peerBusy: Record<string, boolean>; connected: boolean };
 
@@ -12,6 +13,7 @@ export function ComputerControl({ computerId, agentState }: { computerId: string
   const [holder, setHolder] = useState<{ id: string; name: string } | null>(null);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [known, setKnown] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [confirming, setConfirming] = useState(false);
   useEffect(() => {
     const controller = new AbortController(); setKnown(false);
     const load = async () => {
@@ -51,7 +53,7 @@ export function ComputerControl({ computerId, agentState }: { computerId: string
       const result = await api.POST('/api/computers/{id}/release', { params: { path: { id: computerId } }, body: {} });
       if (!result.data?.released) throw new Error(result.error?.message ?? 'Could not release control.');
       setHolder(null); setKnown(true); setAttempt(value => value + 1);
-    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not release control.'); }
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not release control.'); throw failure; }
     finally { setBusy(false); }
   }
   return <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 text-xs">
@@ -59,7 +61,9 @@ export function ComputerControl({ computerId, agentState }: { computerId: string
       <AgentAvatar initials={holder.name.slice(0, 2).toUpperCase()} avatar={agent?.avatar ?? defaultAvatar(holder.id)} ready={live && Boolean(agent)} working={working} typing={typing} />
       <span className="min-w-0"><span className="flex min-w-0 items-baseline gap-1"><span className="max-w-36 truncate font-medium" title={holder.name}>{holder.name}</span><span className="shrink-0 text-muted-foreground">is on this computer</span></span><span className="block text-[10px] text-muted-foreground">{status}</span></span>
     </div> : <span role="status" className="text-muted-foreground">{known ? 'No agent holds control' : error ? 'Control status unavailable' : 'Checking control…'}</span>}
-    {holder && <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void release()} title="Stop this agent's active computer operations and release control; assignments are unchanged.">{busy ? 'Releasing…' : 'Force release'}</Button>}
+    {holder && <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => setConfirming(true)}>{busy ? 'Releasing…' : 'Force release'}</Button>}
+    {holder && <ConfirmDialog open={confirming} onOpenChange={setConfirming} title="Force release computer" confirmLabel="Force release" busyLabel="Releasing…" onConfirm={release}
+      description={<>Stops <strong className="text-foreground">{holder.name}</strong>&apos;s active operations on this computer and takes control from them now. They are told on their next turn. Assignments stay, and programs in terminals keep running.</>} />}
     {error && <span role="alert" className="max-w-full [overflow-wrap:anywhere]">{error} <button type="button" className="cursor-pointer underline" onClick={() => setAttempt(value => value + 1)}>Retry control status</button></span>}
   </div>;
 }

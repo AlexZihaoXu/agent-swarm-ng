@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { computerTerminal, type TerminalRequest, type TerminalResult } from '@/lib/computer-terminals';
 import type { Computer } from './computer-card';
@@ -18,8 +18,9 @@ export function ComputerTerminals({computer,open,connected,onOpenChange}:{comput
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const inFlight=useRef(false);
   const available=connected&&computer.state==='running';
-  const queryKey=['computer-terminals',computer.id,selected];
-  const query=useQuery({queryKey,enabled:open&&available&&!busy,retry:false,gcTime:0,refetchInterval:2000,refetchIntervalInBackground:false,refetchOnWindowFocus:false,
+  // Keyed by computer only and keeping the previous list: choosing a terminal or a background poll must never blank the panel.
+  const queryKey=['computer-terminals',computer.id];
+  const query=useQuery({queryKey,enabled:open&&available&&!busy,retry:false,gcTime:0,placeholderData:keepPreviousData,refetchInterval:2000,refetchIntervalInBackground:false,refetchOnWindowFocus:false,
     queryFn:async({signal})=>{
       const list=await computerTerminal(computer.id,{operation:'list'},signal);
       return {sessions:list.sessions??[]};
@@ -27,7 +28,8 @@ export function ComputerTerminals({computer,open,connected,onOpenChange}:{comput
   });
   const sessions=query.data?.sessions??[];
   const session=sessions.find(item=>item.id===selected);
-  const actionable=available&&!busy&&!query.isFetching&&!query.isError&&session?.id===selected;
+  // A background refresh must not disable the controls: a click that lands mid-poll would be silently dropped.
+  const actionable=available&&!busy&&!query.isError&&session?.id===selected;
   const live=Boolean(actionable&&session?.alive);
   useEffect(()=>{if(open&&selected===null&&sessions[0])setSelected(sessions[0].id);},[open,selected,sessions]);
   useEffect(()=>{setDeleting(false);setConfirmation('');},[selected]);
@@ -35,7 +37,7 @@ export function ComputerTerminals({computer,open,connected,onOpenChange}:{comput
     if(!open||!available){void client.cancelQueries({queryKey:['computer-terminals',computer.id]});setCreating(false);setDeleting(false);setError('');setNotice('');}
   },[open,available,computer.id,client]);
   const act=async(body:TerminalRequest,done?:(value:TerminalResult)=>void)=>{
-    if(inFlight.current||!available||query.isFetching)return;
+    if(inFlight.current||!available)return;
     inFlight.current=true;setBusy(true);setError('');setNotice('');
     try{
       const result=await computerTerminal(computer.id,body);
@@ -62,7 +64,7 @@ export function ComputerTerminals({computer,open,connected,onOpenChange}:{comput
             <label className="block text-xs">Initial command<input aria-label="Initial command" placeholder="Optional; otherwise an interactive shell" className={`${field} mt-1 w-full font-mono`} value={command} maxLength={32768} disabled={busy} onChange={event=>setCommand(event.target.value)} /></label>
             <label className="block text-xs">Working directory<input aria-label="Working directory" className={`${field} mt-1 w-full font-mono`} value={cwd} maxLength={4096} disabled={busy} onChange={event=>setCwd(event.target.value)} /></label>
             <p className="text-[11px] text-muted-foreground">Names: letters, digits, hyphens and underscores. Commands run as the guest agent account, including its configured sudo permissions.</p>
-            <div className="flex flex-wrap justify-end gap-2"><Button type="button" size="sm" variant="outline" className="min-h-10" disabled={busy} onClick={()=>setCreating(false)}>Cancel</Button><Button type="submit" size="sm" className="min-h-10" disabled={busy||query.isFetching||!name}>Create terminal</Button></div>
+            <div className="flex flex-wrap justify-end gap-2"><Button type="button" size="sm" variant="outline" className="min-h-10" disabled={busy} onClick={()=>setCreating(false)}>Cancel</Button><Button type="submit" size="sm" className="min-h-10" disabled={busy||!name}>Create terminal</Button></div>
           </form>}
           {query.isPending&&<p role="status" className="text-sm text-muted-foreground">Loading terminals…</p>}
           {query.isError&&<p role="alert" className="mb-2 text-sm text-red-400">Session list unavailable: {query.error.message}</p>}

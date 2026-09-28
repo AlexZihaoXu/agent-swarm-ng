@@ -563,10 +563,10 @@ export class ComputerManager {
     // cannot grow the cache without bound.
     const alive = new Set(rows.map(row => row.Id));
     for (const cached of this.quotas.keys()) if (!alive.has(cached)) this.quotas.delete(cached);
-    const computers = [];
-    for (const row of rows) {
+    // Docker's non-streaming stats call takes about a second per container, so sample all computers concurrently.
+    const computers = await Promise.all(rows.map(async row => {
       const id = row.Labels['swarm.ng.id'];
-      if (!id || !/^\S+$/.test(id)) continue;
+      if (!id || !/^\S+$/.test(id)) return null;
       let cpuPercent: number | null = null, memoryBytes: number | null = null, memoryLimitBytes: number | null = null, cpuCount: number | null = null;
       if (row.State === 'running') {
         try {
@@ -587,9 +587,9 @@ export class ComputerManager {
       // read 250%. The count lets the dashboard draw an honest fraction.
       // A replacement prepared while powered off is Docker's `created` state;
       // for the dashboard it is powered off and can be started normally.
-      computers.push({ id, status: row.State === 'created' ? 'exited' : row.State, cpuPercent, memoryBytes, memoryLimitBytes, cpuCount });
-    }
-    return computers;
+      return { id, status: row.State === 'created' ? 'exited' : row.State, cpuPercent, memoryBytes, memoryLimitBytes, cpuCount };
+    }));
+    return computers.filter((item): item is NonNullable<typeof item> => item !== null);
   }
   /** Operator reads neither acquire nor release agent control. One per guest, two globally. */
   async operatorFiles(idRaw: string, mode: FileOperation, query: FileQuery) {

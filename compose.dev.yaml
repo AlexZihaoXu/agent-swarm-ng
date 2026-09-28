@@ -4,6 +4,7 @@ services:
       target: development
     environment:
       NODE_ENV: development
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
     restart: "no"
     volumes:
       - ./backend/src:/app/backend/src

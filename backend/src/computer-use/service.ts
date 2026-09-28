@@ -105,15 +105,25 @@ export class ComputerUseService {
   }
   async capture(agentId: string, request: unknown, signal?: AbortSignal, retain?: (frame: ScreenFrame) => Promise<void>) {
     await this.ready();
-    // Serialize capture with release/admission, but human desktop input remains concurrent by policy.
-    return this.exclusive(async () => {
+    // Admission is short and serialized; the slow screenshot itself runs outside the lock so it can never delay
+    // another computer or a human Force release, which aborts and joins it via `active`.
+    const admitted = await this.exclusive(async () => {
       signal?.throwIfAborted(); const claim = await this.claim(agentId);
       if (this.active.has(claim.computerId)) throw new ComputerUseError('Wait for the active computer operation before taking another screenshot.', 409);
-      const frame = await this.driver().capture(claim.computerId, request, signal);
-      signal?.throwIfAborted(); await retain?.(frame); signal?.throwIfAborted();
-      this.allowances.set(agentId, { token: claim.token, until: this.now() + 30_000, remaining: 2 });
-      return frame;
+      const driver = this.driver();
+      const abort = new AbortController();
+      const stop = () => abort.abort(); signal?.addEventListener('abort', stop, { once: true });
+      if (signal?.aborted) abort.abort();
+      const finished = (async () => {
+        const frame = await driver.capture(claim.computerId, request, abort.signal);
+        abort.signal.throwIfAborted(); await retain?.(frame); abort.signal.throwIfAborted();
+        this.allowances.set(agentId, { token: claim.token, until: this.now() + 30_000, remaining: 2 });
+        return frame;
+      })().finally(() => { signal?.removeEventListener('abort', stop); this.active.delete(claim.computerId); });
+      this.active.set(claim.computerId, { abort, finished });
+      return { finished };
     });
+    return admitted.finished;
   }
   private allowance(agentId: string, token: string) {
     const allowance = this.allowances.get(agentId);
@@ -127,19 +137,22 @@ export class ComputerUseService {
       if (this.active.has(claim.computerId)) throw new ComputerUseError('Another computer operation is executing; wait for its result.', 409);
       this.allowance(agentId, claim.token);
       const driver = this.driver();
-      const prepared = driver.validate ? await driver.validate(claim.computerId, request, signal) : request;
-      signal?.throwIfAborted(); const allowance = this.allowance(agentId, claim.token); allowance.remaining--;
       const abort = new AbortController();
       const stop = () => abort.abort(); signal?.addEventListener('abort', stop, { once: true });
       if (signal?.aborted) abort.abort();
-      const finished = Promise.resolve().then(() => driver.execute(claim.computerId, prepared, abort.signal)).then(receipt => {
-        if (!receipt.started && this.allowances.get(agentId) === allowance) allowance.remaining++;
-        return receipt;
-      }).catch(error => {
-        if (!(error instanceof ComputerExecutionError && error.settled)) this.uncertain.add(claim.computerId);
-        this.allowances.delete(agentId); throw error;
-      })
-        .finally(() => { signal?.removeEventListener('abort', stop); this.active.delete(claim.computerId); });
+      // Validation and execution both happen outside the admission lock but inside the joinable `active` slot.
+      const finished = (async () => {
+        const prepared = driver.validate ? await driver.validate(claim.computerId, request, abort.signal) : request;
+        abort.signal.throwIfAborted(); const allowance = this.allowance(agentId, claim.token); allowance.remaining--;
+        try {
+          const receipt = await driver.execute(claim.computerId, prepared, abort.signal);
+          if (!receipt.started && this.allowances.get(agentId) === allowance) allowance.remaining++;
+          return receipt;
+        } catch (error) {
+          if (!(error instanceof ComputerExecutionError && error.settled)) this.uncertain.add(claim.computerId);
+          this.allowances.delete(agentId); throw error;
+        }
+      })().finally(() => { signal?.removeEventListener('abort', stop); this.active.delete(claim.computerId); });
       // Mark admission before yielding so release always sees and joins this execution.
       this.active.set(claim.computerId, { abort, finished });
       return { finished };
@@ -179,28 +192,29 @@ export class ComputerUseService {
       if (this.active.has(claim.computerId)) throw new ComputerUseError('Another computer operation is executing; wait for its result.', 409);
       const driver = this.driver();
       if (!driver.prepareCore || !driver.core) throw new ComputerUseError('Computer core tools are unavailable; update the guest runtime.', 503);
-      let prepared;
-      try { prepared = await driver.prepareCore(claim.computerId, request, signal); }
-      catch (error) {
-        if (error instanceof ComputerUseError && error.status === 503) this.uncertain.add(claim.computerId);
-        throw error;
-      }
-      signal?.throwIfAborted();
-      const input = request as { kind?: string; operation?: string };
-      const readOnly = input?.kind === 'read' || input?.kind === 'terminal' && ['list','view','status'].includes(input.operation ?? '');
-      if (!readOnly && agentId) this.allowances.delete(agentId);
       const abort = new AbortController();
       const stop = () => abort.abort(); signal?.addEventListener('abort', stop, { once: true });
       if (signal?.aborted) abort.abort();
-      const finished = Promise.resolve().then(() => driver.core!(claim.computerId, prepared, abort.signal)).catch(error => {
-        if (!(error instanceof ComputerExecutionError && error.settled)) this.uncertain.add(claim.computerId);
-        if (agentId) this.allowances.delete(agentId); throw error;
-      }).then(async receipt => {
+      const finished = (async () => {
+        let prepared;
+        try { prepared = await driver.prepareCore!(claim.computerId, request, abort.signal); }
+        catch (error) {
+          if (error instanceof ComputerUseError && error.status === 503) this.uncertain.add(claim.computerId);
+          throw error;
+        }
+        signal?.throwIfAborted();
+        const input = request as { kind?: string; operation?: string };
+        const readOnly = input?.kind === 'read' || input?.kind === 'terminal' && ['list','view','status'].includes(input.operation ?? '');
+        if (!readOnly && agentId) this.allowances.delete(agentId);
+        const receipt = await Promise.resolve().then(() => driver.core!(claim.computerId, prepared, abort.signal)).catch(error => {
+          if (!(error instanceof ComputerExecutionError && error.settled)) this.uncertain.add(claim.computerId);
+          if (agentId) this.allowances.delete(agentId); throw error;
+        });
         signal?.throwIfAborted();
         await retain?.(receipt);
         signal?.throwIfAborted();
         return receipt;
-      }).finally(() => { signal?.removeEventListener('abort', stop); this.active.delete(claim.computerId); });
+      })().finally(() => { signal?.removeEventListener('abort', stop); this.active.delete(claim.computerId); });
       this.active.set(claim.computerId, { abort, finished });
       return { finished };
     });

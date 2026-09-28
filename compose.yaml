@@ -10,6 +10,8 @@ services:
       PORT: "3000"
       DATABASE_URL: ${DATABASE_URL:-file:/app/.local/platform.db}
       AGENT_RUN_TIMEOUT_MS: ${AGENT_RUN_TIMEOUT_MS:-0}
+      # Host names (besides IP addresses and localhost) allowed to reach the unauthenticated API; blocks DNS rebinding.
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       COMPUTER_CONTROLLER_URL: http://computer-controller:3101
     init: true
     volumes:

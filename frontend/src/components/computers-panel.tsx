@@ -12,6 +12,7 @@ import { ComputerViewer } from './computer-viewer';
 import { ComputerResourceFields } from './computer-resource-fields';
 import { ComputerFileBrowser } from './computer-file-browser';
 import { ComputerTerminals } from './computer-terminals';
+import { ConfirmDialog } from './confirm-dialog';
 import type { ComputerAgentState } from './computer-control';
 import { computerPath } from '@/lib/dashboard-location';
 type ComputerList = { computers: Computer[] };
@@ -95,6 +96,8 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
   const [confirmation, setConfirmation] = useState('');
   const [powerBusy, setPowerBusy] = useState(false);
   const [powerError, setPowerError] = useState('');
+  const [powerOffTarget, setPowerOffTarget] = useState<Computer | null>(null);
+  const holders = useQuery({ queryKey: ['computer-control'], enabled: powerOffTarget !== null, staleTime: 0, queryFn: async ({ signal }) => { const { data } = await api.GET('/api/computers/control', { signal }); return data?.holders ?? []; } });
   const [menuTarget, setMenuTarget] = useState<Computer | null>(null);
   const [filesTarget, setFilesTarget] = useState<Computer | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
@@ -223,7 +226,7 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
               <MenuIcon path="M3 5.5h18v13H3zM8 21h8" label="Open desktop" />Open
             </ContextMenu.Item>
             <ContextMenu.Item disabled={!menuTarget || !query.data?.controllerConnected || (menuTarget.state !== 'running' && menuTarget.state !== 'exited') || powerBusy}
-              onSelect={() => { if (menuTarget) void submitPower(menuTarget, menuTarget.state === 'running' ? 'stop' : 'start'); }}
+              onSelect={() => { if (!menuTarget) return; if (menuTarget.state === 'running') setPowerOffTarget(menuTarget); else void submitPower(menuTarget, 'start'); }}
               className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-default data-[disabled]:opacity-50">
               <MenuIcon path="M12 3v9M6.5 6.5a8 8 0 1 0 11 0" label="Power" />{menuTarget?.state === 'running' ? 'Power off' : 'Power on'}
             </ContextMenu.Item>
@@ -290,6 +293,9 @@ export function ComputersPanel({ viewingId, dialog, deleteId, settingsId, onOpen
         </form>
       </ComputerDialog>}
     </Dialog.Root>
+    <ConfirmDialog open={powerOffTarget !== null} onOpenChange={open => { if (!open) setPowerOffTarget(null); }} title="Power off computer" confirmLabel="Power off" busyLabel="Powering off…"
+      onConfirm={async () => { if (!powerOffTarget) return; const target = powerOffTarget; const result = await api.POST('/api/computers/{id}/power', { params: { path: { id: target.id } }, body: { action: 'stop' } }); if (!result.data || result.error) throw new Error(result.error?.message ?? 'Could not change the computer power state.'); refresh(); }}
+      description={<>Shuts down <strong className="text-foreground">{powerOffTarget?.name}</strong>. Open programs and every terminal session end. Files in its home and workspace stay.{(() => { const holder = holders.data?.find(item => item.computerId === powerOffTarget?.id); return holder ? <> <strong className="text-foreground">{holder.agent.name}</strong> is using this computer right now and will lose it.</> : null; })()}</>} />
     {terminalsComputer && <ComputerTerminals key={terminalsComputer.id} computer={terminalsComputer} open={terminalsOpen} connected={Boolean(query.data?.controllerConnected) && computers.some(computer => computer.id === terminalsComputer.id)} onOpenChange={setTerminalsOpen} />}
     {filesComputer && <ComputerFileBrowser key={filesComputer.id} computer={filesComputer} open={filesOpen} connected={Boolean(query.data?.controllerConnected) && computers.some(computer => computer.id === filesComputer.id)} onOpenChange={setFilesOpen} />}
   </section>;

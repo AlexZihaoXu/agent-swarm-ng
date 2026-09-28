@@ -107,3 +107,25 @@ it('force release waits for cancellation settlement before transferring a comput
   await Promise.resolve(); expect(released).toBe(false);
   finish(); await running; await release; await f.service.use(f.b.id, 'Desk');
 });
+it('does not let a slow screenshot on one computer delay Force release or another computer, and release aborts it', async () => {
+  const f = await fixture();
+  const other = await f.db.client.computer.create({ data: { name: 'Other', requestKey: crypto.randomUUID(), state: 'running' } });
+  await f.service.assign(f.b.id, [other.id]);
+  await f.service.use(f.a.id, 'Desk'); await f.service.use(f.b.id, 'Other');
+  let started!: () => void; const capturing = new Promise<void>(resolve => { started = resolve; });
+  const slow = f.runtime.capture;
+  f.runtime.capture = (id, request, signal) => {
+    if (id !== f.computer.id) return slow(id, request, signal);
+    started();
+    return new Promise((_resolve, reject) => signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })); // never finishes on its own
+  };
+  const shot = f.service.capture(f.a.id, {}).catch(error => error as Error);
+  await capturing;
+  await expect(f.service.capture(f.b.id, {})).resolves.toMatchObject({ width: 640 }); // another computer proceeds meanwhile
+  const released = Date.now();
+  await f.service.forceRelease(f.computer.id); // would hang behind the stuck screenshot before
+  expect(Date.now() - released).toBeLessThan(2000);
+  expect((await shot as Error).message).toBe('aborted');
+  expect(await f.db.client.computerClaim.count({ where: { computerId: f.computer.id } })).toBe(0);
+  await expect(f.service.run(f.a.id, {})).rejects.toThrow(/use_computer/);
+}, 15000);

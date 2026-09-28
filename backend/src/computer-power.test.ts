@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { prepareDatabase } from './test-database';
 import { ComputerStore } from './computer-store';
-import { reconcileStoppedComputers } from './computer-power';
+import { reconcileStoppedComputers, watchStoppedComputers } from './computer-power';
 import type { ComputerController, ComputerObservation } from './computer-controller-client';
 
 function controller(observed: Map<string, ComputerObservation>, calls: string[]): ComputerController {
@@ -49,6 +49,28 @@ describe('stopped-computer reconciliation', () => {
       failing.stop = async () => { throw new Error('controller offline'); };
       const result = await reconcileStoppedComputers(store, failing);
       expect(result).toMatchObject({ considered: 1, stopped: 0, failed: 1 });
+    } finally { await database.close(); }
+  });
+});
+
+describe('stopped-computer watcher', () => {
+  it('turns a computer off again when only the controller restarted and revived it', async () => {
+    const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
+    const store = new ComputerStore(database);
+    try {
+      const off = await store.reserve('Kept off', crypto.randomUUID());
+      await store.markRunning(off.computer.id);
+      await store.setDesiredState(off.computer.id, 'stopped');
+      const observed = new Map<string, ComputerObservation>([[off.computer.id, { status: 'exited', cpuPercent: null, memoryBytes: null, memoryLimitBytes: null, cpuCount: null }]]);
+      const calls: string[] = [];
+      const fake = controller(observed, calls);
+      const stopWatching = watchStoppedComputers(() => reconcileStoppedComputers(store, fake), 50);
+      try {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        expect(calls).toEqual([]); // nothing to correct while it stays off
+        observed.set(off.computer.id, { status: 'running', cpuPercent: 1, memoryBytes: 1, memoryLimitBytes: 1, cpuCount: 1 }); // controller restarts and revives it
+        await vi.waitFor(() => expect(calls).toEqual([`stop:${off.computer.id}`]), { timeout: 2000 });
+      } finally { stopWatching(); }
     } finally { await database.close(); }
   });
 });

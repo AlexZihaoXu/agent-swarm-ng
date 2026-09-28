@@ -74,7 +74,7 @@ export class ReactionCoordinator {
       const reactionId = crypto.randomUUID();
       const input: ChannelMessage = { role: 'user', id: reactionId, text: notice, timestamp: Date.now(), source: { agentId: 'human', name: 'Human', channelId, chainId: '', messageId, human: true, reaction: true, ...(groupId ? { groupId } : {}) } };
       phase = 'scheduling normal turn';
-      const run = this.runs.enqueue({ agentId, channelId: channel.id, clientMessageId: reactionId, inputSource: 'agent' }, context => this.runInbox(agentId, input, context), { queueTimeoutMs: 300000, executionTimeoutMs: 90000 });
+      const run = this.runs.enqueue({ agentId, channelId: channel.id, clientMessageId: reactionId, inputSource: 'agent' }, context => this.runInbox(agentId, input, context));
       activity?.record('status', 'Reaction triage decision', JSON.stringify({ ...decision, eligible: true, applied: true, scheduledRunId: run.runId }), 'decision', false, 'complete');
     }).catch(() => { failed = !controller.signal.aborted; activity?.record('error', 'Reaction triage unavailable', JSON.stringify({ phase, cancelled: controller.signal.aborted, note: 'Preparation or observation failed; no raw provider error is exposed.' })); }).finally(async () => {
       await activity?.finish(controller.signal.aborted && !observationFailed, failed || observationFailed, 'Reaction triage').catch(() => {});

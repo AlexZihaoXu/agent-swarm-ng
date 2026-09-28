@@ -112,6 +112,12 @@ export class ComputerStore {
     return (await this.platform.client.computer.updateMany({ where: { id, state: 'creating' }, data: { state: 'running' } })).count === 1;
   }
 
+  /** Drop a reservation the controller refused before creating anything (limit reached, invalid settings). */
+  async discardReservation(id: string) {
+    await this.platform.initialize();
+    return (await this.platform.client.computer.deleteMany({ where: { id, state: 'creating' } })).count === 1;
+  }
+
   async markFailed(id: string) {
     await this.platform.initialize();
     return (await this.platform.client.computer.updateMany({ where: { id, state: 'creating' }, data: { state: 'failed' } })).count === 1;

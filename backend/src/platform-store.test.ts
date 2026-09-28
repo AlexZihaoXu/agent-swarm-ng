@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { spawn } from 'node:child_process';
 import { prepareDatabase } from './test-database';
 import { PlatformStore } from './platform-store';
 
@@ -93,6 +94,26 @@ describe('Prisma SQLite platform records', () => {
       const queuedContext = await store.context(channelId, saved.id, saved.sequence);
       expect(queuedContext.at(-1)?.text).toBe('Preceding turn finished');
       expect(queuedContext.some(message => message.text === 'Once' || message.text === 'Queued follow-up')).toBe(false);
+    } finally { await store.close(); }
+  });
+
+  it('keeps its busy timeout after transactions and waits for a competing writer instead of failing', async () => {
+    const path = join(folder, 'busy.db');
+    const store = await prepareDatabase(path);
+    try {
+      const agent = await store.createAgent(config);
+      await store.appendMessage(agent.channels[0].id, 'user', 'first'); // interactive transaction: the client swaps its connection
+      expect(await store.client.$queryRawUnsafe('PRAGMA busy_timeout')).toEqual([{ timeout: 5000 }]);
+      // The native driver blocks its thread while waiting, so the rival writer must live in another process.
+      const holder = spawn('bun', ['-e', `import { createClient } from '@libsql/client';
+        const c = createClient({ url: ${JSON.stringify(pathToFileURL(resolve(path)).href)} });
+        const t = await c.transaction('write'); console.log('locked'); await new Promise(r => setTimeout(r, 1200)); await t.commit(); c.close();`], { cwd: resolve(__dirname, '..') });
+      const exited = new Promise(resolvePromise => holder.once('exit', resolvePromise));
+      await new Promise(resolvePromise => holder.stdout.once('data', resolvePromise)); // wait until the lock is held
+      const started = Date.now();
+      await store.appendMessage(agent.channels[0].id, 'user', 'second'); // must wait, not throw SQLITE_BUSY
+      expect(Date.now() - started).toBeGreaterThanOrEqual(400);
+      await exited;
     } finally { await store.close(); }
   });
 });

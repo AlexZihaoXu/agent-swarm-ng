@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import type { PlatformStore } from './platform-store';
 import { ComputerStore, ComputerStoreError, type ComputerSettings } from './computer-store';
-import type { ComputerController, ComputerObservation } from './computer-controller-client';
+import { ControllerError, type ComputerController, type ComputerObservation } from './computer-controller-client';
 import type { ComputerUseService } from './computer-use/service';
 import { registerComputerFileRoutes } from './computer-file-routes';
 
@@ -40,6 +40,10 @@ function unavailable(reply: FastifyReply) {
 function failure(reply: FastifyReply, error: unknown) {
   if (error instanceof ComputerStoreError) {
     return reply.code(error.code === 'missing' ? 404 : error.code === 'conflict' ? 409 : 400).send({ message: error.message });
+  }
+  if (error instanceof ControllerError) {
+    // Controller messages are operator-safe; keep the real reason (cap reached, images not built, ...).
+    return reply.code([400, 404, 409].includes(error.status) ? error.status : 503).send({ message: error.message });
   }
   return unavailable(reply);
 }
@@ -107,7 +111,8 @@ export function registerComputerRoutes(app: FastifyInstance, platform: PlatformS
       if (!current) return unavailable(reply);
       return reply.code(created ? 201 : 200).send(view(current, observed.get(computer.id)));
     } catch (error) {
-      if (!(error instanceof ComputerStoreError) && recordId) await store.markFailed(recordId).catch(() => {});
+      if (recordId && error instanceof ControllerError && [400, 409].includes(error.status)) await store.discardReservation(recordId).catch(() => {});
+      else if (!(error instanceof ComputerStoreError) && recordId) await store.markFailed(recordId).catch(() => {});
       return failure(reply, error);
     }
   });

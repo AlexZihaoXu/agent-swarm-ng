@@ -39,6 +39,8 @@ export class DmBroker {
   private jobs = new Map<string, Job>();
   private cancelling = new Map<string, Promise<void>>();
   private deleting = new Set<string>();
+  /** Safety net for agent-originated work only (reply loops). Human-originated work follows AGENT_RUN_TIMEOUT_MS like private chat. */
+  peerLimits = { queueTimeoutMs: 300000, executionTimeoutMs: 90000 };
   private linked = new WeakSet<AbortSignal>();
   constructor(private database: PlatformStore, private endpoints: EndpointStore, private codex: CodexProvider, private runs: AgentRuns, private computers?: ComputerUseService, private screenshots?: ScreenshotPool) {
     this.store = new SwarmStore(database); this.groups = new GroupStore(database); this.reactions = new ReactionStore(database); this.sessions = new AgentSessionStore(database);
@@ -56,7 +58,15 @@ export class DmBroker {
     this.reactionCoordinator = new ReactionCoordinator(database, endpoints, codex, runs, (agentId, input, context) => this.runInbox(agentId, input, context), { store: this.activity, emit: (agentId, entry) => runs.activity(agentId, entry) });
   }
   async notifyHumanReaction(channelId: string, messageId: string, emoji: string) { await this.ready(); return this.reactionCoordinator.offer(channelId, messageId, emoji); }
-  ready() { return this.starting ??= (async () => { await this.store.cancelInterruptedDeliveries(); await this.activity.interruptActive(); await this.computers?.ready(); })(); }
+  ready() {
+    // Chat readiness never depends on the optional computer controller: a rejected, cached promise here
+    // would fail every agent run until restart. Computer claims are settled lazily by ComputerUseService,
+    // which retries after a failure; this only starts that attempt early.
+    return this.starting ??= (async () => {
+      await this.store.cancelInterruptedDeliveries(); await this.activity.interruptActive();
+      void this.computers?.ready().catch(() => {});
+    })().catch(error => { this.starting = undefined; throw error; });
+  }
   async send(senderId: string, recipientId: string, text: string, callId: string, context: RunContext, inheritedChain?: string, replyToId?: string): Promise<DmReceipt> {
     context.signal.throwIfAborted();
     if (this.closing || this.deleting.has(senderId) || this.deleting.has(recipientId)) throw new Error('DM delivery is unavailable.');
@@ -83,7 +93,7 @@ export class DmBroker {
         const incoming = await this.store.message(recipientId, senderId, message.id);
         const input: ChannelMessage = { role: 'user', text, id: message.id, timestamp: message.createdAt.getTime(), replyTo: dmReplyContext(message), source: { agentId: senderId, name: incoming.sender.name, channelId: message.conversationId, chainId, messageId: message.id } };
         const channelId = recipient.channels[0].id;
-        const run = this.runs.offer(recipientId, input, { type: 'dm_updated', channelId, conversationId: message.conversationId }) ?? this.runs.enqueue({ agentId: recipientId, channelId, clientMessageId: message.id, inputSource: 'agent' }, ctx => this.runInbox(recipientId, input, ctx), { queueTimeoutMs: 300000, executionTimeoutMs: 90000 });
+        const run = this.runs.offer(recipientId, input, { type: 'dm_updated', channelId, conversationId: message.conversationId }) ?? this.runs.enqueue({ agentId: recipientId, channelId, clientMessageId: message.id, inputSource: 'agent' }, ctx => this.runInbox(recipientId, input, ctx), this.peerLimits);
         const cleanup = run.finished.then(async () => {
           await this.store.finish(message.id, recipientId, run.controller.signal.aborted ? 'cancelled' : 'failed');
           run.emit({ type: 'dm_updated', conversationId: message.conversationId });
@@ -131,7 +141,7 @@ export class DmBroker {
         if (!recipient) throw new Error('Recipient no longer exists.');
         const input: ChannelMessage = { role: 'user', text: message.text, id: message.id, timestamp: message.createdAt.getTime(), replyTo: groupReplyContext(message), source: groupSource(message) };
         const channelId = recipient.channels[0].id;
-        const run = this.runs.offer(agentId, input, { type: 'group_delivery', channelId, groupId: message.groupId }) ?? this.runs.enqueue({ agentId, channelId, clientMessageId: message.id, ...(message.role === 'user' ? {} : { inputSource: 'agent' as const }) }, ctx => this.runInbox(agentId, input, ctx), { queueTimeoutMs: 300000, executionTimeoutMs: 90000 });
+        const run = this.runs.offer(agentId, input, { type: 'group_delivery', channelId, groupId: message.groupId }) ?? this.runs.enqueue({ agentId, channelId, clientMessageId: message.id, ...(message.role === 'user' ? {} : { inputSource: 'agent' as const }) }, ctx => this.runInbox(agentId, input, ctx), message.role === 'user' ? undefined : this.peerLimits);
         const key = `${message.id}:${agentId}`;
         const cleanup = run.finished.then(async () => {
           await this.groups.finish(message.id, agentId, run.controller.signal.aborted ? 'cancelled' : 'failed');
@@ -168,7 +178,8 @@ ${preview.text}` : preview.text, timestamp: message.createdAt.getTime(), replyTo
     const chainFor = (recipientId: string) => humanBatch ? undefined : sources.find(source => source.agentId === recipientId)?.chainId ?? inherited;
     const peerTools = createDmTools(this.store, agentId, (recipientId, text, callId, replyToId) => this.send(agentId, recipientId, text, callId, context, chainFor(recipientId), replyToId));
     const computerTools = this.computers && this.screenshots ? createComputerTools(this.computers, this.screenshots, agentId) : [];
-    const notices = await this.computers?.notices(agentId) ?? [];
+    // Notices are best effort: an unreachable controller must not block the turn (its tools report the problem).
+    const notices = await this.computers?.notices(agentId).catch(() => []) ?? [];
     await runChat(context, {
       name: agent.name, model: agent.model, thinkingLevel: agent.thinkingLevel, baseUrl: connection.baseUrl, apiKey: connection.apiKey, channel,
       publishPeer: async (channelId, text, callId, replyToId) => {

@@ -4,6 +4,7 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { randomUuid } from '@/lib/random-uuid';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { endpointPath, type DashboardRoute } from '@/lib/dashboard-location';
 
 type TestResult =
@@ -17,8 +18,9 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
 
 type Endpoint = { id: string; name: string; baseUrl: string; hasApiKey: boolean; saved: boolean };
 
-function EndpointCard({ endpoint, onSaved, onRemove }: { endpoint: Endpoint; onSaved: (value: Endpoint) => void; onRemove: () => void }) {
+function EndpointCard({ endpoint, onSaved, onRemove }: { endpoint: Endpoint; onSaved: (value: Endpoint) => void; onRemove: () => Promise<void> }) {
   const id = useId();
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   const [name, setName] = useState(endpoint.name);
   const [baseUrl, setBaseUrl] = useState(endpoint.baseUrl);
   const [apiKey, setApiKey] = useState('');
@@ -74,10 +76,12 @@ function EndpointCard({ endpoint, onSaved, onRemove }: { endpoint: Endpoint; onS
           <h3 id={`${id}-title`} className="truncate text-sm font-semibold">{name.trim() || 'New endpoint'}</h3>
           <p className="mt-1 text-xs text-muted-foreground">{openrouter ? 'OpenRouter · API credits' : 'OpenAI-compatible API'}</p>
         </div>
-        <button type="button" onClick={onRemove} aria-label="Remove endpoint" className="flex size-11 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring sm:size-auto sm:p-2">
+        <button type="button" onClick={() => { if (endpoint.saved) setConfirmingRemoval(true); else void onRemove(); }} aria-label="Remove endpoint" className="flex size-11 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring sm:size-auto sm:p-2">
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="size-4"><path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" /></svg>
         </button>
       </div>
+      <ConfirmDialog open={confirmingRemoval} onOpenChange={setConfirmingRemoval} title="Remove endpoint" confirmLabel="Remove endpoint" busyLabel="Removing…" onConfirm={onRemove}
+        description={<>Removes <strong className="text-foreground">{endpoint.name.trim() || 'this endpoint'}</strong> and its saved API key from this backend. Agents that use it must be moved to another endpoint or deleted first; you will be told if any still do.</>} />
       {/* Labeled field-group composition: Kibo field/basic-inputs/field-basic-inputs-4. */}
       <form onSubmit={event => { event.preventDefault(); void testConnection(); }}>
         <fieldset disabled={testing || saving} className="space-y-4">
@@ -159,10 +163,8 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
 
   async function removeEndpoint(endpoint: Endpoint) {
     if (endpoint.saved) {
-      try {
-        const { response } = await api.DELETE('/api/model-endpoints/{id}', { params: { path: { id: endpoint.id } } });
-        if (!response.ok) throw new Error();
-      } catch { setError('Could not remove the saved endpoint.'); return; }
+      const { response, error: failure } = await api.DELETE('/api/model-endpoints/{id}', { params: { path: { id: endpoint.id } } }).catch(() => ({ response: undefined, error: undefined }));
+      if (!response?.ok) throw new Error(failure?.message ?? 'Could not remove the saved endpoint.');
     }
     setEndpoints(current => current.filter(item => item.id !== endpoint.id));
     if (route.endpointId === endpoint.id || route.kind === 'endpoint-new' && !endpoint.saved) onNavigate('/settings');
@@ -203,7 +205,7 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
             </div>
           )}
           {route.kind === 'endpoint' && !loading && !error && !endpoints.some(item => item.id === route.endpointId) && <p role="alert" className="text-sm">Endpoint not found. <button type="button" className="cursor-pointer underline" onClick={() => onNavigate('/settings')}>Return to settings</button></p>}
-          {endpoints.map(endpoint => <div key={endpoint.id} id={`endpoint-${endpoint.id}`}><EndpointCard endpoint={endpoint} onSaved={saved => { setEndpoints(current => current.map(item => item.id === endpoint.id ? saved : item)); onNavigate(endpointPath(saved.id)); }} onRemove={() => void removeEndpoint(endpoint)} /></div>)}
+          {endpoints.map(endpoint => <div key={endpoint.id} id={`endpoint-${endpoint.id}`}><EndpointCard endpoint={endpoint} onSaved={saved => { setEndpoints(current => current.map(item => item.id === endpoint.id ? saved : item)); onNavigate(endpointPath(saved.id)); }} onRemove={() => removeEndpoint(endpoint)} /></div>)}
         </div>
         <p className="mt-5 text-xs leading-relaxed text-muted-foreground">Save endpoints to keep them after restart. Keys are stored on the backend, never in browser storage. Changing a saved URL clears its key unless you enter a replacement. Use HTTPS for remote providers.</p>
       </section>

@@ -592,4 +592,29 @@ describe('Pi chat and platform channel boundary', () => {
     // Two real 1.5-second debounce windows plus SDK/SQLite restart I/O need
     // headroom on shared CI runners; all persistence assertions remain intact.
   }, 15000);
+  it('edits name, model and thinking level in place, keeps history, and refuses invalid choices or edits during a turn', async () => {
+    behavior = 'tool'; captured = [];
+    const app = await testApp();
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const renamed = await app.inject({ method: 'PATCH', url: `/api/agents/${agent.id}`, payload: { name: '  Renamed agent  ', model: 'other-model' } });
+      expect(renamed.statusCode).toBe(200);
+      expect(renamed.json()).toMatchObject({ id: agent.id, channelId: agent.channelId, name: 'Renamed agent', model: 'other-model', endpointId: 'endpoint', thinkingLevel: 'off' });
+      expect((await app.inject('/api/agents')).json().agents[0]).toMatchObject({ name: 'Renamed agent', model: 'other-model' });
+      expect((await app.inject({ method: 'PATCH', url: `/api/agents/${agent.id}`, payload: { endpointId: 'nope' } })).statusCode).toBe(400);
+      expect((await app.inject({ method: 'PATCH', url: `/api/agents/${agent.id}`, payload: { thinkingLevel: 'high' } })).statusCode).toBe(400); // unsupported by this model
+      expect((await app.inject({ method: 'PATCH', url: `/api/agents/${agent.id}`, payload: { name: '   ' } })).statusCode).toBe(400);
+      expect((await app.inject({ method: 'PATCH', url: `/api/agents/${agent.id}`, payload: {} })).statusCode).toBe(400);
+      expect((await app.inject({ method: 'PATCH', url: '/api/agents/missing', payload: { name: 'Ghost' } })).statusCode).toBe(404);
+      // The next turn uses the new identity and model.
+      const sent = chatPayload(agent, 'Hello again');
+      const started = await app.inject({ method: 'POST', url: '/api/chat', headers: { prefer: 'respond-async' }, payload: sent });
+      expect(started.statusCode).toBe(202);
+      expect((await app.inject({ method: 'PATCH', url: `/api/agents/${agent.id}`, payload: { name: 'Mid turn' } })).statusCode).toBe(409);
+      await vi.waitFor(async () => expect(captured.length).toBeGreaterThan(0), { timeout: 8000 });
+      expect(captured[0].model).toBe('other-model');
+      expect(String(captured[0].messages[0]?.content)).toContain('You are Renamed agent.');
+      await app.inject({ method: 'POST', url: `/api/agents/${agent.id}/stop`, payload: { clientMessageId: sent.clientMessageId } });
+    } finally { await app.close(); }
+  }, 20000);
 });

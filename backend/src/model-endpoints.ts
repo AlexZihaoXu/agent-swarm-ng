@@ -18,7 +18,7 @@ function parseBaseUrl(value: string) {
   return url;
 }
 
-export function registerModelEndpoints(app: FastifyInstance, fetcher: typeof fetch = fetch, store = new EndpointStore()) {
+export function registerModelEndpoints(app: FastifyInstance, fetcher: typeof fetch = fetch, store = new EndpointStore(), agentsUsing: (endpointId: string) => Promise<number> = async () => 0) {
   const View = Type.Object({ id: Type.String(), name: Type.String(), baseUrl: Type.String(), hasApiKey: Type.Boolean() });
   const SaveBody = Type.Object({
     id: Type.String({ minLength: 1, maxLength: 100, pattern: '^[a-zA-Z0-9-]+$' }),
@@ -43,9 +43,12 @@ export function registerModelEndpoints(app: FastifyInstance, fetcher: typeof fet
     return endpointView(await store.save({ ...request.body, name: request.body.name.trim(), baseUrl, apiKey: request.body.apiKey?.trim() }));
   });
   app.delete<{ Params: { id: string } }>('/api/model-endpoints/:id', {
-    schema: { operationId: 'removeModelEndpoint', params: Type.Object({ id: Type.String() }), response: { 200: Type.Object({ removed: Type.Boolean() }) } },
+    schema: { operationId: 'removeModelEndpoint', params: Type.Object({ id: Type.String() }), response: { 200: Type.Object({ removed: Type.Boolean() }), 409: ConnectionError } },
   }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
+    // Removing an endpoint (and its saved key) would strand every agent that runs on it, and agents cannot be re-pointed.
+    const using = await agentsUsing(request.params.id);
+    if (using > 0) return reply.code(409).send({ message: `${using} ${using === 1 ? 'agent uses' : 'agents use'} this endpoint. Change ${using === 1 ? 'its' : 'their'} endpoint in Agents, or delete ${using === 1 ? 'it' : 'them'}, first.` });
     await store.remove(request.params.id);
     return { removed: true };
   });

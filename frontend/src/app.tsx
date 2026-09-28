@@ -33,6 +33,7 @@ import { ChatPanel } from '@/components/chat-panel';
 import { GroupConversation } from '@/components/group-conversation';
 import { ChatComposer } from '@/components/chat-composer';
 import { useGroupEvents } from '@/use-groups';
+import { useAgentSearch } from '@/use-agent-search';
 import { agentDmPath, agentPath, chatAgentDmPath, chatAgentPath, chatGroupPath, computerPath, parseDashboardPath } from '@/lib/dashboard-location';
 
 function Avatar({ initials, avatar, small = false, typing = false, ready = false, working = false }: { initials: string; avatar?: AvatarAppearance; small?: boolean; typing?: boolean; ready?: boolean; working?: boolean }) {
@@ -52,7 +53,7 @@ function Avatar({ initials, avatar, small = false, typing = false, ready = false
 const emptyAgent: ChatAgent = { id: '', name: '', initials: '', time: '', channelId: '' };
 
 export function App() {
-  const { agents, conversations, drafts, busy, peerBusy, typing, typingTargets, activity, errors, addAgent, deleteAgent, editAvatar, send, stop, setDraft, eventsConnected,
+  const { agents, conversations, drafts, busy, peerBusy, typing, typingTargets, activity, errors, addAgent, applyAgent, runOf, deleteAgent, editAvatar, send, stop, setDraft, eventsConnected,
     agentsLoading, agentsFailed, agentsCursor, loadAgents, historyReady, historyLoading, historyFailed, historyCursor, loadHistory,
     loadActivity, expandActivity, retryActivity, activityHistory,
   } = useChat();
@@ -118,7 +119,8 @@ export function App() {
   const pendingSend = useRef<string | null>(null);
   const [replyTargets, setReplyTargets] = useState<Record<string, ChatMessage>>({});
   const pendingReplyAcks = useRef(new Map<string, { channelId: string; targetId: string }>());
-  const visibleAgents = agents.filter(item => item.name.toLowerCase().includes(search.trim().toLowerCase()));
+  // Server-side, like the Chat sidebar: a client-side filter would miss agents beyond the loaded page.
+  const { agents: visibleAgents, query: agentSearch, term: searchTerm } = useAgentSearch(search, agents);
   const agent = route.agentId ? agents.find(item => item.id === route.agentId) ?? emptyAgent : agents[0] ?? emptyAgent;
   const narrowDetail = (activeTab === 'agents' || activeTab === 'chat') && mobileConversation && Boolean(selectedGroup || agent.id);
   const inbox = useDmInbox(agent.id);
@@ -245,15 +247,16 @@ export function App() {
             'phone-list-enter min-h-0 w-full shrink-0 flex-col border-border bg-sidebar pb-[calc(5rem+env(safe-area-inset-bottom))] md:flex md:w-72 md:border-r md:pb-0',
             mobileConversation ? 'hidden' : 'flex',
           )}>
-            {/* Search-with-icon composition: Kibo input-group/icons/input-group-icons-1. */}
-            <div className="shrink-0 px-4 pb-2 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-3">
-              <div className="flex h-11 items-center gap-2 rounded-lg border border-foreground/15 bg-[#262626] px-2.5 focus-within:ring-1 focus-within:ring-ring sm:h-8">
+            {/* Search-with-icon composition: Kibo input-group/icons/input-group-icons-1. The + matches the Chat sidebar's create control. */}
+            <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-3">
+              <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-foreground/15 bg-[#262626] px-2.5 focus-within:ring-1 focus-within:ring-ring sm:h-8">
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-3.5 shrink-0 text-muted-foreground"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" strokeLinecap="round" /></svg>
                 <input type="search" aria-label="Search agents" placeholder="Search agents" value={search} onChange={event => setSearch(event.target.value)} className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground" />
               </div>
+              <Button type="button" variant="outline" size="sm" className="size-11 shrink-0 p-0 text-lg sm:size-8" aria-label="Create new agent" title="Create new agent" onClick={() => navigate('/agents/new')}>+</Button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
-              {visibleAgents.length === 0 && !agentsLoading && !agentsFailed && <p role="status" className="px-2 py-4 text-xs text-muted-foreground">{search.trim() ? 'No agents found.' : 'No agents yet. Right-click here to create one.'}</p>}
+              {visibleAgents.length === 0 && !agentsLoading && !agentsFailed && !(searchTerm && (agentSearch.isFetching || agentSearch.isError)) && <p role="status" className="px-2 py-4 text-xs text-muted-foreground">{search.trim() ? 'No agents found.' : 'No agents yet. Use + to create one.'}</p>}
               <ul className="space-y-0.5">
                 {visibleAgents.map(item => {
                   const lastMessage = conversations[item.channelId]?.at(-1);
@@ -283,7 +286,9 @@ export function App() {
                   );
                 })}
               </ul>
-              {(agentsLoading || agentsFailed || agentsCursor !== null) && <Button variant="outline" size="sm" className="mt-3 w-full" disabled={agentsLoading} onClick={() => void loadAgents(agentsCursor ?? undefined)}>{agentsLoading ? 'Loading agents…' : agentsFailed ? 'Retry loading agents' : 'Load more agents'}</Button>}
+              {searchTerm
+                ? (agentSearch.isFetching || agentSearch.isError || agentSearch.hasNextPage) && <Button variant="outline" size="sm" className="mt-3 w-full" disabled={agentSearch.isFetching} onClick={() => void (agentSearch.isError ? agentSearch.refetch() : agentSearch.fetchNextPage())}>{agentSearch.isFetching ? 'Searching…' : agentSearch.isError ? 'Retry search' : 'Load more matches'}</Button>
+                : (agentsLoading || agentsFailed || agentsCursor !== null) && <Button variant="outline" size="sm" className="mt-3 w-full" disabled={agentsLoading} onClick={() => void loadAgents(agentsCursor ?? undefined)}>{agentsLoading ? 'Loading agents…' : agentsFailed ? 'Retry loading agents' : 'Load more agents'}</Button>}
             </div>
             <div className="flex shrink-0 items-center gap-2.5 px-4 py-3">
               <Avatar initials="YO" small />
@@ -291,10 +296,10 @@ export function App() {
             </div>
           </AgentPanel>}
 
-          {activeTab === 'agents' ? (agent.id && route.kind !== 'agent-dm' && route.kind !== 'agent-new' && route.kind !== 'agent-delete'
-            ? <EditAgentForm key={agent.id} agent={agent} route={route} mobile={mobileConversation} onNavigate={navigate} onSave={editAvatar} onBack={() => { focusAgentsAfterDelete.current = true; navigate('/agents'); }} />
+          {activeTab === 'agents' ? (agent.id && route.kind !== 'agent-dm' && route.kind !== 'agent-new'
+            ? <EditAgentForm key={agent.id} agent={agent} route={route} mobile={mobileConversation} onNavigate={navigate} onSave={editAvatar} onModelSaved={applyAgent} onBack={() => { focusAgentsAfterDelete.current = true; navigate('/agents'); }} />
             : <section aria-label="No agent selected" className="hidden min-w-0 flex-1 items-center justify-center p-6 text-sm text-muted-foreground md:flex">Select or create an agent to configure.</section>)
-            : selectedGroup ? <GroupConversation key={selectedGroup} groupId={selectedGroup} modal={route.kind === 'group-edit' ? 'edit' : route.kind === 'group-delete' ? 'delete' : null} returnTo={location.state?.returnTo === '/chat' ? '/chat' : chatGroupPath(selectedGroup)} onNavigate={navigate} mobile={mobileConversation} onBack={() => navigate('/chat')} draft={drafts[`group:${selectedGroup}`] ?? ''} onDraft={text => setDraft(`group:${selectedGroup}`, text)} typingIn={typingIn} /> : agents.length > 0 ? <section aria-label={`Conversation with ${agent.name}`} className={cn(
+            : selectedGroup ? <GroupConversation key={selectedGroup} groupId={selectedGroup} modal={route.kind === 'group-edit' ? 'edit' : route.kind === 'group-delete' ? 'delete' : null} returnTo={location.state?.returnTo === '/chat' ? '/chat' : chatGroupPath(selectedGroup)} onNavigate={navigate} mobile={mobileConversation} onBack={() => navigate('/chat')} draft={drafts[`group:${selectedGroup}`] ?? ''} onDraft={text => setDraft(`group:${selectedGroup}`, text)} typingIn={typingIn} busy={busy} runOf={runOf} onStop={stop} /> : agents.length > 0 ? <section aria-label={`Conversation with ${agent.name}`} className={cn(
             'phone-detail-enter min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none md:flex',
             activityOpen && 'lg:mr-96',
             mobileConversation ? 'flex' : 'hidden',

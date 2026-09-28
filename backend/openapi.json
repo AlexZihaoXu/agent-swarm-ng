@@ -336,6 +336,24 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -6408,6 +6426,581 @@
         }
       }
     },
+    "/api/agents/{id}": {
+      "patch": {
+        "operationId": "updateChatAgent",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "minProperties": 1,
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "type": "string"
+                  },
+                  "endpointId": {
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "type": "string"
+                  },
+                  "model": {
+                    "minLength": 1,
+                    "maxLength": 512,
+                    "type": "string"
+                  },
+                  "thinkingLevel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "off"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "minimal"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "low"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "medium"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "xhigh"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "max"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "endpointId",
+                    "model",
+                    "thinkingLevel",
+                    "id",
+                    "channelId",
+                    "createdAt",
+                    "lastMessage"
+                  ],
+                  "properties": {
+                    "name": {
+                      "minLength": 1,
+                      "maxLength": 80,
+                      "type": "string"
+                    },
+                    "endpointId": {
+                      "minLength": 1,
+                      "maxLength": 100,
+                      "type": "string"
+                    },
+                    "model": {
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "type": "string"
+                    },
+                    "thinkingLevel": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "off"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "minimal"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "low"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "medium"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "high"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "xhigh"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "max"
+                          ]
+                        }
+                      ]
+                    },
+                    "avatar": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "shape",
+                            "color",
+                            "seed"
+                          ],
+                          "properties": {
+                            "shape": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "pebble"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "squircle"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "gumdrop"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "triangle"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "bean"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "pear"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "capsule"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "diamond"
+                                  ]
+                                }
+                              ]
+                            },
+                            "color": {
+                              "minLength": 7,
+                              "maxLength": 7,
+                              "pattern": "^#[0-9a-fA-F]{6}$",
+                              "type": "string"
+                            },
+                            "eyeStyle": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "pill"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "round"
+                                  ]
+                                }
+                              ]
+                            },
+                            "seed": {
+                              "minimum": 0,
+                              "maximum": 2147483647,
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "channelId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "lastMessage": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "sequence",
+                            "channelId",
+                            "role",
+                            "text",
+                            "timestamp",
+                            "replyTo"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "sequence": {
+                              "type": "integer"
+                            },
+                            "channelId": {
+                              "type": "string"
+                            },
+                            "role": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "user"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "assistant"
+                                  ]
+                                }
+                              ]
+                            },
+                            "text": {
+                              "type": "string"
+                            },
+                            "timestamp": {
+                              "type": "number"
+                            },
+                            "replyTo": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "id",
+                                    "role",
+                                    "text"
+                                  ],
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "role": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "user"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "assistant"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteChatAgent",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "confirmation"
+                ],
+                "properties": {
+                  "confirmation": {
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agents/{id}/avatar": {
       "patch": {
         "operationId": "updateAgentAvatar",
@@ -6629,136 +7222,6 @@
                           "type": "integer"
                         }
                       }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "message"
-                  ],
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "message"
-                  ],
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "message"
-                  ],
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/agents/{id}": {
-      "delete": {
-        "operationId": "deleteChatAgent",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "type": "object",
-                "required": [
-                  "confirmation"
-                ],
-                "properties": {
-                  "confirmation": {
-                    "minLength": 1,
-                    "maxLength": 80,
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "schema": {
-              "minLength": 1,
-              "maxLength": 100,
-              "type": "string"
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "deleted"
-                  ],
-                  "properties": {
-                    "deleted": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "message"
-                  ],
-                  "properties": {
-                    "message": {
-                      "type": "string"
                     }
                   }
                 }

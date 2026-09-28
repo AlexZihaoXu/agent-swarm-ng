@@ -17,7 +17,7 @@ import { chatGroupPath } from '@/lib/dashboard-location';
 
 class GroupNotFoundError extends Error {}
 
-export function GroupConversation({ groupId, modal, returnTo, onNavigate, mobile, onBack, draft, onDraft, typingIn }: { groupId: string; modal: 'edit' | 'delete' | null; returnTo: string; onNavigate: (path: string, options?: { replace?: boolean; state?: unknown }) => void; mobile: boolean; onBack: () => void; draft: string; onDraft: (text: string) => void; typingIn: (channelId: string, destination: string) => boolean }) {
+export function GroupConversation({ groupId, modal, returnTo, onNavigate, mobile, onBack, draft, onDraft, typingIn, busy, runOf, onStop }: { groupId: string; modal: 'edit' | 'delete' | null; returnTo: string; onNavigate: (path: string, options?: { replace?: boolean; state?: unknown }) => void; mobile: boolean; onBack: () => void; draft: string; onDraft: (text: string) => void; typingIn: (channelId: string, destination: string) => boolean; busy: Record<string, boolean>; runOf: (channelId: string) => { clientMessageId: string } | undefined; onStop: (channelId: string) => void }) {
   const client = useQueryClient();
   const group = useQuery({ queryKey: ['group', groupId], retry: (failures, failure) => !(failure instanceof GroupNotFoundError) && failures < 3, queryFn: async ({ signal }) => {
     const { data, error, response } = await api.GET('/api/groups/{id}', { params: { path: { id: groupId } }, signal });
@@ -65,6 +65,9 @@ export function GroupConversation({ groupId, modal, returnTo, onNavigate, mobile
     finally { setSending(false); }
   };
   const name = group.data?.name ?? 'group';
+  // Members whose current run was started by a message in this group (not their private chat or another group).
+  const messageIds = new Set(messages.map(message => message.id));
+  const working = (group.data?.members ?? []).filter(member => busy[member.channelId] && messageIds.has(runOf(member.channelId)?.clientMessageId ?? ''));
   return <section aria-label={`Group conversation: ${name}`} className={cn('phone-detail-enter min-h-0 min-w-0 flex-1 flex-col md:flex', mobile ? 'flex' : 'hidden')}>
     <header className="flex min-h-11 shrink-0 items-center gap-2 border-b border-border px-4 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] md:gap-3 md:pt-1.5">
       <div className="min-w-0 flex-1 md:hidden"><MobileConversationBreadcrumb parent="Chats" current={name} onBack={onBack} /><p className="truncate px-2 text-[11px] text-muted-foreground">You{group.data?.members.map(member => `, ${member.name}`).join('')}</p></div>
@@ -83,8 +86,8 @@ export function GroupConversation({ groupId, modal, returnTo, onNavigate, mobile
     </ScrollArea>
     <div className="shrink-0 pl-[calc(1.5rem+env(safe-area-inset-left))] pr-[calc(1.5rem+env(safe-area-inset-right))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:px-5 sm:pb-3">
       {error && <p role="alert" className="mb-2 text-xs text-red-400">{error}</p>}
-      <div className="mb-1 flex min-h-5 flex-wrap items-center gap-x-3 px-2">{group.data?.members.filter(member => typingIn(member.channelId, `group:${groupId}`)).map(member => <AgentTypingStatus key={member.id} name={member.name} typing />)}</div>
-      <ChatComposer name={name} draft={draft} onChange={onDraft} onSend={() => void send()} disabled={sending || !group.data || !history.data} inputRef={inputRef} reply={replyTo ? { author: replyTo.role === 'user' ? 'You' : replyTo.authorName, text: replyExcerpt(replyTo.text) } : undefined} onCancelReply={() => { setReplyTo(null); inputRef.current?.focus(); }} />
+      <div className="mb-1 flex min-h-5 flex-wrap items-center gap-x-3 px-2">{group.data?.members.filter(member => typingIn(member.channelId, `group:${groupId}`)).map(member => <AgentTypingStatus key={member.id} name={member.name} typing />)}{working.length > 0 && <span role="status" className="text-xs text-muted-foreground">{working.map(member => member.name).join(', ')} {working.length === 1 ? 'is' : 'are'} working…</span>}</div>
+      <ChatComposer name={name} draft={draft} onChange={onDraft} onSend={() => void send()} busy={working.length > 0} onStop={() => working.forEach(member => onStop(member.channelId))} disabled={sending || !group.data || !history.data} inputRef={inputRef} reply={replyTo ? { author: replyTo.role === 'user' ? 'You' : replyTo.authorName, text: replyExcerpt(replyTo.text) } : undefined} onCancelReply={() => { setReplyTo(null); inputRef.current?.focus(); }} />
     </div>
   </section>;
 }
