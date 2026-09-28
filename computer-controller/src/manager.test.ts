@@ -858,3 +858,46 @@ it('advertises the configured computer cap with the host limits', async () => {
   vi.mocked(docker.json).mockImplementation(async () => ({ NCPU: 16, MemTotal: 34_359_738_368 }));
   expect(await manager.limits()).toMatchObject({ maxComputers: 4, cpuCores: { max: 8 } });
 });
+
+it('finds the display server from the inspected creation-time image when the list only reports an image ID', async () => {
+  const { manager, docker } = fixture();
+  vi.mocked(docker.json).mockImplementation(async (_method: unknown, path: unknown) => {
+    const p = String(path);
+    if (p.startsWith('/containers/json'))
+      return [
+        {
+          Id: 'x11-box',
+          State: 'running',
+          Image: 'sha256:aaaaaaaaaaaa',
+          Labels: manager.names.labels(id, 'desktop', name),
+        },
+        {
+          Id: 'wayland-box',
+          State: 'running',
+          Image: 'sha256:bbbbbbbbbbbb',
+          Labels: manager.names.labels('5b29129a-5790-4fa5-86ca-4dc080d41fb4', 'desktop', 'Other'),
+        },
+        {
+          Id: 'stopped-box',
+          State: 'exited',
+          Image: 'sha256:cccccccccccc',
+          Labels: manager.names.labels('6c39239a-6890-4fa5-86ca-4dc080d41fb4', 'desktop', 'Off'),
+        },
+      ];
+    if (p === '/containers/x11-box/json')
+      return {
+        HostConfig: { Memory: 1, NanoCpus: 1e9 },
+        Config: { Image: 'agent-swarm-default:h265-xorg120', Labels: {} },
+      };
+    if (p === '/containers/wayland-box/json')
+      return { HostConfig: {}, Config: { Image: 'agent-swarm-default:stage2', Labels: {} } };
+    if (p === '/containers/stopped-box/json')
+      return {
+        HostConfig: {},
+        Config: { Image: 'agent-swarm-default:whatever', Labels: { 'swarm.ng.display-server': 'x11' } },
+      };
+    return { cpu_stats: {}, precpu_stats: {}, memory_stats: {} };
+  });
+  const rows = await manager.observe();
+  expect(rows.map(row => row.displayServer)).toEqual(['x11', 'wayland', 'x11']);
+});

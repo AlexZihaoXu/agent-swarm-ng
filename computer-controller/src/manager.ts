@@ -769,16 +769,22 @@ export class ComputerManager {
   }
   /** Enforced container quotas, cached per Docker container id. Recreation
    * produces a new id, so the cache cannot serve a stale quota. */
-  private quotas = new Map<string, { memory: number | null; cpuCount: number | null }>();
+  private quotas = new Map<string, { memory: number | null; cpuCount: number | null; displayServer?: DisplayServer }>();
   private async containerQuota(containerId: string) {
     const cached = this.quotas.get(containerId);
     if (cached) return cached;
-    const quota = { memory: null as number | null, cpuCount: null as number | null };
+    const quota: { memory: number | null; cpuCount: number | null; displayServer?: DisplayServer } = {
+      memory: null,
+      cpuCount: null,
+    };
     try {
-      const info = await this.docker.json<{ HostConfig?: { Memory?: number; NanoCpus?: number } }>(
-        'GET',
-        `${this.path('containers', containerId)}/json`,
-      );
+      const info = await this.docker.json<{
+        HostConfig?: { Memory?: number; NanoCpus?: number };
+        Config?: { Image?: string; Labels?: Record<string, string> | null };
+      }>('GET', `${this.path('containers', containerId)}/json`);
+      // The list call reports an image ID once a tag has moved on; the inspected creation-time name and labels are reliable.
+      if (info.Config)
+        quota.displayServer = displayServerOf({ Image: info.Config.Image, Labels: info.Config.Labels ?? {} });
       // 0 means "no limit configured"; report null rather than an infinite dial.
       if (typeof info.HostConfig?.Memory === 'number' && info.HostConfig.Memory > 0)
         quota.memory = info.HostConfig.Memory;
@@ -806,6 +812,8 @@ export class ComputerManager {
           memoryBytes: number | null = null,
           memoryLimitBytes: number | null = null,
           cpuCount: number | null = null;
+        // Inspected once per container id (cached): it also reveals the creation-time image, which the list call does not.
+        const inspected = await this.containerQuota(row.Id);
         if (row.State === 'running') {
           try {
             const stats = await this.docker.json<Statistics>(
@@ -822,9 +830,8 @@ export class ComputerManager {
             // Sysbox nests the desktop, so the stats payload reports the parent
             // cgroup's limit (host memory) rather than the quota Docker enforces.
             // The enforced HostConfig.Memory is the honest denominator.
-            const quota = await this.containerQuota(row.Id);
-            memoryLimitBytes = quota.memory;
-            cpuCount = quota.cpuCount;
+            memoryLimitBytes = inspected.memory;
+            cpuCount = inspected.cpuCount;
           } catch {
             /* State stays visible when live stats are temporarily unavailable. */
           }
@@ -840,7 +847,7 @@ export class ComputerManager {
           memoryBytes,
           memoryLimitBytes,
           cpuCount,
-          displayServer: displayServerOf(row),
+          displayServer: inspected.displayServer ?? displayServerOf(row),
         };
       }),
     );
