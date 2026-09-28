@@ -3,7 +3,7 @@ import { ResourceError } from './resources';
 /** Internal controller protocol. Authorization/claim/fresh-look accounting is the backend's responsibility.
  * Every execution needs the generation token from dry validation; cancel rotates it before joining.
  * Never retry actions after a transport error, or transfer a claim without a settled cancel response. */
-export type CaptureRequest = { kind: 'glance'; quality?: 'low' | 'medium' | 'high' } | { kind: 'look_at'; x: number; y: number; size: number };
+export type CaptureRequest = { kind: 'glance'; quality?: 'low' | 'medium' | 'high' | 'full' } | { kind: 'look_at'; x: number; y: number; size: number };
 export type CaptureResult = { mimeType: 'image/jpeg'; data: string; bounds: number[]; width: number; height: number; sourceWidth: number; sourceHeight: number };
 export type Action =
   | { type: 'mouse.move_to'; x: number; y: number; speed?: number }
@@ -42,7 +42,7 @@ export function validateCapture(input: unknown): CaptureRequest {
   const value = object(input);
   if (value.kind === 'glance') {
     fields(value, ['kind', 'quality']);
-    if (value.quality !== undefined && !['low', 'medium', 'high'].includes(String(value.quality))) fail('quality must be low, medium or high.');
+    if (value.quality !== undefined && (typeof value.quality !== 'string' || !['low', 'medium', 'high', 'full'].includes(value.quality))) fail('quality must be low, medium, high or full.');
   } else if (value.kind === 'look_at') {
     fields(value, ['kind', 'x', 'y', 'size']);
     number(value.x, 'x', 0, 999); number(value.y, 'y', 0, 999); number(value.size, 'size', 0, Number.MAX_VALUE, true);
@@ -61,7 +61,7 @@ export function captureGeometry(input: unknown, sourceWidth: number, sourceHeigh
   };
   const [l, r] = value.kind === 'glance' ? [0, sourceWidth] : axis(value.x, value.size, sourceWidth);
   const [t, b] = value.kind === 'glance' ? [0, sourceHeight] : axis(value.y, value.size, sourceHeight);
-  const scale = value.kind === 'glance' ? { low: .33, medium: .5, high: .75 }[value.quality ?? 'low'] : 1;
+  const scale = value.kind === 'glance' ? { low: .33, medium: .5, high: .75, full: 1 }[value.quality ?? 'low'] : 1;
   return { bounds: [l / sourceWidth * 999, t / sourceHeight * 999, r / sourceWidth * 999, b / sourceHeight * 999], pixels: [l, t, r, b], width: Math.max(1, Math.round((r - l) * scale)), height: Math.max(1, Math.round((b - t) * scale)) };
 }
 /** Pure full-combo admission, also run again in the guest against its current pointer.
@@ -74,7 +74,7 @@ export function validateCombo(input: unknown, state: DesktopState) {
   if (value.validationToken !== undefined && (typeof value.validationToken !== 'string' || !/^[0-9a-f-]{36}$/.test(value.validationToken))) fail('Invalid validationToken.');
   if (!Array.isArray(value.actions) || value.actions.length < 1 || value.actions.length > 16) fail('Use 1..16 actions.');
   const actions = value.actions as unknown[];
-  const pause = number(value.per_action_pause ?? .1, 'per_action_pause', 0, 10);
+  const pause = number(value.per_action_pause ?? .2, 'per_action_pause', 0, 10);
   let x = state.x, y = state.y, actionSeconds = 0;
   const held = new Set<string>();
   const durations: number[] = [];

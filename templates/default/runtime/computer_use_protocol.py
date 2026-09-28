@@ -36,9 +36,9 @@ def capture_geometry(value, w, h):
     if value.get('kind') == 'glance':
         fields(value, ['kind', 'quality'])
         quality = value.get('quality', 'low')
-        if quality not in ('low', 'medium', 'high'):
-            raise ValueError('quality must be low, medium or high.')
-        scale = {'low': .33, 'medium': .5, 'high': .75}[quality]
+        if quality not in ('low', 'medium', 'high', 'full'):
+            raise ValueError('quality must be low, medium, high or full.')
+        scale = {'low': .33, 'medium': .5, 'high': .75, 'full': 1}[quality]
         pixels = [0, 0, w, h]
     elif value.get('kind') == 'look_at':
         fields(value, ['kind', 'x', 'y', 'size'])
@@ -67,7 +67,7 @@ def validate_combo(value, state):
     actions = value.get('actions')
     if not isinstance(actions, list) or not 1 <= len(actions) <= 16:
         raise ValueError('Use 1..16 actions.')
-    pause = number(value.get('per_action_pause', .1), 'per_action_pause', 0, 10)
+    pause = number(value.get('per_action_pause', .2), 'per_action_pause', 0, 10)
     w, h, x, y = state
     held, durations = set(), []
     for index, a in enumerate(actions):

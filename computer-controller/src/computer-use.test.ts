@@ -5,7 +5,7 @@ describe('computer-use pure preflight', () => {
   it('counts codepoints and only between-action pauses', () => {
     const result = validateCombo({ actions: [{ type: 'mouse.left_click' }, { type: 'keyboard.type', text: 'hello world' } ] }, screen);
     expect(result.actionSeconds).toBeCloseTo(.845);
-    expect(result.totalSeconds).toBeCloseTo(.945);
+    expect(result.totalSeconds).toBeCloseTo(1.045);
     expect(validateCombo({ actions: [{ type: 'keyboard.type', text: '😀', cpm: 800 }] }, screen).totalSeconds).toBe(.075);
   });
   it('uses physical straight endpoint distance before trajectory sampling', () => {
@@ -32,12 +32,15 @@ describe('computer-use pure preflight', () => {
     expect(() => validateCombo({ actions: [{ type: 'keyboard.down', key: 'Shift_L' }, { type: 'keyboard.type', text: 'x' }, { type: 'keyboard.up', key: 'Shift_L' }] }, screen)).toThrow('Release keys');
   });
   it('accepts balanced chords and mouse drag', () => {
-    expect(validateCombo({ actions: [{ type: 'keyboard.down', key: 'Control_L' }, { type: 'keyboard.down', key: 'a' }, { type: 'keyboard.up', key: 'a' }, { type: 'keyboard.up', key: 'Control_L' }] }, screen).totalSeconds).toBeCloseTo(.3);
+    expect(validateCombo({ actions: [{ type: 'keyboard.down', key: 'Control_L' }, { type: 'keyboard.down', key: 'a' }, { type: 'keyboard.up', key: 'a' }, { type: 'keyboard.up', key: 'Control_L' }] }, screen).totalSeconds).toBeCloseTo(.6);
   });
 });
 describe('captureGeometry', () => {
   it('scales the full boundary rather than cropping glance', () => {
     expect(captureGeometry({ kind: 'glance' }, 1920, 1080)).toEqual({ bounds: [0, 0, 999, 999], pixels: [0, 0, 1920, 1080], width: 634, height: 356 });
+  });
+  it.each([['low', 634, 356], ['medium', 960, 540], ['high', 1440, 810], ['full', 1920, 1080]])('supports %s detail without changing the full boundary', (quality, width, height) => {
+    expect(captureGeometry({ kind: 'glance', quality }, 1920, 1080)).toEqual({ bounds: [0,0,999,999], pixels: [0,0,1920,1080], width, height });
   });
   it('shifts axes independently and returns rounded actual bounds', () => {
     const crop = captureGeometry({ kind: 'look_at', x: 0, y: 500, size: 100 }, 999, 999);
@@ -48,6 +51,6 @@ describe('captureGeometry', () => {
   it('keeps tiny crops nonempty and rejects malformed requests', () => {
     expect(captureGeometry({ kind: 'look_at', x: 999, y: 999, size: .0001 }, 1920, 1080).width).toBe(1);
     expect(captureGeometry({ kind: 'look_at', x: 0, y: 0, size: Number.MIN_VALUE }, 1, 1).pixels).toEqual([0, 0, 1, 1]);
-    for (const input of [{ kind: 'look_at', x: -1, y: 0, size: 1 }, { kind: 'look_at', x: 0, y: 0, size: 0 }, { kind: 'glance', quality: 'native' }]) expect(() => captureGeometry(input, 1920, 1080)).toThrow();
+    for (const input of [{ kind: 'look_at', x: -1, y: 0, size: 1 }, { kind: 'look_at', x: 0, y: 0, size: 0 }, { kind: 'glance', quality: 'native' }, { kind: 'glance', quality: ['full'] }]) expect(() => captureGeometry(input, 1920, 1080)).toThrow();
   });
 });

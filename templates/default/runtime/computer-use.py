@@ -188,7 +188,7 @@ def execute(value, x11):
                     save()
             result['completed'] = index + 1
             if index < len(value['actions']) - 1:
-                sleep(value.get('per_action_pause', .1))
+                sleep(value.get('per_action_pause', .2))
     except (ValueError, Cancelled) as error:
         result['error'] = str(error)
     except Exception:

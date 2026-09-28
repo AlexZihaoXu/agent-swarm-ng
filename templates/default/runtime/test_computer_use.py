@@ -45,7 +45,7 @@ class FakeX11:
 class ProtocolTests(unittest.TestCase):
     def test_unicode_codepoint_time_and_between_only_pause(self):
         self.assertAlmostEqual(validate_combo({'actions': [{'type': 'keyboard.type', 'text': '😀e\u0301'}]}, STATE)['totalSeconds'], .225)
-        self.assertAlmostEqual(validate_combo({'actions': [{'type': 'mouse.left_click'}, {'type': 'keyboard.type', 'text': 'hello world'}]}, STATE)['totalSeconds'], .945)
+        self.assertAlmostEqual(validate_combo({'actions': [{'type': 'mouse.left_click'}, {'type': 'keyboard.type', 'text': 'hello world'}]}, STATE)['totalSeconds'], 1.045)
 
     def test_invalid_combos(self):
         for combo in [
@@ -72,6 +72,12 @@ class ProtocolTests(unittest.TestCase):
         for value in [{'kind': 'look_at', 'x': -1, 'y': 0, 'size': 1}, {'kind': 'look_at', 'x': 0, 'y': 0, 'size': 0}, {'kind': 'glance', 'quality': 'native'}]:
             with self.assertRaises(ValueError):
                 capture_geometry(value, 1920, 1080)
+
+    def test_full_glance_keeps_native_dimensions_and_boundary(self):
+        geometry = capture_geometry({'kind': 'glance', 'quality': 'full'}, 1920, 1080)
+        self.assertEqual(geometry['bounds'], [0, 0, 999, 999])
+        self.assertEqual((geometry['width'], geometry['height']), (1920, 1080))
+        self.assertAlmostEqual(validate_combo({'actions': [{'type': 'mouse.left_click'}, {'type': 'mouse.right_click'}]}, STATE)['totalSeconds'], .24)
 
     def test_bezier_is_bounded_precomputed_and_endpoint_exact(self):
         points = bezier_points((0, 0), (1919, 1079), 5, 1920, 1080)

@@ -14,9 +14,9 @@ The human viewer starts **Input locked** each time it opens/reconnects. The actu
 
 ## Observe, act, verify
 
-- `glance({quality?: "low"|"medium"|"high"})`: fresh full-desktop JPEG at 33% (default), 50% or 75% dimensions.
+- `glance({quality?: "low"|"medium"|"high"|"full"})`: fresh full-desktop JPEG at 33% (default), 50%, 75% or 100% native dimensions. Low is for orientation, not accurate reading. Use high for broad readable context, full for exact text/fine details across the screen, or native `look_at` for a particular region. If text is unclear, increase detail/crop rather than guess or repeat low-resolution views. Verify the actual application result at adequate detail before claiming success. Existing JPEG/frame limits apply; use a crop if a full frame exceeds them.
 - `look_at({x,y,size})`: native-resolution crop with center and radius in **[0,999]** coordinates. Each axis shifts into the screen while preserving its span, or becomes the full [0,999] axis if oversized. Return actual pixel-rounded normalized bounds plus output dimensions, not just the requested rectangle.
-- `run_actions({actions,per_action_pause?})`: a validated ordered combo, at most 16 actions. Action entries use `{name,params?}`. Pause defaults to 0.1 seconds, **only between** actions. Every key/button down must pair with an up in the same combo, without duplicate downs or unmatched ups.
+- `run_actions({actions,per_action_pause?})`: a validated ordered combo, at most 16 actions. Action entries use `{name,params?}`. Recommended pause defaults to 0.2 seconds, **only between** actions. Every key/button down must pair with an up in the same combo, without duplicate downs or unmatched ups.
 
 Each successful `glance`/`look_at` resets **two combos for 30 real seconds**, per agent and claimed computer. Failed screenshots do not reset it. Invalid/preflight-rejected combos consume no use, but time still elapses; started partial failures consume a use. Release/switch/restart invalidates the allowance. An expired/exhausted allowance errors before input and tells the agent to look again. This bounds blind operation; it cannot freeze a desktop or remove human races.
 
