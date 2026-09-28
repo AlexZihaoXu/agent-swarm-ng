@@ -78,6 +78,7 @@ test('on a touch keyboard Enter writes a new line and only the Send button sends
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect.poll(() => posts.length).toBe(1);
   expect((posts[0] as { message: string }).message).toBe('first line\nsecond line');
+  await expect(page.locator('[data-message-id]').filter({ hasText: 'second line' })).toBeVisible(); // let the mocked send finish
 });
 
 test('with a mouse, Enter still sends and Shift+Enter writes a new line', async ({ page }) => {
@@ -94,6 +95,7 @@ test('with a mouse, Enter still sends and Shift+Enter writes a new line', async 
   await expect(box).toHaveValue('one\ntwo');
   await box.press('Enter');
   await expect.poll(() => posts.length).toBe(1);
+  await expect(page.locator('[data-message-id]').filter({ hasText: 'two' })).toBeVisible(); // let the mocked send finish
 });
 
 test('the reaction menu says an agent may respond', async ({ page }) => {

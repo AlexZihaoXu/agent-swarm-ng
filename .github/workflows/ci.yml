@@ -18,6 +18,7 @@ jobs:
         with:
           node-version: 22
       - run: bun install --frozen-lockfile
+      - run: bun run format:check
       - run: bun run api:check
       - run: bun run typecheck
       - run: bun run test
@@ -29,3 +30,12 @@ jobs:
       - run: bun run test:e2e
       - run: docker compose config --quiet
       - run: docker compose -f compose.yaml -f compose.dev.yaml config --quiet
+      - name: Every supported deployment stack is valid
+        env:
+          TAILSCALE_IP: 100.64.0.1
+          TAILSCALE_DNS_NAME: host.example.ts.net
+          LAN_IP: 192.168.0.10
+        run: |
+          for stack in $(sh scripts/compose.sh --list | awk '/^(local|dev|lan-http|tailnet-[a-z0-9]+) /{print $1}'); do
+            echo "== $stack"; sh scripts/compose.sh "$stack" config --quiet
+          done
