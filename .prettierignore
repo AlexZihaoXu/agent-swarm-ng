@@ -1,0 +1,22 @@
+# Generated or vendored
+node_modules
+dist
+backend/src/generated
+backend/openapi.json
+frontend/src/api/schema.d.ts
+bun.lock
+docs/references
+templates/default/vendor
+# Local and scratch
+.scratch
+.local
+.pi
+test-results
+playwright-report
+# Only source code is formatted: TypeScript, TSX, module scripts and CSS
+*.md
+*.json
+*.yaml
+*.yml
+*.html
+*.svg
