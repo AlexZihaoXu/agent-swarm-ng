@@ -89,7 +89,7 @@ The default image uses **Ubuntu 24.04 LTS with Ubuntu GNOME**, retaining Ubuntu�
 
 The workspace includes Chrome, VS Code, Git/curl, gcc/g++, ffmpeg, Node.js/npm with nvm available, Bun, Python/uv, tmux, and an unauthenticated Pi CLI. Installing Pi in the guest does not grant product agents computer tools or copy host Pi credentials. Separate named volumes retain `/home/agent` and `/workspace` across container replacement; deletion of their data is explicit. tmux preserves sessions across client disconnections, not container restarts. See [workspace setup and checks](docs/development.md#workspace-tools-and-persistence).
 
-Desktop resolution is fixed at **1920×1080**; do not resize it automatically to match the browser viewport. Passive grid previews are 480×270 JPEGs requested at up to 0.5 fps per visible card. The interactive video/input path shares the dashboard's one external TCP port. Local input-to-decoded-video trials and the AMD hardware/software trade-off are documented in [Computers](docs/computers.md); 120 fps and optical glass-to-glass latency are not promises.
+Desktop resolution is fixed at **1920×1080**; do not resize it automatically to match the browser viewport. Passive grid previews are 480×270 JPEGs requested at 2 fps (every 500 ms) per visible card, only while the card is on screen and the tab is visible. The interactive video/input path shares the dashboard's one external TCP port. Local input-to-decoded-video trials and the AMD hardware/software trade-off are documented in [Computers](docs/computers.md); 120 fps and optical glass-to-glass latency are not promises.
 
 ## Progressive web app
 
