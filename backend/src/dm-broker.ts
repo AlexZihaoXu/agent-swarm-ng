@@ -70,6 +70,7 @@ export class DmBroker {
   readonly settings: SwarmSettingsStore;
   /** Streams files in and out of computers for copy_file and upload_file (set when a controller exists). */
   transfers?: Pick<ComputerController, 'exportFile' | 'importFile'> | null;
+  private pruning?: ReturnType<typeof setInterval>;
   private watcher?: TerminalWatcher;
   /** One-shot watches on claimed computers (watch_terminal, watch_desktop). */
   readonly watches?: ComputerWatches;
@@ -229,11 +230,10 @@ export class DmBroker {
       // Watches end with claims on a restart; their agents hear so once.
       void this.watches?.start().catch(() => {});
       void this.computers?.ready().catch(() => {});
-      // Uploads a restart interrupted, and ones never sent within a day, are cleaned up.
-      void this.files.blobs
-        .clearTemporary()
-        .then(() => this.files.pruneUnsent())
-        .catch(() => {});
+      // Uploads never sent within a day are removed, now and hourly.
+      void this.files.pruneUnsent().catch(() => {});
+      this.pruning ??= setInterval(() => void this.files.pruneUnsent().catch(() => {}), 60 * 60 * 1000);
+      this.pruning.unref?.();
     })().catch(error => {
       this.starting = undefined;
       throw error;
@@ -757,6 +757,7 @@ ${preview.text}`
     this.deleting.delete(agentId);
   }
   close() {
+    if (this.pruning) clearInterval(this.pruning);
     this.closing = true;
     this.timers.close();
     this.watcher?.close();

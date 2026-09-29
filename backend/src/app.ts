@@ -75,6 +75,8 @@ export async function buildApp({
   const screenshots = new ScreenshotPool(join(platform.dataDirectory, 'computer-screenshots'));
   const swarmSettings = new SwarmSettingsStore(platform);
   const files = new FileStore(platform, new BlobStore(join(platform.dataDirectory, 'files')), swarmSettings);
+  // Uploads a restart interrupted leave temporary files; remove them before any new upload can start.
+  await files.blobs.clearTemporary();
   registerFileRoutes(app, platform, files, new Scratchpad(platform, swarmSettings));
   registerSwarmSettingsRoutes(app, swarmSettings);
   registerChat(app, endpointStore, platform, codex, computers, screenshots, files, controller);

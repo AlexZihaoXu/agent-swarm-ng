@@ -31,7 +31,7 @@ function DownloadLink({ file, className }: { file: ChatFile; className?: string 
 function DeletedFile({ file }: { file: ChatFile }) {
   const when = file.deleted?.at ? new Date(file.deleted.at) : null;
   return (
-    <div className="flex w-full max-w-sm min-w-0 items-center gap-3 rounded-lg border border-dashed border-border bg-sidebar/40 px-3 py-2 text-muted-foreground">
+    <div className="flex w-full min-w-0 items-center gap-3 rounded-lg border border-dashed border-border bg-sidebar/40 px-3 py-2 text-muted-foreground">
       <FileIcon className="size-7 shrink-0 opacity-60" />
       <span className="min-w-0">
         <span className="block truncate text-sm line-through" title={file.name}>
@@ -54,7 +54,7 @@ function DeletedFile({ file }: { file: ChatFile }) {
 /** Any other file: an icon, the name as a download link, and its size. */
 function GenericFile({ file }: { file: ChatFile }) {
   return (
-    <div className="flex w-full max-w-sm min-w-0 items-center gap-3 rounded-lg border border-border bg-sidebar px-3 py-2">
+    <div className="flex w-full min-w-0 items-center gap-3 rounded-lg border border-border bg-sidebar px-3 py-2">
       <FileIcon className="size-7 shrink-0 text-muted-foreground" />
       <span className="flex min-w-0 flex-col">
         <DownloadLink file={file} className="text-sm" />
@@ -205,7 +205,11 @@ export function MessageFiles({ files, align = 'start' }: { files: ChatFile[]; al
     <div
       aria-label={`${files.length} ${files.length === 1 ? 'file' : 'files'}`}
       role="group"
-      className={cn('flex w-full min-w-0 flex-col gap-1.5', align === 'end' ? 'items-end' : 'items-start')}
+      // A steady width (like Discord's previews) instead of shrinking to a short caption.
+      className={cn(
+        'flex w-[28rem] min-w-0 max-w-full flex-col gap-1.5',
+        align === 'end' ? 'items-end' : 'items-start',
+      )}
     >
       {images.length > 0 && <ImageGrid images={images} />}
       {rest.map(file =>
