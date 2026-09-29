@@ -334,6 +334,7 @@ function Run({
   const failed = run.steps.some(step => step.type === 'error');
   return (
     <section
+      data-anchor-id={`run:${run.id}`}
       aria-label={`Run at ${time(run.started)}`}
       className="card-enter rounded-xl border border-border bg-background/40 p-3"
       title={`Channel ${run.channelId} · Run ${run.id}`}
@@ -359,7 +360,7 @@ function Run({
         {/* The connecting line is the chain; each step hangs off it. */}
         <ol className="relative ml-1 space-y-1.5 border-l border-border pl-3">
           {run.steps.map(step => (
-            <li key={step.id} className="min-w-0">
+            <li key={step.id} data-anchor-id={step.id} className="min-w-0">
               <Step step={step} agentId={agentId} history={history} expand={expand} />
             </li>
           ))}
@@ -434,7 +435,7 @@ export function AgentActivityPanel({
   const loading = history.loading[agent.id],
     failed = history.failed[agent.id];
   const hasOlder = history.cursor[agent.id] != null;
-  const anchor = useRef<{ id?: string; height: number; top: number } | null>(null);
+  const anchor = useRef<{ id: string; offset: number } | null>(null);
   useEffect(() => {
     if (open) void loadActivity(agent.id);
   }, [agent.id, open, loadActivity]);
@@ -450,19 +451,35 @@ export function AgentActivityPanel({
     follow.current = true;
     anchor.current = null;
   }, [agent.id, open]);
+  // Remember the first visible step (or collapsed run) so it stays put when older activity arrives above it or a
+  // run gains earlier steps. Steps win over their run, since a run can grow above them.
+  const measure = () => {
+    const root = viewport.current;
+    if (!root) return;
+    const top = root.getBoundingClientRect().top;
+    for (const element of root.querySelectorAll<HTMLElement>('[data-anchor-id]')) {
+      const rect = element.getBoundingClientRect();
+      if (rect.bottom <= top || rect.height === 0) continue;
+      anchor.current = { id: element.dataset.anchorId!, offset: rect.top - top };
+      if (element.tagName !== 'SECTION' || !element.querySelector('[data-anchor-id]')) return;
+    }
+  };
   useLayoutEffect(() => {
-    const element = viewport.current;
-    if (!element) return;
-    if (anchor.current && anchor.current.id !== entries[0]?.id) {
-      element.scrollTop = anchor.current.top + element.scrollHeight - anchor.current.height;
-      anchor.current = null;
-    } else if (follow.current) element.scrollTop = element.scrollHeight;
-  }, [entries, open, agent.id]);
+    const root = viewport.current;
+    if (!root) return;
+    if (follow.current) {
+      root.scrollTop = root.scrollHeight;
+      return;
+    }
+    const element =
+      anchor.current && root.querySelector<HTMLElement>(`[data-anchor-id="${CSS.escape(anchor.current.id)}"]`);
+    if (element)
+      root.scrollTop += element.getBoundingClientRect().top - root.getBoundingClientRect().top - anchor.current!.offset;
+  }, [entries, hasOlder, open, agent.id]);
   const loadOlder = () => {
     if (loading || !hasOlder) return;
-    if (viewport.current)
-      anchor.current = { id: entries[0]?.id, height: viewport.current.scrollHeight, top: viewport.current.scrollTop };
     follow.current = false;
+    measure();
     void loadActivity(agent.id, true);
   };
   const olderRef = useRef(loadOlder);
@@ -589,10 +606,11 @@ export function AgentActivityPanel({
             label="Agent activity history"
             viewportRef={viewport}
             className="min-h-0 min-w-0 flex-1"
-            viewportClassName="[&>div]:!block [&>div]:w-full [&>div]:min-w-0"
+            viewportClassName="[overflow-anchor:none] [&>div]:!block [&>div]:w-full [&>div]:min-w-0"
             onScroll={event => {
               const element = event.currentTarget;
               follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40;
+              measure();
               if (element.scrollTop < 120) olderRef.current();
             }}
           >
@@ -607,8 +625,14 @@ export function AgentActivityPanel({
                   Load older activity
                 </button>
               )}
-              {loading && (
-                <div role="status" aria-label="Loading activity…" className="space-y-2">
+              {/* Held in place whenever older activity exists, so starting a load never pushes the content. */}
+              {(loading || hasOlder) && (
+                <div
+                  role={loading ? 'status' : undefined}
+                  aria-label={loading ? 'Loading activity…' : undefined}
+                  aria-hidden={loading ? undefined : true}
+                  className="space-y-2"
+                >
                   <Skeleton className="h-16 rounded-xl" />
                   <Skeleton className="h-10 rounded-xl" />
                 </div>

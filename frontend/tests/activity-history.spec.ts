@@ -244,3 +244,49 @@ test('retries failed history and text chunks, with replacement on an expansion r
   await expect(panel).not.toContainText('First section');
   await expect(panel.getByRole('button', { name: 'Load more text' })).toHaveCount(0);
 });
+
+test('loading older activity while scrolling keeps the visible runs still', async ({ page }) => {
+  await page.route(`**/api/agents/${agent.id}/activity*`, async route => {
+    const before = Number(new URL(route.request().url()).searchParams.get('before') ?? 200);
+    if (before < 200) await new Promise(resolve => setTimeout(resolve, 400));
+    const first = Math.max(0, before - 20);
+    return route.fulfill({
+      json: {
+        entries: Array.from({ length: before - first }, (_, i) => ({
+          ...entry(`e${first + i}`, first + i, `Trace ${first + i}`),
+          runId: `run-${first + i}`,
+        })),
+        nextCursor: first > 0 ? first : null,
+      },
+    });
+  });
+  const panel = await open(page);
+  await expect(panel).toContainText('Trace 199');
+  const viewport = panel.getByRole('region', { name: 'Agent activity history' });
+  // Scroll up in small steps, as a wheel does, and record where one visible run sits on screen every frame.
+  const drift = await viewport.evaluate(async root => {
+    const frame = () => new Promise(requestAnimationFrame);
+    const sections = () => [...root.querySelectorAll('section')];
+    while (root.scrollTop > 200) {
+      root.scrollTop -= 80;
+      await frame();
+    }
+    root.scrollTop = 160;
+    await frame();
+    const top = root.getBoundingClientRect().top;
+    const target = sections().find(section => section.getBoundingClientRect().top > top + 20)!;
+    const label = target.dataset.anchorId;
+    const start = target.getBoundingClientRect().top;
+    let worst = 0;
+    for (let i = 0; i < 60; i++) {
+      await frame();
+      const now = sections().find(section => section.dataset.anchorId === label)!;
+      worst = Math.max(worst, Math.abs(now.getBoundingClientRect().top - start));
+      if (i === 10) root.scrollTop -= 60;
+    }
+    return { worst, loaded: sections().length };
+  });
+  expect(drift.loaded).toBeGreaterThan(20);
+  // One deliberate 60px scroll step; nothing else may move the content.
+  expect(Math.abs(drift.worst - 60)).toBeLessThan(2);
+});
