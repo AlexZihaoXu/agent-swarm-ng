@@ -82,8 +82,10 @@ test('group header, reply and composer fit a narrow phone without horizontal ove
   const edit = await size(page.getByRole('button', { name: 'Edit group chat' }));
   expect(edit.height).toBeGreaterThanOrEqual(44);
   expect(edit.width).toBe(44);
+  expect((await size(page.getByRole('button', { name: 'Chat files' }))).width).toBe(44);
+  // Back, Files and Edit share the 320px header with the title, which keeps a readable width.
   expect((await size(page.getByRole('heading', { name: 'Research notes and plans' }))).width).toBeGreaterThanOrEqual(
-    150,
+    110,
   );
   await page.getByText('A result', { exact: true }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Reply' }).click();

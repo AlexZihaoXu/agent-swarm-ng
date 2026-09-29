@@ -101,7 +101,14 @@ test('agent settings offer jump links that follow the reader and land each headi
   await page.goto('/agents/avery');
   const pane = page.getByRole('region', { name: 'Settings for Avery' });
   const nav = pane.getByRole('navigation', { name: 'Jump to section' });
-  await expect(nav.getByRole('link')).toHaveText(['Channels', 'Model', 'Computers', 'Avatar', 'Delete agent']);
+  await expect(nav.getByRole('link')).toHaveText([
+    'Channels',
+    'Model',
+    'Computers',
+    'Scratchpad',
+    'Avatar',
+    'Delete agent',
+  ]);
   // On wide screens the links share the header row with the title (no separate strip or subtitle).
   const title = (await pane.getByRole('heading', { name: 'Agent settings' }).boundingBox())!;
   const links = (await nav.boundingBox())!;
