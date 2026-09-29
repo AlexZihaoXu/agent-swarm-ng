@@ -127,3 +127,45 @@ for (const rosterLoaded of [true, false])
     await expect(input).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
+
+test('the agent on a computer opens a floating chat over the desktop that sends to its conversation', async ({
+  page,
+}) => {
+  const agent = sampleAgents[0];
+  await page.addInitScript(id => localStorage.setItem(`computer-consent:${id}`, 'yes'), desk.id);
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({ json: { computers: [{ ...desk, portalFree: true }], controllerConnected: true } }),
+  );
+  await page.route('**/api/computers/control', route =>
+    route.fulfill({ json: { holders: [{ computerId: desk.id, agent: { id: agent.id, name: agent.name } }] } }),
+  );
+  await page.route(`**/computers/${desk.id}/desktop/**`, route =>
+    route.request().url().endsWith('/api/health')
+      ? route.fulfill({ json: { status: 'ok' } })
+      : route.fulfill({ contentType: 'text/html', body: '<html><body>Desktop fixture</body></html>' }),
+  );
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/computers/${desk.id}`);
+  await page.getByRole('button', { name: `Chat with ${agent.name}` }).click();
+  const window = page.getByRole('region', { name: `Chat with ${agent.name}` });
+  await expect(window.getByRole('list', { name: 'Messages' })).toBeVisible();
+  const box = (await window.boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(1280);
+  const sent = page.waitForRequest(request => request.url().endsWith('/api/chat'));
+  await window.getByRole('textbox', { name: `Message ${agent.name}` }).fill('How is it going?');
+  await window.getByRole('button', { name: 'Send message' }).click();
+  expect((await sent).postDataJSON()).toMatchObject({ agentId: agent.id, message: 'How is it going?' });
+  await expect(window).toContainText('How is it going?');
+  // Dragging by the title bar moves the window.
+  await page.mouse.move(box.x + box.width / 2, box.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 - 200, box.y + 112, { steps: 4 });
+  await page.mouse.up();
+  expect((await window.boundingBox())!.x).toBeLessThan(box.x - 150);
+  // The traffic light minimizes it back to the header; Open in Chat goes to the whole conversation.
+  await window.getByRole('button', { name: `Minimize chat with ${agent.name}` }).click();
+  await expect(window).toHaveCount(0);
+  await page.getByRole('button', { name: `Chat with ${agent.name}` }).click();
+  await window.getByRole('button', { name: 'Open in Chat' }).click();
+  await expect(page).toHaveURL(new RegExp(`/chat/agents/${agent.id}$`));
+});

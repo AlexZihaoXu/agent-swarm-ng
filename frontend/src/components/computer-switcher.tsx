@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { EdgeHandle } from '@/components/ui/edge-handle';
 import { useQuery } from '@tanstack/react-query';
 import { computersQuery } from '@/lib/computers-query';
 import { cn } from '@/lib/utils';
@@ -37,17 +38,7 @@ export function ComputerSwitcher({ currentId, onOpen }: { currentId: string; onO
     >
       <div className="pointer-events-none absolute inset-x-0 bottom-2 z-20 flex justify-center">
         <Dialog.Trigger asChild>
-          <button
-            type="button"
-            aria-label="All computers"
-            className="group pointer-events-auto flex h-7 items-center gap-1 rounded-full border border-white/15 bg-black/55 px-2 text-xs font-medium text-white/70 shadow-lg backdrop-blur outline-none transition-[opacity,background-color,color,padding] duration-200 hover:bg-black/80 hover:px-3 hover:text-white focus-visible:px-3 focus-visible:text-white focus-visible:ring-2 focus-visible:ring-ring [@media(hover:hover)]:opacity-60 [@media(hover:hover)]:hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
-          >
-            <ChevronUp />
-            {/* The label unfolds on hover or focus; touch screens show it all the time. */}
-            <span className="max-w-40 overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 [@media(hover:hover)]:max-w-0 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:max-w-40 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-visible:max-w-40 [@media(hover:hover)]:group-focus-visible:opacity-100">
-              All computers
-            </span>
-          </button>
+          <EdgeHandle label="All computers" icon={<ChevronUp />} />
         </Dialog.Trigger>
       </div>
       <Dialog.Portal>

@@ -8,6 +8,8 @@ import { ComputerControl, type ComputerAgentState } from './computer-control';
 import { TerminalWorkspace } from './computer-terminals';
 import { ComputerSwitcher } from './computer-switcher';
 import { FloatingTerminal } from './floating-terminal';
+import { FloatingChat } from './floating-chat';
+import type { ChatAgent } from '@/use-chat';
 import {
   ChevronDownIcon,
   ComputerIcon,
@@ -71,6 +73,9 @@ export function ComputerViewer({
     if (view === 'terminal') setInputEnabled(false);
   }, [view]);
   const [inputEnabled, setInputEnabled] = useState(false);
+  // The floating chat with the agent on this computer, opened from the header.
+  const [chatAgent, setChatAgent] = useState<ChatAgent | null>(null);
+  useEffect(() => setChatAgent(null), [id]);
   const [frame, setFrame] = useState(Date.now());
   const [previewLoaded, setPreviewLoaded] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
@@ -318,7 +323,12 @@ export function ComputerViewer({
             </div>
           )}
         </div>
-        <ComputerControl key={id} computerId={id} agentState={agentState} />
+        <ComputerControl
+          key={id}
+          computerId={id}
+          agentState={agentState}
+          onOpenChat={agentState?.chat && view === 'desktop' ? setChatAgent : undefined}
+        />
         {running && view === 'desktop' && (
           <Button
             ref={inputToggleRef}
@@ -628,6 +638,14 @@ export function ComputerViewer({
         )}
         {running && !setupOpen && (
           <FloatingTerminal computer={computer} onExpand={session => onRoute?.(computerTerminalPath(id, session))} />
+        )}
+        {running && !setupOpen && view === 'desktop' && chatAgent && agentState?.chat && (
+          <FloatingChat
+            key={chatAgent.id}
+            agent={agentState.agents.find(item => item.id === chatAgent.id) ?? chatAgent}
+            state={{ ...agentState, chat: agentState.chat }}
+            onMinimize={() => setChatAgent(null)}
+          />
         )}
         {onOpenComputer && <ComputerSwitcher currentId={id} onOpen={onOpenComputer} />}
       </div>

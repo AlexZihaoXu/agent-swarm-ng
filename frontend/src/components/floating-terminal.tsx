@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { computerTerminal, terminalSessionsQuery, type TerminalRequest } from '@/lib/computer-terminals';
 import { ChevronLeftIcon, PlusIcon } from '@/components/ui/icons';
 import { NewTerminalDialog } from './new-terminal-dialog';
+import { EdgeHandle } from '@/components/ui/edge-handle';
+import { MinimizeLight } from '@/components/ui/minimize-light';
 import type { Computer } from './computer-card';
 
 const TerminalEmulator = lazy(() =>
@@ -171,16 +173,7 @@ export function FloatingTerminal({
         {!current && (
           <div className="absolute inset-y-0 right-2 flex items-center">
             <Dialog.Trigger asChild>
-              <button
-                type="button"
-                aria-label="Terminals"
-                className="group pointer-events-auto flex h-7 items-center gap-1 rounded-full border border-white/15 bg-black/55 px-2 text-xs font-medium text-white/70 shadow-lg backdrop-blur outline-none transition-[opacity,background-color,color,padding] duration-200 hover:bg-black/80 hover:px-3 hover:text-white focus-visible:px-3 focus-visible:text-white focus-visible:ring-2 focus-visible:ring-ring [@media(hover:hover)]:opacity-60 [@media(hover:hover)]:hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
-              >
-                <ChevronLeftIcon className="size-4" />
-                <span className="max-w-40 overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 [@media(hover:hover)]:max-w-0 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:max-w-40 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-visible:max-w-40 [@media(hover:hover)]:group-focus-visible:opacity-100">
-                  Terminals
-                </span>
-              </button>
+              <EdgeHandle label="Terminals" icon={<ChevronLeftIcon className="size-4" />} />
             </Dialog.Trigger>
           </div>
         )}
@@ -327,15 +320,7 @@ export function FloatingTerminal({
               onTitlePointerDown={start('move')}
               titleLeading={
                 // One traffic light: minimize back into the Terminals drawer ("−" appears on hover).
-                <button
-                  type="button"
-                  aria-label="Minimize to Terminals"
-                  title="Minimize"
-                  onClick={minimize}
-                  className="group flex size-3 shrink-0 items-center justify-center rounded-full border border-[#dc9e2b] bg-[#febc2e] outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span className="h-[1.5px] w-1.5 rounded bg-[#8d5a0e] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
-                </button>
+                <MinimizeLight label="Minimize to Terminals" onClick={minimize} />
               }
             />
           </Suspense>

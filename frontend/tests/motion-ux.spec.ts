@@ -246,6 +246,42 @@ test('the viewer mode and terminal session live in the address, so a refresh ret
   await expect(page).toHaveURL('/computers/desk');
 });
 
+test('edge handles stay hidden until the mouse nears, then show a glyph, a round button, and their label', async ({
+  page,
+}) => {
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({
+      json: {
+        controllerConnected: true,
+        computers: [
+          { id: 'desk', name: 'Desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0, portalFree: true },
+        ],
+      },
+    }),
+  );
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await page.goto('/computers/desk');
+  for (const name of ['All computers', 'Terminals']) {
+    const handle = page.getByRole('button', { name, exact: true });
+    await page.mouse.move(600, 300);
+    await expect(handle).toHaveAttribute('data-near', 'far');
+    await expect(handle).toHaveCSS('opacity', '0');
+    const box = (await handle.boundingBox())!;
+    // Collapsed, the button is a true circle.
+    expect(Math.abs(box.width - box.height)).toBeLessThan(0.5);
+    const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const away = name === 'Terminals' ? { x: -1, y: 0 } : { x: 0, y: -1 };
+    await page.mouse.move(centre.x + away.x * 150, centre.y + away.y * 150);
+    await expect(handle).toHaveAttribute('data-near', 'near');
+    await expect(handle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await page.mouse.move(centre.x + away.x * 60, centre.y + away.y * 60);
+    await expect(handle).toHaveAttribute('data-near', 'close');
+    await expect(handle).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await handle.hover();
+    await expect(handle.getByText(name)).toHaveCSS('opacity', '1');
+  }
+});
+
 test('the desktop handle opens a Terminals drawer, and a session floats out fitted to its shape', async ({ page }) => {
   await page.route(/\/api\/computers(?:\?.*)?$/, route =>
     route.fulfill({

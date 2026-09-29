@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { defaultAvatar } from '@/lib/agent-avatar';
 import type { ChatAgent } from '@/use-chat';
+import type { ChatMessage } from '@/chat-types';
 import { AgentAvatar } from './chat-identity';
 import { Button } from './ui/button';
 import { ConfirmDialog } from './confirm-dialog';
@@ -13,9 +14,31 @@ export type ComputerAgentState = {
   typing: Record<string, boolean>;
   peerBusy: Record<string, boolean>;
   connected: boolean;
+  /** Conversation access for the floating chat with the agent on a computer. */
+  chat?: {
+    conversations: Record<string, ChatMessage[]>;
+    drafts: Record<string, string>;
+    historyReady: Record<string, boolean>;
+    historyLoading: Record<string, boolean>;
+    setDraft: (channelId: string, text: string) => void;
+    send: (agent: ChatAgent, text: string) => string | undefined;
+    stop: (channelId: string) => void;
+    loadHistory: (agent: ChatAgent) => void;
+    /** Open the agent's full conversation in Chat. */
+    openConversation: (agent: ChatAgent) => void;
+  };
 };
 
-export function ComputerControl({ computerId, agentState }: { computerId: string; agentState?: ComputerAgentState }) {
+export function ComputerControl({
+  computerId,
+  agentState,
+  onOpenChat,
+}: {
+  computerId: string;
+  agentState?: ComputerAgentState;
+  /** Opens a floating chat with the agent holding the computer (only for agents in the loaded roster). */
+  onOpenChat?: (agent: ChatAgent) => void;
+}) {
   const [holder, setHolder] = useState<{ id: string; name: string } | null>(null);
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
@@ -113,22 +136,41 @@ export function ComputerControl({ computerId, agentState }: { computerId: string
           className="flex min-w-0 max-w-full items-center gap-2"
           data-testid="computer-agent-presence"
         >
-          <AgentAvatar
-            initials={holder.name.slice(0, 2).toUpperCase()}
-            avatar={agent?.avatar ?? defaultAvatar(holder.id)}
-            ready={live && Boolean(agent)}
-            working={working}
-            typing={typing}
-          />
-          <span className="min-w-0">
-            <span className="flex min-w-0 items-baseline gap-1">
-              <span className="max-w-36 truncate font-medium" title={holder.name}>
-                {holder.name}
-              </span>
-              <span className="shrink-0 text-muted-foreground">is on this computer</span>
-            </span>
-            <span className="block text-[10px] text-muted-foreground">{status}</span>
-          </span>
+          {(() => {
+            const presence = (
+              <>
+                <AgentAvatar
+                  initials={holder.name.slice(0, 2).toUpperCase()}
+                  avatar={agent?.avatar ?? defaultAvatar(holder.id)}
+                  ready={live && Boolean(agent)}
+                  working={working}
+                  typing={typing}
+                />
+                <span className="min-w-0 text-left">
+                  <span className="flex min-w-0 items-baseline gap-1">
+                    <span className="max-w-36 truncate font-medium" title={holder.name}>
+                      {holder.name}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground">is on this computer</span>
+                  </span>
+                  <span className="block text-[10px] text-muted-foreground">{status}</span>
+                </span>
+              </>
+            );
+            return onOpenChat && listed ? (
+              <button
+                type="button"
+                aria-label={`Chat with ${holder.name}`}
+                title={`Chat with ${holder.name}`}
+                onClick={() => onOpenChat(listed)}
+                className="-mx-1.5 flex min-w-0 items-center gap-2 rounded-lg px-1.5 py-1 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {presence}
+              </button>
+            ) : (
+              presence
+            );
+          })()}
         </div>
       ) : (
         <span role="status" className="text-muted-foreground">

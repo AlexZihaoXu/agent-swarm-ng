@@ -1146,7 +1146,24 @@ export function App() {
           {activeTab === 'computers' && (
             <Suspense fallback={loading}>
               <ComputersPanel
-                agentState={{ agents, busy, peerBusy, typing, connected: eventsConnected }}
+                agentState={{
+                  agents,
+                  busy,
+                  peerBusy,
+                  typing,
+                  connected: eventsConnected,
+                  chat: {
+                    conversations,
+                    drafts,
+                    historyReady,
+                    historyLoading,
+                    setDraft,
+                    send: (target, text) => send(target, text),
+                    stop,
+                    loadHistory: target => void loadHistory(target),
+                    openConversation: target => navigate(chatAgentPath(target.id)),
+                  },
+                }}
                 viewingId={route.kind === 'computer' ? (route.computerId ?? null) : null}
                 viewerView={route.computerView ?? 'desktop'}
                 terminalId={route.terminalId ?? null}
