@@ -18,6 +18,8 @@ import { ScreenshotPool } from './computer-use/image-pool';
 import { registerComputerUseRoutes } from './computer-use/routes';
 import { join } from 'node:path';
 import { allowedHosts } from './host-policy';
+import { SwarmSettingsStore } from './swarm-settings';
+import { registerSwarmSettingsRoutes } from './swarm-settings-routes';
 
 export async function buildApp({
   fetcher,
@@ -68,7 +70,9 @@ export async function buildApp({
   const computers = new ComputerUseService(platform, controller?.runtime ?? null);
   const screenshots = new ScreenshotPool(join(platform.dataDirectory, 'computer-screenshots'));
   registerChat(app, endpointStore, platform, codex, computers, screenshots);
-  registerComputerRoutes(app, platform, controller, computers);
+  const swarmSettings = new SwarmSettingsStore(platform);
+  registerSwarmSettingsRoutes(app, swarmSettings);
+  registerComputerRoutes(app, platform, controller, computers, swarmSettings);
   registerComputerUseRoutes(app, computers, screenshots);
   registerTerminalStreams(app, computers, controller);
   registerKnowledgeRoutes(app);

@@ -96,6 +96,6 @@ Stage-2 local gates: generated API contract drift check, backend/frontend/contro
 
 ## Computer limit and display mode
 
-`COMPUTER_MAX_COUNT` (default 4, passed through Compose) is the most computers the controller lets you create. The Computers page shows how many are in use and disables **Create computer** at the limit; the controller still refuses a create over the limit with "Computer limit reached." and the backend drops the reservation it made.
+**Settings → Swarm → Computers** (default 4, 1–100) is the most computers that can exist at once; it is stored in the platform database, not an environment variable (the former `COMPUTER_MAX_COUNT` is no longer read). The Computers page shows how many are in use and disables **Create computer** at the limit. The backend sends the limit with each create and the controller still refuses a create over it (or over its own ceiling of 100) with "Computer limit reached."; the backend then drops the reservation it made. Lowering the setting below the current count removes nothing; it only blocks new computers.
 
 Each computer reports its display server: images built from `x11.Dockerfile` carry the label `swarm.ng.display-server=x11` (older images are recognized by their `x11`/`xorg` tags). X11 computers have no screen-share consent step in the viewer; Wayland computers keep it. `VITE_COMPUTER_PORTAL_FREE` is now only the fallback for a controller that does not say.

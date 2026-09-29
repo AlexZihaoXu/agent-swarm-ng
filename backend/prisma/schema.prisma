@@ -351,3 +351,15 @@ model Message {
   @@index([channelId, createdAt, sequence])
   @@index([replyToId])
 }
+
+// Operator-wide settings for the whole swarm (one row, id 1). Absent row = defaults.
+model SwarmSettings {
+  id                Int      @id @default(1)
+  maxComputers      Int      @default(4)
+  uploadMaxMb       Int      @default(100)
+  scratchFileMaxKb  Int      @default(1024)
+  scratchMaxFiles   Int      @default(500)
+  scratchTotalMb    Int      @default(50)
+  storageBudgetGb   Int      @default(10)
+  updatedAt         DateTime @updatedAt
+}

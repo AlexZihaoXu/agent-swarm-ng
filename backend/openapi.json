@@ -9906,6 +9906,512 @@
         }
       }
     },
+    "/api/settings/swarm": {
+      "get": {
+        "operationId": "getSwarmSettings",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "settings",
+                    "bounds"
+                  ],
+                  "properties": {
+                    "settings": {
+                      "type": "object",
+                      "required": [
+                        "maxComputers",
+                        "uploadMaxMb",
+                        "scratchFileMaxKb",
+                        "scratchMaxFiles",
+                        "scratchTotalMb",
+                        "storageBudgetGb"
+                      ],
+                      "properties": {
+                        "maxComputers": {
+                          "type": "integer"
+                        },
+                        "uploadMaxMb": {
+                          "type": "integer"
+                        },
+                        "scratchFileMaxKb": {
+                          "type": "integer"
+                        },
+                        "scratchMaxFiles": {
+                          "type": "integer"
+                        },
+                        "scratchTotalMb": {
+                          "type": "integer"
+                        },
+                        "storageBudgetGb": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "bounds": {
+                      "type": "object",
+                      "required": [
+                        "maxComputers",
+                        "uploadMaxMb",
+                        "scratchFileMaxKb",
+                        "scratchMaxFiles",
+                        "scratchTotalMb",
+                        "storageBudgetGb"
+                      ],
+                      "properties": {
+                        "maxComputers": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "uploadMaxMb": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "scratchFileMaxKb": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "scratchMaxFiles": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "scratchTotalMb": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "storageBudgetGb": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateSwarmSettings",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "maxComputers": {
+                    "type": "integer"
+                  },
+                  "uploadMaxMb": {
+                    "type": "integer"
+                  },
+                  "scratchFileMaxKb": {
+                    "type": "integer"
+                  },
+                  "scratchMaxFiles": {
+                    "type": "integer"
+                  },
+                  "scratchTotalMb": {
+                    "type": "integer"
+                  },
+                  "storageBudgetGb": {
+                    "type": "integer"
+                  }
+                },
+                "additionalProperties": false,
+                "minProperties": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "settings",
+                    "bounds"
+                  ],
+                  "properties": {
+                    "settings": {
+                      "type": "object",
+                      "required": [
+                        "maxComputers",
+                        "uploadMaxMb",
+                        "scratchFileMaxKb",
+                        "scratchMaxFiles",
+                        "scratchTotalMb",
+                        "storageBudgetGb"
+                      ],
+                      "properties": {
+                        "maxComputers": {
+                          "type": "integer"
+                        },
+                        "uploadMaxMb": {
+                          "type": "integer"
+                        },
+                        "scratchFileMaxKb": {
+                          "type": "integer"
+                        },
+                        "scratchMaxFiles": {
+                          "type": "integer"
+                        },
+                        "scratchTotalMb": {
+                          "type": "integer"
+                        },
+                        "storageBudgetGb": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "bounds": {
+                      "type": "object",
+                      "required": [
+                        "maxComputers",
+                        "uploadMaxMb",
+                        "scratchFileMaxKb",
+                        "scratchMaxFiles",
+                        "scratchTotalMb",
+                        "storageBudgetGb"
+                      ],
+                      "properties": {
+                        "maxComputers": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "uploadMaxMb": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "scratchFileMaxKb": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "scratchMaxFiles": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "scratchTotalMb": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "storageBudgetGb": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/computers/{id}/files": {
       "get": {
         "operationId": "listComputerFiles",

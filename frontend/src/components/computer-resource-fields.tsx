@@ -8,7 +8,7 @@ const zones = [
   ...((typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []) as string[]),
 ];
 
-function NumberField({
+export function NumberField({
   label,
   unit,
   value,
@@ -16,6 +16,7 @@ function NumberField({
   max,
   onChange,
   disabled,
+  hint,
 }: {
   label: string;
   unit: string;
@@ -24,6 +25,8 @@ function NumberField({
   max: number;
   onChange: (value: string) => void;
   disabled: boolean;
+  /** Replaces the default "min–max unit available for one computer" line. */
+  hint?: string;
 }) {
   const id = useId();
   const parsed = Number(value);
@@ -71,9 +74,7 @@ function NumberField({
           +
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        {min}–{max} {unit} available for one computer
-      </p>
+      <p className="text-xs text-muted-foreground">{hint ?? `${min}–${max} ${unit} available for one computer`}</p>
     </div>
   );
 }

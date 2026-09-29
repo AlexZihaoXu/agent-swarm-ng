@@ -59,7 +59,6 @@ services:
     environment:
       COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-agent-swarm-ng}
       # Most computers that can exist at once.
-      COMPUTER_MAX_COUNT: ${COMPUTER_MAX_COUNT:-4}
       COMPUTER_CONTROLLER_TOKEN: ${COMPUTER_CONTROLLER_TOKEN:-}
       # Opt-in: shares ONLY this DRM render node with each sudo computer.
       COMPUTER_RENDER_DEVICE: ${COMPUTER_RENDER_DEVICE:-}

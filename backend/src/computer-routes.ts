@@ -1,3 +1,4 @@
+import { SwarmSettingsStore } from './swarm-settings';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import type { PlatformStore } from './platform-store';
@@ -85,6 +86,7 @@ export function registerComputerRoutes(
   platform: PlatformStore,
   controller: ComputerController | null,
   use?: ComputerUseService,
+  swarmSettings: SwarmSettingsStore = new SwarmSettingsStore(platform),
 ) {
   const store = new ComputerStore(platform);
   registerComputerFileRoutes(app, store, controller);
@@ -141,7 +143,8 @@ export function registerComputerRoutes(
       reply.header('Cache-Control', 'no-store');
       if (!controller) return unavailable(reply);
       try {
-        return await controller.limits();
+        // The computer count comes from Settings → Swarm; CPU/RAM bounds from the host.
+        return { ...(await controller.limits()), maxComputers: (await swarmSettings.get()).maxComputers };
       } catch (error) {
         return failure(reply, error);
       }
@@ -186,7 +189,7 @@ export function registerComputerRoutes(
             .code(409)
             .send({ message: 'Delete the incomplete computer before reusing this create request.' });
         if (computer.state === 'creating') {
-          await controller.create(computer.id, computer.name, settings);
+          await controller.create(computer.id, computer.name, settings, (await swarmSettings.get()).maxComputers);
           await store.markRunning(computer.id);
         }
         const observed = await controller.observe();

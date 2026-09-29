@@ -146,3 +146,43 @@ test('saved endpoints rest collapsed; Edit expands, and Cancel reverts unsaved c
   await expect(card.getByLabel('Base URL', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Kept server' })).toBeVisible();
 });
+
+test('Settings → Swarm edits limits within their bounds, saves only changes, and discards drafts', async ({ page }) => {
+  const bounds = {
+    maxComputers: { min: 1, max: 100, default: 4, label: 'Computers', unit: '' },
+    uploadMaxMb: { min: 1, max: 1024, default: 100, label: 'Largest chat file', unit: 'MB' },
+    scratchFileMaxKb: { min: 16, max: 16384, default: 1024, label: 'Largest scratch file', unit: 'KB' },
+    scratchMaxFiles: { min: 10, max: 10000, default: 500, label: 'Scratch files per agent', unit: '' },
+    scratchTotalMb: { min: 1, max: 10240, default: 50, label: 'Scratch space per agent', unit: 'MB' },
+    storageBudgetGb: { min: 1, max: 10000, default: 10, label: 'Total file storage', unit: 'GB' },
+  };
+  // In-memory settings: the shared test backend's real settings stay untouched.
+  let settings = Object.fromEntries(Object.entries(bounds).map(([key, bound]) => [key, bound.default]));
+  const patches: object[] = [];
+  await page.route('**/api/settings/swarm', async route => {
+    if (route.request().method() === 'PATCH') {
+      patches.push(route.request().postDataJSON());
+      settings = { ...settings, ...route.request().postDataJSON() };
+    }
+    await route.fulfill({ json: { settings, bounds } });
+  });
+  await page.goto('/settings');
+  const swarm = page.getByRole('region', { name: 'Swarm' });
+  const computers = swarm.getByLabel('Computers', { exact: true });
+  await expect(computers).toHaveValue('4');
+  const save = swarm.getByRole('button', { name: 'Save changes' });
+  await expect(save).toBeDisabled();
+  await swarm.getByRole('button', { name: 'Increase Computers' }).click();
+  await swarm.getByLabel('Largest chat file (MB)', { exact: true }).fill('0');
+  await expect(swarm.getByRole('alert')).toContainText('Largest chat file must be a whole number from 1 to 1024.');
+  await expect(save).toBeDisabled();
+  await swarm.getByLabel('Largest chat file (MB)', { exact: true }).fill('250');
+  await save.click();
+  await expect(swarm.getByRole('status')).toHaveText('Saved.');
+  expect(patches).toEqual([{ maxComputers: 5, uploadMaxMb: 250 }]);
+  await swarm.getByLabel('Total file storage (GB)', { exact: true }).fill('20');
+  await swarm.getByRole('button', { name: 'Discard changes' }).click();
+  await expect(swarm.getByLabel('Total file storage (GB)', { exact: true })).toHaveValue('10');
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Swarm' }).getByLabel('Computers', { exact: true })).toHaveValue('5');
+});

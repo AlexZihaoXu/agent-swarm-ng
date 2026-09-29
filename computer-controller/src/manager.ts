@@ -57,6 +57,8 @@ const PRIVATE_MODE = 'com.docker.network.bridge.gateway_mode_ipv4';
 const DEFAULT_IMAGE = 'agent-swarm-default:stage2';
 const DEFAULT_GATEWAY_IMAGE = 'agent-swarm-computer-egress:dev';
 const DEFAULT_MEDIA_IMAGE = 'agent-swarm-computer-media:stage2';
+/** The most computers the controller will ever keep, whatever the operator's setting. */
+export const MAX_COMPUTERS = 100;
 
 /** Owns only its labelled Docker computers; other projects and agent containers are untouchable. */
 /** Guest hostname from the operator-visible computer name, so the desktop
@@ -161,14 +163,11 @@ export class ComputerManager {
     private readonly image = DEFAULT_IMAGE,
     private readonly gatewayImage = DEFAULT_GATEWAY_IMAGE,
     private readonly mediaImage = DEFAULT_MEDIA_IMAGE,
-    private readonly maxComputers = 4,
     private readonly renderDevice = '',
     private readonly cpuLimit = 2,
     private readonly timezone = '',
   ) {
     this.names = new ComputerNames(namespace);
-    if (!Number.isInteger(maxComputers) || maxComputers < 1 || maxComputers > 100)
-      throw new Error('Invalid computer limit.');
     // Only an operator-selected DRM render node, never a card/modeset device
     // or arbitrary host path, may be shared with sudo-capable computers.
     if (renderDevice && !/^\/dev\/dri\/renderD\d{3}$/.test(renderDevice))
@@ -187,10 +186,7 @@ export class ComputerManager {
   async limits() {
     if (this.detectedLimits) return this.detectedLimits;
     const info = await this.docker.json<{ NCPU?: number; MemTotal?: number }>('GET', '/info', undefined, 256 * 1024);
-    this.detectedLimits = {
-      ...deriveComputerLimits(info, this.cpuLimit, this.timezone),
-      maxComputers: this.maxComputers,
-    };
+    this.detectedLimits = deriveComputerLimits(info, this.cpuLimit, this.timezone);
     return this.detectedLimits;
   }
 
@@ -415,7 +411,7 @@ export class ComputerManager {
     if (!relay.State.Running) await this.docker.request('POST', `${this.path('containers', mediaName)}/start`);
   }
 
-  private async createOwned(id: string, name: string, requested?: ComputerConfiguration) {
+  private async createOwned(id: string, name: string, requested: ComputerConfiguration | undefined, limit: number) {
     const settings = requested ?? {
       cpuCores: this.cpuLimit,
       memoryGiB: 4,
@@ -446,7 +442,7 @@ export class ComputerManager {
       return;
     }
     const count = await this.listIds();
-    if (count.length >= this.maxComputers) throw new ResourceError(409, 'Computer limit reached.');
+    if (count.length >= limit) throw new ResourceError(409, 'Computer limit reached.');
     // These images are operator-built, never supplied by the browser.
     for (const image of [this.image, this.gatewayImage, this.mediaImage]) await this.approvedImage(image);
     const egress = await this.ensureNetwork(this.names.egressNetwork, null, 'egress-network');
@@ -482,14 +478,19 @@ export class ComputerManager {
     await this.ensureMedia(id, name, computer);
   }
 
-  async create(idRaw: string, nameRaw: string, requested?: ComputerConfiguration) {
+  /**
+   * `maxComputers` is the operator's limit from Settings → Swarm (sent by the backend with each create); the
+   * controller never goes past it, nor past its own ceiling of MAX_COMPUTERS.
+   */
+  async create(idRaw: string, nameRaw: string, requested?: ComputerConfiguration, maxComputers = MAX_COMPUTERS) {
     const id = validateId(idRaw),
       name = validateName(nameRaw);
     const settings = requested ? validateComputerConfiguration(requested, await this.limits()) : undefined;
     // Never erase a computer or its persistent volumes on a failed/retried
     // create. A partial resource remains visible through its failed DB record;
     // only exact-name confirmed DELETE may remove it.
-    return this.exclusive(() => this.createOwned(id, name, settings));
+    const limit = Math.min(Math.max(1, Math.floor(maxComputers)), MAX_COMPUTERS);
+    return this.exclusive(() => this.createOwned(id, name, settings, limit));
   }
 
   /** Docker can change resource caps on a running Sysbox computer without a

@@ -21,7 +21,6 @@ function fixture(renderDevice = '', timezone = '') {
     undefined,
     undefined,
     undefined,
-    4,
     renderDevice,
     2,
     timezone,
@@ -468,17 +467,17 @@ it('keeps the new desktop if Docker deleted the old one but lost the DELETE resp
 it('rejects unbounded or fractional operator CPU quotas before creating Docker resources', () => {
   for (const limit of [0, 1.5, 9, Number.NaN, Number.POSITIVE_INFINITY]) {
     expect(
-      () => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '', limit),
+      () => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, '', limit),
     ).toThrow('CPU limit');
   }
   expect(
-    () => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '', 4),
+    () => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, '', 4),
   ).not.toThrow();
 });
 
 it('rejects operator timezones that are not a plain IANA zone name', () => {
   const make = (timezone: string) => () =>
-    new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '', 2, timezone);
+    new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, '', 2, timezone);
   for (const bad of [
     '../etc/passwd',
     '/etc/localtime',
@@ -586,11 +585,10 @@ it('refuses invalid resource IDs and namespaces before calling Docker', async ()
   expect(() => new ComputerManager({} as DockerApi, '../outside', '{}')).toThrow('namespace');
   expect(
     () =>
-      new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '/dev/dri/card0'),
+      new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, '/dev/dri/card0'),
   ).toThrow('render device');
   expect(
-    () =>
-      new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, 4, '/etc/shadow'),
+    () => new ComputerManager({} as DockerApi, 'swarm-ng-test', '{}', undefined, undefined, undefined, '/etc/shadow'),
   ).toThrow('render device');
   expect(request).not.toHaveBeenCalled();
 });
@@ -853,10 +851,26 @@ it("reports each computer's display server from its image label, falling back to
   expect(displayServerOf({ Labels: {} })).toBe('wayland');
 });
 
-it('advertises the configured computer cap with the host limits', async () => {
+it('refuses a new computer past the limit the backend sends, before creating Docker resources', async () => {
+  const { manager, docker, request } = fixture();
+  const other = '11111111-2222-4333-8444-555555555555';
+  vi.mocked(docker.json).mockImplementation(async (_method: string, path: string) =>
+    path.startsWith('/containers/json')
+      ? [{ Id: 'a', Names: ['/x'], Labels: manager.names.labels(other, 'desktop', 'Other') }]
+      : { NCPU: 16, MemTotal: 34_359_738_368 },
+  );
+  await expect(manager.create(id, name, undefined, 1)).rejects.toMatchObject({
+    code: 409,
+    message: 'Computer limit reached.',
+  });
+  expect(request).not.toHaveBeenCalled();
+});
+
+it('reports host limits without a computer count', async () => {
   const { manager, docker } = fixture();
   vi.mocked(docker.json).mockImplementation(async () => ({ NCPU: 16, MemTotal: 34_359_738_368 }));
-  expect(await manager.limits()).toMatchObject({ maxComputers: 4, cpuCores: { max: 8 } });
+  expect(await manager.limits()).toMatchObject({ cpuCores: { max: 8 } });
+  expect(await manager.limits()).not.toHaveProperty('maxComputers'); // the backend's Settings → Swarm owns the count
 });
 
 it('finds the display server from the inspected creation-time image when the list only reports an image ID', async () => {

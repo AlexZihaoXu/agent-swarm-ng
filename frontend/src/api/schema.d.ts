@@ -356,6 +356,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/swarm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSwarmSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateSwarmSettings"];
+        trace?: never;
+    };
     "/api/computers/{id}/files": {
         parameters: {
             query?: never;
@@ -2923,6 +2939,174 @@ export interface operations {
             };
             /** @description Default Response */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getSwarmSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        settings: {
+                            maxComputers: number;
+                            uploadMaxMb: number;
+                            scratchFileMaxKb: number;
+                            scratchMaxFiles: number;
+                            scratchTotalMb: number;
+                            storageBudgetGb: number;
+                        };
+                        bounds: {
+                            maxComputers: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            uploadMaxMb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            scratchFileMaxKb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            scratchMaxFiles: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            scratchTotalMb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            storageBudgetGb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+    };
+    updateSwarmSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    maxComputers?: number;
+                    uploadMaxMb?: number;
+                    scratchFileMaxKb?: number;
+                    scratchMaxFiles?: number;
+                    scratchTotalMb?: number;
+                    storageBudgetGb?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        settings: {
+                            maxComputers: number;
+                            uploadMaxMb: number;
+                            scratchFileMaxKb: number;
+                            scratchMaxFiles: number;
+                            scratchTotalMb: number;
+                            storageBudgetGb: number;
+                        };
+                        bounds: {
+                            maxComputers: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            uploadMaxMb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            scratchFileMaxKb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            scratchMaxFiles: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            scratchTotalMb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            storageBudgetGb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -5,8 +5,6 @@ export type ComputerLimits = {
   cpuCores: { min: 1; max: number; default: number };
   memoryGiB: { min: 1; max: number; default: number };
   timezoneDefault: string;
-  /** Most managed computers the controller will create (COMPUTER_MAX_COUNT). */
-  maxComputers?: number;
 };
 
 const GiB = 1024 ** 3;

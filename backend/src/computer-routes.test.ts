@@ -9,6 +9,7 @@ async function fixture() {
   const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
   const calls: string[] = [];
   const settingsCalls: ComputerSettings[] = [];
+  const limitCalls: (number | undefined)[] = [];
   const observed = new Map<string, ComputerObservation>();
   const controller: ComputerController = {
     async limits() {
@@ -18,8 +19,9 @@ async function fixture() {
         timezoneDefault: 'America/Toronto',
       };
     },
-    async create(id, name, settings) {
+    async create(id, name, settings, maxComputers) {
       calls.push(`create:${id}:${name}`);
+      limitCalls.push(maxComputers);
       settingsCalls.push(settings);
       observed.set(id, {
         status: 'running',
@@ -81,11 +83,11 @@ async function fixture() {
     },
   };
   const app = await buildApp({ database, computerController: controller });
-  return { app, database, calls, settingsCalls, observed, controller };
+  return { app, database, calls, settingsCalls, limitCalls, observed, controller };
 }
 
 it('creates one platform computer, lists status/usage and serves its bounded JPEG without granting agents tools', async () => {
-  const { app, database, calls } = await fixture();
+  const { app, database, calls, limitCalls } = await fixture();
   try {
     const requestKey = crypto.randomUUID();
     const create = await app.inject({
@@ -104,6 +106,7 @@ it('creates one platform computer, lists status/usage and serves its bounded JPE
     expect(retry.statusCode).toBe(200);
     expect(retry.json().id).toBe(computer.id);
     expect(calls).toEqual([`create:${computer.id}:My computer`]);
+    expect(limitCalls).toEqual([4]); // the Settings → Swarm limit travels with the create
     expect((await app.inject({ method: 'GET', url: '/api/computers' })).json()).toEqual({
       computers: [computer],
       controllerConnected: true,
@@ -708,9 +711,11 @@ it('tells the dashboard which computers are portal-free X11 and what the compute
       cpuCores: { min: 1, max: 8, default: 2 },
       memoryGiB: { min: 1, max: 16, default: 4 },
       timezoneDefault: 'UTC',
-      maxComputers: 4,
     });
+    // The computer count comes from Settings → Swarm, not the controller.
     expect((await app.inject({ method: 'GET', url: '/api/computers/settings-limits' })).json().maxComputers).toBe(4);
+    await app.inject({ method: 'PATCH', url: '/api/settings/swarm', payload: { maxComputers: 7 } });
+    expect((await app.inject({ method: 'GET', url: '/api/computers/settings-limits' })).json().maxComputers).toBe(7);
   } finally {
     await app.close();
     await database.close();

@@ -18,7 +18,6 @@ const manager = new ComputerManager(
   process.env.COMPUTER_IMAGE ?? 'agent-swarm-default:stage2',
   process.env.COMPUTER_EGRESS_IMAGE ?? 'agent-swarm-computer-egress:dev',
   process.env.COMPUTER_MEDIA_IMAGE ?? 'agent-swarm-computer-media:stage2',
-  Number(process.env.COMPUTER_MAX_COUNT ?? 4),
   process.env.COMPUTER_RENDER_DEVICE ?? '',
   Number(process.env.COMPUTER_CPU_LIMIT ?? 2),
   process.env.COMPUTER_TIMEZONE ?? '',
@@ -85,10 +84,17 @@ Bun.serve<TerminalSocket>({
           (!input.settings || typeof input.settings !== 'object' || Array.isArray(input.settings))
         )
           throw new ResourceError(400, 'Invalid computer settings.');
+        if (
+          'maxComputers' in input &&
+          input.maxComputers !== undefined &&
+          (!Number.isInteger(input.maxComputers) || (input.maxComputers as number) < 1)
+        )
+          throw new ResourceError(400, 'Invalid computer limit.');
         await manager.create(
           input.id,
           input.name,
           'settings' in input ? (input.settings as ComputerConfiguration) : undefined,
+          'maxComputers' in input ? (input.maxComputers as number | undefined) : undefined,
         );
         return json({ created: true }, 201);
       }

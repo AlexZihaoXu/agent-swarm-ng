@@ -24,7 +24,7 @@ export interface ComputerController {
   files?(id: string, mode: FileOperation, query: FileQuery): Promise<FileResult>;
   terminalSocket?(id: string, session: string): WebSocket;
   limits(): Promise<ComputerLimits>;
-  create(id: string, name: string, settings: ComputerSettings): Promise<void>;
+  create(id: string, name: string, settings: ComputerSettings, maxComputers?: number): Promise<void>;
   remove(id: string, name: string): Promise<void>;
   observe(): Promise<Map<string, ComputerObservation>>;
   preview(id: string, full?: boolean): Promise<Uint8Array | null>;
@@ -122,8 +122,13 @@ export class HttpComputerController implements ComputerController {
       maxComputers: typeof max === 'number' && Number.isInteger(max) && max > 0 ? max : undefined,
     };
   }
-  async create(id: string, name: string, settings: ComputerSettings) {
-    await this.request('/computers', { method: 'POST', body: JSON.stringify({ id, name, settings }) }, 120_000);
+  /** Creates a computer; the controller refuses one past `maxComputers` (the operator's Settings → Swarm limit). */
+  async create(id: string, name: string, settings: ComputerSettings, maxComputers?: number) {
+    await this.request(
+      '/computers',
+      { method: 'POST', body: JSON.stringify({ id, name, settings, maxComputers }) },
+      120_000,
+    );
   }
   async remove(id: string, name: string) {
     await this.request(

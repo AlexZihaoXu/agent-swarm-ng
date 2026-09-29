@@ -1,3 +1,4 @@
+import { SwarmSettings } from '@/components/swarm-settings';
 import { useEffect, useId, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import { surface } from '@/lib/motion';
@@ -415,7 +416,12 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
 
   return (
     <div>
-      <PageHeader title="Settings" description="Manage your model connections." width="max-w-3xl" sticky />
+      <PageHeader
+        title="Settings"
+        description="Model connections, Knowledge and swarm limits."
+        width="max-w-3xl"
+        sticky
+      />
       <div className="mx-auto w-full max-w-3xl space-y-8 px-4 pb-8 pt-6 md:px-6 md:pb-10">
         <CodexConnection />
         <section aria-labelledby="knowledge-title" className="space-y-4">
@@ -521,6 +527,7 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
             Changing a saved URL clears its key unless you enter a replacement. Use HTTPS for remote providers.
           </p>
         </section>
+        <SwarmSettings card={settingsCard} />
       </div>
     </div>
   );
