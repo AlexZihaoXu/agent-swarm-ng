@@ -87,7 +87,11 @@ export class MessageInbox {
           try {
             decision = await evaluate([...this.pending], controller.signal);
           } catch {
-            decision = { action: 'uncertain', reason: 'Triage unavailable; queued.' };
+            // Failing open to an interrupt: new messages must not wait behind long work because triage broke.
+            decision = {
+              action: 'interrupt',
+              reason: 'Triage unavailable; interrupting so the new messages are not missed.',
+            };
           } finally {
             signal.removeEventListener('abort', abort);
           }

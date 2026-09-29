@@ -23,6 +23,34 @@ it('forks context without mutating main state or claiming pending tools succeede
   expect(messages[0].content).toBe('Original task');
   expect(messages).toHaveLength(2);
 });
+it('gives no placeholder result to tool calls of aborted or errored turns, which the provider never sees', () => {
+  // Regression: an aborted turn's call got a placeholder output, the provider rejected the orphan output (HTTP
+  // 400: "No tool call found for function call output") and every later triage in the run failed.
+  const messages = [
+    { role: 'user', content: 'Original task', timestamp: 1 },
+    {
+      role: 'assistant',
+      stopReason: 'aborted',
+      content: [{ type: 'toolCall', id: 'abandoned', name: 'terminal_view', arguments: {} }],
+      timestamp: 2,
+    },
+    {
+      role: 'assistant',
+      stopReason: 'error',
+      content: [{ type: 'toolCall', id: 'failed', name: 'terminal_view', arguments: {} }],
+      timestamp: 3,
+    },
+    {
+      role: 'assistant',
+      stopReason: 'toolUse',
+      content: [{ type: 'toolCall', id: 'running', name: 'terminal_view', arguments: {} }],
+      timestamp: 4,
+    },
+  ];
+  const main = { messages, agent: { state: {} } } as unknown as AgentSession;
+  const results = forkContext(main).filter(message => message.role === 'toolResult');
+  expect(results.map(message => (message as { toolCallId: string }).toolCallId)).toEqual(['running']);
+});
 it('records only bounded structured decisions and terminates the fork', async () => {
   const decide = vi.fn();
   const tool = createDecisionTool(decide);

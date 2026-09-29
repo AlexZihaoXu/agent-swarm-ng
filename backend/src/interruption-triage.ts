@@ -47,7 +47,9 @@ export function forkContext(main: AgentSession) {
   const messages = structuredClone(main.messages);
   const finished = new Set(messages.filter(m => m.role === 'toolResult').map(m => m.toolCallId));
   for (const message of [...messages])
-    if (message.role === 'assistant') {
+    // Aborted/errored assistant messages are never sent to the provider, so their tool calls must not get
+    // placeholder results: an output without its call is rejected (HTTP 400) and every triage would fail.
+    if (message.role === 'assistant' && message.stopReason !== 'aborted' && message.stopReason !== 'error') {
       for (const block of message.content)
         if (block.type === 'toolCall' && !finished.has(block.id)) {
           messages.push({
@@ -134,14 +136,17 @@ export async function evaluateInterruption(
       () => Boolean(decision),
       combined,
     );
-    return !combined.aborted && decision ? decision : { action: 'uncertain', reason: `${failure} Queued.` };
+    // A failed triage interrupts rather than queues: missing an important message is worse than a pause.
+    return !combined.aborted && decision
+      ? decision
+      : { action: 'interrupt', reason: `${failure} Interrupting so the new messages are not missed.` };
   } catch {
     trace?.record(
       'error',
       'Fork failed',
       JSON.stringify({ phase, cancelled: combined.aborted, note: 'Raw provider/initialization errors are withheld.' }),
     );
-    return { action: 'uncertain', reason: 'Triage unavailable; queued.' };
+    return { action: 'interrupt', reason: 'Triage unavailable; interrupting so the new messages are not missed.' };
   } finally {
     clearTimeout(timer);
     combined.removeEventListener('abort', abort);

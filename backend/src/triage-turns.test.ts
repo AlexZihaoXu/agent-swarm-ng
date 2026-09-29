@@ -133,7 +133,7 @@ for (const kind of ['interruption', 'reaction'] as const) {
       const result = await evaluate(kind, [step]);
       expect(requests).toHaveLength(10);
       expect(result.reason).toContain('10 turns');
-      expect(result.action).toBe(kind === 'interruption' ? 'uncertain' : 'ignore');
+      expect(result.action).toBe(kind === 'interruption' ? 'interrupt' : 'ignore');
     },
   );
   it(`${kind}: accepts a valid decision on the tenth turn`, async () => {
@@ -145,6 +145,8 @@ for (const kind of ['interruption', 'reaction'] as const) {
     const result = await evaluate(kind, ['error']);
     expect(requests).toHaveLength(1);
     expect(result.reason).toContain('provider request failed');
+    // A failed interruption triage interrupts the agent so the new messages are not missed.
+    if (kind === 'interruption') expect(result.action).toBe('interrupt');
     expect(JSON.stringify(traces)).not.toContain('secret-token');
     expect(JSON.stringify(traces)).toContain('Model request error');
   });

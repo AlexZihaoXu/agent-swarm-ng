@@ -87,7 +87,7 @@ describe('message admission and interruption races', () => {
     expect(interrupt).toHaveBeenCalledTimes(1);
   });
 
-  it('queues uncertainty and errors; Stop cancels debounce and closes admission', async () => {
+  it('queues queue/uncertain decisions, interrupts when triage errors; Stop cancels debounce and closes admission', async () => {
     const inbox = new MessageInbox(),
       controller = new AbortController();
     inbox.add(message('saved'));
@@ -109,8 +109,12 @@ describe('message admission and interruption races', () => {
       await Promise.resolve();
       main.resolve();
       await run;
-      expect(interrupt).not.toHaveBeenCalled();
-      expect(queue.hasPending()).toBe(true);
+      // A broken triage must not leave new messages waiting behind long work.
+      if (action === 'error') expect(interrupt).toHaveBeenCalledTimes(1);
+      else {
+        expect(interrupt).not.toHaveBeenCalled();
+        expect(queue.hasPending()).toBe(true);
+      }
     }
   });
 });
