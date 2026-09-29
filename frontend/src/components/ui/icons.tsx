@@ -85,3 +85,26 @@ export const SoundOffIcon = (props: ComponentProps<'svg'>) => (
     <path d="M11 5 6 9H2v6h4l5 4V5ZM22 9l-6 6M16 9l6 6" />
   </Icon>
 );
+export const LockIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <rect width="18" height="11" x="3" y="11" rx="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </Icon>
+);
+export const UnlockIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <rect width="18" height="11" x="3" y="11" rx="2" />
+    <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+  </Icon>
+);
+export const KeyboardIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <rect width="20" height="16" x="2" y="4" rx="2" />
+    <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" />
+  </Icon>
+);
+export const ChevronDownIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="m6 9 6 6 6-6" />
+  </Icon>
+);

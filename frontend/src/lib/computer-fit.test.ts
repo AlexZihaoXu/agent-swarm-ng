@@ -24,14 +24,12 @@ describe('containFit', () => {
 
 describe('desktopStreamFit', () => {
   it('contains the desktop on desktop viewports so resizing needs no reload', () => {
-    expect(desktopStreamFit(1100, 439, false)).toEqual({ width: 780, height: 439 });
-    expect(desktopStreamFit(900, 639, false)).toEqual({ width: 900, height: 506 });
+    expect(desktopStreamFit(1100, 439, false)).toEqual({ width: 780, height: 439, rotated: false });
+    expect(desktopStreamFit(900, 639, false)).toEqual({ width: 900, height: 506, rotated: false });
   });
 
-  it('keeps the existing phone behaviour: a full-height stream that pans', () => {
-    // Phones deliberately render the desktop at 1:1 width and pan to the rest;
-    // this change must not alter that, so the assertion records today's rule.
-    expect(desktopStreamFit(320, 700, true)).toEqual({ width: 1244, height: 700 });
-    expect(desktopStreamFit(1100, 439, true)).toEqual({ width: 1100, height: 439 });
+  it('never pans on phones: landscape contains, upright turns the picture to use the long side', () => {
+    expect(desktopStreamFit(740, 300, true)).toEqual({ width: 533, height: 300, rotated: false });
+    expect(desktopStreamFit(320, 700, true)).toEqual({ width: 568, height: 320, rotated: true });
   });
 });

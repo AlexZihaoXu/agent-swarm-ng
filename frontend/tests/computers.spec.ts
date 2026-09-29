@@ -381,7 +381,7 @@ test('resizing the window re-fits the desktop without a reload', async ({ page }
   await expect(stream).toBeVisible();
   const measure = () =>
     page.evaluate(() => {
-      const scroller = document.querySelector('[data-testid="computer-viewer"] .overflow-x-auto');
+      const scroller = document.querySelector('[data-testid="computer-viewer"] [data-slot="desktop-stream"]');
       const frame = document.querySelector('iframe[title="Resizable desk desktop"]');
       if (!scroller || !frame) throw Error('viewer stream elements missing');
       const box = frame.getBoundingClientRect();

@@ -8,7 +8,16 @@ import { ComputerControl, type ComputerAgentState } from './computer-control';
 import { TerminalWorkspace } from './computer-terminals';
 import { ComputerSwitcher } from './computer-switcher';
 import { FloatingTerminal } from './floating-terminal';
-import { ComputerIcon, SoundOffIcon, SoundOnIcon, TerminalIcon } from '@/components/ui/icons';
+import {
+  ChevronDownIcon,
+  ComputerIcon,
+  KeyboardIcon,
+  LockIcon,
+  SoundOffIcon,
+  SoundOnIcon,
+  TerminalIcon,
+  UnlockIcon,
+} from '@/components/ui/icons';
 import { m } from 'motion/react';
 import { glide } from '@/lib/motion';
 import { computerPath, computerTerminalPath } from '@/lib/dashboard-location';
@@ -73,8 +82,7 @@ export function ComputerViewer({
   const [keyboardTargetVisible, setKeyboardTargetVisible] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [fitWidth, setFitWidth] = useState(0);
-  const [stream, setStream] = useState({ width: 0, height: 0 });
-  const [panOffset, setPanOffset] = useState(0);
+  const [stream, setStream] = useState({ width: 0, height: 0, rotated: false });
   const imageRef = useRef<HTMLImageElement>(null);
   const previewPointerStart = useRef<{ x: number; y: number } | null>(null);
   const previewDragged = useRef(false);
@@ -96,9 +104,10 @@ export function ComputerViewer({
   useEffect(() => {
     if (view === 'terminal') setSoundOn(false);
   }, [view]);
+  // An upright phone shows the desktop turned a quarter turn: a view only, since touches would land rotated.
   useEffect(() => {
     setInputEnabled(false);
-  }, [id, viewerKey]);
+  }, [id, viewerKey, stream.rotated]);
   useEffect(() => {
     iframeRef.current?.contentWindow?.postMessage(
       { type: 'swarm:desktop-input', enabled: inputEnabled },
@@ -130,7 +139,7 @@ export function ComputerViewer({
     const scroller = streamRef.current;
     if (!running || !scroller) return;
     // Contain the fixed 1920x1080 desktop in the available box so resizing the
-    // browser window re-fits instantly instead of stretching the picture.
+    // browser window re-fits instantly instead of stretching or cropping the picture.
     const resize = () =>
       setStream(
         desktopStreamFit(scroller.clientWidth, scroller.clientHeight, window.matchMedia('(max-width: 767px)').matches),
@@ -318,10 +327,18 @@ export function ComputerViewer({
             size="sm"
             aria-pressed={inputEnabled}
             aria-label={`${inputEnabled ? 'Input live' : 'Input locked'}, human desktop input`}
+            disabled={stream.rotated}
+            title={
+              stream.rotated
+                ? 'Turn your phone sideways to control the desktop'
+                : inputEnabled
+                  ? 'Input live: lock the desktop'
+                  : 'Input locked: control the desktop'
+            }
             onClick={() => setInputEnabled(enabled => !enabled)}
-            className="min-h-11 shrink-0 md:min-h-0"
+            className="size-11 shrink-0 p-0 md:size-8"
           >
-            {inputEnabled ? 'Input live' : 'Input locked'}
+            {inputEnabled ? <UnlockIcon /> : <LockIcon />}
           </Button>
         )}
         {running && view === 'desktop' && (
@@ -340,10 +357,9 @@ export function ComputerViewer({
                 : 'Desktop sound needs a secure (HTTPS) dashboard address'
             }
             onClick={() => soundAvailable && setSoundOn(on => !on)}
-            className={`min-h-11 shrink-0 gap-1.5 md:min-h-0 ${soundAvailable ? '' : 'opacity-50'}`}
+            className={`size-11 shrink-0 p-0 md:size-8 ${soundAvailable ? '' : 'opacity-50'}`}
           >
             {soundOn ? <SoundOnIcon /> : <SoundOffIcon />}
-            <span className="max-sm:sr-only">{soundOn ? 'Sound on' : 'Sound off'}</span>
           </Button>
         )}
         {running && view === 'desktop' && !setupOpen && (
@@ -354,10 +370,12 @@ export function ComputerViewer({
                 variant="outline"
                 size="sm"
                 aria-label="Remote shortcuts"
+                title="Send keys"
                 disabled={!inputEnabled || available === 'offline'}
-                className="ml-auto min-h-11 shrink-0 gap-2 md:min-h-0"
+                className="ml-auto h-11 shrink-0 gap-1 px-2.5 md:h-8"
               >
-                Send keys <span aria-hidden="true">⌄</span>
+                <KeyboardIcon />
+                <ChevronDownIcon className="size-3.5 text-muted-foreground" />
               </Button>
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
@@ -433,8 +451,8 @@ export function ComputerViewer({
           <>
             <div
               ref={streamRef}
-              onScroll={event => setPanOffset(event.currentTarget.scrollLeft)}
-              className="relative flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden bg-black"
+              data-slot="desktop-stream"
+              className="relative flex min-h-0 flex-1 overflow-hidden bg-black"
             >
               <iframe
                 ref={iframeRef}
@@ -458,7 +476,8 @@ export function ComputerViewer({
                   width: stream.width ? `${stream.width}px` : '100%',
                   height: stream.height ? `${stream.height}px` : '100%',
                 }}
-                className={`m-auto min-h-0 shrink-0 border-0 bg-black ${inputEnabled ? '' : 'pointer-events-none'}`}
+                data-rotated={stream.rotated ? '' : undefined}
+                className={`m-auto min-h-0 shrink-0 border-0 bg-black data-[rotated]:absolute data-[rotated]:left-1/2 data-[rotated]:top-1/2 data-[rotated]:m-0 data-[rotated]:-translate-x-1/2 data-[rotated]:-translate-y-1/2 data-[rotated]:rotate-90 ${inputEnabled ? '' : 'pointer-events-none'}`}
               />
               {!inputEnabled && !setupOpen && (
                 <div
@@ -472,33 +491,6 @@ export function ComputerViewer({
                 />
               )}
             </div>
-            {stream.width > (streamRef.current?.clientWidth ?? 0) + 4 && !setupOpen && (
-              <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full bg-background/90 p-1 shadow-lg md:bottom-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  aria-label="Pan desktop left"
-                  disabled={panOffset < 1}
-                  className="min-h-11 min-w-11"
-                  onClick={() => streamRef.current?.scrollBy({ left: -240 })}
-                >
-                  ←
-                </Button>
-                <span className="text-xs text-muted-foreground">Pan desktop</span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  aria-label="Pan desktop right"
-                  disabled={panOffset >= stream.width - (streamRef.current?.clientWidth ?? 0) - 1}
-                  className="min-h-11 min-w-11"
-                  onClick={() => streamRef.current?.scrollBy({ left: 240 })}
-                >
-                  →
-                </Button>
-              </div>
-            )}
             {available === 'offline' && !setupOpen && (
               <div
                 role="alert"

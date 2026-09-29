@@ -156,7 +156,7 @@ for (const portalFree of [true, false])
     }
   });
 
-test("the input toggle's accessible name contains its visible text", async ({ page }) => {
+test('the icon-only input toggle names its state', async ({ page }) => {
   await page.route(/\/api\/computers(?:\?.*)?$/, route =>
     route.fulfill({ json: { computers: [{ ...desk, portalFree: true }], controllerConnected: true } }),
   );
@@ -168,11 +168,42 @@ test("the input toggle's accessible name contains its visible text", async ({ pa
   );
   await page.goto(`/computers/${desk.id}`);
   const toggle = page.getByRole('button', { name: /human desktop input/ });
-  await expect(toggle).toHaveText('Input locked');
   await expect(toggle).toHaveAccessibleName(/^Input locked/);
+  await expect(toggle).toHaveAttribute('title', 'Input locked: control the desktop');
   await toggle.click();
-  await expect(toggle).toHaveText('Input live');
   await expect(toggle).toHaveAccessibleName(/^Input live/);
+});
+
+test('an upright phone turns the contained desktop and keeps it view-only; sideways restores control', async ({
+  page,
+}) => {
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({ json: { computers: [{ ...desk, portalFree: true }], controllerConnected: true } }),
+  );
+  await page.route('**/api/computers/control', route => route.fulfill({ json: { holders: [] } }));
+  await page.route(`**/computers/${desk.id}/desktop/**`, route =>
+    route.request().url().endsWith('/api/health')
+      ? route.fulfill({ json: { status: 'ok' } })
+      : route.fulfill({ contentType: 'text/html', body: '<html><body>Desktop fixture</body></html>' }),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/computers/${desk.id}`);
+  const frame = page.locator('iframe[title$="desktop"]');
+  const toggle = page.getByRole('button', { name: /human desktop input/ });
+  await expect(frame).toHaveAttribute('data-rotated', '');
+  await expect(toggle).toBeDisabled();
+  await expect(page.getByText('Pan desktop')).toHaveCount(0);
+  // Turned, the 16:9 picture runs along the screen's height and stays inside the viewer.
+  const box = (await frame.boundingBox())!;
+  expect(box.height).toBeGreaterThan(box.width * 1.7);
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(391);
+  await page.setViewportSize({ width: 740, height: 360 });
+  await expect(frame).not.toHaveAttribute('data-rotated');
+  await expect(toggle).toBeEnabled();
+  const wide = (await frame.boundingBox())!;
+  expect(wide.x + wide.width).toBeLessThanOrEqual(741);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('an unknown page offers an in-app link back', async ({ page }) => {

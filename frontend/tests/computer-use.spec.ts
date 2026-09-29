@@ -103,14 +103,15 @@ for (const rosterLoaded of [true, false])
     );
     await expect(presence).toContainText('Ready');
     await expect(art).toHaveAttribute('data-avatar-state', 'idle');
-    await page.setViewportSize({ width: 320, height: 720 });
+    // Sideways: an upright phone shows the desktop turned and view-only.
+    await page.setViewportSize({ width: 720, height: 320 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const input = page.getByRole('button', { name: /human desktop input/ });
-    await expect(input).toHaveText('Input locked');
+    await expect(input).toHaveAccessibleName(/^Input locked/);
     await expect(page.getByRole('button', { name: 'Remote shortcuts' })).toBeDisabled();
     await expect(page.locator('iframe')).toHaveAttribute('inert', '');
     await input.click();
-    await expect(input).toHaveText('Input live');
+    await expect(input).toHaveAccessibleName(/^Input live/);
     await expect(page.getByRole('button', { name: 'Remote shortcuts' })).toBeEnabled();
     if (!rosterLoaded)
       await page.getByTestId('computer-viewer').screenshot({ path: '../.scratch/controller-avatar-320.png' });
@@ -119,9 +120,9 @@ for (const rosterLoaded of [true, false])
     await expect(confirm).toContainText('takes control from them now');
     await confirm.getByRole('button', { name: 'Force release', exact: true }).click();
     await expect(page.getByText('No agent holds control')).toBeVisible();
-    await expect(input).toHaveText('Input live');
+    await expect(input).toHaveAccessibleName(/^Input live/);
     await page.reload();
-    await expect(input).toHaveText('Input locked');
+    await expect(input).toHaveAccessibleName(/^Input locked/);
     await page.setViewportSize({ width: 320, height: 720 });
     await expect(input).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

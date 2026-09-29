@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { ConfirmDialog } from './confirm-dialog';
+import { NewTerminalDialog } from './new-terminal-dialog';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { ChevronLeftIcon, PlusIcon, TrashIcon } from '@/components/ui/icons';
@@ -14,8 +15,6 @@ import { dialogMotion, dialogOverlay } from '@/lib/styles';
 const TerminalEmulator = lazy(() =>
   import('./terminal-emulator').then(module => ({ default: module.TerminalEmulator })),
 );
-const field =
-  'min-h-10 min-w-0 rounded-md border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:text-sm';
 
 /** Window sizes offered for a session (columns × rows); the guest accepts 40..240 × 10..80. */
 const terminalSizes = [
@@ -54,10 +53,7 @@ export function TerminalWorkspace({
   const reportSession = useRef(onSessionChange);
   reportSession.current = onSessionChange;
   useEffect(() => reportSession.current?.(selected), [selected]);
-  const [creating, setCreating] = useState(false),
-    [name, setName] = useState(''),
-    [command, setCommand] = useState(''),
-    [cwd, setCwd] = useState('~/Desktop');
+  const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   // Phones show the list first and one session at a time; wider screens show both.
   const [phoneDetail, setPhoneDetail] = useState(false);
@@ -386,88 +382,17 @@ export function TerminalWorkspace({
         </div>
       )}
       {/* New terminal opens as its own modal over the Terminals window, like the app's other create dialogs. */}
-      <Dialog.Root open={creating} onOpenChange={open => !busy && setCreating(open)}>
-        <Dialog.Portal>
-          <Dialog.Overlay className={dialogOverlay} />
-          <Dialog.Content
-            aria-describedby={undefined}
-            className={`fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl ${dialogMotion}`}
-          >
-            <form
-              className="space-y-3"
-              onSubmit={event => {
-                event.preventDefault();
-                void act(
-                  { operation: 'create', name, ...(command ? { command } : {}), ...(cwd ? { cwd } : {}) },
-                  result => {
-                    if (result.session) setSelected(result.session.id);
-                    setCreating(false);
-                    setName('');
-                    setCommand('');
-                  },
-                );
-              }}
-            >
-              <Dialog.Title className="text-lg font-semibold">New terminal</Dialog.Title>
-              <label className="block text-xs">
-                Terminal name
-                <input
-                  aria-label="Terminal name"
-                  className={`${field} mt-1 w-full`}
-                  value={name}
-                  pattern="[A-Za-z0-9](?:[A-Za-z0-9_]|-){0,47}"
-                  maxLength={48}
-                  required
-                  disabled={busy}
-                  onChange={event => setName(event.target.value)}
-                />
-              </label>
-              <label className="block text-xs">
-                Initial command
-                <input
-                  aria-label="Initial command"
-                  placeholder="Optional; otherwise an interactive shell"
-                  className={`${field} mt-1 w-full font-mono`}
-                  value={command}
-                  maxLength={32768}
-                  disabled={busy}
-                  onChange={event => setCommand(event.target.value)}
-                />
-              </label>
-              <label className="block text-xs">
-                Working directory
-                <input
-                  aria-label="Working directory"
-                  className={`${field} mt-1 w-full font-mono`}
-                  value={cwd}
-                  maxLength={4096}
-                  disabled={busy}
-                  onChange={event => setCwd(event.target.value)}
-                />
-              </label>
-              <p className="text-[11px] text-muted-foreground">
-                Names: letters, digits, hyphens and underscores. Commands run as the guest agent account, including its
-                configured sudo permissions.
-              </p>
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="min-h-10"
-                  disabled={busy}
-                  onClick={() => setCreating(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" size="sm" className="min-h-10" disabled={busy || !name}>
-                  Create terminal
-                </Button>
-              </div>
-            </form>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <NewTerminalDialog
+        open={creating}
+        onOpenChange={setCreating}
+        busy={busy}
+        onSubmit={body =>
+          act(body, result => {
+            if (result.session) setSelected(result.session.id);
+            setCreating(false);
+          })
+        }
+      />
       <ConfirmDialog
         open={deleting && Boolean(session)}
         onOpenChange={setDeleting}

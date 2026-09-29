@@ -295,6 +295,60 @@ test('the desktop handle opens a Terminals drawer, and a session floats out fitt
   await expect(page.getByRole('dialog', { name: 'Terminals' })).toBeVisible();
 });
 
+test('the Terminals drawer creates a terminal and floats it straight up', async ({ page }) => {
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({
+      json: {
+        controllerConnected: true,
+        computers: [
+          { id: 'desk', name: 'Desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0, portalFree: true },
+        ],
+      },
+    }),
+  );
+  const made = {
+    id: '12345678-1234-1234-1234-123456789abd',
+    name: 'notes',
+    alive: true,
+    exitCode: null,
+    createdAt: 1,
+    columns: 120,
+    rows: 36,
+  };
+  let sessions: (typeof made)[] = [];
+  const bodies: { operation: string }[] = [];
+  await page.route('**/api/computers/*/terminals', route => {
+    const body = route.request().postDataJSON();
+    bodies.push(body);
+    if (body.operation === 'create') {
+      sessions = [made];
+      return route.fulfill({ json: { type: 'terminal', session: made } });
+    }
+    return route.fulfill({ json: { type: 'terminal', sessions } });
+  });
+  await page.routeWebSocket('**/api/computers/*/terminals/*/stream', ws =>
+    ws.send(JSON.stringify({ type: 'ready', columns: 120, rows: 36 })),
+  );
+  await page.goto('/computers/desk');
+  await page.getByRole('button', { name: 'Terminals', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: 'Terminals' });
+  await expect(drawer).toContainText('No terminals on this computer yet.');
+  await expect(drawer.getByRole('button', { name: 'New terminal' })).toHaveCount(2); // header + and the empty state
+  await drawer.getByRole('button', { name: 'New terminal' }).last().click();
+  const form = page.getByRole('dialog', { name: 'New terminal' });
+  await expect(form.getByLabel('Working directory')).toHaveValue('~/Desktop');
+  await form.getByLabel('Terminal name', { exact: true }).fill('notes');
+  await form.getByRole('button', { name: 'Create terminal', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await expect(drawer).toHaveCount(0);
+  expect(bodies.find(body => body.operation === 'create')).toEqual({
+    operation: 'create',
+    name: 'notes',
+    cwd: '~/Desktop',
+  });
+  await expect(page.getByRole('region', { name: 'Floating terminal' })).toContainText('notes');
+});
+
 test('computer previews keep fetching fresh frames after leaving the grid and coming back', async ({ page }) => {
   // A tiny valid JPEG.
   const jpeg = Buffer.from(

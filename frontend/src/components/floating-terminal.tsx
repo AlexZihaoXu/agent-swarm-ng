@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { useQuery } from '@tanstack/react-query';
-import { computerTerminal, terminalSessionsQuery } from '@/lib/computer-terminals';
-import { ChevronLeftIcon } from '@/components/ui/icons';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { computerTerminal, terminalSessionsQuery, type TerminalRequest } from '@/lib/computer-terminals';
+import { ChevronLeftIcon, PlusIcon } from '@/components/ui/icons';
+import { NewTerminalDialog } from './new-terminal-dialog';
 import type { Computer } from './computer-card';
 
 const TerminalEmulator = lazy(() =>
@@ -47,7 +48,11 @@ export function FloatingTerminal({
   /** Open the Terminal view (where terminals are created). */
   onExpand: (session: string | null) => void;
 }) {
+  const client = useQueryClient();
   const [drawer, setDrawer] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState('');
   const [session, setSession] = useState<string | null>(null);
   const [box, setBox] = useState<Box | null>(null);
   const [shape, setShape] = useState<Shape | null>(null);
@@ -95,6 +100,27 @@ export function FloatingTerminal({
         current ??
         place({ width: Math.min(760, room.width * 0.55), height: 0, x: room.width, y: room.height * 0.1 }, null, room),
     );
+  };
+  // A terminal made from the drawer floats up straight away.
+  const create = async (body: TerminalRequest) => {
+    setCreateBusy(true);
+    setCreateError('');
+    try {
+      const result = await computerTerminal(computer.id, body);
+      await client.invalidateQueries({ queryKey: terminalSessionsQuery(computer.id).queryKey });
+      setCreating(false);
+      if (result.session) bringUp(result.session.id);
+      return true;
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : 'Could not create the terminal.');
+      return false;
+    } finally {
+      setCreateBusy(false);
+    }
+  };
+  const newTerminal = () => {
+    setCreateError('');
+    setCreating(true);
   };
   const minimize = () => {
     setSession(null);
@@ -161,8 +187,17 @@ export function FloatingTerminal({
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 motion-safe:data-[state=open]:animate-[fade-in_200ms_ease-out] motion-safe:data-[state=closed]:animate-[fade-out_160ms_ease-in]" />
           <Dialog.Content className="sheet-right fixed inset-y-0 right-0 z-50 flex w-[min(26rem,100vw)] flex-col border-l border-border bg-background pt-[env(safe-area-inset-top)] shadow-2xl outline-none">
-            <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-4">
+            <div className="flex items-center gap-1 px-4 pb-2 pt-4">
               <Dialog.Title className="text-base font-semibold">Terminals</Dialog.Title>
+              <button
+                type="button"
+                aria-label="New terminal"
+                title="New terminal"
+                onClick={newTerminal}
+                className="ml-auto flex size-9 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <PlusIcon />
+              </button>
               <Dialog.Close className="flex size-9 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
                 <span className="sr-only">Close</span>
                 <svg
@@ -188,16 +223,26 @@ export function FloatingTerminal({
               {sessions.isSuccess && !list.length && (
                 <div className="space-y-3 py-6 text-sm text-muted-foreground">
                   <p>No terminals on this computer yet.</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDrawer(false);
-                      onExpand(null);
-                    }}
-                    className="rounded-md border border-border px-3 py-1.5 text-xs text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    Open the Terminal view
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={newTerminal}
+                      className="flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background outline-none hover:bg-foreground/90 focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <PlusIcon className="size-3.5" />
+                      New terminal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDrawer(false);
+                        onExpand(null);
+                      }}
+                      className="rounded-md border border-border px-3 py-1.5 text-xs text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      Open the Terminal view
+                    </button>
+                  </div>
                 </div>
               )}
               {list.map((item, index) => (
@@ -243,6 +288,13 @@ export function FloatingTerminal({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+      <NewTerminalDialog
+        open={creating}
+        onOpenChange={setCreating}
+        busy={createBusy}
+        error={createError}
+        onSubmit={create}
+      />
       {current && box && (
         <section
           aria-label="Floating terminal"
