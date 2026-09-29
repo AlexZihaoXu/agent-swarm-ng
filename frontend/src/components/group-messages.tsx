@@ -37,25 +37,32 @@ export function GroupMessages({
         const previous = messages[index - 1];
         const continued = continuesGroup(previous, message);
         const human = message.role === 'user';
-        const bare = !message.text.trim() && !message.replyTo && Boolean(message.files?.length);
+        const hasFiles = Boolean(message.files?.length);
+        // Files sit below the text bubble as their own blocks; a message of only files has no text bubble.
+        const hasText = Boolean(message.text.trim() || message.replyTo);
         const date = new Date(message.timestamp);
         const newDay = !previous || new Date(previous.timestamp).toDateString() !== date.toDateString();
         const avatar =
           members.find(member => member.id === message.authorId)?.avatar ??
           message.authorAvatar ??
           defaultAvatar(message.authorId ?? message.id);
-        const content = (
-          <div
-            tabIndex={channelId ? 0 : undefined}
-            className={cn(
-              'message-context-target w-fit max-w-full min-w-0 rounded-md whitespace-pre-wrap text-sm leading-5 [overflow-wrap:anywhere] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-              bare
-                ? 'max-w-[90%] md:max-w-[75%]'
-                : human
-                  ? 'max-w-[90%] rounded-2xl bg-primary px-3.5 py-2 text-primary-foreground md:max-w-[75%]'
-                  : 'max-w-[90%] rounded-2xl bg-foreground/[0.07] px-3.5 py-2 md:max-w-full md:rounded-md md:bg-transparent md:px-0 md:py-0.5',
-            )}
+        const time = (
+          <time
+            dateTime={date.toISOString()}
+            title={date.toLocaleString()}
+            className="mt-1 block text-right text-[10px] leading-none opacity-60 md:hidden"
           >
+            {clock(message.timestamp)}
+          </time>
+        );
+        const textClass = cn(
+          'w-fit max-w-full min-w-0 whitespace-pre-wrap text-sm leading-5 [overflow-wrap:anywhere]',
+          human
+            ? 'rounded-2xl bg-primary px-3.5 py-2 text-primary-foreground'
+            : 'rounded-2xl bg-foreground/[0.07] px-3.5 py-2 md:rounded-md md:bg-transparent md:px-0 md:py-0.5',
+        );
+        const textBody = (
+          <>
             {message.replyTo && (
               <div className="mb-1">
                 <MessageReply
@@ -65,18 +72,26 @@ export function GroupMessages({
               </div>
             )}
             {message.text.trim() && <MessageMarkdown text={message.text} />}
-            {message.files?.length ? (
-              <div className={cn(!bare && 'mt-2')}>
-                <MessageFiles files={message.files} align={human ? 'end' : 'start'} />
-              </div>
-            ) : null}
-            <time
-              dateTime={date.toISOString()}
-              title={date.toLocaleString()}
-              className="mt-1 block text-right text-[10px] leading-none opacity-60 md:hidden"
-            >
-              {clock(message.timestamp)}
-            </time>
+          </>
+        );
+        const target = cn(
+          'message-context-target min-w-0 max-w-[90%] rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+          human ? 'md:max-w-[75%]' : 'md:max-w-full',
+        );
+        // The message element: the text bubble itself, or (with files) a column of the bubble and file blocks.
+        const content = hasFiles ? (
+          <div
+            tabIndex={channelId ? 0 : undefined}
+            className={cn(target, 'flex w-full flex-col gap-1.5', human ? 'items-end' : 'items-start')}
+          >
+            {hasText && <div className={textClass}>{textBody}</div>}
+            <MessageFiles files={message.files!} align={human ? 'end' : 'start'} />
+            {time}
+          </div>
+        ) : (
+          <div tabIndex={channelId ? 0 : undefined} className={cn(target, textClass, human && 'md:max-w-[75%]')}>
+            {textBody}
+            {time}
           </div>
         );
         return (

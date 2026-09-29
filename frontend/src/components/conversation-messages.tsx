@@ -82,36 +82,23 @@ export function ConversationMessages({
             );
           const message = item.message;
           const senderColor = senderStyles?.[message.author].color;
-          // A message of only files shows them without a bubble around them.
-          const bare = !message.text.trim() && !message.replyTo && Boolean(message.files?.length);
-          const bubble = (
-            <div
-              data-message-id={message.id}
-              tabIndex={reactionChannel && message.sequence !== undefined ? 0 : undefined}
-              style={
-                {
-                  animationDelay: `${index >= entranceStart && index < entranceCount.current ? (index - entranceStart + 1) * 30 : 0}ms`,
-                  '--enter-x': message.author === 'user' ? '14px' : '-14px',
-                  ...(senderColor ? agentBubbleStyle(senderColor) : {}),
-                } as React.CSSProperties
-              }
-              className={cn(
-                'message-enter message-context-target min-w-0 whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-5 [overflow-wrap:anywhere]',
-                message.author === 'user' ? 'origin-top-right' : 'origin-top-left',
-                bare
-                  ? '!p-0'
-                  : message.author === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-foreground/[0.07]',
-                reactionChannel
-                  ? 'max-w-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
-                  : 'max-w-[85%] md:max-w-[75%]',
-              )}
-            >
-              <span className={senderStyles ? 'mb-1 block text-[11px] font-medium opacity-80' : 'sr-only'}>
-                {message.author === 'user' ? counterpartName : agentName}
-                {senderStyles ? '' : ': '}
-              </span>
+          const user = message.author === 'user';
+          const hasFiles = Boolean(message.files?.length);
+          // Files sit below the text bubble as their own blocks; a message of only files has no text bubble.
+          const hasText = Boolean(message.text.trim() || message.replyTo);
+          const sender = (
+            <span className={senderStyles && hasText ? 'mb-1 block text-[11px] font-medium opacity-80' : 'sr-only'}>
+              {user ? counterpartName : agentName}
+              {senderStyles && hasText ? '' : ': '}
+            </span>
+          );
+          const textClass = cn(
+            'min-w-0 max-w-full whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-5 [overflow-wrap:anywhere]',
+            user ? 'bg-primary text-primary-foreground' : 'bg-foreground/[0.07]',
+          );
+          const textBody = (
+            <>
+              {sender}
               {message.replyTo && (
                 <div className="mb-2">
                   <MessageReply
@@ -121,11 +108,46 @@ export function ConversationMessages({
                 </div>
               )}
               {message.text.trim() && <MessageMarkdown text={message.text} />}
-              {message.files?.length ? (
-                <div className={cn(!bare && 'mt-2')}>
-                  <MessageFiles files={message.files} align={message.author === 'user' ? 'end' : 'start'} />
+            </>
+          );
+          // The message element: the text bubble itself, or (with files) a column of the bubble and file blocks.
+          const outer = {
+            'data-message-id': message.id,
+            tabIndex: reactionChannel && message.sequence !== undefined ? 0 : undefined,
+            className: cn(
+              'message-enter message-context-target min-w-0',
+              user ? 'origin-top-right' : 'origin-top-left',
+              reactionChannel
+                ? 'max-w-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
+                : 'max-w-[85%] md:max-w-[75%]',
+            ),
+            style: {
+              animationDelay: `${index >= entranceStart && index < entranceCount.current ? (index - entranceStart + 1) * 30 : 0}ms`,
+              '--enter-x': user ? '14px' : '-14px',
+            } as React.CSSProperties,
+          };
+          const colour = senderColor ? agentBubbleStyle(senderColor) : undefined;
+          const bubble = hasFiles ? (
+            <div
+              {...outer}
+              className={cn(
+                outer.className,
+                'flex w-full flex-col gap-1.5 rounded-2xl',
+                user ? 'items-end' : 'items-start',
+              )}
+            >
+              {hasText ? (
+                <div className={textClass} style={colour}>
+                  {textBody}
                 </div>
-              ) : null}
+              ) : (
+                sender
+              )}
+              <MessageFiles files={message.files!} align={user ? 'end' : 'start'} />
+            </div>
+          ) : (
+            <div {...outer} className={cn(outer.className, textClass)} style={{ ...outer.style, ...colour }}>
+              {textBody}
             </div>
           );
           const content =
