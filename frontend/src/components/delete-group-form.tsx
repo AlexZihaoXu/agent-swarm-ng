@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import type { GroupChat } from '@/use-groups';
+import { dialogOverlay, dialogMotion } from '@/lib/styles';
 
 // Kibo dialog/standard/dialog-standard-5: typed destructive confirmation, adapted to the group API.
 export function DeleteGroupForm({
@@ -52,8 +53,10 @@ export function DeleteGroupForm({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl">
+        <Dialog.Overlay className={dialogOverlay} />
+        <Dialog.Content
+          className={`fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl ${dialogMotion}`}
+        >
           <form
             onSubmit={event => {
               event.preventDefault();

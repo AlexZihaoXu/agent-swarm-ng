@@ -55,7 +55,7 @@ test('restores paginated history and preserves the reading position when older m
   await expect(row).toContainText('Saved message 120');
   await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
   await row.click();
-  await expect(history.locator('[data-message-id="saved-120"]')).toHaveCSS('animation-delay', '0.6s');
+  await expect(history.locator('[data-message-id="saved-120"]')).toHaveCSS('animation-delay', '0.24s');
 });
 
 test('agent pages and history failures can be retried without duplicate cards or browser persistence', async ({

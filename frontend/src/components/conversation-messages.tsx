@@ -37,7 +37,8 @@ export function ConversationMessages({
     messages.filter(message => message.sequence !== undefined).map(message => message.id),
   );
   const entranceCount = useRef(messages.length);
-  // Long restored histories must not delay the visible latest messages by many seconds.
+  // Long restored histories must not delay the visible latest messages: at most 8 steps of 30ms, so the
+  // newest bubble (where the reader looks) lands within about half a second.
   const entranceStart = Math.max(0, entranceCount.current - 8);
 
   const timeline = conversationTimeline(messages, notices);
@@ -64,7 +65,7 @@ export function ConversationMessages({
               data-message-id={message.id}
               tabIndex={reactionChannel && message.sequence !== undefined ? 0 : undefined}
               style={{
-                animationDelay: `${index >= entranceStart && index < entranceCount.current ? (index - entranceStart + 1) * 75 : 0}ms`,
+                animationDelay: `${index >= entranceStart && index < entranceCount.current ? (index - entranceStart + 1) * 30 : 0}ms`,
                 ...(senderColor ? agentBubbleStyle(senderColor) : {}),
               }}
               className={cn(

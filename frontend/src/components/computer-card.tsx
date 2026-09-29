@@ -16,10 +16,13 @@ const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: r
 export function ComputerCard({
   computer,
   canManage,
+  index = 0,
   onOpen,
 }: {
   computer: Computer;
   canManage: boolean;
+  /** Position in the grid, for the entrance cascade. */
+  index?: number;
   onOpen: (computer: Computer) => void;
 }) {
   const card = useRef<HTMLElement>(null);
@@ -126,7 +129,8 @@ export function ComputerCard({
       ref={card}
       data-computer-id={computer.id}
       aria-label={computer.name}
-      className="min-w-0 overflow-hidden rounded-xl border border-border bg-sidebar shadow-sm"
+      style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
+      className="card-enter min-w-0 overflow-hidden rounded-xl border border-border bg-sidebar shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:border-foreground/20 hover:shadow-lg hover:shadow-black/30 motion-safe:hover:-translate-y-0.5"
     >
       <button
         type="button"

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { AgentAvatar } from '@/components/chat-identity';
 import { defaultAvatar } from '@/lib/agent-avatar';
 import type { GroupChat } from '@/use-groups';
+import { dialogOverlay, dialogMotion } from '@/lib/styles';
 
 // Kibo dialog-standard-1 and checkbox-standard-8: retain the dialog and labelled list composition.
 export function GroupEditor({
@@ -90,8 +91,10 @@ export function GroupEditor({
     >
       {children && <Dialog.Trigger asChild>{children}</Dialog.Trigger>}
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl">
+        <Dialog.Overlay className={dialogOverlay} />
+        <Dialog.Content
+          className={`fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl ${dialogMotion}`}
+        >
           <Dialog.Title className="text-lg font-semibold">
             {group ? 'Edit group chat' : 'Create group chat'}
           </Dialog.Title>

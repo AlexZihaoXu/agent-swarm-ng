@@ -45,4 +45,8 @@ export default defineConfig(({ mode }) => ({
     watch: { awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 25 } },
     proxy: { '/api': { target: process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:3000', ws: true } },
   },
+  // `vite preview` checks the production build against the same backend.
+  preview: {
+    proxy: { '/api': { target: process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:3000', ws: true } },
+  },
 }));

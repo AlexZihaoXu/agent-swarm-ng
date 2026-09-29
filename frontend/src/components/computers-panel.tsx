@@ -4,6 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { randomUuid } from '@/lib/random-uuid';
 import { generateComputerName } from '@/lib/computer-name';
 import { defaultComputerSettings, parseComputerSettings, type ComputerSettingsDraft } from '@/lib/computer-settings';
@@ -16,6 +17,8 @@ import { ConfirmDialog } from './confirm-dialog';
 import { PageHeader } from './page-header';
 import type { ComputerAgentState } from './computer-control';
 import { computerPath } from '@/lib/dashboard-location';
+import { computersQuery } from '@/lib/computers-query';
+import { dialogOverlay } from '@/lib/styles';
 type ComputerList = { computers: Computer[] };
 
 function MenuIcon({ path, label }: { path: string; label: string }) {
@@ -40,7 +43,7 @@ function MenuIcon({ path, label }: { path: string; label: string }) {
 function ComputerDialog({ children }: { children: ReactNode }) {
   return (
     <Dialog.Portal>
-      <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
+      <Dialog.Overlay className={dialogOverlay} />
       <Dialog.Content className="computer-dialog fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl">
         {children}
       </Dialog.Content>
@@ -69,12 +72,7 @@ export function ComputersPanel({
 }) {
   const client = useQueryClient();
   const query = useQuery({
-    queryKey: ['computers'],
-    queryFn: async ({ signal }) => {
-      const { data, error } = await api.GET('/api/computers', { signal });
-      if (!data || error) throw new Error(error?.message ?? 'Could not load computers.');
-      return data;
-    },
+    ...computersQuery,
     refetchInterval: 5000,
     refetchIntervalInBackground: false,
   });
@@ -433,9 +431,21 @@ export function ComputersPanel({
           />
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pb-6">
             {query.isPending && (
-              <p role="status" className="text-sm text-muted-foreground">
-                Loading computers…
-              </p>
+              <div
+                role="status"
+                aria-label="Loading computers…"
+                className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-4 md:gap-5"
+              >
+                {[0, 1].map(index => (
+                  <div key={index} className="overflow-hidden rounded-xl border border-border bg-sidebar">
+                    <Skeleton className="aspect-video rounded-none" style={{ animationDelay: `${index * 120}ms` }} />
+                    <div className="space-y-3 p-3">
+                      <Skeleton className="h-4 w-2/3" />
+                      <Skeleton className="h-8 w-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
             {query.isError && (
               <div role="alert" className="space-y-3 text-sm">
@@ -474,9 +484,10 @@ export function ComputersPanel({
                       setMenuTarget(computers.find(computer => computer.id === card?.dataset.computerId) ?? null);
                     }}
                   >
-                    {computers.map(computer => (
+                    {computers.map((computer, index) => (
                       <ComputerCard
                         key={computer.id}
+                        index={index}
                         computer={computer}
                         canManage={Boolean(query.data?.controllerConnected)}
                         onOpen={target => onOpen(target.id)}

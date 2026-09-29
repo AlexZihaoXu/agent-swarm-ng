@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import { Button } from '@/components/ui/button';
 import { computerTerminal, type TerminalRequest, type TerminalResult } from '@/lib/computer-terminals';
 import type { Computer } from './computer-card';
+import { dialogOverlay } from '@/lib/styles';
 const TerminalEmulator = lazy(() =>
   import('./terminal-emulator').then(module => ({ default: module.TerminalEmulator })),
 );
@@ -111,7 +112,7 @@ export function ComputerTerminals({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 motion-safe:data-[state=open]:animate-[fade-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[fade-out_120ms_ease-in]" />
+        <Dialog.Overlay className={dialogOverlay} />
         <Dialog.Content
           onEscapeKeyDown={event => {
             if ((event.target as HTMLElement)?.closest('[data-terminal-emulator]')) event.preventDefault();

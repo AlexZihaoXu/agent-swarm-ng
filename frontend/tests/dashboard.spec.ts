@@ -109,11 +109,11 @@ test('messages enter in order with overlapping timing and respect reduced motion
   const timestamp = page.getByRole('region', { name: 'Conversation with Avery' }).getByText('3:23 AM', { exact: true });
   await expect(timestamp).toHaveCSS('animation-name', 'message-in, fade-in');
   expect(await timestamp.evaluate(element => parseFloat(getComputedStyle(element).animationDelay))).toBe(0);
-  expect(timing[0].delay).toBe(0.075);
+  expect(timing[0].delay).toBe(0.03);
   expect(timing[0].duration).toBe(0.3);
   for (let i = 1; i < timing.length; i++) {
     expect(timing[i].delay).toBeGreaterThan(timing[i - 1].delay);
-    expect(timing[i].delay - timing[i - 1].delay).toBeCloseTo(timing[i - 1].duration * 0.25);
+    expect(timing[i].delay - timing[i - 1].delay).toBeCloseTo(timing[i - 1].duration * 0.1);
   }
   await expect(messages.last()).toHaveCSS('opacity', '1');
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -166,7 +166,7 @@ test('sidebar preview and time use the shared swap, and sent history staggers on
   await row.click();
   const sentBubble = page.getByRole('list', { name: 'Messages' }).locator('[data-message-id]').last();
   await expect(sentBubble).toHaveCSS('animation-name', 'message-in, fade-in');
-  await expect(sentBubble).toHaveCSS('animation-delay', '0.3s');
+  await expect(sentBubble).toHaveCSS('animation-delay', '0.12s');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.getByLabel('Message Avery').fill('Immediate preview');
   await page.getByRole('button', { name: 'Send message' }).click();

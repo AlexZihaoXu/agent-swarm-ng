@@ -44,7 +44,7 @@ export function ChatComposer({
         event.preventDefault();
         send();
       }}
-      className="rounded-3xl border border-foreground/20 bg-transparent p-3 focus-within:ring-1 focus-within:ring-ring sm:p-2"
+      className="rounded-3xl border border-foreground/20 bg-transparent p-3 transition-[border-color,box-shadow] duration-200 focus-within:border-foreground/30 focus-within:ring-1 focus-within:ring-ring sm:p-2"
     >
       {reply && (
         <div className="mb-2 px-2 pt-1">
@@ -83,7 +83,7 @@ export function ChatComposer({
             type="button"
             size="sm"
             aria-label="Stop response"
-            className="size-11 shrink-0 rounded-full p-0 sm:size-7"
+            className="control-swap size-11 shrink-0 rounded-full p-0 sm:size-7"
             onClick={onStop}
           >
             <span aria-hidden="true" className="size-2.5 rounded-sm bg-current" />
@@ -95,7 +95,7 @@ export function ChatComposer({
             size="sm"
             disabled={disabled || !draft.trim()}
             aria-label="Send message"
-            className="size-11 shrink-0 rounded-full p-0 sm:size-7"
+            className="control-swap size-11 shrink-0 rounded-full p-0 sm:size-7"
           >
             <svg
               aria-hidden="true"

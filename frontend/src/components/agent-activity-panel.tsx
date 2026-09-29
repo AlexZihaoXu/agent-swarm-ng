@@ -126,7 +126,9 @@ export function AgentActivityPanel({
       </Dialog.Trigger>
       {/* Kibo sheet/standard/sheet-standard-2; docked on desktop, modal on narrow screens. */}
       <Dialog.Portal>
-        {!wide && <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50" />}
+        {!wide && (
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 motion-safe:data-[state=open]:animate-[fade-in_200ms_ease-out] motion-safe:data-[state=closed]:animate-[fade-out_160ms_ease-in]" />
+        )}
         <Dialog.Content
           className="fixed bottom-0 right-0 top-[calc(4rem+env(safe-area-inset-top))] z-50 flex w-full min-w-0 max-w-sm sm:top-14 flex-col border-l border-border bg-sidebar shadow-xl outline-none motion-safe:data-[state=open]:animate-[activity-in_180ms_ease-out] motion-safe:data-[state=closed]:animate-[activity-out_140ms_ease-in]"
           onInteractOutside={event => {

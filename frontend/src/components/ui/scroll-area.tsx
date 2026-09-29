@@ -12,6 +12,7 @@ export function ScrollArea({
   label,
   viewportClassName,
   viewportTabIndex = 0,
+  overlay,
 }: {
   children: ReactNode;
   className?: string;
@@ -21,6 +22,8 @@ export function ScrollArea({
   viewportTabIndex?: number;
   onScroll?: UIEventHandler<HTMLDivElement>;
   label: string;
+  /** Floats over the viewport (for example a jump-to-latest control); it does not scroll with the content. */
+  overlay?: ReactNode;
 }) {
   return (
     <ScrollAreaPrimitive.Root
@@ -42,6 +45,7 @@ export function ScrollArea({
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
+      {overlay}
       <ScrollAreaPrimitive.Scrollbar
         orientation="vertical"
         data-slot="scroll-area-scrollbar"

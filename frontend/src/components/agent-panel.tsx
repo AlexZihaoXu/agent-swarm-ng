@@ -6,6 +6,7 @@ import { CreateAgentForm } from '@/components/create-agent-form';
 import { DeleteAgentForm } from '@/components/delete-agent-form';
 import type { ChatAgent, RealAgent } from '@/use-chat';
 import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
+import { dialogOverlay } from '@/lib/styles';
 
 // Compositions: Kibo context-menu/standard/context-menu-standard-1 and dialog/standard/dialog-standard-1.
 export function AgentPanel({
@@ -121,7 +122,7 @@ export function AgentPanel({
       </ContextMenu.Root>
 
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 motion-safe:data-[state=open]:animate-[fade-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[fade-out_120ms_ease-in]" />
+        <Dialog.Overlay className={dialogOverlay} />
         <Dialog.Content
           className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-h-[90dvh] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-background p-2 shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]"
           onCloseAutoFocus={event => {

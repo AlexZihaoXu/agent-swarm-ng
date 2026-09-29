@@ -6,7 +6,8 @@ import { listTime } from '@/lib/format-time';
 import { SidebarSearch } from '@/components/sidebar-search';
 import { ConversationRow } from '@/components/conversation-row';
 import type { ChatMessage } from '@/chat-types';
-import { useGroups, type GroupChat } from '@/use-groups';
+import { groupMessagesOptions, useGroups, type GroupChat } from '@/use-groups';
+import { useQueryClient } from '@tanstack/react-query';
 import { AgentAvatar } from '@/components/chat-identity';
 import { AgentAvatarArt } from '@/components/agent-avatar-art';
 import { defaultAvatar } from '@/lib/agent-avatar';
@@ -50,6 +51,7 @@ export function ChatPanel({
   agentsFailed,
   agentsCursor,
   loadAgents,
+  onPrefetchAgent,
 }: {
   route: DashboardRoute;
   onNavigate: (path: string, options?: { state?: unknown }) => void;
@@ -67,7 +69,9 @@ export function ChatPanel({
   agentsFailed: boolean;
   agentsCursor: number | null;
   loadAgents: (after?: number) => Promise<void>;
+  onPrefetchAgent: (agent: ChatAgent) => void;
 }) {
+  const client = useQueryClient();
   const [search, setSearch] = useState('');
   const [context, setContext] = useState<{ kind: 'dm'; agent: ChatAgent } | { kind: 'group'; group: GroupChat } | null>(
     null,
@@ -206,6 +210,12 @@ export function ChatPanel({
                       data={{ 'data-chat-kind': item.kind, 'data-chat-id': item.id }}
                       label={`Open ${item.kind === 'group' ? 'group chat' : 'conversation with'} ${item.name}`}
                       selected={selected}
+                      selectionGroup="chat"
+                      onPrefetch={() =>
+                        item.kind === 'group'
+                          ? void client.prefetchQuery({ ...groupMessagesOptions(client, item.id), staleTime: 10_000 })
+                          : onPrefetchAgent(item.agent)
+                      }
                       onClick={() => (item.kind === 'group' ? onGroup(item.group) : onAgent(item.id, item.agent.real))}
                       avatar={
                         item.kind === 'group' ? (

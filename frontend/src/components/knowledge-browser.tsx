@@ -6,6 +6,8 @@ import { BorderedBreadcrumb } from '@/components/ui/bordered-breadcrumb';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { knowledgePath } from '@/lib/dashboard-location';
 import { cn } from '@/lib/utils';
+import { m } from 'motion/react';
+import { glide } from '@/lib/motion';
 
 type Topic = operations['listKnowledge']['responses'][200]['content']['application/json']['entries'][number] & {
   snippet?: string;
@@ -244,10 +246,18 @@ export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: 
                       aria-current={id === topic.id ? 'page' : undefined}
                       onClick={() => open(topic.id)}
                       className={cn(
-                        'flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                        id === topic.id && 'bg-muted',
+                        'relative isolate flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                        id !== topic.id && 'hover:bg-muted/60',
                       )}
                     >
+                      {id === topic.id && (
+                        <m.span
+                          aria-hidden="true"
+                          layoutId="knowledge-selection"
+                          transition={glide}
+                          className="absolute inset-0 -z-10 bg-muted"
+                        />
+                      )}
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{topic.title}</span>
                         <span className="mt-1 block line-clamp-2 text-xs text-muted-foreground">

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { JumpToLatest } from '@/components/jump-to-latest';
 import { ChatComposer } from '@/components/chat-composer';
 import { GroupEditor } from '@/components/group-editor';
 import { DeleteGroupForm } from '@/components/delete-group-form';
@@ -194,6 +195,7 @@ export function GroupConversation({
       <ScrollArea
         viewportRef={viewport}
         label="Group chat history"
+        overlay={<JumpToLatest viewport={viewport} count={messages.length} />}
         className="min-h-0 flex-1"
         viewportClassName="[&>div]:!block [&>div]:w-full"
         onScroll={() => {

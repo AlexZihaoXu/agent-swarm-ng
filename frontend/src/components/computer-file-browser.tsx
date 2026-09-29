@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { BorderedBreadcrumb } from '@/components/ui/bordered-breadcrumb';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { dialogOverlay } from '@/lib/styles';
 import {
   downloadComputerFile,
   FILE_DOWNLOAD_LIMIT,
@@ -171,7 +172,7 @@ export function ComputerFileBrowser({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 motion-safe:data-[state=open]:animate-[fade-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[fade-out_120ms_ease-in]" />
+        <Dialog.Overlay className={dialogOverlay} />
         <Dialog.Content
           onCloseAutoFocus={event => {
             event.preventDefault();

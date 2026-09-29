@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { AnimatePresence, m } from 'motion/react';
+import { surface } from '@/lib/motion';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -274,67 +276,77 @@ export function EditAgentForm({
             </section>
           </div>
         </ScrollArea>
-        {(unsaved.length > 0 || loadError || !loaded || error || allError) && (
-          <div className="shrink-0 border-t border-border motion-safe:animate-[fade-in_160ms_ease-out]">
-            <div className="mx-auto w-full max-w-5xl px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 md:px-6 md:py-4">
-              {loadError ? (
-                <p role="alert" className="mb-3 text-sm">
-                  Could not load permissions.{' '}
-                  <button
-                    type="button"
-                    onClick={() => setAttempt(value => value + 1)}
-                    className="inline-flex min-h-11 items-center underline sm:min-h-0"
-                  >
-                    Retry settings
-                  </button>
-                </p>
-              ) : (
-                !loaded && (
-                  <p role="status" className="mb-3 text-xs text-muted-foreground">
-                    Loading settings…
+        {/* The action bar rises from the bottom edge when there is something to save, and settles away after. */}
+        <AnimatePresence initial={false}>
+          {(unsaved.length > 0 || loadError || !loaded || error || allError) && (
+            <m.div
+              key="action-bar"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={surface}
+              className="shrink-0 overflow-hidden border-t border-border"
+            >
+              <div className="mx-auto w-full max-w-5xl px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 md:px-6 md:py-4">
+                {loadError ? (
+                  <p role="alert" className="mb-3 text-sm">
+                    Could not load permissions.{' '}
+                    <button
+                      type="button"
+                      onClick={() => setAttempt(value => value + 1)}
+                      className="inline-flex min-h-11 items-center underline sm:min-h-0"
+                    >
+                      Retry settings
+                    </button>
                   </p>
-                )
-              )}
-              {error && (
-                <p role="alert" className="mb-3 text-sm">
-                  {error}
-                </p>
-              )}
-              {allError && allError !== error && (
-                <p role="alert" className="mb-3 text-sm">
-                  {allError}
-                </p>
-              )}
-              {unsaved.length > 0 && (
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  {unsaved.length > 1 || unsaved[0].label !== 'Channels and avatar' ? (
-                    <p role="status" className="mr-auto text-xs text-muted-foreground">
-                      Unsaved: {unsaved.map(section => section.label).join(', ')}
+                ) : (
+                  !loaded && (
+                    <p role="status" className="mb-3 text-xs text-muted-foreground">
+                      Loading settings…
                     </p>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="min-h-11 sm:min-h-0"
-                    disabled={busy || savingAll || !loaded}
-                    onClick={discard}
-                  >
-                    Discard changes
-                  </Button>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    className="min-h-11 sm:min-h-0"
-                    disabled={busy || savingAll || !loaded}
-                  >
-                    {busy || savingAll ? 'Saving…' : 'Save changes'}
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+                  )
+                )}
+                {error && (
+                  <p role="alert" className="mb-3 text-sm">
+                    {error}
+                  </p>
+                )}
+                {allError && allError !== error && (
+                  <p role="alert" className="mb-3 text-sm">
+                    {allError}
+                  </p>
+                )}
+                {unsaved.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {unsaved.length > 1 || unsaved[0].label !== 'Channels and avatar' ? (
+                      <p role="status" className="mr-auto text-xs text-muted-foreground">
+                        Unsaved: {unsaved.map(section => section.label).join(', ')}
+                      </p>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-h-11 sm:min-h-0"
+                      disabled={busy || savingAll || !loaded}
+                      onClick={discard}
+                    >
+                      Discard changes
+                    </Button>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      className="min-h-11 sm:min-h-0"
+                      disabled={busy || savingAll || !loaded}
+                    >
+                      {busy || savingAll ? 'Saving…' : 'Save changes'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </m.div>
+          )}
+        </AnimatePresence>
       </form>
     </section>
   );

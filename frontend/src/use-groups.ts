@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import type { paths } from '@/api/schema';
 
@@ -77,11 +77,11 @@ export function useGroups(search = '') {
     getNextPageParam: page => page.nextCursor ?? undefined,
   });
 }
-export function useGroupMessages(groupId: string) {
-  const client = useQueryClient();
-  const query = useQuery({
+/** Shared by the conversation and by hover prefetch, so a warmed group opens from cache. */
+export function groupMessagesOptions(client: QueryClient, groupId: string) {
+  return {
     queryKey: ['group-messages', groupId],
-    queryFn: async ({ signal }) => {
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
       const { data, error } = await api.GET('/api/groups/{id}/messages', {
         params: { path: { id: groupId }, query: { limit: 40 } },
         signal,
@@ -91,7 +91,11 @@ export function useGroupMessages(groupId: string) {
       client.removeQueries({ queryKey: ['group-pending', groupId], exact: true });
       return { ...data, messages: mergeGroupMessages(data.messages, pending) };
     },
-  });
+  };
+}
+export function useGroupMessages(groupId: string) {
+  const client = useQueryClient();
+  const query = useQuery(groupMessagesOptions(client, groupId));
   const older = async () => {
     const before = client.getQueryData<GroupPage>(['group-messages', groupId])?.nextCursor;
     if (before == null) return;

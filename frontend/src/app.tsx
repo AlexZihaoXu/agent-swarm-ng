@@ -1,9 +1,13 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { computersQuery } from '@/lib/computers-query';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useLocation, useNavigate } from 'react-router';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ChatSkeleton } from '@/components/ui/skeleton';
+import { JumpToLatest } from '@/components/jump-to-latest';
 import { AgentPanel } from '@/components/agent-panel';
 import { EditAgentForm } from '@/components/edit-agent-form';
 import { AgentAvatar, AgentName } from '@/components/chat-identity';
@@ -44,13 +48,21 @@ import {
 } from '@/lib/dashboard-location';
 
 // Tabs the operator opens less often load on demand, keeping the first download small.
-const Settings = lazy(() => import('@/components/settings').then(module => ({ default: module.Settings })));
-const KnowledgeBrowser = lazy(() =>
-  import('@/components/knowledge-browser').then(module => ({ default: module.KnowledgeBrowser })),
-);
-const ComputersPanel = lazy(() =>
-  import('@/components/computers-panel').then(module => ({ default: module.ComputersPanel })),
-);
+// They are fetched quietly once the dashboard is idle, so the first visit does not wait on the network.
+const loadSettings = () => import('@/components/settings');
+const loadKnowledge = () => import('@/components/knowledge-browser');
+const loadComputers = () => import('@/components/computers-panel');
+const Settings = lazy(() => loadSettings().then(module => ({ default: module.Settings })));
+const KnowledgeBrowser = lazy(() => loadKnowledge().then(module => ({ default: module.KnowledgeBrowser })));
+const ComputersPanel = lazy(() => loadComputers().then(module => ({ default: module.ComputersPanel })));
+const whenIdle = (task: () => void) => {
+  if ('requestIdleCallback' in window) {
+    const id = window.requestIdleCallback(task, { timeout: 3000 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = setTimeout(task, 1200);
+  return () => clearTimeout(id);
+};
 const loading = (
   <p role="status" className="p-6 text-sm text-muted-foreground">
     Loading…
@@ -322,6 +334,31 @@ export function App() {
   useEffect(() => {
     void loadHistory(agent);
   }, [agent.id]);
+  // Warm what the operator is likely to open next: the lazy tabs, the computers list and recent conversations.
+  // History loads are idempotent and bounded (one section per channel), so warming a few is cheap.
+  const client = useQueryClient();
+  useEffect(
+    () =>
+      whenIdle(() => {
+        void loadSettings();
+        void loadComputers();
+        void loadKnowledge();
+        void client.prefetchQuery({ ...computersQuery, staleTime: 5000 });
+      }),
+    [],
+  );
+  const warmed = agentsLoading
+    ? ''
+    : agents
+        .slice(0, 6)
+        .map(item => item.id)
+        .join();
+  useEffect(() => {
+    if (!warmed) return;
+    return whenIdle(() => {
+      for (const item of agents.slice(0, 6)) void loadHistory(item);
+    });
+  }, [warmed]);
   // The URL owns list/detail state across refresh and viewport changes.
   useEffect(() => {
     const query = window.matchMedia('(max-width: 767px)');
@@ -503,6 +540,7 @@ export function App() {
               agentsFailed={agentsFailed}
               agentsCursor={agentsCursor}
               loadAgents={loadAgents}
+              onPrefetchAgent={item => void loadHistory(item)}
               onAgent={(id, real) => {
                 if (real && !agents.some(agent => agent.id === id)) addAgent(real, false);
                 navigate(chatAgentPath(id));
@@ -581,6 +619,7 @@ export function App() {
                         data={{ 'data-agent-id': item.id }}
                         label={`Open settings for ${item.name}`}
                         selected={item.id === agent.id}
+                        selectionGroup="agents"
                         onClick={() => leave(() => navigate(agentPath(item.id)))}
                         avatar={
                           <Avatar
@@ -842,12 +881,14 @@ export function App() {
                 key={`${agent.id}:${conversationPeer}`}
                 viewportRef={scrollRef}
                 label="Chat history"
+                overlay={conversationPeer === 'you' && <JumpToLatest viewport={scrollRef} count={timeline.length} />}
                 className="min-h-0 flex-1"
                 viewportClassName="[&>div]:!block [&>div]:w-full"
               >
                 {conversationPeer === 'you' ? (
                   <>
-                    {(historyLoading[agent.channelId] ||
+                    {!historyReady[agent.channelId] && !historyFailed[agent.channelId] && <ChatSkeleton />}
+                    {((historyReady[agent.channelId] && historyLoading[agent.channelId]) ||
                       historyFailed[agent.channelId] ||
                       historyCursor[agent.channelId] != null) && (
                       <div className="px-5 pt-3 text-center">
