@@ -49,15 +49,21 @@ describe('extended avatar traits', () => {
     expect(new Set(avatars.map(avatar => JSON.stringify({ ...avatar, seed: 0 }))).size).toBeGreaterThan(390);
   });
 
-  it('variations stay close: one or two traits change, always within range', () => {
-    const base = richAppearanceFromSeed(seeds[7]);
-    for (let salt = 1; salt <= 60; salt++) {
-      const next = mutateAvatar(base, salt);
-      expect(inRange(next)).toBe(true);
-      const changed = (Object.keys({ ...base, ...next }) as (keyof AvatarAppearance)[]).filter(
-        key => key !== 'seed' && base[key] !== next[key],
-      );
-      expect(changed.length).toBeLessThanOrEqual(2);
+  it('variations make two visible changes, stay in range, and a grid of them differs from each other', () => {
+    for (const seed of seeds.slice(0, 20)) {
+      const base = richAppearanceFromSeed(seed);
+      const grid = Array.from({ length: 8 }, (_, i) => mutateAvatar(base, i + 1));
+      for (const next of grid) {
+        expect(inRange(next)).toBe(true);
+        const changed = (Object.keys({ ...base, ...next }) as (keyof AvatarAppearance)[]).filter(
+          key => key !== 'seed' && base[key] !== next[key],
+        );
+        // Two kinds of change; eyes and proportions each move two traits.
+        expect(changed.length).toBeGreaterThanOrEqual(2);
+        expect(changed.length).toBeLessThanOrEqual(4);
+      }
+      // No two tiles in a grid look alike.
+      expect(new Set(grid.map(next => JSON.stringify({ ...next, seed: 0 }))).size).toBe(8);
     }
   });
 

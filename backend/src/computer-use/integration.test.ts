@@ -83,7 +83,7 @@ it('runs claimed computer tools in a real Pi turn with image context, Knowledge 
     expect(step).toBe(7);
     expect(executions).toBe(1);
     expect(receivedImages).toBe(true);
-    expect(prompt).toContain('swarm/computers/actions');
+    expect(prompt).toContain('practices/desktop');
     expect(prompt).toContain('Swarm restarted and released');
     expect(await db.client.computerNotice.count()).toBe(0);
     expect(await db.client.computerClaim.count()).toBe(0);

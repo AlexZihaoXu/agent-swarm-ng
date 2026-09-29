@@ -18,6 +18,7 @@ const entries = {
     source: 'docs/vision.md',
     hasChildren: false,
     text: 'Channels provide communication, not computer access. More context follows.',
+    related: [{ id: 'swarm/computers', title: 'Computers', summary: 'Shared resources.' }],
   },
   'swarm/computers': {
     id: 'swarm/computers',
@@ -26,7 +27,8 @@ const entries = {
     summary: 'Shared resources.',
     source: 'docs/vision.md',
     hasChildren: false,
-    text: 'Computers provide capabilities only when explicitly granted.',
+    text: 'Computers provide capabilities only when explicitly granted. See swarm/channels.',
+    related: [{ id: 'swarm/channels', title: 'Channels', summary: 'Ways to communicate.' }],
   },
 };
 const summary = (entry: (typeof entries)[keyof typeof entries]) => ({
@@ -60,6 +62,7 @@ async function mockKnowledge(page: Page) {
           ...summary(entry),
           parentId: entry.parentId,
           breadcrumbs,
+          related: 'related' in entry ? entry.related : [],
           text,
           offset,
           totalCharacters: entry.text.length,
@@ -147,6 +150,7 @@ test('Knowledge entry loading errors retry and long content expands by explicit 
           { id: 'swarm', title: 'Swarm concepts' },
           { id: 'swarm/channels', title: 'Channels' },
         ],
+        related: [],
         text,
         offset,
         totalCharacters: entries['swarm/channels'].text.length,
@@ -167,4 +171,16 @@ test('Knowledge entry loading errors retry and long content expands by explicit 
       .toContain(entries['swarm/channels'].text.slice(0, Math.min(offset + 15, entries['swarm/channels'].text.length)));
   }
   await expect(browser.getByText(entries['swarm/channels'].text)).toBeVisible();
+});
+
+test('entries link their related entries, including IDs named in the text', async ({ page }) => {
+  await mockKnowledge(page);
+  await page.goto('/settings/knowledge/swarm/channels');
+  const related = page.getByRole('navigation', { name: 'Related knowledge' });
+  await expect(related.getByRole('button', { name: /Computers/ })).toBeVisible();
+  await related.getByRole('button', { name: /Computers/ }).click();
+  await expect(page).toHaveURL(/\/settings\/knowledge\/swarm\/computers$/);
+  // An ID in the text is a link to that entry.
+  await page.getByRole('button', { name: 'swarm/channels', exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/knowledge\/swarm\/channels$/);
 });

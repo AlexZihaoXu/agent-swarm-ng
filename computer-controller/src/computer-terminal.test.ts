@@ -9,7 +9,7 @@ it.each([
   ...['view', 'status', 'interrupt', 'delete'].map(operation => ({ operation, session: id })),
   { operation: 'type', session: id, text: 'hello\n世界; kill-server' },
   { operation: 'press', session: id, key: 'C-c' },
-  { operation: 'view', session: id, rows: 200, up: 10000 },
+  { operation: 'view', session: id, rows: 200, up: 10000, colors: true },
   { operation: 'rename', session: id, name: 'server-2' },
   { operation: 'resize', session: id, columns: 80, rows: 24 },
   { operation: 'screens' },
@@ -38,11 +38,13 @@ it.each([
   { operation: 'press', session: id, key: 'run-shell' },
   { operation: 'constructor' },
   { operation: 'list', validationToken: id },
-  ...[{ rows: 0 }, { rows: 201 }, { up: -1 }, { up: 10001 }, { rows: 1.5 }, { up: '3' }].map(extra => ({
-    operation: 'view',
-    session: id,
-    ...extra,
-  })),
+  ...[{ rows: 0 }, { rows: 201 }, { up: -1 }, { up: 10001 }, { rows: 1.5 }, { up: '3' }, { colors: 'yes' }].map(
+    extra => ({
+      operation: 'view',
+      session: id,
+      ...extra,
+    }),
+  ),
   { operation: 'status', session: id, up: 1 },
   { operation: 'rename', session: id, name: 'bad name' },
   { operation: 'resize', session: id, columns: 241, rows: 24 },
@@ -88,6 +90,16 @@ it('passes only a validated scroll window through a view reply', () => {
       'view',
     ),
   ).toMatchObject({ window });
+  // A coloured view passes its escapes on for rendering, still bounded.
+  expect(
+    terminalResult({ type: 'terminal', session, text: 'a', truncated: false, note: 'n', ansi: '\x1b[31ma' }, 'view'),
+  ).toMatchObject({ ansi: '\x1b[31ma' });
+  expect(() =>
+    terminalResult(
+      { type: 'terminal', session, text: 'a', truncated: false, note: 'n', ansi: 'x'.repeat(262145) },
+      'view',
+    ),
+  ).toThrow();
   expect(() =>
     terminalResult(
       { type: 'terminal', session, text: '', truncated: true, window: { ...window, up: -1 }, note: 'n' },

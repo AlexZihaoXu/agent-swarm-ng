@@ -100,6 +100,8 @@ export function registerKnowledgeRoutes(app: FastifyInstance, catalog: Knowledge
             ...Summary.properties,
             parentId: Type.Union([Type.String(), Type.Null()]),
             breadcrumbs: Type.Array(Type.Object({ id: Type.String(), title: Type.String() })),
+            movedFrom: Type.Optional(Type.String()),
+            related: Type.Array(Type.Object({ id: Type.String(), title: Type.String(), summary: Type.String() })),
             text: Type.String(),
             offset: Type.Integer(),
             totalCharacters: Type.Integer(),

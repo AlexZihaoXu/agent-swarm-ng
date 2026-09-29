@@ -217,7 +217,6 @@ export function GroupConversation({
         label="Group chat history"
         overlay={<JumpToLatest viewport={viewport} newest={messages.at(-1)?.id} onJump={window_.toLatest} />}
         className="min-h-0 flex-1"
-        viewportClassName="[&>div]:!block [&>div]:w-full"
         onScroll={() => {
           const element = viewport.current;
           if (element) nearBottom.current = element.scrollHeight - element.clientHeight - element.scrollTop < 80;

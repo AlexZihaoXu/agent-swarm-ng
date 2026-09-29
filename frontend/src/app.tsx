@@ -1160,7 +1160,8 @@ export function App() {
                     setDraft,
                     send: (target, text) => send(target, text),
                     stop,
-                    loadHistory: target => void loadHistory(target),
+                    historyCursor,
+                    loadHistory: (target, older) => void loadHistory(target, older),
                     openConversation: target => navigate(chatAgentPath(target.id)),
                   },
                 }}

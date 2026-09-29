@@ -20,10 +20,13 @@ export type ComputerAgentState = {
     drafts: Record<string, string>;
     historyReady: Record<string, boolean>;
     historyLoading: Record<string, boolean>;
+    /** Where older history continues on the server (null when all is loaded). */
+    historyCursor: Record<string, unknown>;
     setDraft: (channelId: string, text: string) => void;
     send: (agent: ChatAgent, text: string) => string | undefined;
     stop: (channelId: string) => void;
-    loadHistory: (agent: ChatAgent) => void;
+    /** Loads the latest page, or with `older` the page before what is held. */
+    loadHistory: (agent: ChatAgent, older?: boolean) => void;
     /** Open the agent's full conversation in Chat. */
     openConversation: (agent: ChatAgent) => void;
   };

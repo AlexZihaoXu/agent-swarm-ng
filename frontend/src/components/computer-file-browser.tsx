@@ -281,11 +281,7 @@ export function ComputerFileBrowser({
             )}
           </div>
           <div className="flex min-h-0 min-w-0 flex-1">
-            <ScrollArea
-              label="Computer files"
-              className="min-h-0 min-w-0 flex-1"
-              viewportClassName="[&>div]:!block [&>div]:w-full [&>div]:min-w-0"
-            >
+            <ScrollArea label="Computer files" className="min-h-0 min-w-0 flex-1">
               <div className="min-w-0 p-3 sm:p-4">
                 {!available ? (
                   <p role="status" className="text-sm text-muted-foreground">

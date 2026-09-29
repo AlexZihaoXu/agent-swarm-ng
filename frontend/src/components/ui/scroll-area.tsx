@@ -38,8 +38,10 @@ export function ScrollArea({
         role="region"
         aria-label={label}
         tabIndex={viewportTabIndex}
+        // Radix sizes its content wrapper as a table, which grows to the widest unbreakable content and pushes
+        // right-aligned items (your chat bubbles) out of view. These areas scroll vertically only: keep it a block.
         className={cn(
-          'size-full outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring',
+          'size-full outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring [&>div]:!block [&>div]:w-full [&>div]:min-w-0',
           viewportClassName,
         )}
       >

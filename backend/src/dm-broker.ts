@@ -26,6 +26,9 @@ import { SwarmKnowledgePlugin } from './swarm-knowledge/plugin';
 import type { ComputerUseService } from './computer-use/service';
 import type { ScreenshotPool } from './computer-use/image-pool';
 import { createComputerTools } from './computer-use/tools';
+import { ComputerWatches } from './computer-use/watches';
+import { createWatchJudge, type ForkBasis } from './computer-use/watch-judge';
+import { createWatchTools } from './computer-use/watch-tools';
 
 type Job = {
   senderId: string;
@@ -53,6 +56,10 @@ export class DmBroker {
   private linked = new WeakSet<AbortSignal>();
   readonly timers: AgentTimers;
   private watcher?: TerminalWatcher;
+  /** One-shot watches on claimed computers (watch_terminal, watch_desktop). */
+  readonly watches?: ComputerWatches;
+  /** Each agent's session as a fork would copy it (live while it runs, then as it ended while fork watches need it). */
+  private bases = new Map<string, () => ForkBasis>();
   constructor(
     private database: PlatformStore,
     private endpoints: EndpointStore,
@@ -83,6 +90,20 @@ export class DmBroker {
               });
           })
           .catch(() => {});
+    this.watches = computers
+      ? new ComputerWatches(
+          database,
+          computers,
+          (agentId, text, human) => this.deliverPlatformEvent(agentId, 'computer', text, human),
+          createWatchJudge({
+            database,
+            endpoints,
+            codex,
+            basis: agentId => this.bases.get(agentId)?.(),
+            archive: { store: this.activity, emit: (agentId, entry) => runs.activity(agentId, entry) },
+          }),
+        )
+      : undefined;
     this.watcher = computers
       ? new TerminalWatcher(database, computers, (agentId, text) =>
           this.deliverPlatformEvent(agentId, 'computer', text, true),
@@ -165,6 +186,8 @@ export class DmBroker {
       // Pending timers are rows: after a restart or power loss they resume here.
       this.timers.start();
       this.watcher?.start();
+      // Watches end with claims on a restart; their agents hear so once.
+      void this.watches?.start().catch(() => {});
       void this.computers?.ready().catch(() => {});
     })().catch(error => {
       this.starting = undefined;
@@ -445,7 +468,12 @@ ${preview.text}`
       this.send(agentId, recipientId, text, callId, context, chainFor(recipientId), replyToId),
     );
     const computerTools =
-      this.computers && this.screenshots ? createComputerTools(this.computers, this.screenshots, agentId) : [];
+      this.computers && this.screenshots
+        ? [
+            ...createComputerTools(this.computers, this.screenshots, agentId, this.watches),
+            ...(this.watches ? createWatchTools(this.watches, agentId, () => humanAuthority) : []),
+          ]
+        : [];
     // Notices are best effort: an unreachable controller must not block the turn (its tools report the problem).
     const notices = (await this.computers?.notices(agentId).catch(() => [])) ?? [];
     await runChat(
@@ -515,7 +543,7 @@ ${preview.text}`
         ),
         ...this.knowledge.toolsFor(agentId),
         // Every agent's sense of time: current time, timers and reminders (no computer needed).
-        ...createTimeTools(this.timers, agentId, () => humanAuthority),
+        ...createTimeTools(this.timers, agentId, () => humanAuthority, this.watches),
         ...computerTools,
       ],
       {
@@ -527,6 +555,11 @@ ${preview.text}`
             notices.map(notice => notice.id),
           ) ?? Promise.resolve(),
         activityStore: this.activity,
+        session: (basis, ended) => {
+          if (!ended || this.watches?.forAgent(agentId).some(watch => watch.context === 'fork'))
+            this.bases.set(agentId, basis);
+          else this.bases.delete(agentId);
+        },
         prepare: async messages => {
           const admitted: ChannelMessage[] = [];
           for (const message of messages) {
@@ -583,6 +616,8 @@ ${preview.text}`
   }
   async beforeDelete(agentId: string) {
     this.deleting.add(agentId);
+    await this.watches?.releasedBy(agentId);
+    this.bases.delete(agentId);
     await this.reactionCoordinator.cancelAgent(agentId);
     await this.runs.settled(agentId);
     const related = [...this.jobs.values()].filter(
@@ -598,6 +633,7 @@ ${preview.text}`
     this.closing = true;
     this.timers.close();
     this.watcher?.close();
+    this.watches?.close();
     this.reactionCoordinator.close();
   }
   async settled() {

@@ -606,7 +606,7 @@ export function AgentActivityPanel({
             label="Agent activity history"
             viewportRef={viewport}
             className="min-h-0 min-w-0 flex-1"
-            viewportClassName="[overflow-anchor:none] [&>div]:!block [&>div]:w-full [&>div]:min-w-0"
+            viewportClassName="[overflow-anchor:none]"
             onScroll={event => {
               const element = event.currentTarget;
               follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40;

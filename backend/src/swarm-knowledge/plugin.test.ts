@@ -10,9 +10,9 @@ it('grants read-only knowledge tools to a server-bound agent and rechecks existe
   expect(tools.map(tool => tool.name)).toEqual(['list_knowledge', 'search_knowledge', 'read_knowledge']);
   const call = (name: string, args: object = {}) =>
     tools.find(tool => tool.name === name)!.execute('call', args as never, undefined, undefined, undefined as never);
-  expect(((await call('list_knowledge')).details as any).entries[0].id).toBe('swarm');
+  expect(((await call('list_knowledge')).details as any).entries[0].id).toBe('concepts');
   exists = false;
-  await expect(call('read_knowledge', { id: 'swarm' })).rejects.toThrow('not granted');
+  await expect(call('read_knowledge', { id: 'concepts' })).rejects.toThrow('not granted');
   expect(store.hasAgent).toHaveBeenCalledTimes(2);
   expect(store.hasAgent).toHaveBeenCalledWith('agent-a');
 });

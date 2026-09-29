@@ -182,24 +182,70 @@ export function richAppearanceFromSeed(seed: number): AvatarAppearance {
  * A close relative of an avatar for the variations grid: one or two traits nudged or swapped, the rest kept, so
  * the reader can steer by picking the nearest improvement.
  */
+const mutations = ['shape', 'color', 'mouth', 'marking', 'accessory', 'eyes', 'proportions'] as const;
+/**
+ * A variation of an avatar: two different, clearly visible changes. The first kind cycles with the salt, so a grid
+ * of consecutive salts shows every kind of change; each change picks a value other than the current one, and
+ * proportions move to the far side of their range (a small nudge is invisible at tile size).
+ */
 export function mutateAvatar(avatar: AvatarAppearance, salt: number): AvatarAppearance {
-  const v = (n: number) => variation(avatar.seed ^ (salt * 7919), n);
+  const v = (n: number) => variation(Math.imul(avatar.seed, 31) ^ Math.imul(salt, 0x9e3779b1), n);
   const next: AvatarAppearance = { ...avatar, seed: Math.floor(v(1) * 2147483647) };
-  const changes = v(2) < 0.5 ? 1 : 2;
-  for (let i = 0; i < changes; i++) {
-    const which = Math.floor(v(3 + i) * 9);
-    const nudge = (trait: AvatarRange, base: number) =>
-      (next[trait] = clampTrait(trait, (next[trait] ?? base) + (v(10 + i) - 0.5) * 0.8));
-    if (which === 0) next.shape = pick(avatarShapes, v(20 + i)).id;
-    else if (which === 1) next.color = pick(avatarColors, v(20 + i)).value;
-    else if (which === 2) nudge('stretch', 0);
-    else if (which === 3) nudge('taper', 0);
-    else if (which === 4) nudge('eyeSize', 1);
-    else if (which === 5) nudge('eyeGap', 0);
-    else if (which === 6) next.mouth = pick(avatarMouths, v(20 + i)).value;
-    else if (which === 7) next.marking = pick(avatarMarkings, v(20 + i)).value;
-    else next.accessory = pick(avatarAccessories, v(20 + i)).value;
-  }
+  const other = <T>(values: readonly T[], current: T | undefined, r: number) => {
+    const choices = values.filter(value => value !== current);
+    return choices[Math.floor(r * choices.length) % choices.length];
+  };
+  const far = (trait: AvatarRange, r: number) => {
+    const { min, max } = avatarRanges[trait];
+    const middle = (min + max) / 2,
+      current = next[trait] ?? middle;
+    // Towards the end opposite to where it is now, at least halfway there.
+    const end = current > middle ? min : max;
+    return clampTrait(trait, middle + (end - middle) * (0.55 + 0.45 * r));
+  };
+  const first = mutations[salt % mutations.length];
+  const rest = mutations.filter(kind => kind !== first);
+  const second = rest[Math.floor(v(2) * rest.length) % rest.length];
+  [first, second].forEach((kind, i) => {
+    const r = v(20 + i);
+    if (kind === 'shape')
+      next.shape = other(
+        avatarShapes.map(item => item.id),
+        next.shape,
+        r,
+      );
+    else if (kind === 'color')
+      next.color = other(
+        avatarColors.map(item => item.value),
+        next.color,
+        r,
+      );
+    else if (kind === 'mouth')
+      next.mouth = other(
+        avatarMouths.map(item => item.value),
+        next.mouth ?? avatarMouths[0].value,
+        r,
+      );
+    else if (kind === 'marking')
+      next.marking = other(
+        avatarMarkings.map(item => item.value),
+        next.marking ?? avatarMarkings[0].value,
+        r,
+      );
+    else if (kind === 'accessory')
+      next.accessory = other(
+        avatarAccessories.map(item => item.value),
+        next.accessory ?? avatarAccessories[0].value,
+        r,
+      );
+    else if (kind === 'eyes') {
+      next.eyeStyle = next.eyeStyle === 'round' ? 'pill' : 'round';
+      next.eyeSize = far('eyeSize', r);
+    } else {
+      next.stretch = far('stretch', r);
+      next.taper = far('taper', v(30 + i));
+    }
+  });
   return next;
 }
 /** The accent colour to draw: the saved one, or a lighter tint of the body. */

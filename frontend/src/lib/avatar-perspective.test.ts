@@ -41,3 +41,25 @@ it('bounds all preview directions, with smaller excursions for narrow silhouette
     projectEye(eyePoses.idle[0], { x: 2.5, y: 0 }, 'pebble').x,
   );
 });
+
+it('keeps a top accessory steady on a flat-topped outline instead of jumping between its shoulders', async () => {
+  const { crown } = await import('./avatar-motion');
+  // A flat top with two shoulders a hair apart; the higher one swaps as the shape wobbles.
+  const outline = (left: number, right: number) => [
+    { x: 20, y: 10 + left },
+    { x: 26, y: 10.4 },
+    { x: 32, y: 10.5 },
+    { x: 38, y: 10.4 },
+    { x: 44, y: 10 + right },
+    { x: 52, y: 32 },
+    { x: 32, y: 54 },
+    { x: 12, y: 32 },
+  ];
+  const leaning = crown(outline(0, 0.05)),
+    other = crown(outline(0.05, 0));
+  expect(Math.abs(leaning.x - other.x)).toBeLessThan(1);
+  expect(Math.abs(leaning.x - 32)).toBeLessThan(1);
+  // It sits on the outline's top edge.
+  expect(leaning.y).toBeGreaterThan(10);
+  expect(leaning.y).toBeLessThan(10.6);
+});

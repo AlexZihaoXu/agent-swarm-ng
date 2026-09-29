@@ -32,7 +32,11 @@ export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: 
   const [listLoading, setListLoading] = useState(false),
     [listError, setListError] = useState(''),
     [listAttempt, setListAttempt] = useState(0);
-  const selected = entry?.id === id ? entry : null;
+  // An old ID (from before a reorganisation) resolves to its entry, then the address moves to the current ID.
+  const selected = entry && (entry.id === id || entry.movedFrom === id) ? entry : null;
+  useEffect(() => {
+    if (selected && selected.id !== id) onNavigate(knowledgePath(selected.id));
+  }, [selected, id, onNavigate]);
   const parentId = id && !selected ? null : selected?.hasChildren ? selected.id : (selected?.parentId ?? null);
   const listKey = `${id ?? ''}|${parentId ?? ''}|${search}`;
   const currentListKey = useRef(listKey),
@@ -214,7 +218,7 @@ export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: 
               All topics
             </button>
           </div>
-          <ScrollArea label="Knowledge topics list" className="min-h-0 flex-1" viewportClassName="[&>div]:!block">
+          <ScrollArea label="Knowledge topics list" className="min-h-0 flex-1">
             <div className="pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-4">
               {listError && (
                 <div className="p-4 text-sm">
@@ -293,7 +297,7 @@ export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: 
           aria-label="Knowledge entry"
           className={cn('phone-detail-enter min-h-0 min-w-0 flex-1 flex-col md:flex', id ? 'flex' : 'hidden')}
         >
-          <ScrollArea label="Knowledge entry content" className="min-h-0 flex-1" viewportClassName="[&>div]:!block">
+          <ScrollArea label="Knowledge entry content" className="min-h-0 flex-1">
             <div
               key={id ?? 'none'}
               className="view-enter space-y-5 px-4 py-5 pb-[calc(5rem+env(safe-area-inset-bottom))] md:px-8 md:pb-8"
@@ -362,7 +366,9 @@ export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: 
                     <p className="mt-1 text-sm text-muted-foreground">{selected.summary}</p>
                     <p className="mt-2 text-xs text-muted-foreground">Source: {selected.source}</p>
                   </div>
-                  <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{selected.text}</div>
+                  <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                    <LinkedText text={selected.text} links={selected.related} onOpen={open} />
+                  </div>
                   {moreError && (
                     <p role="alert" className="text-sm">
                       {moreError}
@@ -379,6 +385,29 @@ export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: 
                       {moreLoading ? 'Loading knowledge…' : 'Load more knowledge'}
                     </Button>
                   )}
+                  {selected.related.length > 0 && (
+                    <nav aria-label="Related knowledge" className="border-t border-border pt-4">
+                      <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Related
+                      </h4>
+                      <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+                        {selected.related.map(link => (
+                          <li key={link.id}>
+                            <button
+                              type="button"
+                              onClick={() => open(link.id)}
+                              className="flex w-full cursor-pointer flex-col items-start gap-0.5 px-3 py-2 text-left outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                            >
+                              <span className="text-sm font-medium">{link.title}</span>
+                              <span className="line-clamp-1 text-xs text-muted-foreground">
+                                <span className="font-mono">{link.id}</span> · {link.summary}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </nav>
+                  )}
                 </>
               )}
             </div>
@@ -386,5 +415,34 @@ export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: 
         </article>
       </div>
     </section>
+  );
+}
+
+/** Entry text with the IDs of linked entries (for example practices/waiting) as links to them. */
+function LinkedText({
+  text,
+  links,
+  onOpen,
+}: {
+  text: string;
+  links: { id: string; title: string }[];
+  onOpen: (id: string) => void;
+}) {
+  const known = new Map(links.map(link => [link.id, link.title]));
+  const parts = text.split(/([a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)+)/g);
+  return parts.map((part, index) =>
+    known.has(part) ? (
+      <button
+        key={index}
+        type="button"
+        title={known.get(part)}
+        onClick={() => onOpen(part)}
+        className="cursor-pointer rounded font-mono text-[0.92em] text-teal-300 underline decoration-teal-300/40 underline-offset-2 outline-none hover:decoration-teal-300 focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {part}
+      </button>
+    ) : (
+      part
+    ),
   );
 }

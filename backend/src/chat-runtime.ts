@@ -161,6 +161,15 @@ export function chatResources(
   };
 }
 
+/** The agent's configured model and the runtime that calls it (its Codex subscription or its endpoint). */
+export async function resolveChatModel(config: ChatConfiguration, subscriptionRuntime?: ModelRuntime) {
+  const { model, modelRuntime } = subscriptionRuntime
+    ? { model: subscriptionRuntime.getModel('openai-codex', config.model), modelRuntime: subscriptionRuntime }
+    : await createEndpointRuntime(config);
+  if (!model) throw new Error('Unknown subscription model');
+  return { model, modelRuntime };
+}
+
 async function createEndpointRuntime(config: ChatConfiguration) {
   const openrouter = isOpenRouter(config.baseUrl);
   if (openrouter && !config.apiKey?.trim()) throw new Error('Add an OpenRouter API key in Settings.');
@@ -279,10 +288,7 @@ export async function createChatSession(
   subscriptionRuntime?: ModelRuntime,
   restoredManager?: SessionManager,
 ) {
-  const { model, modelRuntime } = subscriptionRuntime
-    ? { model: subscriptionRuntime.getModel('openai-codex', config.model), modelRuntime: subscriptionRuntime }
-    : await createEndpointRuntime(config);
-  if (!model) throw new Error('Unknown subscription model');
+  const { model, modelRuntime } = await resolveChatModel(config, subscriptionRuntime);
   const levels = model.reasoning ? getSupportedThinkingLevels(model) : ['off'];
   if (!levels.includes(config.thinkingLevel)) throw new Error('Unsupported thinking level');
 

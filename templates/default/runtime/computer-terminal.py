@@ -25,7 +25,7 @@ KEYS = {'Enter', 'Tab', 'BTab', 'Escape', 'BSpace', 'Delete', 'Insert', 'Space',
 KEYS.update('F' + str(i) for i in range(1, 13))
 KEYS.update('C-' + c for c in 'abcdefghijklmnopqrstuvwxyz')
 KEYS.update('M-' + c for c in 'abcdefghijklmnopqrstuvwxyz')
-FIELDS = {'create': ['name', 'command', 'cwd'], 'list': [], 'view': ['session', 'rows', 'up'],
+FIELDS = {'create': ['name', 'command', 'cwd'], 'list': [], 'view': ['session', 'rows', 'up', 'colors'],
           'status': ['session'], 'type': ['session', 'text'], 'press': ['session', 'key'],
           'actions': ['session', 'actions', 'pause'],
           'interrupt': ['session'], 'delete': ['session'],
@@ -103,6 +103,7 @@ def validate(value):
         for key, low, high in [('rows', 1, 200), ('up', 0, 10000)]:
             if key in value and (type(value[key]) is not int or not low <= value[key] <= high):
                 raise ValueError(key + ' must be an integer from ' + str(low) + ' to ' + str(high) + '.')
+        if 'colors' in value and type(value['colors']) is not bool: raise ValueError('colors must be true or false.')
     if operation == 'type' and not valid_text(value.get('text')):
         raise ValueError('Text must be 1..32768 UTF-8 bytes; use press for control keys.')
     if operation == 'actions': actions_duration(value)
@@ -111,6 +112,7 @@ def validate(value):
     return value
 
 
+ANSI_VIEW_LIMIT = 262144
 SGR = re.compile(r'\x1b\[[0-9;:]*m')
 OTHER_ESCAPES = re.compile(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-9;:?]*[A-Za-ln-z@`]|\x1b[^\[\]]')
 
@@ -325,8 +327,13 @@ def execute(value):
     text = tmux('capture-pane', '-p', '-t', pane, '-S', str(start - history), '-E', str(end - 1 - history))
     text, clipped = bounded_text(text)
     window = {'from': start + 1, 'to': end, 'total': total, 'up': up}
-    return {'session': status, 'text': text, 'truncated': clipped or start > 0 or up > 0, 'window': window,
-            'note': view_note(start, end, total, up)}
+    result = {'session': status, 'text': text, 'truncated': clipped or start > 0 or up > 0, 'window': window,
+              'note': view_note(start, end, total, up)}
+    if value.get('colors'):
+        # The same rows with their colour/style escapes, for a rendered image of the view.
+        raw = tmux('capture-pane', '-e', '-p', '-t', pane, '-S', str(start - history), '-E', str(end - 1 - history))
+        result['ansi'] = screen_text(raw, ANSI_VIEW_LIMIT)
+    return result
 
 
 if __name__ == '__main__':

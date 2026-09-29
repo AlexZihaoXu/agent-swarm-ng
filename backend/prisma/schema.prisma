@@ -94,10 +94,25 @@ model Agent {
   computerClaim ComputerClaim?
   computerNotices ComputerNotice[]
   timers           AgentTimer[]
+  watches          ComputerWatch[]
   activity         Activity[]
 }
 
 // An agent's own timer (fires once) or repeating reminder. Firing wakes the agent with a platform event.
+// A one-shot watch on a claimed computer. Checks run in memory; the row only lets a restart (which releases claims
+// and so ends watches) tell the agent its watch is gone.
+model ComputerWatch {
+  id         String   @id @default(uuid())
+  agentId    String
+  computerId String
+  kind       String
+  until      String
+  human      Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  @@index([agentId])
+}
+
 model AgentTimer {
   id          String    @id @default(uuid())
   agentId     String

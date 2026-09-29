@@ -6,6 +6,9 @@ import { ResizeEdges } from './ui/resize-edges';
 import { glide } from '@/lib/motion';
 import { defaultAvatar } from '@/lib/agent-avatar';
 import type { ChatAgent } from '@/use-chat';
+import type { ChatMessage } from '@/chat-types';
+import { useMessageWindow } from '@/lib/use-message-window';
+import { EdgeSkeleton } from '@/components/ui/skeleton';
 import { AgentAvatarArt } from './agent-avatar-art';
 import { AgentTypingStatus } from './agent-typing-status';
 import { ChatComposer } from './chat-composer';
@@ -15,7 +18,6 @@ import { CloseLight } from './ui/close-light';
 import { ScrollArea } from './ui/scroll-area';
 
 /** A window shows the latest messages only; the full history stays in Chat. */
-const SHOWN = 80;
 
 /** Any size from 300×320 up to the page. */
 const size = (want: { width: number; height: number }) => ({
@@ -65,13 +67,23 @@ export function FloatingChat({
   useEffect(() => {
     if (!chat.historyReady[channel]) chat.loadHistory(agent);
   }, [channel]);
-  const messages = (chat.conversations[channel] ?? []).slice(-SHOWN);
+  const messages = chat.conversations[channel] ?? [];
+  const ready = Boolean(chat.historyReady[channel]);
+  // The same bounded window as the full chat: older pages load near the top, newer ones return near the bottom.
+  const history = useMessageWindow({
+    items: messages,
+    idOf: (message: ChatMessage) => message.id,
+    viewport,
+    canLoadOlder: chat.historyCursor[channel] != null && !chat.historyLoading[channel] && ready,
+    loadOlder: () => chat.loadHistory(agent, true),
+    reset: channel,
+  });
   // Follow the newest message while the reader is at the bottom.
   const following = useRef(true);
   useLayoutEffect(() => {
     const root = viewport.current;
     if (root && following.current) root.scrollTop = root.scrollHeight;
-  }, [messages.length, messages.at(-1)?.text, box !== null]);
+  }, [history.visible.at(-1)?.id, history.visible.at(-1)?.text, box !== null]);
 
   const start = (kind: 'move' | Edge) => (event: ReactPointerEvent<HTMLElement>) => {
     if (!box || event.button !== 0) return;
@@ -95,7 +107,6 @@ export function FloatingChat({
   const end = () => {
     gesture.current = null;
   };
-  const ready = Boolean(chat.historyReady[channel]);
   // The grow/shrink point, in the window's own coordinates.
   const origin =
     box && from ? `${from.left + from.width / 2 - box.x}px ${from.top + from.height / 2 - box.y}px` : 'top right';
@@ -152,6 +163,7 @@ export function FloatingChat({
               onScroll={event => {
                 const root = event.currentTarget;
                 following.current = root.scrollHeight - root.scrollTop - root.clientHeight < 40;
+                history.onScroll();
               }}
               className="min-h-0 flex-1"
             >
@@ -165,12 +177,18 @@ export function FloatingChat({
                     No messages yet. Say something to {agent.name}.
                   </p>
                 ) : (
-                  <ConversationMessages
-                    reactionChannel={channel}
-                    messages={messages}
-                    time={agent.time}
-                    agentName={agent.name}
-                  />
+                  <>
+                    {(chat.historyCursor[channel] != null || chat.historyLoading[channel] || history.olderHidden) && (
+                      <EdgeSkeleton label="Loading earlier messages…" />
+                    )}
+                    <ConversationMessages
+                      reactionChannel={channel}
+                      messages={history.visible}
+                      time={agent.time}
+                      agentName={agent.name}
+                    />
+                    {history.newerHidden && <EdgeSkeleton label="Loading newer messages…" />}
+                  </>
                 )}
               </div>
             </ScrollArea>

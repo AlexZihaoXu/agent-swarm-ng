@@ -30,7 +30,7 @@ const keys = new Set([
 const fields: Record<string, string[]> = {
   create: ['name', 'command', 'cwd'],
   list: [],
-  view: ['session', 'rows', 'up'],
+  view: ['session', 'rows', 'up', 'colors'],
   status: ['session'],
   type: ['session', 'text'],
   press: ['session', 'key'],
@@ -100,6 +100,8 @@ export function validateTerminal(value: Record<string, any>, prepared = false) {
     ] as const)
       if (value[key] !== undefined && (!Number.isInteger(value[key]) || value[key] < min || value[key] > max))
         fail(`${key} must be an integer from ${min} to ${max}.`);
+  if (value.operation === 'view' && value.colors !== undefined && typeof value.colors !== 'boolean')
+    fail('colors must be true or false.');
   if (value.operation === 'type') {
     text('text', 32768);
     if (controlCharacters.test(value.text)) fail('Use press for control keys.');
@@ -228,6 +230,7 @@ export function terminalResult(result: any, operation: string, requestedSession?
       truncated: result.truncated,
       ...(w ? { window: { from: count(w.from), to: count(w.to), total: count(w.total), up: count(w.up) } } : {}),
       note: string(result.note, 768),
+      ...(result.ansi !== undefined ? { ansi: string(result.ansi, 262144) } : {}),
     };
   }
   if (['type', 'press', 'interrupt'].includes(operation)) {

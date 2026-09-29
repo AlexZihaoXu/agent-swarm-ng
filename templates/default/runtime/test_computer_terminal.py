@@ -40,8 +40,8 @@ class TerminalValidation(unittest.TestCase):
 
     def test_view_scrolls_by_rows_above_the_live_bottom(self):
         session = {'operation': 'view', 'session': '12345678-1234-1234-1234-123456789abc'}
-        terminal.validate(dict(session, rows=200, up=10000))
-        for extra in ({'rows': 0}, {'rows': 201}, {'up': -1}, {'up': 10001}, {'rows': True}, {'up': '3'}):
+        terminal.validate(dict(session, rows=200, up=10000, colors=True))
+        for extra in ({'rows': 0}, {'rows': 201}, {'up': -1}, {'up': 10001}, {'rows': True}, {'up': '3'}, {'colors': 1}):
             with self.assertRaises(ValueError): terminal.validate(dict(session, **extra))
         # 100 history rows + a 36-row screen = 136 buffer rows.
         self.assertEqual(terminal.view_window(136, 36), (100, 136, 0))

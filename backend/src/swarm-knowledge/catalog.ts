@@ -6,7 +6,13 @@ export type KnowledgeEntry = Readonly<{
   summary: string;
   source: string;
   content: string;
+  /** Entries to read alongside this one (a concept's practices, a practice's concepts). */
+  related?: readonly string[];
 }>;
+/** Where an entry used to be: old IDs keep resolving after a reorganisation. */
+export type KnowledgeAliases = Readonly<Record<string, string>>;
+type Link = { id: string; title: string; summary: string };
+const mentioned = /[a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)+/g;
 
 type Page = { offset?: number; limit?: number };
 const idPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$/;
@@ -21,8 +27,10 @@ function bounded(value: number | undefined, fallback: number, max: number, name:
 export class KnowledgeCatalog {
   readonly #entries = new Map<string, KnowledgeEntry>();
   readonly #children = new Map<string | null, KnowledgeEntry[]>();
+  readonly #aliases: KnowledgeAliases;
+  readonly #links = new Map<string, Link[]>();
 
-  constructor(entries: readonly KnowledgeEntry[]) {
+  constructor(entries: readonly KnowledgeEntry[], aliases: KnowledgeAliases = {}) {
     if (entries.length > 500) throw new Error('Too many knowledge entries.');
     for (const entry of entries) {
       if (
@@ -44,6 +52,27 @@ export class KnowledgeCatalog {
     for (const entry of this.#entries.values()) {
       if (entry.parentId !== null && !this.#entries.has(entry.parentId))
         throw new Error(`Missing parent for ${entry.id}`);
+      const related = entry.related ?? [];
+      if (related.length > 16 || related.some(id => id === entry.id || !this.#entries.has(id)))
+        throw new Error(`Invalid related entries for ${entry.id}`);
+    }
+    for (const [from, to] of Object.entries(aliases))
+      if (this.#entries.has(from) || !this.#entries.has(to)) throw new Error(`Invalid knowledge alias: ${from}`);
+    this.#aliases = aliases;
+    // Links: the explicit related entries first, then every entry the text mentions by ID.
+    for (const entry of this.#entries.values()) {
+      const ids = new Set(entry.related ?? []);
+      for (const [id] of entry.content.matchAll(mentioned)) {
+        const target = this.#entries.has(id) ? id : aliases[id];
+        if (target && target !== entry.id) ids.add(target);
+      }
+      this.#links.set(
+        entry.id,
+        [...ids].map(id => {
+          const target = this.#entries.get(id)!;
+          return { id, title: target.title, summary: target.summary };
+        }),
+      );
     }
     const visited = new Set<string>(),
       visiting = new Set<string>();
@@ -75,7 +104,13 @@ export class KnowledgeCatalog {
     };
   }
 
-  list({ parentId = null, offset, limit }: Page & { parentId?: string | null } = {}) {
+  /** An entry ID, following an alias from before a reorganisation. */
+  resolve(id: string) {
+    return this.#entries.has(id) ? id : this.#aliases[id];
+  }
+
+  list({ parentId: requested = null, offset, limit }: Page & { parentId?: string | null } = {}) {
+    const parentId = requested === null ? null : (this.resolve(requested) ?? requested);
     if (parentId !== null && !this.#entries.has(parentId)) throw new Error('Knowledge entry not found.');
     const from = bounded(offset, 0, 500, 'offset'),
       size = bounded(limit, 20, 20, 'limit');
@@ -108,7 +143,8 @@ export class KnowledgeCatalog {
     };
   }
 
-  read({ id, offset, length }: { id: string; offset?: number; length?: number }) {
+  read({ id: requested, offset, length }: { id: string; offset?: number; length?: number }) {
+    const id = this.resolve(requested) ?? requested;
     const entry = this.#entries.get(id);
     if (!entry) throw new Error('Knowledge entry not found.');
     const from = bounded(offset, 0, entry.content.length, 'offset'),
@@ -124,6 +160,8 @@ export class KnowledgeCatalog {
       ...this.#summary(entry),
       parentId: entry.parentId,
       breadcrumbs,
+      ...(id !== requested ? { movedFrom: requested } : {}),
+      related: this.#links.get(entry.id) ?? [],
       text,
       offset: from,
       totalCharacters: entry.content.length,

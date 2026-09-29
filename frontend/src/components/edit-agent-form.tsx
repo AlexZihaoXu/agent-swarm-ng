@@ -187,12 +187,7 @@ export function EditAgentForm({
           action={<SectionNav container={sectionList} inline className="hidden md:block" />}
           actionShrinks
         />
-        <ScrollArea
-          label="Agent editor"
-          viewportTabIndex={-1}
-          className="min-h-0 flex-1"
-          viewportClassName="[&>div]:!block"
-        >
+        <ScrollArea label="Agent editor" viewportTabIndex={-1} className="min-h-0 flex-1">
           <SectionNav container={sectionList} className="md:hidden" />
           <div ref={sectionList} className="mx-auto w-full max-w-5xl space-y-8 px-4 pb-8 pt-6 md:px-6">
             <section aria-label="Channels" className="space-y-4">

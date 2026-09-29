@@ -34,7 +34,7 @@ export class ComputerExecutionError extends ComputerUseError {
     super(message, 503);
   }
 }
-const knowledge = ' Read Swarm Knowledge swarm/computers/use.';
+const knowledge = ' Read Swarm Knowledge practices/computer-use.';
 /** Operations that only read: they neither consume the screenshot allowance nor make other callers fail. */
 const isReadOnly = (request: unknown) => {
   const input = request as { kind?: string; operation?: string } | undefined;
@@ -75,10 +75,11 @@ export class ComputerUseService {
    * Another operation holds the computer: a short read is waited for (so dashboard polling and previews never
    * make an agent's call fail); anything else is refused as before.
    */
-  private waitForReads(computerId: string, refusal: string) {
+  private waitForReads(computerId: string, refusal: string, patient = false) {
     const active = this.active.get(computerId);
     if (!active) return undefined;
-    if (active.readOnly)
+    // A watch's look is never urgent: it waits out any operation instead of failing.
+    if (active.readOnly || patient)
       return active.finished.then(
         () => undefined,
         () => undefined,
@@ -233,14 +234,65 @@ export class ComputerUseService {
     retain?: (frame: ScreenFrame) => Promise<void>,
   ): Promise<ScreenFrame> {
     await this.ready();
+    return this.screenshot(
+      () => this.claim(agentId),
+      request,
+      signal,
+      retain,
+      claim => this.allowances.set(agentId, { token: claim.token, until: this.now() + 30_000, remaining: 2 }),
+    );
+  }
+  /**
+   * A watch's look at the computer its agent holds: the same capture, but it grants the agent no input allowance
+   * (the agent looks for itself after waking) and it waits out a busy computer instead of failing.
+   */
+  async watchCapture(agentId: string, computerId: string, request: unknown, signal?: AbortSignal) {
+    await this.ready();
+    return this.screenshot(() => this.watchClaim(agentId, computerId), request, signal, undefined, undefined, true);
+  }
+  /** A watch's read of a terminal on the computer its agent holds (view/status only). */
+  async watchTerminal(agentId: string, computerId: string, request: Record<string, unknown>, signal?: AbortSignal) {
+    if (!['view', 'status'].includes(String(request.operation)))
+      throw new ComputerUseError('A watch can only view a terminal or read its status.', 403);
+    await this.ready();
+    return this.performCore(
+      () => this.watchClaim(agentId, computerId),
+      { ...request, kind: 'terminal' },
+      signal,
+      undefined,
+      true,
+    );
+  }
+  /** The computer the agent holds now (a watch is set on it). */
+  async held(agentId: string) {
+    await this.ready();
+    const claim = await this.claim(agentId);
+    return { computerId: claim.computerId, name: claim.computer.name };
+  }
+  /** The agent's current claim, which must still be on this computer (a watch never follows it elsewhere). */
+  async watchClaim(agentId: string, computerId: string) {
+    const claim = await this.claim(agentId);
+    if (claim.computerId !== computerId)
+      throw new ComputerUseError('You no longer hold the computer this watch was set on.', 403);
+    return claim;
+  }
+  private async screenshot<C extends { computerId: string; token: string }>(
+    resolve: () => Promise<C>,
+    request: unknown,
+    signal: AbortSignal | undefined,
+    retain: ((frame: ScreenFrame) => Promise<void>) | undefined,
+    granted: ((claim: C) => void) | undefined,
+    patient = false,
+  ): Promise<ScreenFrame> {
     // Admission is short and serialized; the slow screenshot itself runs outside the lock so it can never delay
     // another computer or a human Force release, which aborts and joins it via `active`.
     const admitted = await this.exclusive(async () => {
       signal?.throwIfAborted();
-      const claim = await this.claim(agentId);
+      const claim = await resolve();
       const waiting = this.waitForReads(
         claim.computerId,
         'Wait for the active computer operation before taking another screenshot.',
+        patient,
       );
       if (waiting) return { waiting };
       const driver = this.driver();
@@ -253,18 +305,19 @@ export class ComputerUseService {
         abort.signal.throwIfAborted();
         await retain?.(frame);
         abort.signal.throwIfAborted();
-        this.allowances.set(agentId, { token: claim.token, until: this.now() + 30_000, remaining: 2 });
+        granted?.(claim);
         return frame;
       })().finally(() => {
         signal?.removeEventListener('abort', stop);
         this.active.delete(claim.computerId);
       });
-      this.active.set(claim.computerId, { abort, finished });
+      // A screenshot only reads: another caller waits for it rather than failing.
+      this.active.set(claim.computerId, { abort, finished, readOnly: true });
       return { finished };
     });
     if ('waiting' in admitted) {
       await admitted.waiting;
-      return this.capture(agentId, request, signal, retain);
+      return this.screenshot(resolve, request, signal, retain, granted, patient);
     }
     return admitted.finished;
   }
@@ -391,7 +444,7 @@ export class ComputerUseService {
           allowance.remaining <= 0
         )
           throw new ComputerUseError(
-            `View this terminal first: a terminal_view allows ${TERMINAL_ALLOWANCE.combos} terminal_run_actions calls on that session within ${TERMINAL_ALLOWANCE.seconds} real seconds. Read Swarm Knowledge swarm/computers/terminals.`,
+            `View this terminal first: a terminal_view allows ${TERMINAL_ALLOWANCE.combos} terminal_run_actions calls on that session within ${TERMINAL_ALLOWANCE.seconds} real seconds. Read Swarm Knowledge concepts/computers/terminals.`,
           );
         allowance.remaining--;
         spent = allowance;
@@ -450,6 +503,7 @@ export class ComputerUseService {
     request: unknown,
     signal?: AbortSignal,
     retain?: (result: CoreReceipt) => Promise<void>,
+    patient = false,
   ): Promise<CoreReceipt> {
     const admitted = await this.exclusive(async () => {
       signal?.throwIfAborted();
@@ -463,6 +517,7 @@ export class ComputerUseService {
       const waiting = this.waitForReads(
         claim.computerId,
         'Another computer operation is executing; wait for its result.',
+        patient,
       );
       if (waiting) return { waiting };
       const driver = this.driver();
@@ -502,7 +557,7 @@ export class ComputerUseService {
     });
     if ('waiting' in admitted) {
       await admitted.waiting;
-      return this.performCore(resolve, request, signal, retain);
+      return this.performCore(resolve, request, signal, retain, patient);
     }
     return admitted.finished;
   }

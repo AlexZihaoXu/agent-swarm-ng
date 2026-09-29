@@ -27,6 +27,7 @@ EXPOSE 3000
 CMD ["bun", "run", "dev"]
 
 FROM base AS production
+COPY backend/assets assets
 COPY backend/src src
 COPY backend/scripts/migrate.ts scripts/migrate.ts
 ENV NODE_ENV=production

@@ -135,11 +135,7 @@ export function AgentPanel({
             else panelRef.current?.focus();
           }}
         >
-          <ScrollArea
-            label="Agent editor"
-            viewportTabIndex={-1}
-            viewportClassName="max-h-[calc(90dvh-1rem)] [&>div]:!block"
-          >
+          <ScrollArea label="Agent editor" viewportTabIndex={-1} viewportClassName="max-h-[calc(90dvh-1rem)]">
             <div className="p-4">
               {shownDelete ? (
                 <DeleteAgentForm

@@ -33,14 +33,48 @@ const catalog = () => new KnowledgeCatalog(entries);
 
 describe('Swarm Knowledge catalog', () => {
   it('loads the statically imported topic files without granting a runtime tool', () => {
-    expect(swarmKnowledge.list({}).entries.map(entry => entry.id)).toEqual(['swarm']);
-    expect(swarmKnowledge.list({ parentId: 'swarm' }).entries.map(entry => entry.id)).toEqual([
-      'swarm/channels',
-      'swarm/computers',
-      'swarm/time',
-    ]);
-    expect(JSON.stringify(swarmKnowledge.read({ id: 'swarm/time' }))).toContain('set_reminder');
-    expect(swarmKnowledge.read({ id: 'swarm/channels' }).source).toBe('docs/vision.md');
+    // Two roots: what things are, and how and when to do them.
+    expect(swarmKnowledge.list({}).entries.map(entry => entry.id)).toEqual(['concepts', 'practices']);
+    expect(swarmKnowledge.list({ parentId: 'concepts' }).entries.map(entry => entry.id)).toContain('concepts/tools');
+    expect(swarmKnowledge.list({ parentId: 'practices' }).entries.map(entry => entry.id)).toContain(
+      'practices/waiting',
+    );
+    expect(JSON.stringify(swarmKnowledge.read({ id: 'concepts/time' }))).toContain('set_reminder');
+    expect(swarmKnowledge.read({ id: 'concepts/channels' }).source).toBe('docs/vision.md');
+    // Each concept links its practice and back.
+    const related = (id: string) => swarmKnowledge.read({ id }).related.map(link => link.id);
+    expect(related('concepts/computers/watches')).toContain('practices/waiting');
+    expect(related('practices/waiting')).toContain('concepts/computers/watches');
+    // Every tool an agent can be granted is described in concepts/tools.
+    const tools = swarmKnowledge.read({ id: 'concepts/tools', length: 6000 }).text;
+    for (const name of [
+      'send_message',
+      'watch_terminal',
+      'terminal_run_actions',
+      'set_reminder',
+      'read_knowledge',
+      'send_dm',
+    ])
+      expect(tools).toContain(name);
+  });
+
+  it('resolves IDs from before a reorganisation and links entries mentioned in the text', () => {
+    const moved = swarmKnowledge.read({ id: 'swarm/computers/use' });
+    expect(moved).toMatchObject({ id: 'practices/computer-use', movedFrom: 'swarm/computers/use' });
+    expect(swarmKnowledge.list({ parentId: 'swarm' }).parentId).toBe('concepts');
+    const linked = new KnowledgeCatalog(
+      [
+        { ...entries[1], content: 'See swarm/channels and missing/entry.', related: ['swarm/computers'] },
+        entries[0],
+        entries[2],
+      ],
+      { old: 'swarm/channels' },
+    );
+    expect(linked.read({ id: 'swarm' }).related.map(link => link.id)).toEqual(['swarm/computers', 'swarm/channels']);
+    expect(() => new KnowledgeCatalog([{ ...entries[1], related: ['missing'] }, entries[0], entries[2]])).toThrow(
+      'related',
+    );
+    expect(() => new KnowledgeCatalog(entries, { 'swarm/channels': 'swarm' })).toThrow('alias');
   });
 
   it('indexes a hierarchy without exposing full content in listings and pages by stable ID order', () => {

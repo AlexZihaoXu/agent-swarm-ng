@@ -8,7 +8,7 @@ const path = Type.String({
   description: 'Guest path: absolute, ~/ under /home/agent, or relative to /workspace. Never a platform-host path.',
 });
 const scope =
-  'Requires your current assigned, claimed computer; runs as its guest agent account. No host access. Await each computer operation before starting another. Read swarm/computers/files before first use. ';
+  'Requires your current assigned, claimed computer; runs as its guest agent account. No host access. Await each computer operation before starting another. Read concepts/computers/files before first use. ';
 export function createCoreTools(
   service: ComputerUseService,
   images: ScreenshotPool,

@@ -17,6 +17,7 @@ import {
   contourPoints,
   curvePath,
   contourSpeed,
+  crown,
   eyelidTransform,
   faceMotion,
   shapeOutline,
@@ -204,8 +205,8 @@ export function AgentAvatarArt({
       narrow.current = morph ? blend(morph.narrow, targetNarrow) : targetNarrow;
       head.current?.setAttribute('transform', `rotate(${tilt.current} 32 32)`);
       outline.setAttribute('d', curvePath(rendered.current));
-      // A top accessory rides the outline's highest point as the silhouette moves.
-      const top = rendered.current.reduce((best, point) => (point.y < best.y ? point : best));
+      // A top accessory rides the top of the outline as the silhouette moves.
+      const top = crown(rendered.current);
       topping.current?.setAttribute('transform', `translate(${(top.x - 32).toFixed(2)} ${top.y.toFixed(2)})`);
       if (progress === 1) transition.current = undefined;
       root.dataset.transition = transition.current ? 'running' : 'idle';

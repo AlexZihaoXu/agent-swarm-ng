@@ -12418,6 +12418,10 @@
                         "maximum": 10000,
                         "description": "Scroll position: rows above the live bottom (default 0 = bottom). Use the value the result suggests.",
                         "type": "integer"
+                      },
+                      "colors": {
+                        "description": "Also attach an image of these rows as the terminal shows them, with colours and styles (default false: text only). Needs a vision model.",
+                        "type": "boolean"
                       }
                     }
                   },
@@ -14457,6 +14461,7 @@
                     "hasChildren",
                     "parentId",
                     "breadcrumbs",
+                    "related",
                     "text",
                     "offset",
                     "totalCharacters",
@@ -14501,6 +14506,31 @@
                             "type": "string"
                           },
                           "title": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "movedFrom": {
+                      "type": "string"
+                    },
+                    "related": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "title",
+                          "summary"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "summary": {
                             "type": "string"
                           }
                         }

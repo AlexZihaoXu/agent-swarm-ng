@@ -26,4 +26,4 @@ The same platform-event path carries **computer events**: while an agent holds a
 
 ## Guidance
 
-The system prompt carries a short "Time, timers and reminders" section, and Swarm Knowledge `swarm/time` has the full guide and scheduling patterns (a clock time → compute the delay; recurring → chain timers or use a reminder).
+The system prompt carries a short "Time, timers and reminders" section, and Swarm Knowledge `concepts/time` defines timers and reminders, `practices/scheduling` gives the scheduling patterns (a clock time → compute the delay; recurring → chain timers or use a reminder), and `practices/waiting` compares timers, reminders, [computer watches](agent-computer-use.md#watches) and terminal events. `list_timers` and `cancel_timer` also cover watches.

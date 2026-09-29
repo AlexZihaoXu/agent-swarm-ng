@@ -4058,6 +4058,8 @@ export interface operations {
                     rows?: number;
                     /** @description Scroll position: rows above the live bottom (default 0 = bottom). Use the value the result suggests. */
                     up?: number;
+                    /** @description Also attach an image of these rows as the terminal shows them, with colours and styles (default false: text only). Needs a vision model. */
+                    colors?: boolean;
                 } | {
                     /** @enum {string} */
                     operation: "delete";
@@ -4773,6 +4775,12 @@ export interface operations {
                         breadcrumbs: {
                             id: string;
                             title: string;
+                        }[];
+                        movedFrom?: string;
+                        related: {
+                            id: string;
+                            title: string;
+                            summary: string;
                         }[];
                         text: string;
                         offset: number;

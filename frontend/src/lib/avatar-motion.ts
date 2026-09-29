@@ -100,3 +100,27 @@ export function shapeOutline(
   const fit = extent > 28.5 ? 28.5 / extent : 1;
   return shaped.map(point => ({ x: 32 + (point.x - 32) * fit, y: 32 + (point.y - 32) * fit }));
 }
+
+/**
+ * Where a top accessory sits: a softly weighted centre of the highest part of the outline, on the outline itself.
+ * The single highest point would flip between the shoulders of a flat-topped shape as it wobbles.
+ */
+export function crown(points: readonly { x: number; y: number }[]) {
+  const highest = Math.min(...points.map(point => point.y));
+  let weight = 0,
+    sum = 0;
+  for (const point of points) {
+    const w = Math.exp(-(point.y - highest) / 1.5);
+    weight += w;
+    sum += w * point.x;
+  }
+  const x = sum / weight;
+  // The outline's top edge at that x (the highest crossing of the vertical line through it).
+  let y = Infinity;
+  points.forEach((a, index) => {
+    const b = points[(index + 1) % points.length];
+    if ((a.x - x) * (b.x - x) > 0 || a.x === b.x) return;
+    y = Math.min(y, a.y + ((x - a.x) / (b.x - a.x)) * (b.y - a.y));
+  });
+  return { x, y: Number.isFinite(y) ? y : highest };
+}

@@ -43,7 +43,11 @@ export default function interruptionTriage(pi: ExtensionAPI) {
   pi.registerTool(createDecisionTool(decision => pi.events.emit('swarm:triage-decision', decision)));
 }
 
-export function forkContext(main: AgentSession) {
+/** The main branch's transcript, safe to continue in a fork (a live session or a saved basis of one). */
+export function forkContext(main: {
+  messages: AgentSession['messages'];
+  agent: { state: { streamingMessage?: AgentSession['agent']['state']['streamingMessage'] } };
+}) {
   const messages = structuredClone(main.messages);
   const finished = new Set(messages.filter(m => m.role === 'toolResult').map(m => m.toolCallId));
   for (const message of [...messages])

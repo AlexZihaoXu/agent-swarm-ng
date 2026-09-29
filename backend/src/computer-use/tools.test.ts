@@ -75,17 +75,19 @@ it('binds real agent identity, returns model image content and maps name/params 
   }
 });
 it('teaches the computer tools through real Knowledge entries and prompt guidance', () => {
-  for (const id of ['use', 'actions', 'browser']) {
-    expect(swarmKnowledge.read({ id: `swarm/computers/${id}` }).text.length).toBeGreaterThan(200);
-    expect(COMPUTER_USE_GUIDANCE).toContain(`swarm/computers/${id}`);
+  for (const id of ['practices/computer-use', 'practices/desktop', 'practices/browser', 'practices/waiting']) {
+    expect(swarmKnowledge.read({ id }).text.length).toBeGreaterThan(200);
+    expect(COMPUTER_USE_GUIDANCE).toContain(id);
   }
   expect(COMPUTER_USE_GUIDANCE).toContain('low is for orientation');
   expect(COMPUTER_USE_GUIDANCE).toContain('quality:"full"');
-  const actions = swarmKnowledge.read({ id: 'swarm/computers/actions' }).text;
+  const actions =
+    swarmKnowledge.read({ id: 'practices/desktop' }).text +
+    swarmKnowledge.read({ id: 'concepts/computers/desktop' }).text;
   expect(actions).toContain('100%');
   expect(actions).toContain('0.2');
   expect(actions).toContain('Do not guess');
-  const browser = swarmKnowledge.read({ id: 'swarm/computers/browser' }).text;
+  const browser = swarmKnowledge.read({ id: 'practices/browser' }).text;
   expect(browser).toContain('ONE attempt');
   expect(browser).toContain('before trying');
   expect(browser).toContain('Google');

@@ -8,6 +8,7 @@ import { formatContextUsage } from './context-usage';
 import { createPublicationTyping } from './publication-typing';
 import { AgentSessionStore } from './agent-session-store';
 import type { ActivityStore } from './activity-store';
+import { forkBasis, type ForkBasis } from './computer-use/watch-judge';
 
 export type InboxHooks = {
   prepare?: (messages: ChannelMessage[]) => Promise<ChannelMessage[]>;
@@ -16,6 +17,8 @@ export type InboxHooks = {
   notices?: string[];
   noticesSaved?: () => Promise<void>;
   activityStore?: ActivityStore;
+  /** The run's session as a fork would copy it: live while running, then as it ended. */
+  session?: (basis: () => ForkBasis, ended: boolean) => void;
 };
 
 export async function runChat(
@@ -90,6 +93,8 @@ export async function runChat(
     );
     if (hooks.sessionStore && !restored && session.sessionManager.getEntries().length)
       await hooks.sessionStore.save(channel.agentId, session.sessionManager);
+    const live = session;
+    hooks.session?.(() => forkBasis(live), false);
     signal.addEventListener('abort', abort, { once: true });
     signal.throwIfAborted();
     phase = 'running';
@@ -286,6 +291,10 @@ export async function runChat(
     unsubscribe();
     signal.removeEventListener('abort', abort);
     await checkpoint;
+    if (session) {
+      const ended = { ...forkBasis(session), messages: session.messages.slice(), streamingMessage: undefined };
+      hooks.session?.(() => ended, true);
+    }
     session?.dispose();
     await web?.close();
     try {

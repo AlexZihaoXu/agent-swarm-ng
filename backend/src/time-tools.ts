@@ -8,6 +8,7 @@ import {
   TimerError,
   type AgentTimers,
 } from './agent-timers';
+import type { ComputerWatches } from './computer-use/watches';
 
 const reply = (value: unknown, isError = false) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value) }],
@@ -50,13 +51,18 @@ export function currentTime(timeZone?: string, now = new Date()) {
  * Time awareness for every agent, with or without a computer: the current time, one-shot timers and repeating
  * reminders that wake the agent with a platform event. Not cron: the agent computes delays itself.
  */
-export function createTimeTools(timers: AgentTimers, agentId: string, humanAuthority: () => boolean): ToolDefinition[] {
+export function createTimeTools(
+  timers: AgentTimers,
+  agentId: string,
+  humanAuthority: () => boolean,
+  watches?: ComputerWatches,
+): ToolDefinition[] {
   return [
     defineTool({
       name: 'current_time',
       label: 'Current time',
       description:
-        'The current date and time (UTC, Unix ms, and local time in an IANA time zone such as "America/Toronto"; the platform zone by default). Use it before computing a delay for set_timer or set_reminder. Read swarm/time for scheduling patterns.',
+        'The current date and time (UTC, Unix ms, and local time in an IANA time zone such as "America/Toronto"; the platform zone by default). Use it before computing a delay for set_timer or set_reminder. Read practices/scheduling for scheduling patterns.',
       parameters: Type.Object(
         { timezone: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })) },
         { additionalProperties: false },
@@ -112,24 +118,30 @@ export function createTimeTools(timers: AgentTimers, agentId: string, humanAutho
     defineTool({
       name: 'list_timers',
       label: 'List timers',
-      description: 'Your pending timers and reminders, soonest first, with their ids, notes and next firing time.',
+      description:
+        'Your pending timers and reminders, soonest first, with their ids, notes and next firing time, and your computer watches (watch_terminal/watch_desktop) with their next check and timeout.',
       parameters: Type.Object({}, { additionalProperties: false }),
       async execute() {
-        return reply({ timers: await timers.list(agentId) });
+        const watching = watches?.list(agentId) ?? [];
+        return reply({ timers: await timers.list(agentId), ...(watching.length ? { watches: watching } : {}) });
       },
     }),
     defineTool({
       name: 'cancel_timer',
       label: 'Cancel timer',
-      description: 'Cancel one of your timers or reminders by id (from set_timer, set_reminder or list_timers).',
+      description:
+        'Cancel one of your timers, reminders or computer watches by id (from set_timer, set_reminder, watch_terminal, watch_desktop or list_timers).',
       parameters: Type.Object({ id: Type.String({ minLength: 1, maxLength: 64 }) }, { additionalProperties: false }),
       async execute(_call, { id }) {
-        const cancelled = await timers.cancel(agentId, id);
-        return reply(cancelled ? { cancelled: true, id } : { error: 'No such timer of yours.' }, !cancelled);
+        const cancelled = (await watches?.cancel(agentId, id)) || (await timers.cancel(agentId, id));
+        return reply(
+          cancelled ? { cancelled: true, id } : { error: 'No such timer, reminder or watch of yours.' },
+          !cancelled,
+        );
       },
     }),
   ];
 }
 
 export const TIME_GUIDANCE = `## Time, timers and reminders
-You have a sense of time. Call current_time instead of guessing the date or time. To come back to something later, set_timer({seconds, note}) and end your turn rather than waiting or polling; the note (up to 256 characters) is what you will see when it fires. set_reminder repeats every N seconds for a number of times (or until cancel_timer). A firing arrives as a platform event, not a human message: act on your note and message the human only if useful. There is no cron yet: compute the delay to a clock time yourself and chain timers for recurring schedules. Read Swarm Knowledge swarm/time before relying on these for anything scheduled.`;
+You have a sense of time. Call current_time instead of guessing the date or time. To come back to something later, set_timer({seconds, note}) and end your turn rather than waiting or polling; the note (up to 256 characters) is what you will see when it fires. set_reminder repeats every N seconds for a number of times (or until cancel_timer). A firing arrives as a platform event, not a human message: act on your note and message the human only if useful. There is no cron yet: compute the delay to a clock time yourself and chain timers for recurring schedules. Read Swarm Knowledge practices/waiting and practices/scheduling before relying on these for anything scheduled.`;
