@@ -51,10 +51,13 @@ export function ComputerCard({
   useEffect(() => {
     if (!polling) return;
     let cancelled = false,
-      frame = 0;
+      last = 0;
     const tick = () => {
-      frame += 1;
-      const id = frame;
+      // Frame IDs must never repeat, even across visits: Chrome reuses an already-decoded image for an identical
+      // URL in the same page regardless of no-store, so a counter restarting at 1 replayed old frames after
+      // returning to this page. A timestamp is unique per card and increases.
+      const id = Math.max(Date.now(), last + 1);
+      last = id;
       // One stable URL per frame, shared by the preload and the rendered <img>,
       // so the fade never triggers a second fetch.
       const src = `/api/computers/${encodeURIComponent(computer.id)}/preview?at=${id}`;

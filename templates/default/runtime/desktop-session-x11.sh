@@ -7,8 +7,13 @@ runtime=${XDG_RUNTIME_DIR:?}
 export DISPLAY=:1 XDG_SESSION_TYPE=x11
 pipewire > "$runtime/pipewire.log" 2>&1 &
 pipewire_pid=$!
+# WirePlumber and the PulseAudio bridge connect to PipeWire's socket; starting them in the
+# same instant raced it. pipewire-pulse gives browsers (PulseAudio clients) an audio server.
+until [ -S "$runtime/pipewire-0" ] || ! kill -0 "$pipewire_pid" 2>/dev/null; do sleep 0.05; done
 wireplumber > "$runtime/wireplumber.log" 2>&1 &
 wireplumber_pid=$!
+pipewire-pulse > "$runtime/pipewire-pulse.log" 2>&1 &
+pulse_pid=$!
 # Present a 120 Hz virtual screen to GNOME; this is a target, not a promise
 # that every app or remote JPEG frame can be encoded/delivered at 120 fps.
 Xvfb :1 -screen 0 1920x1080x24 -fakescreenfps 120 -nolisten tcp +extension GLX +extension RANDR -dpi 96 > "$runtime/xvfb.log" 2>&1 &
@@ -18,10 +23,10 @@ stream_pid=''
 cleanup() {
     [ -z "$stream_pid" ] || kill "$stream_pid" 2>/dev/null || true
     [ -z "$shell_pid" ] || kill "$shell_pid" 2>/dev/null || true
-    kill "$xvfb_pid" "$wireplumber_pid" "$pipewire_pid" 2>/dev/null || true
+    kill "$xvfb_pid" "$pulse_pid" "$wireplumber_pid" "$pipewire_pid" 2>/dev/null || true
     [ -z "$stream_pid" ] || wait "$stream_pid" 2>/dev/null || true
     [ -z "$shell_pid" ] || wait "$shell_pid" 2>/dev/null || true
-    wait "$xvfb_pid" "$wireplumber_pid" "$pipewire_pid" 2>/dev/null || true
+    wait "$xvfb_pid" "$pulse_pid" "$wireplumber_pid" "$pipewire_pid" 2>/dev/null || true
     rm -f "$runtime/desktop-ready"
 }
 trap cleanup EXIT INT TERM

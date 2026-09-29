@@ -137,6 +137,9 @@ RUN install -d -m 0755 /home/agent/.nvm \
 # Ubuntu Dock without changing its separate Trash icon. Schema defaults leave
 # existing home-volume customizations alone; no owner desktop is restarted.
 COPY gnome-workspace.gschema.override /usr/share/glib-2.0/schemas/90_swarm-computer.gschema.override
+# Audio without a sound card: a virtual output, and no Bluetooth monitor (it needs logind).
+COPY audio/60-swarm-output.conf /etc/pipewire/pipewire.conf.d/60-swarm-output.conf
+COPY audio/80-swarm-no-bluetooth.lua /etc/wireplumber/bluetooth.lua.d/80-swarm-no-bluetooth.lua
 RUN glib-compile-schemas /usr/share/glib-2.0/schemas
 
 # Operator-built HTTP/LAN variant uses JPEG/createImageBitmap instead of

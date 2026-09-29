@@ -3,8 +3,13 @@ set -eu
 runtime=${XDG_RUNTIME_DIR:?}
 pipewire > "$runtime/pipewire.log" 2>&1 &
 pipewire_pid=$!
+# WirePlumber and the PulseAudio bridge connect to PipeWire's socket; starting them in the
+# same instant raced it. pipewire-pulse gives browsers (PulseAudio clients) an audio server.
+until [ -S "$runtime/pipewire-0" ] || ! kill -0 "$pipewire_pid" 2>/dev/null; do sleep 0.05; done
 wireplumber > "$runtime/wireplumber.log" 2>&1 &
 wireplumber_pid=$!
+pipewire-pulse > "$runtime/pipewire-pulse.log" 2>&1 &
+pulse_pid=$!
 gnome-shell --wayland --headless --no-x11 --virtual-monitor 1920x1080 --mode=ubuntu > "$runtime/gnome-shell.log" 2>&1 &
 shell_pid=$!
 cast_pid=''
@@ -14,8 +19,8 @@ cleanup() {
     [ -z "$cast_pid" ] || kill "$cast_pid" 2>/dev/null || true
     [ -z "$link_pid" ] || kill "$link_pid" 2>/dev/null || true
     [ -z "$stream_pid" ] || kill "$stream_pid" 2>/dev/null || true
-    kill "$shell_pid" "$wireplumber_pid" "$pipewire_pid" 2>/dev/null || true
-    wait "$shell_pid" "$wireplumber_pid" "$pipewire_pid" 2>/dev/null || true
+    kill "$shell_pid" "$pulse_pid" "$wireplumber_pid" "$pipewire_pid" 2>/dev/null || true
+    wait "$shell_pid" "$pulse_pid" "$wireplumber_pid" "$pipewire_pid" 2>/dev/null || true
     [ -z "$stream_pid" ] || wait "$stream_pid" 2>/dev/null || true
     [ -z "$link_pid" ] || wait "$link_pid" 2>/dev/null || true
 }

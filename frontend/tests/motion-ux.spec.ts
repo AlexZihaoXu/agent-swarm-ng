@@ -294,3 +294,42 @@ test('the desktop handle opens a Terminals drawer, and a session floats out fitt
   await expect(floating).toHaveCount(0);
   await expect(page.getByRole('dialog', { name: 'Terminals' })).toBeVisible();
 });
+
+test('computer previews keep fetching fresh frames after leaving the grid and coming back', async ({ page }) => {
+  // A tiny valid JPEG.
+  const jpeg = Buffer.from(
+    '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==',
+    'base64',
+  );
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({
+      json: {
+        controllerConnected: true,
+        computers: [
+          { id: 'desk', name: 'Desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0, portalFree: true },
+        ],
+      },
+    }),
+  );
+  const urls: string[] = [];
+  await page.route('**/api/computers/desk/preview*', route => {
+    urls.push(route.request().url());
+    return route.fulfill({ body: jpeg, contentType: 'image/jpeg', headers: { 'Cache-Control': 'no-store' } });
+  });
+  await page.goto('/computers');
+  await expect.poll(() => urls.length).toBeGreaterThan(3);
+  const shown = () =>
+    page
+      .locator('[data-testid="computer-preview-layer"]')
+      .evaluateAll(images => images.map(i => i.getAttribute('src')));
+  const seen = new Set(await shown());
+  await page.waitForTimeout(1200);
+  for (const src of await shown()) seen.add(src);
+  await page.getByRole('button', { name: 'Open Desk desktop' }).click();
+  await page.getByRole('button', { name: 'Back to computers' }).click();
+  await page.waitForTimeout(1500);
+  // Frame URLs never repeat, so coming back cannot replay frames from the first visit out of the image cache.
+  const again = await shown();
+  expect(again.length).toBeGreaterThan(0);
+  for (const src of again) expect(seen.has(src)).toBe(false);
+});
