@@ -2,8 +2,6 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { Button } from '@/components/ui/button';
-const COLS = 120,
-  ROWS = 36;
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 const ctrl = (letter: string) => String.fromCharCode(letter.charCodeAt(0) & 0x1f);
 
@@ -50,10 +48,15 @@ export function TerminalEmulator({
   sessionId,
   interactive,
   title,
+  columns = 120,
+  rows = 36,
 }: {
   computerId: string;
   sessionId: string;
   interactive: boolean;
+  /** The session's own grid (default 120 × 36); the operator can resize a session, viewers never do. */
+  columns?: number;
+  rows?: number;
   /** Shown in the window's title bar, like a desktop terminal app. */
   title: string;
 }) {
@@ -69,7 +72,7 @@ export function TerminalEmulator({
   const touch = useTouchKeyboard();
   const latched = useRef(false);
   latched.current = ctrlLatched;
-  // The grid stays 120 × 36; it is scaled to fill the space like the desktop viewer, never resized.
+  // The grid keeps the session's size; it is scaled to fill the space like the desktop viewer, never resized.
   const frame = useRef<HTMLDivElement>(null),
     stage = useRef<HTMLDivElement>(null),
     titleBar = useRef<HTMLDivElement>(null),
@@ -91,8 +94,8 @@ export function TerminalEmulator({
       return;
     }
     const term = new Terminal({
-      cols: COLS,
-      rows: ROWS,
+      cols: columns,
+      rows,
       fontSize: 13,
       lineHeight: 1.15,
       fontFamily: 'Consolas, "Liberation Mono", monospace',
@@ -214,12 +217,12 @@ export function TerminalEmulator({
       try {
         if (typeof event.data !== 'string' || event.data.length > 16384) throw Error();
         const frame = JSON.parse(event.data);
-        if (frame.type === 'ready' && frame.columns === COLS && frame.rows === ROWS) {
+        if (frame.type === 'ready' && frame.columns === columns && frame.rows === rows) {
           ready = true;
           connected.current = true;
           clearTimeout(timeout);
           term.options.disableStdin = !inputAllowed.current;
-          setStatus('Connected · 120 × 36 · Keyboard only');
+          setStatus(`Connected · ${columns} × ${rows} · Keyboard only`);
           term.focus();
           return;
         }
@@ -254,7 +257,7 @@ export function TerminalEmulator({
       term.dispose();
       terminal.current = null;
     };
-  }, [computerId, sessionId, attempt, visible]);
+  }, [computerId, sessionId, attempt, visible, columns, rows]);
   useEffect(() => {
     const area = stage.current,
       inner = host.current;

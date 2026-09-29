@@ -1,3 +1,11 @@
+import { terminalSize } from './computer-terminal';
+const validTerminalSize = (columns: unknown, rows: unknown) =>
+  Number.isInteger(columns) &&
+  Number.isInteger(rows) &&
+  (columns as number) >= terminalSize.columns[0] &&
+  (columns as number) <= terminalSize.columns[1] &&
+  (rows as number) >= terminalSize.rows[0] &&
+  (rows as number) <= terminalSize.rows[1];
 import type { ServerWebSocket } from 'bun';
 import type { ComputerManager } from './manager';
 import type { ExecConnection } from './docker-exec-stream';
@@ -73,7 +81,7 @@ export function terminalSockets(manager: ComputerManager) {
                 const event = JSON.parse(data.buffer.slice(0, newline));
                 data.buffer = data.buffer.slice(newline + 1);
                 const valid =
-                  (event.type === 'ready' && event.columns === 120 && event.rows === 36) ||
+                  (event.type === 'ready' && validTerminalSize(event.columns, event.rows)) ||
                   (event.type === 'output' &&
                     typeof event.data === 'string' &&
                     event.data.length <= 12000 &&

@@ -28,6 +28,16 @@ class TerminalValidation(unittest.TestCase):
         for text in ('\0', '\x1b[31m', 'a' * 33000):
             with self.assertRaises(ValueError): terminal.validate(dict(target, operation='type', text=text))
 
+    def test_operator_rename_and_resize_are_bounded(self):
+        target = {'session': '12345678-1234-1234-1234-123456789abc'}
+        terminal.validate(dict(target, operation='rename', name='build-2'))
+        terminal.validate(dict(target, operation='resize', columns=80, rows=24))
+        terminal.validate(dict(target, operation='resize', columns=240, rows=80))
+        for value in (dict(target, operation='rename', name='-bad'), dict(target, operation='rename'),
+                      dict(target, operation='resize', columns=39, rows=24), dict(target, operation='resize', columns=80, rows=81),
+                      dict(target, operation='resize', columns=80.0, rows=24), dict(target, operation='resize', columns=80)):
+            with self.assertRaises(ValueError): terminal.validate(value)
+
     def test_view_scrolls_by_rows_above_the_live_bottom(self):
         session = {'operation': 'view', 'session': '12345678-1234-1234-1234-123456789abc'}
         terminal.validate(dict(session, rows=200, up=10000))

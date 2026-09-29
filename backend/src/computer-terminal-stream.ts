@@ -127,7 +127,15 @@ export function registerTerminalStreams(
             if (typeof event.data !== 'string' || event.data.length > 16384 || socket.bufferedAmount > 262144)
               throw Error();
             const data = JSON.parse(event.data);
-            if (data.type === 'ready' && data.columns === 120 && data.rows === 36) {
+            if (
+              data.type === 'ready' &&
+              Number.isInteger(data.columns) &&
+              Number.isInteger(data.rows) &&
+              data.columns >= 40 &&
+              data.columns <= 240 &&
+              data.rows >= 10 &&
+              data.rows <= 80
+            ) {
               ready = true;
               clearTimeout(connectionTimer);
             } else if (

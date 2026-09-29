@@ -36,7 +36,11 @@ const fields: Record<string, string[]> = {
   press: ['session', 'key'],
   interrupt: ['session'],
   delete: ['session'],
+  // Trusted operator only (the backend never offers these to agents).
+  rename: ['session', 'name'],
+  resize: ['session', 'columns', 'rows'],
 };
+export const terminalSize = { columns: [40, 240], rows: [10, 80] } as const;
 export function validateTerminal(value: Record<string, any>, prepared = false) {
   if (typeof value.operation !== 'string' || !Object.hasOwn(fields, value.operation))
     fail('Unknown terminal operation.');
@@ -57,6 +61,14 @@ export function validateTerminal(value: Record<string, any>, prepared = false) {
   };
   if (!['create', 'list'].includes(value.operation) && (typeof value.session !== 'string' || !id.test(value.session)))
     fail('Use the exact terminal session ID from create/list.');
+  if (value.operation === 'rename' && (typeof value.name !== 'string' || !name.test(value.name)))
+    fail('Name: 1..48 letters, digits, hyphens or underscores; start with a letter/digit.');
+  if (value.operation === 'resize')
+    for (const key of ['columns', 'rows'] as const) {
+      const [min, max] = terminalSize[key];
+      if (!Number.isInteger(value[key]) || value[key] < min || value[key] > max)
+        fail(`${key} must be an integer from ${min} to ${max}.`);
+    }
   if (value.operation === 'create') {
     if (typeof value.name !== 'string' || !name.test(value.name))
       fail('Name: 1..48 letters, digits, hyphens or underscores; start with a letter/digit.');

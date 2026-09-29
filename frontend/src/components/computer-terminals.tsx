@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import * as ContextMenu from '@radix-ui/react-context-menu';
 import { ConfirmDialog } from './confirm-dialog';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,15 @@ const TerminalEmulator = lazy(() =>
 );
 const field =
   'min-h-10 min-w-0 rounded-md border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:text-sm';
+
+/** Window sizes offered for a session (columns × rows); the guest accepts 40..240 × 10..80. */
+const terminalSizes = [
+  [80, 24, 'Classic'],
+  [100, 30, 'Medium'],
+  [120, 36, 'Default'],
+  [160, 48, 'Large'],
+  [200, 50, 'Wide'],
+] as const;
 
 const exitText = (item: { exitCode: number | null; exitSignal?: string | null }) =>
   `exited${item.exitCode !== null ? ` (${item.exitCode})` : item.exitSignal ? ` (${item.exitSignal})` : ''}`;
@@ -51,6 +61,10 @@ export function TerminalWorkspace({
   const [deleting, setDeleting] = useState(false);
   // Phones show the list first and one session at a time; wider screens show both.
   const [phoneDetail, setPhoneDetail] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  // Rename opens an inline field; the menu must not hand focus back to the row as it closes.
+  const renameField = useRef<HTMLInputElement>(null);
+  const focusRename = useRef(false);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
@@ -162,55 +176,154 @@ export function TerminalWorkspace({
               {sessions.map(item => {
                 const on = item.id === selected && !creating;
                 return (
-                  <div key={item.id} className="group relative">
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={on}
-                      title={item.cwd}
-                      disabled={busy}
-                      onClick={() => {
-                        setSelected(item.id);
-                        setCreating(false);
-                        setPhoneDetail(true);
-                        setNotice('');
-                        setError('');
-                      }}
-                      className={`relative isolate flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 pr-10 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring md:min-h-0 ${on ? 'text-foreground' : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'}`}
-                    >
-                      {on && (
-                        <m.span
-                          aria-hidden="true"
-                          layoutId={`terminal-session-${computer.id}`}
-                          transition={glide}
-                          className="absolute inset-0 -z-10 rounded-lg bg-foreground/10"
-                        />
-                      )}
-                      <span
-                        aria-hidden="true"
-                        className={`size-2 shrink-0 rounded-full ${item.alive ? 'bg-teal-400' : 'bg-muted-foreground/50'}`}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-mono text-xs">{item.name}</span>
-                        <span className="block truncate text-[11px] text-muted-foreground">
-                          {item.alive ? (item.currentCommand ?? 'running') : exitText(item)}
-                        </span>
-                      </span>
-                      <span className="sr-only">{item.alive ? ' (running)' : ` (${exitText(item)})`}</span>
-                    </button>
-                    {on && (
-                      <button
-                        type="button"
-                        aria-label="Delete terminal"
-                        title="Delete terminal"
-                        disabled={!actionable}
-                        onClick={() => setDeleting(true)}
-                        className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-red-500/10 hover:text-red-400 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                  // Right-click (or long-press / Shift+F10) a session for its settings.
+                  <ContextMenu.Root key={item.id}>
+                    <ContextMenu.Trigger asChild disabled={busy}>
+                      <div className="group relative">
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={on}
+                          title={item.cwd}
+                          disabled={busy}
+                          onClick={() => {
+                            setSelected(item.id);
+                            setCreating(false);
+                            setPhoneDetail(true);
+                            setNotice('');
+                            setError('');
+                          }}
+                          className={`relative isolate flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 pr-10 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring md:min-h-0 ${on ? 'text-foreground' : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'}`}
+                        >
+                          {on && (
+                            <m.span
+                              aria-hidden="true"
+                              layoutId={`terminal-session-${computer.id}`}
+                              transition={glide}
+                              className="absolute inset-0 -z-10 rounded-lg bg-foreground/10"
+                            />
+                          )}
+                          <span
+                            aria-hidden="true"
+                            className={`size-2 shrink-0 rounded-full ${item.alive ? 'bg-teal-400' : 'bg-muted-foreground/50'}`}
+                          />
+                          <span className="min-w-0 flex-1">
+                            {renaming === item.id ? (
+                              <input
+                                ref={renameField}
+                                aria-label="Terminal name"
+                                defaultValue={item.name}
+                                maxLength={48}
+                                pattern="[A-Za-z0-9](?:[A-Za-z0-9_]|-){0,47}"
+                                onClick={event => event.stopPropagation()}
+                                onKeyDown={event => {
+                                  event.stopPropagation();
+                                  if (event.key === 'Escape') setRenaming(null);
+                                  if (event.key === 'Enter') {
+                                    event.preventDefault();
+                                    const next = event.currentTarget.value.trim();
+                                    setRenaming(null);
+                                    if (next && next !== item.name)
+                                      void act({ operation: 'rename', session: item.id, name: next });
+                                  }
+                                }}
+                                onBlur={() => setRenaming(null)}
+                                className="w-full rounded border border-ring bg-background px-1 font-mono text-xs text-foreground outline-none"
+                              />
+                            ) : (
+                              <span className="block truncate font-mono text-xs">{item.name}</span>
+                            )}
+                            <span className="block truncate text-[11px] text-muted-foreground">
+                              {item.alive ? (item.currentCommand ?? 'running') : exitText(item)} · {item.columns}×
+                              {item.rows}
+                            </span>
+                          </span>
+                          <span className="sr-only">{item.alive ? ' (running)' : ` (${exitText(item)})`}</span>
+                        </button>
+                        {on && (
+                          <button
+                            type="button"
+                            aria-label="Delete terminal"
+                            title="Delete terminal"
+                            disabled={!actionable}
+                            onClick={() => setDeleting(true)}
+                            className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-red-500/10 hover:text-red-400 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                          >
+                            <TrashIcon className="size-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </ContextMenu.Trigger>
+                    <ContextMenu.Portal>
+                      <ContextMenu.Content
+                        className="context-menu-content phone-menu-targets z-[60] min-w-52 rounded-lg border border-border bg-background p-1 text-sm shadow-lg"
+                        aria-label={`Settings for ${item.name}`}
+                        onCloseAutoFocus={event => {
+                          if (!focusRename.current) return;
+                          focusRename.current = false;
+                          event.preventDefault();
+                          requestAnimationFrame(() => renameField.current?.select());
+                        }}
                       >
-                        <TrashIcon className="size-3.5" />
-                      </button>
-                    )}
-                  </div>
+                        <ContextMenu.Item
+                          className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:opacity-50 md:min-h-0"
+                          onSelect={() => {
+                            focusRename.current = true;
+                            setRenaming(item.id);
+                          }}
+                        >
+                          Rename…
+                        </ContextMenu.Item>
+                        <ContextMenu.Sub>
+                          <ContextMenu.SubTrigger className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:opacity-50 md:min-h-0 justify-between data-[state=open]:bg-muted">
+                            Window size
+                            <span className="text-xs text-muted-foreground">
+                              {item.columns} × {item.rows}
+                            </span>
+                          </ContextMenu.SubTrigger>
+                          <ContextMenu.Portal>
+                            <ContextMenu.SubContent
+                              className="context-menu-content z-[60] min-w-44 rounded-lg border border-border bg-background p-1 text-sm shadow-lg"
+                              sideOffset={4}
+                            >
+                              <ContextMenu.RadioGroup
+                                value={`${item.columns}x${item.rows}`}
+                                onValueChange={value => {
+                                  const [columns, rows] = value.split('x').map(Number);
+                                  void act({ operation: 'resize', session: item.id, columns, rows });
+                                }}
+                              >
+                                {terminalSizes.map(([columns, rows, label]) => (
+                                  <ContextMenu.RadioItem
+                                    key={label}
+                                    value={`${columns}x${rows}`}
+                                    className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:opacity-50 md:min-h-0 pl-7 relative"
+                                  >
+                                    <ContextMenu.ItemIndicator className="absolute left-2.5 size-1.5 rounded-full bg-foreground" />
+                                    <span className="flex-1">{label}</span>
+                                    <span className="font-mono text-xs text-muted-foreground">
+                                      {columns}×{rows}
+                                    </span>
+                                  </ContextMenu.RadioItem>
+                                ))}
+                              </ContextMenu.RadioGroup>
+                            </ContextMenu.SubContent>
+                          </ContextMenu.Portal>
+                        </ContextMenu.Sub>
+                        <ContextMenu.Separator className="my-1 h-px bg-border" />
+                        <ContextMenu.Item
+                          className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:opacity-50 md:min-h-0 text-red-400"
+                          onSelect={() => {
+                            setSelected(item.id);
+                            setCreating(false);
+                            setDeleting(true);
+                          }}
+                        >
+                          Delete terminal…
+                        </ContextMenu.Item>
+                      </ContextMenu.Content>
+                    </ContextMenu.Portal>
+                  </ContextMenu.Root>
                 );
               })}
             </div>
@@ -331,9 +444,11 @@ export function TerminalWorkspace({
                     }
                   >
                     <TerminalEmulator
-                      key={session.id}
+                      key={`${session.id}:${session.columns}x${session.rows}`}
                       computerId={computer.id}
                       sessionId={session.id}
+                      columns={session.columns}
+                      rows={session.rows}
                       interactive={session.alive && !busy && !creating && !deleting}
                       title={`${session.name}${session.cwd ? ` — ${session.cwd}` : ''}`}
                     />

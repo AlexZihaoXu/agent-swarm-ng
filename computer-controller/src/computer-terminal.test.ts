@@ -10,6 +10,8 @@ it.each([
   { operation: 'type', session: id, text: 'hello\n世界; kill-server' },
   { operation: 'press', session: id, key: 'C-c' },
   { operation: 'view', session: id, rows: 200, up: 10000 },
+  { operation: 'rename', session: id, name: 'server-2' },
+  { operation: 'resize', session: id, columns: 80, rows: 24 },
 ])('accepts bounded terminal request %#', input =>
   expect(validateCore({ kind: 'terminal', ...input })).toMatchObject(input),
 );
@@ -30,6 +32,9 @@ it.each([
     ...extra,
   })),
   { operation: 'status', session: id, up: 1 },
+  { operation: 'rename', session: id, name: 'bad name' },
+  { operation: 'resize', session: id, columns: 241, rows: 24 },
+  { operation: 'resize', session: id, columns: 80 },
 ])('rejects malformed/cross-scope terminal request %#', input =>
   expect(() => validateCore({ kind: 'terminal', ...input })).toThrow(),
 );

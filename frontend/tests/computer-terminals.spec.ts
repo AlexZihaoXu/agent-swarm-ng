@@ -259,3 +259,24 @@ test('clicking the console keeps keyboard focus in it, and sessions are listed b
   await page.keyboard.type('ls');
   await expect.poll(() => input.join('')).toBe('ls');
 });
+
+test('right-clicking a session renames it or changes its window size', async ({ page }) => {
+  const { panel, requests } = await open(page);
+  const row = panel.getByRole('tab', { name: /build/ });
+  await expect(row).toContainText('120×36');
+  await row.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Rename…' }).click();
+  const field = panel.getByLabel('Terminal name');
+  await expect(field).toBeFocused();
+  await field.fill('api-server');
+  await field.press('Enter');
+  await expect
+    .poll(() => requests.find(r => r.operation === 'rename'))
+    .toEqual({ operation: 'rename', session: '12345678-1234-1234-1234-123456789abc', name: 'api-server' });
+  await row.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: /Window size/ }).click();
+  await page.getByRole('menuitemradio', { name: /Classic/ }).click();
+  await expect
+    .poll(() => requests.find(r => r.operation === 'resize'))
+    .toEqual({ operation: 'resize', session: '12345678-1234-1234-1234-123456789abc', columns: 80, rows: 24 });
+});

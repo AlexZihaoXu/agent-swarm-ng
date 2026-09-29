@@ -25,7 +25,10 @@ KEYS.update('C-' + c for c in 'abcdefghijklmnopqrstuvwxyz')
 KEYS.update('M-' + c for c in 'abcdefghijklmnopqrstuvwxyz')
 FIELDS = {'create': ['name', 'command', 'cwd'], 'list': [], 'view': ['session', 'rows', 'up'],
           'status': ['session'], 'type': ['session', 'text'], 'press': ['session', 'key'],
-          'interrupt': ['session'], 'delete': ['session']}
+          'interrupt': ['session'], 'delete': ['session'],
+          # Operator-only: agents' tools never offer these two.
+          'rename': ['session', 'name'], 'resize': ['session', 'columns', 'rows']}
+SIZE_LIMITS = {'columns': (40, 240), 'rows': (10, 80)}
 
 
 def validate(value):
@@ -36,7 +39,11 @@ def validate(value):
         raise ValueError('Unknown terminal operation or field.')
     if operation not in ('create', 'list') and not ID.fullmatch(str(value.get('session', ''))):
         raise ValueError('Use the exact session ID returned by create/list, not a name or tmux target.')
-    if operation == 'create':
+    if operation == 'resize':
+        for key, (low, high) in SIZE_LIMITS.items():
+            if type(value.get(key)) is not int or not low <= value[key] <= high:
+                raise ValueError(key + ' must be an integer from ' + str(low) + ' to ' + str(high) + '.')
+    if operation in ('create', 'rename'):
         if not isinstance(value.get('name'), str) or not NAME.fullmatch(value['name']):
             raise ValueError('Name: 1..48 ASCII letters, digits, hyphens or underscores, starting with a letter/digit.')
         for key, maximum in [('command', 32768), ('cwd', 4096)]:
@@ -171,6 +178,16 @@ def execute(value):
     item = next((item for item in items if item['id'] == session), None)
     if not item: raise ValueError('Terminal not found. Refresh list; session IDs are never reused by this API.')
     pane = item['pane']
+    if operation == 'rename':
+        if any(row['id'] != session and row['name'].lower() == value['name'].lower() for row in items):
+            raise ValueError('Terminal name already exists; choose another.')
+        tmux('set-option', '-t', 'sw-' + session, '@swarm_name', value['name'])
+        return {'session': public(next(row for row in sessions() if row['id'] == session))}
+    if operation == 'resize':
+        # One size per session (not per viewer): everyone attached sees the same grid; viewers reconnect to it.
+        tmux('set-window-option', '-t', pane, 'window-size', 'manual', ';',
+             'resize-window', '-t', pane, '-x', str(value['columns']), '-y', str(value['rows']))
+        return {'session': public(next(row for row in sessions() if row['id'] == session))}
     if operation in ('type', 'press', 'interrupt'):
         if not item['alive']: raise ValueError('Terminal has exited; create another session.')
         if operation == 'type':

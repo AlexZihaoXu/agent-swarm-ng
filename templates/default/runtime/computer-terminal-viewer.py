@@ -1,4 +1,4 @@
-"""Human-only fixed-size PTY attachment. Closing this bridge detaches, never kills a session.
+"""Human-only PTY attachment at the session's own size. Closing this bridge detaches, never kills a session.
 
 stdin/stdout carry bounded JSON lines over a label-checked Docker exec. No caller commands,
 resize API, host paths or guest listener. A lease also bounds orphaned transports.
@@ -51,16 +51,19 @@ def main(session):
     item = next((row for row in terminal.sessions() if row['id'] == session), None)
     if not item: raise ValueError('Terminal not found.')
     pane = item['pane']
-    # Existing sessions get the same invariant as newly-created sessions. Never follow client size.
+    # The session owns its size (default 120 × 36, operator-resizable within bounds). Never follow client size.
     terminal.tmux('set-window-option', '-t', pane, 'window-size', 'manual')
-    if item['columns'] != COLS or item['rows'] != ROWS:
+    cols, rows = item['columns'], item['rows']
+    (low_c, high_c), (low_r, high_r) = terminal.SIZE_LIMITS['columns'], terminal.SIZE_LIMITS['rows']
+    if not (low_c <= cols <= high_c and low_r <= rows <= high_r):
+        cols, rows = COLS, ROWS
         terminal.tmux('resize-window', '-t', pane, '-x', str(COLS), '-y', str(ROWS))
     # This browser is a terminal, not a tmux command console. Ctrl+B and every other delivered
     # key go to the application, not tmux's prefix table. Applies only to this managed session.
     terminal.tmux('set-option', '-t', 'sw-' + session, 'prefix', 'None', ';', 'set-option', '-t', 'sw-' + session, 'prefix2', 'None')
     pid, master = pty.fork()
     if pid == 0:
-        fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack('HHHH', ROWS, COLS, 0, 0))
+        fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack('HHHH', rows, cols, 0, 0))
         env = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': '/home/agent', 'USER': 'agent', 'LOGNAME': 'agent', 'LANG': 'C.UTF-8', 'TERM': 'xterm-256color', 'SHELL': '/bin/bash'}
         os.execve('/usr/bin/tmux', ['tmux', '-u', '-S', str(terminal.ROOT / 'socket'), 'attach-session', '-f', 'ignore-size', '-t', 'sw-' + session], env)
     os.set_blocking(master, False); os.set_blocking(0, False); os.set_blocking(1, False)
@@ -73,7 +76,7 @@ def main(session):
         stopping = True
     signal.signal(signal.SIGTERM, stop)
     try:
-        send({'type': 'ready', 'columns': COLS, 'rows': ROWS})
+        send({'type': 'ready', 'columns': cols, 'rows': rows})
         while not stopping and time.monotonic() < lease:
             for key, mask in selector.select(.25):
                 if key.fd == 0:
