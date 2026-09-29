@@ -487,7 +487,7 @@ export function ComputerViewer({
                   height: stream.height ? `${stream.height}px` : '100%',
                 }}
                 data-rotated={stream.rotated ? '' : undefined}
-                className={`m-auto min-h-0 shrink-0 border-0 bg-black data-[rotated]:absolute data-[rotated]:left-1/2 data-[rotated]:top-1/2 data-[rotated]:m-0 data-[rotated]:-translate-x-1/2 data-[rotated]:-translate-y-1/2 data-[rotated]:rotate-90 ${inputEnabled ? '' : 'pointer-events-none'}`}
+                className={`m-auto min-h-0 shrink-0 border-0 bg-black data-[rotated]:absolute data-[rotated]:left-1/2 data-[rotated]:top-1/2 data-[rotated]:m-0 data-[rotated]:[transform:translate(-50%,-50%)_rotate(90deg)] ${inputEnabled ? '' : 'pointer-events-none'}`}
               />
               {!inputEnabled && !setupOpen && (
                 <div
