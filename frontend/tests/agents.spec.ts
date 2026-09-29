@@ -384,6 +384,19 @@ test('select menus visibly highlight hovered options and animate with reduced-mo
   await expect(page.getByRole('option', { name: 'gpt-5', exact: true })).toHaveCSS('transition-property', 'none');
 });
 
+test('a long select list inside a dialog scrolls with the mouse wheel or trackpad', async ({ page }) => {
+  await page.route('**/api/model-endpoints/test', route =>
+    route.fulfill({ json: { models: ['test-model', ...Array.from({ length: 40 }, (_, i) => `model-${i}`)] } }),
+  );
+  await configure(page);
+  await page.getByLabel('Model', { exact: true }).click();
+  const list = page.getByRole('listbox');
+  const box = (await list.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 400);
+  await expect.poll(() => list.evaluate(element => element.scrollTop)).toBeGreaterThan(100);
+});
+
 test('styled selects support keyboard selection, dismissal, and long lists on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const lastModel = 'provider-' + 'long-model-name-'.repeat(6);

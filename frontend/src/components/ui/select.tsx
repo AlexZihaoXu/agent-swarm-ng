@@ -49,7 +49,9 @@ export function Select({
     return () => cancelAnimationFrame(frame);
   }, [open, searchable]);
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    // Modal: the open list takes over the page's scroll lock, so it scrolls by wheel/trackpad even inside a dialog
+    // (whose own lock would otherwise swallow wheel events over this portalled list).
+    <Popover.Root open={open} onOpenChange={setOpen} modal>
       <Popover.Trigger
         id={id}
         role="combobox"
