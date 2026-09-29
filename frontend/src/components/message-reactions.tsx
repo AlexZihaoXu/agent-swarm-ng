@@ -1,3 +1,4 @@
+import { menuAnchorX } from '@/lib/menu-anchor';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import * as Popover from '@radix-ui/react-popover';
@@ -210,7 +211,13 @@ export function MessageReactions({
                 touchHold.current = null;
                 suppressTouchClick.current = true;
                 trigger.dispatchEvent(
-                  new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: x, clientY: y }),
+                  new MouseEvent('contextmenu', {
+                    bubbles: true,
+                    cancelable: true,
+                    button: 2,
+                    clientX: menuAnchorX(x),
+                    clientY: y,
+                  }),
                 );
               }, 550),
             };

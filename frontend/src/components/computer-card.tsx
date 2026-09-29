@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { menuAnchorX } from '@/lib/menu-anchor';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { advanceFrames, settleFrames, type PreviewLayer } from '@/lib/computer-preview-frames';
 import { UsageDial } from './usage-dial';
@@ -109,20 +110,21 @@ export function ComputerCard({
     computer.cpuPercent === null ? null : computer.cpuPercent / (100 * Math.max(1, computer.cpuCount ?? 1));
   const memoryMiB = computer.memoryBytes === null ? null : Math.round(computer.memoryBytes / (1024 * 1024));
   const limitMiB = computer.memoryLimitBytes === null ? null : Math.round(computer.memoryLimitBytes / (1024 * 1024));
-  const openMenu = () => {
+  const openMenu = (event: ReactMouseEvent<HTMLElement>) => {
     // Radix opens on the DOM contextmenu event; a button click does not fire
     // one, so the trigger synthesises it on the card (the dashboard's existing
-    // pattern for keyboard/touch access to a context menu).
+    // pattern for keyboard/touch access to a context menu). It opens at the ⋯
+    // button, kept where the menu fits on screen.
     const anchor = card.current;
     if (!anchor) return;
-    const bounds = anchor.getBoundingClientRect();
+    const button = event.currentTarget.getBoundingClientRect();
     anchor.dispatchEvent(
       new MouseEvent('contextmenu', {
         bubbles: true,
         cancelable: true,
         button: 2,
-        clientX: Math.round(bounds.left + bounds.width / 2),
-        clientY: Math.round(bounds.top + bounds.height / 2),
+        clientX: Math.round(menuAnchorX(button.right)),
+        clientY: Math.round(button.bottom),
       }),
     );
   };

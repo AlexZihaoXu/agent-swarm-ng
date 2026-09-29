@@ -1,3 +1,4 @@
+import type { Locator } from '@playwright/test';
 import { test, expect, type Page } from './fixtures';
 
 type Computer = {
@@ -149,6 +150,28 @@ test('Computers shows a responsive screenshot-first grid with name and CPU/memor
   expect(previewCount()).toBe(before);
 });
 
+/** The whole element is inside the viewport (a menu must never open past a screen edge). */
+async function expectOnScreen(page: Page, locator: Locator) {
+  await expect(locator).toBeVisible();
+  const box = (await locator.boundingBox())!;
+  const width = page.viewportSize()!.width;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(width);
+}
+
+test('a phone-width card menu opens from its ⋯ button fully on screen', async ({ page }) => {
+  await mockComputers(page, [
+    { id: 'phone', name: 'Phone desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0 },
+  ]);
+  await page.setViewportSize({ width: 430, height: 900 });
+  await page.goto('/computers');
+  await page
+    .getByRole('article', { name: 'Phone desk' })
+    .getByRole('button', { name: 'Actions for Phone desk' })
+    .click();
+  await expectOnScreen(page, page.getByRole('menu'));
+});
+
 test('280px phone keeps the grid, tabs and dialogs reachable without reduced-motion animation', async ({ page }) => {
   await mockComputers(page, [
     {
@@ -178,6 +201,7 @@ test('280px phone keeps the grid, tabs and dialogs reachable without reduced-mot
   await expect(dialog).toHaveCSS('animation-name', 'none');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await card.getByRole('button', { name: /Actions for Very long/ }).click();
+  await expectOnScreen(page, page.getByRole('menu'));
   await page
     .getByRole('menu')
     .getByRole('menuitem', { name: /Remove/ })
