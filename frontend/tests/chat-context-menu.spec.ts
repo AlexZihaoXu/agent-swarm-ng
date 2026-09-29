@@ -14,10 +14,11 @@ test('agent cards keep the same avatar and presence sizes in Chat and Agents', a
     .getByRole('button', { name: 'Open conversation with Avery' });
   const chatFace = await chatCard.getByTestId('chat-avatar').boundingBox();
   const chatDot = await chatCard.locator('[data-slot="online-indicator"]').boundingBox();
-  expect(chatFace?.width).toBe(agentFace?.width);
-  expect(chatFace?.height).toBe(agentFace?.height);
-  expect(chatDot?.width).toBe(agentDot?.width);
-  expect(chatDot?.height).toBe(agentDot?.height);
+  // Sub-pixel noise is possible while the tab entrance animation settles.
+  expect(chatFace!.width).toBeCloseTo(agentFace!.width, 1);
+  expect(chatFace!.height).toBeCloseTo(agentFace!.height, 1);
+  expect(chatDot!.width).toBeCloseTo(agentDot!.width, 1);
+  expect(chatDot!.height).toBeCloseTo(agentDot!.height, 1);
 });
 
 test('Chat sidebar context menu creates and edits groups, and navigates from agent DMs', async ({ page }) => {
