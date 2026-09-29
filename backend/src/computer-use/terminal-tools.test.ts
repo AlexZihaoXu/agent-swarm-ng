@@ -158,3 +158,47 @@ it('a terminal view allows five combos on that session for 90 real seconds; inva
     await db.close();
   }
 });
+
+it('an agent call waits out a short read (a dashboard preview) instead of failing; other work still refuses', async () => {
+  const db = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
+  const agent = await db.createAgent({ name: 'A', endpointId: 'mock', model: 'model', thinkingLevel: 'off' });
+  const computer = await db.client.computer.create({
+    data: { name: 'Desk', requestKey: crypto.randomUUID(), state: 'running' },
+  });
+  const gates = new Map<string, () => void>();
+  const core = vi.fn(async (_id: string, request: any) => {
+    if (['screens', 'type'].includes(request.operation))
+      await new Promise<void>(release => gates.set(request.operation, release));
+    return { started: true, settled: true as const, result: { type: 'terminal', operation: request.operation } };
+  });
+  const runtime: ComputerRuntime = {
+    capture: async () => ({ mimeType: 'image/jpeg', data: new Uint8Array(), width: 1, height: 1, bounds: [] }),
+    execute: async () => ({ started: true, completed: 1, error: null }),
+    prepareCore: async (_id, request) => request,
+    core,
+    cancel: async () => {},
+  };
+  const service = new ComputerUseService(db, runtime);
+  const session = crypto.randomUUID();
+  try {
+    await service.assign(agent.id, [computer.id]);
+    await service.use(agent.id, computer.id);
+    const preview = service.operatorTerminal(computer.id, { operation: 'screens' });
+    await vi.waitFor(() => expect(gates.has('screens')).toBe(true));
+    const status = service.core(agent.id, { kind: 'terminal', operation: 'status', session });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(core).toHaveBeenCalledTimes(1); // still waiting behind the preview
+    gates.get('screens')!();
+    await expect(preview).resolves.toMatchObject({ started: true });
+    await expect(status).resolves.toMatchObject({ result: { operation: 'status' } });
+    const typing = service.operatorTerminal(computer.id, { operation: 'type', session, text: 'x' });
+    await vi.waitFor(() => expect(gates.has('type')).toBe(true));
+    await expect(service.core(agent.id, { kind: 'terminal', operation: 'status', session })).rejects.toThrow(
+      /Another computer operation/,
+    );
+    gates.get('type')!();
+    await typing;
+  } finally {
+    await db.close();
+  }
+});

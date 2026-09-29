@@ -35,11 +35,20 @@ export class ComputerExecutionError extends ComputerUseError {
   }
 }
 const knowledge = ' Read Swarm Knowledge swarm/computers/use.';
+/** Operations that only read: they neither consume the screenshot allowance nor make other callers fail. */
+const isReadOnly = (request: unknown) => {
+  const input = request as { kind?: string; operation?: string } | undefined;
+  return (
+    input?.kind === 'read' ||
+    (input?.kind === 'terminal' && ['list', 'view', 'status', 'screens'].includes(input.operation ?? ''))
+  );
+};
 type Allowance = { token: string; until: number; remaining: number };
 /** What one terminal_view permits: five terminal_run_actions calls on that session within 90 real seconds. */
 const TERMINAL_ALLOWANCE = { seconds: 90, combos: 5 };
 type TerminalAllowance = Allowance & { session: string };
-type Active = { abort: AbortController; finished: Promise<unknown> };
+/** The operation running on a computer; a read-only one (list/view/status/screens, file reads) is short. */
+type Active = { abort: AbortController; finished: Promise<unknown>; readOnly?: boolean };
 
 /** One backend owns admission; SQL uniqueness also protects against duplicate claims. */
 export class ComputerUseService {
@@ -54,6 +63,20 @@ export class ComputerUseService {
     private runtime: ComputerRuntime | null,
     private now = () => performance.now(),
   ) {}
+  /**
+   * Another operation holds the computer: a short read is waited for (so dashboard polling and previews never
+   * make an agent's call fail); anything else is refused as before.
+   */
+  private waitForReads(computerId: string, refusal: string) {
+    const active = this.active.get(computerId);
+    if (!active) return undefined;
+    if (active.readOnly)
+      return active.finished.then(
+        () => undefined,
+        () => undefined,
+      );
+    throw new ComputerUseError(refusal, 409);
+  }
   private exclusive<T>(work: () => Promise<T>): Promise<T> {
     const result = this.queue.then(work);
     this.queue = result.catch(() => {});
@@ -200,15 +223,18 @@ export class ComputerUseService {
     request: unknown,
     signal?: AbortSignal,
     retain?: (frame: ScreenFrame) => Promise<void>,
-  ) {
+  ): Promise<ScreenFrame> {
     await this.ready();
     // Admission is short and serialized; the slow screenshot itself runs outside the lock so it can never delay
     // another computer or a human Force release, which aborts and joins it via `active`.
     const admitted = await this.exclusive(async () => {
       signal?.throwIfAborted();
       const claim = await this.claim(agentId);
-      if (this.active.has(claim.computerId))
-        throw new ComputerUseError('Wait for the active computer operation before taking another screenshot.', 409);
+      const waiting = this.waitForReads(
+        claim.computerId,
+        'Wait for the active computer operation before taking another screenshot.',
+      );
+      if (waiting) return { waiting };
       const driver = this.driver();
       const abort = new AbortController();
       const stop = () => abort.abort();
@@ -228,6 +254,10 @@ export class ComputerUseService {
       this.active.set(claim.computerId, { abort, finished });
       return { finished };
     });
+    if ('waiting' in admitted) {
+      await admitted.waiting;
+      return this.capture(agentId, request, signal, retain);
+    }
     return admitted.finished;
   }
   private allowance(agentId: string, token: string) {
@@ -244,8 +274,11 @@ export class ComputerUseService {
     const admitted = await this.exclusive(async () => {
       signal?.throwIfAborted();
       const claim = await this.claim(agentId);
-      if (this.active.has(claim.computerId))
-        throw new ComputerUseError('Another computer operation is executing; wait for its result.', 409);
+      const waiting = this.waitForReads(
+        claim.computerId,
+        'Another computer operation is executing; wait for its result.',
+      );
+      if (waiting) return { waiting };
       this.allowance(agentId, claim.token);
       const driver = this.driver();
       const abort = new AbortController();
@@ -275,6 +308,10 @@ export class ComputerUseService {
       this.active.set(claim.computerId, { abort, finished });
       return { finished };
     });
+    if ('waiting' in admitted) {
+      await admitted.waiting;
+      return this.run(agentId, request, signal);
+    }
     return admitted.finished;
   }
   async core(
@@ -394,8 +431,11 @@ export class ComputerUseService {
           409,
         );
       const agentId = claim.agentId;
-      if (this.active.has(claim.computerId))
-        throw new ComputerUseError('Another computer operation is executing; wait for its result.', 409);
+      const waiting = this.waitForReads(
+        claim.computerId,
+        'Another computer operation is executing; wait for its result.',
+      );
+      if (waiting) return { waiting };
       const driver = this.driver();
       if (!driver.prepareCore || !driver.core)
         throw new ComputerUseError('Computer core tools are unavailable; update the guest runtime.', 503);
@@ -412,11 +452,7 @@ export class ComputerUseService {
           throw error;
         }
         signal?.throwIfAborted();
-        const input = request as { kind?: string; operation?: string };
-        const readOnly =
-          input?.kind === 'read' ||
-          (input?.kind === 'terminal' && ['list', 'view', 'status', 'screens'].includes(input.operation ?? ''));
-        if (!readOnly && agentId) this.allowances.delete(agentId);
+        if (!isReadOnly(request) && agentId) this.allowances.delete(agentId);
         const receipt = await Promise.resolve()
           .then(() => driver.core!(claim.computerId, prepared, abort.signal))
           .catch(error => {
@@ -432,9 +468,13 @@ export class ComputerUseService {
         signal?.removeEventListener('abort', stop);
         this.active.delete(claim.computerId);
       });
-      this.active.set(claim.computerId, { abort, finished });
+      this.active.set(claim.computerId, { abort, finished, readOnly: isReadOnly(request) });
       return { finished };
     });
+    if ('waiting' in admitted) {
+      await admitted.waiting;
+      return this.performCore(resolve, request, signal, retain);
+    }
     return admitted.finished;
   }
   private async clearClaim(computerId: string, notice?: string) {
