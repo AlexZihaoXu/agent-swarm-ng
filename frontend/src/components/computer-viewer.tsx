@@ -90,6 +90,15 @@ export function ComputerViewer({
   const [zoom, setZoom] = useState(1);
   const [fitWidth, setFitWidth] = useState(0);
   const [stream, setStream] = useState({ width: 0, height: 0, rotated: false });
+  // The frame keeps the size it connected at: Selkies fixes its video and input overlay to the window size when the
+  // stream starts and never follows later changes. Resizing the viewer scales the frame instead, which the browser
+  // maps input through, so the picture always fits and clicks land where they should.
+  const connectedAt = useRef<{ key: string; width: number; height: number } | null>(null);
+  const frameKey = `${id}:${viewerKey}:${stream.rotated}`;
+  if (stream.width && connectedAt.current?.key !== frameKey)
+    connectedAt.current = { key: frameKey, width: stream.width, height: stream.height };
+  const frameSize = connectedAt.current?.key === frameKey ? connectedAt.current : null;
+  const frameScale = frameSize ? stream.width / frameSize.width : 1;
   const imageRef = useRef<HTMLImageElement>(null);
   const previewPointerStart = useRef<{ x: number; y: number } | null>(null);
   const previewDragged = useRef(false);
@@ -492,11 +501,14 @@ export function ComputerViewer({
                 sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-downloads"
                 allow="fullscreen"
                 style={{
-                  width: stream.width ? `${stream.width}px` : '100%',
-                  height: stream.height ? `${stream.height}px` : '100%',
+                  width: frameSize ? `${frameSize.width}px` : '100%',
+                  height: frameSize ? `${frameSize.height}px` : '100%',
+                  transform: frameSize
+                    ? `translate(-50%, -50%) scale(${frameScale})${stream.rotated ? ' rotate(90deg)' : ''}`
+                    : undefined,
                 }}
                 data-rotated={stream.rotated ? '' : undefined}
-                className={`m-auto min-h-0 shrink-0 border-0 bg-black data-[rotated]:absolute data-[rotated]:left-1/2 data-[rotated]:top-1/2 data-[rotated]:m-0 data-[rotated]:[transform:translate(-50%,-50%)_rotate(90deg)] ${inputEnabled ? '' : 'pointer-events-none'}`}
+                className={`absolute left-1/2 top-1/2 min-h-0 shrink-0 border-0 bg-black ${inputEnabled ? '' : 'pointer-events-none'}`}
               />
               {!inputEnabled && !setupOpen && (
                 <div
