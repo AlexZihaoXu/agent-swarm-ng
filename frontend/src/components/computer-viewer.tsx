@@ -218,57 +218,68 @@ export function ComputerViewer({
         {/* Kibo Breadcrumb with Slash Separator, adapted to a real back action.
           The breadcrumb claims a full row on phones so the action buttons wrap
           below it instead of painting over the back control. */}
-        <nav aria-label="Computer location" className="min-w-0 basis-full md:flex-1 md:basis-auto">
-          <ol className="flex min-w-0 items-center gap-2 text-sm">
-            <li>
-              <button
-                type="button"
-                aria-label="Back to computers"
-                onClick={onBack}
-                className="min-h-11 cursor-pointer rounded-md text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0"
-              >
-                Computers
-              </button>
-            </li>
-            <li aria-hidden="true" className="text-muted-foreground">
-              /
-            </li>
-            <li aria-current="page" className="min-w-0 truncate font-semibold" title={computer.name}>
-              {computer.name}
-            </li>
-          </ol>
-        </nav>
-        {running && (
-          <div role="tablist" aria-label="Computer view" className="flex shrink-0 items-center rounded-lg bg-muted p-1">
-            {(['desktop', 'terminal'] as const).map(value => {
-              const on = view === value;
-              return (
+        {/* Location and the Desktop/Terminal switch read together on the left; controls stay on the right. */}
+        <div className="flex min-w-0 basis-full items-center gap-3 md:flex-1 md:basis-auto">
+          <nav aria-label="Computer location" className="min-w-0">
+            <ol className="flex min-w-0 items-center gap-2 text-sm">
+              <li>
                 <button
-                  key={value}
                   type="button"
-                  role="tab"
-                  aria-selected={on}
-                  onClick={() => {
-                    if (value === 'terminal') setInputEnabled(false);
-                    setView(value);
-                  }}
-                  className={`relative isolate flex min-h-9 items-center gap-1.5 rounded-md px-3 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring md:min-h-7 ${on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  aria-label="Back to computers"
+                  onClick={onBack}
+                  className="min-h-11 cursor-pointer rounded-md text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0"
                 >
-                  {on && (
-                    <m.span
-                      aria-hidden="true"
-                      layoutId={`viewer-view-${id}`}
-                      transition={glide}
-                      className="absolute inset-0 -z-10 rounded-md bg-background shadow-sm"
-                    />
-                  )}
-                  {value === 'desktop' ? <ComputerIcon className="size-3.5" /> : <TerminalIcon className="size-3.5" />}
-                  {value === 'desktop' ? 'Desktop' : 'Terminal'}
+                  Computers
                 </button>
-              );
-            })}
-          </div>
-        )}
+              </li>
+              <li aria-hidden="true" className="text-muted-foreground">
+                /
+              </li>
+              <li aria-current="page" className="min-w-0 truncate font-semibold" title={computer.name}>
+                {computer.name}
+              </li>
+            </ol>
+          </nav>
+          {running && (
+            <div
+              role="tablist"
+              aria-label="Computer view"
+              className="flex shrink-0 items-center rounded-lg bg-muted p-1"
+            >
+              {(['desktop', 'terminal'] as const).map(value => {
+                const on = view === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => {
+                      if (value === 'terminal') setInputEnabled(false);
+                      setView(value);
+                    }}
+                    className={`relative isolate flex min-h-9 items-center gap-1.5 rounded-md px-3 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring md:min-h-7 ${on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    {on && (
+                      <m.span
+                        aria-hidden="true"
+                        layoutId={`viewer-view-${id}`}
+                        transition={glide}
+                        className="absolute inset-0 -z-10 rounded-md bg-background shadow-sm"
+                      />
+                    )}
+                    {value === 'desktop' ? (
+                      <ComputerIcon className="size-3.5" />
+                    ) : (
+                      <TerminalIcon className="size-3.5" />
+                    )}
+                    <span className="max-sm:sr-only">{value === 'desktop' ? 'Desktop' : 'Terminal'}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
         <ComputerControl key={id} computerId={id} agentState={agentState} />
         {running && view === 'desktop' && (
           <Button
