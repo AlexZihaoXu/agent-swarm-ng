@@ -83,6 +83,7 @@ export function GroupMessages({
             )}
             <li
               data-message-id={message.id}
+              data-window-id={message.id}
               data-grouped={continued || undefined}
               className={cn(
                 'group relative grid grid-cols-[2.25rem_minmax(0,1fr)] px-2 py-0.5 md:grid-cols-[3rem_minmax(0,1fr)] md:px-3',

@@ -27,3 +27,13 @@ export function ChatSkeleton({ label = 'Loading messages…' }: { label?: string
     </div>
   );
 }
+
+/** A short run of bubble placeholders at the edge of a chat window while more history arrives or is revealed. */
+export function EdgeSkeleton({ label }: { label: string }) {
+  return (
+    <div role="status" aria-label={label} className="mx-auto flex w-full max-w-4xl flex-col gap-2 px-4 py-3 sm:px-5">
+      <Skeleton className="h-10 w-[55%] rounded-2xl" />
+      <Skeleton className="h-9 w-[35%] self-end rounded-2xl" style={{ animationDelay: '120ms' }} />
+    </div>
+  );
+}

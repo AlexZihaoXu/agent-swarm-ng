@@ -6,10 +6,11 @@ import { useLocation, useNavigate } from 'react-router';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ChatSkeleton } from '@/components/ui/skeleton';
+import { ChatSkeleton, EdgeSkeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { AgentsIcon, ChatIcon, ComputerIcon, PlusIcon, SettingsIcon } from '@/components/ui/icons';
 import { JumpToLatest } from '@/components/jump-to-latest';
+import { useMessageWindow } from '@/lib/use-message-window';
 import { AgentPanel } from '@/components/agent-panel';
 import { EditAgentForm } from '@/components/edit-agent-form';
 import { AgentAvatar, AgentName } from '@/components/chat-identity';
@@ -324,6 +325,18 @@ export function App() {
   const draft = drafts[agent.channelId] ?? '';
   const messages = conversations[agent.channelId] ?? [];
   const timeline = conversationTimeline(messages, inbox.messages);
+  // Long histories render a bounded window that follows the reader; older pages load near the top.
+  const history = useMessageWindow({
+    items: messages,
+    idOf: (message: ChatMessage) => message.id,
+    viewport: scrollRef,
+    canLoadOlder:
+      historyCursor[agent.channelId] != null &&
+      !historyLoading[agent.channelId] &&
+      Boolean(historyReady[agent.channelId]),
+    loadOlder: () => void loadHistory(agent, true),
+    reset: `${agent.id}:${conversationPeer}`,
+  });
   const previousConversation = useRef({
     id: agent.id,
     viewport: null as HTMLDivElement | null,
@@ -446,8 +459,10 @@ export function App() {
       previous.first !== timeline[0]?.id &&
       previous.last === timeline.at(-1)?.id;
     const sentId = pendingSend.current;
-    if (prepended) scroller.scrollTop += scroller.scrollHeight - previous.height;
-    else if (
+    // Older pages keep the reader's place through useMessageWindow's anchor, not a height delta here.
+    if (prepended) {
+      /* anchored by useMessageWindow */
+    } else if (
       newViewport ||
       (addedMessage && (Boolean(sentId) || previous.height - scroller.scrollTop - scroller.clientHeight < 80))
     ) {
@@ -945,30 +960,48 @@ export function App() {
                 key={`${agent.id}:${conversationPeer}`}
                 viewportRef={scrollRef}
                 label="Chat history"
-                overlay={conversationPeer === 'you' && <JumpToLatest viewport={scrollRef} count={timeline.length} />}
+                onScroll={conversationPeer === 'you' ? history.onScroll : undefined}
+                overlay={
+                  conversationPeer === 'you' && (
+                    <JumpToLatest viewport={scrollRef} count={timeline.length} onJump={history.toLatest} />
+                  )
+                }
                 className="min-h-0 flex-1"
                 viewportClassName="[&>div]:!block [&>div]:w-full"
               >
                 {conversationPeer === 'you' ? (
                   <>
                     {!historyReady[agent.channelId] && !historyFailed[agent.channelId] && <ChatSkeleton />}
-                    {((historyReady[agent.channelId] && historyLoading[agent.channelId]) ||
-                      historyFailed[agent.channelId] ||
-                      historyCursor[agent.channelId] != null) && (
+                    {historyFailed[agent.channelId] ? (
                       <div className="px-5 pt-3 text-center">
                         <Button
                           variant="outline"
                           size="sm"
-                          disabled={historyLoading[agent.channelId] || busy[agent.channelId]}
+                          disabled={historyLoading[agent.channelId]}
                           onClick={() => void loadHistory(agent, Boolean(historyReady[agent.channelId]))}
                         >
-                          {historyLoading[agent.channelId]
-                            ? 'Loading messages…'
-                            : historyFailed[agent.channelId]
-                              ? 'Retry loading messages'
-                              : 'Load earlier messages'}
+                          Retry loading messages
                         </Button>
                       </div>
+                    ) : (
+                      historyReady[agent.channelId] && (
+                        <>
+                          {/* Older messages load as the reader nears the top; this stays for keyboard users. */}
+                          {historyCursor[agent.channelId] != null && (
+                            <button
+                              type="button"
+                              disabled={historyLoading[agent.channelId]}
+                              onClick={() => void loadHistory(agent, true)}
+                              className="sr-only focus:not-sr-only focus:mx-auto focus:mt-3 focus:block focus:rounded-md focus:px-3 focus:py-1 focus:text-xs focus:ring-2 focus:ring-ring"
+                            >
+                              Load earlier messages
+                            </button>
+                          )}
+                          {(historyLoading[agent.channelId] || history.olderHidden) && (
+                            <EdgeSkeleton label="Loading earlier messages…" />
+                          )}
+                        </>
+                      )
                     )}
                     {(inbox.failed || inbox.cursor !== null) && (
                       <div className="px-5 pt-3 text-center">
@@ -985,10 +1018,15 @@ export function App() {
                     {historyReady[agent.channelId] && (
                       <ConversationMessages
                         reactionChannel={agent.channelId}
-                        messages={messages}
+                        messages={history.visible}
                         time={agent.time}
                         agentName={agent.name}
-                        notices={inbox.messages}
+                        notices={inbox.messages.filter(
+                          notice =>
+                            (!history.olderHidden || notice.timestamp >= (history.visible[0]?.timestamp ?? 0)) &&
+                            (!history.newerHidden ||
+                              notice.timestamp <= (history.visible.at(-1)?.timestamp ?? Infinity)),
+                        )}
                         onViewDm={notice => chooseConversation(notice.senderId)}
                         onReply={message => {
                           setReplyTargets(current => ({ ...current, [agent.channelId]: message }));
@@ -996,6 +1034,7 @@ export function App() {
                         }}
                       />
                     )}
+                    {history.newerHidden && <EdgeSkeleton label="Loading newer messages…" />}
                   </>
                 ) : peer ? (
                   <AgentDmTranscript

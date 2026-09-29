@@ -105,7 +105,11 @@ export function ConversationMessages({
               bubble
             );
           return (
-            <li key={message.id} className={cn('relative flex', message.author === 'user' && 'justify-end')}>
+            <li
+              key={message.id}
+              data-window-id={message.id}
+              className={cn('relative flex', message.author === 'user' && 'justify-end')}
+            >
               {reactionChannel ? (
                 <div
                   className={cn(

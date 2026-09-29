@@ -6,7 +6,16 @@ import { surface } from '@/lib/motion';
  * A pill that appears when the reader has scrolled away from the newest messages, and brings them back.
  * It says "New messages" when something arrived while they were reading older history.
  */
-export function JumpToLatest({ viewport, count }: { viewport: RefObject<HTMLDivElement | null>; count: number }) {
+export function JumpToLatest({
+  viewport,
+  count,
+  onJump,
+}: {
+  viewport: RefObject<HTMLDivElement | null>;
+  count: number;
+  /** Runs first, e.g. to bring a windowed history back to its newest messages. */
+  onJump?: () => void;
+}) {
   const [away, setAway] = useState(false);
   const latest = useRef(count);
   const seen = useRef(count);
@@ -37,6 +46,7 @@ export function JumpToLatest({ viewport, count }: { viewport: RefObject<HTMLDivE
             exit={{ opacity: 0, y: 10, scale: 0.92 }}
             transition={surface}
             onClick={() => {
+              onJump?.();
               const element = viewport.current;
               if (!element) return;
               const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

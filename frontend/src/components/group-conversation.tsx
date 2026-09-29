@@ -4,6 +4,8 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { JumpToLatest } from '@/components/jump-to-latest';
+import { useMessageWindow } from '@/lib/use-message-window';
+import { ChatSkeleton, EdgeSkeleton } from '@/components/ui/skeleton';
 import { ChatComposer } from '@/components/chat-composer';
 import { GroupEditor } from '@/components/group-editor';
 import { DeleteGroupForm } from '@/components/delete-group-form';
@@ -70,6 +72,23 @@ export function GroupConversation({
     [error, setError] = useState('');
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
   const viewport = useRef<HTMLDivElement>(null);
+  const loadOlder = () => {
+    setLoadingOlder(true);
+    setError('');
+    void history
+      .older()
+      .catch(() => setError('Could not load earlier messages.'))
+      .finally(() => setLoadingOlder(false));
+  };
+  // Long histories render a bounded window that follows the reader; older pages load near the top.
+  const window_ = useMessageWindow({
+    items: messages,
+    idOf: (message: GroupMessage) => message.id,
+    viewport,
+    canLoadOlder: history.data?.nextCursor != null && !loadingOlder && !history.isFetching,
+    loadOlder,
+    reset: groupId,
+  });
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const previous = useRef({ first: '', last: '', height: 0 });
   const nearBottom = useRef(true);
@@ -82,9 +101,10 @@ export function GroupConversation({
     const first = messages[0]?.id ?? '',
       last = messages.at(-1)?.id ?? '';
     const before = previous.current;
-    if (before.first && before.first !== first && before.last === last)
-      element.scrollTop += element.scrollHeight - before.height;
-    else if (!before.last || nearBottom.current) element.scrollTo({ top: element.scrollHeight, behavior: 'instant' });
+    // Older pages keep the reader's place through useMessageWindow's anchor, not a height delta here.
+    if (before.first && before.first !== first && before.last === last) {
+      /* anchored by useMessageWindow */
+    } else if (!before.last || nearBottom.current) element.scrollTo({ top: element.scrollHeight, behavior: 'instant' });
     previous.current = { first, last, height: element.scrollHeight };
   }, [messages.length, mobile]);
   const send = async () => {
@@ -195,53 +215,49 @@ export function GroupConversation({
       <ScrollArea
         viewportRef={viewport}
         label="Group chat history"
-        overlay={<JumpToLatest viewport={viewport} count={messages.length} />}
+        overlay={<JumpToLatest viewport={viewport} count={messages.length} onJump={window_.toLatest} />}
         className="min-h-0 flex-1"
         viewportClassName="[&>div]:!block [&>div]:w-full"
         onScroll={() => {
           const element = viewport.current;
           if (element) nearBottom.current = element.scrollHeight - element.clientHeight - element.scrollTop < 80;
+          window_.onScroll();
         }}
       >
-        {(history.isPending || history.isError || group.isError || history.data?.nextCursor != null) && (
+        {history.isPending && <ChatSkeleton />}
+        {(history.isError || group.isError) && (
           <div className="p-3 text-center">
             <Button
               variant="outline"
               size="sm"
-              disabled={history.isFetching || loadingOlder}
-              onClick={() => {
-                if (group.isError) {
-                  void group.refetch();
-                  return;
-                }
-                if (history.isError) {
-                  void history.refetch();
-                  return;
-                }
-                setLoadingOlder(true);
-                setError('');
-                void history
-                  .older()
-                  .catch(() => setError('Could not load earlier messages.'))
-                  .finally(() => setLoadingOlder(false));
-              }}
+              disabled={history.isFetching}
+              onClick={() => void (group.isError ? group.refetch() : history.refetch())}
             >
-              {history.isFetching || loadingOlder
-                ? 'Loading messages…'
-                : history.isError || group.isError
-                  ? 'Retry loading chat'
-                  : 'Load earlier messages'}
+              Retry loading chat
             </Button>
           </div>
         )}
+        {/* Older messages load as the reader nears the top; this stays for keyboard users. */}
+        {history.data?.nextCursor != null && (
+          <button
+            type="button"
+            disabled={loadingOlder}
+            onClick={loadOlder}
+            className="sr-only focus:not-sr-only focus:mx-auto focus:mt-3 focus:block focus:rounded-md focus:px-3 focus:py-1 focus:text-xs focus:ring-2 focus:ring-ring"
+          >
+            Load earlier messages
+          </button>
+        )}
+        {(loadingOlder || window_.olderHidden) && <EdgeSkeleton label="Loading earlier messages…" />}
         <GroupMessages
-          messages={messages}
+          messages={window_.visible}
           members={group.data?.members ?? []}
           onReply={message => {
             setReplyTo(message);
             requestAnimationFrame(() => inputRef.current?.focus());
           }}
         />
+        {window_.newerHidden && <EdgeSkeleton label="Loading newer messages…" />}
         {history.isSuccess && !messages.length && (
           <p className="p-6 text-center text-sm text-muted-foreground">Start a conversation with this group.</p>
         )}

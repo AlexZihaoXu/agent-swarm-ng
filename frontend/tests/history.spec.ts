@@ -40,16 +40,19 @@ test('restores paginated history and preserves the reading position when older m
   const history = page.getByRole('list', { name: 'Messages' });
   await expect(history.locator(':scope > li')).toHaveCount(50);
   const viewport = page.getByRole('region', { name: 'Chat history', exact: true });
-  await viewport.evaluate(element => {
-    element.scrollTop = 0;
-  });
-  const anchor = history.locator('[data-message-id="saved-71"]');
-  const before = (await anchor.boundingBox())!.y;
-  await page.getByRole('button', { name: 'Load earlier messages' }).click();
-  await expect(history.locator(':scope > li')).toHaveCount(100);
-  expect((await anchor.boundingBox())!.y).toBeCloseTo(before, 0);
-  await page.getByRole('button', { name: 'Load earlier messages' }).click();
-  await expect(history.locator(':scope > li')).toHaveCount(120);
+  // Scrolling up is enough: each time the reader nears the top the next page loads, and what they were
+  // reading stays exactly where it was on screen.
+  const toTop = async (anchorId: string, count: number) => {
+    await viewport.evaluate(element => {
+      element.scrollTop = 0;
+    });
+    const anchor = history.locator(`[data-message-id="${anchorId}"]`);
+    const before = (await anchor.boundingBox())!.y;
+    await expect(history.locator(':scope > li')).toHaveCount(count);
+    await expect.poll(async () => Math.round((await anchor.boundingBox())!.y)).toBe(Math.round(before));
+  };
+  await toTop('saved-71', 100);
+  await toTop('saved-21', 120);
   await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
   expect(cursors).toEqual([121, 71, 21]);
   await expect(row).toContainText('Saved message 120');

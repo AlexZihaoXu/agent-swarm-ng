@@ -333,3 +333,37 @@ test('computer previews keep fetching fresh frames after leaving the grid and co
   expect(again.length).toBeGreaterThan(0);
   for (const src of again) expect(seen.has(src)).toBe(false);
 });
+
+test('long histories keep a bounded window: older pages load near the top and the newest are offloaded', async ({
+  page,
+}) => {
+  const total = Array.from({ length: 400 }, (_, i) => ({
+    id: `w-${i + 1}`,
+    sequence: i + 1,
+    channelId: agent.channelId,
+    role: i % 2 ? 'assistant' : 'user',
+    text: `Window message ${i + 1}`,
+    timestamp: 1000 + i,
+  }));
+  await page.route('**/api/channels/long-channel/messages*', route => {
+    const before = Number(new URL(route.request().url()).searchParams.get('before') || 401);
+    const rows = total.filter(row => row.sequence < before).slice(-50);
+    return route.fulfill({ json: { messages: rows, nextCursor: rows[0].sequence > 1 ? rows[0].sequence : null } });
+  });
+  await page.goto('/chat/agents/long-agent');
+  const list = page.getByRole('list', { name: 'Messages' });
+  const viewport = page.getByRole('region', { name: 'Chat history', exact: true });
+  await expect(list.locator('[data-message-id="w-400"]')).toBeVisible();
+  for (let i = 0; i < 8; i++) {
+    await viewport.evaluate(element => {
+      element.scrollTop = 0;
+    });
+    await page.waitForTimeout(250);
+  }
+  await expect(list.locator('[data-message-id="w-150"]')).toHaveCount(1);
+  // At most one window of messages is on the page, and the newest were dropped while reading older ones.
+  expect(await list.locator(':scope > li').count()).toBeLessThanOrEqual(150);
+  await expect(list.locator('[data-message-id="w-400"]')).toHaveCount(0);
+  await page.getByRole('button', { name: /Jump to latest|New messages/ }).click();
+  await expect(list.locator('[data-message-id="w-400"]')).toBeVisible();
+});
