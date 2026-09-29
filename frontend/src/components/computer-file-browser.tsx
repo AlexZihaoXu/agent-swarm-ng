@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { BorderedBreadcrumb } from '@/components/ui/bordered-breadcrumb';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { dialogOverlay } from '@/lib/styles';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { FolderIcon } from '@/components/ui/icons';
 import {
   downloadComputerFile,
   FILE_DOWNLOAD_LIMIT,
@@ -362,12 +364,27 @@ export function ComputerFileBrowser({
                             This folder exceeds the scan limit. Results are partial; open a more specific path.
                           </p>
                         )}
+                        {/* An empty folder replaces the table (no orphaned header over blank space). */}
                         {!listing.data.entries.length && (
-                          <p className="py-8 text-center text-sm text-muted-foreground">
-                            {appliedFilter ? 'No matching files in this folder.' : 'This folder is empty.'}
-                          </p>
+                          <Empty className="min-h-64">
+                            <EmptyHeader>
+                              <EmptyMedia>
+                                <FolderIcon />
+                              </EmptyMedia>
+                              <EmptyTitle className="text-base">
+                                {appliedFilter ? 'No matches' : 'This folder is empty'}
+                              </EmptyTitle>
+                              <EmptyDescription>
+                                {appliedFilter
+                                  ? 'No matching files in this folder.'
+                                  : 'Nothing has been saved here yet.'}
+                              </EmptyDescription>
+                            </EmptyHeader>
+                          </Empty>
                         )}
-                        <div className="hidden grid-cols-[minmax(0,1fr)_5rem_6rem_2.5rem] gap-3 border-b border-border px-2 pb-2 text-xs text-muted-foreground sm:grid">
+                        <div
+                          className={`hidden grid-cols-[minmax(0,1fr)_5rem_6rem_2.5rem] gap-3 border-b border-border px-2 pb-2 text-xs text-muted-foreground ${listing.data.entries.length ? 'sm:grid' : ''}`}
+                        >
                           <span>Name</span>
                           <span>Size</span>
                           <span>Modified</span>
