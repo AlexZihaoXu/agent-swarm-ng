@@ -7,6 +7,7 @@ import type { Computer } from './computer-card';
 import { ComputerControl, type ComputerAgentState } from './computer-control';
 import { TerminalWorkspace } from './computer-terminals';
 import { ComputerSwitcher } from './computer-switcher';
+import { FloatingTerminal } from './floating-terminal';
 import { ComputerIcon, TerminalIcon } from '@/components/ui/icons';
 import { m } from 'motion/react';
 import { glide } from '@/lib/motion';
@@ -596,6 +597,9 @@ export function ComputerViewer({
               </div>
             )}
           </>
+        )}
+        {running && !setupOpen && (
+          <FloatingTerminal computer={computer} onExpand={session => onRoute?.(computerTerminalPath(id, session))} />
         )}
         {onOpenComputer && <ComputerSwitcher currentId={id} onOpen={onOpenComputer} />}
       </div>

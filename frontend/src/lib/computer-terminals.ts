@@ -11,3 +11,12 @@ export async function computerTerminal(
   if (!data || error) throw new Error(error?.message ?? 'Terminal unavailable; inspect before retrying input.');
   return data;
 }
+
+/** The session list, shared (same cache key) by the Terminal view and the desktop's floating terminal. */
+export const terminalSessionsQuery = (computerId: string) => ({
+  queryKey: ['computer-terminals', computerId],
+  queryFn: async ({ signal }: { signal: AbortSignal }) => {
+    const list = await computerTerminal(computerId, { operation: 'list' }, signal);
+    return { sessions: list.sessions ?? [] };
+  },
+});

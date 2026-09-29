@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { Button } from '@/components/ui/button';
@@ -50,6 +57,9 @@ export function TerminalEmulator({
   title,
   columns = 120,
   rows = 36,
+  fill = false,
+  titleContent,
+  onTitlePointerDown,
 }: {
   computerId: string;
   sessionId: string;
@@ -57,6 +67,12 @@ export function TerminalEmulator({
   /** The session's own grid (default 120 × 36); the operator can resize a session, viewers never do. */
   columns?: number;
   rows?: number;
+  /** Fill the parent instead of sizing the window to the grid (a floating window supplies its own size). */
+  fill?: boolean;
+  /** Replaces the title text (e.g. a session picker and window buttons in a floating window). */
+  titleContent?: ReactNode;
+  /** Lets a floating window be dragged by its title bar. */
+  onTitlePointerDown?: (event: ReactPointerEvent<HTMLDivElement>) => void;
   /** Shown in the window's title bar, like a desktop terminal app. */
   title: string;
 }) {
@@ -281,7 +297,7 @@ export function TerminalEmulator({
         fitHeight = roomHeight / height;
       // Fill the space, but not beyond 1.35× so a wide screen does not turn the text into a poster. When fitting
       // the width would make text unreadable (phones), fit the rows instead and pan sideways inside the window.
-      const pan = fitWidth < 0.6;
+      const pan = fitWidth < (fill ? 0.45 : 0.6);
       const scale = pan ? Math.min(1, Math.max(0.6, fitHeight)) : Math.min(1.35, fitWidth, fitHeight);
       setFit({ scale, width, height, pan });
     };
@@ -289,7 +305,7 @@ export function TerminalEmulator({
     const observer = new ResizeObserver(measure);
     for (const element of [area, inner, titleBar.current, keysBar.current]) if (element) observer.observe(element);
     return () => observer.disconnect();
-  }, [attempt, visible]);
+  }, [attempt, visible, fill]);
   const connectedNow = status.startsWith('Connected');
   const press = (value: string) => {
     send.current?.(value);
@@ -307,25 +323,28 @@ export function TerminalEmulator({
     <div
       ref={stage}
       data-terminal-emulator
-      className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden p-2 sm:p-4"
+      className={`flex min-h-0 min-w-0 flex-1 overflow-hidden ${fill ? '' : 'items-center justify-center p-2 sm:p-4'}`}
     >
       <div
         className="flex max-h-full min-h-0 max-w-full flex-col overflow-hidden rounded-xl border border-white/15 bg-[#141414] shadow-2xl shadow-black/60"
-        style={fit.pan ? { width: '100%', height: '100%' } : undefined}
+        style={fill || fit.pan ? { width: '100%', height: '100%' } : undefined}
       >
         <div
           ref={titleBar}
-          onMouseDown={focusTerminal}
-          className="flex h-8 shrink-0 items-center gap-3 border-b border-white/10 bg-[#1d1d1d] px-3"
+          onMouseDown={titleContent ? undefined : focusTerminal}
+          onPointerDown={onTitlePointerDown}
+          className={`flex h-8 shrink-0 items-center gap-3 border-b border-white/10 bg-[#1d1d1d] px-3 ${onTitlePointerDown ? 'cursor-grab touch-none select-none active:cursor-grabbing' : ''}`}
         >
           <span aria-hidden="true" className="flex shrink-0 gap-1.5">
             <span className="size-2.5 rounded-full bg-white/15" />
             <span className="size-2.5 rounded-full bg-white/15" />
             <span className="size-2.5 rounded-full bg-white/15" />
           </span>
-          <span className="min-w-0 flex-1 truncate text-center font-mono text-[11px] text-muted-foreground">
-            {title}
-          </span>
+          {titleContent ?? (
+            <span className="min-w-0 flex-1 truncate text-center font-mono text-[11px] text-muted-foreground">
+              {title}
+            </span>
+          )}
           <span role="status" className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
             <span
               aria-hidden="true"
@@ -337,8 +356,8 @@ export function TerminalEmulator({
         <div
           ref={frame}
           onMouseDown={focusTerminal}
-          className={`relative ${fit.pan ? 'min-h-0 flex-1 overflow-auto' : 'shrink-0 overflow-hidden'}`}
-          style={fit.width && !fit.pan ? { width: gridWidth, height: gridHeight } : undefined}
+          className={`relative ${fit.pan ? 'min-h-0 flex-1 overflow-auto' : fill ? 'flex min-h-0 flex-1 items-center justify-center overflow-hidden' : 'shrink-0 overflow-hidden'}`}
+          style={fit.width && !fit.pan && !fill ? { width: gridWidth, height: gridHeight } : undefined}
           aria-label="Interactive terminal"
           data-testid="terminal-viewport"
         >

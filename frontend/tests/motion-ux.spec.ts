@@ -245,3 +245,45 @@ test('the viewer mode and terminal session live in the address, so a refresh ret
   await page.getByRole('tablist', { name: 'Computer view' }).getByRole('tab', { name: 'Desktop' }).click();
   await expect(page).toHaveURL('/computers/desk');
 });
+
+test('a handle on the desktop pulls out a floating terminal that can expand to the Terminal view', async ({ page }) => {
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({
+      json: {
+        controllerConnected: true,
+        computers: [
+          { id: 'desk', name: 'Desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0, portalFree: true },
+        ],
+      },
+    }),
+  );
+  const session = {
+    id: '12345678-1234-1234-1234-123456789abc',
+    name: 'build',
+    alive: true,
+    exitCode: null,
+    createdAt: 1,
+    columns: 120,
+    rows: 36,
+  };
+  await page.route('**/api/computers/*/terminals', route =>
+    route.fulfill({ json: { type: 'terminal', sessions: [session] } }),
+  );
+  await page.routeWebSocket('**/api/computers/*/terminals/*/stream', ws =>
+    ws.send(JSON.stringify({ type: 'ready', columns: 120, rows: 36 })),
+  );
+  await page.goto('/computers/desk');
+  await page.getByRole('button', { name: 'Floating terminal' }).click();
+  const floating = page.getByRole('region', { name: 'Floating terminal' });
+  await expect(floating).toBeVisible();
+  await expect(floating.getByLabel('Terminal session')).toHaveValue(session.id);
+  await expect(floating).toContainText('Connected');
+  await floating.getByRole('button', { name: 'Close floating terminal' }).click();
+  await expect(floating).toHaveCount(0);
+  await page.getByRole('button', { name: 'Floating terminal' }).click();
+  await page
+    .getByRole('region', { name: 'Floating terminal' })
+    .getByRole('button', { name: 'Open in Terminal view' })
+    .click();
+  await expect(page).toHaveURL(`/computers/desk/terminal/${session.id}`);
+});
