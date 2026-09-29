@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { EdgeHandle } from '@/components/ui/edge-handle';
+import { AboveWindows } from '@/components/ui/above-windows';
 import { useQuery } from '@tanstack/react-query';
 import { computersQuery } from '@/lib/computers-query';
 import { cn } from '@/lib/utils';
@@ -36,11 +37,14 @@ export function ComputerSwitcher({ currentId, onOpen }: { currentId: string; onO
         setOpen(next);
       }}
     >
-      <div className="pointer-events-none absolute inset-x-0 bottom-2 z-20 flex justify-center">
-        <Dialog.Trigger asChild>
-          <EdgeHandle label="All computers" icon={<ChevronUp />} />
-        </Dialog.Trigger>
-      </div>
+      {/* Above any floating window, so the switcher is always reachable. */}
+      <AboveWindows>
+        <div className="absolute inset-x-0 bottom-2 flex justify-center">
+          <Dialog.Trigger asChild>
+            <EdgeHandle label="All computers" icon={<ChevronUp />} />
+          </Dialog.Trigger>
+        </div>
+      </AboveWindows>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 motion-safe:data-[state=open]:animate-[fade-in_200ms_ease-out] motion-safe:data-[state=closed]:animate-[fade-out_160ms_ease-in]" />
         <Dialog.Content className="sheet-bottom fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[70dvh] w-full max-w-5xl flex-col rounded-t-2xl border border-b-0 border-border bg-background pb-[env(safe-area-inset-bottom)] shadow-2xl outline-none">

@@ -302,19 +302,32 @@ test('the desktop handle opens a Terminals drawer, and a session floats out fitt
     columns: 120,
     rows: 36,
   };
+  const second = { ...session, id: '12345678-1234-1234-1234-123456789abd', name: 'deploy' };
   await page.route('**/api/computers/*/terminals', route =>
-    route.fulfill({ json: { type: 'terminal', sessions: [session] } }),
+    route.fulfill({ json: { type: 'terminal', sessions: [session, second] } }),
   );
   await page.routeWebSocket('**/api/computers/*/terminals/*/stream', ws =>
     ws.send(JSON.stringify({ type: 'ready', columns: 120, rows: 36 })),
   );
+  await page.setViewportSize({ width: 1400, height: 900 });
   await page.goto('/computers/desk');
-  // The handle opens the Terminals drawer first; a session is then brought up as a floating window.
+  // The handle opens the Terminals drawer first; sessions are then brought up as floating windows. The drawer
+  // stays open so several can come out, and a floated session's card leaves the list.
   await page.getByRole('button', { name: 'Terminals', exact: true }).click();
   const drawer = page.getByRole('dialog', { name: 'Terminals' });
   await drawer.getByRole('button', { name: 'Float build' }).click();
+  await expect(drawer.getByRole('button', { name: 'Float build' })).toHaveCount(0);
+  await drawer.getByRole('button', { name: 'Float deploy' }).click();
+  await expect(drawer).toContainText('Every terminal is out on the desktop.');
+  await expect(page.getByRole('region', { name: /^Floating terminal/ })).toHaveCount(2);
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(drawer).toHaveCount(0);
-  const floating = page.getByRole('region', { name: 'Floating terminal' });
+  const floating = page.getByRole('region', { name: 'Floating terminal build' });
+  await page
+    .getByRole('region', { name: 'Floating terminal deploy' })
+    .getByRole('button', { name: 'Close deploy' })
+    .click();
+  await expect(page.getByRole('region', { name: 'Floating terminal deploy' })).toHaveCount(0);
   await expect(floating).toContainText('Connected');
   // The window wraps the terminal: widths change, the shape follows.
   const before = (await floating.boundingBox())!;
@@ -337,9 +350,11 @@ test('the desktop handle opens a Terminals drawer, and a session floats out fitt
   const frame = floating.locator('[data-terminal-emulator]');
   await expect(frame).not.toHaveCSS('overflow', 'hidden');
   // The red close light puts it back into the drawer.
-  await floating.getByRole('button', { name: 'Close to Terminals' }).click();
+  await floating.getByRole('button', { name: 'Close build' }).click();
   await expect(floating).toHaveCount(0);
-  await expect(page.getByRole('dialog', { name: 'Terminals' })).toBeVisible();
+  await page.getByRole('button', { name: 'Terminals', exact: true }).click();
+  await expect(drawer.getByRole('button', { name: 'Float build' })).toBeVisible();
+  await expect(drawer.getByRole('button', { name: 'Float deploy' })).toBeVisible();
 });
 
 test('the Terminals drawer creates a terminal and floats it straight up', async ({ page }) => {
@@ -387,13 +402,14 @@ test('the Terminals drawer creates a terminal and floats it straight up', async 
   await form.getByLabel('Terminal name', { exact: true }).fill('notes');
   await form.getByRole('button', { name: 'Create terminal', exact: true }).click();
   await expect(form).toHaveCount(0);
-  await expect(drawer).toHaveCount(0);
+  // The drawer stays open; the new terminal is out on the desktop, not in its list.
+  await expect(drawer).toContainText('Every terminal is out on the desktop.');
   expect(bodies.find(body => body.operation === 'create')).toEqual({
     operation: 'create',
     name: 'notes',
     cwd: '~/Desktop',
   });
-  await expect(page.getByRole('region', { name: 'Floating terminal' })).toContainText('notes');
+  await expect(page.getByRole('region', { name: 'Floating terminal notes' })).toContainText('notes');
 });
 
 test('computer previews keep fetching fresh frames after leaving the grid and coming back', async ({ page }) => {

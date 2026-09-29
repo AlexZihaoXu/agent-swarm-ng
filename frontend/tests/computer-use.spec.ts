@@ -236,7 +236,9 @@ test('the chat and terminal windows show which one is focused, and the one touch
   await page.goto(`/computers/${desk.id}`);
   await page.getByRole('button', { name: 'Terminals', exact: true }).click();
   await page.getByRole('dialog', { name: 'Terminals' }).getByRole('button', { name: 'Float build' }).click();
-  const terminal = page.getByRole('region', { name: 'Floating terminal' });
+  await page.getByRole('dialog', { name: 'Terminals' }).getByRole('button', { name: 'Close', exact: true }).click();
+  const terminal = page.getByRole('region', { name: 'Floating terminal build' });
+  await terminal.getByText('build').click();
   await expect(terminal).toHaveAttribute('data-focused', '');
   await page.getByRole('button', { name: `Chat with ${agent.name}` }).click();
   const chat = page.getByRole('region', { name: `Chat with ${agent.name}` });

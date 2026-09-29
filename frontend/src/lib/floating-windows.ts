@@ -19,7 +19,8 @@ export function keepReachable(box: Box): Box {
 }
 
 // Stacking and focus: the window touched last is on top, and it is the focused one until something outside the
-// floating windows is touched. Floating windows sit above the page and below dialogs (z-50).
+// floating windows is touched. Floating windows sit above the page (z-30 up), below the viewer's edge handles
+// (z-48) and dialogs (z-50).
 let state: { order: string[]; active: string | null } = { order: [], active: null };
 const listeners = new Set<() => void>();
 const subscribe = (listener: () => void) => {
@@ -35,6 +36,12 @@ const set = (next: typeof state) => {
 export function raiseWindow(id: string) {
   if (state.order.at(-1) === id && state.active === id) return;
   set({ order: [...state.order.filter(item => item !== id), id], active: id });
+}
+
+/** Forgets a closed window, so the stacking order only holds open ones. */
+export function dropWindow(id: string) {
+  if (!state.order.includes(id)) return;
+  set({ order: state.order.filter(item => item !== id), active: state.active === id ? null : state.active });
 }
 
 if (typeof document !== 'undefined') {
@@ -55,10 +62,10 @@ if (typeof document !== 'undefined') {
   );
 }
 
-/** This window's z-index (40 and up, in the order windows were last touched) and whether it is focused. */
+/** This window's z-index (30 and up, in the order windows were last touched) and whether it is focused. */
 export function useWindowLayer(id: string) {
   const current = useSyncExternalStore(subscribe, () => state);
-  return { zIndex: 40 + Math.max(0, current.order.indexOf(id)), focused: current.active === id };
+  return { zIndex: 30 + Math.min(16, Math.max(0, current.order.indexOf(id))), focused: current.active === id };
 }
 
 /** Which edge or corner of a window is being dragged to resize it. */
