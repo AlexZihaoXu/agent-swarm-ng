@@ -60,6 +60,8 @@ export function TerminalEmulator({
   fill = false,
   titleContent,
   onTitlePointerDown,
+  onMeasure,
+  titleLeading,
 }: {
   computerId: string;
   sessionId: string;
@@ -73,6 +75,10 @@ export function TerminalEmulator({
   titleContent?: ReactNode;
   /** Lets a floating window be dragged by its title bar. */
   onTitlePointerDown?: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  /** Reports the grid's natural size and the window chrome around it, so a floating window can match its shape. */
+  /** Replaces the decorative window dots (a floating window puts its own control there). */
+  titleLeading?: ReactNode;
+  onMeasure?: (size: { width: number; height: number; chromeWidth: number; chromeHeight: number }) => void;
   /** Shown in the window's title bar, like a desktop terminal app. */
   title: string;
 }) {
@@ -89,6 +95,8 @@ export function TerminalEmulator({
   const latched = useRef(false);
   latched.current = ctrlLatched;
   // The grid keeps the session's size; it is scaled to fill the space like the desktop viewer, never resized.
+  const measured = useRef(onMeasure);
+  measured.current = onMeasure;
   const frame = useRef<HTMLDivElement>(null),
     stage = useRef<HTMLDivElement>(null),
     titleBar = useRef<HTMLDivElement>(null),
@@ -298,8 +306,15 @@ export function TerminalEmulator({
       // Fill the space, but not beyond 1.35× so a wide screen does not turn the text into a poster. When fitting
       // the width would make text unreadable (phones), fit the rows instead and pan sideways inside the window.
       const pan = fitWidth < (fill ? 0.45 : 0.6);
-      const scale = pan ? Math.min(1, Math.max(0.6, fitHeight)) : Math.min(1.35, fitWidth, fitHeight);
+      // A floating window is sized to the grid's shape, so it may scale further than a docked console.
+      const scale = pan ? Math.min(1, Math.max(0.6, fitHeight)) : Math.min(fill ? 2.5 : 1.35, fitWidth, fitHeight);
       setFit({ scale, width, height, pan });
+      measured.current?.({
+        width,
+        height,
+        chromeWidth: 2 + 16,
+        chromeHeight: 2 + 16 + (titleBar.current?.offsetHeight ?? 0) + (keysBar.current?.offsetHeight ?? 0),
+      });
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -335,11 +350,13 @@ export function TerminalEmulator({
           onPointerDown={onTitlePointerDown}
           className={`flex h-8 shrink-0 items-center gap-3 border-b border-white/10 bg-[#1d1d1d] px-3 ${onTitlePointerDown ? 'cursor-grab touch-none select-none active:cursor-grabbing' : ''}`}
         >
-          <span aria-hidden="true" className="flex shrink-0 gap-1.5">
-            <span className="size-2.5 rounded-full bg-white/15" />
-            <span className="size-2.5 rounded-full bg-white/15" />
-            <span className="size-2.5 rounded-full bg-white/15" />
-          </span>
+          {titleLeading ?? (
+            <span aria-hidden="true" className="flex shrink-0 gap-1.5">
+              <span className="size-2.5 rounded-full bg-white/15" />
+              <span className="size-2.5 rounded-full bg-white/15" />
+              <span className="size-2.5 rounded-full bg-white/15" />
+            </span>
+          )}
           {titleContent ?? (
             <span className="min-w-0 flex-1 truncate text-center font-mono text-[11px] text-muted-foreground">
               {title}

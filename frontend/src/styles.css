@@ -216,6 +216,22 @@
     transform: translateX(0) scale(1);
   }
 }
+@keyframes sheet-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes sheet-out-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
 @keyframes sheet-up {
   from {
     transform: translateY(100%);
@@ -314,6 +330,13 @@
   /* The floating terminal slides in from the desktop's right edge, where its handle lives. */
   .float-window-enter {
     animation: float-window-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  /* Side drawers slide in from the right edge, where their handle lives. */
+  .sheet-right[data-state='open'] {
+    animation: sheet-in-right 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .sheet-right[data-state='closed'] {
+    animation: sheet-out-right 180ms ease-in both;
   }
   /* Bottom drawers slide up from the edge they belong to and drop back down. */
   .sheet-bottom[data-state='open'] {

@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as Dialog from '@radix-ui/react-dialog';
+import { useQuery } from '@tanstack/react-query';
 import { computerTerminal, terminalSessionsQuery } from '@/lib/computer-terminals';
-import { ChevronLeftIcon, PlusIcon } from '@/components/ui/icons';
+import { ChevronLeftIcon } from '@/components/ui/icons';
 import type { Computer } from './computer-card';
 
 const TerminalEmulator = lazy(() =>
@@ -9,82 +10,110 @@ const TerminalEmulator = lazy(() =>
 );
 
 type Box = { x: number; y: number; width: number; height: number };
-const MIN = { width: 320, height: 220 };
-const clamp = (box: Box, area: { width: number; height: number }): Box => {
-  const width = Math.min(Math.max(box.width, MIN.width), area.width - 16);
-  const height = Math.min(Math.max(box.height, MIN.height), area.height - 16);
+type Shape = { width: number; height: number; chromeWidth: number; chromeHeight: number };
+const MIN_WIDTH = 320;
+
+/** Height that makes the window exactly wrap the grid at this width (no empty bands around the text). */
+const fitted = (width: number, shape: Shape | null) =>
+  shape ? shape.chromeHeight + ((width - shape.chromeWidth) * shape.height) / shape.width : width * 0.6;
+
+function place(box: Box, shape: Shape | null, area: { width: number; height: number }): Box {
+  let width = Math.min(Math.max(box.width, MIN_WIDTH), area.width - 16);
+  let height = fitted(width, shape);
+  // Too tall for the viewer: narrow the window until its fitted height fits.
+  if (height > area.height - 16 && shape) {
+    width = shape.chromeWidth + ((area.height - 16 - shape.chromeHeight) * shape.width) / shape.height;
+    height = area.height - 16;
+  }
   return {
     width,
     height,
     x: Math.min(Math.max(box.x, 8), area.width - width - 8),
     y: Math.min(Math.max(box.y, 8), area.height - height - 8),
   };
-};
-
-const windowButton =
-  'flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground outline-none transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40';
+}
 
 /**
- * A handle on the desktop's right edge ("‹", "‹ Terminal" on hover) that pulls out a floating terminal window over
- * the live desktop. The window is dragged by its title bar, resized from its corner, and stays inside the viewer;
- * the desktop stays usable wherever the window does not cover it.
+ * The desktop's right-edge handle ("‹", "‹ Terminals" on hover) opens a drawer of this computer's terminals with
+ * their current screens rendered; choosing one brings it up as a floating window over the live desktop. The window
+ * keeps the terminal's own shape, is dragged by its title bar and resized from its corner, stays inside the viewer,
+ * and its one traffic light minimizes it back into the drawer.
  */
 export function FloatingTerminal({
   computer,
   onExpand,
 }: {
   computer: Computer;
-  /** Open the same session in the full Terminal view. */
+  /** Open the Terminal view (where terminals are created). */
   onExpand: (session: string | null) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [box, setBox] = useState<Box | null>(null);
+  const [drawer, setDrawer] = useState(false);
   const [session, setSession] = useState<string | null>(null);
-  const [error, setError] = useState('');
+  const [box, setBox] = useState<Box | null>(null);
+  const [shape, setShape] = useState<Shape | null>(null);
   const area = useRef<HTMLDivElement>(null);
   const gesture = useRef<{ kind: 'move' | 'resize'; x: number; y: number; start: Box } | null>(null);
-  const client = useQueryClient();
-  const query = useQuery({ ...terminalSessionsQuery(computer.id), enabled: open, refetchInterval: 4000 });
-  const sessions = query.data?.sessions ?? [];
-  const current = sessions.find(item => item.id === session);
-
-  useEffect(() => {
-    if (open && !current && sessions.length) setSession((sessions.find(item => item.alive) ?? sessions[0]).id);
-  }, [open, current, sessions]);
+  const sessions = useQuery({
+    ...terminalSessionsQuery(computer.id),
+    enabled: drawer || session !== null,
+    refetchInterval: session ? 4000 : false,
+  });
+  const list = sessions.data?.sessions ?? [];
+  const current = list.find(item => item.id === session);
+  // The computer admits one operation at a time, so the drawer reads each screen in turn, in one request.
+  const previews = useQuery({
+    queryKey: ['terminal-previews', computer.id, list.map(item => item.id).join()],
+    enabled: drawer && list.length > 0,
+    staleTime: 0,
+    gcTime: 0,
+    queryFn: async ({ signal }) => {
+      const texts: Record<string, string> = {};
+      for (const item of list) {
+        try {
+          const screen = await computerTerminal(computer.id, { operation: 'view', session: item.id }, signal);
+          texts[item.id] = screen.text ?? '';
+        } catch {
+          texts[item.id] = '';
+        }
+      }
+      return texts;
+    },
+  });
 
   const bounds = () => {
     const element = area.current?.parentElement;
     return { width: element?.clientWidth ?? 800, height: element?.clientHeight ?? 600 };
   };
-  const show = () => {
+  const bringUp = (id: string) => {
     const room = bounds();
-    // First open: docked to the right, a comfortable size; later opens keep where the operator put it.
+    setSession(id);
+    setDrawer(false);
+    setShape(null);
+    // Rises in from the right, where the drawer was; later opens keep where the operator put it.
     setBox(
       current =>
         current ??
-        clamp(
-          {
-            width: Math.min(760, room.width * 0.55),
-            height: Math.min(480, room.height * 0.62),
-            x: room.width,
-            y: room.height * 0.12,
-          },
-          room,
-        ),
+        place({ width: Math.min(760, room.width * 0.55), height: 0, x: room.width, y: room.height * 0.1 }, null, room),
     );
-    setOpen(true);
   };
+  const minimize = () => {
+    setSession(null);
+    setDrawer(true);
+  };
+  // Once the console reports its grid, wrap the window around that shape.
   useEffect(() => {
-    if (!open) return;
-    const refit = () => setBox(current => (current ? clamp(current, bounds()) : current));
+    if (shape) setBox(current => (current ? place(current, shape, bounds()) : current));
+  }, [shape]);
+  useEffect(() => {
+    if (!session) return;
+    const refit = () => setBox(current => (current ? place(current, shape, bounds()) : current));
     window.addEventListener('resize', refit);
     return () => window.removeEventListener('resize', refit);
-  }, [open]);
+  }, [session, shape]);
 
   const start = (kind: 'move' | 'resize') => (event: ReactPointerEvent<HTMLElement>) => {
     if (!box || event.button !== 0) return;
-    // Buttons and the picker in the title bar keep their own clicks.
-    if (kind === 'move' && (event.target as Element).closest('button, select')) return;
+    if (kind === 'move' && (event.target as Element).closest('button')) return;
     event.preventDefault();
     // Capture keeps the drag going while the pointer passes over the desktop stream's iframe.
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -96,10 +125,12 @@ export function FloatingTerminal({
     const dx = event.clientX - drag.x,
       dy = event.clientY - drag.y;
     setBox(
-      clamp(
+      place(
+        // Resizing follows the width; the height always matches the terminal's shape.
         drag.kind === 'move'
           ? { ...drag.start, x: drag.start.x + dx, y: drag.start.y + dy }
-          : { ...drag.start, width: drag.start.width + dx, height: drag.start.height + dy },
+          : { ...drag.start, width: drag.start.width + dx },
+        shape,
         bounds(),
       ),
     );
@@ -108,38 +139,111 @@ export function FloatingTerminal({
     gesture.current = null;
   };
 
-  async function newTerminal() {
-    setError('');
-    const taken = new Set(sessions.map(item => item.name.toLowerCase()));
-    let n = 1;
-    while (taken.has(`shell-${n}`)) n++;
-    try {
-      const result = await computerTerminal(computer.id, { operation: 'create', name: `shell-${n}` });
-      if (result.session) setSession(result.session.id);
-      await client.invalidateQueries({ queryKey: ['computer-terminals', computer.id] });
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Could not start a terminal.');
-    }
-  }
-
   return (
     <div ref={area} className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
-      {!open && (
-        <div className="absolute inset-y-0 right-2 flex items-center">
-          <button
-            type="button"
-            aria-label="Floating terminal"
-            onClick={show}
-            className="group pointer-events-auto flex h-7 items-center gap-1 rounded-full border border-white/15 bg-black/55 px-2 text-xs font-medium text-white/70 shadow-lg backdrop-blur outline-none transition-[opacity,background-color,color,padding] duration-200 hover:bg-black/80 hover:px-3 hover:text-white focus-visible:px-3 focus-visible:text-white focus-visible:ring-2 focus-visible:ring-ring [@media(hover:hover)]:opacity-60 [@media(hover:hover)]:hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
-          >
-            <ChevronLeftIcon className="size-4" />
-            <span className="max-w-40 overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 [@media(hover:hover)]:max-w-0 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:max-w-40 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-visible:max-w-40 [@media(hover:hover)]:group-focus-visible:opacity-100">
-              Terminal
-            </span>
-          </button>
-        </div>
-      )}
-      {open && box && (
+      <Dialog.Root open={drawer} onOpenChange={setDrawer}>
+        {!current && (
+          <div className="absolute inset-y-0 right-2 flex items-center">
+            <Dialog.Trigger asChild>
+              <button
+                type="button"
+                aria-label="Terminals"
+                className="group pointer-events-auto flex h-7 items-center gap-1 rounded-full border border-white/15 bg-black/55 px-2 text-xs font-medium text-white/70 shadow-lg backdrop-blur outline-none transition-[opacity,background-color,color,padding] duration-200 hover:bg-black/80 hover:px-3 hover:text-white focus-visible:px-3 focus-visible:text-white focus-visible:ring-2 focus-visible:ring-ring [@media(hover:hover)]:opacity-60 [@media(hover:hover)]:hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+              >
+                <ChevronLeftIcon className="size-4" />
+                <span className="max-w-40 overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 [@media(hover:hover)]:max-w-0 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:max-w-40 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-visible:max-w-40 [@media(hover:hover)]:group-focus-visible:opacity-100">
+                  Terminals
+                </span>
+              </button>
+            </Dialog.Trigger>
+          </div>
+        )}
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 motion-safe:data-[state=open]:animate-[fade-in_200ms_ease-out] motion-safe:data-[state=closed]:animate-[fade-out_160ms_ease-in]" />
+          <Dialog.Content className="sheet-right fixed inset-y-0 right-0 z-50 flex w-[min(26rem,100vw)] flex-col border-l border-border bg-background pt-[env(safe-area-inset-top)] shadow-2xl outline-none">
+            <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-4">
+              <Dialog.Title className="text-base font-semibold">Terminals</Dialog.Title>
+              <Dialog.Close className="flex size-9 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+                <span className="sr-only">Close</span>
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="size-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" />
+                </svg>
+              </Dialog.Close>
+            </div>
+            <Dialog.Description className="sr-only">Choose a terminal to float over the desktop.</Dialog.Description>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-5">
+              {sessions.isPending && <p className="py-6 text-sm text-muted-foreground">Loading terminals…</p>}
+              {sessions.isError && (
+                <p role="alert" className="py-6 text-sm text-red-400">
+                  {sessions.error.message}
+                </p>
+              )}
+              {sessions.isSuccess && !list.length && (
+                <div className="space-y-3 py-6 text-sm text-muted-foreground">
+                  <p>No terminals on this computer yet.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDrawer(false);
+                      onExpand(null);
+                    }}
+                    className="rounded-md border border-border px-3 py-1.5 text-xs text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Open the Terminal view
+                  </button>
+                </div>
+              )}
+              {list.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-label={`Float ${item.name}`}
+                  onClick={() => bringUp(item.id)}
+                  className="card-enter block w-full overflow-hidden rounded-lg border border-border bg-sidebar text-left outline-none transition-colors hover:border-foreground/25 focus-visible:ring-2 focus-visible:ring-ring"
+                  style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
+                >
+                  {/* The session's current screen, drawn as text at the terminal's own proportions. */}
+                  <span
+                    className="relative block overflow-hidden bg-[#141414] [container-type:inline-size]"
+                    style={{ aspectRatio: `${item.columns * 0.6} / ${item.rows * 1.15}` }}
+                  >
+                    {previews.data?.[item.id] ? (
+                      <pre
+                        data-testid="terminal-preview"
+                        aria-hidden="true"
+                        className="absolute inset-x-0 bottom-0 m-0 whitespace-pre p-[2cqw] font-mono text-[#d4d4d4]"
+                        style={{ fontSize: `calc(96cqw / ${item.columns * 0.6})`, lineHeight: 1.15 }}
+                      >
+                        {previews.data[item.id].split('\n').slice(-item.rows).join('\n')}
+                      </pre>
+                    ) : (
+                      <span className="skeleton absolute inset-2 rounded" />
+                    )}
+                  </span>
+                  <span className="flex items-center gap-2 px-3 py-2">
+                    <span
+                      aria-hidden="true"
+                      className={`size-1.5 rounded-full ${item.alive ? 'bg-teal-400' : 'bg-muted-foreground/60'}`}
+                    />
+                    <span className="min-w-0 flex-1 truncate font-mono text-xs">{item.name}</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {item.alive ? (item.currentCommand ?? 'running') : 'exited'} · {item.columns}×{item.rows}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+      {current && box && (
         <section
           aria-label="Floating terminal"
           className="float-window-enter pointer-events-auto absolute flex flex-col"
@@ -148,120 +252,41 @@ export function FloatingTerminal({
           onPointerUp={end}
           onPointerCancel={end}
         >
-          {current ? (
-            <Suspense fallback={<div className="flex-1 rounded-xl border border-white/15 bg-[#141414]" />}>
-              <TerminalEmulator
-                key={`${current.id}:${current.columns}x${current.rows}`}
-                computerId={computer.id}
-                sessionId={current.id}
-                interactive={current.alive}
-                title={current.name}
-                columns={current.columns}
-                rows={current.rows}
-                fill
-                onTitlePointerDown={start('move')}
-                titleContent={
-                  <>
-                    <select
-                      aria-label="Terminal session"
-                      value={current.id}
-                      onChange={event => setSession(event.target.value)}
-                      className="min-w-0 max-w-40 flex-1 cursor-pointer truncate rounded bg-transparent font-mono text-[11px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&>option]:bg-background"
-                    >
-                      {sessions.map(item => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                          {item.alive ? '' : ' (exited)'}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="flex-1" />
-                    <button
-                      type="button"
-                      aria-label="New terminal"
-                      title="New terminal"
-                      onClick={() => void newTerminal()}
-                      className={windowButton}
-                    >
-                      <PlusIcon className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Open in Terminal view"
-                      title="Open in Terminal view"
-                      onClick={() => onExpand(current.id)}
-                      className={windowButton}
-                    >
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 24 24"
-                        className="size-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                      >
-                        <path
-                          d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Close floating terminal"
-                      title="Close"
-                      onClick={() => setOpen(false)}
-                      className={windowButton}
-                    >
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 24 24"
-                        className="size-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                      >
-                        <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" />
-                      </svg>
-                    </button>
-                  </>
-                }
-              />
-            </Suspense>
-          ) : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-white/15 bg-[#141414] p-4 text-center shadow-2xl shadow-black/60">
-              <p className="text-sm text-muted-foreground">
-                {query.isPending
-                  ? 'Loading terminals…'
-                  : query.isError
-                    ? query.error.message
-                    : 'No terminals on this computer yet.'}
-              </p>
-              <div className="flex gap-2">
+          <Suspense fallback={<div className="flex-1 rounded-xl border border-white/15 bg-[#141414]" />}>
+            <TerminalEmulator
+              key={`${current.id}:${current.columns}x${current.rows}`}
+              computerId={computer.id}
+              sessionId={current.id}
+              interactive={current.alive}
+              title={current.name}
+              columns={current.columns}
+              rows={current.rows}
+              fill
+              onMeasure={next =>
+                setShape(previous =>
+                  previous &&
+                  previous.width === next.width &&
+                  previous.height === next.height &&
+                  previous.chromeHeight === next.chromeHeight
+                    ? previous
+                    : next,
+                )
+              }
+              onTitlePointerDown={start('move')}
+              titleLeading={
+                // One traffic light: minimize back into the Terminals drawer ("−" appears on hover).
                 <button
                   type="button"
-                  onClick={() => void newTerminal()}
-                  className="flex min-h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Minimize to Terminals"
+                  title="Minimize"
+                  onClick={minimize}
+                  className="group flex size-3 shrink-0 items-center justify-center rounded-full border border-[#dc9e2b] bg-[#febc2e] outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <PlusIcon className="size-3.5" />
-                  Start a terminal
+                  <span className="h-[1.5px] w-1.5 rounded bg-[#8d5a0e] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="flex min-h-9 items-center rounded-md px-3 text-xs text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  Close
-                </button>
-              </div>
-              {error && (
-                <p role="alert" className="text-xs text-red-400">
-                  {error}
-                </p>
-              )}
-            </div>
-          )}
+              }
+            />
+          </Suspense>
           <div
             role="presentation"
             title="Resize"

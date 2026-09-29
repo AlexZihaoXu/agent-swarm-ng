@@ -246,7 +246,7 @@ test('the viewer mode and terminal session live in the address, so a refresh ret
   await expect(page).toHaveURL('/computers/desk');
 });
 
-test('a handle on the desktop pulls out a floating terminal that can expand to the Terminal view', async ({ page }) => {
+test('the desktop handle opens a Terminals drawer, and a session floats out fitted to its shape', async ({ page }) => {
   await page.route(/\/api\/computers(?:\?.*)?$/, route =>
     route.fulfill({
       json: {
@@ -273,17 +273,24 @@ test('a handle on the desktop pulls out a floating terminal that can expand to t
     ws.send(JSON.stringify({ type: 'ready', columns: 120, rows: 36 })),
   );
   await page.goto('/computers/desk');
-  await page.getByRole('button', { name: 'Floating terminal' }).click();
+  // The handle opens the Terminals drawer first; a session is then brought up as a floating window.
+  await page.getByRole('button', { name: 'Terminals', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: 'Terminals' });
+  await drawer.getByRole('button', { name: 'Float build' }).click();
+  await expect(drawer).toHaveCount(0);
   const floating = page.getByRole('region', { name: 'Floating terminal' });
-  await expect(floating).toBeVisible();
-  await expect(floating.getByLabel('Terminal session')).toHaveValue(session.id);
   await expect(floating).toContainText('Connected');
-  await floating.getByRole('button', { name: 'Close floating terminal' }).click();
+  // The window wraps the terminal: widths change, the shape follows.
+  const before = (await floating.boundingBox())!;
+  await page.mouse.move(before.x + before.width - 2, before.y + before.height - 2);
+  await page.mouse.down();
+  await page.mouse.move(before.x + before.width - 200, before.y + before.height, { steps: 5 });
+  await page.mouse.up();
+  const after = (await floating.boundingBox())!;
+  expect(after.width).toBeLessThan(before.width);
+  expect(after.height).toBeLessThan(before.height);
+  // The one traffic light minimizes back into the drawer.
+  await floating.getByRole('button', { name: 'Minimize to Terminals' }).click();
   await expect(floating).toHaveCount(0);
-  await page.getByRole('button', { name: 'Floating terminal' }).click();
-  await page
-    .getByRole('region', { name: 'Floating terminal' })
-    .getByRole('button', { name: 'Open in Terminal view' })
-    .click();
-  await expect(page).toHaveURL(`/computers/desk/terminal/${session.id}`);
+  await expect(page.getByRole('dialog', { name: 'Terminals' })).toBeVisible();
 });
