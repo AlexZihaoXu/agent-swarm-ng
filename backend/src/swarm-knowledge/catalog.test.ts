@@ -37,7 +37,9 @@ describe('Swarm Knowledge catalog', () => {
     expect(swarmKnowledge.list({ parentId: 'swarm' }).entries.map(entry => entry.id)).toEqual([
       'swarm/channels',
       'swarm/computers',
+      'swarm/time',
     ]);
+    expect(JSON.stringify(swarmKnowledge.read({ id: 'swarm/time' }))).toContain('set_reminder');
     expect(swarmKnowledge.read({ id: 'swarm/channels' }).source).toBe('docs/vision.md');
   });
 

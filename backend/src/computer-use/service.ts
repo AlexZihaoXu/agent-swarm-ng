@@ -56,6 +56,12 @@ export class ComputerUseService {
   private starting?: Promise<void>;
   private allowances = new Map<string, Allowance>();
   private terminalAllowances = new Map<string, TerminalAllowance>();
+  /** Terminals an agent deleted itself (computer:session → when), so the watcher does not report them back. */
+  private agentDeletes = new Map<string, number>();
+  deletedByAgent(computerId: string, session: string) {
+    const at = this.agentDeletes.get(`${computerId}:${session}`);
+    return at !== undefined && this.now() - at < 5 * 60_000;
+  }
   private active = new Map<string, Active>();
   private uncertain = new Set<string>();
   constructor(
@@ -321,7 +327,21 @@ export class ComputerUseService {
     retain?: (result: CoreReceipt) => Promise<void>,
   ): Promise<CoreReceipt> {
     await this.ready();
-    return this.performCore(() => this.claim(agentId), request, signal, retain);
+    let computerId = '';
+    const receipt = await this.performCore(
+      async () => {
+        const claim = await this.claim(agentId);
+        computerId = claim.computerId;
+        return claim;
+      },
+      request,
+      signal,
+      retain,
+    );
+    const input = request as { kind?: string; operation?: string; session?: string };
+    if (input.kind === 'terminal' && input.operation === 'delete' && input.session && !receipt.error)
+      this.agentDeletes.set(`${computerId}:${input.session}`, this.now());
+    return receipt;
   }
   /** An agent's terminal_view; a successful look allows a few terminal_run_actions combos on that session. */
   async terminalView(agentId: string, request: { session: string }, signal?: AbortSignal): Promise<CoreReceipt> {

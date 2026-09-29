@@ -105,7 +105,16 @@ export function createComputerTools(
       parameters: object({ computer: Type.Union([Type.String({ minLength: 1, maxLength: 100 }), Type.Null()]) }),
       async execute(_call, { computer }, signal) {
         signal?.throwIfAborted();
-        return textResult(await service.use(agentId, computer));
+        const result = await service.use(agentId, computer);
+        return textResult(
+          computer === null
+            ? result
+            : {
+                ...result,
+                knowledge:
+                  'Before any other computer tool: if swarm/computers/use, /actions, /browser, /terminals and /files are not in your retained context, read them now with read_knowledge.',
+              },
+        );
       },
     }),
     defineTool({
@@ -157,7 +166,8 @@ export function createComputerTools(
 }
 
 export const COMPUTER_USE_GUIDANCE = `## Assigned computers and desktop use
-Before first computer work, after acknowledging an actionable human request, read Swarm Knowledge swarm/computers/use, swarm/computers/actions, and swarm/computers/browser if not already read in retained context. These entries teach tool examples, coordinates, timing, screenshots, CAPTCHA/account rules and release etiquette. Re-read relevant guidance if uncertain or a tool reports a rule failure.
+Knowledge first: if swarm/computers/use, swarm/computers/actions, swarm/computers/browser, swarm/computers/terminals and swarm/computers/files are not in your retained context (a new or compacted conversation, or you simply do not remember reading them), read them with read_knowledge BEFORE calling use_computer or any other computer tool, even for a task that looks simple. Acknowledge an actionable human request first, then read. These entries teach tool examples, coordinates, timing, screenshots, terminals, CAPTCHA/account rules and release etiquette. Re-read relevant guidance if uncertain or a tool reports a rule failure.
+While you hold a computer you receive platform computer events when one of its terminals exits or is closed by someone else; decide whether to inspect it, report to the human, or clean it up (swarm/computers/terminals).
 Use list_computers to see assigned resources, use_computer with a name/ID to claim one, and glance/look_at before acting. A successful look permits only two run_actions combos in 30 real seconds. Input remains subject to execution-time checks. Only one agent holds a computer; the human can interact concurrently. Ask a holder to release using an already-permitted chat; if stuck, ask the human for Force release. Release when done using use_computer({computer:null}) unless explicitly asked to keep it dedicated. Restart releases claims and the next-turn notice explains recovery. Never mistake saved screenshots or old claims for fresh authority.
 Choose screenshot detail by purpose: low is for orientation, NOT accurate reading. Use high for broad readable context, glance({quality:"full"}) for exact text/fine details across the screen, or look_at for a targeted native-resolution crop. If unclear, increase detail/crop or deliberately zoom; do not guess or repeat low-resolution views for the same unreadable detail. After input, verify the actual application outcome at adequate detail before claiming success. Recommended/default per_action_pause is 0.2 seconds between actions; a pause is not proof the UI is ready.
 Report a blocking CAPTCHA BEFORE trying it; one attempt maximum by default, report its result immediately and do not try again without human approval. If you observe the human's Google account signed into Chrome, warn about possible account restrictions from automation and await informed permission before Google services; use a non-Google route meanwhile. Read the browser Knowledge entry for the scope and examples.

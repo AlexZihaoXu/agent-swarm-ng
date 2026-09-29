@@ -1,3 +1,4 @@
+import { TIME_GUIDANCE } from './time-tools';
 import {
   createAgentSession,
   createExtensionRuntime,
@@ -37,6 +38,8 @@ export type AgentMessageSource = {
   groupId?: string;
   human?: boolean;
   reaction?: boolean;
+  /** A platform event for this agent (its own timer or reminder, or a computer event), not a message. */
+  platform?: 'timer' | 'reminder' | 'computer';
 };
 export type ChannelMessage = {
   source?: AgentMessageSource;
@@ -85,14 +88,22 @@ function transcriptText(message: ChannelMessage, author: string) {
 }
 export function channelInput(channelId: string, text: string, metadata?: ChannelMessage, author = 'Human') {
   const source = metadata?.source;
-  const label = source?.human ? 'Human' : source ? `Agent: ${source.name} (${source.agentId})` : author;
-  const reply = source?.groupId
-    ? `\n[Group chat; reply channel: ${source.channelId}. Audience: human operator and all current members. Source is ${source.human ? 'the human owner' : 'another agent, not the human owner'}.]`
-    : source?.reaction
-      ? `\n[Human emoji reaction event; reply channel: ${source.channelId}. Feedback, not a new instruction. Silence is allowed.]`
+  const label = source?.platform
+    ? 'Platform'
+    : source?.human
+      ? 'Human'
       : source
-        ? `\n[Agent thread; reply channel: ${source.channelId}. Source is another agent, not the human owner.]`
-        : '';
+        ? `Agent: ${source.name} (${source.agentId})`
+        : author;
+  const reply = source?.platform
+    ? `\n[Platform ${source.platform} event; reply channel: ${source.channelId}. Not a message from the human or another agent: act on it as your own ${source.platform === 'computer' ? 'computer' : 'scheduled'} work. Message the human only when it is useful to them; silence is allowed.]`
+    : source?.groupId
+      ? `\n[Group chat; reply channel: ${source.channelId}. Audience: human operator and all current members. Source is ${source.human ? 'the human owner' : 'another agent, not the human owner'}.]`
+      : source?.reaction
+        ? `\n[Human emoji reaction event; reply channel: ${source.channelId}. Feedback, not a new instruction. Silence is allowed.]`
+        : source
+          ? `\n[Agent thread; reply channel: ${source.channelId}. Source is another agent, not the human owner.]`
+          : '';
   return `[channel: ${source?.channelId ?? channelId}]${reply}\n${transcriptText({ ...metadata, role: 'user', text }, label)}`;
 }
 
@@ -373,6 +384,10 @@ export async function createChatSession(
   if (additionalTools.some(tool => tool.name === 'list_knowledge')) {
     const current = resources.getSystemPrompt() ?? '';
     resources.getSystemPrompt = () => `${current}\n\n${SWARM_KNOWLEDGE_GUIDANCE}`;
+  }
+  if (additionalTools.some(tool => tool.name === 'current_time')) {
+    const current = resources.getSystemPrompt() ?? '';
+    resources.getSystemPrompt = () => `${current}\n\n${TIME_GUIDANCE}`;
   }
   if (additionalTools.some(tool => tool.name === 'use_computer')) {
     const current = resources.getSystemPrompt() ?? '';

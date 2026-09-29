@@ -1,3 +1,6 @@
+import { TerminalWatcher } from './computer-use/terminal-watcher';
+import { AgentTimers } from './agent-timers';
+import { createTimeTools } from './time-tools';
 import type { AgentRuns, RunContext } from './agent-runs';
 import type { PlatformStore } from './platform-store';
 import type { EndpointStore } from './endpoint-store';
@@ -48,6 +51,8 @@ export class DmBroker {
   /** Safety net for agent-originated work only (reply loops). Human-originated work follows AGENT_RUN_TIMEOUT_MS like private chat. */
   peerLimits = { queueTimeoutMs: 300000, executionTimeoutMs: 90000 };
   private linked = new WeakSet<AbortSignal>();
+  readonly timers: AgentTimers;
+  private watcher?: TerminalWatcher;
   constructor(
     private database: PlatformStore,
     private endpoints: EndpointStore,
@@ -61,6 +66,14 @@ export class DmBroker {
     this.reactions = new ReactionStore(database);
     this.sessions = new AgentSessionStore(database);
     this.activity = new ActivityStore(database);
+    this.timers = new AgentTimers(database, (agentId, kind, text, human) =>
+      this.deliverPlatformEvent(agentId, kind, text, human),
+    );
+    this.watcher = computers
+      ? new TerminalWatcher(database, computers, (agentId, text) =>
+          this.deliverPlatformEvent(agentId, 'computer', text, true),
+        )
+      : undefined;
     this.runs.setLifecycle(async (run, state, emit) => {
       await this.ready();
       if (state === 'queued') {
@@ -94,6 +107,36 @@ export class DmBroker {
       { store: this.activity, emit: (agentId, entry) => runs.activity(agentId, entry) },
     );
   }
+  /**
+   * Wakes an agent with a platform event (a timer or reminder firing, a computer event): offered to its running
+   * turn if there is one (where interruption triage applies), otherwise it starts a normal turn. `human` carries
+   * whether the event may be answered in the human's private channel.
+   */
+  async deliverPlatformEvent(
+    agentId: string,
+    platform: 'timer' | 'reminder' | 'computer',
+    text: string,
+    human: boolean,
+  ) {
+    if (this.closing || this.deleting.has(agentId)) return false;
+    await this.ready();
+    const agent = await this.database.findAgent(agentId);
+    if (!agent) return false;
+    const channelId = agent.channels[0].id;
+    const id = crypto.randomUUID();
+    const input: ChannelMessage = {
+      role: 'user',
+      id,
+      text,
+      timestamp: Date.now(),
+      source: { agentId: 'platform', name: 'Platform', channelId, chainId: '', messageId: id, human, platform },
+    };
+    this.runs.offer(agentId, input, { type: 'platform_event', channelId, platform }) ??
+      this.runs.enqueue({ agentId, channelId, clientMessageId: id, inputSource: 'agent' }, context =>
+        this.runInbox(agentId, input, context),
+      );
+    return true;
+  }
   async notifyHumanReaction(channelId: string, messageId: string, emoji: string) {
     await this.ready();
     return this.reactionCoordinator.offer(channelId, messageId, emoji);
@@ -105,6 +148,9 @@ export class DmBroker {
     return (this.starting ??= (async () => {
       await this.store.cancelInterruptedDeliveries();
       await this.activity.interruptActive();
+      // Pending timers are rows: after a restart or power loss they resume here.
+      this.timers.start();
+      this.watcher?.start();
       void this.computers?.ready().catch(() => {});
     })().catch(error => {
       this.starting = undefined;
@@ -454,6 +500,8 @@ ${preview.text}`
           (channelId, messageId) => this.runs.reactionsChanged(channelId, messageId),
         ),
         ...this.knowledge.toolsFor(agentId),
+        // Every agent's sense of time: current time, timers and reminders (no computer needed).
+        ...createTimeTools(this.timers, agentId, () => humanAuthority),
         ...computerTools,
       ],
       {
@@ -471,13 +519,14 @@ ${preview.text}`
             if (
               !message.source ||
               message.source.reaction ||
+              message.source.platform ||
               (message.source.groupId
                 ? await this.groups.claim(message.source.messageId, agentId)
                 : await this.store.claim(message.source.messageId, agentId))
             )
               admitted.push(message);
           }
-          humanBatch = admitted.some(message => !message.source || message.source.reaction);
+          humanBatch = admitted.some(message => !message.source || message.source.reaction || message.source.platform);
           humanAuthority = admitted.some(message => !message.source || message.source.human);
           sources = admitted.flatMap(message => (message.source ? [message.source] : []));
           inherited = sources[0]?.chainId;
@@ -486,7 +535,7 @@ ${preview.text}`
         },
         complete: async (messages, failed) => {
           for (const message of messages)
-            if (message.source && !message.source.reaction) {
+            if (message.source && !message.source.reaction && !message.source.platform) {
               const status = context.signal.aborted ? 'cancelled' : failed ? 'failed' : 'completed';
               if (message.source.groupId) {
                 await this.groups.finish(message.source.messageId, agentId, status);
@@ -533,6 +582,8 @@ ${preview.text}`
   }
   close() {
     this.closing = true;
+    this.timers.close();
+    this.watcher?.close();
     this.reactionCoordinator.close();
   }
   async settled() {

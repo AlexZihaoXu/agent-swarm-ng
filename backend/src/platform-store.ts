@@ -26,6 +26,8 @@ export class PlatformStore {
   initialize() {
     return (this.initialized ??= (async () => {
       await this.client.$queryRawUnsafe('PRAGMA journal_mode=WAL');
+      // Every commit reaches the disk before it is acknowledged (agents' timers must survive power loss).
+      await this.client.$queryRawUnsafe('PRAGMA synchronous=FULL');
       await this.client.$executeRawUnsafe('PRAGMA foreign_keys=ON');
     })());
   }

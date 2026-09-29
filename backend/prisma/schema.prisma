@@ -93,7 +93,28 @@ model Agent {
   computerAssignments ComputerAssignment[]
   computerClaim ComputerClaim?
   computerNotices ComputerNotice[]
+  timers           AgentTimer[]
   activity         Activity[]
+}
+
+// An agent's own timer (fires once) or repeating reminder. Firing wakes the agent with a platform event.
+model AgentTimer {
+  id          String    @id @default(uuid())
+  agentId     String
+  kind        String
+  note        String    @default("")
+  nextAt      DateTime
+  intervalMs  Int?
+  // How many times it fires in all; null repeats until cancelled.
+  total       Int?
+  fired       Int       @default(0)
+  lastFiredAt DateTime?
+  // Whether the run that set it could answer the human; the event carries the same authority.
+  human       Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  agent       Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  @@index([nextAt])
+  @@index([agentId])
 }
 
 // Operator-visible traces only; never agent working context or channel publications.

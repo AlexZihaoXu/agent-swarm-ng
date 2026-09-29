@@ -27,3 +27,23 @@ it('labels the originating conversation, not the receiving agent’s private cha
   expect(dm).toMatch(/^\[channel: dm:a:b\]/);
   expect(channelInput('private', 'Hello')).toMatch(/^\[channel: private\]/);
 });
+
+it('labels platform events (timers, reminders, computer events) as the platform, never as the human', () => {
+  const text = channelInput('private', 'Your timer fired.\nNote: check the build', {
+    role: 'user',
+    text: '',
+    source: {
+      agentId: 'platform',
+      name: 'Platform',
+      channelId: 'private',
+      chainId: '',
+      messageId: 'event-1',
+      human: true,
+      platform: 'timer',
+    },
+  });
+  expect(text).toContain('[Platform timer event; reply channel: private.');
+  expect(text).toContain('Not a message from the human');
+  expect(text).toContain('Platform');
+  expect(text).not.toMatch(/\bHuman\b.*Your timer/);
+});
