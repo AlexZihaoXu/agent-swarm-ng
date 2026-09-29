@@ -35,7 +35,7 @@ it('requires a current claim for every terminal tool; operator access neither ac
     delete: { session: crypto.randomUUID() },
     status: { session: crypto.randomUUID() },
     resize: { session: crypto.randomUUID(), columns: 100, rows: 30 },
-    run_actions: { session: viewed, actions: [{ name: 'keyboard.press', params: { key: 'Enter' } }] },
+    run_actions: { session: viewed, actions: [{ name: 'keyboard.press', params: { key: 'BSpace', repeat: 30 } }] },
   };
   const invoke = (i: number) => tools[i].execute('call', Object.values(args)[i], undefined, undefined, {} as any);
   const app = Fastify();
@@ -59,6 +59,13 @@ it('requires a current claim for every terminal tool; operator access neither ac
     await service.use(agent.id, computer.id);
     for (let i = 0; i < tools.length; i++) await invoke(i);
     expect(core.mock.calls).toHaveLength(9);
+    // The combo reaches the guest as plain actions, repeat included.
+    expect(
+      core.mock.calls.map(([, request]: any) => request).find(request => request.operation === 'actions'),
+    ).toMatchObject({
+      session: viewed,
+      actions: [{ type: 'press', key: 'BSpace', repeat: 30 }],
+    });
     await service.capture(agent.id, {});
     await list();
     await service.run(agent.id, {}); // readonly human snapshots preserve GUI allowance

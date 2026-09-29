@@ -79,6 +79,10 @@ class TerminalValidation(unittest.TestCase):
         terminal.validate(combo)
         # 6 code points at the default 800 cpm plus two 0.2 s pauses.
         self.assertAlmostEqual(terminal.actions_duration(combo), 6 * 60 / 800 + 0.4)
+        # 30 backspaces 0.05 s apart add 29 intervals.
+        repeated = {'operation': 'actions', 'session': session,
+                    'actions': [{'type': 'press', 'key': 'BSpace', 'repeat': 30, 'interval': 0.05}]}
+        self.assertAlmostEqual(terminal.actions_duration(terminal.validate(repeated)), 29 * 0.05)
         for actions, pause in [([], 0.2), ([{'type': 'press', 'key': 'rm -rf'}], 0.2),
                                ([{'type': 'type', 'text': 'a', 'cpm': 0}], 0.2),
                                ([{'type': 'type', 'text': 'a', 'cpm': 5000}], 0.2),
@@ -86,7 +90,12 @@ class TerminalValidation(unittest.TestCase):
                                ([{'type': 'type', 'text': 'y' * 500, 'cpm': 800}], 0.2),
                                ([{'type': 'press', 'key': 'Enter'}] * 17, 0.2),
                                ([{'type': 'press', 'key': 'Enter'}] * 2, 11),
-                               ([{'type': 'click'}], 0.2)]:
+                               ([{'type': 'click'}], 0.2),
+                               ([{'type': 'press', 'key': 'BSpace', 'repeat': 0}], 0.2),
+                               ([{'type': 'press', 'key': 'BSpace', 'repeat': 201}], 0.2),
+                               ([{'type': 'press', 'key': 'BSpace', 'repeat': 2.5}], 0.2),
+                               ([{'type': 'press', 'key': 'BSpace', 'interval': 3}], 0.2),
+                               ([{'type': 'press', 'key': 'BSpace', 'repeat': 200, 'interval': 0.2}], 0.2)]:
             with self.assertRaises(ValueError):
                 terminal.validate({'operation': 'actions', 'session': session, 'actions': actions, 'pause': pause})
 

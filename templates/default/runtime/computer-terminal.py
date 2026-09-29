@@ -62,8 +62,14 @@ def actions_duration(value):
                     raise ValueError('Action ' + str(number) + ': cpm must be above 0 and at most 3200, or "instant".')
                 total += len(action['text']) * 60 / cpm
         elif kind == 'press':
-            if set(action) - {'type', 'key'} or action.get('key') not in KEYS:
+            if set(action) - {'type', 'key', 'repeat', 'interval'} or action.get('key') not in KEYS:
                 raise ValueError('Action ' + str(number) + ': unsupported key. Use documented terminal key names.')
+            repeat, interval = action.get('repeat', 1), action.get('interval', 0)
+            if type(repeat) is not int or not 1 <= repeat <= 200:
+                raise ValueError('Action ' + str(number) + ': repeat must be a whole number from 1 to 200.')
+            if type(interval) not in (int, float) or not 0 <= interval <= 2:
+                raise ValueError('Action ' + str(number) + ': interval must be 0..2 seconds.')
+            total += (repeat - 1) * interval
         else:
             raise ValueError('Action ' + str(number) + ': type must be "type" or "press".')
     if total > ACTIONS_SECONDS:
@@ -219,6 +225,14 @@ def paste(pane, text):
         except ValueError: pass
 
 
+def press(pane, key, repeat=1, interval=0):
+    # Without an interval tmux repeats the key itself in one request.
+    if not interval: return tmux('send-keys', '-N', str(repeat), '-t', pane, '--', key)
+    for index in range(repeat):
+        if index: time.sleep(interval)
+        tmux('send-keys', '-t', pane, '--', key)
+
+
 def type_timed(pane, text, cpm):
     # One code point at a time, literally (never as key names), at the requested speed.
     delay = 60 / cpm
@@ -282,7 +296,7 @@ def execute(value):
             for number, action in enumerate(value['actions'], 1):
                 if done: time.sleep(value.get('pause', 0.2))
                 try:
-                    if action['type'] == 'press': tmux('send-keys', '-t', pane, '--', action['key'])
+                    if action['type'] == 'press': press(pane, action['key'], action.get('repeat', 1), action.get('interval', 0))
                     elif action.get('cpm', DEFAULT_CPM) == 'instant': paste(pane, action['text'])
                     else: type_timed(pane, action['text'], action.get('cpm', DEFAULT_CPM))
                 except ValueError as error:

@@ -112,8 +112,18 @@ export function validateTerminal(value: Record<string, any>, prepared = false) {
     for (const action of value.actions) {
       if (!action || typeof action !== 'object' || Array.isArray(action)) fail('Invalid action.');
       if (action.type === 'press') {
-        if (Object.keys(action).some(key => !['type', 'key'].includes(key)) || !keys.has(action.key))
+        if (
+          Object.keys(action).some(key => !['type', 'key', 'repeat', 'interval'].includes(key)) ||
+          !keys.has(action.key)
+        )
           fail('Unsupported terminal key.');
+        const repeat = action.repeat ?? 1,
+          interval = action.interval ?? 0;
+        if (!Number.isInteger(repeat) || repeat < 1 || repeat > 200)
+          fail('repeat must be a whole number from 1 to 200.');
+        if (typeof interval !== 'number' || !Number.isFinite(interval) || interval < 0 || interval > 2)
+          fail('interval must be 0..2 seconds.');
+        seconds += (repeat - 1) * interval;
       } else if (action.type === 'type') {
         if (
           Object.keys(action).some(key => !['type', 'text', 'cpm'].includes(key)) ||
