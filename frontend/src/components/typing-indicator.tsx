@@ -113,12 +113,13 @@ export function PresenceIndicator({
       title={typing ? 'Typing' : working ? 'Working' : 'Ready to chat'}
       style={indicatorDimensions(size, typing)}
       className={cn(
-        'absolute bottom-1 right-1 z-10 translate-x-1/2 translate-y-1/2 flex items-center justify-center transition-[width,height,color,background-color] duration-220 motion-reduce:transition-none',
+        // Rounded in every state: the teal fill fades out as typing ends, and must fade as a pill, not a square.
+        'absolute bottom-1 right-1 z-10 translate-x-1/2 translate-y-1/2 flex items-center justify-center overflow-hidden rounded-full transition-[width,height,color,background-color] duration-220 motion-reduce:transition-none',
         typing
-          ? 'overflow-hidden rounded-full bg-[#2dd4bf] text-[#134e4a]'
+          ? 'bg-[#2dd4bf] text-[#134e4a]'
           : working
-            ? 'text-[#2dd4bf]'
-            : 'text-[#23a55a]',
+            ? 'bg-transparent text-[#2dd4bf]'
+            : 'bg-transparent text-[#23a55a]',
         className,
       )}
     >

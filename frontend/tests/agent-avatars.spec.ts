@@ -45,6 +45,9 @@ test('all silhouettes move; randomization is stable and preserves the state prev
   await expect(sample.locator('[data-slot="typing-badge"]')).toHaveCSS('width', '24px');
   await expect(sample.locator('[data-slot="presence-cutout"]')).toHaveCSS('width', '28px');
   await select(page, 'State preview', 'Working');
+  // Leaving typing, the fading fill stays a pill (it flashed as a square).
+  const badge = sample.locator('[data-slot="online-indicator"]');
+  expect(await badge.evaluate(element => getComputedStyle(element).borderTopLeftRadius)).not.toBe('0px');
   await page.getByRole('button', { name: 'Randomize', exact: true }).click();
   const seed = await art.getAttribute('data-avatar-seed');
   await expect(art).toHaveAttribute('data-avatar-state', 'working');
