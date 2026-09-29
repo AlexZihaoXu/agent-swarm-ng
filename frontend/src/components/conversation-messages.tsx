@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { MessageMarkdown } from '@/components/message-markdown';
 import { cn } from '@/lib/utils';
+import { MESSAGE_TIME_GAP, messageTime } from '@/lib/format-time';
 import { AgentDmNotice } from '@/components/agent-dm-notice';
 import type { DmNotice } from '@/use-dm-inbox';
 import type { AvatarAppearance } from '@/lib/agent-avatar';
@@ -42,10 +43,27 @@ export function ConversationMessages({
   const entranceStart = Math.max(0, entranceCount.current - 8);
 
   const timeline = conversationTimeline(messages, notices);
+  // A time label opens the conversation and every stretch that starts more than five minutes after the one before;
+  // messages closer together share the label above them. Unsent messages (no time yet) never start a stretch.
+  let previous = 0;
+  const labels = timeline.map((item, index) => {
+    if (!item.timestamp) return index === 0 ? time : null;
+    const opens = !previous || item.timestamp - previous > MESSAGE_TIME_GAP;
+    previous = item.timestamp;
+    return opens ? messageTime(item.timestamp) : null;
+  });
+  const label = (index: number) =>
+    labels[index] && (
+      <p
+        data-slot="message-time"
+        className="message-enter mb-3 mt-3 origin-bottom text-center text-xs text-muted-foreground first:mt-0"
+      >
+        {labels[index]}
+      </p>
+    );
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-5 sm:px-5">
-      <p className="message-enter mb-5 origin-bottom text-center text-xs text-muted-foreground">{time}</p>
       <ReactionLoadError
         failed={Boolean(reactionChannel) && reactions.isError}
         retry={() => void reactions.refetch()}
@@ -54,8 +72,11 @@ export function ConversationMessages({
         {timeline.map((item, index) => {
           if (item.kind === 'dm')
             return (
-              <li key={`dm:${item.notice.id}`} className="flex">
-                <AgentDmNotice notice={item.notice} onOpen={() => onViewDm?.(item.notice)} />
+              <li key={`dm:${item.notice.id}`}>
+                {label(index)}
+                <div className="flex">
+                  <AgentDmNotice notice={item.notice} onOpen={() => onViewDm?.(item.notice)} />
+                </div>
               </li>
             );
           const message = item.message;
@@ -64,11 +85,13 @@ export function ConversationMessages({
             <div
               data-message-id={message.id}
               tabIndex={reactionChannel && message.sequence !== undefined ? 0 : undefined}
-              style={{
-                animationDelay: `${index >= entranceStart && index < entranceCount.current ? (index - entranceStart + 1) * 30 : 0}ms`,
-                '--enter-x': message.author === 'user' ? '14px' : '-14px',
-                ...(senderColor ? agentBubbleStyle(senderColor) : {}),
-              } as React.CSSProperties}
+              style={
+                {
+                  animationDelay: `${index >= entranceStart && index < entranceCount.current ? (index - entranceStart + 1) * 30 : 0}ms`,
+                  '--enter-x': message.author === 'user' ? '14px' : '-14px',
+                  ...(senderColor ? agentBubbleStyle(senderColor) : {}),
+                } as React.CSSProperties
+              }
               className={cn(
                 'message-enter message-context-target min-w-0 whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-5 [overflow-wrap:anywhere]',
                 message.author === 'user'
@@ -108,23 +131,22 @@ export function ConversationMessages({
               bubble
             );
           return (
-            <li
-              key={message.id}
-              data-window-id={message.id}
-              className={cn('relative flex', message.author === 'user' && 'justify-end')}
-            >
-              {reactionChannel ? (
-                <div
-                  className={cn(
-                    'min-w-0 max-w-[85%] md:max-w-[75%]',
-                    message.author === 'user' && 'flex flex-col items-end',
-                  )}
-                >
-                  {content}
-                </div>
-              ) : (
-                content
-              )}
+            <li key={message.id} data-window-id={message.id} className="relative">
+              {label(index)}
+              <div className={cn('flex', message.author === 'user' && 'justify-end')}>
+                {reactionChannel ? (
+                  <div
+                    className={cn(
+                      'min-w-0 max-w-[85%] md:max-w-[75%]',
+                      message.author === 'user' && 'flex flex-col items-end',
+                    )}
+                  >
+                    {content}
+                  </div>
+                ) : (
+                  content
+                )}
+              </div>
             </li>
           );
         })}

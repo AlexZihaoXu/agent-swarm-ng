@@ -504,6 +504,9 @@ test('long histories keep a bounded window: older pages load near the top and th
   // At most one window of messages is on the page, and the newest were dropped while reading older ones.
   expect(await list.locator(':scope > li').count()).toBeLessThanOrEqual(150);
   await expect(list.locator('[data-message-id="w-400"]')).toHaveCount(0);
-  await page.getByRole('button', { name: /Jump to latest|New messages/ }).click();
+  // Older history loading in is not news: the pill only offers the way back.
+  await expect(page.getByRole('button', { name: 'Jump to latest' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New messages' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Jump to latest' }).click();
   await expect(list.locator('[data-message-id="w-400"]')).toBeVisible();
 });

@@ -971,7 +971,7 @@ export function App() {
                 onScroll={conversationPeer === 'you' ? history.onScroll : undefined}
                 overlay={
                   conversationPeer === 'you' && (
-                    <JumpToLatest viewport={scrollRef} count={timeline.length} onJump={history.toLatest} />
+                    <JumpToLatest viewport={scrollRef} newest={timeline.at(-1)?.id} onJump={history.toLatest} />
                   )
                 }
                 className="min-h-0 flex-1"

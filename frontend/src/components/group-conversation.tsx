@@ -215,7 +215,7 @@ export function GroupConversation({
       <ScrollArea
         viewportRef={viewport}
         label="Group chat history"
-        overlay={<JumpToLatest viewport={viewport} count={messages.length} onJump={window_.toLatest} />}
+        overlay={<JumpToLatest viewport={viewport} newest={messages.at(-1)?.id} onJump={window_.toLatest} />}
         className="min-h-0 flex-1"
         viewportClassName="[&>div]:!block [&>div]:w-full"
         onScroll={() => {

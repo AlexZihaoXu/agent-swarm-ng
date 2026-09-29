@@ -106,7 +106,10 @@ test('messages enter in order with overlapping timing and respect reduced motion
       };
     }),
   );
-  const timestamp = page.getByRole('region', { name: 'Conversation with Avery' }).getByText('3:23 AM', { exact: true });
+  const timestamp = page
+    .getByRole('region', { name: 'Conversation with Avery' })
+    .locator('[data-slot="message-time"]')
+    .first();
   await expect(timestamp).toHaveCSS('animation-name', 'message-in, fade-in');
   expect(await timestamp.evaluate(element => parseFloat(getComputedStyle(element).animationDelay))).toBe(0);
   expect(timing[0].delay).toBe(0.03);
@@ -326,4 +329,30 @@ test('mobile can move between agent list and inline settings without overflow', 
   await page.getByRole('button', { name: 'Back to agents' }).click();
   await expect(page.getByRole('button', { name: 'Open settings for Avery' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create new agent' })).toBeVisible();
+});
+
+test('time labels open each stretch of messages more than five minutes after the one before', async ({ page }) => {
+  const start = new Date(2026, 8, 28, 9, 0).getTime();
+  await page.route('**/api/channels/*/messages*', route =>
+    route.fulfill({
+      json: {
+        messages: [0, 2, 12].map((minutes, i) => ({
+          id: `t-${i}`,
+          sequence: i + 1,
+          channelId: 'c',
+          role: i % 2 ? 'assistant' : 'user',
+          text: `At ${minutes} minutes`,
+          timestamp: start + minutes * 60_000,
+        })),
+        nextCursor: null,
+      },
+    }),
+  );
+  await page.goto('/chat/agents/avery');
+  const labels = page.getByRole('list', { name: 'Messages' }).locator('[data-slot="message-time"]');
+  await expect(page.getByRole('list', { name: 'Messages' }).getByText('At 12 minutes')).toBeVisible();
+  // 0 and 2 minutes share one label; 12 minutes opens another.
+  await expect(labels).toHaveCount(2);
+  await expect(labels.first()).toContainText('9:00');
+  await expect(labels.last()).toContainText('9:12');
 });

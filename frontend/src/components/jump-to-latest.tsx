@@ -4,22 +4,24 @@ import { surface } from '@/lib/motion';
 
 /**
  * A pill that appears when the reader has scrolled away from the newest messages, and brings them back.
- * It says "New messages" when something arrived while they were reading older history.
+ * It says "New messages" only when something newer arrived while they were away; older history loading in
+ * above them never counts.
  */
 export function JumpToLatest({
   viewport,
-  count,
+  newest,
   onJump,
 }: {
   viewport: RefObject<HTMLDivElement | null>;
-  count: number;
+  /** The newest message's ID: it changes only when a message arrives after it. */
+  newest: string | undefined;
   /** Runs first, e.g. to bring a windowed history back to its newest messages. */
   onJump?: () => void;
 }) {
   const [away, setAway] = useState(false);
-  const latest = useRef(count);
-  const seen = useRef(count);
-  latest.current = count;
+  const latest = useRef(newest);
+  const seen = useRef(newest);
+  latest.current = newest;
   useEffect(() => {
     const element = viewport.current;
     if (!element) return;
@@ -33,8 +35,8 @@ export function JumpToLatest({
     element.addEventListener('scroll', update, { passive: true });
     return () => element.removeEventListener('scroll', update);
   });
-  if (!away) seen.current = count;
-  const fresh = away && count > seen.current;
+  if (!away) seen.current = newest;
+  const fresh = away && newest !== seen.current;
   return (
     <AnimatePresence>
       {away && (
