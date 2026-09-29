@@ -7,6 +7,8 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatSkeleton } from '@/components/ui/skeleton';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { AgentsIcon, ChatIcon, ComputerIcon, PlusIcon, SettingsIcon } from '@/components/ui/icons';
 import { JumpToLatest } from '@/components/jump-to-latest';
 import { AgentPanel } from '@/components/agent-panel';
 import { EditAgentForm } from '@/components/edit-agent-form';
@@ -497,7 +499,7 @@ export function App() {
             {/* Basic Tabs composition: Kibo tabs/standard/tabs-standard-1, floating without a footer on phones. */}
             <Tabs.List
               aria-label="Main navigation"
-              className="pointer-events-auto relative isolate grid h-[50px] w-[min(23rem,calc(100vw-2rem))] grid-cols-4 items-center rounded-lg border border-border bg-muted p-[3px] shadow-lg md:h-9 md:w-96 md:border-0 md:p-1 md:shadow-none"
+              className="pointer-events-auto relative isolate grid h-[50px] w-[min(23rem,calc(100vw-2rem))] grid-cols-4 items-center rounded-lg border border-border bg-muted p-[3px] shadow-lg md:h-9 md:w-[28rem] md:border-0 md:p-1 md:shadow-none"
             >
               <span
                 aria-hidden="true"
@@ -507,13 +509,24 @@ export function App() {
                   transform: `translateX(${['agents', 'chat', 'computers', 'settings'].indexOf(activeTab) * 100}%)`,
                 }}
               />
-              {['Agents', 'Chat', 'Computers', 'Settings'].map(label => (
+              {(
+                [
+                  ['Agents', AgentsIcon],
+                  ['Chat', ChatIcon],
+                  ['Computers', ComputerIcon],
+                  ['Settings', SettingsIcon],
+                ] as const
+              ).map(([label, TabIcon]) => (
                 <Tabs.Trigger
                   key={label}
                   value={label.toLowerCase()}
                   className="relative z-10 min-h-11 min-w-0 rounded-md px-1 py-1 text-[11px] font-medium md:min-h-0 md:px-3 md:text-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:text-foreground"
                 >
-                  {label}
+                  {/* Kibo tabs-standard-2 (Tabs with Icons): stacked on the phone bar, inline on desktop. */}
+                  <span className="flex flex-col items-center gap-0.5 md:flex-row md:gap-1.5">
+                    <TabIcon className="size-[18px] md:size-4" />
+                    {label}
+                  </span>
                 </Tabs.Trigger>
               ))}
             </Tabs.List>
@@ -693,11 +706,22 @@ export function App() {
                 }
               />
             ) : (
-              <section
-                aria-label="No agent selected"
-                className="hidden min-w-0 flex-1 items-center justify-center p-6 text-sm text-muted-foreground md:flex"
-              >
-                Select or create an agent to configure.
+              <section aria-label="No agent selected" className="hidden min-w-0 flex-1 md:flex">
+                <Empty>
+                  <EmptyHeader>
+                    <EmptyMedia>
+                      <AgentsIcon />
+                    </EmptyMedia>
+                    <EmptyTitle>No agent selected</EmptyTitle>
+                    <EmptyDescription>Select or create an agent to configure.</EmptyDescription>
+                  </EmptyHeader>
+                  <EmptyContent>
+                    <Button type="button" className="gap-1.5" onClick={() => navigate('/agents/new')}>
+                      <PlusIcon />
+                      Create agent
+                    </Button>
+                  </EmptyContent>
+                </Empty>
               </section>
             )
           ) : selectedGroup ? (
@@ -1016,11 +1040,16 @@ export function App() {
               )}
             </section>
           ) : (
-            <section
-              aria-label="No agent selected"
-              className="hidden min-w-0 flex-1 items-center justify-center p-6 text-sm text-muted-foreground md:flex"
-            >
-              Select or create an agent to start chatting.
+            <section aria-label="No agent selected" className="hidden min-w-0 flex-1 md:flex">
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia>
+                    <ChatIcon />
+                  </EmptyMedia>
+                  <EmptyTitle>No conversation open</EmptyTitle>
+                  <EmptyDescription>Select or create an agent to start chatting.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             </section>
           )}
         </Tabs.Content>

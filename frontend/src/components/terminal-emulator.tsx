@@ -5,6 +5,28 @@ import { Button } from '@/components/ui/button';
 const COLS = 120,
   ROWS = 36;
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
+const ctrl = (letter: string) => String.fromCharCode(letter.charCodeAt(0) & 0x1f);
+
+/**
+ * Keys a browser or phone keyboard cannot send (or keeps for itself, like Ctrl+W), as the bytes a real
+ * terminal would produce. They travel over the same live stream as typing, so they act instantly.
+ */
+const keyBar: { label: string; name: string; bytes: (appCursor: boolean) => string }[] = [
+  { label: 'Esc', name: 'Escape', bytes: () => '\x1b' },
+  { label: 'Tab', name: 'Tab', bytes: () => '\t' },
+  { label: '⌃C', name: 'Control C (interrupt)', bytes: () => ctrl('c') },
+  { label: '⌃D', name: 'Control D', bytes: () => ctrl('d') },
+  { label: '⌃Z', name: 'Control Z', bytes: () => ctrl('z') },
+  { label: '⌃L', name: 'Control L', bytes: () => ctrl('l') },
+  { label: '⌃R', name: 'Control R', bytes: () => ctrl('r') },
+  { label: '⌃W', name: 'Control W', bytes: () => ctrl('w') },
+  { label: '↑', name: 'Up arrow', bytes: app => (app ? '\x1bOA' : '\x1b[A') },
+  { label: '↓', name: 'Down arrow', bytes: app => (app ? '\x1bOB' : '\x1b[B') },
+  { label: '←', name: 'Left arrow', bytes: app => (app ? '\x1bOD' : '\x1b[D') },
+  { label: '→', name: 'Right arrow', bytes: app => (app ? '\x1bOC' : '\x1b[C') },
+  { label: 'PgUp', name: 'Page Up', bytes: () => '\x1b[5~' },
+  { label: 'PgDn', name: 'Page Down', bytes: () => '\x1b[6~' },
+];
 
 /** Fixed geometry. No fit/resize, links, clipboard, image or attach addons. */
 export function TerminalEmulator({
@@ -22,6 +44,14 @@ export function TerminalEmulator({
   const [attempt, setAttempt] = useState(0),
     [visible, setVisible] = useState(() => !document.hidden);
   const [status, setStatus] = useState('Connecting…');
+  // Sends bytes over the live stream (set while connected); the key bar and the Ctrl latch use it.
+  const send = useRef<((value: string) => void) | null>(null);
+  const [ctrlLatched, setCtrlLatched] = useState(false);
+  const latched = useRef(false);
+  latched.current = ctrlLatched;
+  // The grid stays 120 × 36; it is scaled to fill the space like the desktop viewer, never resized.
+  const frame = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState({ scale: 1, width: 0, height: 0, pan: false });
   const inputAllowed = useRef(interactive);
   inputAllowed.current = interactive;
   useEffect(() => {
@@ -124,7 +154,7 @@ export function TerminalEmulator({
         end();
       }
     };
-    const data = term.onData(value => {
+    const queueInput = (value: string) => {
       if (!ready || disposed) return;
       // Focus reports are not keyboard input. Defence in depth for mouse protocols as well.
       if (/^\x1b\[(?:I|O)$/.test(value) || /^\x1b\[(?:<\d+;\d+;\d+[Mm]|M[\s\S]{3}|\d+;\d+;\d+M)$/.test(value)) return;
@@ -136,7 +166,18 @@ export function TerminalEmulator({
       }
       for (let i = 0; i < bytes.length; i += 4096) queue.push(bytes.slice(i, i + 4096));
       if (flushTimer === undefined) flushTimer = setTimeout(flush, 10);
+    };
+    const data = term.onData(value => {
+      // A latched on-screen Ctrl turns the next typed letter into its control character (phone keyboards).
+      if (latched.current && /^[a-z]$/i.test(value)) {
+        value = ctrl(value.toLowerCase());
+        setCtrlLatched(false);
+      }
+      queueInput(value);
     });
+    send.current = value => {
+      if (!term.options.disableStdin) queueInput(value);
+    };
     const heartbeat = setInterval(() => {
       if (ready && socket.readyState === WebSocket.OPEN) socket.send('{"type":"ping"}');
     }, 5000);
@@ -179,30 +220,116 @@ export function TerminalEmulator({
       clearInterval(heartbeat);
       socket.close();
       data.dispose();
+      send.current = null;
       clipboard.dispose();
       for (const name of mouseEvents) element.removeEventListener(name, stopMouse, true);
       term.dispose();
       terminal.current = null;
     };
   }, [computerId, sessionId, attempt, visible]);
+  useEffect(() => {
+    const outer = frame.current,
+      inner = host.current;
+    if (!outer || !inner) return;
+    const measure = () => {
+      const width = inner.offsetWidth,
+        height = inner.offsetHeight;
+      if (!width || !height) return;
+      const fitWidth = (outer.clientWidth - 16) / width,
+        fitHeight = (outer.clientHeight - 16) / height;
+      // Fill the frame, but not beyond 1.35× so a wide screen does not turn the text into a poster. When
+      // fitting the width would make text unreadable (phones), fit the rows instead and pan sideways.
+      const pan = fitWidth < 0.6;
+      const scale = pan ? Math.min(1, Math.max(0.6, fitHeight)) : Math.min(1.35, fitWidth, fitHeight);
+      setFit({ scale, width, height, pan });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(outer);
+    observer.observe(inner);
+    return () => observer.disconnect();
+  }, [attempt, visible]);
+  const connectedNow = status.startsWith('Connected');
+  const press = (value: string) => {
+    send.current?.(value);
+    terminal.current?.focus();
+  };
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-terminal-emulator>
       <div
-        className="min-h-0 max-w-full flex-1 overflow-auto bg-[#141414] p-2"
+        ref={frame}
+        className={`relative flex min-h-0 max-w-full flex-1 bg-[#141414] ${fit.pan ? 'items-start justify-start overflow-auto p-2' : 'items-center justify-center overflow-hidden'}`}
         aria-label="Interactive terminal"
         data-testid="terminal-viewport"
       >
-        <div ref={host} className="w-max" />
+        <div style={fit.width ? { width: fit.width * fit.scale, height: fit.height * fit.scale } : undefined}>
+          <div
+            ref={host}
+            className="w-max origin-top-left"
+            style={{ transform: fit.scale === 1 ? undefined : `scale(${fit.scale})` }}
+          />
+        </div>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
-        <span role="status">{status}</span>
+      <div className="flex min-w-0 shrink-0 items-center gap-2 border-t border-border bg-sidebar/40 px-2 py-1.5">
+        {/* Buttons keep focus in the terminal (no focus steal on press), so typing continues after a tap. */}
+        <div
+          role="toolbar"
+          aria-label="Terminal keys"
+          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]"
+        >
+          <button
+            type="button"
+            aria-pressed={ctrlLatched}
+            aria-label="Control (applies to the next letter)"
+            title="Ctrl: applies to the next letter you type"
+            disabled={!connectedNow}
+            onPointerDown={event => event.preventDefault()}
+            onClick={() => {
+              setCtrlLatched(value => !value);
+              terminal.current?.focus();
+            }}
+            className={keyClass(ctrlLatched)}
+          >
+            Ctrl
+          </button>
+          {keyBar.map(key => (
+            <button
+              key={key.name}
+              type="button"
+              aria-label={key.name}
+              title={key.name}
+              disabled={!connectedNow}
+              onPointerDown={event => event.preventDefault()}
+              onClick={() => press(key.bytes(Boolean(terminal.current?.modes.applicationCursorKeysMode)))}
+              className={keyClass(false)}
+            >
+              {key.label}
+            </button>
+          ))}
+        </div>
+        <span role="status" className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span
+            aria-hidden="true"
+            className={`size-1.5 rounded-full ${connectedNow ? 'bg-teal-400' : status.startsWith('Disconnected') ? 'bg-red-400' : 'bg-muted-foreground'}`}
+          />
+          <span className="sr-only sm:not-sr-only">{status}</span>
+        </span>
         {status.startsWith('Disconnected') && (
-          <Button size="sm" variant="outline" className="min-h-9" onClick={() => setAttempt(value => value + 1)}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="min-h-9 shrink-0"
+            onClick={() => setAttempt(value => value + 1)}
+          >
             Reconnect
           </Button>
         )}
-        <span>Browser/OS-reserved shortcuts may require Send key.</span>
       </div>
     </div>
   );
 }
+
+const keyClass = (on: boolean) =>
+  `flex min-h-9 min-w-9 shrink-0 items-center justify-center rounded-md border px-2 font-mono text-xs outline-none transition-[background-color,border-color,transform] duration-100 focus-visible:ring-2 focus-visible:ring-ring active:scale-95 disabled:opacity-40 motion-reduce:active:scale-100 sm:min-h-7 ${
+    on ? 'border-teal-400/60 bg-teal-400/15 text-teal-200' : 'border-border bg-background hover:bg-muted'
+  }`;

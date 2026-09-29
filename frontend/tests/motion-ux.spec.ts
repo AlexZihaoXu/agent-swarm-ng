@@ -108,10 +108,46 @@ test('agent settings offer jump links that follow the reader and land each headi
   const heading = pane.getByRole('heading', { name: 'Avatar', exact: true });
   await expect.poll(async () => (await heading.boundingBox())!.y).toBeGreaterThan((await nav.boundingBox())!.y);
   const navBottom = (await nav.boundingBox())!.y + (await nav.boundingBox())!.height;
-  await expect.poll(async () => (await heading.boundingBox())!.y - navBottom).toBeLessThan(80);
+  // Near the end of the page the scroll bottoms out, so allow the heading anywhere in the upper half.
+  await expect.poll(async () => (await heading.boundingBox())!.y - navBottom).toBeLessThan(700 / 2);
   expect((await heading.boundingBox())!.y).toBeGreaterThanOrEqual(navBottom);
   await expect(pane.getByRole('region', { name: 'Avatar' })).toBeFocused();
   // Scrolling by hand moves the highlight back.
   await pane.getByRole('region', { name: 'Agent editor' }).evaluate(element => element.scrollTo({ top: 0 }));
   await expect(nav.locator('[aria-current="location"]')).toHaveText('Channels');
+});
+
+test('empty screens say what is missing and point to the next step', async ({ page }) => {
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({ json: { computers: [], controllerConnected: true } }),
+  );
+  await page.goto('/computers');
+  await expect(page.getByRole('heading', { name: 'No computers yet' })).toBeVisible();
+  // The main navigation keeps plain accessible names; its icons are decorative.
+  await expect(page.getByRole('tab', { name: 'Computers', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Computers', exact: true }).locator('svg')).toHaveAttribute(
+    'aria-hidden',
+    'true',
+  );
+  await expect(page.getByRole('button', { name: 'Create computer' })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Create computer' }).click();
+  await expect(page).toHaveURL(/\/computers\/new$/);
+  await expect(page.getByRole('dialog', { name: 'Create computer' })).toBeVisible();
+});
+
+test('the browser page menu is suppressed on app surfaces but kept for fields and selected text', async ({ page }) => {
+  await page.goto('/chat/agents/avery');
+  const prevented = (selector: string) =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate(element => {
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+        element.dispatchEvent(event);
+        return event.defaultPrevented;
+      });
+  expect(await prevented('header')).toBe(true);
+  expect(await prevented('textarea')).toBe(false);
+  await page.getByRole('heading', { name: 'Avery', exact: true }).first().selectText();
+  expect(await prevented('header')).toBe(false);
 });

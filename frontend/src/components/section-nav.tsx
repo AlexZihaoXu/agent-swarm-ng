@@ -32,7 +32,8 @@ export function SectionNav({
   const [items, setItems] = useState<Item[]>([]);
   const [active, setActive] = useState('');
   const strip = useRef<HTMLDivElement>(null);
-  const jumping = useRef<string | null>(null);
+  // The clicked target and when the hold ends; the page may bottom out before the target is computed.
+  const jumping = useRef<{ id: string; until: number } | null>(null);
 
   // Sections can appear later (model settings wait for their data), so rebuild the list when children change.
   useEffect(() => {
@@ -59,6 +60,7 @@ export function SectionNav({
     const scroller = scrollParent(container.current);
     if (!scroller || !items.length) return;
     let frame = 0;
+    let recheck: ReturnType<typeof setTimeout> | undefined;
     const update = () => {
       frame = 0;
       const top = scroller.getBoundingClientRect().top;
@@ -69,7 +71,13 @@ export function SectionNav({
       if (atEnd) current = items.at(-1)!.id;
       // While a clicked jump is gliding, keep its target lit instead of flickering through the ones passed.
       if (jumping.current) {
-        if (current !== jumping.current) return;
+        const left = jumping.current.until - performance.now();
+        if (current !== jumping.current.id && left > 0) {
+          // Look again once the hold ends, even if no further scroll event arrives.
+          clearTimeout(recheck);
+          recheck = setTimeout(schedule, left + 20);
+          return;
+        }
         jumping.current = null;
       }
       setActive(current);
@@ -86,6 +94,7 @@ export function SectionNav({
       scroller.removeEventListener('scroll', schedule);
       resize.disconnect();
       cancelAnimationFrame(frame);
+      clearTimeout(recheck);
     };
   }, [container, items]);
 
@@ -120,7 +129,7 @@ export function SectionNav({
                 onClick={event => {
                   event.preventDefault();
                   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-                  jumping.current = reduced ? null : item.id;
+                  jumping.current = reduced ? null : { id: item.id, until: performance.now() + 900 };
                   setActive(item.id);
                   const scroller = scrollParent(item.element);
                   if (scroller) {

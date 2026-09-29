@@ -166,25 +166,27 @@ test('fixed120x36 terminal does not resize on a phone or resize request; reconne
   await page.screenshot({ path: '../.scratch/terminal-emulator-320.png', animations: 'disabled' });
 });
 test('create, reserved-key controls and deliberate deletion remain available', async ({ page }) => {
-  const { panel, requests } = await open(page);
+  const { panel, requests, input } = await open(page);
   await panel.getByRole('button', { name: 'New terminal', exact: true }).click();
   await panel.getByLabel('Terminal name', { exact: true }).fill('server');
   await panel.getByLabel('Initial command').fill('npm run dev');
   await panel.getByLabel('Working directory').fill('~/project');
   await panel.getByRole('button', { name: 'Create terminal', exact: true }).click();
-  await expect(panel.getByLabel('Select terminal')).toHaveValue('98765432-1234-1234-1234-123456789abc');
+  await expect(panel.getByRole('tab', { name: /server/ })).toHaveAttribute('aria-selected', 'true');
   expect(requests.find(r => r.operation === 'create')).toEqual({
     operation: 'create',
     name: 'server',
     command: 'npm run dev',
     cwd: '~/project',
   });
-  await panel.getByLabel('Terminal key').selectOption('C-w');
-  await panel.getByRole('button', { name: 'Send key', exact: true }).click();
-  await expect.poll(() => requests.filter(r => r.operation === 'press').length).toBe(1);
+  // Keys the browser keeps (Ctrl+W closes a tab) travel over the live stream, not a separate request.
+  await expect(panel).toContainText('Keyboard only');
+  await panel.getByRole('button', { name: 'Control W', exact: true }).click();
+  await expect.poll(() => input.join('')).toContain('\x17');
+  expect(requests.some(r => r.operation === 'press')).toBe(false);
   await panel.getByRole('button', { name: 'Delete terminal', exact: true }).click();
   expect(requests.some(r => r.operation === 'delete')).toBe(false);
-  await panel.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Delete terminal' }).getByRole('button', { name: 'Delete terminal' }).click();
   await expect.poll(() => requests.filter(r => r.operation === 'delete').length).toBe(1);
   await panel.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Actions for Terminal desk' })).toBeFocused();
@@ -195,12 +197,12 @@ test('stopped computers do not offer terminal execution', async ({ page }) => {
   await expect(page.getByRole('menuitem', { name: 'Terminals', exact: true })).toHaveAttribute('data-disabled', '');
 });
 test('controls stay usable while the session list refreshes in the background', async ({ page }) => {
-  const { panel, requests } = await open(page);
+  const { panel, input } = await open(page);
   await page.route('**/api/computers/*/terminals', async route => {
     if (route.request().postDataJSON()?.operation === 'list') await new Promise(resolve => setTimeout(resolve, 700));
     return route.fallback();
   });
-  const interrupt = panel.getByRole('button', { name: 'Interrupt', exact: true });
+  const interrupt = panel.getByRole('button', { name: 'Control C (interrupt)', exact: true });
   await expect(interrupt).toBeEnabled();
   // Polls run every 2 s and now take 700 ms: sample across several cycles. The button must never be disabled by a refresh.
   let disabled = 0;
@@ -210,7 +212,28 @@ test('controls stay usable while the session list refreshes in the background', 
   }
   expect(disabled).toBe(0);
   await interrupt.click();
-  await expect.poll(() => requests.filter(r => r.operation === 'interrupt').length).toBe(1);
+  await expect.poll(() => input.join('')).toContain('\x03');
   // Choosing another terminal keeps the panel populated instead of blanking to "Loading terminals…".
   await expect(panel.getByText('Loading terminals…')).toHaveCount(0);
+});
+
+test('the terminal takes focus on open, fits its frame, and the on-screen Ctrl applies to the next letter', async ({
+  page,
+}) => {
+  const { panel, input } = await open(page);
+  await expect(panel.locator('.xterm-helper-textarea')).toBeFocused();
+  // Scaled to fit rather than scrolled: the 120 × 36 grid stays whole inside its frame.
+  const frame = (await panel.getByTestId('terminal-viewport').boundingBox())!;
+  const screen = (await panel.locator('.xterm-screen').boundingBox())!;
+  expect(screen.width).toBeLessThanOrEqual(frame.width + 1);
+  expect(screen.height).toBeLessThanOrEqual(frame.height + 1);
+  await panel.getByRole('button', { name: 'Control (applies to the next letter)' }).click();
+  await expect(panel.getByRole('button', { name: 'Control (applies to the next letter)' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.keyboard.type('c');
+  await panel.getByRole('button', { name: 'Up arrow' }).click();
+  await expect.poll(() => input.join('')).toBe('\x03\x1b[A');
+  await expect(panel.locator('.xterm-helper-textarea')).toBeFocused();
 });

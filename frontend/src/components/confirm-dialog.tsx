@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Button } from '@/components/ui/button';
-import { dialogOverlay } from '@/lib/styles';
+import { dialogMotion, dialogOverlay } from '@/lib/styles';
 
 /** Same shell as the computer dialogs. States what will happen, then runs the action only after an explicit click. */
 export function ConfirmDialog({
@@ -48,7 +48,9 @@ export function ConfirmDialog({
     >
       <Dialog.Portal>
         <Dialog.Overlay className={dialogOverlay} />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]">
+        <Dialog.Content
+          className={`fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl ${dialogMotion}`}
+        >
           <form
             onSubmit={event => {
               event.preventDefault();

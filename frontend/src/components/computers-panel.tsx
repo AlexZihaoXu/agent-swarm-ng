@@ -5,6 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { ComputerIcon } from '@/components/ui/icons';
 import { randomUuid } from '@/lib/random-uuid';
 import { generateComputerName } from '@/lib/computer-name';
 import { defaultComputerSettings, parseComputerSettings, type ComputerSettingsDraft } from '@/lib/computer-settings';
@@ -465,9 +467,16 @@ export function ComputersPanel({
               </p>
             )}
             {query.isSuccess && query.data.controllerConnected && computers.length === 0 && (
-              <p role="status" className="py-10 text-center text-sm text-muted-foreground">
-                No computers yet. Create one to get started.
-              </p>
+              <Empty role="status">
+                <EmptyHeader>
+                  <EmptyMedia>
+                    <ComputerIcon />
+                  </EmptyMedia>
+                  <EmptyTitle>No computers yet</EmptyTitle>
+                  {/* The page header already carries Create computer; a second copy here would compete with it. */}
+                  <EmptyDescription>Use Create computer above to get started.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             )}
             {powerError && (
               <p role="alert" className="mb-4 text-sm text-red-400">

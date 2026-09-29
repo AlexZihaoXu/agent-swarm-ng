@@ -14,6 +14,8 @@ import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { SectionNav } from '@/components/section-nav';
+import { ChevronLeftIcon } from '@/components/ui/icons';
+import { backLink } from '@/lib/styles';
 import type { SettingsSection } from '@/lib/settings-sections';
 
 // Kibo's spacious section-form layout adapted to a left-aligned, scrollable
@@ -175,13 +177,9 @@ export function EditAgentForm({
           width="max-w-5xl"
           title="Agent settings"
           leading={
-            <button
-              type="button"
-              onClick={onBack}
-              aria-label="Back to agents"
-              className="flex min-h-11 shrink-0 items-center rounded-md px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
-            >
-              ‹ <span className="ml-1">Agents</span>
+            <button type="button" onClick={onBack} aria-label="Back to agents" className={cn(backLink, 'md:hidden')}>
+              <ChevronLeftIcon />
+              Agents
             </button>
           }
           description={

@@ -4,6 +4,9 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { BorderedBreadcrumb } from '@/components/ui/bordered-breadcrumb';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { BookIcon, ChevronLeftIcon } from '@/components/ui/icons';
+import { backLink } from '@/lib/styles';
 import { knowledgePath } from '@/lib/dashboard-location';
 import { cn } from '@/lib/utils';
 import { m } from 'motion/react';
@@ -302,12 +305,23 @@ export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: 
                     setSearch('');
                     onNavigate(knowledgePath());
                   }}
-                  className="min-h-11 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+                  className={cn(backLink, 'md:hidden')}
                 >
-                  ‹ Back to knowledge topics
+                  <ChevronLeftIcon />
+                  Back to knowledge topics
                 </button>
               )}
-              {!id && <p className="text-sm text-muted-foreground">Choose a topic to review its content and source.</p>}
+              {!id && (
+                <Empty className="min-h-[60dvh]">
+                  <EmptyHeader>
+                    <EmptyMedia>
+                      <BookIcon />
+                    </EmptyMedia>
+                    <EmptyTitle>Pick a topic</EmptyTitle>
+                    <EmptyDescription>Choose a topic to review its content and source.</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              )}
               {entryLoading && (
                 <p role="status" className="text-sm text-muted-foreground">
                   Loading knowledge entry…

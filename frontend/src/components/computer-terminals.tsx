@@ -1,7 +1,11 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { ConfirmDialog } from './confirm-dialog';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { PlusIcon, TrashIcon } from '@/components/ui/icons';
+import { m } from 'motion/react';
+import { glide } from '@/lib/motion';
 import { computerTerminal, type TerminalRequest, type TerminalResult } from '@/lib/computer-terminals';
 import type { Computer } from './computer-card';
 import { dialogOverlay } from '@/lib/styles';
@@ -10,25 +14,9 @@ const TerminalEmulator = lazy(() =>
 );
 const field =
   'min-h-10 min-w-0 rounded-md border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:text-sm';
-const keys = [
-  'Tab',
-  'Escape',
-  'BSpace',
-  'Up',
-  'Down',
-  'Left',
-  'Right',
-  'Home',
-  'End',
-  'PageUp',
-  'PageDown',
-  'Delete',
-  'C-d',
-  'C-l',
-  'C-z',
-  'C-t',
-  'C-w',
-] as const;
+
+const exitText = (item: { exitCode: number | null; exitSignal?: string | null }) =>
+  `exited${item.exitCode !== null ? ` (${item.exitCode})` : item.exitSignal ? ` (${item.exitSignal})` : ''}`;
 
 /** Retains the Kibo dialog shell; a trusted fixed-size xterm renders the guest PTY stream. */
 export function ComputerTerminals({
@@ -48,7 +36,6 @@ export function ComputerTerminals({
     [name, setName] = useState(''),
     [command, setCommand] = useState(''),
     [cwd, setCwd] = useState('/workspace');
-  const [key, setKey] = useState<(typeof keys)[number]>('Tab');
   const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
@@ -75,7 +62,6 @@ export function ComputerTerminals({
   const session = sessions.find(item => item.id === selected);
   // A background refresh must not disable the controls: a click that lands mid-poll would be silently dropped.
   const actionable = available && !busy && !query.isError && session?.id === selected;
-  const live = Boolean(actionable && session?.alive);
   useEffect(() => {
     if (open && selected === null && sessions[0]) setSelected(sessions[0].id);
   }, [open, selected, sessions]);
@@ -92,7 +78,7 @@ export function ComputerTerminals({
     }
   }, [open, available, computer.id, client]);
   const act = async (body: TerminalRequest, done?: (value: TerminalResult) => void) => {
-    if (inFlight.current || !available) return;
+    if (inFlight.current || !available) return false;
     inFlight.current = true;
     setBusy(true);
     setError('');
@@ -102,8 +88,10 @@ export function ComputerTerminals({
       done?.(result);
       setNotice(body.operation === 'interrupt' ? 'Ctrl+C sent; inspect the output to confirm.' : 'Request accepted.');
       await client.invalidateQueries({ queryKey: ['computer-terminals', computer.id] });
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Terminal request failed. Inspect before retrying.');
+      return false;
     } finally {
       inFlight.current = false;
       setBusy(false);
@@ -150,29 +138,57 @@ export function ComputerTerminals({
               </p>
             ) : (
               <>
-                <div className="mb-3 flex min-w-0 shrink-0 flex-wrap gap-2">
-                  <select
-                    aria-label="Select terminal"
-                    className={`${field} w-0 flex-1 cursor-pointer`}
-                    value={selected ?? ''}
-                    disabled={busy || !sessions.length}
-                    onChange={event => {
-                      setSelected(event.target.value);
-                      setNotice('');
-                      setError('');
-                    }}
+                {/* Sessions as tabs (the app's glide highlight), like tabs in a terminal app. */}
+                <div className="mb-3 flex min-w-0 shrink-0 items-center gap-2">
+                  <div
+                    role="tablist"
+                    aria-label="Terminal sessions"
+                    className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto rounded-lg bg-muted p-1 [scrollbar-width:none]"
                   >
-                    <option value="">Select terminal</option>
-                    {sessions.map(item => (
-                      <option key={item.id} value={item.id}>
-                        {item.name} · {item.alive ? 'Running' : 'Exited'}
-                      </option>
-                    ))}
-                  </select>
+                    {sessions.length === 0 && (
+                      <span className="px-2 py-1 text-xs text-muted-foreground">No terminals yet</span>
+                    )}
+                    {sessions.map(item => {
+                      const on = item.id === selected;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={on}
+                          title={`${item.name} · ${item.alive ? 'running' : exitText(item)}${item.cwd ? ` · ${item.cwd}` : ''}`}
+                          disabled={busy}
+                          onClick={() => {
+                            setSelected(item.id);
+                            setNotice('');
+                            setError('');
+                          }}
+                          className={`relative isolate flex min-h-9 shrink-0 items-center gap-2 rounded-md px-3 font-mono text-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring md:min-h-7 ${on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                          {on && (
+                            <m.span
+                              aria-hidden="true"
+                              layoutId={`terminal-tab-${computer.id}`}
+                              transition={glide}
+                              className="absolute inset-0 -z-10 rounded-md bg-background shadow-sm"
+                            />
+                          )}
+                          <span
+                            aria-hidden="true"
+                            className={`size-1.5 rounded-full ${item.alive ? 'bg-teal-400' : 'bg-muted-foreground/60'}`}
+                          />
+                          {item.name}
+                          <span className="sr-only">{item.alive ? ' (running)' : ` (${exitText(item)})`}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="min-h-10"
+                    aria-label="New terminal"
+                    title="New terminal"
+                    className="size-10 shrink-0 p-0 md:size-9"
                     disabled={busy}
                     onClick={() => {
                       setCreating(value => !value);
@@ -180,7 +196,18 @@ export function ComputerTerminals({
                       setError('');
                     }}
                   >
-                    New terminal
+                    <PlusIcon />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    aria-label="Delete terminal"
+                    title="Delete terminal"
+                    className="size-10 shrink-0 p-0 text-red-400 hover:bg-red-500/10 md:size-9"
+                    disabled={!actionable}
+                    onClick={() => setDeleting(true)}
+                  >
+                    <TrashIcon />
                   </Button>
                 </div>
                 {creating && (
@@ -277,24 +304,13 @@ export function ComputerTerminals({
                   </p>
                 )}
                 {session && (
-                  <div className="flex min-h-60 min-w-0 flex-1 flex-col rounded-lg border border-border bg-background motion-safe:animate-[fade-in_120ms_ease-out]">
-                    <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2 font-mono text-xs">
-                      <span className="min-w-0 flex-1 truncate" title={session.cwd}>
-                        {session.name} ·{' '}
-                        {session.alive
-                          ? 'Running'
-                          : `Exited${session.exitCode !== null ? ` (${session.exitCode})` : session.exitSignal ? ` (${session.exitSignal})` : ''}`}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="min-h-9"
-                        disabled={!actionable}
-                        onClick={() => setDeleting(value => !value)}
-                      >
-                        Delete terminal
-                      </Button>
-                    </div>
+                  <div className="flex min-h-60 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-[#141414]">
+                    {!session.alive && (
+                      <p role="status" className="border-b border-border px-3 py-2 text-xs text-muted-foreground">
+                        {session.name} has {exitText(session)}. Its last output stays below; start a new terminal to run
+                        more.
+                      </p>
+                    )}
                     {open && available && (
                       <Suspense
                         fallback={
@@ -311,91 +327,6 @@ export function ComputerTerminals({
                         />
                       </Suspense>
                     )}
-                    <div className="shrink-0 space-y-2 border-t border-border p-3">
-                      <p className="text-[10px] text-muted-foreground">
-                        Fixed 120 × 36 · Click the terminal to focus. Escape and Tab go to the guest; use Close to
-                        leave.
-                      </p>
-                      {deleting ? (
-                        <form
-                          className="space-y-2"
-                          onSubmit={event => {
-                            event.preventDefault();
-                            void act({ operation: 'delete', session: session.id }, () => {
-                              setSelected(null);
-                              setDeleting(false);
-                            });
-                          }}
-                        >
-                          <p className="text-xs text-red-400">
-                            Delete “{session.name}”? This stops the session and discards its output.
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="min-h-10"
-                              onClick={() => setDeleting(false)}
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              type="submit"
-                              variant="outline"
-                              size="sm"
-                              className="min-h-10 text-red-400"
-                              disabled={!actionable}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </form>
-                      ) : (
-                        <>
-                          <div className="flex min-w-0 flex-wrap gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="min-h-10"
-                              disabled={!live}
-                              onClick={() => void act({ operation: 'press', session: session.id, key: 'Enter' })}
-                            >
-                              Enter
-                            </Button>
-                            <select
-                              aria-label="Terminal key"
-                              className={`${field} w-24 cursor-pointer`}
-                              value={key}
-                              disabled={!session.alive || busy}
-                              onChange={event => setKey(event.target.value as typeof key)}
-                            >
-                              {keys.map(value => (
-                                <option key={value}>{value}</option>
-                              ))}
-                            </select>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="min-h-10"
-                              disabled={!live}
-                              onClick={() => void act({ operation: 'press', session: session.id, key })}
-                            >
-                              Send key
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="min-h-10"
-                              disabled={!live}
-                              onClick={() => void act({ operation: 'interrupt', session: session.id })}
-                            >
-                              Interrupt
-                            </Button>
-                          </div>
-                        </>
-                      )}
-                    </div>
                   </div>
                 )}
               </>
@@ -418,6 +349,20 @@ export function ComputerTerminals({
               </Button>
             </Dialog.Close>
           </footer>
+          <ConfirmDialog
+            open={deleting && Boolean(session)}
+            onOpenChange={setDeleting}
+            title="Delete terminal"
+            description={
+              <>Delete “{session?.name}”? This stops the session and discards its output; programs running in it end.</>
+            }
+            confirmLabel="Delete terminal"
+            busyLabel="Deleting…"
+            onConfirm={async () => {
+              if (!session || !(await act({ operation: 'delete', session: session.id }, () => setSelected(null))))
+                throw new Error('Could not delete the terminal. Inspect it before retrying.');
+            }}
+          />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

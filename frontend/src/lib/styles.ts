@@ -8,3 +8,7 @@ export const dialogOverlay =
 /** Centered dialogs scale in from 96% and fade; closing is quicker than opening. */
 export const dialogMotion =
   'motion-safe:data-[state=open]:animate-[dialog-in_180ms_cubic-bezier(0.22,1,0.36,1)] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]';
+
+/** Phone back links (agent settings, Knowledge): a clear 20px chevron plus the destination, 44px tall. */
+export const backLink =
+  '-ml-2 flex min-h-11 shrink-0 items-center gap-0.5 rounded-md pl-1 pr-2 text-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] motion-reduce:active:scale-100 [&_svg]:size-5';
