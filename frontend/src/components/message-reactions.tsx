@@ -245,11 +245,11 @@ export function MessageReactions({
               if (pickerOpen || replyChosen.current) event.preventDefault();
               replyChosen.current = false;
             }}
-            className="context-menu-content phone-menu-targets z-50 max-h-[calc(100dvh-16px)] min-w-52 overflow-y-auto rounded-lg border border-border bg-background p-1 shadow-lg sm:max-h-none sm:overflow-visible"
+            className="context-menu-content phone-menu-targets z-50 max-h-[calc(100dvh-16px)] min-w-52 max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-border bg-background p-1 shadow-lg sm:max-h-none sm:overflow-visible"
           >
             {recent.data.length > 0 && (
               <>
-                <div role="group" aria-label="Recent reactions" className="flex gap-0.5 px-1 py-1">
+                <div role="group" aria-label="Recent reactions" className="flex flex-wrap gap-0.5 px-1 py-1">
                   {recent.data.map(emoji => {
                     const label = choices.find(choice => choice.value === emoji)?.label ?? emoji;
                     const mine = reactions.some(reaction => reaction.emoji === emoji && reaction.mine);
@@ -260,7 +260,7 @@ export function MessageReactions({
                         aria-label={mine ? `Remove ${label} reaction` : `React with ${label}`}
                         disabled={pending}
                         onSelect={() => void change(emoji)}
-                        className="flex size-11 cursor-pointer items-center justify-center rounded-md text-2xl leading-none outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40 sm:size-9"
+                        className="flex size-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md text-2xl leading-none outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40 sm:size-9"
                       >
                         {emoji}
                       </ContextMenu.Item>

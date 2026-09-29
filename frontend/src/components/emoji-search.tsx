@@ -81,7 +81,7 @@ export function EmojiSearch({ onSelect, compact = false }: { onSelect: (emoji: s
                     aria-label={item.label}
                     title={item.label}
                     onClick={() => onSelect(item.value)}
-                    className="flex size-11 cursor-pointer items-center justify-center rounded-md text-xl outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-1 focus-visible:ring-ring sm:size-8"
+                    className="flex size-11 min-w-0 cursor-pointer items-center justify-center overflow-hidden rounded-md text-xl outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-1 focus-visible:ring-ring sm:size-8"
                   >
                     {item.value}
                   </button>
