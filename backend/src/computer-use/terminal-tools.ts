@@ -195,7 +195,20 @@ export async function viewResult(
       details: {},
     };
   const columns = (result.session as { columns?: number } | undefined)?.columns ?? 120;
-  const image = renderTerminal(ansi, columns);
+  let image: ReturnType<typeof renderTerminal>;
+  try {
+    image = renderTerminal(ansi, columns);
+  } catch {
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify({ ...result, colors: 'The image could not be drawn; text only.' }),
+        },
+      ],
+      details: {},
+    };
+  }
   const reference = await retain?.({ mimeType: 'image/png', ...image, bounds: [] });
   return {
     content: [

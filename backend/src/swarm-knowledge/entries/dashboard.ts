@@ -30,7 +30,7 @@ Topics:
 - practices/dashboard/chat: private chat, stopping an agent, viewing agent DMs, groups, reactions and replies.
 - practices/dashboard/settings: ChatGPT/Codex subscription, OpenRouter and other endpoints, the Knowledge browser.
 
-Not in the app: any view of agents' timers, reminders or watches (agents list them with list_timers; reminder entries can appear in the activity log); per-tool switches or system-prompt editing; theme, notification or user-account settings; uploading or deleting files through the file browser; editing Knowledge.`,
+Not in the app: any view of agents' timers, reminders or watches (agents list them with list_timers; reminder records can appear in a run's collapsed "Details" in the activity log); per-tool switches or system-prompt editing; theme, notification or user-account settings; uploading or deleting files through the file browser; editing Knowledge.`,
 } satisfies KnowledgeEntry;
 
 export const dashboardAgents = {
@@ -48,12 +48,12 @@ Create an agent: + (or /agents/new). The "Create new agent" dialog asks for Agen
 Agent settings (/agents/<id>), sections in order, with jump links in the header:
 1. Channels: "Allowed DMs", one checkbox per other agent (with "Find agents" search; up to 100). Allowing a DM lets both agents message each other (off by default; automated chains are limited to eight DMs). "View DM" opens their read-only conversation.
 2. Model: Name, Endpoint, Model, Thinking level.
-3. Computers: cards of all computers with live previews; click a card to tick or untick it. This is where computers are assigned (not on the Computers tab).
+3. Computers: cards of all computers (previews refresh about every 10 s); click a card to tick or untick it. This is where computers are assigned (not on the Computers tab). A stopped computer can be ticked (it shows "Desktop offline") but cannot be used until powered on. With no computers it says "No computers yet. Create one in Computers first."
 4. Avatar: preview (idle/working/typing), variations, randomize, undo, shape, colour, eyes, mouth, markings, accessory, accent colour, fine-tune sliders.
 5. Delete agent.
 Changes are saved together: a bar slides up from the bottom when something changed, with "Discard changes" and "Save changes". Leaving with unsaved changes asks "Discard unsaved changes?".
 
-Assigning a computer ("how do I give you a computer?"): Agents tab → pick the agent → Computers section → click the computer's card so it is ticked → Save changes. If no computers exist, create one first (practices/dashboard/computers). Assignment is permission; the agent then claims the computer itself when it needs it, and the viewer shows "<agent> is on this computer" while it holds control. Unticking releases control once active input and commands finish.
+Assigning a computer ("how do I give you a computer?"): Agents tab → pick the agent → Computers section → click the computer's card so it is ticked → Save changes (it confirms "Computer assignments saved."). If no computers exist, create one first (practices/dashboard/computers). Several agents can be assigned the same computer; one holds it at a time. Assignment is permission; the agent then claims the computer itself when it needs it, and the viewer shows "<agent> is on this computer" while it holds control. Unticking releases control once active input and commands finish.
 
 Delete an agent: the "Delete <name>…" button at the bottom of its settings (or right-click → Delete agent). Type the exact name into "Confirm agent name", then "Delete agent". This removes its private chat, DMs and DM permissions (and its timers, watches and saved conversation).
 
@@ -70,11 +70,11 @@ export const dashboardComputers = {
     'Create, power, configure and delete computers; the desktop viewer, input lock, terminals, force release, files.',
   source: 'frontend/src/components/computers-panel.tsx',
   related: ['practices/dashboard', 'concepts/computers', 'concepts/computers/terminals', 'concepts/system'],
-  content: `Computers tab (/computers): "Computers · N of M in use" with a "Create computer" button at the top right (disabled when the limit is reached or the controller is offline). Each card shows a live preview, status (Running, Stopped, Creating, Deleting, Unavailable), CPU and memory dials, and a ⋯ menu (also right-click): Open, Power on / Power off, File browser, Terminals, Settings, and Danger zone → Remove.
+  content: `Computers tab (/computers): "Computers", subtitled "Containerized Ubuntu desktops · N of M in use", with a "Create computer" button at the top right (disabled when the limit is reached, "Limit reached (M). Delete a computer to create another.", or when computer management is offline, which a banner explains; the ⋯ menus and opening cards are disabled then too). Each card shows a live preview, status (Running, Stopped, Creating, Deleting, Unavailable), CPU and memory dials, and a ⋯ menu (also right-click): Open, Power on / Power off, File browser, Terminals, Settings, and Danger zone → Remove.
 
-Create a computer: "Create computer" → name (suggested), CPU cores and Memory (GiB) with −/+, Timezone → "Create computer". Then assign it to agents in their settings (practices/dashboard/agents).
+Create a computer: "Create computer" (or right-click empty space → New computer, or /computers/new) → "Computer name" (suggested), "CPU cores" and "Memory (GiB RAM)" with −/+, "Timezone" → "Create computer". It starts by itself (Creating, then Running). Then assign it to agents in their settings (practices/dashboard/agents).
 
-Power: ⋯ → Power on / Power off (confirms, and warns if an agent is using it). Powering off ends its terminals and running programs; files on its disk remain. Computers do not start by themselves after the host machine restarts: power them on here.
+Power: ⋯ → Power on (starts at once) / Power off (asks to confirm, and warns if an agent is using it). Powering off ends its terminals and running programs; files on its disk remain. After the host machine restarts, computers that were on start again by themselves; ones powered off stay off.
 
 Settings: ⋯ → Settings. CPU and memory apply live; changing the timezone requires the computer powered off, a confirmation tick and "Replace stopped computer".
 
@@ -90,7 +90,7 @@ Desktop viewer (click a running card, or Open; /computers/<id>): the header has
 - sound on/off (HTTPS address only),
 - "Send keys" (while input is live): New tab, Close tab, Address bar, Reload, New window.
 
-Force release: takes control away from the agent now, after stopping its active operation; the agent keeps its assignment and its terminal programs keep running. The agent is told on its next turn.
+Force release (confirm in "Force release computer"): takes control away from the agent now, after stopping its active operation; the agent keeps its assignment and its terminal programs keep running. The agent is told on its next turn.
 
 Terminals: the "‹" handle on the right edge ("Terminals") opens a drawer of live terminal previews: click one to float it as a window (several can be open; drag by the title bar, resize from any edge, click to bring to front, red light returns it to the drawer); "+" makes a new terminal (name, optional initial command, working directory, default ~/Desktop). The Terminal view (Desktop | Terminal switch, /computers/<id>/terminal) lists sessions with "+", delete, and right-click Rename…, Window size (80×24 up to 200×50) and Delete terminal…. A small avatar badge shows when an agent is typing in a terminal. On phones a key bar offers Ctrl, Esc, Tab and common shortcuts.
 
@@ -104,7 +104,7 @@ export const dashboardChat = {
   summary: 'Private chat, stopping an agent, viewing agent-to-agent DMs, group chats, reactions and replies.',
   source: 'frontend/src/components/chat-panel.tsx',
   related: ['practices/dashboard', 'concepts/channels', 'practices/communication'],
-  content: `Chat tab (/chat). The sidebar ("Search chats", + for a new group) mixes agent chats and groups, newest first; right-click for Open chat, Create group chat, Edit/Delete group chat, or View in Agents.
+  content: `Chat tab (/chat). The sidebar ("Search chats", + for a new group) mixes agent chats and groups, newest first; right-click for Create group chat, Open chat, Edit group chat, Delete group chat, or View in Agents.
 
 Private chat (/chat/agents/<id>): the message box ("Message <name>…"; Enter sends on a computer, Shift+Enter for a new line; on a phone use the ↑ button). While the agent works a square "Stop response" button appears next to Send: it stops the current run. The line above the box shows when the agent is working or typing. Older messages load as you scroll up. DMs the agent received from other agents appear inline as "Received from <agent>".
 
@@ -126,13 +126,13 @@ export const dashboardSettings = {
   summary: 'Connect the ChatGPT/Codex subscription, OpenRouter or another endpoint; browse Swarm Knowledge.',
   source: 'frontend/src/components/settings.tsx',
   related: ['practices/dashboard', 'concepts/system'],
-  content: `Settings tab (/settings), three sections.
+  content: `Settings tab (/settings), three sections in this order.
 
 OpenAI Codex: use a ChatGPT Plus or Pro subscription without an API key. "Connect ChatGPT" shows a one-time sign-in code and an "Open OpenAI sign-in" link; enter the code there (device code sign-in may need enabling in ChatGPT → Settings → Security). Status reads Not connected, Waiting for sign-in… or Connected to ChatGPT; "Disconnect" removes it.
 
-API endpoints: "Add OpenRouter" (prefills https://openrouter.ai/api/v1) or "+ Add endpoint" for another OpenAI-compatible provider or a local server: Name, Base URL, API key, then "Save endpoint". "Test connection" lists the models (no model request). Saved endpoints can be edited or removed (×). Agents choose an endpoint and model in their settings (Model section).
-
 Swarm Knowledge: "Browse Swarm Knowledge" (/settings/knowledge) opens this catalog read-only: topics with search on the left, the entry with its breadcrumb and related links on the right. It cannot be edited in the app.
+
+API endpoints: "Add OpenRouter" (prefills https://openrouter.ai/api/v1) or "+ Add endpoint" for another OpenAI-compatible provider or a local server: Name, Base URL, API key, then "Save endpoint". "Test connection" lists the models (no model request). Saved endpoints can be edited, or removed with × after a confirmation (not while an agent uses them). Agents choose an endpoint and model in their settings (Model section).
 
 There are no other settings (no theme, notifications or user accounts).`,
 } satisfies KnowledgeEntry;

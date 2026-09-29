@@ -975,7 +975,6 @@ export function App() {
                   )
                 }
                 className="min-h-0 flex-1"
-                viewportClassName="[&>div]:!block [&>div]:w-full"
               >
                 {conversationPeer === 'you' ? (
                   <>

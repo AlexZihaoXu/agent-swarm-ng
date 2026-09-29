@@ -129,6 +129,15 @@ def screen_text(text, limit=32768):
     return ''.join(kept).encode('utf-8', errors='replace')[:limit].decode('utf-8', errors='ignore')
 
 
+def ansi_tail(text, limit=ANSI_VIEW_LIMIT):
+    """The last whole rows within `limit` bytes: like the text view, the live bottom matters most."""
+    raw = text.encode('utf-8', errors='replace')
+    if len(raw) <= limit: return text
+    tail = raw[-limit:]
+    cut = tail.find(b'\n')
+    return (tail[cut + 1:] if cut >= 0 else tail).decode('utf-8', errors='ignore')
+
+
 def bounded_text(text):
     clean = ''.join(c for c in text if ord(c) >= 32 and ord(c) != 127 or c in '\n\t')
     raw = clean.encode('utf-8', errors='replace')
@@ -238,12 +247,20 @@ def press(pane, key, repeat=1, interval=0):
         tmux('send-keys', '-t', pane, '--', key)
 
 
+def literal(pane, text):
+    # tmux reads an argument that ends in ';' as a command separator (and '\\;' as ';'), even with -l: a typed ';'
+    # vanished. Trailing semicolons go as their key code instead.
+    body = text.rstrip(';')
+    if body: tmux('send-keys', '-t', pane, '-l', '--', body)
+    if len(body) < len(text): tmux('send-keys', '-N', str(len(text) - len(body)), '-t', pane, '-H', '3b')
+
+
 def type_timed(pane, text, cpm):
     # One code point at a time, literally (never as key names), at the requested speed.
     delay = 60 / cpm
     for index, character in enumerate(text):
         if index: time.sleep(delay)
-        tmux('send-keys', '-t', pane, '-l', '--', character)
+        literal(pane, character)
 
 
 def execute(value):
@@ -332,7 +349,7 @@ def execute(value):
     if value.get('colors'):
         # The same rows with their colour/style escapes, for a rendered image of the view.
         raw = tmux('capture-pane', '-e', '-p', '-t', pane, '-S', str(start - history), '-E', str(end - 1 - history))
-        result['ansi'] = screen_text(raw, ANSI_VIEW_LIMIT)
+        result['ansi'] = ansi_tail(screen_text(raw, len(raw.encode()) + 1))
     return result
 
 

@@ -91,7 +91,9 @@ const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;
 
 /** An SVG of the rows on a `columns`-wide grid (one cell per code point; wide characters are not special-cased). */
 export function terminalSvg(ansi: string, columns: number) {
-  const lines = ansi.replace(/\n$/, '').split('\n');
+  // Only SGR escapes are understood; anything else (a stray or cut escape) would be invalid XML text.
+  const clean = ansi.replace(/\x1b(?!\[[0-9;:]*m)/g, '').replace(/[\x00-\x08\x0b-\x1a\x1c-\x1f\x7f]/g, '');
+  const lines = clean.replace(/\n$/, '').split('\n');
   const width = Math.ceil(columns * CELL.width + PAD * 2);
   const height = lines.length * CELL.height + PAD * 2;
   const shapes: string[] = [];

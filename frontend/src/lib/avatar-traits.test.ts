@@ -9,6 +9,7 @@ import {
   avatarRanges,
   defaultAvatar,
   mutateAvatar,
+  sameAvatar,
   richAppearanceFromSeed,
   type AvatarAppearance,
   type AvatarRange,
@@ -58,13 +59,33 @@ describe('extended avatar traits', () => {
         const changed = (Object.keys({ ...base, ...next }) as (keyof AvatarAppearance)[]).filter(
           key => key !== 'seed' && base[key] !== next[key],
         );
-        // Two kinds of change; eyes and proportions each move two traits.
+        // Two kinds of change; eyes and proportions each move three traits.
         expect(changed.length).toBeGreaterThanOrEqual(2);
-        expect(changed.length).toBeLessThanOrEqual(4);
+        expect(changed.length).toBeLessThanOrEqual(6);
+        expect(sameAvatar(base, next)).toBe(false);
       }
       // No two tiles in a grid look alike.
       expect(new Set(grid.map(next => JSON.stringify({ ...next, seed: 0 }))).size).toBe(8);
     }
+  });
+
+  it('treats unset traits as their defaults and colours without case when comparing looks', () => {
+    const saved = { shape: 'pebble' as const, color: '#6795F8', seed: 4 };
+    expect(sameAvatar(saved, { ...saved, color: '#6795f8', mouth: 'none', stretch: 0, eyeStyle: 'pill' })).toBe(true);
+    // A change to any single trait is a change (the settings page must offer to save it).
+    for (const change of [{ mouth: 'smile' }, { accessory: 'sprout' }, { accent: '#ffffff' }, { taper: 0.4 }] as const)
+      expect(sameAvatar(saved, { ...saved, ...change })).toBe(false);
+  });
+
+  it('variation moves are clear but not always to an extreme, and reach both directions', () => {
+    const base = { shape: 'pebble' as const, color: '#6795f8', seed: 11 };
+    const stretches = Array.from({ length: 200 }, (_, i) => mutateAvatar(base, i * 7 + 6).stretch).filter(
+      (value): value is number => value !== undefined,
+    );
+    expect(stretches.some(value => value > 0.2)).toBe(true);
+    expect(stretches.some(value => value < -0.2)).toBe(true);
+    expect(stretches.every(value => Math.abs(value) >= 0.3)).toBe(true); // a visible move from the default 0
+    expect(stretches.some(value => Math.abs(value) < 0.9)).toBe(true); // not only the ends
   });
 
   it('derives a lighter accent from the body unless one is chosen', () => {

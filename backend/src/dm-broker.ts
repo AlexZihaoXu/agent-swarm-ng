@@ -556,6 +556,7 @@ ${preview.text}`
           ) ?? Promise.resolve(),
         activityStore: this.activity,
         session: (basis, ended) => {
+          if (this.deleting.has(agentId)) return void this.bases.delete(agentId);
           if (!ended || this.watches?.forAgent(agentId).some(watch => watch.context === 'fork'))
             this.bases.set(agentId, basis);
           else this.bases.delete(agentId);
@@ -617,7 +618,6 @@ ${preview.text}`
   async beforeDelete(agentId: string) {
     this.deleting.add(agentId);
     await this.watches?.releasedBy(agentId);
-    this.bases.delete(agentId);
     await this.reactionCoordinator.cancelAgent(agentId);
     await this.runs.settled(agentId);
     const related = [...this.jobs.values()].filter(
@@ -625,6 +625,9 @@ ${preview.text}`
     );
     await Promise.all([...new Set(related.map(job => job.chainId))].map(id => this.cancelChain(id)));
     await Promise.all(related.filter(job => !job.run.humanOwned).map(job => job.cleanup));
+    // Again once its runs have settled: a turn still running may have set a watch or kept its context.
+    await this.watches?.releasedBy(agentId);
+    this.bases.delete(agentId);
   }
   afterDelete(agentId: string) {
     this.deleting.delete(agentId);

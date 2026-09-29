@@ -178,32 +178,57 @@ export function richAppearanceFromSeed(seed: number): AvatarAppearance {
     accessory: v(23) < 0.7 ? 'none' : pick(avatarAccessories.slice(1), v(24)).value,
   };
 }
-/**
- * A close relative of an avatar for the variations grid: one or two traits nudged or swapped, the rest kept, so
- * the reader can steer by picking the nearest improvement.
- */
+/** What an unset trait draws as (saved avatars from before a trait existed leave it out). */
+export const traitDefaults = {
+  eyeStyle: 'pill',
+  stretch: 0,
+  taper: 0,
+  wobble: 0,
+  eyeSize: 1,
+  eyeGap: 0,
+  mouth: 'none',
+  marking: 'none',
+  accessory: 'none',
+} as const;
+/** Whether two avatars look the same (unset traits count as their defaults; colours ignore case). */
+export function sameAvatar(a: AvatarAppearance, b: AvatarAppearance) {
+  const normal = (avatar: AvatarAppearance) =>
+    JSON.stringify({
+      ...traitDefaults,
+      ...Object.fromEntries(Object.entries(avatar).filter(([, value]) => value !== undefined)),
+      color: avatar.color.toLowerCase(),
+      accent: avatar.accent?.toLowerCase() ?? null,
+    });
+  return normal(a) === normal(b);
+}
 const mutations = ['shape', 'color', 'mouth', 'marking', 'accessory', 'eyes', 'proportions'] as const;
 /**
  * A variation of an avatar: two different, clearly visible changes. The first kind cycles with the salt, so a grid
  * of consecutive salts shows every kind of change; each change picks a value other than the current one, and
- * proportions move to the far side of their range (a small nudge is invisible at tile size).
+ * proportions move by a third of their range or more (a small nudge is invisible at tile size), either way.
  */
 export function mutateAvatar(avatar: AvatarAppearance, salt: number): AvatarAppearance {
   const v = (n: number) => variation(Math.imul(avatar.seed, 31) ^ Math.imul(salt, 0x9e3779b1), n);
   const next: AvatarAppearance = { ...avatar, seed: Math.floor(v(1) * 2147483647) };
+  const same = <T>(a: T, b: T | undefined) =>
+    typeof a === 'string' && typeof b === 'string' ? a.toLowerCase() === b.toLowerCase() : a === b;
   const other = <T>(values: readonly T[], current: T | undefined, r: number) => {
-    const choices = values.filter(value => value !== current);
+    const choices = values.filter(value => !same(value, current));
     return choices[Math.floor(r * choices.length) % choices.length];
   };
+  // A clear move from the current value (a third of the range or more), in whichever direction has room.
   const far = (trait: AvatarRange, r: number) => {
     const { min, max } = avatarRanges[trait];
-    const middle = (min + max) / 2,
-      current = next[trait] ?? middle;
-    // Towards the end opposite to where it is now, at least halfway there.
-    const end = current > middle ? min : max;
-    return clampTrait(trait, middle + (end - middle) * (0.55 + 0.45 * r));
+    const span = max - min,
+      current = next[trait] ?? traitDefaults[trait];
+    const distance = span * (0.34 + 0.3 * ((r * 7) % 1));
+    const up = current + distance <= max,
+      down = current - distance >= min;
+    const direction = up && down ? (r < 0.5 ? 1 : -1) : up ? 1 : -1;
+    return clampTrait(trait, current + direction * distance);
   };
-  const first = mutations[salt % mutations.length];
+
+  const first = mutations[((salt % mutations.length) + mutations.length) % mutations.length];
   const rest = mutations.filter(kind => kind !== first);
   const second = rest[Math.floor(v(2) * rest.length) % rest.length];
   [first, second].forEach((kind, i) => {
@@ -241,9 +266,11 @@ export function mutateAvatar(avatar: AvatarAppearance, salt: number): AvatarAppe
     else if (kind === 'eyes') {
       next.eyeStyle = next.eyeStyle === 'round' ? 'pill' : 'round';
       next.eyeSize = far('eyeSize', r);
+      next.eyeGap = far('eyeGap', v(40 + i));
     } else {
       next.stretch = far('stretch', r);
       next.taper = far('taper', v(30 + i));
+      next.wobble = far('wobble', v(50 + i));
     }
   });
   return next;

@@ -9,6 +9,7 @@ import type { ChatAgent } from '@/use-chat';
 import type { ChatMessage } from '@/chat-types';
 import { useMessageWindow } from '@/lib/use-message-window';
 import { EdgeSkeleton } from '@/components/ui/skeleton';
+import { JumpToLatest } from './jump-to-latest';
 import { AgentAvatarArt } from './agent-avatar-art';
 import { AgentTypingStatus } from './agent-typing-status';
 import { ChatComposer } from './chat-composer';
@@ -16,8 +17,6 @@ import type { ComputerAgentState } from './computer-control';
 import { ConversationMessages } from './conversation-messages';
 import { CloseLight } from './ui/close-light';
 import { ScrollArea } from './ui/scroll-area';
-
-/** A window shows the latest messages only; the full history stays in Chat. */
 
 /** Any size from 300×320 up to the page. */
 const size = (want: { width: number; height: number }) => ({
@@ -78,12 +77,25 @@ export function FloatingChat({
     loadOlder: () => chat.loadHistory(agent, true),
     reset: channel,
   });
-  // Follow the newest message while the reader is at the bottom.
-  const following = useRef(true);
+  // Follow new messages only while the reader is near the bottom; older pages keep their place through the
+  // window's anchor (as in the group chat).
+  const nearBottom = useRef(true);
+  const previous = useRef({ first: '', last: '' });
   useLayoutEffect(() => {
     const root = viewport.current;
-    if (root && following.current) root.scrollTop = root.scrollHeight;
-  }, [history.visible.at(-1)?.id, history.visible.at(-1)?.text, box !== null]);
+    if (!root) return;
+    const first = messages[0]?.id ?? '',
+      last = messages.at(-1)?.id ?? '';
+    const before = previous.current;
+    if (before.first && before.first !== first && before.last === last) {
+      /* anchored by useMessageWindow */
+    } else if (!before.last || nearBottom.current) root.scrollTo({ top: root.scrollHeight, behavior: 'instant' });
+    previous.current = { first, last };
+  }, [messages.length, messages.at(-1)?.text, box !== null]);
+  // Once the window is on the page: a short history that cannot scroll still pages in older messages.
+  useEffect(() => {
+    if (box && ready) history.onScroll();
+  }, [box !== null, ready]);
 
   const start = (kind: 'move' | Edge) => (event: ReactPointerEvent<HTMLElement>) => {
     if (!box || event.button !== 0) return;
@@ -160,9 +172,10 @@ export function FloatingChat({
             <ScrollArea
               label={`Messages with ${agent.name}`}
               viewportRef={viewport}
+              overlay={<JumpToLatest viewport={viewport} newest={messages.at(-1)?.id} onJump={history.toLatest} />}
               onScroll={event => {
                 const root = event.currentTarget;
-                following.current = root.scrollHeight - root.scrollTop - root.clientHeight < 40;
+                nearBottom.current = root.scrollHeight - root.scrollTop - root.clientHeight < 80;
                 history.onScroll();
               }}
               className="min-h-0 flex-1"
@@ -178,6 +191,17 @@ export function FloatingChat({
                   </p>
                 ) : (
                   <>
+                    {/* Older messages load as the reader nears the top; this stays for keyboard users. */}
+                    {chat.historyCursor[channel] != null && (
+                      <button
+                        type="button"
+                        disabled={chat.historyLoading[channel]}
+                        onClick={() => chat.loadHistory(agent, true)}
+                        className="sr-only focus:not-sr-only focus:mx-auto focus:mb-2 focus:block focus:rounded-md focus:px-3 focus:py-1 focus:text-xs focus:ring-2 focus:ring-ring"
+                      >
+                        Load earlier messages
+                      </button>
+                    )}
                     {(chat.historyCursor[channel] != null || chat.historyLoading[channel] || history.olderHidden) && (
                       <EdgeSkeleton label="Loading earlier messages…" />
                     )}
@@ -206,7 +230,9 @@ export function FloatingChat({
                 draft={chat.drafts[channel] ?? ''}
                 onChange={text => chat.setDraft(channel, text)}
                 onSend={() => {
-                  following.current = true;
+                  // Your own message always shows, even when you had scrolled back.
+                  nearBottom.current = true;
+                  history.toLatest();
                   chat.send(agent, chat.drafts[channel] ?? '');
                 }}
                 busy={state.busy[channel]}

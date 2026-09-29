@@ -136,6 +136,11 @@ RUN install -d -m 0755 /home/agent/.nvm \
 # one fixed workspace; pin Files, Chrome and the already-installed VS Code in
 # Ubuntu Dock without changing its separate Trash icon. Schema defaults leave
 # existing home-volume customizations alone; no owner desktop is restarted.
+# Files on ~/Desktop appear as desktop icons: Ubuntu mode enables Desktop Icons NG (ding@rastersoft.com), but
+# only once its package is installed.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnome-shell-extension-desktop-icons-ng \
+    && rm -rf /var/lib/apt/lists/*
 COPY gnome-workspace.gschema.override /usr/share/glib-2.0/schemas/90_swarm-computer.gschema.override
 # Audio without a sound card: a virtual output, and no Bluetooth monitor (it needs logind).
 COPY audio/60-swarm-output.conf /etc/pipewire/pipewire.conf.d/60-swarm-output.conf

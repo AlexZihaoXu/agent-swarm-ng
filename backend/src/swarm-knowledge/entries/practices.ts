@@ -184,7 +184,7 @@ Which wake-up:
 - A known amount of time ("check back in 10 minutes", "at 9:00"): set_timer (concepts/time).
 - Something to do repeatedly on a clock ("every 15 minutes, three times"): set_reminder.
 - A condition on the computer you hold, whose timing you cannot predict ("when the build finishes", "when Claude Code is done and waiting for input", "when the download completes", "when the dialog appears"): watch_terminal or watch_desktop (concepts/computers/watches).
-- A terminal that should simply end (a command terminal): its exit already wakes you with a terminal event; no watch needed unless you care about something before it exits.
+- A terminal that should simply end (a command terminal): while you hold the computer its exit already wakes you with a terminal event; no watch needed unless you care about something before it exits. After you release the computer, no terminal events arrive.
 
 Writing the condition (until): the watcher sees only your condition, the view and the facts the platform adds (time, whether and for how long the view has been unchanged, the view at watch start). Say what counts as done and what else should wake you. Be concrete about what it will see:
 - "Claude Code has finished responding: its spinner/'esc to interrupt' line is gone and the input box is waiting for a prompt. Also notify if it asks a question or shows a permission prompt, or if an error appears."

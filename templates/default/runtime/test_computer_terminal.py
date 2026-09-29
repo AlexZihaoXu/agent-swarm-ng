@@ -51,6 +51,21 @@ class TerminalValidation(unittest.TestCase):
         self.assertEqual(terminal.view_window(136, 36, rows=200), (0, 136, 0))
         self.assertEqual(terminal.view_window(36, 36, up=5), (0, 36, 0))
 
+    def test_typed_semicolons_are_never_taken_as_tmux_separators(self):
+        # tmux splits commands at an argument ending in ';' (and turns '\\;' into ';'), so those go as key codes.
+        calls = []
+        original = terminal.tmux
+        terminal.tmux = lambda *args, **kwargs: calls.append(args)
+        try:
+            for text in ('a;', ';', 'b\\;', 'plain', 'x;;'): terminal.literal('%1', text)
+        finally: terminal.tmux = original
+        self.assertEqual(calls, [
+            ('send-keys', '-t', '%1', '-l', '--', 'a'), ('send-keys', '-N', '1', '-t', '%1', '-H', '3b'),
+            ('send-keys', '-N', '1', '-t', '%1', '-H', '3b'),
+            ('send-keys', '-t', '%1', '-l', '--', 'b\\'), ('send-keys', '-N', '1', '-t', '%1', '-H', '3b'),
+            ('send-keys', '-t', '%1', '-l', '--', 'plain'),
+            ('send-keys', '-t', '%1', '-l', '--', 'x'), ('send-keys', '-N', '2', '-t', '%1', '-H', '3b')])
+
     def test_view_note_points_to_the_next_scroll_position(self):
         self.assertIn('up=72', terminal.view_note(64, 100, 136, 36))
         self.assertIn('up=0', terminal.view_note(64, 100, 136, 36))
@@ -70,6 +85,12 @@ class TerminalValidation(unittest.TestCase):
         text = terminal.screen_text('a\x1b[1;32mgo\x1b[0m\x1b]0;title\x07b\x1b[2Jc\x1b7\x00d\n')
         self.assertEqual(text, 'a\x1b[1;32mgo\x1b[0mbcd\n')
         self.assertLessEqual(len(terminal.screen_text('x' * 40000).encode()), 32768)
+        # A coloured view keeps its last whole rows, never a cut escape.
+        rows = ''.join('\x1b[31mrow %05d\x1b[0m\n' % i for i in range(20000))
+        tail = terminal.ansi_tail(rows)
+        self.assertLessEqual(len(tail.encode()), terminal.ANSI_VIEW_LIMIT)
+        self.assertTrue(tail.startswith('\x1b[31mrow'))
+        self.assertTrue(tail.endswith('row 19999\x1b[0m\n'))
 
     def test_action_combos_are_checked_whole_before_any_input(self):
         session = '12345678-1234-1234-1234-123456789abc'

@@ -16,6 +16,16 @@ export const WATCH_UNTIL_MAX = 1000;
 export const WATCH_MAX_ACTIVE = 3;
 
 export class WatchError extends Error {}
+/** A reason the watch cannot go on (not a failed check): it ends with this message. */
+export class WatchEnd extends Error {}
+/** The watched computer can no longer be used by this watch. */
+class WatchLost extends Error {}
+const lostReason = (error: ComputerUseError) =>
+  /not running/i.test(error.message)
+    ? 'the computer is not running (it was powered off)'
+    : /settlement is uncertain/i.test(error.message)
+      ? 'the computer is blocked after an operation whose outcome is uncertain (ask the human to Force release it)'
+      : 'you no longer hold that computer (the human force released it, or its assignment was removed)';
 export type Region = { x: number; y: number; size: number };
 export type WatchSpec = {
   kind: 'terminal' | 'desktop';
@@ -34,6 +44,8 @@ export type Watch = {
   agentId: string;
   computerId: string;
   computerName: string;
+  /** The claim it was set under: a new claim (after a force release) does not carry it over. */
+  claimToken: string;
   kind: 'terminal' | 'desktop';
   session?: string;
   sessionName?: string;
@@ -79,19 +91,28 @@ const image = (frame: ScreenFrame): ImageContent => ({
  */
 export class ComputerWatches {
   private watches = new Map<string, Watch>();
+  /** Watches being created, counted against the limit before their first await. */
+  private creating = new Map<string, number>();
   private closed = false;
+  private readonly startedAt: number;
   constructor(
     private database: PlatformStore,
     private computers: ComputerUseService,
     private deliver: Deliver,
     private judge: Judge,
     private now = () => Date.now(),
-  ) {}
+  ) {
+    this.startedAt = now();
+  }
 
   /** After a restart: every earlier watch ended with its claim; tell each agent once. */
   async start() {
     await this.database.initialize();
-    const rows = await this.database.client.computerWatch.findMany({ orderBy: { createdAt: 'asc' } });
+    // Only rows from before this process started: a watch set since then is live.
+    const rows = await this.database.client.computerWatch.findMany({
+      where: { createdAt: { lt: new Date(this.startedAt) } },
+      orderBy: { createdAt: 'asc' },
+    });
     if (!rows.length) return;
     await this.database.client.computerWatch.deleteMany({ where: { id: { in: rows.map(row => row.id) } } });
     for (const row of rows)
@@ -125,12 +146,28 @@ export class ComputerWatches {
       throw new WatchError(
         `context "fork" needs every_seconds below ${WATCH_FORK_BELOW_SECONDS} (a longer gap loses the provider's cache of your context, so every check would pay for all of it). Use "fresh", or check more often.`,
       );
-    if ([...this.watches.values()].filter(watch => watch.agentId === agentId).length >= WATCH_MAX_ACTIVE)
+    const active = this.forAgent(agentId).length + (this.creating.get(agentId) ?? 0);
+    if (active >= WATCH_MAX_ACTIVE)
       throw new WatchError(`At most ${WATCH_MAX_ACTIVE} watches at once; cancel one with cancel_timer first.`);
+    // Reserve the slot now: several watch calls in one turn run in parallel.
+    this.creating.set(agentId, (this.creating.get(agentId) ?? 0) + 1);
+    try {
+      return await this.admit(agentId, spec, { until, every, timeout, context });
+    } finally {
+      const left = (this.creating.get(agentId) ?? 1) - 1;
+      if (left) this.creating.set(agentId, left);
+      else this.creating.delete(agentId);
+    }
+  }
+  private async admit(
+    agentId: string,
+    spec: WatchSpec,
+    { until, every, timeout, context }: { until: string; every: number; timeout: number; context: 'fresh' | 'fork' },
+  ) {
     const held = await this.computers.held(agentId);
     let sessionName: string | undefined;
     if (spec.kind === 'terminal') {
-      const receipt = await this.computers.watchTerminal(agentId, held.computerId, {
+      const receipt = await this.computers.watchTerminal(agentId, held.computerId, held.token, {
         operation: 'status',
         session: spec.session,
       });
@@ -140,12 +177,20 @@ export class ComputerWatches {
     const row = await this.database.client.computerWatch.create({
       data: { agentId, computerId: held.computerId, kind: spec.kind, until, human: spec.human },
     });
+    // A release or switch that ran alongside (in the same turn) must not leave this watch behind.
+    try {
+      await this.computers.watchClaim(agentId, held.computerId, held.token);
+    } catch (error) {
+      await this.database.client.computerWatch.deleteMany({ where: { id: row.id } });
+      throw error;
+    }
     const now = this.now();
     const watch: Watch = {
       id: row.id,
       agentId,
       computerId: held.computerId,
       computerName: held.name,
+      claimToken: held.token,
       kind: spec.kind,
       session: spec.session,
       sessionName,
@@ -273,12 +318,24 @@ export class ComputerWatches {
       watch.lastReason = verdict.summary;
     } catch (error) {
       if (controller.signal.aborted || !this.watches.has(watch.id)) return;
-      const lost = error instanceof ComputerUseError && [403, 404].includes(error.status);
+      const at = iso(this.now());
+      const condition = `\nCondition was: ${watch.until}\nThe watch is removed.`;
+      if (error instanceof WatchLost)
+        return await this.end(
+          watch,
+          `${label} ended at ${at}: ${error.message} (${after}).${condition} Claim it again with use_computer and set a new watch if you still need one.`,
+        );
+      if (error instanceof WatchEnd)
+        return await this.end(watch, `${label} ended at ${at}: ${error.message} (${after}).${condition}`);
+      const reason =
+        error instanceof Error && error.name === 'AbortError'
+          ? 'the check took longer than its time limit'
+          : error instanceof Error
+            ? error.message.slice(0, 300)
+            : 'unknown error';
       return await this.end(
         watch,
-        lost
-          ? `${label} ended at ${iso(this.now())}: you no longer hold that computer (the human force released it, or its assignment was removed), so it cannot be watched (${after}).\nCondition was: ${watch.until}\nThe watch is removed.`
-          : `${label} stopped at ${iso(this.now())}: a check failed (${error instanceof Error ? error.message.slice(0, 300) : 'unknown error'}), so the watcher could not decide (${after}). You are told in case the condition happened: look yourself.\nCondition was: ${watch.until}\nThe watch is removed; set a new one if you still want to wait.`,
+        `${label} stopped at ${at}: a check failed (${reason}), so the watcher could not decide (${after}). You are told in case the condition happened: look yourself.${condition} Set a new one if you still want to wait.`,
       );
     } finally {
       if (watch.running === controller) watch.running = undefined;
@@ -292,15 +349,28 @@ export class ComputerWatches {
     return ` The ${watch.kind === 'terminal' ? 'terminal text' : 'screen'} had not changed for ${seconds(at - watch.unchangedSince)}s (${watch.unchangedChecks + 1} checks in a row).`;
   }
 
+  /** A watch read; losing the computer (claim, assignment, power) ends the watch rather than failing a check. */
+  private async read<T>(work: () => Promise<T>) {
+    try {
+      return await work();
+    } catch (error) {
+      if (error instanceof ComputerUseError && error.status !== 503) throw new WatchLost(lostReason(error));
+      throw error;
+    }
+  }
+
   /** The current view, or why the watch cannot continue. */
   private async observe(watch: Watch, signal: AbortSignal): Promise<Observation | string> {
     const at = this.now();
     if (watch.kind === 'terminal') {
-      const receipt = await this.computers.watchTerminal(
-        watch.agentId,
-        watch.computerId,
-        { operation: 'view', session: watch.session },
-        signal,
+      const receipt = await this.read(() =>
+        this.computers.watchTerminal(
+          watch.agentId,
+          watch.computerId,
+          watch.claimToken,
+          { operation: 'view', session: watch.session },
+          signal,
+        ),
       );
       if (receipt.error) return `the terminal can no longer be viewed (${receipt.error})`;
       const result = receipt.result as { text?: string; session?: Record<string, unknown> };
@@ -311,11 +381,14 @@ export class ComputerWatches {
       const text = `Terminal state: ${state}.\n${result.text ?? ''}`;
       return { at, text, hash: createHash('sha256').update(text).digest('hex') };
     }
-    const frame = await this.computers.watchCapture(
-      watch.agentId,
-      watch.computerId,
-      watch.region ? { kind: 'look_at', ...watch.region } : { kind: 'glance', quality: 'high' },
-      signal,
+    const frame = await this.read(() =>
+      this.computers.watchCapture(
+        watch.agentId,
+        watch.computerId,
+        watch.claimToken,
+        watch.region ? { kind: 'look_at', ...watch.region } : { kind: 'glance', quality: 'high' },
+        signal,
+      ),
     );
     return { at, text: '', frame, hash: createHash('sha256').update(frame.data).digest('hex') };
   }
@@ -352,7 +425,7 @@ export class ComputerWatches {
     const { agentId, computerId } = watch;
     const computers = this.computers;
     const watchedTerminal = (request: Record<string, unknown>, signal?: AbortSignal) =>
-      computers.watchTerminal(agentId, computerId, request, signal);
+      computers.watchTerminal(agentId, computerId, watch.claimToken, request, signal);
     const text = (value: unknown) => ({
       content: [{ type: 'text' as const, text: JSON.stringify(value) }],
       details: {},
@@ -388,7 +461,13 @@ export class ComputerWatches {
       ];
     }
     const look = (request: object) => async (_id: string, params: object, signal?: AbortSignal) => {
-      const frame = await computers.watchCapture(agentId, computerId, { ...request, ...params }, signal);
+      const frame = await computers.watchCapture(
+        agentId,
+        computerId,
+        watch.claimToken,
+        { ...request, ...params },
+        signal,
+      );
       return {
         content: [
           {

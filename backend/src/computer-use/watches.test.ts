@@ -213,11 +213,47 @@ it('after a restart, tells each agent its watch ended', async () => {
     await t.db.client.computerWatch.create({
       data: { agentId: t.agent.id, computerId: t.computer.id, kind: 'terminal', until: 'build done', human: true },
     });
-    await t.watches.start();
+    // A process that started after the row was written reports it; its own new watches are left alone.
+    await new Promise(resolve => setTimeout(resolve, 5));
+    const restarted = new ComputerWatches(
+      t.db,
+      t.service,
+      async (_agent, text) => t.events.push(text),
+      async () => ({
+        notify: false,
+        summary: 'no',
+      }),
+    );
+    await restarted.start();
     expect(t.events).toHaveLength(1);
     expect(t.events[0]).toContain('the platform restarted');
     expect(t.events[0]).toContain('build done');
     expect(await t.db.client.computerWatch.count()).toBe(0);
+  } finally {
+    await t.close();
+  }
+});
+
+it('counts watches being created against the limit, and ties a watch to the claim it was set under', async () => {
+  const t = await setup(async () => ({ notify: false, summary: 'no' }));
+  try {
+    // Several watch calls in one turn run in parallel.
+    const results = await Promise.allSettled(
+      Array.from({ length: 5 }, () => t.watches.create(t.agent.id, { ...terminalWatch, checkNow: false })),
+    );
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(3);
+    await t.watches.releasedBy(t.agent.id, null);
+    // A force release followed by a new claim does not carry the watch over.
+    await t.watches.create(t.agent.id, { ...terminalWatch, checkNow: false });
+    await t.service.forceRelease(t.computer.id);
+    await t.service.use(t.agent.id, t.computer.id);
+    await t.tick(30);
+    expect(t.events.at(-1)).toContain('you no longer hold that computer');
+    // A stopped computer says so.
+    await t.watches.create(t.agent.id, { ...terminalWatch, checkNow: false });
+    await t.db.client.computer.update({ where: { id: t.computer.id }, data: { state: 'stopped' } });
+    await t.tick(30);
+    expect(t.events.at(-1)).toContain('the computer is not running');
   } finally {
     await t.close();
   }

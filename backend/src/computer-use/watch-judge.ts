@@ -13,7 +13,7 @@ import type { ActivityStore } from '../activity-store';
 import type { PlatformStore } from '../platform-store';
 import type { EndpointStore } from '../endpoint-store';
 import type { CodexProvider } from '../codex-provider';
-import type { Judge } from './watches';
+import { WatchEnd, type Judge } from './watches';
 import { forkContext } from '../interruption-triage';
 import { TRIAGE_MAX_TOKENS } from '../triage-turns';
 import type { ActivityTrace } from '../activity-events';
@@ -50,6 +50,8 @@ export function forkBasis(session: AgentSession): ForkBasis {
 export type Verdict = { notify: boolean; summary: string };
 export type JudgeInput = {
   model: Model<Api>;
+  /** The agent's own thinking level: a fork must match the main request for its cached prefix. */
+  thinkingLevel?: string;
   modelRuntime: ModelRuntime;
   channelId: string;
   /** Present for a fork: the main agent's context at this moment. */
@@ -104,11 +106,18 @@ export async function judgeWatch(input: JudgeInput): Promise<Verdict> {
     const systemPrompt = fork?.systemPrompt ?? WATCHER_PROMPT;
     const resources = chatResources('Computer watch', input.channelId, false, false);
     resources.getSystemPrompt = () => systemPrompt;
-    const levels = model.reasoning ? getSupportedThinkingLevels(model) : ['off'];
+    const levels: string[] = model.reasoning ? getSupportedThinkingLevels(model) : ['off'];
+    const thinkingLevel =
+      fork && input.thinkingLevel && levels.includes(input.thinkingLevel)
+        ? input.thinkingLevel
+        : levels.includes('low')
+          ? 'low'
+          : 'off';
     ({ session } = await createAgentSession({
-      model: { ...model, maxTokens: Math.min(model.maxTokens, TRIAGE_MAX_TOKENS) },
+      // A fork keeps the main request's settings (a cache is only reused for the same request shape).
+      model: fork ? model : { ...model, maxTokens: Math.min(model.maxTokens, TRIAGE_MAX_TOKENS) },
       modelRuntime: input.modelRuntime,
-      thinkingLevel: levels.includes('low') ? 'low' : 'off',
+      thinkingLevel: thinkingLevel as never,
       noTools: 'all',
       tools: [],
       customTools: [],
@@ -125,6 +134,12 @@ export async function judgeWatch(input: JudgeInput): Promise<Verdict> {
     const agent = session.agent;
     // The loop is driven on the agent itself: AgentSession.prompt would rebuild the system prompt.
     agent.state.systemPrompt = systemPrompt;
+    // The session re-derives its own prompt before every later turn; keep this one on every turn.
+    const prepare = agent.prepareNextTurnWithContext;
+    agent.prepareNextTurnWithContext = async (turn, signal) => {
+      const next = await prepare?.(turn, signal);
+      return next?.context ? { ...next, context: { ...next.context, systemPrompt } } : next;
+    };
     // A fork keeps each main tool object as sent (schema, description) and only swaps what runs.
     agent.state.tools = fork
       ? fork.tools.map(tool => {
@@ -240,11 +255,14 @@ export function createWatchJudge(deps: {
         },
         connection.subscriptionRuntime,
       );
+      if (input.images.length && !model.input.includes('image'))
+        throw new WatchEnd('your model no longer accepts images, so the desktop cannot be watched');
       const fork = watch.context === 'fork' ? deps.basis(agent.id) : undefined;
       if (watch.context === 'fork' && !fork) throw new Error('Your conversation is not available to fork.');
       const verdict = await judgeWatch({
         model,
         modelRuntime,
+        thinkingLevel: agent.thinkingLevel,
         channelId: channel.id,
         fork,
         tools: input.tools(model.input.includes('image')),

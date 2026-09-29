@@ -12,6 +12,13 @@ it('lays out coloured rows on a monospace grid as inert SVG text', () => {
   expect(svg).toMatch(/<rect [^>]*fill="rgb\(255,135,0\)"\/>/); // inverse swaps into the background
 });
 
+it('drops stray or cut escapes and control characters instead of producing invalid XML', () => {
+  const svg = terminalSvg('\x1b[31mred\x1b[3\x07x\x1b', 80);
+  expect(svg).toContain('fill="#cd3131">red');
+  expect(svg).not.toMatch(/[\x00-\x08\x1b]/);
+  expect(() => renderTerminal('\x1b[31mred\x1b[3', 80)).not.toThrow();
+});
+
 it('renders a PNG as wide as the terminal', () => {
   const image = renderTerminal('hello \x1b[32mworld\x1b[0m\n', 120);
   expect([...image.data.slice(1, 4)].map(byte => String.fromCharCode(byte)).join('')).toBe('PNG');

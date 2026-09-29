@@ -19,7 +19,13 @@ type Entry = operations['readKnowledgeEntry']['responses'][200]['content']['appl
 
 // Kibo Item Group (title/description rows) and Breadcrumb with Border, adapted
 // to read-only, URL-addressable knowledge instead of demo people/navigation.
-export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: (path: string) => void }) {
+export function KnowledgeBrowser({
+  id,
+  onNavigate,
+}: {
+  id?: string;
+  onNavigate: (path: string, options?: { replace?: boolean }) => void;
+}) {
   const [search, setSearch] = useState('');
   const [entry, setEntry] = useState<Entry | null>(null),
     [entryError, setEntryError] = useState(''),
@@ -35,7 +41,7 @@ export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: 
   // An old ID (from before a reorganisation) resolves to its entry, then the address moves to the current ID.
   const selected = entry && (entry.id === id || entry.movedFrom === id) ? entry : null;
   useEffect(() => {
-    if (selected && selected.id !== id) onNavigate(knowledgePath(selected.id));
+    if (selected && selected.id !== id) onNavigate(knowledgePath(selected.id), { replace: true });
   }, [selected, id, onNavigate]);
   const parentId = id && !selected ? null : selected?.hasChildren ? selected.id : (selected?.parentId ?? null);
   const listKey = `${id ?? ''}|${parentId ?? ''}|${search}`;
@@ -43,6 +49,8 @@ export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: 
     currentId = useRef(id);
   currentListKey.current = listKey;
   currentId.current = id;
+  const held = useRef(entry);
+  held.current = entry;
 
   useEffect(() => {
     if (!id) {
@@ -51,6 +59,8 @@ export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: 
       setEntryLoading(false);
       return;
     }
+    // Already held: the address just moved from an old ID to this entry's current one.
+    if (held.current?.id === id) return;
     const controller = new AbortController();
     setEntry(null);
     setEntryError('');

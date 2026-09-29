@@ -8,7 +8,7 @@ import { AgentAvatarPreview } from '@/components/agent-avatar-preview';
 import { AgentChannelSettings } from '@/components/agent-channel-settings';
 import { AgentComputerSettings } from '@/components/agent-computer-settings';
 import { AgentModelSettings } from '@/components/agent-model-settings';
-import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
+import { defaultAvatar, sameAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 import type { ChatAgent, RealAgent } from '@/use-chat';
 import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { cn } from '@/lib/utils';
@@ -80,10 +80,7 @@ export function EditAgentForm({
     return () => controller.abort();
   }, [agent.id, attempt]);
   const dirty =
-    avatar.shape !== savedAvatar.shape ||
-    avatar.color !== savedAvatar.color ||
-    avatar.seed !== savedAvatar.seed ||
-    (avatar.eyeStyle ?? 'pill') !== (savedAvatar.eyeStyle ?? 'pill') ||
+    !sameAvatar(avatar, savedAvatar) ||
     allowed.length !== savedAllowed.length ||
     allowed.some(id => !savedAllowed.includes(id));
   async function save() {

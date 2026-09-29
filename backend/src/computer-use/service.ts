@@ -246,17 +246,30 @@ export class ComputerUseService {
    * A watch's look at the computer its agent holds: the same capture, but it grants the agent no input allowance
    * (the agent looks for itself after waking) and it waits out a busy computer instead of failing.
    */
-  async watchCapture(agentId: string, computerId: string, request: unknown, signal?: AbortSignal) {
+  async watchCapture(agentId: string, computerId: string, token: string, request: unknown, signal?: AbortSignal) {
     await this.ready();
-    return this.screenshot(() => this.watchClaim(agentId, computerId), request, signal, undefined, undefined, true);
+    return this.screenshot(
+      () => this.watchClaim(agentId, computerId, token),
+      request,
+      signal,
+      undefined,
+      undefined,
+      true,
+    );
   }
   /** A watch's read of a terminal on the computer its agent holds (view/status only). */
-  async watchTerminal(agentId: string, computerId: string, request: Record<string, unknown>, signal?: AbortSignal) {
+  async watchTerminal(
+    agentId: string,
+    computerId: string,
+    token: string,
+    request: Record<string, unknown>,
+    signal?: AbortSignal,
+  ) {
     if (!['view', 'status'].includes(String(request.operation)))
       throw new ComputerUseError('A watch can only view a terminal or read its status.', 403);
     await this.ready();
     return this.performCore(
-      () => this.watchClaim(agentId, computerId),
+      () => this.watchClaim(agentId, computerId, token),
       { ...request, kind: 'terminal' },
       signal,
       undefined,
@@ -267,12 +280,13 @@ export class ComputerUseService {
   async held(agentId: string) {
     await this.ready();
     const claim = await this.claim(agentId);
-    return { computerId: claim.computerId, name: claim.computer.name };
+    return { computerId: claim.computerId, name: claim.computer.name, token: claim.token };
   }
   /** The agent's current claim, which must still be on this computer (a watch never follows it elsewhere). */
-  async watchClaim(agentId: string, computerId: string) {
+  async watchClaim(agentId: string, computerId: string, token: string) {
     const claim = await this.claim(agentId);
-    if (claim.computerId !== computerId)
+    // The same claim, not just the same computer: a force release and a new claim end the watch.
+    if (claim.computerId !== computerId || claim.token !== token)
       throw new ComputerUseError('You no longer hold the computer this watch was set on.', 403);
     return claim;
   }
@@ -541,7 +555,8 @@ export class ComputerUseService {
           .then(() => driver.core!(claim.computerId, prepared, abort.signal))
           .catch(error => {
             if (!(error instanceof ComputerExecutionError && error.settled)) this.uncertain.add(claim.computerId);
-            if (agentId) this.allowances.delete(agentId);
+            // A watch's read never touches its agent's input allowance.
+            if (agentId && !patient) this.allowances.delete(agentId);
             throw error;
           });
         signal?.throwIfAborted();
