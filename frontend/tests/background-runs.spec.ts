@@ -107,7 +107,10 @@ test('shows the latest context estimate in activity without adding chat messages
     entry: { ...entry, text: '≈ 16,384 / 32,768 tokens · 50.0%\nMain session estimate.' },
   });
   await expect(usage).toHaveText('≈ 16,384 / 32,768 tokens · 50.0%');
-  await expect(page.locator('details').filter({ hasText: 'Context usage' })).toHaveCount(1);
+  // The estimate is replaced in the header, never listed as a step.
+  await expect(page.getByRole('dialog', { name: 'Agent activity' }).locator('section')).not.toContainText(
+    'Context usage',
+  );
   await expect(page.getByRole('list', { name: 'Messages' }).locator(':scope > li')).toHaveCount(1);
 });
 

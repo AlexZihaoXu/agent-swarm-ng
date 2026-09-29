@@ -19,6 +19,14 @@ const emit = (page: Page, value: object) =>
     event => (window as unknown as { emitAgentEvent: (value: object) => void }).emitAgentEvent(event),
     value,
   );
+/** Steps show a one-line preview; their full text (and paging) opens on demand. */
+async function expandSteps(panel: ReturnType<Page['getByRole']>) {
+  for (let i = 0; i < 12; i++) {
+    const closed = panel.locator('button[data-disclosure][aria-expanded="false"]');
+    if (!(await closed.count())) return;
+    await closed.first().click();
+  }
+}
 async function open(page: Page) {
   await page.goto(`/chat/agents/${agent.id}`);
   await page.getByRole('button', { name: 'Agent activity', exact: true }).click();
@@ -45,9 +53,9 @@ test('restores complete and partial activity after refresh, pages older entries,
   await expect(panel).toContainText('Completed trace');
   await expect(panel).toContainText('Partial active trace');
   await expect(page.getByLabel('Context usage', { exact: true })).toHaveText('≈ 25 / 100 tokens · 25.0%');
-  await panel.getByRole('button', { name: 'Load older activity' }).click();
+  // Two short entries do not fill the panel, so the older page loads by itself.
   await expect(panel).toContainText('Archived older trace');
-  await expect(panel.locator('details')).toHaveCount(3);
+  await expect(panel.locator('[data-activity-kind="assistant"]')).toHaveCount(3);
   await page.reload();
   await page.getByRole('button', { name: 'Agent activity', exact: true }).click();
   panel = page.getByRole('dialog', { name: 'Agent activity', exact: true });
@@ -86,7 +94,7 @@ test('keeps the newer live revision when a delayed snapshot arrives and ignores 
   release();
   await expect(panel).toContainText('New live replacement');
   await expect(panel).not.toContainText('Old snapshot');
-  await expect(panel.locator('details')).toHaveCount(1);
+  await expect(panel.locator('[data-activity-kind="assistant"]')).toHaveCount(1);
   await emit(page, { ...live, entry: entry('active', 1, 'Older live event', 1) });
   await expect(panel).not.toContainText('Older live event');
 });
@@ -107,6 +115,7 @@ test('restored page can expand again after pagehide aborts an in-flight fragment
     await route.fulfill({ json: { ...entry('long', 1, ' tail'), offset: 5 } }).catch(() => {});
   });
   const panel = await open(page);
+  await expandSteps(panel);
   await panel.getByRole('button', { name: 'Load more text' }).click();
   await expect(panel.getByRole('button', { name: 'Loading text…' })).toBeDisabled();
   await page.evaluate(() => {
@@ -176,11 +185,11 @@ for (const width of [280, 320, 390, 760])
       route.fulfill({ json: { entries: [long, meta], nextCursor: 1, contextUsage: null } }),
     );
     const panel = await open(page);
+    // Bookkeeping stays folded under the run's Details until asked for.
+    await expect(panel).not.toContainText('Detailed metadata value');
+    await expandSteps(panel);
     await expect(panel).toContainText('Partial view');
-    const metadata = panel.locator('details[data-activity-kind="metadata"]');
-    await expect(metadata).not.toHaveAttribute('open', '');
-    await metadata.locator('summary').click();
-    await expect(metadata).toContainText('Detailed metadata value');
+    await expect(panel.locator('[data-activity-kind="metadata"]')).toContainText('Detailed metadata value');
     const geometry = await panel.evaluate(element => {
       const rect = element.getBoundingClientRect();
       const viewport = element.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
@@ -190,7 +199,7 @@ for (const width of [280, 320, 390, 760])
         window: innerWidth,
         viewportWidth: viewport.clientWidth,
         contentWidth: viewport.scrollWidth,
-        escaped: [...element.querySelectorAll('header, details, summary, pre, button')]
+        escaped: [...element.querySelectorAll('header, section, pre, button')]
           .filter(
             node =>
               node.getBoundingClientRect().right > rect.right + 1 || node.getBoundingClientRect().left < rect.left - 1,
@@ -228,6 +237,7 @@ test('retries failed history and text chunks, with replacement on an expansion r
   const panel = await open(page);
   await panel.getByRole('button', { name: 'Retry activity' }).click();
   await expect(panel).toContainText('First section');
+  await expandSteps(panel);
   await panel.getByRole('button', { name: 'Load more text' }).click();
   await panel.getByRole('button', { name: 'Retry more text' }).click();
   await expect(panel).toContainText('Updated complete text');
