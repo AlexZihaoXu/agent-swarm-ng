@@ -184,8 +184,7 @@ test('create, reserved-key controls and deliberate deletion remain available', a
   await expect.poll(() => requests.filter(r => r.operation === 'press').length).toBe(1);
   await panel.getByRole('button', { name: 'Delete terminal', exact: true }).click();
   expect(requests.some(r => r.operation === 'delete')).toBe(false);
-  await panel.getByLabel('Confirm terminal name').fill('server');
-  await panel.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+  await panel.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect.poll(() => requests.filter(r => r.operation === 'delete').length).toBe(1);
   await panel.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Actions for Terminal desk' })).toBeFocused();

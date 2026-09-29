@@ -48,8 +48,7 @@ export function ComputerTerminals({
     [command, setCommand] = useState(''),
     [cwd, setCwd] = useState('/workspace');
   const [key, setKey] = useState<(typeof keys)[number]>('Tab');
-  const [deleting, setDeleting] = useState(false),
-    [confirmation, setConfirmation] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
@@ -81,7 +80,6 @@ export function ComputerTerminals({
   }, [open, selected, sessions]);
   useEffect(() => {
     setDeleting(false);
-    setConfirmation('');
   }, [selected]);
   useEffect(() => {
     if (!open || !available) {
@@ -291,10 +289,7 @@ export function ComputerTerminals({
                         size="sm"
                         className="min-h-9"
                         disabled={!actionable}
-                        onClick={() => {
-                          setDeleting(value => !value);
-                          setConfirmation('');
-                        }}
+                        onClick={() => setDeleting(value => !value)}
                       >
                         Delete terminal
                       </Button>
@@ -325,23 +320,15 @@ export function ComputerTerminals({
                           className="space-y-2"
                           onSubmit={event => {
                             event.preventDefault();
-                            if (confirmation === session.name)
-                              void act({ operation: 'delete', session: session.id }, () => {
-                                setSelected(null);
-                                setDeleting(false);
-                              });
+                            void act({ operation: 'delete', session: session.id }, () => {
+                              setSelected(null);
+                              setDeleting(false);
+                            });
                           }}
                         >
                           <p className="text-xs text-red-400">
-                            Delete stops this session and discards its output. Type {session.name} to confirm.
+                            Delete “{session.name}”? This stops the session and discards its output.
                           </p>
-                          <input
-                            aria-label="Confirm terminal name"
-                            className={`${field} w-full`}
-                            value={confirmation}
-                            disabled={busy}
-                            onChange={event => setConfirmation(event.target.value)}
-                          />
                           <div className="flex flex-wrap gap-2">
                             <Button
                               type="button"
@@ -357,9 +344,9 @@ export function ComputerTerminals({
                               variant="outline"
                               size="sm"
                               className="min-h-10 text-red-400"
-                              disabled={!actionable || confirmation !== session.name}
+                              disabled={!actionable}
                             >
-                              Confirm delete
+                              Delete
                             </Button>
                           </div>
                         </form>
