@@ -1,0 +1,75 @@
+/** What the chat can do with a file: show an image, preview text, read a PDF, or only offer a download. */
+export type FileKind = 'image' | 'text' | 'pdf' | 'other';
+
+const textTypes: Record<string, string> = {
+  md: 'text/markdown',
+  markdown: 'text/markdown',
+  txt: 'text/plain',
+  log: 'text/plain',
+  csv: 'text/csv',
+  tsv: 'text/tab-separated-values',
+  json: 'application/json',
+  html: 'text/html',
+  htm: 'text/html',
+  css: 'text/css',
+  js: 'text/javascript',
+  mjs: 'text/javascript',
+  ts: 'text/typescript',
+  tsx: 'text/typescript',
+  jsx: 'text/javascript',
+  py: 'text/x-python',
+  xml: 'application/xml',
+  svg: 'image/svg+xml',
+  yaml: 'application/yaml',
+  yml: 'application/yaml',
+  toml: 'application/toml',
+  sh: 'text/x-shellscript',
+};
+const extension = (name: string) => name.toLowerCase().match(/\.([a-z0-9]{1,10})$/)?.[1] ?? '';
+const starts = (head: Uint8Array, bytes: number[], at = 0) => bytes.every((byte, index) => head[at + index] === byte);
+const ascii = (text: string) => [...text].map(character => character.charCodeAt(0));
+
+/** Looks like UTF-8 text: no NUL bytes and valid UTF-8 (a character cut at the end of the sample is fine). */
+function isText(head: Uint8Array) {
+  if (head.includes(0)) return false;
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(head);
+    return true;
+  } catch {
+    // The sample may end inside a multi-byte character.
+    for (let cut = 1; cut <= 3 && cut < head.length; cut++)
+      try {
+        new TextDecoder('utf-8', { fatal: true }).decode(head.subarray(0, head.length - cut));
+        return true;
+      } catch {
+        /* try a shorter cut */
+      }
+    return false;
+  }
+}
+
+/**
+ * The kind and media type of a file from its first bytes (never trusting the name alone for images or PDFs).
+ * SVG and HTML count as text: they are previewed as source, never rendered.
+ */
+export function detectFile(name: string, head: Uint8Array): { kind: FileKind; mime: string } {
+  if (starts(head, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return { kind: 'image', mime: 'image/png' };
+  if (starts(head, [0xff, 0xd8, 0xff])) return { kind: 'image', mime: 'image/jpeg' };
+  if (starts(head, ascii('GIF87a')) || starts(head, ascii('GIF89a'))) return { kind: 'image', mime: 'image/gif' };
+  if (starts(head, ascii('RIFF')) && starts(head, ascii('WEBP'), 8)) return { kind: 'image', mime: 'image/webp' };
+  if (starts(head, ascii('%PDF-'))) return { kind: 'pdf', mime: 'application/pdf' };
+  const ext = extension(name);
+  if (head.length === 0 || isText(head)) return { kind: 'text', mime: textTypes[ext] ?? 'text/plain' };
+  return { kind: 'other', mime: 'application/octet-stream' };
+}
+
+/** A safe display name: no folders, control characters or leading dots; at most 255 characters. */
+export function fileName(raw: string) {
+  const base = String(raw ?? '')
+    .split(/[\\/]/)
+    .pop()!
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .trim()
+    .replace(/^\.+/, '');
+  return (base || 'file').slice(0, 255);
+}

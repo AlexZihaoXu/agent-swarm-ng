@@ -378,3 +378,42 @@ model ScratchFile {
   agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
   @@unique([agentId, path])
 }
+
+// File bytes, identified by their SHA-256 and stored once under .local/files/ however often they are posted.
+// Removed when no ChannelFile refers to them. `storage` is 'local' now; 'external' (e.g. Discord) later.
+model FileBlob {
+  id        String        @id
+  size      Int
+  storage   String        @default("local")
+  location  String?
+  createdAt DateTime      @default(now())
+  files     ChannelFile[]
+}
+
+// A file posted to a channel: `chat:<channelId>`, `dm:<agentA>:<agentB>` or `group:<groupId>` (Discord etc.
+// later). Deleting keeps the row as a tombstone (name, who deleted it and when) and drops its bytes.
+model ChannelFile {
+  id            String    @id @default(uuid())
+  channelKey    String
+  messageKind   String?
+  messageId     String?
+  uploaderKind  String
+  uploaderId    String?
+  uploaderName  String
+  name          String
+  mime          String
+  kind          String
+  size          Int
+  blobId        String?
+  blob          FileBlob? @relation(fields: [blobId], references: [id], onDelete: SetNull)
+  status        String    @default("available")
+  deletedByKind String?
+  deletedById   String?
+  deletedByName String?
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([channelKey, createdAt])
+  @@index([messageKind, messageId])
+  @@index([blobId])
+}
