@@ -59,4 +59,7 @@ it('a coloured view returns its text without escapes plus an image, kept by refe
   expect(JSON.stringify(blind.content)).toContain('does not accept images');
   const plain = await viewResult({ ...receipt, result: { type: 'terminal', text: 'ok' } }, true);
   expect(plain.content).toHaveLength(1);
+  // Asked for colours from a computer whose helper predates them: said so, text only.
+  const old = await viewResult({ ...receipt, result: { type: 'terminal', text: 'ok' } }, true, undefined, true);
+  expect(JSON.stringify(old.content)).toContain('Colours are unavailable');
 });

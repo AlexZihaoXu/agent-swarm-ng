@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { PlatformStore } from '../platform-store';
 import { WatchClaimError, type ComputerUseError, type ComputerUseService, type ScreenFrame } from './service';
-import { terminalParameters, viewResult } from './terminal-tools';
+import { terminalParameters, viewResult, viewTerminal } from './terminal-tools';
 import { lookParameters } from './tools';
 import type { AgentTool, Verdict } from './watch-judge';
 
@@ -390,20 +390,31 @@ export class ComputerWatches {
   }
 
   /** A watch read; losing the computer (claim, assignment, power) ends the watch rather than failing a check. */
-  private async read<T>(work: () => Promise<T>) {
+  private async read<T>(watch: Watch, work: () => Promise<T>) {
     try {
       return await work();
     } catch (error) {
       if (error instanceof WatchClaimError) throw lost(error);
+      // A force release or power-off aborts the read in flight: say that, not that the check failed.
+      const still = await this.computers.watchClaim(watch.agentId, watch.computerId, watch.claimToken).then(
+        () => undefined,
+        claimError => claimError,
+      );
+      if (still instanceof WatchClaimError) throw lost(still);
       throw error;
     }
+  }
+  /** The agent deleted a terminal itself: its watches on that terminal end quietly, whenever that was. */
+  async terminalDeleted(agentId: string, computerId: string, session: string) {
+    for (const watch of this.forAgent(agentId))
+      if (watch.computerId === computerId && watch.session === session) await this.remove(watch);
   }
 
   /** The current view, or why the watch cannot continue. */
   private async observe(watch: Watch, signal: AbortSignal): Promise<Observation | string | null> {
     const at = this.now();
     if (watch.kind === 'terminal') {
-      const receipt = await this.read(() =>
+      const receipt = await this.read(watch, () =>
         this.computers.watchTerminal(
           watch.agentId,
           watch.computerId,
@@ -425,7 +436,7 @@ export class ComputerWatches {
       const text = `Terminal state: ${state}.\n${result.text ?? ''}`;
       return { at, text, hash: createHash('sha256').update(text).digest('hex') };
     }
-    const frame = await this.read(() =>
+    const frame = await this.read(watch, () =>
       this.computers.watchCapture(
         watch.agentId,
         watch.computerId,
@@ -487,7 +498,12 @@ export class ComputerWatches {
           parameters: terminalParameters.view,
           async execute(_id, params: any, signal) {
             only(params.session);
-            return viewResult(await watchedTerminal({ ...params, operation: 'view' }, signal), vision) as never;
+            return viewResult(
+              await viewTerminal(request => watchedTerminal(request, signal), { ...params, operation: 'view' }),
+              vision,
+              undefined,
+              Boolean(params.colors),
+            ) as never;
           },
         },
         {

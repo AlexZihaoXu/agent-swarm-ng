@@ -60,6 +60,8 @@ export class ComputerUseService {
   private terminalAllowances = new Map<string, TerminalAllowance>();
   /** Told when an agent's terminal combo starts and ends (the dashboard shows who is typing where). */
   onTerminalInput?: (event: { agentId: string; computerId: string; session: string; active: boolean }) => void;
+  /** Told when an agent deletes a terminal itself (its watches on it end quietly). */
+  onAgentTerminalDelete?: (event: { agentId: string; computerId: string; session: string }) => void;
   /** Terminals an agent deleted itself (computer:session → when), so the watcher does not report them back. */
   private agentDeletes = new Map<string, number>();
   deletedByAgent(computerId: string, session: string) {
@@ -412,8 +414,10 @@ export class ComputerUseService {
       retain,
     );
     const input = request as { kind?: string; operation?: string; session?: string };
-    if (input.kind === 'terminal' && input.operation === 'delete' && input.session && !receipt.error)
+    if (input.kind === 'terminal' && input.operation === 'delete' && input.session && !receipt.error) {
       this.agentDeletes.set(`${computerId}:${input.session}`, this.now());
+      this.onAgentTerminalDelete?.({ agentId, computerId, session: input.session });
+    }
     return receipt;
   }
   /** An agent's terminal_view; a successful look allows a few terminal_run_actions combos on that session. */

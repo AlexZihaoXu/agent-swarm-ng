@@ -140,7 +140,7 @@ export const terminalsPractice = {
 
 View before typing. terminal_view, then terminal_run_actions within 90 s (up to five combos per view). Run a command by typing it and pressing Enter:
 terminal_run_actions({session, actions:[{name:"keyboard.type",params:{text:"npm test"}},{name:"keyboard.press",params:{key:"Enter"}}]})
-Paste long text or multi-line scripts with cpm:"instant". Clear a line with C-u, interrupt with C-c (then view: a program may ignore it), delete a few characters with BSpace and repeat. Answer an interactive prompt only after reading it.
+Paste long text or multi-line scripts with cpm:"instant", then press Enter: a paste (bracketed) stays in the input line until Enter, unlike typed newlines, which run each line as it is typed. Clear a line with C-u, interrupt with C-c (then view: a program may ignore it), delete a few characters with BSpace and repeat. Answer an interactive prompt only after reading it.
 
 Reading output. The default view is one screen at the live bottom; page back with up=up+rows as the result's note suggests. For long output, redirect it to a file and read a window (read with offset/limit, or grep) instead of paging hundreds of rows. Use colors:true when colour or layout carries meaning the text loses: red errors among green passes, a highlighted selection in a menu, diff colours, a status bar, a TUI (such as Claude Code) whose state shows in colour. Otherwise text is cheaper.
 

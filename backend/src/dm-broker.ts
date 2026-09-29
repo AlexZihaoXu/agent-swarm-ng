@@ -105,10 +105,14 @@ export class DmBroker {
         )
       : undefined;
     // A finished session's copy is kept only while a fork watch may still need it.
-    if (this.watches)
-      this.watches.onForkWatchesGone = agentId => {
+    if (this.watches && computers) {
+      const watches = this.watches;
+      watches.onForkWatchesGone = agentId => {
         if (this.bases.get(agentId)?.ended) this.bases.delete(agentId);
       };
+      computers.onAgentTerminalDelete = ({ agentId, computerId, session }) =>
+        void watches.terminalDeleted(agentId, computerId, session).catch(() => {});
+    }
     this.watcher = computers
       ? new TerminalWatcher(database, computers, (agentId, text) =>
           this.deliverPlatformEvent(agentId, 'computer', text, true),

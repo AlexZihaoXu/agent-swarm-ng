@@ -57,7 +57,9 @@ export class HttpComputerRuntime implements ComputerRuntime {
     if (!response.ok) {
       if (response.status === 400)
         throw new ComputerUseError(
-          `${String(body.message ?? body.error ?? 'Invalid action combo.').slice(0, 512)} Read Swarm Knowledge practices/desktop.`,
+          `${String(body.message ?? body.error ?? 'Invalid action combo.').slice(0, 512)} Read Swarm Knowledge ${
+            (input as { kind?: string } | undefined)?.kind === 'terminal' ? 'practices/terminals' : 'practices/desktop'
+          }.`,
         );
       throw new ComputerUseError('Computer execution unavailable; do not retry input blindly.', 503);
     }

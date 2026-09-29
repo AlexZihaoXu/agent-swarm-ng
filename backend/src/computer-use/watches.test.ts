@@ -63,6 +63,9 @@ async function setup(judge: Judge) {
     judge,
     () => clock,
   );
+  // As the broker wires it.
+  service.onAgentTerminalDelete = ({ agentId, computerId, session }) =>
+    void watches.terminalDeleted(agentId, computerId, session);
   return {
     db,
     agent,
@@ -321,6 +324,36 @@ it('always checks at least once, and a failed read never blocks the computer', a
     expect(t.events.at(-1)).toContain('a check failed');
     t.state.prepareFails = false;
     expect((await t.service.terminalView(t.agent.id, { session })).error).toBeUndefined();
+  } finally {
+    await t.close();
+  }
+});
+
+it('a force release during a read says the computer was lost, and an own delete ends the watch at any interval', async () => {
+  const t = await setup(async () => ({ notify: false, summary: 'no' }));
+  try {
+    t.state.hang = true;
+    await t.watches.create(t.agent.id, {
+      kind: 'desktop',
+      until: 'dialog',
+      everySeconds: 30,
+      human: true,
+      checkNow: false,
+    });
+    const checking = t.tick(30);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    await t.service.forceRelease(t.computer.id);
+    await checking;
+    expect(t.events.at(-1)).toContain('you no longer hold that computer');
+    t.state.hang = false;
+    // An hour-long interval: deleting the terminal yourself removes the watch at once, quietly.
+    await t.service.use(t.agent.id, t.computer.id);
+    await t.watches.create(t.agent.id, { ...terminalWatch, everySeconds: 3600, checkNow: false });
+    const events = t.events.length;
+    await t.service.core(t.agent.id, { kind: 'terminal', operation: 'delete', session });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(t.watches.list(t.agent.id)).toEqual([]);
+    expect(t.events).toHaveLength(events);
   } finally {
     await t.close();
   }

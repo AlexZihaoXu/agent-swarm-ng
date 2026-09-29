@@ -98,7 +98,6 @@ model Agent {
   activity         Activity[]
 }
 
-// An agent's own timer (fires once) or repeating reminder. Firing wakes the agent with a platform event.
 // A one-shot watch on a claimed computer. Checks run in memory; the row only lets a restart (which releases claims
 // and so ends watches) tell the agent its watch is gone.
 model ComputerWatch {
@@ -113,6 +112,7 @@ model ComputerWatch {
   @@index([agentId])
 }
 
+// An agent's own timer (fires once) or repeating reminder. Firing wakes the agent with a platform event.
 model AgentTimer {
   id          String    @id @default(uuid())
   agentId     String
