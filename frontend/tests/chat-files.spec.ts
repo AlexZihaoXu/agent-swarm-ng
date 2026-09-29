@@ -252,3 +252,49 @@ test('a presented scratch file shows live, marked as such, and refreshes when th
   });
   await expect(preview).toContainText('# Draft v2');
 });
+
+test('a cut-off text preview fades out and says how much more there is', async ({ page }) => {
+  const long = Array.from({ length: 40 }, (_, index) => `line ${index + 1}`);
+  await page.route(/\/api\/files\/long\/text(\?.*)?$/, route => {
+    const limit = Number(new URL(route.request().url()).searchParams.get('limit'));
+    const lines = long.slice(0, limit);
+    return route.fulfill({
+      json: {
+        text: lines.join('\n') + '\n',
+        offset: 1,
+        lines: lines.length,
+        totalLines: 40,
+        truncated: false,
+        partialLine: false,
+        nextOffset: lines.length < 40 ? lines.length + 1 : null,
+        prevOffset: null,
+        previewLimited: false,
+      },
+    });
+  });
+  await page.route('**/api/channels/avery/messages*', route =>
+    route.fulfill({
+      json: {
+        messages: [
+          {
+            id: 'long-file',
+            channelId: 'avery',
+            sequence: 1,
+            role: 'assistant',
+            text: 'The log.',
+            timestamp: Date.now(),
+            replyTo: null,
+            files: [file('long', 'log.txt', 'text')],
+          },
+        ],
+        nextCursor: null,
+      },
+    }),
+  );
+  await page.goto('/chat/agents/avery');
+  const more = page.getByRole('button', { name: 'Show all 40 lines (28 more)' });
+  await expect(more).toBeVisible();
+  await more.click();
+  await expect(page.getByLabel('Preview of log.txt')).toContainText('line 40');
+  await expect(more).toHaveCount(0);
+});

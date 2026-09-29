@@ -141,22 +141,44 @@ function TextFile({ file }: { file: ChatFile }) {
           {preview.error.message}
         </p>
       ) : (
-        <pre
-          tabIndex={0}
-          aria-label={`Preview of ${file.name}`}
-          className={cn(
-            'overflow-auto p-3 font-mono text-xs leading-relaxed whitespace-pre outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring',
-            expanded ? 'max-h-[28rem]' : 'max-h-64',
+        <div className="relative">
+          <pre
+            tabIndex={0}
+            aria-label={`Preview of ${file.name}`}
+            className={cn(
+              'overflow-auto p-3 font-mono text-xs leading-relaxed whitespace-pre outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring',
+              expanded ? 'max-h-[28rem]' : 'max-h-64',
+            )}
+          >
+            {text === undefined ? (
+              <span className="text-muted-foreground">Loading preview…</span>
+            ) : highlighted !== null ? (
+              <code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} />
+            ) : (
+              <code>{text || '(Empty file)'}</code>
+            )}
+          </pre>
+          {/* A cut-off preview fades out, so it never reads as the whole file. */}
+          {!expanded && more && (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-b from-transparent to-sidebar"
+            />
           )}
+        </div>
+      )}
+      {!expanded && more && (
+        <button
+          type="button"
+          aria-expanded={false}
+          onClick={() => setExpanded(true)}
+          className="flex w-full cursor-pointer items-center justify-center gap-1 border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
         >
-          {text === undefined ? (
-            <span className="text-muted-foreground">Loading preview…</span>
-          ) : highlighted !== null ? (
-            <code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} />
-          ) : (
-            <code>{text || '(Empty file)'}</code>
-          )}
-        </pre>
+          {preview.data!.nextOffset !== null && !preview.data!.previewLimited
+            ? `Show all ${preview.data!.totalLines} lines (${preview.data!.totalLines - preview.data!.lines} more)`
+            : 'Show more'}
+          <span aria-hidden="true">↓</span>
+        </button>
       )}
       {expanded && more && (
         <p className="border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
