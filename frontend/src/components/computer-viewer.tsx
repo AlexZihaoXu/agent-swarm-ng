@@ -38,6 +38,11 @@ function initialSetup(id: string, portalFree: boolean) {
   }
 }
 
+/** iPhone/iPad Safari (iPadOS reports a Mac with touch points). */
+const isAppleTouch = () =>
+  typeof navigator !== 'undefined' &&
+  (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
 export function ComputerViewer({
   computer,
   canManage,
@@ -93,12 +98,24 @@ export function ComputerViewer({
   // The frame keeps the size it connected at: Selkies fixes its video and input overlay to the window size when the
   // stream starts and never follows later changes. Resizing the viewer scales the frame instead, which the browser
   // maps input through, so the picture always fits and clicks land where they should.
+  // iOS Safari shows the stream black inside a transformed frame, so there it is never scaled or turned: the frame
+  // takes the fitted size directly and reconnects when that size changes.
+  const untransformed = useRef(isAppleTouch()).current;
   const connectedAt = useRef<{ key: string; width: number; height: number } | null>(null);
   const frameKey = `${id}:${viewerKey}:${stream.rotated}`;
   if (stream.width && connectedAt.current?.key !== frameKey)
     connectedAt.current = { key: frameKey, width: stream.width, height: stream.height };
-  const frameSize = connectedAt.current?.key === frameKey ? connectedAt.current : null;
-  const frameScale = frameSize ? stream.width / frameSize.width : 1;
+  const frameSize = untransformed ? stream : connectedAt.current?.key === frameKey ? connectedAt.current : null;
+  const frameScale = frameSize?.width ? stream.width / frameSize.width : 1;
+  const transformed = Boolean(frameSize && (frameScale !== 1 || stream.rotated));
+  useEffect(() => {
+    const connected = connectedAt.current;
+    if (!untransformed || !connected || connected.key !== frameKey) return;
+    if (Math.abs(connected.width - stream.width) < 2 && Math.abs(connected.height - stream.height) < 2) return;
+    // Selkies keeps the size it connected at, so reconnect once the new size settles.
+    const timer = window.setTimeout(() => setViewerKey(key => key + 1), 500);
+    return () => window.clearTimeout(timer);
+  }, [untransformed, frameKey, stream.width, stream.height]);
   const imageRef = useRef<HTMLImageElement>(null);
   const previewPointerStart = useRef<{ x: number; y: number } | null>(null);
   const previewDragged = useRef(false);
@@ -158,7 +175,11 @@ export function ComputerViewer({
     // browser window re-fits instantly instead of stretching or cropping the picture.
     const resize = () =>
       setStream(
-        desktopStreamFit(scroller.clientWidth, scroller.clientHeight, window.matchMedia('(max-width: 767px)').matches),
+        desktopStreamFit(
+          scroller.clientWidth,
+          scroller.clientHeight,
+          window.matchMedia('(max-width: 767px)').matches && !isAppleTouch(),
+        ),
       );
     const observer = new ResizeObserver(resize);
     observer.observe(scroller);
@@ -503,12 +524,13 @@ export function ComputerViewer({
                 style={{
                   width: frameSize ? `${frameSize.width}px` : '100%',
                   height: frameSize ? `${frameSize.height}px` : '100%',
-                  transform: frameSize
+                  // Transformed only to scale or turn it (centered by the transform then); otherwise centered by its insets.
+                  transform: transformed
                     ? `translate(-50%, -50%) scale(${frameScale})${stream.rotated ? ' rotate(90deg)' : ''}`
                     : undefined,
                 }}
                 data-rotated={stream.rotated ? '' : undefined}
-                className={`absolute left-1/2 top-1/2 min-h-0 shrink-0 border-0 bg-black ${inputEnabled ? '' : 'pointer-events-none'}`}
+                className={`absolute min-h-0 shrink-0 border-0 bg-black ${transformed ? 'left-1/2 top-1/2' : 'inset-0 m-auto'} ${inputEnabled ? '' : 'pointer-events-none'}`}
               />
               {!inputEnabled && !setupOpen && (
                 <div

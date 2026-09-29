@@ -206,6 +206,39 @@ test('an upright phone turns the contained desktop and keeps it view-only; sidew
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('on iPhone Safari the desktop frame is never transformed; a new size reconnects the stream instead', async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(navigator, 'userAgent', {
+      get: () => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
+    }),
+  );
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({ json: { computers: [{ ...desk, portalFree: true }], controllerConnected: true } }),
+  );
+  await page.route('**/api/computers/control', route => route.fulfill({ json: { holders: [] } }));
+  let loads = 0;
+  await page.route(`**/computers/${desk.id}/desktop/**`, route => {
+    if (route.request().url().endsWith('/api/health')) return route.fulfill({ json: { status: 'ok' } });
+    loads++;
+    return route.fulfill({ contentType: 'text/html', body: '<html><body>Desktop fixture</body></html>' });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/computers/${desk.id}`);
+  const frame = page.locator('iframe[title$="desktop"]');
+  // Upright, the picture is contained but not turned, so input stays available.
+  await expect(frame).not.toHaveAttribute('data-rotated');
+  await expect(frame).toHaveCSS('transform', 'none');
+  await expect(page.getByRole('button', { name: /human desktop input/ })).toBeEnabled();
+  await expect.poll(() => loads).toBe(1);
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect.poll(() => loads).toBe(2);
+  await expect(frame).toHaveCSS('transform', 'none');
+  const box = (await frame.boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(845);
+});
+
 test('an unknown page offers an in-app link back', async ({ page }) => {
   await page.goto('/nowhere');
   const loads: string[] = [];
