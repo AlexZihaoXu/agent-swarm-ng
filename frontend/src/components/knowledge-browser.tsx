@@ -39,7 +39,8 @@ export function KnowledgeBrowser({
     [listError, setListError] = useState(''),
     [listAttempt, setListAttempt] = useState(0);
   // An old ID (from before a reorganisation) resolves to its entry, then the address moves to the current ID.
-  const selected = entry && (entry.id === id || entry.movedFrom === id) ? entry : null;
+  // Only with an ID: at the Knowledge root an entry without movedFrom must not match `undefined`.
+  const selected = id && entry && (entry.id === id || entry.movedFrom === id) ? entry : null;
   useEffect(() => {
     if (selected && selected.id !== id) onNavigate(knowledgePath(selected.id), { replace: true });
   }, [selected, id, onNavigate]);

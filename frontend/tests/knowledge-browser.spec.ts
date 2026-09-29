@@ -99,6 +99,11 @@ test('Settings opens a read-only Knowledge browser with hierarchy, search, sourc
   await browser.getByRole('button', { name: 'Open knowledge topic Swarm concepts' }).click();
   await expect(browser.getByText('Agents persist independently of their channels and computers.')).toBeVisible();
   await expect(browser.getByRole('navigation', { name: 'Knowledge path' })).toContainText('Swarm concepts');
+  // The root crumb leaves the entry (it once bounced straight back to it).
+  await browser.getByRole('navigation', { name: 'Knowledge path' }).getByRole('button', { name: 'Knowledge' }).click();
+  await expect(page).toHaveURL(/\/settings\/knowledge$/);
+  await expect(browser.getByText('Agents persist independently of their channels and computers.')).toHaveCount(0);
+  await browser.getByRole('button', { name: 'Open knowledge topic Swarm concepts' }).click();
   await expect(browser.getByRole('button', { name: 'Open knowledge topic Channels' })).toBeVisible();
   await browser.getByRole('button', { name: 'Open knowledge topic Channels' }).click();
   await expect(page).toHaveURL(/\/settings\/knowledge\/swarm\/channels$/);
