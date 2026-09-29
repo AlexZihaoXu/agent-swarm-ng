@@ -936,7 +936,8 @@ export class ComputerManager {
         response = await this.docker.archive(
           'PUT',
           container,
-          { path: directory, noOverwriteDirNonDir: 'true', copyUIDGID: '1' },
+          // Written as the guest's root (user namespaces make tar owners unreliable), then handed to the guest user.
+          { path: directory, noOverwriteDirNonDir: 'true' },
           tarOneFile(partial, size, body),
         );
       } catch (error) {
@@ -950,9 +951,25 @@ export class ComputerManager {
           throw new ResourceError(404, 'The destination folder does not exist. Create it first.');
         throw new ResourceError(400, 'Could not write the file there.');
       }
+      // Docker writes archive files with raw host ids, which a user-namespaced guest cannot own or chown. The
+      // guest's root copies the (world-readable) partial file into a file of its own, hands that to the guest
+      // user, and renames it over the target (-T: a folder of that name is refused); the partial is removed.
+      const staged = `${directory === '/' ? '' : directory}/.${crypto.randomUUID()}.swarm-staged`;
       try {
-        // -T: never move into a directory of that name (a folder at the target is refused).
-        await this.docker.exec(container, ['/bin/mv', '-f', '-T', '--', temporary, target], 'root', 10_000);
+        await this.docker.exec(
+          container,
+          [
+            '/bin/sh',
+            '-c',
+            'cat -- "$1" > "$2" && chown 1000:1000 -- "$2" && chmod 0644 -- "$2" && mv -f -T -- "$2" "$3"; s=$?; rm -f -- "$1" "$2"; exit $s',
+            'swarm-import',
+            temporary,
+            staged,
+            target,
+          ],
+          'root',
+          120_000,
+        );
       } catch {
         await discard();
         throw new ResourceError(400, 'Could not replace the file there (is it a folder?).');

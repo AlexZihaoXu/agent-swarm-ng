@@ -45,6 +45,25 @@ export interface ComputerController {
   replaceStopped(id: string, name: string, settings: ComputerSettings): Promise<void>;
 }
 
+/** A fetch request body from any byte source (this Bun has no ReadableStream.from). */
+export function streamOf(source: AsyncIterable<Uint8Array>) {
+  const iterator = source[Symbol.asyncIterator]();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const next = await iterator.next();
+        if (next.done) controller.close();
+        else controller.enqueue(next.value);
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    async cancel() {
+      await iterator.return?.();
+    },
+  });
+}
+
 export type GuestFile = { name: string; size: number; stream: AsyncIterable<Uint8Array> };
 
 /** A rejection the controller itself explained (its ResourceError messages are operator-safe). */
@@ -108,7 +127,7 @@ export class HttpComputerController implements ComputerController {
   async exportFile(id: string, path: string, maxBytes: number, signal?: AbortSignal): Promise<GuestFile> {
     const query = new URLSearchParams({ path, max: String(maxBytes) });
     const response = await this.request(`/computers/${encodeURIComponent(id)}/export?${query}`, { signal }, 300_000);
-    const length = response.headers.get('content-length');
+    const length = response.headers.get('x-file-size') ?? response.headers.get('content-length');
     const size = length === null ? NaN : Number(length);
     if (!response.body || !Number.isSafeInteger(size) || size < 0)
       throw new ControllerError(503, 'Invalid file response.');
@@ -124,7 +143,7 @@ export class HttpComputerController implements ComputerController {
       `/computers/${encodeURIComponent(id)}/import?${query}`,
       {
         method: 'PUT',
-        body: body as unknown as ReadableStream,
+        body: streamOf(body),
         headers: { 'content-type': 'application/octet-stream' },
         signal,
         duplex: 'half',

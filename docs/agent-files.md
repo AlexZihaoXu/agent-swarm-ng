@@ -72,7 +72,7 @@ Images and PDFs are handled in the backend with `@napi-rs/canvas` (decoding and 
 `copy_file` and `upload_file` accept three kinds of location: `scratch:<path>`, `computer:<computer name or ID>:<absolute guest path>` and (source only) `file:<fileId>`.
 
 - **Computers need only an assignment** to each computer involved, not control, and are never refused because another agent holds them. Copies do not touch the desktop or terminals. When a copy reads from or writes to a computer another agent currently holds, that holder receives a platform computer event naming the file.
-- **Onto a computer:** any file, into an **existing** folder, owned by the guest user (1000:1000, mode 0644). It is written under a hidden temporary name and renamed over the target only when complete, so a failed or cancelled copy never leaves a partial file; a file of the same name is replaced; a folder of that name is refused.
+- **Onto a computer:** any file, into an **existing** folder, owned by the guest user (1000:1000, mode 0644). It is written under a hidden temporary name and moved over the target only when complete, so a failed or cancelled copy never leaves a partial file (Docker writes archive files with raw host ids, which a user-namespaced guest cannot own, so the guest's root copies the finished file into one owned by the guest user); a file of the same name is replaced; a folder of that name is refused.
 - **From a computer:** regular files only (no folders, links or devices), up to the Settings → Swarm file size limit. `/proc`, `/sys` and `/dev` are refused.
 - **Into the scratchpad:** UTF-8 text only, within the scratchpad limits. Scratch → scratch copies keep old versions side by side.
 

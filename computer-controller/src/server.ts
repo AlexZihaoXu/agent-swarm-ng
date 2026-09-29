@@ -30,6 +30,24 @@ const computerCore = new ComputerCoreService((id, mode, input) => manager.comput
 const computerUse = new ComputerUseService((id, mode, input) => manager.computerUseExec(id, mode, input));
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 
+/** A request body as chunks (this Bun's async iteration of a streaming request body is broken). */
+async function* chunks(stream: ReadableStream<Uint8Array>) {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) return;
+      yield value;
+    }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      /* this Bun's request-body reader cannot always release its lock; the request ends anyway */
+    }
+  }
+}
+
 async function body(request: Request, maxBytes = 4096): Promise<unknown> {
   const reader = request.body?.getReader();
   if (!reader) throw new ResourceError(400, 'A JSON body is required.');
@@ -141,6 +159,8 @@ Bun.serve<TerminalSocket>({
               headers: {
                 'Content-Type': 'application/octet-stream',
                 'Content-Length': String(file.size),
+                // Bun sends streamed bodies chunked (dropping Content-Length), so the size also travels here.
+                'X-File-Size': String(file.size),
                 'X-File-Name': encodeURIComponent(file.name),
                 'Cache-Control': 'no-store',
               },
@@ -154,7 +174,7 @@ Bun.serve<TerminalSocket>({
             id,
             searchParams.get('path') ?? '',
             Number(searchParams.get('size')),
-            request.body as unknown as AsyncIterable<Uint8Array>,
+            chunks(request.body),
           ),
         );
       }
