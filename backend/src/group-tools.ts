@@ -5,6 +5,7 @@ import { dmConversationId, type SwarmStore } from './swarm-store';
 import type { Channel } from './chat-runtime';
 import { messageText, messageMatch } from './message-text';
 import { groupReply } from './reply-preview';
+import type { FileStore } from './files/store';
 
 const result = (data: object) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data) }], details: {} });
 function groupId(channelId: string) {
@@ -31,8 +32,10 @@ export function createGroupTools(
   swarm: SwarmStore,
   channel: Channel,
   canPublishHuman = () => true,
+  files?: FileStore,
 ) {
   const agentId = channel.agentId;
+  const withFiles = async <T extends { id: string }>(items: T[]) => (await files?.annotate('group', items)) ?? items;
   return [
     defineTool({
       name: 'list_chats',
@@ -123,7 +126,7 @@ export function createGroupTools(
         return result({
           channelId,
           order: 'oldest-first',
-          messages: page.messages.map(row => view(row, offset ?? 0, length)),
+          messages: await withFiles(page.messages.map(row => view(row, offset ?? 0, length))),
           nextCursor: page.nextCursor,
         });
       },
@@ -149,7 +152,7 @@ export function createGroupTools(
         return result({
           channelId,
           order: 'newest-first',
-          matches: page.messages.map(row => ({ ...metadata(row), ...messageMatch(row.text, query) })),
+          matches: await withFiles(page.messages.map(row => ({ ...metadata(row), ...messageMatch(row.text, query) }))),
           nextCursor: page.nextCursor,
         });
       },

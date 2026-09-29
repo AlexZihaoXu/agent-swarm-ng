@@ -3,13 +3,16 @@ import { Type } from '@earendil-works/pi-ai';
 import { messageText } from './message-text';
 import { DM_TEXT_LIMIT, type SwarmStore } from './swarm-store';
 import { dmReply } from './reply-preview';
+import type { FileStore } from './files/store';
 
 export type DmReceipt = { id: string; conversationId: string; status: string; duplicate: boolean };
 export function createDmTools(
   store: SwarmStore,
   agentId: string,
   send: (recipientId: string, text: string, toolCallId: string, replyToMessageId?: string) => Promise<DmReceipt>,
+  files?: FileStore,
 ) {
+  const withFiles = async <T extends { id: string }>(items: T[]) => (await files?.annotate('dm', items)) ?? items;
   return [
     defineTool({
       name: 'list_dm_contacts',
@@ -32,20 +35,23 @@ export function createDmTools(
       async execute(_id, { before }, signal) {
         signal?.throwIfAborted();
         const page = await store.received(agentId, before);
+        const messages = await withFiles(
+          page.messages.map(message => ({
+            id: message.id,
+            senderId: message.senderId,
+            author: message.sender.name,
+            timestamp: message.createdAt.toISOString(),
+            status: message.status,
+            ...messageText(message.text),
+            replyTo: dmReply(message),
+          })),
+        );
         return {
           content: [
             {
               type: 'text' as const,
               text: JSON.stringify({
-                messages: page.messages.map(message => ({
-                  id: message.id,
-                  senderId: message.senderId,
-                  author: message.sender.name,
-                  timestamp: message.createdAt.toISOString(),
-                  status: message.status,
-                  ...messageText(message.text),
-                  replyTo: dmReply(message),
-                })),
+                messages,
                 nextCursor: page.nextCursor,
               }),
             },
@@ -96,16 +102,18 @@ export function createDmTools(
           ? { messages: [await store.message(agentId, peerId, messageId)], nextCursor: null }
           : await store.history(agentId, peerId, before, limit);
         const budget = messageId ? 6000 : Math.min(1000, Math.floor(20000 / Math.max(1, page.messages.length)));
-        const messages = page.messages.map(message => ({
-          id: message.id,
-          sequence: message.sequence,
-          senderId: message.senderId,
-          author: message.sender.name,
-          timestamp: message.createdAt.toISOString(),
-          status: message.status,
-          ...messageText(message.text, offset ?? 0, budget),
-          replyTo: dmReply(message),
-        }));
+        const messages = await withFiles(
+          page.messages.map(message => ({
+            id: message.id,
+            sequence: message.sequence,
+            senderId: message.senderId,
+            author: message.sender.name,
+            timestamp: message.createdAt.toISOString(),
+            status: message.status,
+            ...messageText(message.text, offset ?? 0, budget),
+            replyTo: dmReply(message),
+          })),
+        );
         return {
           content: [{ type: 'text' as const, text: JSON.stringify({ messages, nextCursor: page.nextCursor }) }],
           details: {},

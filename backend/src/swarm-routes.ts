@@ -5,6 +5,8 @@ import { AvatarSchema } from './agent-avatar';
 import { SwarmError, type SwarmStore } from './swarm-store';
 import type { PlatformStore } from './platform-store';
 import { dmReply } from './reply-preview';
+import { FileSchema } from './files/routes';
+import type { FileStore } from './files/store';
 const Id = Type.String({ minLength: 1, maxLength: 100 });
 const Params = Type.Object({ id: Id });
 const ErrorResponse = Type.Object({ message: Type.String() });
@@ -35,6 +37,7 @@ const DmMessage = Type.Object({
   status: Type.String(),
   timestamp: Type.Number(),
   replyTo: DmReply,
+  files: Type.Optional(Type.Array(FileSchema)),
 });
 export function registerSwarmRoutes(
   app: FastifyInstance,
@@ -42,6 +45,7 @@ export function registerSwarmRoutes(
   database: PlatformStore,
   active: Set<string>,
   closing: () => boolean,
+  files: FileStore,
 ) {
   app.get<{ Params: { id: string } }>(
     '/api/agents/:id/settings',
@@ -207,6 +211,10 @@ export function registerSwarmRoutes(
         request.query.before,
         request.query.limit,
       );
+      const attached = await files.forMessages(
+        'dm',
+        page.messages.map(message => message.id),
+      );
       return {
         messages: page.messages.map(message => ({
           id: message.id,
@@ -220,6 +228,7 @@ export function registerSwarmRoutes(
           status: message.status,
           timestamp: message.createdAt.getTime(),
           replyTo: dmReply(message),
+          ...(attached.has(message.id) ? { files: attached.get(message.id) } : {}),
         })),
         nextCursor: page.nextCursor,
       };

@@ -5,6 +5,10 @@ import { SwarmError } from './swarm-store';
 import type { DmBroker } from './dm-broker';
 import { groupMessageView } from './group-message';
 import { GROUP_MEMBER_LIMIT } from './group-store';
+import { FileSchema } from './files/routes';
+import { FileError, type FileView } from './files/store';
+
+const withGroupFiles = <T extends object>(view: T, files?: FileView[]) => (files?.length ? { ...view, files } : view);
 
 const Id = Type.String({ minLength: 1, maxLength: 100 });
 const Params = Type.Object({ id: Id });
@@ -28,6 +32,7 @@ export const GroupMessageSchema = Type.Object({
   authorAvatar: Type.Union([AvatarSchema, Type.Null()]),
   text: Type.String(),
   timestamp: Type.Number(),
+  files: Type.Optional(Type.Array(FileSchema)),
   replyTo: Type.Union([
     Type.Object({
       id: Type.String(),
@@ -80,6 +85,7 @@ async function safely(reply: FastifyReply, operation: () => Promise<unknown>, st
       return reply
         .code(error.code === 'missing' ? 404 : error.code === 'limit' ? 409 : 400)
         .send({ message: error.message });
+    if (error instanceof FileError) return reply.code(error.status).send({ message: error.message });
     return reply
       .code(503)
       .send({ message: 'The group operation could not finish. Reload history before retrying a message.' });
@@ -169,6 +175,8 @@ export function registerGroupRoutes(
       safely(reply, async () => {
         writable();
         await broker.groups.remove(request.params.id, request.body.confirmation);
+        // The group's files go with it.
+        await broker.files.deleteChannels([`group:${request.params.id}`]).catch(() => {});
         announceDeleted(request.params.id);
         return { deleted: true };
       }),
@@ -194,10 +202,20 @@ export function registerGroupRoutes(
           request.query.before,
           request.query.limit,
         );
-        return { messages: page.messages.map(groupMessageView), nextCursor: page.nextCursor };
+        const files = await broker.files.forMessages(
+          'group',
+          page.messages.map(message => message.id),
+        );
+        return {
+          messages: page.messages.map(message => withGroupFiles(groupMessageView(message), files.get(message.id))),
+          nextCursor: page.nextCursor,
+        };
       }),
   );
-  app.post<{ Params: { id: string }; Body: { message: string; clientMessageId: string; replyToMessageId?: string } }>(
+  app.post<{
+    Params: { id: string };
+    Body: { message: string; clientMessageId: string; replyToMessageId?: string; fileIds?: string[] };
+  }>(
     '/api/groups/:id/messages',
     {
       schema: {
@@ -205,9 +223,10 @@ export function registerGroupRoutes(
         params: Params,
         body: Type.Object(
           {
-            message: Type.String({ minLength: 1, maxLength: 20000 }),
+            message: Type.String({ maxLength: 20000 }),
             clientMessageId: Type.String({ format: 'uuid' }),
             replyToMessageId: Type.Optional(Id),
+            fileIds: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 10 })),
           },
           { additionalProperties: false },
         ),
@@ -219,13 +238,20 @@ export function registerGroupRoutes(
         reply,
         async () => {
           writable();
+          const fileIds = request.body.fileIds ?? [];
+          if (!request.body.message.trim() && !fileIds.length) throw new SwarmError('invalid', 'Message is empty.');
           const publication = await broker.sendHumanGroup(
             request.params.id,
             request.body.message,
             request.body.clientMessageId,
             request.body.replyToMessageId,
+            fileIds,
           );
-          return { message: groupMessageView(publication.message), duplicate: publication.duplicate };
+          const files = (await broker.files.forMessages('group', [publication.message.id])).get(publication.message.id);
+          return {
+            message: withGroupFiles(groupMessageView(publication.message), files),
+            duplicate: publication.duplicate,
+          };
         },
         202,
       ),

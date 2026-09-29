@@ -5,6 +5,7 @@ import type { Channel } from './chat-runtime';
 import { ChannelHistory } from './channel-history';
 import { messageText, messageMatch } from './message-text';
 import { channelReply } from './reply-preview';
+import type { FileStore } from './files/store';
 
 type Row = Awaited<ReturnType<PlatformStore['appendMessage']>>;
 function integer(value: number | undefined, fallback: number, min: number, max: number) {
@@ -26,8 +27,15 @@ const position = (row: Row) => ({ id: row.id, sequence: row.sequence, timestamp:
 const range = (rows: Row[]) => (rows.length ? { from: position(rows[0]), to: position(rows.at(-1)!) } : null);
 const result = (data: object) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data) }], details: data });
 
-export function createChatHistoryTools(store: PlatformStore, channel: Channel, name: string): ToolDefinition[] {
+export function createChatHistoryTools(
+  store: PlatformStore,
+  channel: Channel,
+  name: string,
+  files?: FileStore,
+): ToolDefinition[] {
   const history = new ChannelHistory(store, channel.id);
+  /** Adds attached file references, when files are wired. */
+  const withFiles = async <T extends { id: string }>(items: T[]) => (await files?.annotate('chat', items)) ?? items;
   const author = (row: Row) => ({ role: row.role, name: row.role === 'user' ? 'Human' : name });
   const view = (row: Row, offset = 0, length = 1000) => ({
     ...position(row),
@@ -90,7 +98,13 @@ export function createChatHistoryTools(store: PlatformStore, channel: Channel, n
           const message = view(row, args.offset, 6000);
           const cursors = await history.cursors([row]);
           signal?.throwIfAborted();
-          return result({ channelId: channel.id, mode: 'message', range: range([row]), messages: [message], cursors });
+          return result({
+            channelId: channel.id,
+            mode: 'message',
+            range: range([row]),
+            messages: await withFiles([message]),
+            cursors,
+          });
         }
         const page = await history.section({
           at,
@@ -106,7 +120,7 @@ export function createChatHistoryTools(store: PlatformStore, channel: Channel, n
           mode: 'window',
           order: 'oldest-first',
           range: range(page.messages),
-          messages: page.messages.map(row => view(row, 0, length)),
+          messages: await withFiles(page.messages.map(row => view(row, 0, length))),
           cursors: page.cursors,
         });
       },
@@ -157,7 +171,7 @@ export function createChatHistoryTools(store: PlatformStore, channel: Channel, n
           channelId: channel.id,
           query: args.query,
           order: 'newest-first',
-          matches,
+          matches: await withFiles(matches),
           nextCursor: page.nextCursor,
         });
       },

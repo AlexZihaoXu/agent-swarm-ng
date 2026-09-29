@@ -141,14 +141,11 @@ export class FileStore {
     return fileView(row);
   }
 
-  /** Puts uploaded files into a sent message: same channel, same uploader, not yet in a message, at most 10. */
-  async attach(
-    ids: string[],
-    target: { channelKey: string; messageKind: MessageKind; messageId: string; uploader: Uploader },
-  ) {
-    if (!ids.length) return [];
+  /** Checks files can go into a message (before it is saved): same channel and uploader, unsent, at most 10. */
+  async attachable(ids: string[], target: { channelKey: string; uploader: Uploader; messageId?: string }) {
     if (ids.length > FILES_PER_MESSAGE) throw new FileError(`A message carries at most ${FILES_PER_MESSAGE} files.`);
     if (new Set(ids).size !== ids.length) throw new FileError('A file is listed twice.');
+    if (!ids.length) return;
     await this.database.initialize();
     const rows = await this.database.client.channelFile.findMany({ where: { id: { in: ids } } });
     const uploaderId = target.uploader.kind === 'agent' ? target.uploader.id : null;
@@ -162,11 +159,42 @@ export class FileStore {
         throw new FileError('That file is already in a message.', 409);
       if (row.status !== 'available') throw new FileError(`"${row.name}" was deleted.`, 409);
     }
+  }
+  /** Puts uploaded files into a sent message: same channel, same uploader, not yet in a message, at most 10. */
+  async attach(
+    ids: string[],
+    target: { channelKey: string; messageKind: MessageKind; messageId: string; uploader: Uploader },
+  ) {
+    if (!ids.length) return [];
+    await this.attachable(ids, target);
     await this.database.client.channelFile.updateMany({
       where: { id: { in: ids } },
       data: { messageKind: target.messageKind, messageId: target.messageId },
     });
     return this.forMessages(target.messageKind, [target.messageId]).then(map => map.get(target.messageId) ?? []);
+  }
+  /** File references for the agent (what it sees in message envelopes). */
+  static refs(files: FileView[] | undefined) {
+    return (files ?? []).map(file => ({
+      id: file.id,
+      name: file.name,
+      kind: file.kind,
+      size: file.size,
+      status: file.status,
+    }));
+  }
+
+  /** History items (with message ids) plus their file references as agent tools show them. */
+  async annotate<T extends { id: string }>(messageKind: MessageKind, items: T[]) {
+    const map = await this.forMessages(
+      messageKind,
+      items.map(item => item.id),
+    );
+    return items.map(item => {
+      const files = map.get(item.id);
+      if (!files) return item;
+      return { ...item, files: FileStore.refs(files).map(({ id, ...file }) => ({ fileId: id, ...file })) };
+    });
   }
 
   async get(id: string) {
@@ -221,7 +249,7 @@ export class FileStore {
               : a.createdAt.getTime() - b.createdAt.getTime();
       return compare * order;
     });
-    return { files: matching.map(fileView), total: matching.reduce((sum, row) => sum + row.size, 0) };
+    return { files: matching.map(fileView), totalBytes: matching.reduce((sum, row) => sum + row.size, 0) };
   }
 
   /**
@@ -261,6 +289,17 @@ export class FileStore {
     });
     await this.database.client.channelFile.deleteMany({ where: { channelKey: { in: channelKeys } } });
     await this.collect(rows.map(row => row.blobId));
+  }
+  /** Deleting an agent deletes the files of its private chat and of its agent-to-agent DMs. */
+  async deleteForAgent(agentId: string, channelIds: string[]) {
+    await this.database.initialize();
+    const dms = await this.database.client.channelFile.findMany({
+      where: { channelKey: { startsWith: 'dm:', contains: agentId } },
+      select: { channelKey: true },
+      distinct: ['channelKey'],
+    });
+    const keys = dms.map(row => row.channelKey).filter(key => key.split(':').slice(1).includes(agentId));
+    await this.deleteChannels([...channelIds.map(id => `chat:${id}`), ...keys]);
   }
   /**
    * Uploads that never made it into a message (the send was abandoned) are removed after a while; they were never

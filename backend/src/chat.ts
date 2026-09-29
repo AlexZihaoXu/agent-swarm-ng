@@ -1,3 +1,6 @@
+import { FileSchema } from './files/routes';
+import { FileError, FileStore, type FileView } from './files/store';
+import { chatKey } from './files/access';
 import { registerScratchRoutes } from './scratch-routes';
 import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
@@ -45,6 +48,7 @@ const Message = Type.Object({
     }),
     Type.Null(),
   ]),
+  files: Type.Optional(Type.Array(FileSchema)),
 });
 const Cursor = Type.Union([Type.Integer(), Type.Null()]);
 const Agent = Type.Object(
@@ -75,12 +79,14 @@ const ChatBody = Type.Object(
   {
     agentId: Type.String({ minLength: 1, maxLength: 100 }),
     clientMessageId: Type.String({ format: 'uuid' }),
-    message: Type.String({ minLength: 1, maxLength: 20000 }),
+    message: Type.String({ maxLength: 20000 }),
     replyToMessageId: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
+    /** Files uploaded to this chat beforehand (POST /api/files), sent with the message. */
+    fileIds: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 10 })),
   },
   { additionalProperties: false },
 );
-const messageView = (message: Awaited<ReturnType<PlatformStore['appendMessage']>>) => ({
+const messageView = (message: Awaited<ReturnType<PlatformStore['appendMessage']>>, files?: FileView[]) => ({
   id: message.id,
   sequence: message.sequence,
   channelId: message.channelId,
@@ -88,8 +94,12 @@ const messageView = (message: Awaited<ReturnType<PlatformStore['appendMessage']>
   text: message.text,
   timestamp: message.createdAt.getTime(),
   replyTo: channelReply(message),
+  ...(files?.length ? { files } : {}),
 });
-function agentView(agent: NonNullable<Awaited<ReturnType<PlatformStore['findAgent']>>>) {
+function agentView(
+  agent: NonNullable<Awaited<ReturnType<PlatformStore['findAgent']>>>,
+  files?: Map<string, FileView[]>,
+) {
   const channel = agent.channels[0];
   return {
     id: agent.id,
@@ -100,7 +110,7 @@ function agentView(agent: NonNullable<Awaited<ReturnType<PlatformStore['findAgen
     model: agent.model,
     thinkingLevel: agent.thinkingLevel,
     channelId: channel.id,
-    lastMessage: channel.messages[0] ? messageView(channel.messages[0]) : null,
+    lastMessage: channel.messages[0] ? messageView(channel.messages[0], files?.get(channel.messages[0].id)) : null,
   };
 }
 
@@ -111,10 +121,20 @@ export function registerChat(
   codex = new CodexProvider(),
   computers?: ComputerUseService,
   screenshots?: ScreenshotPool,
+  files?: FileStore,
 ) {
   const runs = new AgentRuns();
   const streams = createRunStreams(runs);
-  const broker = new DmBroker(database, store, codex, runs, computers, screenshots);
+  const broker = new DmBroker(database, store, codex, runs, computers, screenshots, files);
+  const channelFiles = broker.files;
+  /** Private-chat messages with their files. */
+  const withFiles = async (messages: Awaited<ReturnType<PlatformStore['appendMessage']>>[]) => {
+    const map = await channelFiles.forMessages(
+      'chat',
+      messages.map(message => message.id),
+    );
+    return messages.map(message => messageView(message, map.get(message.id)));
+  };
   registerActivityRoutes(app, database, broker.activity);
   registerScratchRoutes(app, database, broker.scratch);
   app.addHook('onListen', async () => {
@@ -126,7 +146,7 @@ export function registerChat(
     { clientMessageId: string; controller: AbortController; finished: Promise<void> }
   >();
   let closing = false;
-  registerSwarmRoutes(app, broker.store, database, active, () => closing);
+  registerSwarmRoutes(app, broker.store, database, active, () => closing, channelFiles);
   registerGroupRoutes(
     app,
     broker,
@@ -242,7 +262,11 @@ export function registerChat(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       const page = await database.listAgents(request.query.after, request.query.limit, request.query.search);
-      return { agents: page.agents.map(agentView), nextCursor: page.nextCursor };
+      const files = await channelFiles.forMessages(
+        'chat',
+        page.agents.flatMap(agent => (agent.channels[0].messages[0] ? [agent.channels[0].messages[0].id] : [])),
+      );
+      return { agents: page.agents.map(agent => agentView(agent, files)), nextCursor: page.nextCursor };
     },
   );
   app.get<{ Params: { channelId: string }; Querystring: { before?: number; limit?: number } }>(
@@ -263,7 +287,7 @@ export function registerChat(
       if (!(await database.hasChannel(request.params.channelId)))
         return reply.code(404).send({ message: 'Channel not found.' });
       const page = await database.messages(request.params.channelId, request.query.before, request.query.limit);
-      return { messages: page.messages.map(messageView), nextCursor: page.nextCursor };
+      return { messages: await withFiles(page.messages), nextCursor: page.nextCursor };
     },
   );
   /** Shared by create and edit: the endpoint, model and thinking level must be usable together right now. */
@@ -414,6 +438,13 @@ export function registerChat(
         // Delete the record before its files: if this fails the agent is still whole, and leftover images only expire from the pool.
         if (!(await database.deleteAgent(id, request.body.confirmation)))
           return reply.code(404).send({ message: 'Agent not found.' });
+        // Its chats are gone, so their files go too.
+        await channelFiles
+          .deleteForAgent(
+            id,
+            agent.channels.map(channel => channel.id),
+          )
+          .catch(() => {});
         await screenshots?.removeAgent(id).catch(() => {});
         runs.announce(''); // Agent deletion can change membership in several groups.
         return { deleted: true };
@@ -448,9 +479,9 @@ export function registerChat(
     },
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
-      const { agentId, clientMessageId, message, replyToMessageId } = request.body;
+      const { agentId, clientMessageId, message, replyToMessageId, fileIds = [] } = request.body;
       const stopVersion = runs.stopVersion(agentId);
-      if (!message.trim()) return reply.code(400).send({ message: 'Message is empty.' });
+      if (!message.trim() && !fileIds.length) return reply.code(400).send({ message: 'Message is empty.' });
       if (closing) return reply.code(503).send({ message: 'The backend is shutting down.' });
       if (active.has(agentId))
         return reply.code(409).send({ message: 'Another message is being saved. Try again shortly.' });
@@ -472,6 +503,8 @@ export function registerChat(
           return reply.code(409).send({ message: 'This message was already received. Reload the channel history.' });
         await resolveChatConnection(agent.endpointId, store, codex, controller.signal);
         controller.signal.throwIfAborted();
+        const fileTarget = { channelKey: chatKey(agent.channelId), uploader: { kind: 'human' as const } };
+        await channelFiles.attachable(fileIds, fileTarget);
         const userMessage = await database.appendMessage(
           agent.channelId,
           'user',
@@ -479,8 +512,14 @@ export function registerChat(
           clientMessageId,
           replyToMessageId,
         );
+        const attached = await channelFiles.attach(fileIds, {
+          ...fileTarget,
+          messageKind: 'chat',
+          messageId: userMessage.id,
+        });
         const incoming = {
           role: 'user' as const,
+          files: FileStore.refs(attached),
           text: message,
           id: userMessage.id,
           sequence: userMessage.sequence,
@@ -491,7 +530,7 @@ export function registerChat(
           return reply.code(409).send({
             message: 'The run was stopped while your message was being saved. Reload history before continuing.',
           });
-        let run = runs.offer(agentId, incoming, { type: 'user_message', ...messageView(userMessage) });
+        let run = runs.offer(agentId, incoming, { type: 'user_message', ...messageView(userMessage, attached) });
         const joined = Boolean(run);
         if (!run) {
           controller.signal.throwIfAborted();
@@ -500,7 +539,7 @@ export function registerChat(
           if (closing)
             return reply.code(503).send({ message: 'The backend is shutting down. Your message was saved.' });
           run = runs.enqueue({ agentId, channelId: agent.channelId, clientMessageId }, async context => {
-            context.emit({ type: 'user_message', ...messageView(userMessage) });
+            context.emit({ type: 'user_message', ...messageView(userMessage, attached) });
             await broker.runInbox(agentId, incoming, context);
           });
         }
@@ -523,7 +562,7 @@ export function registerChat(
                 typingTargets: run.typingTargets,
                 queued: run.queued,
               },
-              message: messageView(userMessage),
+              message: messageView(userMessage, attached),
             });
         streams.attach(
           reply,
@@ -531,7 +570,7 @@ export function registerChat(
           joined
             ? {
                 type: 'user_message',
-                ...messageView(userMessage),
+                ...messageView(userMessage, attached),
                 agentId,
                 runId: run.runId,
                 eventId: `${run.runId}:accepted:${userMessage.id}`,
@@ -541,6 +580,7 @@ export function registerChat(
         return reply;
       } catch (error) {
         if (error instanceof ConnectionError) return reply.code(error.status).send({ message: error.message });
+        if (error instanceof FileError) return reply.code(error.status).send({ message: error.message });
         if (error instanceof Error && error.message.startsWith('Reply target not found'))
           return reply.code(400).send({ message: error.message });
         if (controller.signal.aborted)

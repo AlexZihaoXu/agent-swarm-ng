@@ -4,6 +4,9 @@ import { createTimeTools } from './time-tools';
 import { Scratchpad } from './scratchpad';
 import { createScratchTools } from './scratch-tools';
 import { SwarmSettingsStore } from './swarm-settings';
+import { FileStore } from './files/store';
+import { BlobStore } from './files/blob-store';
+import { join } from 'node:path';
 import type { AgentRuns, RunContext } from './agent-runs';
 import type { PlatformStore } from './platform-store';
 import type { EndpointStore } from './endpoint-store';
@@ -72,6 +75,12 @@ export class DmBroker {
     private runs: AgentRuns,
     private computers?: ComputerUseService,
     private screenshots?: ScreenshotPool,
+    /** Files posted to channels (chat attachments). */
+    readonly files: FileStore = new FileStore(
+      database,
+      new BlobStore(join(database.dataDirectory, 'files')),
+      new SwarmSettingsStore(database),
+    ),
   ) {
     this.store = new SwarmStore(database);
     this.groups = new GroupStore(database);
@@ -205,6 +214,11 @@ export class DmBroker {
       // Watches end with claims on a restart; their agents hear so once.
       void this.watches?.start().catch(() => {});
       void this.computers?.ready().catch(() => {});
+      // Uploads a restart interrupted, and ones never sent within a day, are cleaned up.
+      void this.files.blobs
+        .clearTemporary()
+        .then(() => this.files.pruneUnsent())
+        .catch(() => {});
     })().catch(error => {
       this.starting = undefined;
       throw error;
@@ -308,11 +322,22 @@ export class DmBroker {
     context.emit({ type: 'dm_updated', conversationId: message.conversationId });
     return { id: message.id, conversationId: message.conversationId, status, duplicate: false };
   }
-  async sendHumanGroup(groupId: string, text: string, clientMessageId: string, replyToId?: string) {
+  async sendHumanGroup(
+    groupId: string,
+    text: string,
+    clientMessageId: string,
+    replyToId?: string,
+    fileIds: string[] = [],
+  ) {
     if (this.closing) throw new Error('Group delivery is unavailable.');
     await this.ready();
-    const publication = await this.groups.publishHuman(groupId, text, clientMessageId, replyToId);
-    if (!publication.duplicate) await this.dispatchGroup(publication);
+    const target = { channelKey: `group:${groupId}`, uploader: { kind: 'human' as const } };
+    await this.files.attachable(fileIds, target);
+    const publication = await this.groups.publishHuman(groupId, text, clientMessageId, replyToId, fileIds.length > 0);
+    if (!publication.duplicate) {
+      await this.files.attach(fileIds, { ...target, messageKind: 'group', messageId: publication.message.id });
+      await this.dispatchGroup(publication);
+    }
     return publication;
   }
   async sendGroup(
@@ -361,6 +386,7 @@ export class DmBroker {
   private async dispatchGroup(publication: Awaited<ReturnType<GroupStore['publishHuman']>>) {
     const { message } = publication;
     const chain = await this.database.client.dmChain.findUnique({ where: { id: message.chainId } });
+    const files = FileStore.refs((await this.files.forMessages('group', [message.id])).get(message.id));
     for (const delivery of publication.deliveries) {
       const agentId = delivery.agentId;
       try {
@@ -375,6 +401,7 @@ export class DmBroker {
           timestamp: message.createdAt.getTime(),
           replyTo: groupReplyContext(message),
           source: groupSource(message),
+          files,
         };
         const channelId = recipient.channels[0].id;
         const run =
@@ -422,6 +449,12 @@ export class DmBroker {
       incoming.source ? undefined : incoming.id,
       incoming.source ? undefined : incoming.sequence,
     );
+    // The files each recent private message carries, as references the agent can open.
+    const recentFiles = await this.files.forMessages(
+      'chat',
+      human.map(message => message.id),
+    );
+    for (const message of human) (message as ChannelMessage).files = FileStore.refs(recentFiles.get(message.id));
     const peerHistory = await this.database.client.dmMessage.findMany({
       where: { OR: [{ senderId: agentId }, { recipientId: agentId, status: { notIn: ['queued', 'running'] } }] },
       orderBy: { sequence: 'desc' },
@@ -480,8 +513,12 @@ ${preview.text}`
     let sources: AgentMessageSource[] = incoming.source ? [incoming.source] : [];
     const chainFor = (recipientId: string) =>
       humanBatch ? undefined : (sources.find(source => source.agentId === recipientId)?.chainId ?? inherited);
-    const peerTools = createDmTools(this.store, agentId, (recipientId, text, callId, replyToId) =>
-      this.send(agentId, recipientId, text, callId, context, chainFor(recipientId), replyToId),
+    const peerTools = createDmTools(
+      this.store,
+      agentId,
+      (recipientId, text, callId, replyToId) =>
+        this.send(agentId, recipientId, text, callId, context, chainFor(recipientId), replyToId),
+      this.files,
     );
     const computerTools =
       this.computers && this.screenshots
@@ -548,9 +585,9 @@ ${preview.text}`
       connection.accessKey,
       connection.subscriptionRuntime,
       [
-        ...createChatHistoryTools(this.database, channel, agent.name),
+        ...createChatHistoryTools(this.database, channel, agent.name, this.files),
         ...peerTools,
-        ...createGroupTools(this.groups, this.store, channel, () => humanAuthority),
+        ...createGroupTools(this.groups, this.store, channel, () => humanAuthority, this.files),
         ...createReactionTools(
           this.reactions,
           channel,

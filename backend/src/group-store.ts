@@ -129,8 +129,9 @@ export class GroupStore {
     );
     return { groups, nextCursor: rows.length > limit ? groups.at(-1)!.sequence : null };
   }
-  publishHuman(groupId: string, text: string, clientMessageId: string, replyToId?: string) {
-    return this.publish(groupId, text, `human:${clientMessageId}`, replyToId);
+  /** A message may be empty only when it carries files. */
+  publishHuman(groupId: string, text: string, clientMessageId: string, replyToId?: string, hasFiles = false) {
+    return this.publish(groupId, text, `human:${clientMessageId}`, replyToId, undefined, undefined, hasFiles);
   }
   publishAgent(
     groupId: string,
@@ -139,8 +140,9 @@ export class GroupStore {
     chainId: string,
     deliveryKey: string,
     replyToId?: string,
+    hasFiles = false,
   ) {
-    return this.publish(groupId, text, `agent:${agentId}:${deliveryKey}`, replyToId, agentId, chainId);
+    return this.publish(groupId, text, `agent:${agentId}:${deliveryKey}`, replyToId, agentId, chainId, hasFiles);
   }
   private async publish(
     groupId: string,
@@ -149,8 +151,9 @@ export class GroupStore {
     replyToId?: string,
     actorId?: string,
     inheritedChain?: string,
+    hasFiles = false,
   ) {
-    if (!text.trim() || text.length > (actorId ? 8000 : 20000) || submissionKey.length > 400)
+    if ((!text.trim() && !hasFiles) || text.length > (actorId ? 8000 : 20000) || submissionKey.length > 400)
       throw new SwarmError('invalid', 'Invalid group message.');
     await this.store.initialize();
     return this.store.client.$transaction(async tx => {

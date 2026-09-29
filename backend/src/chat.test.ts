@@ -663,6 +663,47 @@ describe('Pi chat and platform channel boundary', () => {
       await app.close();
     }
   });
+  it('sends files with or without text, shows them in history, and gives the agent references only', async () => {
+    behavior = 'tool';
+    captured = [];
+    const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
+    const app = await testApp(database);
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const upload = await app.inject({
+        method: 'POST',
+        url: `/api/files?channelKey=chat:${agent.channelId}&name=plan.md`,
+        headers: { 'content-type': 'text/markdown' },
+        payload: 'SECRET PLAN CONTENT',
+      });
+      expect(upload.statusCode).toBe(201);
+      const file = upload.json();
+      expect((await app.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent, '') })).statusCode).toBe(
+        400,
+      );
+      const sent = await app.inject({
+        method: 'POST',
+        url: '/api/chat',
+        payload: { ...chatPayload(agent, ''), fileIds: [file.id] },
+      });
+      expect(sent.statusCode).toBe(200);
+      const [first] = (await app.inject(`/api/channels/${agent.channelId}/messages`)).json().messages;
+      expect(first.files).toMatchObject([{ id: file.id, name: 'plan.md', status: 'available' }]);
+      expect((await app.inject('/api/agents')).json().agents[0].lastMessage).toBeDefined();
+      const prompt = JSON.stringify(captured[0].messages);
+      expect(prompt).toContain(`fileId ${file.id}`);
+      expect(prompt).not.toContain('SECRET PLAN CONTENT');
+      // A file is sent once; someone else's upload cannot be attached.
+      const again = await app.inject({
+        method: 'POST',
+        url: '/api/chat',
+        payload: { ...chatPayload(agent, 'again'), fileIds: [file.id] },
+      });
+      expect(again.statusCode).toBe(409);
+    } finally {
+      await app.close();
+    }
+  });
   it('creates subscription agents only when connected and rejects sends after disconnect', async () => {
     const model = {
       ...getModels('openai-codex')[0],

@@ -155,6 +155,11 @@ it('stores each content once, attaches files to messages, and keeps a tombstone 
       name: 'spec.md',
     });
     expect((await files.list(key)).files).toEqual([]);
+    // Agent history tools see references, including tombstones, and nothing for messages without files.
+    expect(await files.annotate('chat', [{ id: 'm1' }, { id: 'none' }])).toEqual([
+      { id: 'm1', files: [{ fileId: first.id, name: 'spec.md', kind: 'text', size: 7, status: 'deleted' }] },
+      { id: 'none' },
+    ]);
     expect((await files.list(key, { includeDeleted: true })).files).toHaveLength(2);
   } finally {
     await database.close();

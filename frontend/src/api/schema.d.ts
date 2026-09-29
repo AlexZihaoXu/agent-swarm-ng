@@ -68,6 +68,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listChannelFiles"];
+        put?: never;
+        post: operations["uploadFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/files/{id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getFileContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/files/{id}/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previewFileText"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/files/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteFile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/swarm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSwarmSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateSwarmSettings"];
+        trace?: never;
+    };
     "/api/agents/{id}/activity": {
         parameters: {
             query?: never;
@@ -386,22 +466,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/api/settings/swarm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getSwarmSettings"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["updateSwarmSettings"];
         trace?: never;
     };
     "/api/computers/{id}/files": {
@@ -950,6 +1014,692 @@ export interface operations {
             };
             /** @description Default Response */
             504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    listChannelFiles: {
+        parameters: {
+            query: {
+                channelKey: string;
+                query?: string;
+                sort?: "date" | "name" | "size" | "type";
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        files: {
+                            id: string;
+                            channelKey: string;
+                            name: string;
+                            mime: string;
+                            kind: "image" | "text" | "pdf" | "other";
+                            size: number;
+                            status: "available" | "deleted";
+                            uploader: {
+                                kind: "human" | "agent";
+                                id: string | null;
+                                name: string;
+                            };
+                            messageKind: "chat" | "dm" | "group" | null;
+                            messageId: string | null;
+                            createdAt: string;
+                            deleted?: {
+                                by: {
+                                    kind: "human" | "agent";
+                                    id: string | null;
+                                    name: string;
+                                };
+                                at: string | null;
+                            };
+                        }[];
+                        totalBytes: number;
+                        usage: {
+                            bytes: number;
+                            budgetBytes: number;
+                            files: number;
+                            maxFileBytes: number;
+                            warning: boolean;
+                            full: boolean;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    uploadFile: {
+        parameters: {
+            query: {
+                channelKey: string;
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        channelKey: string;
+                        name: string;
+                        mime: string;
+                        kind: "image" | "text" | "pdf" | "other";
+                        size: number;
+                        status: "available" | "deleted";
+                        uploader: {
+                            kind: "human" | "agent";
+                            id: string | null;
+                            name: string;
+                        };
+                        messageKind: "chat" | "dm" | "group" | null;
+                        messageId: string | null;
+                        createdAt: string;
+                        deleted?: {
+                            by: {
+                                kind: "human" | "agent";
+                                id: string | null;
+                                name: string;
+                            };
+                            at: string | null;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getFileContent: {
+        parameters: {
+            query?: {
+                download?: "1";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    previewFileText: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        text: string;
+                        offset: number;
+                        lines: number;
+                        totalLines: number;
+                        truncated: boolean;
+                        partialLine: boolean;
+                        nextOffset: number | null;
+                        prevOffset: number | null;
+                        previewLimited: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    deleteFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        channelKey: string;
+                        name: string;
+                        mime: string;
+                        kind: "image" | "text" | "pdf" | "other";
+                        size: number;
+                        status: "available" | "deleted";
+                        uploader: {
+                            kind: "human" | "agent";
+                            id: string | null;
+                            name: string;
+                        };
+                        messageKind: "chat" | "dm" | "group" | null;
+                        messageId: string | null;
+                        createdAt: string;
+                        deleted?: {
+                            by: {
+                                kind: "human" | "agent";
+                                id: string | null;
+                                name: string;
+                            };
+                            at: string | null;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getSwarmSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        settings: {
+                            maxComputers: number;
+                            uploadMaxMb: number;
+                            scratchFileMaxKb: number;
+                            scratchMaxFiles: number;
+                            scratchTotalMb: number;
+                            storageBudgetGb: number;
+                        };
+                        bounds: {
+                            maxComputers: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            uploadMaxMb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            scratchFileMaxKb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            scratchMaxFiles: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            scratchTotalMb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            storageBudgetGb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+    };
+    updateSwarmSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    maxComputers?: number;
+                    uploadMaxMb?: number;
+                    scratchFileMaxKb?: number;
+                    scratchMaxFiles?: number;
+                    scratchTotalMb?: number;
+                    storageBudgetGb?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        settings: {
+                            maxComputers: number;
+                            uploadMaxMb: number;
+                            scratchFileMaxKb: number;
+                            scratchMaxFiles: number;
+                            scratchTotalMb: number;
+                            storageBudgetGb: number;
+                        };
+                        bounds: {
+                            maxComputers: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            uploadMaxMb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            scratchFileMaxKb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            scratchMaxFiles: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            scratchTotalMb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            storageBudgetGb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1558,6 +2308,31 @@ export interface operations {
                                 senderName: string;
                                 text: string;
                             } | null;
+                            files?: {
+                                id: string;
+                                channelKey: string;
+                                name: string;
+                                mime: string;
+                                kind: "image" | "text" | "pdf" | "other";
+                                size: number;
+                                status: "available" | "deleted";
+                                uploader: {
+                                    kind: "human" | "agent";
+                                    id: string | null;
+                                    name: string;
+                                };
+                                messageKind: "chat" | "dm" | "group" | null;
+                                messageId: string | null;
+                                createdAt: string;
+                                deleted?: {
+                                    by: {
+                                        kind: "human" | "agent";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    at: string | null;
+                                };
+                            }[];
                         }[];
                         nextCursor: number | null;
                     };
@@ -1655,6 +2430,31 @@ export interface operations {
                                 } | null;
                                 text: string;
                                 timestamp: number;
+                                files?: {
+                                    id: string;
+                                    channelKey: string;
+                                    name: string;
+                                    mime: string;
+                                    kind: "image" | "text" | "pdf" | "other";
+                                    size: number;
+                                    status: "available" | "deleted";
+                                    uploader: {
+                                        kind: "human" | "agent";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    messageKind: "chat" | "dm" | "group" | null;
+                                    messageId: string | null;
+                                    createdAt: string;
+                                    deleted?: {
+                                        by: {
+                                            kind: "human" | "agent";
+                                            id: string | null;
+                                            name: string;
+                                        };
+                                        at: string | null;
+                                    };
+                                }[];
                                 replyTo: {
                                     id: string;
                                     role: "user" | "assistant";
@@ -1784,6 +2584,31 @@ export interface operations {
                             } | null;
                             text: string;
                             timestamp: number;
+                            files?: {
+                                id: string;
+                                channelKey: string;
+                                name: string;
+                                mime: string;
+                                kind: "image" | "text" | "pdf" | "other";
+                                size: number;
+                                status: "available" | "deleted";
+                                uploader: {
+                                    kind: "human" | "agent";
+                                    id: string | null;
+                                    name: string;
+                                };
+                                messageKind: "chat" | "dm" | "group" | null;
+                                messageId: string | null;
+                                createdAt: string;
+                                deleted?: {
+                                    by: {
+                                        kind: "human" | "agent";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    at: string | null;
+                                };
+                            }[];
                             replyTo: {
                                 id: string;
                                 role: "user" | "assistant";
@@ -1906,6 +2731,31 @@ export interface operations {
                             } | null;
                             text: string;
                             timestamp: number;
+                            files?: {
+                                id: string;
+                                channelKey: string;
+                                name: string;
+                                mime: string;
+                                kind: "image" | "text" | "pdf" | "other";
+                                size: number;
+                                status: "available" | "deleted";
+                                uploader: {
+                                    kind: "human" | "agent";
+                                    id: string | null;
+                                    name: string;
+                                };
+                                messageKind: "chat" | "dm" | "group" | null;
+                                messageId: string | null;
+                                createdAt: string;
+                                deleted?: {
+                                    by: {
+                                        kind: "human" | "agent";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    at: string | null;
+                                };
+                            }[];
                             replyTo: {
                                 id: string;
                                 role: "user" | "assistant";
@@ -2109,6 +2959,31 @@ export interface operations {
                             } | null;
                             text: string;
                             timestamp: number;
+                            files?: {
+                                id: string;
+                                channelKey: string;
+                                name: string;
+                                mime: string;
+                                kind: "image" | "text" | "pdf" | "other";
+                                size: number;
+                                status: "available" | "deleted";
+                                uploader: {
+                                    kind: "human" | "agent";
+                                    id: string | null;
+                                    name: string;
+                                };
+                                messageKind: "chat" | "dm" | "group" | null;
+                                messageId: string | null;
+                                createdAt: string;
+                                deleted?: {
+                                    by: {
+                                        kind: "human" | "agent";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    at: string | null;
+                                };
+                            }[];
                             replyTo: {
                                 id: string;
                                 role: "user" | "assistant";
@@ -2211,6 +3086,31 @@ export interface operations {
                             } | null;
                             text: string;
                             timestamp: number;
+                            files?: {
+                                id: string;
+                                channelKey: string;
+                                name: string;
+                                mime: string;
+                                kind: "image" | "text" | "pdf" | "other";
+                                size: number;
+                                status: "available" | "deleted";
+                                uploader: {
+                                    kind: "human" | "agent";
+                                    id: string | null;
+                                    name: string;
+                                };
+                                messageKind: "chat" | "dm" | "group" | null;
+                                messageId: string | null;
+                                createdAt: string;
+                                deleted?: {
+                                    by: {
+                                        kind: "human" | "agent";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    at: string | null;
+                                };
+                            }[];
                             replyTo: {
                                 id: string;
                                 role: "user" | "assistant";
@@ -2285,6 +3185,7 @@ export interface operations {
                     /** Format: uuid */
                     clientMessageId: string;
                     replyToMessageId?: string;
+                    fileIds?: string[];
                 };
             };
         };
@@ -2320,6 +3221,31 @@ export interface operations {
                             } | null;
                             text: string;
                             timestamp: number;
+                            files?: {
+                                id: string;
+                                channelKey: string;
+                                name: string;
+                                mime: string;
+                                kind: "image" | "text" | "pdf" | "other";
+                                size: number;
+                                status: "available" | "deleted";
+                                uploader: {
+                                    kind: "human" | "agent";
+                                    id: string | null;
+                                    name: string;
+                                };
+                                messageKind: "chat" | "dm" | "group" | null;
+                                messageId: string | null;
+                                createdAt: string;
+                                deleted?: {
+                                    by: {
+                                        kind: "human" | "agent";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    at: string | null;
+                                };
+                            }[];
                             replyTo: {
                                 id: string;
                                 role: "user" | "assistant";
@@ -2656,6 +3582,31 @@ export interface operations {
                                     role: "user" | "assistant";
                                     text: string;
                                 } | null;
+                                files?: {
+                                    id: string;
+                                    channelKey: string;
+                                    name: string;
+                                    mime: string;
+                                    kind: "image" | "text" | "pdf" | "other";
+                                    size: number;
+                                    status: "available" | "deleted";
+                                    uploader: {
+                                        kind: "human" | "agent";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    messageKind: "chat" | "dm" | "group" | null;
+                                    messageId: string | null;
+                                    createdAt: string;
+                                    deleted?: {
+                                        by: {
+                                            kind: "human" | "agent";
+                                            id: string | null;
+                                            name: string;
+                                        };
+                                        at: string | null;
+                                    };
+                                }[];
                             } | null;
                         }[];
                         nextCursor: number | null;
@@ -2738,6 +3689,31 @@ export interface operations {
                                 role: "user" | "assistant";
                                 text: string;
                             } | null;
+                            files?: {
+                                id: string;
+                                channelKey: string;
+                                name: string;
+                                mime: string;
+                                kind: "image" | "text" | "pdf" | "other";
+                                size: number;
+                                status: "available" | "deleted";
+                                uploader: {
+                                    kind: "human" | "agent";
+                                    id: string | null;
+                                    name: string;
+                                };
+                                messageKind: "chat" | "dm" | "group" | null;
+                                messageId: string | null;
+                                createdAt: string;
+                                deleted?: {
+                                    by: {
+                                        kind: "human" | "agent";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    at: string | null;
+                                };
+                            }[];
                         } | null;
                     };
                 };
@@ -2799,6 +3775,31 @@ export interface operations {
                                 role: "user" | "assistant";
                                 text: string;
                             } | null;
+                            files?: {
+                                id: string;
+                                channelKey: string;
+                                name: string;
+                                mime: string;
+                                kind: "image" | "text" | "pdf" | "other";
+                                size: number;
+                                status: "available" | "deleted";
+                                uploader: {
+                                    kind: "human" | "agent";
+                                    id: string | null;
+                                    name: string;
+                                };
+                                messageKind: "chat" | "dm" | "group" | null;
+                                messageId: string | null;
+                                createdAt: string;
+                                deleted?: {
+                                    by: {
+                                        kind: "human" | "agent";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    at: string | null;
+                                };
+                            }[];
                         }[];
                         nextCursor: number | null;
                     };
@@ -2952,6 +3953,31 @@ export interface operations {
                                 role: "user" | "assistant";
                                 text: string;
                             } | null;
+                            files?: {
+                                id: string;
+                                channelKey: string;
+                                name: string;
+                                mime: string;
+                                kind: "image" | "text" | "pdf" | "other";
+                                size: number;
+                                status: "available" | "deleted";
+                                uploader: {
+                                    kind: "human" | "agent";
+                                    id: string | null;
+                                    name: string;
+                                };
+                                messageKind: "chat" | "dm" | "group" | null;
+                                messageId: string | null;
+                                createdAt: string;
+                                deleted?: {
+                                    by: {
+                                        kind: "human" | "agent";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    at: string | null;
+                                };
+                            }[];
                         } | null;
                     };
                 };
@@ -3017,6 +4043,7 @@ export interface operations {
                     clientMessageId: string;
                     message: string;
                     replyToMessageId?: string;
+                    fileIds?: string[];
                 };
             };
         };
@@ -3059,6 +4086,31 @@ export interface operations {
                                 role: "user" | "assistant";
                                 text: string;
                             } | null;
+                            files?: {
+                                id: string;
+                                channelKey: string;
+                                name: string;
+                                mime: string;
+                                kind: "image" | "text" | "pdf" | "other";
+                                size: number;
+                                status: "available" | "deleted";
+                                uploader: {
+                                    kind: "human" | "agent";
+                                    id: string | null;
+                                    name: string;
+                                };
+                                messageKind: "chat" | "dm" | "group" | null;
+                                messageId: string | null;
+                                createdAt: string;
+                                deleted?: {
+                                    by: {
+                                        kind: "human" | "agent";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    at: string | null;
+                                };
+                            }[];
                         };
                     };
                 };
@@ -3098,174 +4150,6 @@ export interface operations {
             };
             /** @description Default Response */
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        message: string;
-                    };
-                };
-            };
-        };
-    };
-    getSwarmSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Default Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        settings: {
-                            maxComputers: number;
-                            uploadMaxMb: number;
-                            scratchFileMaxKb: number;
-                            scratchMaxFiles: number;
-                            scratchTotalMb: number;
-                            storageBudgetGb: number;
-                        };
-                        bounds: {
-                            maxComputers: {
-                                min: number;
-                                max: number;
-                                default: number;
-                                label: string;
-                                unit: string;
-                            };
-                            uploadMaxMb: {
-                                min: number;
-                                max: number;
-                                default: number;
-                                label: string;
-                                unit: string;
-                            };
-                            scratchFileMaxKb: {
-                                min: number;
-                                max: number;
-                                default: number;
-                                label: string;
-                                unit: string;
-                            };
-                            scratchMaxFiles: {
-                                min: number;
-                                max: number;
-                                default: number;
-                                label: string;
-                                unit: string;
-                            };
-                            scratchTotalMb: {
-                                min: number;
-                                max: number;
-                                default: number;
-                                label: string;
-                                unit: string;
-                            };
-                            storageBudgetGb: {
-                                min: number;
-                                max: number;
-                                default: number;
-                                label: string;
-                                unit: string;
-                            };
-                        };
-                    };
-                };
-            };
-        };
-    };
-    updateSwarmSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    maxComputers?: number;
-                    uploadMaxMb?: number;
-                    scratchFileMaxKb?: number;
-                    scratchMaxFiles?: number;
-                    scratchTotalMb?: number;
-                    storageBudgetGb?: number;
-                };
-            };
-        };
-        responses: {
-            /** @description Default Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        settings: {
-                            maxComputers: number;
-                            uploadMaxMb: number;
-                            scratchFileMaxKb: number;
-                            scratchMaxFiles: number;
-                            scratchTotalMb: number;
-                            storageBudgetGb: number;
-                        };
-                        bounds: {
-                            maxComputers: {
-                                min: number;
-                                max: number;
-                                default: number;
-                                label: string;
-                                unit: string;
-                            };
-                            uploadMaxMb: {
-                                min: number;
-                                max: number;
-                                default: number;
-                                label: string;
-                                unit: string;
-                            };
-                            scratchFileMaxKb: {
-                                min: number;
-                                max: number;
-                                default: number;
-                                label: string;
-                                unit: string;
-                            };
-                            scratchMaxFiles: {
-                                min: number;
-                                max: number;
-                                default: number;
-                                label: string;
-                                unit: string;
-                            };
-                            scratchTotalMb: {
-                                min: number;
-                                max: number;
-                                default: number;
-                                label: string;
-                                unit: string;
-                            };
-                            storageBudgetGb: {
-                                min: number;
-                                max: number;
-                                default: number;
-                                label: string;
-                                unit: string;
-                            };
-                        };
-                    };
-                };
-            };
-            /** @description Default Response */
-            400: {
                 headers: {
                     [name: string]: unknown;
                 };

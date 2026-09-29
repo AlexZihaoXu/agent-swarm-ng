@@ -20,6 +20,9 @@ import { join } from 'node:path';
 import { allowedHosts } from './host-policy';
 import { SwarmSettingsStore } from './swarm-settings';
 import { registerSwarmSettingsRoutes } from './swarm-settings-routes';
+import { FileStore } from './files/store';
+import { BlobStore } from './files/blob-store';
+import { registerFileRoutes } from './files/routes';
 
 export async function buildApp({
   fetcher,
@@ -69,9 +72,11 @@ export async function buildApp({
   const controller = computerController === undefined ? computerControllerFromEnv() : computerController;
   const computers = new ComputerUseService(platform, controller?.runtime ?? null);
   const screenshots = new ScreenshotPool(join(platform.dataDirectory, 'computer-screenshots'));
-  registerChat(app, endpointStore, platform, codex, computers, screenshots);
   const swarmSettings = new SwarmSettingsStore(platform);
+  const files = new FileStore(platform, new BlobStore(join(platform.dataDirectory, 'files')), swarmSettings);
+  registerFileRoutes(app, platform, files);
   registerSwarmSettingsRoutes(app, swarmSettings);
+  registerChat(app, endpointStore, platform, codex, computers, screenshots, files);
   registerComputerRoutes(app, platform, controller, computers, swarmSettings);
   registerComputerUseRoutes(app, computers, screenshots);
   registerTerminalStreams(app, computers, controller);

@@ -1,0 +1,164 @@
+import { expect, it } from 'vitest';
+import { join } from 'node:path';
+import { mkdir, readdir } from 'node:fs/promises';
+import { prepareDatabase } from '../test-database';
+import { buildApp } from '../app';
+import { chatKey, dmKey, groupKey } from './access';
+import { fileLines } from '../chat-runtime';
+
+const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+async function setup() {
+  const root = join(process.env.SQLITE_TEST_ROOT!, crypto.randomUUID());
+  await mkdir(root, { recursive: true });
+  const database = await prepareDatabase(join(root, 'platform.db'));
+  const app = await buildApp({ database, computerController: null });
+  const agent = await database.createAgent({ name: 'Aether', endpointId: 'mock', model: 'm', thinkingLevel: 'off' });
+  const upload = (channelKey: string, name: string, payload: Buffer | string) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/files?channelKey=${encodeURIComponent(channelKey)}&name=${encodeURIComponent(name)}`,
+      headers: { 'content-type': 'application/octet-stream' },
+      payload,
+    });
+  return { root, database, app, agent, upload };
+}
+
+it('uploads any file as a raw stream, serves images inline and everything else as a download, and previews text', async () => {
+  const { database, app, agent, upload } = await setup();
+  try {
+    const key = chatKey(agent.channels[0].id);
+    const image = await upload(key, 'shot.png', png);
+    expect(image.statusCode).toBe(201);
+    expect(image.json()).toMatchObject({ name: 'shot.png', kind: 'image', mime: 'image/png', size: png.length });
+    const inline = await app.inject(`/api/files/${image.json().id}/content`);
+    expect(inline.headers).toMatchObject({
+      'content-type': 'image/png',
+      'x-content-type-options': 'nosniff',
+      'content-security-policy': "default-src 'none'; sandbox",
+    });
+    expect(inline.headers['content-disposition']).toMatch(/^inline;/);
+    expect(inline.rawPayload).toEqual(png);
+    const forced = await app.inject(`/api/files/${image.json().id}/content?download=1`);
+    expect(forced.headers['content-disposition']).toMatch(/^attachment;/);
+
+    // HTML is text: previewed as source and downloaded, never rendered by the browser.
+    const page = await upload(key, 'page.html', '<script>alert(1)</script>\nline 2\n');
+    expect(page.json()).toMatchObject({ kind: 'text' });
+    const html = await app.inject(`/api/files/${page.json().id}/content`);
+    expect(html.headers['content-type']).toBe('application/octet-stream');
+    expect(html.headers['content-disposition']).toMatch(/^attachment;/);
+    const preview = await app.inject(`/api/files/${page.json().id}/text?limit=1`);
+    expect(preview.json()).toMatchObject({
+      text: '<script>alert(1)</script>\n',
+      totalLines: 2,
+      nextOffset: 2,
+      previewLimited: false,
+    });
+    expect((await app.inject(`/api/files/${image.json().id}/text`)).statusCode).toBe(400);
+
+    // Unknown channels and files are not found; the human never posts into an agent-to-agent DM.
+    expect((await upload('chat:missing', 'a.txt', 'a')).statusCode).toBe(404);
+    const other = await database.createAgent({ name: 'Bram', endpointId: 'mock', model: 'm', thinkingLevel: 'off' });
+    expect((await upload(dmKey(agent.id, other.id), 'a.txt', 'a')).statusCode).toBe(403);
+    expect((await app.inject('/api/files/nope/content')).statusCode).toBe(404);
+  } finally {
+    await app.close();
+    await database.close();
+  }
+});
+
+it('refuses uploads over the per-file limit or the storage budget without leaving partial files', async () => {
+  const { root, database, app, agent, upload } = await setup();
+  try {
+    const key = chatKey(agent.channels[0].id);
+    await app.inject({ method: 'PATCH', url: '/api/settings/swarm', payload: { uploadMaxMb: 1 } });
+    const big = await upload(key, 'big.bin', Buffer.alloc(1024 * 1024 + 1));
+    expect(big.statusCode).toBe(413);
+    expect(await readdir(join(root, 'files', 'tmp'))).toEqual([]);
+    // A budget already used up refuses the next upload.
+    await database.client.fileBlob.create({
+      data: { id: 'f'.repeat(64), size: 11 * 1024 ** 3, storage: 'local', location: 'x' },
+    });
+    const full = await upload(key, 'a.txt', 'a');
+    expect(full.statusCode).toBe(507);
+    const listing = await app.inject(`/api/files?channelKey=${key}`);
+    expect(listing.json().usage).toMatchObject({ full: true, warning: true });
+  } finally {
+    await app.close();
+    await database.close();
+  }
+});
+
+it('attaches files to group messages, lists and deletes them with a tombstone, and deletes them with the group', async () => {
+  const { database, app, upload } = await setup();
+  try {
+    const group = await database.client.groupChat.create({ data: { name: 'Team' } });
+    const key = groupKey(group.id);
+    const first = (await upload(key, 'notes.md', '# Notes\n')).json();
+    const second = (await upload(key, 'shot.png', png)).json();
+    const posted = await app.inject({
+      method: 'POST',
+      url: `/api/groups/${group.id}/messages`,
+      payload: { message: '', clientMessageId: crypto.randomUUID(), fileIds: [first.id, second.id] },
+    });
+    expect(posted.statusCode).toBe(202);
+    expect(posted.json().message.files.map((file: { id: string }) => file.id)).toEqual([first.id, second.id]);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/api/groups/${group.id}/messages`,
+          payload: { message: '', clientMessageId: crypto.randomUUID() },
+        })
+      ).statusCode,
+    ).toBe(400);
+    const history = (await app.inject(`/api/groups/${group.id}/messages`)).json().messages;
+    expect(history[0].files).toHaveLength(2);
+
+    const listed = await app.inject(`/api/files?channelKey=${key}&sort=name&order=asc`);
+    expect(listed.json()).toMatchObject({ totalBytes: 19, files: [{ name: 'notes.md' }, { name: 'shot.png' }] });
+    expect((await app.inject(`/api/files?channelKey=${key}&query=shot`)).json().files).toHaveLength(1);
+
+    const deleted = await app.inject({ method: 'DELETE', url: `/api/files/${first.id}` });
+    expect(deleted.json()).toMatchObject({ status: 'deleted', name: 'notes.md', deleted: { by: { kind: 'human' } } });
+    expect((await app.inject(`/api/files/${first.id}/content`)).statusCode).toBe(410);
+    const after = (await app.inject(`/api/groups/${group.id}/messages`)).json().messages[0].files;
+    expect(after.map((file: { status: string }) => file.status)).toEqual(['deleted', 'available']);
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: `/api/groups/${group.id}`,
+      payload: { confirmation: 'Team' },
+    });
+    expect(removed.statusCode).toBe(200);
+    expect(await database.client.channelFile.count()).toBe(0);
+    expect(await database.client.fileBlob.count()).toBe(0);
+  } finally {
+    await app.close();
+    await database.close();
+  }
+});
+
+it('deletes an agent’s chat and DM files with the agent', async () => {
+  const { database, app, agent, upload } = await setup();
+  try {
+    await upload(chatKey(agent.channels[0].id), 'a.txt', 'a');
+    const deleted = await app.inject({
+      method: 'DELETE',
+      url: `/api/agents/${agent.id}`,
+      payload: { confirmation: 'Aether' },
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect(await database.client.channelFile.count()).toBe(0);
+  } finally {
+    await app.close();
+    await database.close();
+  }
+});
+
+it('shows agents file references, never contents, in message envelopes', () => {
+  expect(fileLines([{ id: 'f1', name: 'plan.md', kind: 'text', size: 2048, status: 'available' }])).toContain(
+    '"plan.md" (text, 2.0 KB, fileId f1)',
+  );
+  expect(fileLines([])).toBe('');
+});
