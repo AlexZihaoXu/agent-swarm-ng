@@ -9,7 +9,7 @@ const FOLLOW = 80; // px from the bottom that counts as following the latest
  * in memory, only the rendered page is bounded. The first visible message keeps its place on screen across every
  * change unless the reader is following the latest messages at the bottom.
  *
- * Rendered items carry `data-window-id`, which is how the anchor is found again.
+ * Rendered items carry `data-window-id`, which is how the anchor (its bottom edge) is found again.
  */
 export function useMessageWindow<T>({
   items,
@@ -72,7 +72,9 @@ export function useMessageWindow<T>({
     for (const element of root.querySelectorAll<HTMLElement>('[data-window-id]')) {
       const rect = element.getBoundingClientRect();
       if (rect.bottom > top) {
-        anchor.current = { id: element.dataset.windowId!, offset: rect.top - top };
+        // The bottom edge: a label at the top of an item (like a time that disappears once earlier messages
+        // arrive) must not move what the reader is looking at.
+        anchor.current = { id: element.dataset.windowId!, offset: rect.bottom - top };
         return;
       }
     }
@@ -103,7 +105,7 @@ export function useMessageWindow<T>({
     if (!root || !anchor.current) return;
     const element = root.querySelector<HTMLElement>(`[data-window-id="${CSS.escape(anchor.current.id)}"]`);
     if (!element) return;
-    root.scrollTop += element.getBoundingClientRect().top - root.getBoundingClientRect().top - anchor.current.offset;
+    root.scrollTop += element.getBoundingClientRect().bottom - root.getBoundingClientRect().top - anchor.current.offset;
   }, [firstId, lastId, length]);
 
   // A short history that cannot scroll never produces a scroll event: fetch older pages until it can.
