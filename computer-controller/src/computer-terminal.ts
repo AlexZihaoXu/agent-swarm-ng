@@ -39,6 +39,8 @@ const fields: Record<string, string[]> = {
   // Trusted operator only (the backend never offers these to agents).
   rename: ['session', 'name'],
   resize: ['session', 'columns', 'rows'],
+  // Every session's visible screen with colour escapes, for the operator's live previews.
+  screens: [],
 };
 export const terminalSize = { columns: [40, 240], rows: [10, 80] } as const;
 export function validateTerminal(value: Record<string, any>, prepared = false) {
@@ -59,7 +61,10 @@ export function validateTerminal(value: Record<string, any>, prepared = false) {
     )
       fail(`Invalid ${key}.`);
   };
-  if (!['create', 'list'].includes(value.operation) && (typeof value.session !== 'string' || !id.test(value.session)))
+  if (
+    !['create', 'list', 'screens'].includes(value.operation) &&
+    (typeof value.session !== 'string' || !id.test(value.session))
+  )
     fail('Use the exact terminal session ID from create/list.');
   if (value.operation === 'rename' && (typeof value.name !== 'string' || !name.test(value.name)))
     fail('Name: 1..48 letters, digits, hyphens or underscores; start with a letter/digit.');
@@ -138,6 +143,16 @@ export function terminalResult(result: any, operation: string, requestedSession?
   if (operation === 'list') {
     if (!Array.isArray(result.sessions) || result.sessions.length > 32) return invalid();
     return { type: 'terminal', sessions: result.sessions.map(session) };
+  }
+  if (operation === 'screens') {
+    if (!Array.isArray(result.screens) || result.screens.length > 32) return invalid();
+    return {
+      type: 'terminal',
+      screens: result.screens.map((screen: any) => {
+        if (!screen || !id.test(string(screen.id, 36))) return invalid();
+        return { id: screen.id, ansi: string(screen.ansi, 32768) };
+      }),
+    };
   }
   if (operation === 'delete') {
     if (

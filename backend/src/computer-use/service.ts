@@ -350,7 +350,7 @@ export class ComputerUseService {
         const input = request as { kind?: string; operation?: string };
         const readOnly =
           input?.kind === 'read' ||
-          (input?.kind === 'terminal' && ['list', 'view', 'status'].includes(input.operation ?? ''));
+          (input?.kind === 'terminal' && ['list', 'view', 'status', 'screens'].includes(input.operation ?? ''));
         if (!readOnly && agentId) this.allowances.delete(agentId);
         const receipt = await Promise.resolve()
           .then(() => driver.core!(claim.computerId, prepared, abort.signal))

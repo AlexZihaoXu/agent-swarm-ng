@@ -79,6 +79,8 @@ const operatorOnlyParameters = {
     },
     { additionalProperties: false },
   ),
+  // Every session's visible screen with colour escapes, for the dashboard's live previews.
+  screens: Type.Object({}, { additionalProperties: false }),
 };
 export const terminalRequest = Type.Union(
   Object.entries({ ...terminalParameters, ...operatorOnlyParameters }).map(([operation, schema]) =>

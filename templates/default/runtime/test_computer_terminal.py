@@ -65,5 +65,11 @@ class TerminalValidation(unittest.TestCase):
         self.assertTrue(text.endswith('\n<html>'))
         self.assertNotIn('\x1b', text)
 
+    def test_preview_screens_keep_only_colour_escapes(self):
+        terminal.validate({'operation': 'screens'})
+        text = terminal.screen_text('a\x1b[1;32mgo\x1b[0m\x1b]0;title\x07b\x1b[2Jc\x1b7\x00d\n')
+        self.assertEqual(text, 'a\x1b[1;32mgo\x1b[0mbcd\n')
+        self.assertLessEqual(len(terminal.screen_text('x' * 40000).encode()), 32768)
+
 
 if __name__ == '__main__': unittest.main()

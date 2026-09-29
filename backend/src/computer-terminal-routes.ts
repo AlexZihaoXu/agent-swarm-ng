@@ -28,6 +28,7 @@ const result = Type.Object({
   accepted: Type.Optional(Type.Boolean()),
   deleted: Type.Optional(Type.Boolean()),
   sessionId: Type.Optional(Type.String()),
+  screens: Type.Optional(Type.Array(Type.Object({ id: Type.String(), ansi: Type.String() }))),
 });
 const error = Type.Object({ message: Type.String() });
 const params = Type.Object(

@@ -1,4 +1,13 @@
-import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
+import { parseAnsi, type Style } from '@/lib/ansi';
 import { createPortal } from 'react-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, m } from 'motion/react';
@@ -99,23 +108,16 @@ export function FloatingTerminal({
   useEffect(() => {
     if (sessions.isSuccess) setFloating(current => current.filter(out => list.some(item => item.id === out.id)));
   }, [sessions.data]);
-  // The computer admits one operation at a time, so the drawer reads each screen in turn, in one request.
+  // Live previews: every screen, with its colours, in one request about twice a second while the drawer is open.
   const previews = useQuery({
-    queryKey: ['terminal-previews', computer.id, docked.map(item => item.id).join()],
+    queryKey: ['terminal-screens', computer.id],
     enabled: drawer && docked.length > 0,
-    staleTime: 0,
+    refetchInterval: 500,
+    refetchIntervalInBackground: false,
     gcTime: 0,
     queryFn: async ({ signal }) => {
-      const texts: Record<string, string> = {};
-      for (const item of docked) {
-        try {
-          const screen = await computerTerminal(computer.id, { operation: 'view', session: item.id }, signal);
-          texts[item.id] = screen.text ?? '';
-        } catch {
-          texts[item.id] = '';
-        }
-      }
-      return texts;
+      const result = await computerTerminal(computer.id, { operation: 'screens' }, signal);
+      return Object.fromEntries((result.screens ?? []).map(screen => [screen.id, screen.ansi]));
     },
   });
 
@@ -289,6 +291,20 @@ export function FloatingTerminal({
   );
 }
 
+/** Inline style for a run, drawn on the terminal's own background and foreground. */
+const runStyle = (style: Style): CSSProperties => {
+  const fg = style.inverse ? (style.bg ?? '#141414') : style.fg;
+  const bg = style.inverse ? (style.fg ?? '#ededed') : style.bg;
+  return {
+    color: fg,
+    backgroundColor: bg,
+    fontWeight: style.bold ? 700 : undefined,
+    fontStyle: style.italic ? 'italic' : undefined,
+    textDecoration: style.underline ? 'underline' : undefined,
+    opacity: style.dim ? 0.6 : undefined,
+  };
+};
+
 function DrawerCard({ item, preview, onFloat }: { item: Session; preview?: string; onFloat: (from: Rect) => void }) {
   return (
     <button
@@ -302,14 +318,24 @@ function DrawerCard({ item, preview, onFloat }: { item: Session; preview?: strin
         className="relative block overflow-hidden bg-[#141414] [container-type:inline-size]"
         style={{ aspectRatio: `${item.columns * 0.6} / ${item.rows * 1.15}` }}
       >
-        {preview ? (
+        {preview !== undefined ? (
           <pre
             data-testid="terminal-preview"
             aria-hidden="true"
-            className="absolute inset-x-0 bottom-0 m-0 whitespace-pre p-[2cqw] font-mono text-[#d4d4d4]"
+            className="absolute inset-0 m-0 overflow-hidden whitespace-pre p-[2cqw] font-mono text-[#ededed]"
             style={{ fontSize: `calc(96cqw / ${item.columns * 0.6})`, lineHeight: 1.15 }}
           >
-            {preview.split('\n').slice(-item.rows).join('\n')}
+            {parseAnsi(preview)
+              .slice(0, item.rows)
+              .map((line, row) => (
+                <div key={row} className="h-[1.15em]">
+                  {line.map((run, index) => (
+                    <span key={index} style={runStyle(run.style)}>
+                      {run.text}
+                    </span>
+                  ))}
+                </div>
+              ))}
           </pre>
         ) : (
           <span className="skeleton absolute inset-2 rounded" />

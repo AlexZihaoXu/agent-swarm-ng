@@ -28,8 +28,8 @@ KEYS.update('M-' + c for c in 'abcdefghijklmnopqrstuvwxyz')
 FIELDS = {'create': ['name', 'command', 'cwd'], 'list': [], 'view': ['session', 'rows', 'up'],
           'status': ['session'], 'type': ['session', 'text'], 'press': ['session', 'key'],
           'interrupt': ['session'], 'delete': ['session'],
-          # Operator-only: agents' tools never offer these two.
-          'rename': ['session', 'name'], 'resize': ['session', 'columns', 'rows']}
+          # Operator-only: agents' tools never offer these.
+          'rename': ['session', 'name'], 'resize': ['session', 'columns', 'rows'], 'screens': []}
 SIZE_LIMITS = {'columns': (40, 240), 'rows': (10, 80)}
 
 
@@ -39,7 +39,7 @@ def validate(value):
     operation = value.get('operation')
     if not isinstance(operation, str) or operation not in FIELDS or set(value) - {'operation', *FIELDS[operation]}:
         raise ValueError('Unknown terminal operation or field.')
-    if operation not in ('create', 'list') and not ID.fullmatch(str(value.get('session', ''))):
+    if operation not in ('create', 'list', 'screens') and not ID.fullmatch(str(value.get('session', ''))):
         raise ValueError('Use the exact session ID returned by create/list, not a name or tmux target.')
     if operation == 'resize':
         for key, (low, high) in SIZE_LIMITS.items():
@@ -62,6 +62,22 @@ def validate(value):
     if operation == 'press' and (not isinstance(value.get('key'), str) or value['key'] not in KEYS):
         raise ValueError('Unsupported key. Use documented terminal key names.')
     return value
+
+
+SGR = re.compile(r'\x1b\[[0-9;:]*m')
+OTHER_ESCAPES = re.compile(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-9;:?]*[A-Za-ln-z@`]|\x1b[^\[\]]')
+
+
+def screen_text(text, limit=32768):
+    """Printable text plus SGR (colour/style) escapes only; anything else is dropped. At most `limit` bytes."""
+    text = OTHER_ESCAPES.sub('', text)
+    kept, position = [], 0
+    for match in SGR.finditer(text):
+        kept.append(''.join(c for c in text[position:match.start()] if ord(c) >= 32 and ord(c) != 127 or c == '\n'))
+        kept.append(match.group())
+        position = match.end()
+    kept.append(''.join(c for c in text[position:] if ord(c) >= 32 and ord(c) != 127 or c == '\n'))
+    return ''.join(kept).encode('utf-8', errors='replace')[:limit].decode('utf-8', errors='ignore')
 
 
 def bounded_text(text):
@@ -162,6 +178,14 @@ def execute(value):
     operation = value['operation']
     items = sessions()
     if operation == 'list': return {'sessions': [public(item) for item in items]}
+    if operation == 'screens':
+        # Every session's visible screen with its colour/style escapes, for the operator's live previews. Only SGR
+        # escapes and printable text survive; each screen is bounded.
+        screens = []
+        for item in items:
+            raw = tmux('capture-pane', '-p', '-e', '-t', item['pane'])
+            screens.append({'id': item['id'], 'ansi': screen_text(raw)})
+        return {'screens': screens}
     if operation == 'create':
         if len(items) >= 32: raise ValueError('At most 32 terminals per computer; delete an unused session first.')
         if any(item['name'].lower() == value['name'].lower() for item in items): raise ValueError('Terminal name already exists; inspect list instead of creating a duplicate.')
@@ -174,7 +198,7 @@ def execute(value):
         session = str(uuid.uuid4())
         command = ['/bin/bash', '-lc', value['command']] if 'command' in value else ['/bin/bash', '-i']
         # Set session label in the same command queue; remain-on-exit is set before even a fast command.
-        tmux('new-session', '-d', '-s', 'sw-' + session, '-x', '120', '-y', '36', '-c', cwd.replace('#', '##') + '/.', shlex.join(command),
+        tmux('new-session', '-d', '-s', 'sw-' + session, '-x', '120', '-y', '36', '-c', cwd.replace('#', '##'), shlex.join(command),
              ';', 'set-option', '-t', 'sw-' + session, '@swarm_name', value['name'],
              ';', 'set-window-option', '-t', 'sw-' + session + ':0', 'window-size', 'manual')
         items = sessions()

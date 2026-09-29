@@ -303,9 +303,18 @@ test('the desktop handle opens a Terminals drawer, and a session floats out fitt
     rows: 36,
   };
   const second = { ...session, id: '12345678-1234-1234-1234-123456789abd', name: 'deploy' };
-  await page.route('**/api/computers/*/terminals', route =>
-    route.fulfill({ json: { type: 'terminal', sessions: [session, second] } }),
-  );
+  let screenReads = 0;
+  await page.route('**/api/computers/*/terminals', route => {
+    if (route.request().postDataJSON().operation !== 'screens')
+      return route.fulfill({ json: { type: 'terminal', sessions: [session, second] } });
+    screenReads++;
+    return route.fulfill({
+      json: {
+        type: 'terminal',
+        screens: [session, second].map(item => ({ id: item.id, ansi: `\x1b[32m${item.name}$\x1b[0m ls` })),
+      },
+    });
+  });
   await page.routeWebSocket('**/api/computers/*/terminals/*/stream', ws =>
     ws.send(JSON.stringify({ type: 'ready', columns: 120, rows: 36 })),
   );
@@ -315,6 +324,12 @@ test('the desktop handle opens a Terminals drawer, and a session floats out fitt
   // stays open so several can come out, and a floated session's card leaves the list.
   await page.getByRole('button', { name: 'Terminals', exact: true }).click();
   const drawer = page.getByRole('dialog', { name: 'Terminals' });
+  // Cards are live previews: the screen with its colours, refreshed about twice a second.
+  const preview = drawer.getByRole('button', { name: 'Float build' }).getByTestId('terminal-preview');
+  await expect(preview).toContainText('build$ ls');
+  await expect(preview.locator('span', { hasText: 'build$' })).toHaveCSS('color', 'rgb(13, 188, 121)');
+  const reads = screenReads;
+  await expect.poll(() => screenReads).toBeGreaterThan(reads + 1);
   await drawer.getByRole('button', { name: 'Float build' }).click();
   await expect(drawer.getByRole('button', { name: 'Float build' })).toHaveCount(0);
   await drawer.getByRole('button', { name: 'Float deploy' }).click();

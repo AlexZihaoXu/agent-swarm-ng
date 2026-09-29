@@ -3927,6 +3927,9 @@ export interface operations {
                     session: string;
                     columns: number;
                     rows: number;
+                } | {
+                    /** @enum {string} */
+                    operation: "screens";
                 };
             };
         };
@@ -3976,6 +3979,10 @@ export interface operations {
                         accepted?: boolean;
                         deleted?: boolean;
                         sessionId?: string;
+                        screens?: {
+                            id: string;
+                            ansi: string;
+                        }[];
                     };
                 };
             };

@@ -12,6 +12,7 @@ it.each([
   { operation: 'view', session: id, rows: 200, up: 10000 },
   { operation: 'rename', session: id, name: 'server-2' },
   { operation: 'resize', session: id, columns: 80, rows: 24 },
+  { operation: 'screens' },
 ])('accepts bounded terminal request %#', input =>
   expect(validateCore({ kind: 'terminal', ...input })).toMatchObject(input),
 );
@@ -103,4 +104,15 @@ it('terminal requests reuse one-use core authorization and cancellation fencing'
   const old = await service.prepare('computer', input);
   await service.cancel('computer');
   await expect(service.execute('computer', { ...input, ...old })).rejects.toThrow(/expired/);
+});
+
+it('passes live preview screens through only as bounded id/ansi pairs', () => {
+  expect(
+    terminalResult({ type: 'terminal', screens: [{ id, ansi: '\x1b[32mok\x1b[0m', extra: 1 }] }, 'screens'),
+  ).toEqual({
+    type: 'terminal',
+    screens: [{ id, ansi: '\x1b[32mok\x1b[0m' }],
+  });
+  expect(() => terminalResult({ type: 'terminal', screens: [{ id: 'build', ansi: '' }] }, 'screens')).toThrow();
+  expect(() => terminalResult({ type: 'terminal', screens: [{ id, ansi: 'x'.repeat(40000) }] }, 'screens')).toThrow();
 });

@@ -10434,6 +10434,21 @@
                         "type": "integer"
                       }
                     }
+                  },
+                  {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "operation"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "screens"
+                        ]
+                      }
+                    }
                   }
                 ]
               }
@@ -10627,6 +10642,24 @@
                     },
                     "sessionId": {
                       "type": "string"
+                    },
+                    "screens": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "ansi"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "ansi": {
+                            "type": "string"
+                          }
+                        }
+                      }
                     }
                   }
                 }
