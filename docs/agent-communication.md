@@ -19,7 +19,7 @@ The shared selector adapts the inspected Kibo `field-selects-1` source/preview a
 
 ## Mutual connections
 
-Select an agent in **Agents**, then use the visible **Channels → Swarm App → Allowed DMs** controls; scroll down for **Avatar**. There are no section tabs or permission-tile drilldown. Right-click remains for Create/Delete, not editing. Save and Discard appear only while appearance or connection permissions differ from the saved values. Saving applies both atomically; Discard restores them.
+Select an agent in **Agents**, then use the visible **Channels → Swarm App → Allowed DMs** controls. All sections (Channels, Model, Computers, Avatar, Delete agent) stay on one scrolling page; a sticky **Jump to section** strip scrolls to each, and there is no permission-tile drilldown. Right-click remains for Create/Delete, not editing. Save changes and Discard appear in an action bar only while some section differs from its saved values; one Save covers every changed section, and Discard restores them.
 
 Enabling A↔B allows both agents to initiate and reply. Disabling the connection from either side blocks subsequent sends in both directions. Both directed grant rows change in one transaction; unrelated connections remain intact. Self/unknown recipients are rejected, and new connections respect the 100-peer limit.
 

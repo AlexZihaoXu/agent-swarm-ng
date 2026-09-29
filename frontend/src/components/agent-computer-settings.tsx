@@ -4,7 +4,13 @@ import type { RegisterSection } from '@/lib/settings-sections';
 
 // Kibo checkbox-standard-8: vertical list with native labels, matching Channels.
 export function AgentComputerSettings({ agentId, register }: { agentId: string; register: RegisterSection }) {
-  const [computers, setComputers] = useState<{ id: string; name: string }[]>([]);
+  const [computers, setComputers] = useState<{ id: string; name: string; state: string }[]>([]);
+  // One preview timestamp for all cards, refreshed slowly: enough to recognise a desktop at a glance.
+  const [frame, setFrame] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setFrame(Date.now()), 10_000);
+    return () => clearInterval(timer);
+  }, []);
   const [selected, setSelected] = useState<string[]>([]),
     [saved, setSaved] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false),
@@ -88,30 +94,76 @@ export function AgentComputerSettings({ agentId, register }: { agentId: string; 
           permissions, including configured sudo—not platform-host access. Removing access releases control only after
           active input and commands settle.
         </p>
-        <fieldset disabled={!loaded || busy} className="space-y-3">
+        <fieldset
+          disabled={!loaded || busy}
+          className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,12rem),1fr))] gap-3"
+        >
           <legend className="sr-only">Assigned computers</legend>
-          {computers.map(computer => (
-            <div key={computer.id} className="flex min-h-11 items-center gap-2 sm:min-h-0">
-              <input
-                type="checkbox"
-                id={`computer-${agentId}-${computer.id}`}
-                checked={selected.includes(computer.id)}
-                onChange={event => {
-                  setSelected(ids =>
-                    event.target.checked ? [...ids, computer.id] : ids.filter(id => id !== computer.id),
-                  );
-                  setStatus('');
-                }}
-                className="size-4 shrink-0 cursor-pointer rounded border-border accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              />
+          {computers.map(computer => {
+            const on = selected.includes(computer.id);
+            const running = computer.state === 'running';
+            return (
               <label
-                htmlFor={`computer-${agentId}-${computer.id}`}
-                className={`min-w-0 flex-1 break-words text-sm ${busy || !loaded ? '' : 'cursor-pointer'}`}
+                key={computer.id}
+                className={`group relative block overflow-hidden rounded-lg border bg-background transition-[border-color,box-shadow] duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${
+                  on
+                    ? 'border-foreground/50 shadow-[0_0_0_1px_var(--foreground)]'
+                    : 'border-border hover:border-foreground/25'
+                } ${busy || !loaded ? 'opacity-60' : 'cursor-pointer'}`}
               >
-                {computer.name}
+                <div className="relative aspect-video bg-black">
+                  {running ? (
+                    <img
+                      src={`/api/computers/${encodeURIComponent(computer.id)}/preview?at=${frame}`}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="size-full object-cover"
+                      onError={event => (event.currentTarget.style.visibility = 'hidden')}
+                    />
+                  ) : (
+                    <span className="flex size-full items-center justify-center text-[11px] text-muted-foreground">
+                      Desktop offline
+                    </span>
+                  )}
+                  <span
+                    aria-hidden="true"
+                    className={`absolute right-2 top-2 flex size-5 items-center justify-center rounded-full border transition-colors ${
+                      on
+                        ? 'border-foreground bg-foreground text-background'
+                        : 'border-white/50 bg-black/40 text-transparent'
+                    }`}
+                  >
+                    <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <path d="m3.5 8.5 3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </div>
+                <span className="flex items-center gap-2 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    aria-label={computer.name}
+                    checked={on}
+                    onChange={event => {
+                      setSelected(ids =>
+                        event.target.checked ? [...ids, computer.id] : ids.filter(id => id !== computer.id),
+                      );
+                      setStatus('');
+                    }}
+                    className="absolute inset-0 z-10 size-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{computer.name}</span>
+                  <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+                    <span
+                      aria-hidden="true"
+                      className={`size-1.5 rounded-full ${running ? 'bg-teal-400' : 'bg-muted-foreground/60'}`}
+                    />
+                    {running ? 'Running' : 'Stopped'}
+                  </span>
+                </span>
               </label>
-            </div>
-          ))}
+            );
+          })}
         </fieldset>
         {!loaded && !error && (
           <p role="status" className="text-xs text-muted-foreground">

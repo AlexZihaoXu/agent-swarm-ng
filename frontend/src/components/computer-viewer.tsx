@@ -5,6 +5,11 @@ import { Button } from '@/components/ui/button';
 import { desktopStreamFit } from '@/lib/computer-fit';
 import type { Computer } from './computer-card';
 import { ComputerControl, type ComputerAgentState } from './computer-control';
+import { TerminalWorkspace } from './computer-terminals';
+import { ComputerSwitcher } from './computer-switcher';
+import { ComputerIcon, TerminalIcon } from '@/components/ui/icons';
+import { m } from 'motion/react';
+import { glide } from '@/lib/motion';
 
 /** Only GNOME/X11 computers bypass portal consent; Wayland ones keep their normal gate. The controller reports which each is;
  * the build-time flag is only the fallback for a controller that does not say. */
@@ -25,16 +30,21 @@ export function ComputerViewer({
   canManage,
   onBack,
   agentState,
+  onOpenComputer,
 }: {
   computer: Computer;
   canManage: boolean;
   onBack: () => void;
   agentState?: ComputerAgentState;
+  /** Switch the viewer to another computer (from the All computers drawer). */
+  onOpenComputer?: (id: string) => void;
 }) {
   const id = computer.id;
   const running = computer.state === 'running' && canManage;
   const portalFree = portalFreeFor(computer);
   const [setupOpen, setSetupOpen] = useState(() => initialSetup(id, portalFree));
+  // Desktop and Terminal share this page. The stream stays connected while Terminal is shown, so switching back is instant.
+  const [view, setView] = useState<'desktop' | 'terminal'>('desktop');
   const [inputEnabled, setInputEnabled] = useState(false);
   const [frame, setFrame] = useState(Date.now());
   const [previewLoaded, setPreviewLoaded] = useState(false);
@@ -228,8 +238,39 @@ export function ComputerViewer({
             </li>
           </ol>
         </nav>
-        <ComputerControl key={id} computerId={id} agentState={agentState} />
         {running && (
+          <div role="tablist" aria-label="Computer view" className="flex shrink-0 items-center rounded-lg bg-muted p-1">
+            {(['desktop', 'terminal'] as const).map(value => {
+              const on = view === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => {
+                    if (value === 'terminal') setInputEnabled(false);
+                    setView(value);
+                  }}
+                  className={`relative isolate flex min-h-9 items-center gap-1.5 rounded-md px-3 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring md:min-h-7 ${on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  {on && (
+                    <m.span
+                      aria-hidden="true"
+                      layoutId={`viewer-view-${id}`}
+                      transition={glide}
+                      className="absolute inset-0 -z-10 rounded-md bg-background shadow-sm"
+                    />
+                  )}
+                  {value === 'desktop' ? <ComputerIcon className="size-3.5" /> : <TerminalIcon className="size-3.5" />}
+                  {value === 'desktop' ? 'Desktop' : 'Terminal'}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <ComputerControl key={id} computerId={id} agentState={agentState} />
+        {running && view === 'desktop' && (
           <Button
             ref={inputToggleRef}
             type="button"
@@ -243,7 +284,7 @@ export function ComputerViewer({
             {inputEnabled ? 'Input live' : 'Input locked'}
           </Button>
         )}
-        {running && !setupOpen && (
+        {running && view === 'desktop' && !setupOpen && (
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <Button
@@ -290,7 +331,7 @@ export function ComputerViewer({
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
         )}
-        {running && !portalFree && !setupOpen && (
+        {running && view === 'desktop' && !portalFree && !setupOpen && (
           <Button
             type="button"
             variant="outline"
@@ -305,7 +346,15 @@ export function ComputerViewer({
           </Button>
         )}
       </header>
-      <div className="relative flex min-h-0 flex-1 flex-col bg-black pb-[env(safe-area-inset-bottom)] md:pb-0">
+      {view === 'terminal' && running && (
+        <div className="view-enter relative flex min-h-0 flex-1 flex-col pb-9">
+          <TerminalWorkspace computer={computer} connected={canManage} active />
+          {onOpenComputer && <ComputerSwitcher currentId={id} onOpen={onOpenComputer} />}
+        </div>
+      )}
+      <div
+        className={`relative min-h-0 flex-1 flex-col bg-black pb-[env(safe-area-inset-bottom)] md:pb-0 ${view === 'terminal' && running ? 'hidden' : 'flex'}`}
+      >
         {!running ? (
           <p role="status" className="m-auto px-5 text-center text-sm text-muted-foreground">
             Desktop unavailable. Its saved files remain until confirmed deletion.
@@ -514,6 +563,7 @@ export function ComputerViewer({
             )}
           </>
         )}
+        {onOpenComputer && <ComputerSwitcher currentId={id} onOpen={onOpenComputer} />}
       </div>
     </section>
   );

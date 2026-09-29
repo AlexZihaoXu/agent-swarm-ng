@@ -50,7 +50,10 @@ test('saving restores endpoint metadata after refresh without exposing its key',
   await page.getByLabel('API key', { exact: true }).fill('saved-test-key');
   await page.getByRole('button', { name: 'Save endpoint' }).click();
   await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toHaveText('Saved locally.');
-  await expect(page.getByLabel('API key', { exact: true })).toHaveValue('');
+  // A successful save folds the card to its summary; the key itself is never shown.
+  await expect(page.getByLabel('API key', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'API endpoints' })).toContainText('key saved');
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveAttribute('aria-expanded', 'false');
   await page.reload();
   await page.getByRole('tab', { name: 'Settings' }).click();
   await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Local model server');
@@ -86,7 +89,7 @@ for (const width of [390, 1280])
     await expect(page.getByText('OpenRouter · API credits')).toBeVisible();
     await page.getByLabel('API key', { exact: true }).fill('sk-or-test-only');
     await page.getByRole('button', { name: 'Save endpoint' }).click();
-    await expect(page.getByLabel('API key', { exact: true })).toHaveValue('');
+    await expect(page.getByLabel('API key', { exact: true })).toHaveCount(0);
     await page.reload();
     await expect(page.getByLabel('API key', { exact: true })).toHaveAttribute(
       'placeholder',
@@ -126,4 +129,20 @@ test('endpoint test shows loading and supports a small viewport', async ({ page 
   release();
   await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toContainText('Connected');
   await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toContainText('0 models');
+});
+
+test('saved endpoints rest collapsed; Edit expands, and Cancel reverts unsaved changes', async ({ page }) => {
+  const saved = { id: 'kept', name: 'Kept server', baseUrl: 'http://127.0.0.1:9000/v1', hasApiKey: false };
+  await page.route('**/api/model-endpoints', route => route.fulfill({ json: [saved] }));
+  await page.goto('/settings');
+  const card = page.getByRole('region', { name: 'Kept server' });
+  await expect(card).toContainText('http://127.0.0.1:9000/v1');
+  await expect(card.getByLabel('Base URL', { exact: true })).toHaveCount(0);
+  await card.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(card.getByLabel('Base URL', { exact: true })).toHaveValue('http://127.0.0.1:9000/v1');
+  await expect(card.getByRole('button', { name: 'Done', exact: true })).toBeVisible();
+  await card.getByLabel('Name', { exact: true }).fill('Renamed');
+  await page.getByRole('region', { name: 'Renamed' }).getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(card.getByLabel('Base URL', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Kept server' })).toBeVisible();
 });

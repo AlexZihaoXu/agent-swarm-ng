@@ -336,6 +336,32 @@ export function App() {
   useEffect(() => {
     void loadHistory(agent);
   }, [agent.id]);
+  // Typing while focus rests elsewhere in a chat (a message, the list, the page) goes straight to the composer,
+  // as in chat apps. Shortcuts, fields, dialogs and the space/enter that activate a focused control are left alone.
+  useEffect(() => {
+    if (activeTab !== 'chat') return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+      if (event.key.length !== 1) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        target?.closest(
+          'input, textarea, select, [contenteditable], [role="dialog"], [role="menu"], [data-terminal-emulator]',
+        )
+      )
+        return;
+      if (event.key === ' ' && target?.closest('button, a[href], [role="button"], [role="tab"], [role="menuitem"]'))
+        return;
+      if (document.querySelector('[role="dialog"], [role="menu"]')) return;
+      const composer = [
+        ...document.querySelectorAll<HTMLTextAreaElement>('form[aria-label="Message composer"] textarea'),
+      ].find(element => element.offsetParent !== null && !element.disabled);
+      // Focusing during keydown lets the browser deliver this very keystroke to the composer.
+      composer?.focus();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [activeTab]);
   // Warm what the operator is likely to open next: the lazy tabs, the computers list and recent conversations.
   // History loads are idempotent and bounded (one section per channel), so warming a few is cheap.
   const client = useQueryClient();

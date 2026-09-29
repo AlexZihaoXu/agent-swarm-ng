@@ -46,6 +46,16 @@
     cursor: pointer;
   }
 
+  /* Number fields in this app come with their own − / + buttons; the browser's tiny spinners only add clutter. */
+  input[type='number'] {
+    appearance: textfield;
+  }
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
   :where(button, input, select, textarea):disabled,
   [aria-disabled='true'] {
     cursor: not-allowed;
@@ -196,6 +206,22 @@
     transform: translateX(0);
   }
 }
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes sheet-down {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
 @keyframes view-in {
   from {
     opacity: 0;
@@ -274,6 +300,13 @@
   /* The one-line status above the composer eases in instead of popping. */
   .status-enter {
     animation: view-in 200ms ease-out both;
+  }
+  /* Bottom drawers slide up from the edge they belong to and drop back down. */
+  .sheet-bottom[data-state='open'] {
+    animation: sheet-up 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .sheet-bottom[data-state='closed'] {
+    animation: sheet-down 180ms ease-in both;
   }
   /* Send and Stop trade places with a small pop, so the change of mode is noticed without a jump. */
   .control-swap {

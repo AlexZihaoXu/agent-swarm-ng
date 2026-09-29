@@ -151,3 +151,64 @@ test('the browser page menu is suppressed on app surfaces but kept for fields an
   await page.getByRole('heading', { name: 'Avery', exact: true }).first().selectText();
   expect(await prevented('header')).toBe(false);
 });
+
+test('typing while focus rests elsewhere in a chat goes to the message box', async ({ page }) => {
+  await page.goto('/chat/agents/avery');
+  const composer = page.getByLabel('Message Avery');
+  await page.getByRole('region', { name: 'Chat history', exact: true }).focus();
+  await page.keyboard.type('hi there');
+  await expect(composer).toBeFocused();
+  await expect(composer).toHaveValue('hi there');
+  // Shortcuts are left alone.
+  await page.getByRole('region', { name: 'Chat history', exact: true }).focus();
+  await page.keyboard.press('Control+a');
+  await expect(composer).not.toBeFocused();
+});
+
+test('right-clicking empty space on Computers offers page actions, a card offers its own', async ({ page }) => {
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({
+      json: {
+        controllerConnected: true,
+        computers: [{ id: 'desk', name: 'Desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0 }],
+      },
+    }),
+  );
+  await page.goto('/computers');
+  await page.getByRole('article', { name: 'Desk' }).waitFor();
+  const box = (await page.getByRole('article', { name: 'Desk' }).boundingBox())!;
+  await page.mouse.click(box.x + box.width + 200, box.y + box.height + 150, { button: 'right' });
+  await expect(page.getByRole('menuitem', { name: 'New computer' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Refresh' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Power off' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.getByRole('article', { name: 'Desk' }).click({ button: 'right' });
+  await expect(page.getByRole('menuitem', { name: 'Power off' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'New computer' })).toHaveCount(0);
+});
+
+test('the desktop viewer switches to a terminal view and to other computers from its drawer', async ({ page }) => {
+  const computers = [
+    { id: 'desk', name: 'Desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0 },
+    { id: 'lab', name: 'Lab', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0 },
+  ];
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({ json: { controllerConnected: true, computers } }),
+  );
+  await page.route('**/api/computers/*/terminals', route =>
+    route.fulfill({ json: { type: 'terminal', sessions: [] } }),
+  );
+  await page.goto('/computers/desk');
+  const views = page.getByRole('tablist', { name: 'Computer view' });
+  await expect(views.getByRole('tab', { name: 'Desktop' })).toHaveAttribute('aria-selected', 'true');
+  await views.getByRole('tab', { name: 'Terminal' }).click();
+  await expect(page.getByRole('tablist', { name: 'Terminal sessions' })).toBeVisible();
+  // Desktop-only controls step aside in the terminal view.
+  await expect(page.getByRole('button', { name: /human desktop input/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'All computers' }).click();
+  const drawer = page.getByRole('dialog', { name: 'All computers' });
+  await expect(drawer.getByRole('button', { name: /Desk/ })).toHaveAttribute('aria-current', 'page');
+  await drawer.getByRole('button', { name: /Lab/ }).click();
+  await expect(page).toHaveURL(/\/computers\/lab$/);
+  await expect(drawer).toHaveCount(0);
+});

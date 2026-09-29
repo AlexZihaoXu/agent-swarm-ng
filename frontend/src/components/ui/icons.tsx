@@ -65,3 +65,8 @@ export const ChevronLeftIcon = (props: ComponentProps<'svg'>) => (
     <path d="m15 18-6-6 6-6" />
   </Icon>
 );
+export const TerminalIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="m4 17 6-6-6-6M12 19h8" />
+  </Icon>
+);

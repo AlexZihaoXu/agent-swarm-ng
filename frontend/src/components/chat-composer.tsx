@@ -76,7 +76,7 @@ export function ChatComposer({
           }
           aria-label={`Message ${name}`}
           placeholder={`Message ${name}…`}
-          className="max-h-32 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-3 text-base leading-5 outline-none placeholder:text-muted-foreground sm:min-h-7 sm:py-1 sm:text-sm"
+          className="max-h-32 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-3 pl-2 text-base leading-5 outline-none placeholder:text-muted-foreground sm:min-h-7 sm:py-1 sm:text-sm"
         />
         {busy && onStop && (
           <Button

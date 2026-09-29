@@ -296,6 +296,7 @@ export function ComputersPanel({
             focusGridTab.current = true;
             onBack();
           }}
+          onOpenComputer={onOpen}
         />
       ) : (viewingId || (dialog === 'delete' && !selected) || (dialog === 'settings' && !settingsComputer)) &&
         query.isSuccess ? (
@@ -431,68 +432,72 @@ export function ComputersPanel({
               </Dialog.Root>
             }
           />
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pb-6">
-            {query.isPending && (
+          {/* Right-click on a card acts on that computer; anywhere else on the page offers page actions. */}
+          <ContextMenu.Root>
+            <ContextMenu.Trigger asChild>
               <div
-                role="status"
-                aria-label="Loading computers…"
-                className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-4 md:gap-5"
+                className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pb-6"
+                onContextMenuCapture={event => {
+                  const card = (event.target as HTMLElement).closest<HTMLElement>('[data-computer-id]');
+                  setMenuTarget(computers.find(computer => computer.id === card?.dataset.computerId) ?? null);
+                }}
               >
-                {[0, 1].map(index => (
-                  <div key={index} className="overflow-hidden rounded-xl border border-border bg-sidebar">
-                    <Skeleton className="aspect-video rounded-none" style={{ animationDelay: `${index * 120}ms` }} />
-                    <div className="space-y-3 p-3">
-                      <Skeleton className="h-4 w-2/3" />
-                      <Skeleton className="h-8 w-full" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {query.isError && (
-              <div role="alert" className="space-y-3 text-sm">
-                <p>{query.error.message}</p>
-                <Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>
-                  Retry loading computers
-                </Button>
-              </div>
-            )}
-            {query.isSuccess && !query.data.controllerConnected && (
-              <p
-                role="status"
-                className="mb-4 rounded-lg border border-border bg-sidebar p-3 text-sm text-muted-foreground"
-              >
-                Computer management is offline. Saved computers remain visible; creation, deletion and previews are
-                unavailable.
-              </p>
-            )}
-            {query.isSuccess && query.data.controllerConnected && computers.length === 0 && (
-              <Empty role="status">
-                <EmptyHeader>
-                  <EmptyMedia>
-                    <ComputerIcon />
-                  </EmptyMedia>
-                  <EmptyTitle>No computers yet</EmptyTitle>
-                  {/* The page header already carries Create computer; a second copy here would compete with it. */}
-                  <EmptyDescription>Use Create computer above to get started.</EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            )}
-            {powerError && (
-              <p role="alert" className="mb-4 text-sm text-red-400">
-                {powerError}
-              </p>
-            )}
-            {computers.length > 0 && (
-              <ContextMenu.Root>
-                <ContextMenu.Trigger asChild>
+                {query.isPending && (
                   <div
+                    role="status"
+                    aria-label="Loading computers…"
                     className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-4 md:gap-5"
-                    onContextMenuCapture={event => {
-                      const card = (event.target as HTMLElement).closest<HTMLElement>('[data-computer-id]');
-                      setMenuTarget(computers.find(computer => computer.id === card?.dataset.computerId) ?? null);
-                    }}
                   >
+                    {[0, 1].map(index => (
+                      <div key={index} className="overflow-hidden rounded-xl border border-border bg-sidebar">
+                        <Skeleton
+                          className="aspect-video rounded-none"
+                          style={{ animationDelay: `${index * 120}ms` }}
+                        />
+                        <div className="space-y-3 p-3">
+                          <Skeleton className="h-4 w-2/3" />
+                          <Skeleton className="h-8 w-full" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {query.isError && (
+                  <div role="alert" className="space-y-3 text-sm">
+                    <p>{query.error.message}</p>
+                    <Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>
+                      Retry loading computers
+                    </Button>
+                  </div>
+                )}
+                {query.isSuccess && !query.data.controllerConnected && (
+                  <p
+                    role="status"
+                    className="mb-4 rounded-lg border border-border bg-sidebar p-3 text-sm text-muted-foreground"
+                  >
+                    Computer management is offline. Saved computers remain visible; creation, deletion and previews are
+                    unavailable.
+                  </p>
+                )}
+                {query.isSuccess && query.data.controllerConnected && computers.length === 0 && (
+                  <Empty role="status">
+                    <EmptyHeader>
+                      <EmptyMedia>
+                        <ComputerIcon />
+                      </EmptyMedia>
+                      <EmptyTitle>No computers yet</EmptyTitle>
+                      {/* The page header already carries Create computer; a second copy here would compete with it. */}
+                      <EmptyDescription>Use Create computer above to get started.</EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                )}
+                {powerError && (
+                  <p role="alert" className="mb-4 text-sm text-red-400">
+                    {powerError}
+                  </p>
+                )}
+                {computers.length > 0 && (
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-4 md:gap-5">
                     {computers.map((computer, index) => (
                       <ComputerCard
                         key={computer.id}
@@ -503,15 +508,19 @@ export function ComputersPanel({
                       />
                     ))}
                   </div>
-                </ContextMenu.Trigger>
-                <ContextMenu.Portal>
-                  <ContextMenu.Content
-                    className="context-menu-content phone-menu-targets z-50 min-w-56 rounded-lg border border-border bg-background p-1 text-sm shadow-lg"
-                    onCloseAutoFocus={event => {
-                      if (createOpen || selected !== null || settingsComputer !== null || filesOpen || terminalsOpen)
-                        event.preventDefault();
-                    }}
-                  >
+                )}
+              </div>
+            </ContextMenu.Trigger>
+            <ContextMenu.Portal>
+              <ContextMenu.Content
+                className="context-menu-content phone-menu-targets z-50 min-w-56 rounded-lg border border-border bg-background p-1 text-sm shadow-lg"
+                onCloseAutoFocus={event => {
+                  if (createOpen || selected !== null || settingsComputer !== null || filesOpen || terminalsOpen)
+                    event.preventDefault();
+                }}
+              >
+                {menuTarget ? (
+                  <>
                     <ContextMenu.Item
                       disabled={!menuTarget || menuTarget.state !== 'running' || !query.data?.controllerConnected}
                       onSelect={() => {
@@ -605,11 +614,29 @@ export function ComputersPanel({
                       <MenuIcon path="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13" label="Remove" />
                       Remove
                     </ContextMenu.Item>
-                  </ContextMenu.Content>
-                </ContextMenu.Portal>
-              </ContextMenu.Root>
-            )}
-          </div>
+                  </>
+                ) : (
+                  <>
+                    <ContextMenu.Item
+                      disabled={!query.data?.controllerConnected}
+                      onSelect={() => onNavigate('/computers/new')}
+                      className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:opacity-50"
+                    >
+                      <MenuIcon path="M12 5v14M5 12h14" label="New" />
+                      New computer
+                    </ContextMenu.Item>
+                    <ContextMenu.Item
+                      onSelect={() => void query.refetch()}
+                      className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:opacity-50"
+                    >
+                      <MenuIcon path="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" label="Refresh" />
+                      Refresh
+                    </ContextMenu.Item>
+                  </>
+                )}
+              </ContextMenu.Content>
+            </ContextMenu.Portal>
+          </ContextMenu.Root>
         </>
       )}
       <Dialog.Root
