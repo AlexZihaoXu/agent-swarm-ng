@@ -11,6 +11,7 @@ import {
   filesConcept,
   watchesConcept,
   scratchpadConcept,
+  chatFilesConcept,
 } from './concepts';
 import { toolsConcept, systemConcept } from './system';
 import {
@@ -21,6 +22,7 @@ import {
   browserPractice,
   terminalsPractice,
   filesPractice,
+  sharingFilesPractice,
   waitingPractice,
   schedulingPractice,
 } from './practices';
@@ -39,6 +41,7 @@ export const swarmKnowledge = new KnowledgeCatalog(
     platformEventsConcept,
     timeConcept,
     scratchpadConcept,
+    chatFilesConcept,
     computersConcept,
     desktopConcept,
     terminalsConcept,
@@ -51,6 +54,7 @@ export const swarmKnowledge = new KnowledgeCatalog(
     browserPractice,
     terminalsPractice,
     filesPractice,
+    sharingFilesPractice,
     waitingPractice,
     schedulingPractice,
     harnessesPractice,

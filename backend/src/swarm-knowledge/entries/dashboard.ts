@@ -38,19 +38,20 @@ export const dashboardAgents = {
   parentId: 'practices/dashboard',
   title: 'Dashboard: agents',
   summary:
-    'Create an agent, edit its settings (DMs, model, computers, avatar), assign computers, delete it, find its activity.',
+    'Create an agent, edit its settings (DMs, model, computers, scratchpad, avatar), assign computers, delete it, find its activity.',
   source: 'frontend/src/components/edit-agent-form.tsx',
   related: ['practices/dashboard', 'concepts/agents', 'concepts/computers', 'concepts/channels'],
   content: `Agents tab. The left sidebar lists agents with a "Search agents" box and a + button ("Create new agent"). Clicking an agent opens its settings (not a chat). Right-click the sidebar for Create new agent / Delete agent. On a phone the list and the settings page are separate screens ("‹ Agents" goes back).
 
-Create an agent: + (or /agents/new). The "Create new agent" dialog asks for Agent name, an optional Avatar, Endpoint (a model connection; if none exist, connect one in Settings first), Model and Thinking level, then "Create agent". A new agent can use the public web and read Swarm Knowledge; it has no computer, file or command access until a computer is assigned.
+Create an agent: + (or /agents/new). The "Create new agent" dialog asks for Agent name, an optional Avatar, Endpoint (a model connection; if none exist, connect one in Settings first), Model and Thinking level, then "Create agent". A new agent can use the public web, read Swarm Knowledge, keep a private scratchpad and open files sent in its chats; it has no computer or command access until a computer is assigned.
 
 Agent settings (/agents/<id>), sections in order, with jump links in the header:
 1. Channels: "Allowed DMs", one checkbox per other agent (with "Find agents" search; up to 100). Allowing a DM lets both agents message each other (off by default; automated chains are limited to eight DMs). "View DM" opens their read-only conversation.
 2. Model: Name, Endpoint, Model, Thinking level.
 3. Computers: cards of all computers (previews refresh about every 10 s); click a card to tick or untick it. This is where computers are assigned (not on the Computers tab). A stopped computer can be ticked (it shows "Desktop offline") but cannot be used until powered on. With no computers it says "No computers yet. Create one in Computers first."
-4. Avatar: preview (idle/working/typing), variations, randomize, undo, shape, colour, eyes, mouth, markings, accessory, accent colour, fine-tune sliders.
-5. Delete agent.
+4. Scratchpad: a read-only browser of the agent's scratch files (folders, sizes, a text preview, usage against the limits); it refreshes as the agent writes. Ask the agent to change them.
+5. Avatar: preview (idle/working/typing), variations, randomize, undo, shape, colour, eyes, mouth, markings, accessory, accent colour, fine-tune sliders.
+6. Delete agent.
 Changes are saved together: a bar slides up from the bottom when something changed, with "Discard changes" and "Save changes". Leaving with unsaved changes asks "Discard unsaved changes?".
 
 Assigning a computer ("how do I give you a computer?"): Agents tab → pick the agent → Computers section → click the computer's card so it is ticked → Save changes (it confirms "Computer assignments saved."). If no computers exist, create one first (practices/dashboard/computers). Several agents can be assigned the same computer; one holds it at a time. Assignment is permission; the agent then claims the computer itself when it needs it, and the viewer shows "<agent> is on this computer" while it holds control. Unticking releases control once active input and commands finish.
@@ -114,6 +115,8 @@ Groups: + (or right-click → Create group chat) → Group name and up to 16 age
 
 Reactions and replies (private, group and floating chats): right-click a message (long-press on touch) for recent emojis, "Add reaction ›" (emoji search) and Reply. Existing reactions under a message toggle yours. An agent may respond to a reaction, which uses its model.
 
+Files: the paperclip beside the message box (or drag files onto it, or paste) attaches up to 10 files to the next message; each uploads right away with progress, × removes one, and a message can be files only. In messages, images appear as a grid (click to open full size), text files as a preview with Expand and a download link in the name, other files as a card whose name downloads them; a live scratch preview is marked "Live" and follows the agent's edits. The folder icon in a chat header (private chats, agent-to-agent DM views and groups) opens Files: search, sort by name, type, size or date, download, and delete (select several, then Delete); a deleted file stays in the chat as "Deleted by …" with the date. The largest file and total storage are set in Settings → Swarm.
+
 Floating chat: in a computer's desktop viewer, click "<agent> is on this computer" to chat with that agent in a floating window ("Open in Chat" opens the full chat).
 
 Activity log: the "Agent activity" icon in a private chat's header (practices/dashboard/agents).`,
@@ -123,16 +126,19 @@ export const dashboardSettings = {
   id: 'practices/dashboard/settings',
   parentId: 'practices/dashboard',
   title: 'Dashboard: settings',
-  summary: 'Connect the ChatGPT/Codex subscription, OpenRouter or another endpoint; browse Swarm Knowledge.',
+  summary:
+    'Connect the ChatGPT/Codex subscription, OpenRouter or another endpoint; browse Swarm Knowledge; Swarm limits.',
   source: 'frontend/src/components/settings.tsx',
   related: ['practices/dashboard', 'concepts/system'],
-  content: `Settings tab (/settings), three sections in this order.
+  content: `Settings tab (/settings), four sections in this order.
 
 OpenAI Codex: use a ChatGPT Plus or Pro subscription without an API key. "Connect ChatGPT" shows a one-time sign-in code and an "Open OpenAI sign-in" link; enter the code there (device code sign-in may need enabling in ChatGPT → Settings → Security). Status reads Not connected, Waiting for sign-in… or Connected to ChatGPT; "Disconnect" removes it.
 
 Swarm Knowledge: "Browse Swarm Knowledge" (/settings/knowledge) opens this catalog read-only: topics with search on the left, the entry with its breadcrumb and related links on the right. It cannot be edited in the app.
 
 API endpoints: "Add OpenRouter" (prefills https://openrouter.ai/api/v1) or "+ Add endpoint" for another OpenAI-compatible provider or a local server: Name, Base URL, API key, then "Save endpoint". "Test connection" lists the models (no model request). Saved endpoints can be edited, or removed with × after a confirmation (not while an agent uses them). Agents choose an endpoint and model in their settings (Model section).
+
+Swarm (last section): limits for the whole swarm, saved with "Save changes": Computers (most that can exist at once), Largest chat file (MB), Total file storage (GB; a chat's Files dialog warns when it is 80% used, and uploads are refused when full), Largest scratch file (KB), Scratch files per agent and Scratch space per agent (MB). Lowering a limit never deletes anything; new work past it is refused.
 
 There are no other settings (no theme, notifications or user accounts).`,
 } satisfies KnowledgeEntry;
