@@ -3,13 +3,14 @@ import { createPortal } from 'react-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, m } from 'motion/react';
 import { glide } from '@/lib/motion';
-import { keepReachable, raiseWindow, useWindowLayer, type Box } from '@/lib/floating-windows';
+import { keepReachable, raiseWindow, resizeFrom, useWindowLayer, type Box, type Edge } from '@/lib/floating-windows';
+import { ResizeEdges } from '@/components/ui/resize-edges';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { computerTerminal, terminalSessionsQuery, type TerminalRequest } from '@/lib/computer-terminals';
 import { ChevronLeftIcon, PlusIcon } from '@/components/ui/icons';
 import { NewTerminalDialog } from './new-terminal-dialog';
 import { EdgeHandle } from '@/components/ui/edge-handle';
-import { MinimizeLight } from '@/components/ui/minimize-light';
+import { CloseLight } from '@/components/ui/close-light';
 import type { Computer } from './computer-card';
 
 const TerminalEmulator = lazy(() =>
@@ -23,24 +24,36 @@ const MIN_WIDTH = 320;
 const fitted = (width: number, shape: Shape | null) =>
   shape ? shape.chromeHeight + ((width - shape.chromeWidth) * shape.height) / shape.width : width * 0.6;
 
-/** Sizes the window to the terminal's shape within the page, then keeps it reachable. */
-function place(box: Box, shape: Shape | null): Box {
+/** The window's size at this width: the height always wraps the grid, and it all fits on the page. */
+function fit(wantWidth: number, shape: Shape | null) {
   const room = { width: window.innerWidth, height: window.innerHeight };
-  let width = Math.min(Math.max(box.width, MIN_WIDTH), room.width - 16);
+  let width = Math.min(Math.max(wantWidth, MIN_WIDTH), room.width - 16);
   let height = fitted(width, shape);
   // Too tall for the page: narrow the window until its fitted height fits.
   if (height > room.height - 16 && shape) {
     width = shape.chromeWidth + ((room.height - 16 - shape.chromeHeight) * shape.width) / shape.height;
     height = room.height - 16;
   }
-  return keepReachable({ ...box, width, height });
+  return { width, height };
 }
+
+/** Sizes the window to the terminal's shape within the page, then keeps it reachable. */
+const place = (box: Box, shape: Shape | null): Box => keepReachable({ ...box, ...fit(box.width, shape) });
+
+/** Resizing keeps the grid's shape: side edges and corners set the width, top and bottom edges the height. */
+const shapedSize = (shape: Shape | null) => (want: { width: number; height: number }, edge: Edge) =>
+  fit(
+    (edge === 'n' || edge === 's') && shape
+      ? shape.chromeWidth + ((want.height - shape.chromeHeight) * shape.width) / shape.height
+      : want.width,
+    shape,
+  );
 
 /**
  * The desktop's right-edge handle ("‹", "‹ Terminals" on hover) opens a drawer of this computer's terminals with
  * their current screens rendered; choosing one brings it up as a floating window over the live desktop. The window
  * keeps the terminal's own shape, is dragged by its title bar (anywhere on the page, 64px always on screen) and
- * resized from its corner, comes to the front when touched, and its one traffic light minimizes it back into the drawer.
+ * resized from its corner, comes to the front when touched, and its one traffic light (red ×) closes it back into the drawer.
  */
 export function FloatingTerminal({
   computer,
@@ -59,7 +72,7 @@ export function FloatingTerminal({
   const [box, setBox] = useState<Box | null>(null);
   const [shape, setShape] = useState<Shape | null>(null);
   const area = useRef<HTMLDivElement>(null);
-  const gesture = useRef<{ kind: 'move' | 'resize'; x: number; y: number; start: Box } | null>(null);
+  const gesture = useRef<{ kind: 'move' | Edge; x: number; y: number; start: Box } | null>(null);
   const sessions = useQuery({
     ...terminalSessionsQuery(computer.id),
     enabled: drawer || session !== null,
@@ -140,7 +153,7 @@ export function FloatingTerminal({
     return () => window.removeEventListener('resize', refit);
   }, [session, shape]);
 
-  const start = (kind: 'move' | 'resize') => (event: ReactPointerEvent<HTMLElement>) => {
+  const start = (kind: 'move' | Edge) => (event: ReactPointerEvent<HTMLElement>) => {
     if (!box || event.button !== 0) return;
     if (kind === 'move' && (event.target as Element).closest('button')) return;
     event.preventDefault();
@@ -154,13 +167,9 @@ export function FloatingTerminal({
     const dx = event.clientX - drag.x,
       dy = event.clientY - drag.y;
     setBox(
-      place(
-        // Resizing follows the width; the height always matches the terminal's shape.
-        drag.kind === 'move'
-          ? { ...drag.start, x: drag.start.x + dx, y: drag.start.y + dy }
-          : { ...drag.start, width: drag.start.width + dx },
-        shape,
-      ),
+      drag.kind === 'move'
+        ? place({ ...drag.start, x: drag.start.x + dx, y: drag.start.y + dy }, shape)
+        : resizeFrom(drag.start, drag.kind, dx, dy, shapedSize(shape)),
     );
   };
   const end = () => {
@@ -337,17 +346,12 @@ export function FloatingTerminal({
                   }
                   onTitlePointerDown={start('move')}
                   titleLeading={
-                    // One traffic light: minimize back into the Terminals drawer ("−" appears on hover).
-                    <MinimizeLight label="Minimize to Terminals" onClick={minimize} dim={!layer.focused} />
+                    // One traffic light: close the window back into the Terminals drawer.
+                    <CloseLight label="Close to Terminals" onClick={minimize} dim={!layer.focused} />
                   }
                 />
               </Suspense>
-              <div
-                role="presentation"
-                title="Resize"
-                onPointerDown={start('resize')}
-                className="absolute -bottom-1 -right-1 z-10 size-4 cursor-nwse-resize touch-none"
-              />
+              <ResizeEdges onStart={start} />
             </m.section>
           )}
         </AnimatePresence>,

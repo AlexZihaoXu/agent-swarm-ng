@@ -60,3 +60,31 @@ export function useWindowLayer(id: string) {
   const current = useSyncExternalStore(subscribe, () => state);
   return { zIndex: 40 + Math.max(0, current.order.indexOf(id)), focused: current.active === id };
 }
+
+/** Which edge or corner of a window is being dragged to resize it. */
+export type Edge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+
+/**
+ * The box after dragging `edge` by (dx, dy). `size` turns the wanted size into an allowed one (minimums, a fixed
+ * shape); the opposite edges stay where they were, and the result is kept reachable.
+ */
+export function resizeFrom(
+  start: Box,
+  edge: Edge,
+  dx: number,
+  dy: number,
+  size: (want: { width: number; height: number }, edge: Edge) => { width: number; height: number },
+): Box {
+  const next = size(
+    {
+      width: start.width + (edge.includes('e') ? dx : edge.includes('w') ? -dx : 0),
+      height: start.height + (edge.includes('s') ? dy : edge.includes('n') ? -dy : 0),
+    },
+    edge,
+  );
+  return keepReachable({
+    ...next,
+    x: edge.includes('w') ? start.x + start.width - next.width : start.x,
+    y: edge.includes('n') ? start.y + start.height - next.height : start.y,
+  });
+}

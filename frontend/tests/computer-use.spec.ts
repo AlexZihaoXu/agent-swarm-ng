@@ -149,13 +149,10 @@ test('the agent on a computer opens a floating chat over the desktop that sends 
   await page.getByRole('button', { name: `Chat with ${agent.name}` }).click();
   const window = page.getByRole('region', { name: `Chat with ${agent.name}` });
   await expect(window.getByRole('list', { name: 'Messages' })).toBeVisible();
-  // It grows out of the agent in the header (above the window), and its minimize light always shows its "−".
+  // It grows out of the agent in the header (above the window), and its red close light always shows its "×".
   const origin = await window.evaluate(element => getComputedStyle(element).transformOrigin.split(' ').map(parseFloat));
   expect(origin[1]).toBeLessThan(0);
-  await expect(window.getByRole('button', { name: `Minimize chat with ${agent.name}` }).locator('span')).toHaveCSS(
-    'opacity',
-    '1',
-  );
+  await expect(window.getByRole('button', { name: `Close chat with ${agent.name}` }).locator('svg')).toBeVisible();
   // Measure once it has finished growing.
   await expect.poll(() => window.evaluate(element => getComputedStyle(element).transform)).toBe('none');
   const box = (await window.boundingBox())!;
@@ -171,6 +168,19 @@ test('the agent on a computer opens a floating chat over the desktop that sends 
   await page.mouse.move(box.x + box.width / 2 - 200, box.y + 112, { steps: 4 });
   await page.mouse.up();
   expect((await window.boundingBox())!.x).toBeLessThan(box.x - 150);
+  // Any edge resizes, with the matching cursor: the left edge widens it while the right edge stays put.
+  const before = (await window.boundingBox())!;
+  const left = page.locator('[data-resize-edge="w"]');
+  await expect(left).toHaveCSS('cursor', 'ew-resize');
+  await expect(page.locator('[data-resize-edge="n"]')).toHaveCSS('cursor', 'ns-resize');
+  await expect(page.locator('[data-resize-edge="se"]')).toHaveCSS('cursor', 'nwse-resize');
+  await page.mouse.move(before.x + 1, before.y + before.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(before.x - 99, before.y + before.height / 2, { steps: 4 });
+  await page.mouse.up();
+  const wider = (await window.boundingBox())!;
+  expect(wider.width).toBeGreaterThan(before.width + 90);
+  expect(Math.abs(wider.x + wider.width - (before.x + before.width))).toBeLessThan(1);
   // It may leave the viewer (even the page edge) but 64px stay on screen to grab it again.
   const moved = (await window.boundingBox())!;
   await page.mouse.move(moved.x + moved.width / 2, moved.y + 12);
@@ -181,8 +191,8 @@ test('the agent on a computer opens a floating chat over the desktop that sends 
   expect(parked.x).toBeLessThanOrEqual(1280 - 64 + 0.5);
   expect(parked.x).toBeGreaterThan(1100);
   expect(parked.y).toBeLessThanOrEqual(800 - 64 + 0.5);
-  // The traffic light minimizes it back to the header; Open in Chat goes to the whole conversation.
-  await window.getByRole('button', { name: `Minimize chat with ${agent.name}` }).click();
+  // The close light shrinks it back into the header; Open in Chat goes to the whole conversation.
+  await window.getByRole('button', { name: `Close chat with ${agent.name}` }).click();
   // It shrinks back into the header before it goes.
   await expect.poll(() => window.evaluate(element => getComputedStyle(element).transform)).not.toBe('none');
   await expect(window).toHaveCount(0);
@@ -239,10 +249,7 @@ test('the chat and terminal windows show which one is focused, and the one touch
   await expect(terminal).toHaveAttribute('data-focused', '');
   await expect(chat).not.toHaveAttribute('data-focused');
   expect(await z(terminal)).toBeGreaterThan(await z(chat));
-  await expect(chat.getByRole('button', { name: /^Minimize chat/ })).not.toHaveCSS(
-    'background-color',
-    'rgb(254, 188, 46)',
-  );
+  await expect(chat.getByRole('button', { name: /^Close chat/ })).not.toHaveCSS('background-color', 'rgb(255, 95, 87)');
   // Touching anything else leaves neither focused.
   await page.getByRole('navigation', { name: 'Computer location' }).click();
   await expect(terminal).not.toHaveAttribute('data-focused');

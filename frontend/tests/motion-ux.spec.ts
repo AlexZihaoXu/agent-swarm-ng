@@ -325,11 +325,19 @@ test('the desktop handle opens a Terminals drawer, and a session floats out fitt
   const after = (await floating.boundingBox())!;
   expect(after.width).toBeLessThan(before.width);
   expect(after.height).toBeLessThan(before.height);
+  // The bottom edge sets the height; the width follows the terminal's shape.
+  await page.mouse.move(after.x + after.width / 2, after.y + after.height - 1);
+  await page.mouse.down();
+  await page.mouse.move(after.x + after.width / 2, after.y + after.height + 80, { steps: 5 });
+  await page.mouse.up();
+  const taller = (await floating.boundingBox())!;
+  expect(taller.height).toBeGreaterThan(after.height + 60);
+  expect(taller.width).toBeGreaterThan(after.width);
   // The window keeps its shadow: nothing inside the window clips it.
   const frame = floating.locator('[data-terminal-emulator]');
   await expect(frame).not.toHaveCSS('overflow', 'hidden');
-  // The one traffic light minimizes back into the drawer.
-  await floating.getByRole('button', { name: 'Minimize to Terminals' }).click();
+  // The red close light puts it back into the drawer.
+  await floating.getByRole('button', { name: 'Close to Terminals' }).click();
   await expect(floating).toHaveCount(0);
   await expect(page.getByRole('dialog', { name: 'Terminals' })).toBeVisible();
 });

@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { m } from 'motion/react';
-import { keepReachable, raiseWindow, useWindowLayer, type Box } from '@/lib/floating-windows';
+import { keepReachable, raiseWindow, resizeFrom, useWindowLayer, type Box, type Edge } from '@/lib/floating-windows';
+import { ResizeEdges } from './ui/resize-edges';
 import { glide } from '@/lib/motion';
 import { defaultAvatar } from '@/lib/agent-avatar';
 import type { ChatAgent } from '@/use-chat';
@@ -10,24 +11,26 @@ import { AgentTypingStatus } from './agent-typing-status';
 import { ChatComposer } from './chat-composer';
 import type { ComputerAgentState } from './computer-control';
 import { ConversationMessages } from './conversation-messages';
-import { MinimizeLight } from './ui/minimize-light';
+import { CloseLight } from './ui/close-light';
 import { ScrollArea } from './ui/scroll-area';
 
 /** A window shows the latest messages only; the full history stays in Chat. */
 const SHOWN = 80;
 
+/** Any size from 300×320 up to the page. */
+const size = (want: { width: number; height: number }) => ({
+  width: Math.min(Math.max(want.width, 300), window.innerWidth - 16),
+  height: Math.min(Math.max(want.height, 320), window.innerHeight - 16),
+});
+
 /** Sizes the window within the page, then keeps it reachable. */
-function place(box: Box): Box {
-  const width = Math.min(Math.max(box.width, 300), window.innerWidth - 16);
-  const height = Math.min(Math.max(box.height, 320), window.innerHeight - 16);
-  return keepReachable({ ...box, width, height });
-}
+const place = (box: Box): Box => keepReachable({ ...box, ...size(box) });
 
 /**
  * A floating chat with the agent on this computer, over the live desktop. It is the same conversation (and draft)
  * as in Chat, in a window styled like the floating terminal: dragged by its title bar (anywhere on the page, 64px
- * always on screen), resized from its corner, brought to the front when touched, and its one traffic light
- * minimizes it back to the agent in the header.
+ * always on screen), resized from its corner, brought to the front when touched, and its one traffic light (red ×)
+ * closes it back to the agent in the header.
  */
 export function FloatingChat({
   agent,
@@ -46,7 +49,7 @@ export function FloatingChat({
   const area = useRef<HTMLDivElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<Box | null>(null);
-  const gesture = useRef<{ kind: 'move' | 'resize'; x: number; y: number; start: Box } | null>(null);
+  const gesture = useRef<{ kind: 'move' | Edge; x: number; y: number; start: Box } | null>(null);
   const layer = useWindowLayer('chat');
   // Opens at the viewer's right side (clear of the Terminals handle); later moves are the operator's.
   useLayoutEffect(() => {
@@ -70,7 +73,7 @@ export function FloatingChat({
     if (root && following.current) root.scrollTop = root.scrollHeight;
   }, [messages.length, messages.at(-1)?.text, box !== null]);
 
-  const start = (kind: 'move' | 'resize') => (event: ReactPointerEvent<HTMLElement>) => {
+  const start = (kind: 'move' | Edge) => (event: ReactPointerEvent<HTMLElement>) => {
     if (!box || event.button !== 0) return;
     if (kind === 'move' && (event.target as Element).closest('button, a')) return;
     event.preventDefault();
@@ -84,11 +87,9 @@ export function FloatingChat({
     const dx = event.clientX - drag.x,
       dy = event.clientY - drag.y;
     setBox(
-      place(
-        drag.kind === 'move'
-          ? { ...drag.start, x: drag.start.x + dx, y: drag.start.y + dy }
-          : { ...drag.start, width: drag.start.width + dx, height: drag.start.height + dy },
-      ),
+      drag.kind === 'move'
+        ? place({ ...drag.start, x: drag.start.x + dx, y: drag.start.y + dy })
+        : resizeFrom(drag.start, drag.kind, dx, dy, size),
     );
   };
   const end = () => {
@@ -128,7 +129,7 @@ export function FloatingChat({
               onPointerDown={start('move')}
               className="flex h-8 shrink-0 cursor-grab touch-none select-none items-center gap-3 border-b border-white/10 bg-[#1d1d1d] px-3 active:cursor-grabbing"
             >
-              <MinimizeLight label={`Minimize chat with ${agent.name}`} onClick={onMinimize} dim={!layer.focused} />
+              <CloseLight label={`Close chat with ${agent.name}`} onClick={onMinimize} dim={!layer.focused} />
               <span className="flex min-w-0 flex-1 items-center justify-center gap-1.5 text-xs">
                 <AgentAvatarArt {...(agent.avatar ?? defaultAvatar(agent.id))} size={16} />
                 <span
@@ -195,12 +196,7 @@ export function FloatingChat({
                 disabled={chat.historyLoading[channel] || !ready}
               />
             </div>
-            <div
-              role="presentation"
-              title="Resize"
-              onPointerDown={start('resize')}
-              className="absolute -bottom-1 -right-1 z-10 size-4 cursor-nwse-resize touch-none"
-            />
+            <ResizeEdges onStart={start} />
           </m.section>,
           document.body,
         )}
