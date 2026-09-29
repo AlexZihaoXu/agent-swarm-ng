@@ -112,6 +112,19 @@
   }
 }
 
+@keyframes badge-dots-in {
+  from {
+    opacity: 0;
+  }
+}
+.badge-dots-in {
+  animation: badge-dots-in 120ms ease-out 110ms both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .badge-dots-in {
+    animation: none;
+  }
+}
 @keyframes typing-dot {
   0%,
   60%,

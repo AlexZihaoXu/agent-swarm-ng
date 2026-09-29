@@ -113,8 +113,8 @@ export function PresenceIndicator({
       title={typing ? 'Typing' : working ? 'Working' : 'Ready to chat'}
       style={indicatorDimensions(size, typing)}
       className={cn(
-        // Rounded in every state: the teal fill fades out as typing ends, and must fade as a pill, not a square.
-        'absolute bottom-1 right-1 z-10 translate-x-1/2 translate-y-1/2 flex items-center justify-center overflow-hidden rounded-full transition-[width,height,color,background-color] duration-220 motion-reduce:transition-none',
+        // One shape in every state: the teal dot grows into the teal pill (and back); text colour switches at once.
+        'absolute bottom-1 right-1 z-10 translate-x-1/2 translate-y-1/2 flex items-center justify-center overflow-hidden rounded-full transition-[width,height,background-color] duration-220 motion-reduce:transition-none',
         typing
           ? 'bg-[#2dd4bf] text-[#134e4a]'
           : working
@@ -124,7 +124,8 @@ export function PresenceIndicator({
       )}
     >
       {typing ? (
-        <TypingDots compact className={size === 'md' ? 'scale-125' : undefined} />
+        // The dots appear once the pill has grown in behind them, so they never float without it.
+        <TypingDots compact className={cn('badge-dots-in', size === 'md' ? 'scale-125' : undefined)} />
       ) : (
         <span ref={dot} className={cn('presence-dot size-full rounded-full bg-current', working && 'presence-pulse')} />
       )}
