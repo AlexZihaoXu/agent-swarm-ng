@@ -91,7 +91,7 @@ it.each(['chat', 'messages'] as const)(
       expect(session.agent.state.tools.map(tool => tool.name)).toEqual(['send_message']);
       await session.prompt('Hello', { expandPromptTemplates: false });
       expect((session.messages.at(-1) as any)?.errorMessage).toBeUndefined();
-      expect(publish).toHaveBeenCalledWith('Delivered', expect.any(String), true, undefined);
+      expect(publish).toHaveBeenCalledWith('Delivered', expect.any(String), true, undefined, []);
       expect(requests).toHaveLength(1);
       const request = requests[0];
       expect(request.url).toBe(OPENROUTER_URL + (api === 'chat' ? '/chat/completions' : '/messages?beta=true'));

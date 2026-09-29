@@ -26,7 +26,7 @@ export async function runChat(
   config: ChatConfiguration,
   history: ChannelMessage[],
   message: ChannelMessage,
-  publish: (text: string, replyToMessageId?: string) => Promise<object>,
+  publish: (text: string, replyToMessageId?: string, fileIds?: string[]) => Promise<object>,
   accessKey: string,
   subscriptionRuntime?: ModelRuntime,
   historyTools: ToolDefinition[] = [],
@@ -75,12 +75,12 @@ export async function runChat(
     session = await createChatSession(
       config,
       restored ? [] : history,
-      async (text, toolCallId, final, replyToMessageId) => {
+      async (text, toolCallId, final, replyToMessageId, fileIds) => {
         signal.throwIfAborted();
         await activity.flush();
         signal.throwIfAborted();
         // Publication belongs to the channel, not any connected browser.
-        const saved = await publish(text, replyToMessageId);
+        const saved = await publish(text, replyToMessageId, fileIds);
         publicationTyping.published(toolCallId);
         published++;
         if (final) finalPublished = true;

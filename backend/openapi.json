@@ -616,6 +616,12 @@
                                 "enum": [
                                   "other"
                                 ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "scratch"
+                                ]
                               }
                             ]
                           },
@@ -770,6 +776,21 @@
                                     "type": "null"
                                   }
                                 ]
+                              }
+                            }
+                          },
+                          "scratch": {
+                            "type": "object",
+                            "required": [
+                              "agentId",
+                              "path"
+                            ],
+                            "properties": {
+                              "agentId": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
                               }
                             }
                           }
@@ -1025,6 +1046,12 @@
                           "enum": [
                             "other"
                           ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "scratch"
+                          ]
                         }
                       ]
                     },
@@ -1179,6 +1206,21 @@
                               "type": "null"
                             }
                           ]
+                        }
+                      }
+                    },
+                    "scratch": {
+                      "type": "object",
+                      "required": [
+                        "agentId",
+                        "path"
+                      ],
+                      "properties": {
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
                         }
                       }
                     }
@@ -1650,6 +1692,12 @@
                           "enum": [
                             "other"
                           ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "scratch"
+                          ]
                         }
                       ]
                     },
@@ -1804,6 +1852,21 @@
                               "type": "null"
                             }
                           ]
+                        }
+                      }
+                    },
+                    "scratch": {
+                      "type": "object",
+                      "required": [
+                        "agentId",
+                        "path"
+                      ],
+                      "properties": {
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
                         }
                       }
                     }
@@ -5189,6 +5252,12 @@
                                       "enum": [
                                         "other"
                                       ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "scratch"
+                                      ]
                                     }
                                   ]
                                 },
@@ -5343,6 +5412,21 @@
                                           "type": "null"
                                         }
                                       ]
+                                    }
+                                  }
+                                },
+                                "scratch": {
+                                  "type": "object",
+                                  "required": [
+                                    "agentId",
+                                    "path"
+                                  ],
+                                  "properties": {
+                                    "agentId": {
+                                      "type": "string"
+                                    },
+                                    "path": {
+                                      "type": "string"
                                     }
                                   }
                                 }
@@ -6083,6 +6167,12 @@
                                               "enum": [
                                                 "other"
                                               ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "scratch"
+                                              ]
                                             }
                                           ]
                                         },
@@ -6237,6 +6327,21 @@
                                                   "type": "null"
                                                 }
                                               ]
+                                            }
+                                          }
+                                        },
+                                        "scratch": {
+                                          "type": "object",
+                                          "required": [
+                                            "agentId",
+                                            "path"
+                                          ],
+                                          "properties": {
+                                            "agentId": {
+                                              "type": "string"
+                                            },
+                                            "path": {
+                                              "type": "string"
                                             }
                                           }
                                         }
@@ -7066,6 +7171,12 @@
                                         "enum": [
                                           "other"
                                         ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "scratch"
+                                        ]
                                       }
                                     ]
                                   },
@@ -7220,6 +7331,21 @@
                                             "type": "null"
                                           }
                                         ]
+                                      }
+                                    }
+                                  },
+                                  "scratch": {
+                                    "type": "object",
+                                    "required": [
+                                      "agentId",
+                                      "path"
+                                    ],
+                                    "properties": {
+                                      "agentId": {
+                                        "type": "string"
+                                      },
+                                      "path": {
+                                        "type": "string"
                                       }
                                     }
                                   }
@@ -8017,6 +8143,12 @@
                                         "enum": [
                                           "other"
                                         ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "scratch"
+                                        ]
                                       }
                                     ]
                                   },
@@ -8171,6 +8303,21 @@
                                             "type": "null"
                                           }
                                         ]
+                                      }
+                                    }
+                                  },
+                                  "scratch": {
+                                    "type": "object",
+                                    "required": [
+                                      "agentId",
+                                      "path"
+                                    ],
+                                    "properties": {
+                                      "agentId": {
+                                        "type": "string"
+                                      },
+                                      "path": {
+                                        "type": "string"
                                       }
                                     }
                                   }
@@ -8999,6 +9146,12 @@
                                         "enum": [
                                           "other"
                                         ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "scratch"
+                                        ]
                                       }
                                     ]
                                   },
@@ -9153,6 +9306,21 @@
                                             "type": "null"
                                           }
                                         ]
+                                      }
+                                    }
+                                  },
+                                  "scratch": {
+                                    "type": "object",
+                                    "required": [
+                                      "agentId",
+                                      "path"
+                                    ],
+                                    "properties": {
+                                      "agentId": {
+                                        "type": "string"
+                                      },
+                                      "path": {
+                                        "type": "string"
                                       }
                                     }
                                   }
@@ -9826,6 +9994,12 @@
                                       "enum": [
                                         "other"
                                       ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "scratch"
+                                      ]
                                     }
                                   ]
                                 },
@@ -9980,6 +10154,21 @@
                                           "type": "null"
                                         }
                                       ]
+                                    }
+                                  }
+                                },
+                                "scratch": {
+                                  "type": "object",
+                                  "required": [
+                                    "agentId",
+                                    "path"
+                                  ],
+                                  "properties": {
+                                    "agentId": {
+                                      "type": "string"
+                                    },
+                                    "path": {
+                                      "type": "string"
                                     }
                                   }
                                 }
@@ -10547,6 +10736,12 @@
                                     "enum": [
                                       "other"
                                     ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "scratch"
+                                    ]
                                   }
                                 ]
                               },
@@ -10701,6 +10896,21 @@
                                         "type": "null"
                                       }
                                     ]
+                                  }
+                                }
+                              },
+                              "scratch": {
+                                "type": "object",
+                                "required": [
+                                  "agentId",
+                                  "path"
+                                ],
+                                "properties": {
+                                  "agentId": {
+                                    "type": "string"
+                                  },
+                                  "path": {
+                                    "type": "string"
                                   }
                                 }
                               }
@@ -11826,6 +12036,12 @@
                                               "enum": [
                                                 "other"
                                               ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "scratch"
+                                              ]
                                             }
                                           ]
                                         },
@@ -11980,6 +12196,21 @@
                                                   "type": "null"
                                                 }
                                               ]
+                                            }
+                                          }
+                                        },
+                                        "scratch": {
+                                          "type": "object",
+                                          "required": [
+                                            "agentId",
+                                            "path"
+                                          ],
+                                          "properties": {
+                                            "agentId": {
+                                              "type": "string"
+                                            },
+                                            "path": {
+                                              "type": "string"
                                             }
                                           }
                                         }
@@ -12788,6 +13019,12 @@
                                         "enum": [
                                           "other"
                                         ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "scratch"
+                                        ]
                                       }
                                     ]
                                   },
@@ -12942,6 +13179,21 @@
                                             "type": "null"
                                           }
                                         ]
+                                      }
+                                    }
+                                  },
+                                  "scratch": {
+                                    "type": "object",
+                                    "required": [
+                                      "agentId",
+                                      "path"
+                                    ],
+                                    "properties": {
+                                      "agentId": {
+                                        "type": "string"
+                                      },
+                                      "path": {
+                                        "type": "string"
                                       }
                                     }
                                   }
@@ -13184,6 +13436,12 @@
                                       "enum": [
                                         "other"
                                       ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "scratch"
+                                      ]
                                     }
                                   ]
                                 },
@@ -13338,6 +13596,21 @@
                                           "type": "null"
                                         }
                                       ]
+                                    }
+                                  }
+                                },
+                                "scratch": {
+                                  "type": "object",
+                                  "required": [
+                                    "agentId",
+                                    "path"
+                                  ],
+                                  "properties": {
+                                    "agentId": {
+                                      "type": "string"
+                                    },
+                                    "path": {
+                                      "type": "string"
                                     }
                                   }
                                 }
@@ -13937,6 +14210,12 @@
                                         "enum": [
                                           "other"
                                         ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "scratch"
+                                        ]
                                       }
                                     ]
                                   },
@@ -14091,6 +14370,21 @@
                                             "type": "null"
                                           }
                                         ]
+                                      }
+                                    }
+                                  },
+                                  "scratch": {
+                                    "type": "object",
+                                    "required": [
+                                      "agentId",
+                                      "path"
+                                    ],
+                                    "properties": {
+                                      "agentId": {
+                                        "type": "string"
+                                      },
+                                      "path": {
+                                        "type": "string"
                                       }
                                     }
                                   }
@@ -14557,6 +14851,12 @@
                                     "enum": [
                                       "other"
                                     ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "scratch"
+                                    ]
                                   }
                                 ]
                               },
@@ -14711,6 +15011,21 @@
                                         "type": "null"
                                       }
                                     ]
+                                  }
+                                }
+                              },
+                              "scratch": {
+                                "type": "object",
+                                "required": [
+                                  "agentId",
+                                  "path"
+                                ],
+                                "properties": {
+                                  "agentId": {
+                                    "type": "string"
+                                  },
+                                  "path": {
+                                    "type": "string"
                                   }
                                 }
                               }

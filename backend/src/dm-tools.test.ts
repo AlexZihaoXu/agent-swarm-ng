@@ -28,9 +28,9 @@ it('binds reads and contact discovery to the granted identity and keeps send met
   await call('read_dm_inbox', { agentId: 'spoofed' });
   expect(store.received).toHaveBeenCalledWith('a', undefined);
   await call('send_dm', { senderId: 'spoofed', chainId: 'spoofed', recipientId: 'b', text: 'Hello' });
-  expect(send).toHaveBeenCalledWith('b', 'Hello', 'call-id', undefined);
+  expect(send).toHaveBeenCalledWith('b', 'Hello', 'call-id', undefined, []);
   await call('send_dm', { recipientId: 'b', text: 'Follow-up', replyToMessageId: 'parent' });
-  expect(send).toHaveBeenCalledWith('b', 'Follow-up', 'call-id', 'parent');
+  expect(send).toHaveBeenCalledWith('b', 'Follow-up', 'call-id', 'parent', []);
   const section = await call('read_dm_messages', { agentId: 'spoofed', peerId: 'b' });
   expect(store.history).toHaveBeenCalledWith('a', 'b', undefined, undefined);
   const result = JSON.parse((section.content[0] as { text: string }).text);

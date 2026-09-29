@@ -23,6 +23,7 @@ import { registerSwarmSettingsRoutes } from './swarm-settings-routes';
 import { FileStore } from './files/store';
 import { BlobStore } from './files/blob-store';
 import { registerFileRoutes } from './files/routes';
+import { Scratchpad } from './scratchpad';
 
 export async function buildApp({
   fetcher,
@@ -74,9 +75,9 @@ export async function buildApp({
   const screenshots = new ScreenshotPool(join(platform.dataDirectory, 'computer-screenshots'));
   const swarmSettings = new SwarmSettingsStore(platform);
   const files = new FileStore(platform, new BlobStore(join(platform.dataDirectory, 'files')), swarmSettings);
-  registerFileRoutes(app, platform, files);
+  registerFileRoutes(app, platform, files, new Scratchpad(platform, swarmSettings));
   registerSwarmSettingsRoutes(app, swarmSettings);
-  registerChat(app, endpointStore, platform, codex, computers, screenshots, files);
+  registerChat(app, endpointStore, platform, codex, computers, screenshots, files, controller);
   registerComputerRoutes(app, platform, controller, computers, swarmSettings);
   registerComputerUseRoutes(app, computers, screenshots);
   registerTerminalStreams(app, computers, controller);

@@ -196,3 +196,59 @@ test('other files link to a download, deleted ones show who deleted them, and th
   await expect(messages.getByText('Deleted by You')).toBeVisible();
   await expect(messages.getByRole('link', { name: 'report.bin' })).toHaveCount(0);
 });
+
+test('a presented scratch file shows live, marked as such, and refreshes when the agent writes', async ({ page }) => {
+  let version = 1;
+  await page.route(/\/api\/files\/live\/text(\?.*)?$/, route =>
+    route.fulfill({
+      json: {
+        text: `# Draft v${version}\n`,
+        offset: 1,
+        lines: 1,
+        totalLines: 1,
+        truncated: false,
+        partialLine: false,
+        nextOffset: null,
+        prevOffset: null,
+        previewLimited: false,
+      },
+    }),
+  );
+  await page.route('**/api/channels/avery/messages*', route =>
+    route.fulfill({
+      json: {
+        messages: [
+          {
+            id: 'presented',
+            channelId: 'avery',
+            sequence: 1,
+            role: 'assistant',
+            text: 'Watch this draft.',
+            timestamp: Date.now(),
+            replyTo: null,
+            files: [
+              file('live', 'draft.md', 'text', {
+                kind: 'scratch',
+                uploader: { kind: 'agent', id: 'avery', name: 'Avery' },
+                scratch: { agentId: 'avery', path: 'notes/draft.md' },
+              }),
+            ],
+          },
+        ],
+        nextCursor: null,
+      },
+    }),
+  );
+  await page.goto('/chat/agents/avery');
+  const preview = page.getByLabel('Preview of draft.md');
+  await expect(preview).toContainText('# Draft v1');
+  await expect(page.getByRole('list', { name: 'Messages' }).getByText('Live', { exact: true })).toBeVisible();
+  version = 2;
+  await page.evaluate(() => {
+    const emit = (window as unknown as { emitAgentEvent: (event: object) => void }).emitAgentEvent;
+    const event = { type: 'scratch_activity', eventId: crypto.randomUUID(), runId: 'platform', agentId: 'avery' };
+    emit({ ...event, channelId: 'scratch:avery', path: 'notes/draft.md', active: true });
+    emit({ ...event, eventId: crypto.randomUUID(), channelId: 'scratch:avery', path: 'notes/draft.md', active: false });
+  });
+  await expect(preview).toContainText('# Draft v2');
+});

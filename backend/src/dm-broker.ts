@@ -5,6 +5,9 @@ import { Scratchpad } from './scratchpad';
 import { createScratchTools } from './scratch-tools';
 import { SwarmSettingsStore } from './swarm-settings';
 import { FileStore } from './files/store';
+import { chatKey, dmKey, groupKey } from './files/access';
+import { createFileTools } from './files/file-tools';
+import type { ComputerController } from './computer-controller-client';
 import { BlobStore } from './files/blob-store';
 import { join } from 'node:path';
 import type { AgentRuns, RunContext } from './agent-runs';
@@ -63,6 +66,10 @@ export class DmBroker {
   readonly timers: AgentTimers;
   /** Every agent's private scratchpad of text files. */
   readonly scratch: Scratchpad;
+  /** Settings → Swarm (file and scratchpad limits). */
+  readonly settings: SwarmSettingsStore;
+  /** Streams files in and out of computers for copy_file and upload_file (set when a controller exists). */
+  transfers?: Pick<ComputerController, 'exportFile' | 'importFile'> | null;
   private watcher?: TerminalWatcher;
   /** One-shot watches on claimed computers (watch_terminal, watch_desktop). */
   readonly watches?: ComputerWatches;
@@ -87,7 +94,8 @@ export class DmBroker {
     this.reactions = new ReactionStore(database);
     this.sessions = new AgentSessionStore(database);
     this.activity = new ActivityStore(database);
-    this.scratch = new Scratchpad(database, new SwarmSettingsStore(database));
+    this.settings = new SwarmSettingsStore(database);
+    this.scratch = new Scratchpad(database, this.settings);
     this.scratch.onActivity = ({ agentId, ...detail }) => runs.scratchActivity(agentId, detail);
     this.files.onDeleted = file => runs.fileDeleted(file);
     this.timers = new AgentTimers(database, (agentId, kind, text, human) =>
@@ -173,6 +181,12 @@ export class DmBroker {
    * turn if there is one (where interruption triage applies), otherwise it starts a normal turn. `human` carries
    * whether the event may be answered in the human's private channel.
    */
+  /** An agent as a file uploader (its name is kept with the file). */
+  private async uploader(agentId: string) {
+    const agent = await this.database.findAgent(agentId);
+    if (!agent) throw new Error('Agent not found.');
+    return { kind: 'agent' as const, id: agentId, name: agent.name };
+  }
   async deliverPlatformEvent(
     agentId: string,
     platform: 'timer' | 'reminder' | 'computer',
@@ -233,12 +247,15 @@ export class DmBroker {
     context: RunContext,
     inheritedChain?: string,
     replyToId?: string,
+    fileIds: string[] = [],
   ): Promise<DmReceipt> {
     context.signal.throwIfAborted();
     if (this.closing || this.deleting.has(senderId) || this.deleting.has(recipientId))
       throw new Error('DM delivery is unavailable.');
     await this.ready();
     context.signal.throwIfAborted();
+    const upload = { channelKey: dmKey(senderId, recipientId), uploader: await this.uploader(senderId) };
+    await this.files.attachable(fileIds, upload);
     const chainId = inheritedChain ?? context.runId;
     if (!inheritedChain) {
       if (!this.linked.has(context.signal)) {
@@ -261,8 +278,10 @@ export class DmBroker {
       chainId,
       deliveryKey: `${context.runId}:${callId}`,
       replyToId,
+      hasFiles: fileIds.length > 0,
     });
     if (duplicate) return { id: message.id, conversationId: message.conversationId, status: message.status, duplicate };
+    const attached = await this.files.attach(fileIds, { ...upload, messageKind: 'dm', messageId: message.id });
     let status = message.status;
     try {
       const chain = await this.database.client.dmChain.findUnique({ where: { id: chainId } });
@@ -285,6 +304,7 @@ export class DmBroker {
           id: message.id,
           timestamp: message.createdAt.getTime(),
           replyTo: dmReplyContext(message),
+          ...(attached.length ? { files: FileStore.refs(attached) } : {}),
           source: {
             agentId: senderId,
             name: incoming.sender.name,
@@ -349,10 +369,13 @@ export class DmBroker {
     context: RunContext,
     inheritedChain?: string,
     replyToId?: string,
+    fileIds: string[] = [],
   ) {
     context.signal.throwIfAborted();
     if (this.closing || this.deleting.has(agentId)) throw new Error('Group delivery is unavailable.');
     await this.ready();
+    const upload = { channelKey: groupKey(groupId), uploader: await this.uploader(agentId) };
+    await this.files.attachable(fileIds, upload);
     const chainId = inheritedChain ?? context.runId;
     if (!inheritedChain) {
       await this.store.beginChain(agentId, chainId);
@@ -375,8 +398,12 @@ export class DmBroker {
       chainId,
       `${context.runId}:${callId}`,
       replyToId,
+      fileIds.length > 0,
     );
-    if (!publication.duplicate) await this.dispatchGroup(publication);
+    if (!publication.duplicate) {
+      await this.files.attach(fileIds, { ...upload, messageKind: 'group', messageId: publication.message.id });
+      await this.dispatchGroup(publication);
+    }
     return {
       id: publication.message.id,
       conversationId: `group:${groupId}`,
@@ -387,7 +414,8 @@ export class DmBroker {
   private async dispatchGroup(publication: Awaited<ReturnType<GroupStore['publishHuman']>>) {
     const { message } = publication;
     const chain = await this.database.client.dmChain.findUnique({ where: { id: message.chainId } });
-    const files = FileStore.refs((await this.files.forMessages('group', [message.id])).get(message.id));
+    const views = (await this.files.forMessages('group', [message.id])).get(message.id);
+    const files = FileStore.refs(views);
     for (const delivery of publication.deliveries) {
       const agentId = delivery.agentId;
       try {
@@ -437,7 +465,11 @@ export class DmBroker {
         await this.groups.finish(message.id, agentId, 'failed');
       }
     }
-    this.runs.announce(message.groupId, groupMessageView(message), true);
+    this.runs.announce(
+      message.groupId,
+      { ...groupMessageView(message), ...(views?.length ? { files: views } : {}) },
+      true,
+    );
   }
   async runInbox(agentId: string, incoming: ChannelMessage, context: RunContext) {
     await this.ready();
@@ -517,8 +549,8 @@ ${preview.text}`
     const peerTools = createDmTools(
       this.store,
       agentId,
-      (recipientId, text, callId, replyToId) =>
-        this.send(agentId, recipientId, text, callId, context, chainFor(recipientId), replyToId),
+      (recipientId, text, callId, replyToId, fileIds) =>
+        this.send(agentId, recipientId, text, callId, context, chainFor(recipientId), replyToId, fileIds),
       this.files,
     );
     const computerTools =
@@ -539,7 +571,7 @@ ${preview.text}`
         baseUrl: connection.baseUrl,
         apiKey: connection.apiKey,
         channel,
-        publishPeer: async (channelId, text, callId, replyToId) => {
+        publishPeer: async (channelId, text, callId, replyToId, fileIds) => {
           if (channelId.startsWith('group:'))
             return JSON.stringify(
               await this.sendGroup(
@@ -550,22 +582,34 @@ ${preview.text}`
                 context,
                 humanBatch ? undefined : (sources.find(source => source.channelId === channelId)?.chainId ?? inherited),
                 replyToId,
+                fileIds,
               ),
             );
           const source = threads.get(channelId);
           if (!source) throw new Error('Unknown agent thread. Use send_dm for a new allowed contact.');
           return JSON.stringify(
-            await this.send(agentId, source.agentId, text, callId, context, chainFor(source.agentId), replyToId),
+            await this.send(
+              agentId,
+              source.agentId,
+              text,
+              callId,
+              context,
+              chainFor(source.agentId),
+              replyToId,
+              fileIds,
+            ),
           );
         },
       },
       history,
       incoming,
-      async (text, replyToId) => {
+      async (text, replyToId, fileIds = []) => {
         if (!humanAuthority)
           throw new Error(
             'Reply to the input’s explicit group or agent-thread channel, not the private human channel.',
           );
+        const upload = { channelKey: chatKey(channel.id), uploader: await this.uploader(agentId) };
+        await this.files.attachable(fileIds, upload);
         const message = await this.database.appendMessage(
           channel.id,
           'assistant',
@@ -573,6 +617,7 @@ ${preview.text}`
           crypto.randomUUID(),
           replyToId,
         );
+        const attached = await this.files.attach(fileIds, { ...upload, messageKind: 'chat', messageId: message.id });
         return {
           id: message.id,
           sequence: message.sequence,
@@ -581,6 +626,7 @@ ${preview.text}`
           text,
           timestamp: message.createdAt.getTime(),
           replyTo: channelReply(message),
+          ...(attached.length ? { files: attached } : {}),
         };
       },
       connection.accessKey,
@@ -599,6 +645,18 @@ ${preview.text}`
         // Every agent's sense of time: current time, timers and reminders (no computer needed).
         ...createTimeTools(this.timers, agentId, () => humanAuthority, this.watches),
         ...createScratchTools(this.scratch, agentId),
+        ...createFileTools({
+          agentId,
+          agentName: agent.name,
+          channelId: channel.id,
+          files: this.files,
+          scratch: this.scratch,
+          settings: this.settings,
+          computers: this.computers,
+          transfers: this.transfers,
+          images: this.screenshots,
+          notifyHolder: (holderId, text) => void this.deliverPlatformEvent(holderId, 'computer', text, false),
+        }),
         ...computerTools,
       ],
       {

@@ -9,7 +9,13 @@ export type DmReceipt = { id: string; conversationId: string; status: string; du
 export function createDmTools(
   store: SwarmStore,
   agentId: string,
-  send: (recipientId: string, text: string, toolCallId: string, replyToMessageId?: string) => Promise<DmReceipt>,
+  send: (
+    recipientId: string,
+    text: string,
+    toolCallId: string,
+    replyToMessageId?: string,
+    fileIds?: string[],
+  ) => Promise<DmReceipt>,
   files?: FileStore,
 ) {
   const withFiles = async <T extends { id: string }>(items: T[]) => (await files?.annotate('dm', items)) ?? items;
@@ -64,18 +70,20 @@ export function createDmTools(
       name: 'send_dm',
       label: 'Send agent DM',
       description:
-        'Publish a DM to an allowed agent. Optional replyToMessageId must identify an existing message in this exact peer conversation. The backend validates current permission and schedules bounded work for the recipient. A receipt is not a reply or proof the task was completed. Do not retry blindly; inspect history after an uncertain result. Share only context needed for the requested task, never credentials or unrelated private conversation.',
+        'Publish a DM to an allowed agent. Optional replyToMessageId must identify an existing message in this exact peer conversation. The backend validates current permission and schedules bounded work for the recipient. Attach up to 10 files you uploaded to this DM with upload_file via fileIds (text may then be empty). A receipt is not a reply or proof the task was completed. Do not retry blindly; inspect history after an uncertain result. Share only context needed for the requested task, never credentials or unrelated private conversation.',
       parameters: Type.Object(
         {
           recipientId: Type.String({ minLength: 1, maxLength: 100 }),
-          text: Type.String({ minLength: 1, maxLength: DM_TEXT_LIMIT }),
+          text: Type.String({ maxLength: DM_TEXT_LIMIT }),
           replyToMessageId: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
+          fileIds: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 10 })),
         },
         { additionalProperties: false },
       ),
-      async execute(id, { recipientId, text, replyToMessageId }, signal) {
+      async execute(id, { recipientId, text, replyToMessageId, fileIds = [] }, signal) {
         signal?.throwIfAborted();
-        const receipt = await send(recipientId, text, id, replyToMessageId);
+        if (!text.trim() && !fileIds.length) throw new Error('Message is empty.');
+        const receipt = await send(recipientId, text, id, replyToMessageId, fileIds);
         return { content: [{ type: 'text' as const, text: JSON.stringify(receipt) }], details: {} };
       },
     }),

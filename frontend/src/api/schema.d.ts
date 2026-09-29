@@ -1051,7 +1051,7 @@ export interface operations {
                             channelKey: string;
                             name: string;
                             mime: string;
-                            kind: "image" | "text" | "pdf" | "other";
+                            kind: "image" | "text" | "pdf" | "other" | "scratch";
                             size: number;
                             status: "available" | "deleted";
                             uploader: {
@@ -1069,6 +1069,10 @@ export interface operations {
                                     name: string;
                                 };
                                 at: string | null;
+                            };
+                            scratch?: {
+                                agentId: string;
+                                path: string;
                             };
                         }[];
                         totalBytes: number;
@@ -1185,7 +1189,7 @@ export interface operations {
                         channelKey: string;
                         name: string;
                         mime: string;
-                        kind: "image" | "text" | "pdf" | "other";
+                        kind: "image" | "text" | "pdf" | "other" | "scratch";
                         size: number;
                         status: "available" | "deleted";
                         uploader: {
@@ -1203,6 +1207,10 @@ export interface operations {
                                 name: string;
                             };
                             at: string | null;
+                        };
+                        scratch?: {
+                            agentId: string;
+                            path: string;
                         };
                     };
                 };
@@ -1442,7 +1450,7 @@ export interface operations {
                         channelKey: string;
                         name: string;
                         mime: string;
-                        kind: "image" | "text" | "pdf" | "other";
+                        kind: "image" | "text" | "pdf" | "other" | "scratch";
                         size: number;
                         status: "available" | "deleted";
                         uploader: {
@@ -1460,6 +1468,10 @@ export interface operations {
                                 name: string;
                             };
                             at: string | null;
+                        };
+                        scratch?: {
+                            agentId: string;
+                            path: string;
                         };
                     };
                 };
@@ -2313,7 +2325,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other";
+                                kind: "image" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -2331,6 +2343,10 @@ export interface operations {
                                         name: string;
                                     };
                                     at: string | null;
+                                };
+                                scratch?: {
+                                    agentId: string;
+                                    path: string;
                                 };
                             }[];
                         }[];
@@ -2435,7 +2451,7 @@ export interface operations {
                                     channelKey: string;
                                     name: string;
                                     mime: string;
-                                    kind: "image" | "text" | "pdf" | "other";
+                                    kind: "image" | "text" | "pdf" | "other" | "scratch";
                                     size: number;
                                     status: "available" | "deleted";
                                     uploader: {
@@ -2453,6 +2469,10 @@ export interface operations {
                                             name: string;
                                         };
                                         at: string | null;
+                                    };
+                                    scratch?: {
+                                        agentId: string;
+                                        path: string;
                                     };
                                 }[];
                                 replyTo: {
@@ -2589,7 +2609,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other";
+                                kind: "image" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -2607,6 +2627,10 @@ export interface operations {
                                         name: string;
                                     };
                                     at: string | null;
+                                };
+                                scratch?: {
+                                    agentId: string;
+                                    path: string;
                                 };
                             }[];
                             replyTo: {
@@ -2736,7 +2760,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other";
+                                kind: "image" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -2754,6 +2778,10 @@ export interface operations {
                                         name: string;
                                     };
                                     at: string | null;
+                                };
+                                scratch?: {
+                                    agentId: string;
+                                    path: string;
                                 };
                             }[];
                             replyTo: {
@@ -2964,7 +2992,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other";
+                                kind: "image" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -2982,6 +3010,10 @@ export interface operations {
                                         name: string;
                                     };
                                     at: string | null;
+                                };
+                                scratch?: {
+                                    agentId: string;
+                                    path: string;
                                 };
                             }[];
                             replyTo: {
@@ -3091,7 +3123,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other";
+                                kind: "image" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -3109,6 +3141,10 @@ export interface operations {
                                         name: string;
                                     };
                                     at: string | null;
+                                };
+                                scratch?: {
+                                    agentId: string;
+                                    path: string;
                                 };
                             }[];
                             replyTo: {
@@ -3226,7 +3262,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other";
+                                kind: "image" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -3244,6 +3280,10 @@ export interface operations {
                                         name: string;
                                     };
                                     at: string | null;
+                                };
+                                scratch?: {
+                                    agentId: string;
+                                    path: string;
                                 };
                             }[];
                             replyTo: {
@@ -3587,7 +3627,7 @@ export interface operations {
                                     channelKey: string;
                                     name: string;
                                     mime: string;
-                                    kind: "image" | "text" | "pdf" | "other";
+                                    kind: "image" | "text" | "pdf" | "other" | "scratch";
                                     size: number;
                                     status: "available" | "deleted";
                                     uploader: {
@@ -3605,6 +3645,10 @@ export interface operations {
                                             name: string;
                                         };
                                         at: string | null;
+                                    };
+                                    scratch?: {
+                                        agentId: string;
+                                        path: string;
                                     };
                                 }[];
                             } | null;
@@ -3694,7 +3738,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other";
+                                kind: "image" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -3712,6 +3756,10 @@ export interface operations {
                                         name: string;
                                     };
                                     at: string | null;
+                                };
+                                scratch?: {
+                                    agentId: string;
+                                    path: string;
                                 };
                             }[];
                         } | null;
@@ -3780,7 +3828,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other";
+                                kind: "image" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -3798,6 +3846,10 @@ export interface operations {
                                         name: string;
                                     };
                                     at: string | null;
+                                };
+                                scratch?: {
+                                    agentId: string;
+                                    path: string;
                                 };
                             }[];
                         }[];
@@ -3958,7 +4010,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other";
+                                kind: "image" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -3976,6 +4028,10 @@ export interface operations {
                                         name: string;
                                     };
                                     at: string | null;
+                                };
+                                scratch?: {
+                                    agentId: string;
+                                    path: string;
                                 };
                             }[];
                         } | null;
@@ -4091,7 +4147,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other";
+                                kind: "image" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -4109,6 +4165,10 @@ export interface operations {
                                         name: string;
                                     };
                                     at: string | null;
+                                };
+                                scratch?: {
+                                    agentId: string;
+                                    path: string;
                                 };
                             }[];
                         };

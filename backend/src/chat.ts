@@ -122,11 +122,13 @@ export function registerChat(
   computers?: ComputerUseService,
   screenshots?: ScreenshotPool,
   files?: FileStore,
+  transfers?: DmBroker['transfers'],
 ) {
   const runs = new AgentRuns();
   const streams = createRunStreams(runs);
   const broker = new DmBroker(database, store, codex, runs, computers, screenshots, files);
   const channelFiles = broker.files;
+  broker.transfers = transfers;
   /** Private-chat messages with their files. */
   const withFiles = async (messages: Awaited<ReturnType<PlatformStore['appendMessage']>>[]) => {
     const map = await channelFiles.forMessages(

@@ -30,7 +30,7 @@ export function fileView(row: Row) {
     channelKey: row.channelKey,
     name: row.name,
     mime: row.mime,
-    kind: row.kind as 'image' | 'text' | 'pdf' | 'other',
+    kind: row.kind as 'image' | 'text' | 'pdf' | 'other' | 'scratch',
     size: row.size,
     status: row.status as 'available' | 'deleted',
     uploader: {
@@ -41,6 +41,9 @@ export function fileView(row: Row) {
     messageKind: row.messageKind as MessageKind | null,
     messageId: row.messageId,
     createdAt: row.createdAt.toISOString(),
+    ...(row.kind === 'scratch' && row.scratchAgentId && row.scratchPath
+      ? { scratch: { agentId: row.scratchAgentId, path: row.scratchPath } }
+      : {}),
     ...(row.status === 'deleted'
       ? {
           deleted: {
@@ -65,6 +68,10 @@ export class FileStore {
     private settings: SwarmSettingsStore,
   ) {}
 
+  /** What an actor may do in a channel (the same rules as for its messages). */
+  access(channelKey: string, actor: Actor) {
+    return channelAccess(this.database, channelKey, actor);
+  }
   /** Bytes stored (each content once) against the Settings → Swarm budget. */
   async usage() {
     await this.database.initialize();
@@ -137,6 +144,36 @@ export class FileStore {
           blobId: stored.id,
         },
       });
+    });
+    return fileView(row);
+  }
+
+  /**
+   * A live preview of the agent's scratch file for a chat: no bytes are copied; viewers read the file as it is now.
+   * Like an upload, it is sent by passing its id with a message.
+   */
+  async present(input: {
+    channelKey: string;
+    uploader: Extract<Uploader, { kind: 'agent' }>;
+    path: string;
+    size: number;
+  }) {
+    const access = await channelAccess(this.database, input.channelKey, { kind: 'agent', id: input.uploader.id });
+    if (!access.exists) throw new FileError('That channel does not exist.', 404);
+    if (!access.post) throw new FileError('You cannot post files in that channel.', 403);
+    const row = await this.database.client.channelFile.create({
+      data: {
+        channelKey: input.channelKey,
+        uploaderKind: 'agent',
+        uploaderId: input.uploader.id,
+        uploaderName: input.uploader.name,
+        name: fileName(input.path),
+        mime: 'text/plain',
+        kind: 'scratch',
+        size: input.size,
+        scratchAgentId: input.uploader.id,
+        scratchPath: input.path,
+      },
     });
     return fileView(row);
   }

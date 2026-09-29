@@ -58,6 +58,8 @@ Bun.serve<TerminalSocket>({
   hostname: '0.0.0.0',
   port: Number(process.env.COMPUTER_CONTROLLER_PORT ?? 3101),
   idleTimeout: 150,
+  // Agent file copies stream up to the 1 GiB transfer bound.
+  maxRequestBodySize: 1025 * 1024 * 1024,
   async fetch(request, server) {
     try {
       const { pathname, searchParams } = new URL(request.url);
@@ -107,6 +109,53 @@ Bun.serve<TerminalSocket>({
         data.opening = false;
         terminals.release(data);
         return json({ message: 'Terminal upgrade failed.' }, 400);
+      }
+      // Agent file copies: stream one guest file out, or one file in (bytes never buffered here).
+      const transferMatch = /^\/computers\/([^/]+)\/(export|import)$/.exec(pathname);
+      if (transferMatch) {
+        const id = decodeURIComponent(transferMatch[1]);
+        if (transferMatch[2] === 'export') {
+          if (request.method !== 'GET') return json({ message: 'Method not allowed.' }, 405);
+          const file = await manager.exportFile(
+            id,
+            searchParams.get('path') ?? '',
+            Number(searchParams.get('max') ?? 0),
+          );
+          return new Response(
+            new ReadableStream<Uint8Array>({
+              async pull(controller) {
+                try {
+                  const next = await file.stream.next();
+                  if (next.done) controller.close();
+                  else controller.enqueue(next.value);
+                } catch (error) {
+                  controller.error(error);
+                }
+              },
+              async cancel() {
+                await file.stream.return(undefined);
+              },
+            }),
+            {
+              headers: {
+                'Content-Type': 'application/octet-stream',
+                'Content-Length': String(file.size),
+                'X-File-Name': encodeURIComponent(file.name),
+                'Cache-Control': 'no-store',
+              },
+            },
+          );
+        }
+        if (request.method !== 'PUT') return json({ message: 'Method not allowed.' }, 405);
+        if (!request.body) return json({ message: 'A file body is required.' }, 400);
+        return json(
+          await manager.importFile(
+            id,
+            searchParams.get('path') ?? '',
+            Number(searchParams.get('size')),
+            request.body as unknown as AsyncIterable<Uint8Array>,
+          ),
+        );
       }
       const fileMatch = /^\/computers\/([^/]+)\/(files|file-preview|download)$/.exec(pathname);
       if (fileMatch) {

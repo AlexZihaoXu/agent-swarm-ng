@@ -411,6 +411,9 @@ model ChannelFile {
   deletedById   String?
   deletedByName String?
   deletedAt     DateTime?
+  /// A live scratch preview (kind "scratch"): the presenting agent's scratch file, read when shown.
+  scratchAgentId String?
+  scratchPath    String?
   createdAt     DateTime  @default(now())
 
   @@index([channelKey, createdAt])

@@ -5,7 +5,7 @@ function reference(entry: SessionEntry): ScreenshotReference | null {
   if (
     entry.type !== 'message' ||
     entry.message.role !== 'toolResult' ||
-    !['glance', 'look_at', 'read', 'terminal_view'].includes(entry.message.toolName)
+    !['glance', 'look_at', 'read', 'terminal_view', 'read_file'].includes(entry.message.toolName)
   )
     return null;
   const details = entry.message.details as { computerImage?: ScreenshotReference } | undefined;

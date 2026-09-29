@@ -59,6 +59,45 @@ export class DockerApi {
     }
   }
 
+  /**
+   * Docker's archive endpoint for one container path: HEAD stats it, GET streams it as tar, PUT extracts a tar into
+   * a folder. Streams both ways; nothing is buffered.
+   */
+  archive(
+    method: 'HEAD' | 'GET' | 'PUT',
+    container: string,
+    query: Record<string, string>,
+    body?: AsyncIterable<Uint8Array>,
+    timeout = 120_000,
+  ) {
+    return new Promise<http.IncomingMessage>((resolve, reject) => {
+      const req = http.request(
+        {
+          socketPath: this.socketPath,
+          path: `/v1.44/containers/${encodeURIComponent(container)}/archive?${new URLSearchParams(query)}`,
+          method,
+          headers: body ? { 'Content-Type': 'application/x-tar', 'Transfer-Encoding': 'chunked' } : {},
+          timeout,
+        },
+        resolve,
+      );
+      req.on('error', reject);
+      req.on('timeout', () => req.destroy(new Error('Docker operation timed out.')));
+      if (!body) return void req.end();
+      void (async () => {
+        try {
+          for await (const chunk of body) {
+            if (!req.write(chunk)) await new Promise(done => req.once('drain', done));
+          }
+          req.end();
+        } catch (error) {
+          req.destroy(error as Error);
+          reject(error);
+        }
+      })();
+    });
+  }
+
   async execStream(
     container: string,
     command: string[],

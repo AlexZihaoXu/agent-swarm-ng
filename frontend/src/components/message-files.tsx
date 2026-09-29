@@ -4,6 +4,7 @@ import { FileIcon } from '@/components/ui/file-icon';
 import { fileSize } from '@/lib/computer-files';
 import { fileContentUrl, previewChatFile, type ChatFile } from '@/lib/chat-files';
 import { cn } from '@/lib/utils';
+import { useScratchRevision } from '@/lib/scratch-writers';
 import 'highlight.js/styles/github-dark.css';
 import './message-markdown.css';
 
@@ -92,13 +93,17 @@ function useHighlighted(text: string | undefined, name: string) {
   return html;
 }
 
-/** Discord-style text file preview: a name/size bar over the first lines, expandable in place. */
+/**
+ * Discord-style text file preview: a name/size bar over the first lines, expandable in place. A live scratch
+ * preview reads the agent's file as it is now and refreshes whenever the agent writes to its scratchpad.
+ */
 function TextFile({ file }: { file: ChatFile }) {
   const [expanded, setExpanded] = useState(false);
+  const revision = useScratchRevision(file.scratch?.agentId ?? '');
   const preview = useQuery({
-    queryKey: ['file-text', file.id, expanded],
+    queryKey: ['file-text', file.id, expanded, file.scratch ? revision : 0],
     queryFn: ({ signal }) => previewChatFile(file.id, expanded ? EXPANDED_LINES : PREVIEW_LINES, signal),
-    staleTime: Infinity,
+    staleTime: file.scratch ? 0 : Infinity,
     retry: false,
     placeholderData: previous => previous,
   });
@@ -110,7 +115,16 @@ function TextFile({ file }: { file: ChatFile }) {
       <div className="flex min-w-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5">
         <FileIcon />
         <DownloadLink file={file} className="text-xs" />
-        <span className="shrink-0 text-[11px] text-muted-foreground">{fileSize(file.size)}</span>
+        {file.scratch ? (
+          <span
+            title={`Live from the scratchpad (${file.scratch.path}): updates as ${file.uploader.name} edits it`}
+            className="shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-px text-[10px] font-medium text-emerald-400"
+          >
+            Live
+          </span>
+        ) : (
+          <span className="shrink-0 text-[11px] text-muted-foreground">{fileSize(file.size)}</span>
+        )}
         {(more || expanded) && (
           <button
             type="button"
@@ -197,7 +211,7 @@ export function MessageFiles({ files, align = 'start' }: { files: ChatFile[]; al
       {rest.map(file =>
         file.status === 'deleted' ? (
           <DeletedFile key={file.id} file={file} />
-        ) : file.kind === 'text' ? (
+        ) : file.kind === 'text' || file.kind === 'scratch' ? (
           <TextFile key={file.id} file={file} />
         ) : (
           <GenericFile key={file.id} file={file} />

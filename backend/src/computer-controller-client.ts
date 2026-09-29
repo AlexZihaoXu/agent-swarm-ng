@@ -23,6 +23,16 @@ export interface ComputerController {
   readonly runtime?: ComputerRuntime;
   files?(id: string, mode: FileOperation, query: FileQuery): Promise<FileResult>;
   terminalSocket?(id: string, session: string): WebSocket;
+  /** Streams one guest file out, at most `maxBytes` (agent file copies). */
+  exportFile?(id: string, path: string, maxBytes: number, signal?: AbortSignal): Promise<GuestFile>;
+  /** Writes one file into an existing guest folder. */
+  importFile?(
+    id: string,
+    path: string,
+    size: number,
+    body: AsyncIterable<Uint8Array>,
+    signal?: AbortSignal,
+  ): Promise<{ path: string; size: number }>;
   limits(): Promise<ComputerLimits>;
   create(id: string, name: string, settings: ComputerSettings, maxComputers?: number): Promise<void>;
   remove(id: string, name: string): Promise<void>;
@@ -34,6 +44,8 @@ export interface ComputerController {
   updateResources(id: string, name: string, settings: Pick<ComputerSettings, 'cpuCores' | 'memoryGiB'>): Promise<void>;
   replaceStopped(id: string, name: string, settings: ComputerSettings): Promise<void>;
 }
+
+export type GuestFile = { name: string; size: number; stream: AsyncIterable<Uint8Array> };
 
 /** A rejection the controller itself explained (its ResourceError messages are operator-safe). */
 export class ControllerError extends Error {
@@ -58,7 +70,7 @@ export class HttpComputerController implements ComputerController {
   private async request(path: string, init: RequestInit = {}, timeout = 10_000) {
     const response = await this.fetcher(new URL(path, this.baseUrl), {
       ...init,
-      signal: AbortSignal.timeout(timeout),
+      signal: init.signal ? AbortSignal.any([AbortSignal.timeout(timeout), init.signal]) : AbortSignal.timeout(timeout),
       redirect: 'error',
       headers: {
         ...controllerHeaders(),
@@ -92,6 +104,32 @@ export class HttpComputerController implements ComputerController {
     );
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     return new WebSocket(url, { headers: controllerHeaders() } as unknown as string[]);
+  }
+  async exportFile(id: string, path: string, maxBytes: number, signal?: AbortSignal): Promise<GuestFile> {
+    const query = new URLSearchParams({ path, max: String(maxBytes) });
+    const response = await this.request(`/computers/${encodeURIComponent(id)}/export?${query}`, { signal }, 300_000);
+    const size = Number(response.headers.get('content-length'));
+    if (!response.body || !Number.isSafeInteger(size)) throw new ControllerError(503, 'Invalid file response.');
+    return {
+      name: decodeURIComponent(response.headers.get('x-file-name') ?? '') || path.split('/').pop() || 'file',
+      size,
+      stream: response.body as unknown as AsyncIterable<Uint8Array>,
+    };
+  }
+  async importFile(id: string, path: string, size: number, body: AsyncIterable<Uint8Array>, signal?: AbortSignal) {
+    const query = new URLSearchParams({ path, size: String(size) });
+    const response = await this.request(
+      `/computers/${encodeURIComponent(id)}/import?${query}`,
+      {
+        method: 'PUT',
+        body: body as unknown as ReadableStream,
+        headers: { 'content-type': 'application/octet-stream' },
+        signal,
+        duplex: 'half',
+      } as RequestInit,
+      300_000,
+    );
+    return (await response.json()) as { path: string; size: number };
   }
   async files(id: string, mode: FileOperation, query: FileQuery) {
     return fetchComputerFile(this.fetcher, this.baseUrl, id, mode, query);

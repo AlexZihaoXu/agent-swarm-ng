@@ -63,7 +63,13 @@ export type ChatConfiguration = {
   baseUrl: string;
   apiKey?: string;
   channel: Channel;
-  publishPeer?: (channelId: string, text: string, callId: string, replyToMessageId?: string) => Promise<string>;
+  publishPeer?: (
+    channelId: string,
+    text: string,
+    callId: string,
+    replyToMessageId?: string,
+    fileIds?: string[],
+  ) => Promise<string>;
 };
 
 function capabilitiesFor(model?: Model<Api>) {
@@ -303,6 +309,7 @@ export async function createChatSession(
     toolCallId: string,
     final: boolean,
     replyToMessageId?: string,
+    fileIds?: string[],
   ) => void | string | Promise<void | string>,
   additionalTools: ToolDefinition[] = [],
   subscriptionRuntime?: ModelRuntime,
@@ -316,10 +323,16 @@ export async function createChatSession(
     name: 'send_message',
     label: 'Send message',
     description:
-      'Publish to an authorized conversation, using the incoming message’s explicit reply channel by default. For private-human tasks, acknowledge FIRST with final:false before working. Group and agent-thread inputs belong in their explicit reply channel, not the private human channel by default; do not automatically acknowledge broadcasts or send thank-you loops. Group/agent-thread messages are limited to 8000 characters, private-human messages to 20000. Split substantial answers into focused messages sent sequentially: final:false for intermediate parts, final:true only for the last part. Plain assistant text is never delivered.',
+      'Publish to an authorized conversation, using the incoming message’s explicit reply channel by default. For private-human tasks, acknowledge FIRST with final:false before working. Group and agent-thread inputs belong in their explicit reply channel, not the private human channel by default; do not automatically acknowledge broadcasts or send thank-you loops. Group/agent-thread messages are limited to 8000 characters, private-human messages to 20000. Split substantial answers into focused messages sent sequentially: final:false for intermediate parts, final:true only for the last part. Attach up to 10 files uploaded to this channel with upload_file by passing their fileIds (text may then be empty). Plain assistant text is never delivered.',
     parameters: Type.Object({
       channelId: Type.String(),
-      text: Type.String({ minLength: 1, maxLength: 20000 }),
+      text: Type.String({ maxLength: 20000 }),
+      fileIds: Type.Optional(
+        Type.Array(Type.String({ minLength: 1, maxLength: 64 }), {
+          maxItems: 10,
+          description: 'Files you uploaded to this same channel with upload_file and have not sent yet.',
+        }),
+      ),
       replyToMessageId: Type.Optional(
         Type.String({
           minLength: 1,
@@ -335,15 +348,15 @@ export async function createChatSession(
         }),
       ),
     }),
-    async execute(toolCallId, { channelId, text, replyToMessageId, final = true }, signal) {
+    async execute(toolCallId, { channelId, text, replyToMessageId, final = true, fileIds = [] }, signal) {
       signal?.throwIfAborted();
-      if (!text.trim()) throw new Error('Message is empty.');
+      if (!text.trim() && !fileIds.length) throw new Error('Message is empty.');
       if (channelId !== config.channel.id) {
         if (!config.publishPeer) throw new Error('Message is not permitted on this channel.');
-        const receipt = await config.publishPeer(channelId, text, toolCallId, replyToMessageId);
+        const receipt = await config.publishPeer(channelId, text, toolCallId, replyToMessageId, fileIds);
         return { content: [{ type: 'text' as const, text: receipt }], details: {}, terminate: final };
       }
-      const receipt = await publish(text, toolCallId, final, replyToMessageId);
+      const receipt = await publish(text, toolCallId, final, replyToMessageId, fileIds);
       return {
         content: [
           {

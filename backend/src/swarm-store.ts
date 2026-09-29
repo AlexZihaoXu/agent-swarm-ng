@@ -97,11 +97,13 @@ export class SwarmStore {
     deliveryKey: string;
     text: string;
     replyToId?: string;
+    /** A DM may be empty only when it carries files. */
+    hasFiles?: boolean;
   }) {
     const { senderId, recipientId, chainId, deliveryKey, text, replyToId } = input;
     if (
       senderId === recipientId ||
-      !text.trim() ||
+      (!text.trim() && !input.hasFiles) ||
       text.length > DM_TEXT_LIMIT ||
       !deliveryKey ||
       deliveryKey.length > 256

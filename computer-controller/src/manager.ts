@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { DockerApi, DockerApiError } from './docker-api';
+import { MAX_TRANSFER, regularFile, tarOneFile, transferPath, untarFirstFile } from './file-transfer';
 import {
   decodeFileResult,
   MAX_DOWNLOAD,
@@ -153,6 +154,7 @@ export class ComputerManager {
   private previewPending = new Map<string, Promise<Buffer | null>>();
   private detectedLimits: ComputerLimits | null = null;
   private fileOperations = new Set<string>();
+  private transfers = new Map<string, number>();
   constructor(
     private readonly docker: DockerApi,
     namespace: string,
@@ -853,6 +855,82 @@ export class ComputerManager {
       }),
     );
     return computers.filter((item): item is NonNullable<typeof item> => item !== null);
+  }
+  /** A running guest desktop by inspected immutable ID, with at most two transfers per guest and six overall. */
+  private async transferTarget(idRaw: string) {
+    const id = validateId(idRaw);
+    const computer = await this.container(this.names.desktop(id), id, 'desktop');
+    if (!computer) throw new ResourceError(404, 'Computer not found.');
+    if (!computer.State.Running) throw new ResourceError(409, 'Computer is not running.');
+    let total = 0;
+    for (const count of this.transfers.values()) total += count;
+    if ((this.transfers.get(id) ?? 0) >= 2 || total >= 6)
+      throw new ResourceError(429, 'File copies are busy. Retry shortly.');
+    this.transfers.set(id, (this.transfers.get(id) ?? 0) + 1);
+    const done = () => {
+      const left = (this.transfers.get(id) ?? 1) - 1;
+      if (left > 0) this.transfers.set(id, left);
+      else this.transfers.delete(id);
+    };
+    return { container: computer.Id, done };
+  }
+  /** Streams one regular guest file out (for agent file copies); the caller bounds the size. */
+  async exportFile(idRaw: string, rawPath: string, maxBytes: number) {
+    const { path, name } = transferPath(rawPath);
+    const limit = Math.min(Math.max(0, Math.trunc(maxBytes) || 0), MAX_TRANSFER);
+    const { container, done } = await this.transferTarget(idRaw);
+    try {
+      const stat = await this.docker.archive('HEAD', container, { path });
+      stat.resume();
+      if (stat.statusCode === 404) throw new ResourceError(404, 'Path not found.');
+      if (stat.statusCode !== 200) throw new ResourceError(400, 'Path is not available.');
+      const { size } = regularFile(stat.headers['x-docker-container-path-stat'] as string | undefined ?? null);
+      if (size > limit) throw new ResourceError(413, 'The file is larger than the transfer limit.');
+      const response = await this.docker.archive('GET', container, { path });
+      if (response.statusCode !== 200) {
+        response.resume();
+        throw new ResourceError(response.statusCode === 404 ? 404 : 400, 'Path is not available.');
+      }
+      const bytes = untarFirstFile(response, limit);
+      const stream = (async function* () {
+        try {
+          yield* bytes;
+        } finally {
+          response.destroy();
+          done();
+        }
+      })();
+      return { name, size, stream };
+    } catch (error) {
+      done();
+      throw error;
+    }
+  }
+  /** Writes one file into an existing guest folder, owned by the guest user; replaces a file of the same name. */
+  async importFile(idRaw: string, rawPath: string, size: number, body: AsyncIterable<Uint8Array>) {
+    const { directory, name } = transferPath(rawPath);
+    if (!Number.isSafeInteger(size) || size < 0 || size > MAX_TRANSFER)
+      throw new ResourceError(400, 'Invalid file size.');
+    const { container, done } = await this.transferTarget(idRaw);
+    try {
+      const folder = await this.docker.archive('HEAD', container, { path: directory });
+      folder.resume();
+      if (folder.statusCode === 404)
+        throw new ResourceError(404, 'The destination folder does not exist. Create it first.');
+      const response = await this.docker.archive(
+        'PUT',
+        container,
+        { path: directory, noOverwriteDirNonDir: 'true', copyUIDGID: '1' },
+        tarOneFile(name, size, body),
+      );
+      response.resume();
+      if (response.statusCode === 404)
+        throw new ResourceError(404, 'The destination folder does not exist. Create it first.');
+      if (response.statusCode !== 200) throw new ResourceError(400, 'Could not write the file there.');
+      return { path: `${directory === '/' ? '' : directory}/${name}`, size };
+    } finally {
+      done();
+    }
   }
   /** Operator reads neither acquire nor release agent control. One per guest, two globally. */
   async operatorFiles(idRaw: string, mode: FileOperation, query: FileQuery) {

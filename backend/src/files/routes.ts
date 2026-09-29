@@ -5,6 +5,7 @@ import { pageText } from '../text-page';
 import { FileError, type FileStore, type FileView } from './store';
 import { channelAccess } from './access';
 import type { PlatformStore } from '../platform-store';
+import type { Scratchpad } from '../scratchpad';
 
 const Uploader = Type.Object({
   kind: Type.Union([Type.Literal('human'), Type.Literal('agent')]),
@@ -17,7 +18,13 @@ export const FileSchema = Type.Object({
   channelKey: Type.String(),
   name: Type.String(),
   mime: Type.String(),
-  kind: Type.Union([Type.Literal('image'), Type.Literal('text'), Type.Literal('pdf'), Type.Literal('other')]),
+  kind: Type.Union([
+    Type.Literal('image'),
+    Type.Literal('text'),
+    Type.Literal('pdf'),
+    Type.Literal('other'),
+    Type.Literal('scratch'),
+  ]),
   size: Type.Integer(),
   status: Type.Union([Type.Literal('available'), Type.Literal('deleted')]),
   uploader: Uploader,
@@ -25,6 +32,8 @@ export const FileSchema = Type.Object({
   messageId: Type.Union([Type.String(), Type.Null()]),
   createdAt: Type.String(),
   deleted: Type.Optional(Type.Object({ by: Uploader, at: Type.Union([Type.String(), Type.Null()]) })),
+  /** A live scratch preview: the presenting agent's scratch file, read as it is now. */
+  scratch: Type.Optional(Type.Object({ agentId: Type.String(), path: Type.String() })),
 });
 const Usage = Type.Object({
   bytes: Type.Integer(),
@@ -49,7 +58,21 @@ const contentDisposition = (kind: 'inline' | 'attachment', name: string) =>
  * The human's file API for chats (trusted dashboard surface): upload into a channel, list a channel's files,
  * open/preview/download one, delete one (a tombstone stays). Agents use their own tools, not these routes.
  */
-export function registerFileRoutes(app: FastifyInstance, database: PlatformStore, files: FileStore) {
+export function registerFileRoutes(
+  app: FastifyInstance,
+  database: PlatformStore,
+  files: FileStore,
+  scratch: Scratchpad,
+) {
+  /** A scratch preview's current text, or the reply already sent when the file is gone from the scratchpad. */
+  const liveScratch = async (reply: FastifyReply, view: FileView) => {
+    try {
+      return (await scratch.content(view.scratch!.agentId, view.scratch!.path)).content;
+    } catch {
+      reply.code(410).send({ message: `"${view.name}" is no longer in the scratchpad.` });
+      return null;
+    }
+  };
   const human = { kind: 'human' as const };
   const fail = (reply: FastifyReply, caught: unknown) => {
     if (caught instanceof FileError) return reply.code(caught.status).send({ message: caught.message });
@@ -149,6 +172,17 @@ export function registerFileRoutes(app: FastifyInstance, database: PlatformStore
       const found = await visible(reply, request.params.id);
       if (!found) return reply;
       const { view, blobId } = found;
+      if (view.status !== 'deleted' && view.scratch) {
+        const text = await liveScratch(reply, view);
+        if (text === null) return reply;
+        return reply
+          .header('Content-Type', 'application/octet-stream')
+          .header('Content-Disposition', contentDisposition('attachment', view.name))
+          .header('X-Content-Type-Options', 'nosniff')
+          .header('Cache-Control', 'no-store')
+          .header('Content-Security-Policy', "default-src 'none'; sandbox")
+          .send(Buffer.from(text));
+      }
       if (view.status === 'deleted' || !blobId) return reply.code(410).send({ message: `"${view.name}" was deleted.` });
       const inline = !request.query.download && INLINE.has(view.mime);
       return reply
@@ -196,6 +230,11 @@ export function registerFileRoutes(app: FastifyInstance, database: PlatformStore
       const found = await visible(reply, request.params.id);
       if (!found) return reply;
       const { view, blobId } = found;
+      if (view.status !== 'deleted' && view.scratch) {
+        const text = await liveScratch(reply, view);
+        if (text === null) return reply;
+        return { ...pageText(text, request.query.offset, request.query.limit), previewLimited: false };
+      }
       if (view.status === 'deleted' || !blobId) return reply.code(410).send({ message: `"${view.name}" was deleted.` });
       if (view.kind !== 'text') return reply.code(400).send({ message: 'Only text files have a text preview.' });
       // The preview reads at most the first megabyte; the full file downloads.
