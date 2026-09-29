@@ -115,9 +115,10 @@ export function createComputerTools(
       parameters: object({ computer: Type.Union([Type.String({ minLength: 1, maxLength: 100 }), Type.Null()]) }),
       async execute(_call, { computer }, signal) {
         signal?.throwIfAborted();
-        const result = await service.use(agentId, computer);
         // Watches belong to the computer they watch: leaving it ends them (quietly: this is your own choice).
-        const ended = (await watches?.releasedBy(agentId, result.computerId)) ?? 0;
+        const { result, ended } = watches
+          ? await watches.releasing(agentId, () => service.use(agentId, computer))
+          : { result: await service.use(agentId, computer), ended: 0 };
         const watchesEnded = ended ? { watchesEnded: ended } : {};
         return textResult(
           computer === null

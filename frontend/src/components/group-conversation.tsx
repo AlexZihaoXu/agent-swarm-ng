@@ -241,7 +241,7 @@ export function GroupConversation({
           <button
             type="button"
             disabled={loadingOlder}
-            onClick={loadOlder}
+            onClick={window_.loadOlder}
             className="sr-only focus:not-sr-only focus:mx-auto focus:mt-3 focus:block focus:rounded-md focus:px-3 focus:py-1 focus:text-xs focus:ring-2 focus:ring-ring"
           >
             Load earlier messages

@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { prepareDatabase } from '../test-database';
-import { ComputerUseService, type ComputerRuntime } from './service';
+import { ComputerUseError, ComputerUseService, type ComputerRuntime } from './service';
 import { ComputerWatches, type Judge } from './watches';
 
 const session = '12345678-1234-1234-1234-123456789abc';
@@ -11,19 +11,28 @@ async function setup(judge: Judge) {
   const computer = await db.client.computer.create({
     data: { name: 'Desk', requestKey: crypto.randomUUID(), state: 'running' },
   });
-  const state = { screen: 'working...', alive: true, pixels: 1 };
+  const state = { screen: 'working...', alive: true, pixels: 1, gone: false, prepareFails: false, hang: false };
   const runtime: ComputerRuntime = {
-    capture: async () => ({
-      mimeType: 'image/png',
-      data: new Uint8Array([state.pixels]),
-      width: 1,
-      height: 1,
-      bounds: [0, 0, 999, 999],
-    }),
+    capture: async (_id, _request, signal) => {
+      if (state.hang)
+        await new Promise((_, reject) =>
+          signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))),
+        );
+      return {
+        mimeType: 'image/png',
+        data: new Uint8Array([state.pixels]),
+        width: 1,
+        height: 1,
+        bounds: [0, 0, 999, 999],
+      };
+    },
     execute: async () => ({ started: true, completed: 1, error: null }),
-    prepareCore: async (_id, request) => request,
+    prepareCore: async (_id, request) => {
+      if (state.prepareFails) throw new ComputerUseError('Computer controller unavailable.', 503);
+      return request;
+    },
     core: async (_id, request: any) =>
-      request.session !== session
+      request.session !== session || (state.gone && request.operation !== 'delete')
         ? { started: true, settled: true as const, error: 'Unknown terminal session.' }
         : {
             started: true,
@@ -254,6 +263,64 @@ it('counts watches being created against the limit, and ties a watch to the clai
     await t.db.client.computer.update({ where: { id: t.computer.id }, data: { state: 'stopped' } });
     await t.tick(30);
     expect(t.events.at(-1)).toContain('the computer is not running');
+  } finally {
+    await t.close();
+  }
+});
+
+it('your own release (even mid-check) and your own terminal delete end watches quietly; others are reported', async () => {
+  const t = await setup(async () => ({ notify: false, summary: 'no' }));
+  try {
+    // Someone else closing the watched terminal is reported.
+    await t.watches.create(t.agent.id, { ...terminalWatch, checkNow: false });
+    t.state.gone = true;
+    await t.tick(30);
+    expect(t.events.at(-1)).toContain('the terminal can no longer be viewed');
+    // Deleting it yourself is not.
+    t.state.gone = false;
+    await t.watches.create(t.agent.id, { ...terminalWatch, checkNow: false });
+    await t.service.core(t.agent.id, { kind: 'terminal', operation: 'delete', session });
+    t.state.gone = true;
+    await t.tick(30);
+    expect(t.events).toHaveLength(1);
+    expect(t.watches.list(t.agent.id)).toEqual([]);
+    // Releasing the computer while a desktop check is reading it.
+    t.state.hang = true;
+    await t.watches.create(t.agent.id, {
+      kind: 'desktop',
+      until: 'dialog',
+      everySeconds: 30,
+      human: true,
+      checkNow: false,
+    });
+    const events = t.events.length;
+    const checking = t.tick(30);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const { ended } = await t.watches.releasing(t.agent.id, () => t.service.use(t.agent.id, null));
+    await checking;
+    expect(ended).toBe(1);
+    expect(t.events).toHaveLength(events);
+  } finally {
+    await t.close();
+  }
+});
+
+it('always checks at least once, and a failed read never blocks the computer', async () => {
+  const judge = vi.fn<Judge>(async () => ({ notify: false, summary: 'not yet' }));
+  const t = await setup(judge);
+  try {
+    await t.watches.create(t.agent.id, { ...terminalWatch, checkNow: false, timeoutSeconds: 30 });
+    await t.tick(30);
+    expect(judge).toHaveBeenCalledTimes(1);
+    await t.tick(0);
+    expect(t.events.at(-1)).toContain('timed out');
+    // A controller hiccup during a watch read fails that watch's check only.
+    await t.watches.create(t.agent.id, { ...terminalWatch, checkNow: false });
+    t.state.prepareFails = true;
+    await t.tick(30);
+    expect(t.events.at(-1)).toContain('a check failed');
+    t.state.prepareFails = false;
+    expect((await t.service.terminalView(t.agent.id, { session })).error).toBeUndefined();
   } finally {
     await t.close();
   }

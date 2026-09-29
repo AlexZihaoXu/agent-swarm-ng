@@ -39,7 +39,7 @@ const common = {
     Type.Number({
       minimum: WATCH_MIN_SECONDS,
       maximum: WATCH_MAX_TIMEOUT_SECONDS,
-      description: `Give up after this long (default: the larger of ${WATCH_DEFAULT_TIMEOUT_SECONDS} and 10 × every_seconds; at most 24 hours). You are told when it times out.`,
+      description: `Give up after this long: at least every_seconds, at most 24 hours (default: the larger of ${WATCH_DEFAULT_TIMEOUT_SECONDS} and 10 × every_seconds). Every watch gets at least one check. You are told when it times out.`,
     }),
   ),
   check_now: Type.Optional(
@@ -51,7 +51,7 @@ const common = {
     }),
   ),
 };
-const facts = `Once only: the first check that finds the condition wakes you with one platform event (the watcher's report) and removes the watch; set a new watch to keep watching. Each check a watcher (your own model, up to ${WATCH_MAX_TURNS} turns, look-only tools) gets your condition, the current view, the view when the watch started, and how long the view has been unchanged (it never skips a check because nothing changed). You are also woken, and the watch removed, when it times out, when a check fails, or when you lose the computer; your own release or cancel_timer ends it quietly. At most ${WATCH_MAX_ACTIVE} watches; list_timers shows them. A watch neither types nor clicks, and grants no input allowance: look yourself after waking. Watches end on a platform restart (you are told). Read Swarm Knowledge practices/waiting before first use.`;
+const facts = `Once only: the first check that finds the condition wakes you with one platform event (the watcher's report) and removes the watch; set a new watch to keep watching. Each check a watcher (your own model, up to ${WATCH_MAX_TURNS} turns and 120 s, 240 s for a fork, look-only tools) gets your condition, the current view, the view when the watch started, and how long the view has been unchanged (it never skips a check because nothing changed). You are also woken, and the watch removed, when it times out, when a check fails, when the watched terminal is gone, or when you lose the computer; your own release, cancel_timer or deleting the watched terminal ends it quietly. At most ${WATCH_MAX_ACTIVE} watches; list_timers shows them. A watch neither types nor clicks, and grants no input allowance: look yourself after waking. Watches end on a platform restart (you are told). Read Swarm Knowledge practices/waiting before first use.`;
 
 export function createWatchTools(
   watches: ComputerWatches,

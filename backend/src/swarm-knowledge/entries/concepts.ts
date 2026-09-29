@@ -66,7 +66,7 @@ export const platformEventsConcept = {
   related: ['concepts/time', 'concepts/computers/watches', 'practices/waiting'],
   content: `A platform event is an input from the platform itself about the agent's own affairs, labelled "[Platform <kind> event ...]". It is not a message from the human or another agent. Kinds:
 - timer and reminder: one of the agent's own timers or reminders fired (concepts/time).
-- computer: something happened on the computer the agent holds: a terminal exited or was closed by someone else (concepts/computers/terminals), or one of its watches finished: fired, timed out, failed, or ended because the computer was lost or the platform restarted (concepts/computers/watches).
+- computer: something happened on the computer the agent holds: a terminal exited or was closed by someone else (concepts/computers/terminals), or one of its watches finished: fired, timed out, failed, or ended because its terminal is gone, the computer was lost or blocked, the model can no longer see images, or the platform restarted (concepts/computers/watches).
 
 Delivery: if the agent is idle, the event starts a new turn. If it is busy, it arrives like a new message and triage decides whether to interrupt. Events are delivered at most once and never replayed: a firing is recorded before it is handed to the agent, so one caught by a platform shutdown at that moment can be lost.
 
@@ -217,7 +217,7 @@ export const watchesConcept = {
   related: ['practices/waiting', 'concepts/time', 'concepts/platform-events', 'practices/harnesses/claude-code'],
   content: `A watch asks the platform to look at the computer you hold at a fixed interval and wake you ONCE when a condition you describe is met. watch_terminal watches one terminal; watch_desktop watches the screen, or one region of it ({x,y,size} as in look_at).
 
-Each check: the platform takes the current view (terminal text with its running/exited state, or a screenshot) and a watcher, a short-lived model check using your own model, decides whether your condition (until, up to 1000 characters) is met. The watcher is given: your condition; what it watches; the check number and time; the current view; the view when the watch started (when it differs); and whether the view changed since the previous check or for how long it has been unchanged ("Unchanged ... 95s, 4 checks in a row"). It never skips a check because nothing changed; the unchanged time is information (for example, "Claude's output has not moved for 60 s"). It may look closer with look-only tools (terminal_view including colors, terminal_status; or glance/look_at). It cannot type or click. It has at most 10 model turns per check.
+Each check: the platform takes the current view (terminal text with its running/exited state, or a screenshot) and a watcher, a short-lived model check using your own model, decides whether your condition (until, up to 1000 characters) is met. The watcher is given: your condition; what it watches; the check number and time; the current view; the view when the watch started (when it differs); and whether the view changed since the previous check or for how long it has been unchanged ("Unchanged ... 95s, 4 checks in a row"). It never skips a check because nothing changed; the unchanged time is information (for example, "Claude's output has not moved for 60 s"). It may look closer with look-only tools (terminal_view including colors, terminal_status; or glance/look_at). It cannot type or click. It has at most 10 model turns and 120 seconds per check (240 for a fork).
 
 Settings: every_seconds 30..3600 (default 30). timeout_seconds defaults to the larger of 600 and 10 × every_seconds, at most 24 hours. check_now (default true) runs the first check immediately; false waits one interval. context "fresh" (default): the watcher sees only the check. context "fork": the watcher is a copy of your own conversation, so it understands conditions that depend on what you were doing; allowed only when every_seconds is below 150, because longer gaps lose the provider's cache of your context and every check would pay for all of it.
 
@@ -225,10 +225,11 @@ Endings, each removing the watch:
 - fired: a check found the condition. You get one platform event with the watcher's report.
 - timed out: you are told, with the last check's reason.
 - failed: a check could not decide (model or computer error). You are told, in case the condition happened.
-- computer lost: force release (even if you claim it again), assignment removal, or the computer powered off. You are told.
-- terminal gone: the watched terminal was deleted or can no longer be viewed. You are told.
+- computer lost: force release (even if you claim it again), assignment removal, the computer powered off, or the computer blocked after an operation whose outcome is uncertain. You are told, with what to do next.
+- terminal gone: the watched terminal was closed by someone else or can no longer be viewed. You are told.
+- model can no longer see images (a desktop watch after the agent's model changed): you are told.
 - platform restart: every claim is released, so watches end. You are told once the platform is back.
-- your own cancel_timer, or releasing/switching computers yourself: ends quietly.
+- your own cancel_timer, releasing/switching computers yourself, or deleting the watched terminal yourself: ends quietly.
 
 Limits: at most 3 watches at a time; list_timers shows them with their next check and timeout. Checks never overlap, and they wait for a busy computer instead of failing. A watch grants no input allowance: after waking, look yourself.
 

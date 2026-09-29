@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { PlatformStore } from '../platform-store';
-import { ComputerUseError, type ComputerUseService, type ScreenFrame } from './service';
+import { WatchClaimError, type ComputerUseError, type ComputerUseService, type ScreenFrame } from './service';
 import { terminalParameters, viewResult } from './terminal-tools';
 import { lookParameters } from './tools';
 import type { AgentTool, Verdict } from './watch-judge';
@@ -19,13 +19,29 @@ export class WatchError extends Error {}
 /** A reason the watch cannot go on (not a failed check): it ends with this message. */
 export class WatchEnd extends Error {}
 /** The watched computer can no longer be used by this watch. */
-class WatchLost extends Error {}
-const lostReason = (error: ComputerUseError) =>
+class WatchLost extends Error {
+  constructor(
+    message: string,
+    readonly next: string,
+  ) {
+    super(message);
+  }
+}
+const lost = (error: ComputerUseError) =>
   /not running/i.test(error.message)
-    ? 'the computer is not running (it was powered off)'
-    : /settlement is uncertain/i.test(error.message)
-      ? 'the computer is blocked after an operation whose outcome is uncertain (ask the human to Force release it)'
-      : 'you no longer hold that computer (the human force released it, or its assignment was removed)';
+    ? new WatchLost(
+        'the computer is not running (it was powered off)',
+        'Ask the human to power it on (Computers tab) if you still need it, then claim it and set a new watch.',
+      )
+    : /uncertain/i.test(error.message)
+      ? new WatchLost(
+          'the computer is blocked after an operation whose outcome is uncertain',
+          'Ask the human to Force release it, then claim it again and look before continuing.',
+        )
+      : new WatchLost(
+          'you no longer hold that computer (the human force released it, or its assignment was removed)',
+          'Claim it again with use_computer and set a new watch if you still need one.',
+        );
 export type Region = { x: number; y: number; size: number };
 export type WatchSpec = {
   kind: 'terminal' | 'desktop';
@@ -91,6 +107,10 @@ const image = (frame: ScreenFrame): ImageContent => ({
  */
 export class ComputerWatches {
   private watches = new Map<string, Watch>();
+  /** Agents releasing or switching computers themselves: their watches' checks end quietly meanwhile. */
+  private leaving = new Set<string>();
+  /** Told when an agent's last fork watch is gone (its saved context is no longer needed). */
+  onForkWatchesGone?: (agentId: string) => void;
   /** Watches being created, counted against the limit before their first await. */
   private creating = new Map<string, number>();
   private closed = false;
@@ -219,6 +239,22 @@ export class ComputerWatches {
     await this.remove(watch);
     return true;
   }
+  /**
+   * Runs the agent's own release or switch: checks interrupted by it end quietly, then its watches on any other
+   * computer are removed. Returns the work's result and how many watches ended.
+   */
+  async releasing<T extends { computerId: string | null }>(agentId: string, work: () => Promise<T>) {
+    this.leaving.add(agentId);
+    const before = this.forAgent(agentId);
+    try {
+      const result = await work();
+      await this.releasedBy(agentId, result.computerId);
+      // Counted from before: a check the release interrupted may already have ended its watch.
+      return { result, ended: before.filter(watch => watch.computerId !== result.computerId).length };
+    } finally {
+      this.leaving.delete(agentId);
+    }
+  }
   /** The agent released or switched computers itself: its watches elsewhere end quietly. Returns how many. */
   async releasedBy(agentId: string, keepComputerId?: string | null) {
     const ended = [...this.watches.values()].filter(
@@ -233,7 +269,8 @@ export class ComputerWatches {
   /** Runs a due check now (the scheduler does this on its own; tests call it to step a controlled clock). */
   async due() {
     const now = this.now();
-    for (const watch of [...this.watches.values()]) if (watch.nextAt <= now && !watch.running) await this.check(watch);
+    for (const watch of [...this.watches.values()])
+      if (Math.min(watch.nextAt, watch.deadline) <= now && !watch.running) await this.check(watch);
   }
 
   private view(watch: Watch) {
@@ -262,6 +299,8 @@ export class ComputerWatches {
     clearTimeout(watch.timer);
     watch.running?.abort();
     this.watches.delete(watch.id);
+    if (watch.context === 'fork' && !this.forAgent(watch.agentId).some(other => other.context === 'fork'))
+      this.onForkWatchesGone?.(watch.agentId);
     await this.database.client.computerWatch.deleteMany({ where: { id: watch.id } }).catch(() => undefined);
   }
   /** Removes the watch and wakes its agent once with why. */
@@ -285,7 +324,8 @@ export class ComputerWatches {
     const startedAt = this.now();
     const label = `Your watch ${watch.id} on ${this.describe(watch)}`;
     const after = `set at ${iso(watch.createdAt)}; ${watch.checks} check(s) ran`;
-    if (startedAt >= watch.deadline)
+    // Every watch gets at least one check, even one whose only check falls at its deadline.
+    if (startedAt >= watch.deadline && watch.checks > 0)
       return this.end(
         watch,
         `${label} timed out at ${iso(startedAt)} without the condition being seen (${after}${watch.lastReason ? `; the last check said: ${watch.lastReason}` : ''}).${this.stillness(watch, startedAt)}\nCondition was: ${watch.until}\nThe watch is removed. Look for yourself before deciding what to do; set a new watch if you still want to wait.`,
@@ -294,6 +334,7 @@ export class ComputerWatches {
     watch.running = controller;
     try {
       const observation = await this.observe(watch, controller.signal);
+      if (observation === null) return await this.remove(watch);
       if (typeof observation === 'string')
         return await this.end(
           watch,
@@ -318,13 +359,12 @@ export class ComputerWatches {
       watch.lastReason = verdict.summary;
     } catch (error) {
       if (controller.signal.aborted || !this.watches.has(watch.id)) return;
+      // The agent's own release or switch interrupted this check: that ends the watch quietly.
+      if (this.leaving.has(watch.agentId)) return await this.remove(watch);
       const at = iso(this.now());
       const condition = `\nCondition was: ${watch.until}\nThe watch is removed.`;
       if (error instanceof WatchLost)
-        return await this.end(
-          watch,
-          `${label} ended at ${at}: ${error.message} (${after}).${condition} Claim it again with use_computer and set a new watch if you still need one.`,
-        );
+        return await this.end(watch, `${label} ended at ${at}: ${error.message} (${after}).${condition} ${error.next}`);
       if (error instanceof WatchEnd)
         return await this.end(watch, `${label} ended at ${at}: ${error.message} (${after}).${condition}`);
       const reason =
@@ -354,13 +394,13 @@ export class ComputerWatches {
     try {
       return await work();
     } catch (error) {
-      if (error instanceof ComputerUseError && error.status !== 503) throw new WatchLost(lostReason(error));
+      if (error instanceof WatchClaimError) throw lost(error);
       throw error;
     }
   }
 
   /** The current view, or why the watch cannot continue. */
-  private async observe(watch: Watch, signal: AbortSignal): Promise<Observation | string> {
+  private async observe(watch: Watch, signal: AbortSignal): Promise<Observation | string | null> {
     const at = this.now();
     if (watch.kind === 'terminal') {
       const receipt = await this.read(() =>
@@ -372,7 +412,11 @@ export class ComputerWatches {
           signal,
         ),
       );
-      if (receipt.error) return `the terminal can no longer be viewed (${receipt.error})`;
+      if (receipt.error)
+        // Deleting the watched terminal yourself ends the watch quietly, like your other deletes.
+        return this.computers.deletedByAgent(watch.computerId, watch.session!)
+          ? null
+          : `the terminal can no longer be viewed (${receipt.error})`;
       const result = receipt.result as { text?: string; session?: Record<string, unknown> };
       const session = result.session ?? {};
       const state = session.alive

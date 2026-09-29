@@ -26,6 +26,8 @@ export class ComputerUseError extends Error {
     super(message);
   }
 }
+/** A watch's computer is no longer usable by it: no claim, not this claim, not running, or blocked. */
+export class WatchClaimError extends ComputerUseError {}
 export class ComputerExecutionError extends ComputerUseError {
   constructor(
     message: string,
@@ -284,10 +286,12 @@ export class ComputerUseService {
   }
   /** The agent's current claim, which must still be on this computer (a watch never follows it elsewhere). */
   async watchClaim(agentId: string, computerId: string, token: string) {
-    const claim = await this.claim(agentId);
+    const claim = await this.claim(agentId).catch(error => {
+      throw error instanceof ComputerUseError ? new WatchClaimError(error.message, error.status) : error;
+    });
     // The same claim, not just the same computer: a force release and a new claim end the watch.
     if (claim.computerId !== computerId || claim.token !== token)
-      throw new ComputerUseError('You no longer hold the computer this watch was set on.', 403);
+      throw new WatchClaimError('You no longer hold the computer this watch was set on.', 403);
     return claim;
   }
   private async screenshot<C extends { computerId: string; token: string }>(
@@ -546,7 +550,9 @@ export class ComputerUseService {
         try {
           prepared = await driver.prepareCore!(claim.computerId, request, abort.signal);
         } catch (error) {
-          if (error instanceof ComputerUseError && error.status === 503) this.uncertain.add(claim.computerId);
+          // A failed read changed nothing, so it never blocks the computer as uncertain.
+          if (error instanceof ComputerUseError && error.status === 503 && !isReadOnly(request))
+            this.uncertain.add(claim.computerId);
           throw error;
         }
         signal?.throwIfAborted();
@@ -554,7 +560,8 @@ export class ComputerUseService {
         const receipt = await Promise.resolve()
           .then(() => driver.core!(claim.computerId, prepared, abort.signal))
           .catch(error => {
-            if (!(error instanceof ComputerExecutionError && error.settled)) this.uncertain.add(claim.computerId);
+            if (!(error instanceof ComputerExecutionError && error.settled) && !isReadOnly(request))
+              this.uncertain.add(claim.computerId);
             // A watch's read never touches its agent's input allowance.
             if (agentId && !patient) this.allowances.delete(agentId);
             throw error;

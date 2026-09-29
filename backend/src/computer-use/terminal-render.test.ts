@@ -16,14 +16,26 @@ it('drops stray or cut escapes and control characters instead of producing inval
   const svg = terminalSvg('\x1b[31mred\x1b[3\x07x\x1b', 80);
   expect(svg).toContain('fill="#cd3131">red');
   expect(svg).not.toMatch(/[\x00-\x08\x1b]/);
-  expect(() => renderTerminal('\x1b[31mred\x1b[3', 80)).not.toThrow();
+  expect(terminalSvg('\x1b[31mred\x1b[3', 80)).toContain('red');
 });
 
-it('renders a PNG as wide as the terminal', () => {
-  const image = renderTerminal('hello \x1b[32mworld\x1b[0m\n', 120);
+it('renders a PNG as wide as the terminal', async () => {
+  const image = await renderTerminal('hello \x1b[32mworld\x1b[0m\n', 120);
   expect([...image.data.slice(1, 4)].map(byte => String.fromCharCode(byte)).join('')).toBe('PNG');
   expect(image.width).toBe(Math.ceil(120 * 16 * 0.602 + 16));
   expect(image.height).toBe(20 + 16);
+});
+
+it('shows at most the last 80 rows, keeping styles from earlier rows, and scales very wide terminals down', async () => {
+  const rows = ['\x1b[31mstart', ...Array.from({ length: 199 }, (_, i) => `row ${i}`)].join('\n');
+  const svg = terminalSvg(rows, 240);
+  expect(svg).not.toContain('>start<');
+  expect(svg).toContain('>row 198<');
+  expect(svg).toContain('fill="#cd3131">row 198'); // still red from the first row
+  expect(svg).toContain(`height="${80 * 20 + 16}"`);
+  const image = await renderTerminal(rows, 240);
+  expect(image.width).toBe(1568);
+  expect(image.rows).toBe(80);
 });
 
 it('a coloured view returns its text without escapes plus an image, kept by reference', async () => {

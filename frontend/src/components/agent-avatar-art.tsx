@@ -206,8 +206,8 @@ export function AgentAvatarArt({
       head.current?.setAttribute('transform', `rotate(${tilt.current} 32 32)`);
       outline.setAttribute('d', curvePath(rendered.current));
       // A top accessory rides the top of the outline as the silhouette moves.
-      const top = crown(rendered.current);
-      topping.current?.setAttribute('transform', `translate(${(top.x - 32).toFixed(2)} ${top.y.toFixed(2)})`);
+      const top = topping.current && crown(rendered.current);
+      if (top) topping.current!.setAttribute('transform', `translate(${(top.x - 32).toFixed(2)} ${top.y.toFixed(2)})`);
       if (progress === 1) transition.current = undefined;
       root.dataset.transition = transition.current ? 'running' : 'idle';
       const motion = ambient ? faceMotion(seed, time, state) : { blink: 0, x: 0, y: 0 };
@@ -373,7 +373,7 @@ export function AgentAvatarArt({
               />
             )}
           </g>
-          <g ref={eyesGroup} fill="none" stroke={INK} strokeWidth="4.2" strokeLinecap="round">
+          <g ref={eyesGroup} data-slot="avatar-eyes" fill="none" stroke={INK} strokeWidth="4.2" strokeLinecap="round">
             <g ref={leftView} data-eye-view="left">
               <g transform={eyeWrap(0)}>
                 {wearing === 'glasses' && (

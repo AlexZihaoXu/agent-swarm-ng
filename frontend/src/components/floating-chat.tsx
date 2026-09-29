@@ -8,7 +8,8 @@ import { defaultAvatar } from '@/lib/agent-avatar';
 import type { ChatAgent } from '@/use-chat';
 import type { ChatMessage } from '@/chat-types';
 import { useMessageWindow } from '@/lib/use-message-window';
-import { EdgeSkeleton } from '@/components/ui/skeleton';
+import { ChatSkeleton, EdgeSkeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { JumpToLatest } from './jump-to-latest';
 import { AgentAvatarArt } from './agent-avatar-art';
 import { AgentTypingStatus } from './agent-typing-status';
@@ -181,10 +182,19 @@ export function FloatingChat({
               className="min-h-0 flex-1"
             >
               <div className="px-3 py-3">
-                {!ready ? (
-                  <p role="status" className="py-6 text-center text-xs text-muted-foreground">
-                    Loading messages…
-                  </p>
+                {chat.historyFailed[channel] && !ready ? (
+                  <div className="py-6 text-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={chat.historyLoading[channel]}
+                      onClick={() => chat.loadHistory(agent)}
+                    >
+                      Retry loading messages
+                    </Button>
+                  </div>
+                ) : !ready ? (
+                  <ChatSkeleton />
                 ) : messages.length === 0 ? (
                   <p className="py-6 text-center text-xs text-muted-foreground">
                     No messages yet. Say something to {agent.name}.
@@ -196,7 +206,7 @@ export function FloatingChat({
                       <button
                         type="button"
                         disabled={chat.historyLoading[channel]}
-                        onClick={() => chat.loadHistory(agent, true)}
+                        onClick={history.loadOlder}
                         className="sr-only focus:not-sr-only focus:mx-auto focus:mb-2 focus:block focus:rounded-md focus:px-3 focus:py-1 focus:text-xs focus:ring-2 focus:ring-ring"
                       >
                         Load earlier messages

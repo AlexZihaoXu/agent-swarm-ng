@@ -20,6 +20,7 @@ export type ComputerAgentState = {
     drafts: Record<string, string>;
     historyReady: Record<string, boolean>;
     historyLoading: Record<string, boolean>;
+    historyFailed: Record<string, boolean>;
     /** Where older history continues on the server (null when all is loaded). */
     historyCursor: Record<string, unknown>;
     setDraft: (channelId: string, text: string) => void;

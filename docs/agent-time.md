@@ -7,8 +7,8 @@ Every agent can tell the time and wake itself later, with or without a computer.
 | `current_time` | `timezone?` | Current UTC time, Unix milliseconds and local time in an IANA zone (the platform's zone by default). |
 | `set_timer` | `seconds, note?` | Fire once after 1 s – 30 days. |
 | `set_reminder` | `every_seconds, times?, note, start_in_seconds?` | Fire every 10 s – 30 days, `times` times in all (1 or more; omitted = until cancelled). The first firing is `start_in_seconds` from now (default one interval). |
-| `list_timers` | none | Pending timers and reminders, soonest first. |
-| `cancel_timer` | `id` | Stop one. |
+| `list_timers` | none | Pending timers and reminders, soonest first, plus the agent's [computer watches](agent-computer-use.md#watches). |
+| `cancel_timer` | `id` | Stop one timer, reminder or watch. |
 
 Notes are at most 256 characters; an agent holds at most 25 timers and reminders. Firing is accurate to about a second.
 
@@ -22,7 +22,7 @@ Timers and reminders are rows in the platform database (`AgentTimer`), committed
 
 ## Computer events
 
-The same platform-event path carries **computer events**: while an agent holds a computer, a watcher lists that computer's terminals every 5 seconds and tells the holder when one exits (with its exit code) or is closed by someone else. The agent's own `terminal_delete` is not reported back. The agent decides whether to read the output, tell the human, or clean up; see [persistent terminals](persistent-terminals.md).
+The same platform-event path carries **computer events**: while an agent holds a computer, a watcher lists that computer's terminals every 5 seconds and tells the holder when one exits (with its exit code) or is closed by someone else. The agent's own `terminal_delete` is not reported back. The agent decides whether to read the output, tell the human, or clean up; see [persistent terminals](persistent-terminals.md). Watch results (fired, timed out, failed, ended) arrive through the same `computer` kind; see [watches](agent-computer-use.md#watches).
 
 ## Guidance
 

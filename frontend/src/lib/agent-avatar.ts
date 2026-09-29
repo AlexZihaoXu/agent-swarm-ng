@@ -192,13 +192,20 @@ export const traitDefaults = {
 } as const;
 /** Whether two avatars look the same (unset traits count as their defaults; colours ignore case). */
 export function sameAvatar(a: AvatarAppearance, b: AvatarAppearance) {
-  const normal = (avatar: AvatarAppearance) =>
-    JSON.stringify({
+  const normal = (avatar: AvatarAppearance) => {
+    const traits: Record<string, unknown> = {
       ...traitDefaults,
       ...Object.fromEntries(Object.entries(avatar).filter(([, value]) => value !== undefined)),
       color: avatar.color.toLowerCase(),
       accent: avatar.accent?.toLowerCase() ?? null,
-    });
+    };
+    // Key order must not matter.
+    return JSON.stringify(
+      Object.keys(traits)
+        .sort()
+        .map(key => [key, traits[key]]),
+    );
+  };
   return normal(a) === normal(b);
 }
 const mutations = ['shape', 'color', 'mouth', 'marking', 'accessory', 'eyes', 'proportions'] as const;
@@ -240,8 +247,9 @@ export function mutateAvatar(avatar: AvatarAppearance, salt: number): AvatarAppe
         r,
       );
     else if (kind === 'color')
+      // Never the accent's colour, which would hide markings and accessories.
       next.color = other(
-        avatarColors.map(item => item.value),
+        avatarColors.map(item => item.value).filter(value => value.toLowerCase() !== next.accent?.toLowerCase()),
         next.color,
         r,
       );

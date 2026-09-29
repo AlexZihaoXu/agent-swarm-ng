@@ -998,7 +998,7 @@ export function App() {
                             <button
                               type="button"
                               disabled={historyLoading[agent.channelId]}
-                              onClick={() => void loadHistory(agent, true)}
+                              onClick={history.loadOlder}
                               className="sr-only focus:not-sr-only focus:mx-auto focus:mt-3 focus:block focus:rounded-md focus:px-3 focus:py-1 focus:text-xs focus:ring-2 focus:ring-ring"
                             >
                               Load earlier messages
@@ -1160,6 +1160,7 @@ export function App() {
                     send: (target, text) => send(target, text),
                     stop,
                     historyCursor,
+                    historyFailed,
                     loadHistory: (target, older) => void loadHistory(target, older),
                     openConversation: target => navigate(chatAgentPath(target.id)),
                   },

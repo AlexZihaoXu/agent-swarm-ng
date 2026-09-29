@@ -2,7 +2,7 @@ import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent
 import { Type, type Static } from '@sinclair/typebox';
 import type { ComputerUseService, CoreReceipt } from './service';
 import type { ScreenshotPool } from './image-pool';
-import { renderTerminal } from './terminal-render';
+import { IMAGE_BYTES, renderTerminal } from './terminal-render';
 const session = Type.String({
   pattern: '^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$',
   description: 'Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.',
@@ -195,9 +195,10 @@ export async function viewResult(
       details: {},
     };
   const columns = (result.session as { columns?: number } | undefined)?.columns ?? 120;
-  let image: ReturnType<typeof renderTerminal>;
+  let image: Awaited<ReturnType<typeof renderTerminal>>;
   try {
-    image = renderTerminal(ansi, columns);
+    image = await renderTerminal(ansi, columns);
+    if (image.data.byteLength > IMAGE_BYTES) throw new Error('Image too large');
   } catch {
     return {
       content: [
@@ -209,11 +210,23 @@ export async function viewResult(
       details: {},
     };
   }
-  const reference = await retain?.({ mimeType: 'image/png', ...image, bounds: [] });
+  const { rows, ...frame } = image;
+  const reference = await retain?.({ mimeType: 'image/png', ...frame, bounds: [] });
+  const shown = (result.window as { from?: number; to?: number } | undefined) ?? {};
+  const all = shown.to !== undefined && shown.from !== undefined ? shown.to - shown.from + 1 : rows;
   return {
     content: [
-      { type: 'text' as const, text: JSON.stringify({ ...result, colors: 'The attached image shows these rows.' }) },
-      { type: 'image' as const, data: Buffer.from(image.data).toString('base64'), mimeType: 'image/png' },
+      {
+        type: 'text' as const,
+        text: JSON.stringify({
+          ...result,
+          colors:
+            rows < all
+              ? `The attached image shows the last ${rows} of these ${all} rows (view fewer rows, or scroll with up, to see others in colour).`
+              : 'The attached image shows these rows.',
+        }),
+      },
+      { type: 'image' as const, data: Buffer.from(frame.data).toString('base64'), mimeType: 'image/png' },
     ],
     details: reference ? { computerImage: reference } : {},
   };

@@ -99,6 +99,9 @@ def validate(value):
         for key, maximum in [('command', 32768), ('cwd', 4096)]:
             if key in value and (not isinstance(value[key], str) or not value[key].strip() or '\0' in value[key] or len(value[key].encode()) > maximum):
                 raise ValueError('Invalid ' + key + '.')
+        # tmux would read a trailing ';' as a command separator.
+        if str(value.get('cwd', '')).rstrip('/').endswith(';'):
+            raise ValueError('A working directory ending in ";" is not supported; use its parent and cd in the shell.')
     if operation == 'view':
         for key, low, high in [('rows', 1, 200), ('up', 0, 10000)]:
             if key in value and (type(value[key]) is not int or not low <= value[key] <= high):

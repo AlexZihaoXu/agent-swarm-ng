@@ -59,7 +59,7 @@ export class DmBroker {
   /** One-shot watches on claimed computers (watch_terminal, watch_desktop). */
   readonly watches?: ComputerWatches;
   /** Each agent's session as a fork would copy it (live while it runs, then as it ended while fork watches need it). */
-  private bases = new Map<string, () => ForkBasis>();
+  private bases = new Map<string, { basis: () => ForkBasis; ended: boolean }>();
   constructor(
     private database: PlatformStore,
     private endpoints: EndpointStore,
@@ -99,11 +99,16 @@ export class DmBroker {
             database,
             endpoints,
             codex,
-            basis: agentId => this.bases.get(agentId)?.(),
+            basis: agentId => this.bases.get(agentId)?.basis(),
             archive: { store: this.activity, emit: (agentId, entry) => runs.activity(agentId, entry) },
           }),
         )
       : undefined;
+    // A finished session's copy is kept only while a fork watch may still need it.
+    if (this.watches)
+      this.watches.onForkWatchesGone = agentId => {
+        if (this.bases.get(agentId)?.ended) this.bases.delete(agentId);
+      };
     this.watcher = computers
       ? new TerminalWatcher(database, computers, (agentId, text) =>
           this.deliverPlatformEvent(agentId, 'computer', text, true),
@@ -558,7 +563,7 @@ ${preview.text}`
         session: (basis, ended) => {
           if (this.deleting.has(agentId)) return void this.bases.delete(agentId);
           if (!ended || this.watches?.forAgent(agentId).some(watch => watch.context === 'fork'))
-            this.bases.set(agentId, basis);
+            this.bases.set(agentId, { basis, ended });
           else this.bases.delete(agentId);
         },
         prepare: async messages => {

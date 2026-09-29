@@ -24,6 +24,8 @@ export type AgentTool = AgentSession['agent']['state']['tools'][number];
 /** Model turns one check may take, and how long it may run. */
 export const WATCH_MAX_TURNS = 10;
 export const WATCH_CHECK_TIMEOUT_MS = 120_000;
+/** A fork re-reads the agent's whole context at its own thinking level, so it gets longer. */
+export const WATCH_FORK_TIMEOUT_MS = 240_000;
 export const WATCH_SUMMARY_MAX = 1000;
 
 /**
@@ -96,7 +98,7 @@ const assistantText = (message: AgentMessage | undefined) =>
 export async function judgeWatch(input: JudgeInput): Promise<Verdict> {
   const { model, fork, signal } = input;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), WATCH_CHECK_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), fork ? WATCH_FORK_TIMEOUT_MS : WATCH_CHECK_TIMEOUT_MS);
   const combined = AbortSignal.any([signal, controller.signal]);
   let session: AgentSession | undefined;
   let detach = () => {};
@@ -115,7 +117,8 @@ export async function judgeWatch(input: JudgeInput): Promise<Verdict> {
           : 'off';
     ({ session } = await createAgentSession({
       // A fork keeps the main request's settings (a cache is only reused for the same request shape).
-      model: fork ? model : { ...model, maxTokens: Math.min(model.maxTokens, TRIAGE_MAX_TOKENS) },
+      // Output length is not part of the cached prefix: every check stays short.
+      model: { ...model, maxTokens: Math.min(model.maxTokens, TRIAGE_MAX_TOKENS) },
       modelRuntime: input.modelRuntime,
       thinkingLevel: thinkingLevel as never,
       noTools: 'all',

@@ -309,7 +309,7 @@ export function KnowledgeBrowser({
         >
           <ScrollArea label="Knowledge entry content" className="min-h-0 flex-1">
             <div
-              key={id ?? 'none'}
+              key={selected?.id ?? id ?? 'none'}
               className="view-enter space-y-5 px-4 py-5 pb-[calc(5rem+env(safe-area-inset-bottom))] md:px-8 md:pb-8"
             >
               {id && (
@@ -377,7 +377,7 @@ export function KnowledgeBrowser({
                     <p className="mt-2 text-xs text-muted-foreground">Source: {selected.source}</p>
                   </div>
                   <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                    <LinkedText text={selected.text} links={selected.related} onOpen={open} />
+                    <LinkedText text={selected.text} links={selected.related ?? []} onOpen={open} />
                   </div>
                   {moreError && (
                     <p role="alert" className="text-sm">
@@ -395,13 +395,13 @@ export function KnowledgeBrowser({
                       {moreLoading ? 'Loading knowledge…' : 'Load more knowledge'}
                     </Button>
                   )}
-                  {selected.related.length > 0 && (
+                  {(selected.related ?? []).length > 0 && (
                     <nav aria-label="Related knowledge" className="border-t border-border pt-4">
                       <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         Related
                       </h4>
                       <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
-                        {selected.related.map(link => (
+                        {(selected.related ?? []).map(link => (
                           <li key={link.id}>
                             <button
                               type="button"

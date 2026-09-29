@@ -1,4 +1,4 @@
-import { Resvg } from '@resvg/resvg-js';
+import { renderAsync } from '@resvg/resvg-js';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -89,22 +89,34 @@ function apply(style: Style, params: string): Style {
 }
 const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/** An SVG of the rows on a `columns`-wide grid (one cell per code point; wide characters are not special-cased). */
-export function terminalSvg(ansi: string, columns: number) {
+/** The most rows one image shows (the latest ones), and its widest size: larger images are only scaled down. */
+export const IMAGE_ROWS = 80;
+const IMAGE_WIDTH = 1568;
+/** An image this large is not attached (the text still is). */
+export const IMAGE_BYTES = 2 * 1024 * 1024;
+
+/**
+ * An SVG of the last `maxRows` rows on a `columns`-wide grid (one cell per code point; wide characters are not
+ * special-cased). Styles from earlier rows still carry into the shown ones.
+ */
+export function terminalSvg(ansi: string, columns: number, maxRows = IMAGE_ROWS) {
   // Only SGR escapes are understood; anything else (a stray or cut escape) would be invalid XML text.
   const clean = ansi.replace(/\x1b(?!\[[0-9;:]*m)/g, '').replace(/[\x00-\x08\x0b-\x1a\x1c-\x1f\x7f]/g, '');
   const lines = clean.replace(/\n$/, '').split('\n');
+  const first = Math.max(0, lines.length - maxRows);
   const width = Math.ceil(columns * CELL.width + PAD * 2);
-  const height = lines.length * CELL.height + PAD * 2;
+  const height = (lines.length - first) * CELL.height + PAD * 2;
   const shapes: string[] = [];
   const texts: string[] = [];
   let style: Style = {};
-  lines.forEach((line, row) => {
+  lines.forEach((line, index) => {
     let column = 0;
+    const row = index - first,
+      shown = row >= 0;
     const y = PAD + row * CELL.height;
     const run = (text: string) => {
       const cells = [...text];
-      if (!cells.length) return;
+      if (!cells.length || !shown) return;
       const fg = (style.inverse ? style.bg : style.fg) ?? (style.inverse ? THEME.background : THEME.foreground);
       const bg = style.inverse ? (style.fg ?? THEME.foreground) : style.bg;
       const x = PAD + column * CELL.width;
@@ -127,16 +139,21 @@ export function terminalSvg(ansi: string, columns: number) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" font-family="DejaVu Sans Mono" font-size="${FONT_SIZE}" xml:space="preserve"><rect width="100%" height="100%" fill="${THEME.background}"/>${shapes.join('')}${texts.join('')}</svg>`;
 }
 
-/** The rows rendered as a PNG, as a person would see them in the terminal. */
-export function renderTerminal(ansi: string, columns: number) {
-  const image = new Resvg(terminalSvg(ansi, columns), {
+/**
+ * The last rows rendered as a PNG, as a person would see them in the terminal. Rendering runs off the main thread;
+ * very wide terminals are scaled down to a width a model takes without shrinking it further.
+ */
+export async function renderTerminal(ansi: string, columns: number) {
+  const width = Math.ceil(columns * CELL.width + PAD * 2);
+  const rendered = await renderAsync(terminalSvg(ansi, columns), {
     font: {
       fontFiles: [join(FONTS, 'DejaVuSansMono.ttf'), join(FONTS, 'DejaVuSansMono-Bold.ttf')],
       loadSystemFonts: false,
       defaultFontFamily: 'DejaVu Sans Mono',
       monospaceFamily: 'DejaVu Sans Mono',
     },
+    fitTo: width > IMAGE_WIDTH ? { mode: 'width', value: IMAGE_WIDTH } : { mode: 'original' },
   });
-  const rendered = image.render();
-  return { data: rendered.asPng(), width: rendered.width, height: rendered.height };
+  const lines = ansi.replace(/\n$/, '').split('\n').length;
+  return { data: rendered.asPng(), width: rendered.width, height: rendered.height, rows: Math.min(lines, IMAGE_ROWS) };
 }

@@ -52,7 +52,7 @@ test('all silhouettes move; randomization is stable and preserves the state prev
   await expect(art).toHaveAttribute('data-avatar-seed', seed!);
   await select(page, 'Eye shape', 'Circles');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(art.locator('g[stroke]')).toHaveAttribute('stroke-width', '8');
+  await expect(art.locator('[data-slot="avatar-eyes"]')).toHaveAttribute('stroke-width', '8');
   await expect(art).toHaveAttribute('data-eye-style', 'round');
   await select(page, 'State preview', 'Idle');
   await expect(page.getByRole('radiogroup', { name: 'State preview' }).getByRole('radio')).toHaveCount(3);
@@ -96,7 +96,7 @@ test('disclosure, shape and eye changes transition; the modal scrollbar is inset
   await expect(art).toHaveAttribute('data-transition', 'idle');
   await select(page, 'Eye shape', 'Rounded pills');
   await expect(art).toHaveAttribute('data-transition', 'idle');
-  await art.locator('g[stroke]').evaluate(element => {
+  await art.locator('[data-slot="avatar-eyes"]').evaluate(element => {
     const widths: number[] = [];
     const observer = new MutationObserver(() => widths.push(Number(element.getAttribute('stroke-width'))));
     observer.observe(element, { attributes: true, attributeFilter: ['stroke-width'] });

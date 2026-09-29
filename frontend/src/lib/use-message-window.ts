@@ -145,6 +145,14 @@ export function useMessageWindow<T>({
     }
   };
 
+  /** Fetches the page before what is held and shows it (the keyboard "Load earlier messages" button). */
+  const loadOlderNow = () => {
+    if (!canLoadOlder || wantOlder.current) return;
+    wantOlder.current = true;
+    heldFirst.current = ids[0];
+    loadOlder();
+  };
+
   /** Back to the newest messages (Jump to latest). */
   const toLatest = useCallback(() => {
     jump.current = true;
@@ -158,6 +166,7 @@ export function useMessageWindow<T>({
     olderHidden: start > 0,
     newerHidden: end < length,
     onScroll,
+    loadOlder: loadOlderNow,
     toLatest,
     windowId: idOf,
   };
