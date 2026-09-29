@@ -18,11 +18,13 @@ test('main tabs and selected agent survive refresh and browser history', async (
 });
 
 test('switching Agents and Chat keeps the selected agent on desktop but shows lists on phones', async ({ page }) => {
+  const path = () => new URL(page.url()).pathname;
   await page.goto('/agents/morgan');
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
-  await expect(page).toHaveURL(/\/chat\/agents\/morgan$/);
+  await expect.poll(path).toBe('/chat/agents/morgan');
+  // Straight back, before the Chat view has necessarily finished rendering: the click must not be lost.
   await page.getByRole('tab', { name: 'Agents', exact: true }).click();
-  await expect(page).toHaveURL(/\/agents\/morgan$/);
+  await expect.poll(path).toBe('/agents/morgan');
   await page.setViewportSize({ width: 320, height: 700 });
   await page.getByRole('button', { name: 'Back to agents' }).click();
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();

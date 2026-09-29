@@ -199,7 +199,10 @@ export function App() {
           : value === 'computers'
             ? '/computers'
             : '/settings';
-    if (value === activeTab || window.location.pathname === target || pendingTabPath.current === target) return;
+    // Compare with the address itself: navigation renders as a transition, so during a quick second click the
+    // rendered tab can still be the old one and would swallow the click.
+    const current = parseDashboardPath(window.location.pathname).tab;
+    if (value === current || window.location.pathname === target || pendingTabPath.current === target) return;
     pendingTabPath.current = target;
     leave(() => {
       navigate(target);
@@ -575,6 +578,11 @@ export function App() {
                 <Tabs.Trigger
                   key={label}
                   value={label.toLowerCase()}
+                  // Radix skips a tab it still renders as selected; while the previous switch is rendering that can be
+                  // the stale one, so the press goes to changeTab directly (it ignores repeats).
+                  onMouseDown={event => {
+                    if (event.button === 0 && !event.ctrlKey) changeTab(label.toLowerCase());
+                  }}
                   className="relative z-10 min-h-11 min-w-0 rounded-md px-1 py-1 text-[11px] font-medium md:min-h-0 md:px-3.5 md:text-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:text-foreground"
                 >
                   {/* Kibo tabs-standard-2 (Tabs with Icons): stacked on the phone bar, inline on desktop. */}
