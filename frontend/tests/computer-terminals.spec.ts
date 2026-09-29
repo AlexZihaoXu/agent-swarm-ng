@@ -172,6 +172,7 @@ test('create, reserved-key controls and deliberate deletion remain available', a
   const form = page.getByRole('dialog', { name: 'New terminal' });
   await form.getByLabel('Terminal name', { exact: true }).fill('server');
   await form.getByLabel('Initial command').fill('npm run dev');
+  await expect(form.getByLabel('Working directory')).toHaveValue('~/Desktop');
   await form.getByLabel('Working directory').fill('~/project');
   await form.getByRole('button', { name: 'Create terminal', exact: true }).click();
   await expect(form).toHaveCount(0);

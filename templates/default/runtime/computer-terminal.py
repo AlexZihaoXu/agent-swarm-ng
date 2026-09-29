@@ -16,6 +16,8 @@ import sys
 import uuid
 
 ROOT = Path('/run/user/1000/swarm-terminals')
+HOME = '/home/agent'
+DEFAULT_CWD = HOME + '/Desktop'
 ID = re.compile(r'^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
 NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,47}$')
 KEYS = {'Enter', 'Tab', 'BTab', 'Escape', 'BSpace', 'Delete', 'Insert', 'Space',
@@ -163,9 +165,11 @@ def execute(value):
     if operation == 'create':
         if len(items) >= 32: raise ValueError('At most 32 terminals per computer; delete an unused session first.')
         if any(item['name'].lower() == value['name'].lower() for item in items): raise ValueError('Terminal name already exists; inspect list instead of creating a duplicate.')
-        cwd = value.get('cwd', '/workspace')
-        if cwd == '~' or cwd.startswith('~/'): cwd = '/home/agent' + cwd[1:]
-        cwd = os.path.abspath(os.path.join('/workspace', cwd))
+        cwd = value.get('cwd', DEFAULT_CWD)
+        if cwd == '~' or cwd.startswith('~/'): cwd = HOME + cwd[1:]
+        cwd = os.path.abspath(os.path.join(HOME, cwd))
+        # The default folder is recreated if the owner removed it; any other directory must already exist.
+        if cwd == DEFAULT_CWD: os.makedirs(cwd, exist_ok=True)
         if not os.path.isdir(cwd): raise ValueError('Working directory does not exist.')
         session = str(uuid.uuid4())
         command = ['/bin/bash', '-lc', value['command']] if 'command' in value else ['/bin/bash', '-i']

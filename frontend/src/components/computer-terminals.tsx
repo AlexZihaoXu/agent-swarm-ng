@@ -57,7 +57,7 @@ export function TerminalWorkspace({
   const [creating, setCreating] = useState(false),
     [name, setName] = useState(''),
     [command, setCommand] = useState(''),
-    [cwd, setCwd] = useState('/workspace');
+    [cwd, setCwd] = useState('~/Desktop');
   const [deleting, setDeleting] = useState(false);
   // Phones show the list first and one session at a time; wider screens show both.
   const [phoneDetail, setPhoneDetail] = useState(false);
