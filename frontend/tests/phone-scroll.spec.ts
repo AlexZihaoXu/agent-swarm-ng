@@ -118,7 +118,7 @@ test.describe('phone touch scrolling', () => {
     await page.goto('/chat');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
     await page.getByRole('combobox', { name: 'Chat with' }).tap();
-    const viewport = page.getByRole('listbox').locator('[data-radix-select-viewport]');
+    const viewport = page.getByRole('listbox');
     await expect.poll(() => viewport.evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(200);
     const box = (await viewport.boundingBox())!;
     await swipeUp(page, box.x + box.width / 2, box.y + Math.min(175, box.height - 50));

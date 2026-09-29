@@ -374,12 +374,13 @@ test('select menus visibly highlight hovered options and animate with reduced-mo
   await option.hover();
   await expect(option).toHaveCSS('background-color', 'rgb(48, 48, 48)');
   await expect(option).toHaveCSS('transition-duration', '0.12s');
-  await expect(page.getByRole('listbox')).toHaveCSS('animation-name', 'dialog-in');
+  const popup = page.locator('[data-slot="combobox-content"]');
+  await expect(popup).toHaveCSS('animation-name', 'dialog-in');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('listbox')).not.toBeVisible();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await model.click();
-  await expect(page.getByRole('listbox')).toHaveCSS('animation-name', 'none');
+  await expect(popup).toHaveCSS('animation-name', 'none');
   await expect(page.getByRole('option', { name: 'gpt-5', exact: true })).toHaveCSS('transition-property', 'none');
 });
 
@@ -393,14 +394,23 @@ test('styled selects support keyboard selection, dismissal, and long lists on mo
   );
   await configure(page);
   const model = page.getByLabel('Model', { exact: true });
+  const width = (await model.boundingBox())!.width;
   await model.focus();
   await page.keyboard.press('Space');
-  await expect(page.getByRole('option', { name: 'test-model', exact: true })).toBeFocused();
+  // Long lists open with the search field focused and the current choice highlighted.
+  await expect(page.getByRole('combobox', { name: 'Search options' })).toBeFocused();
+  await expect(page.getByRole('option', { name: 'test-model', exact: true })).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('End');
   await expect(page.getByRole('option', { name: lastModel, exact: true })).toBeInViewport();
   await page.keyboard.press('Enter');
   await expect(model).toContainText(lastModel);
   await expect(model).toBeFocused();
+  // A longer choice truncates instead of resizing the field.
+  expect((await model.boundingBox())!.width).toBe(width);
+  await page.keyboard.press('Space');
+  await page.keyboard.type('model-3');
+  await expect(page.getByRole('option')).toHaveCount(11);
+  await page.keyboard.press('Escape');
   await page.keyboard.press('Space');
   const menu = await page.getByRole('listbox').boundingBox();
   expect(menu!.x).toBeGreaterThanOrEqual(0);

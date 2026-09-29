@@ -15,7 +15,7 @@ Agent conversations and source-labelled agent threads are implemented. Member-au
 - Received peer messages also appear in the You view as ordinary-sized, differently tinted bubbles with a small sender/avatar label. Their arrow switches to that peer’s conversation. These are projections of real persisted DMs, not fabricated assistant replies, and remain after refresh.
 - Agent history supports older pages and live refresh. Internal exchanges do not play human-chat notification sounds. Human message sequence remains authoritative if the wall clock moves backwards.
 
-The shared selector adapts the inspected Kibo `field-selects-1` source/preview and the existing styled Select; exposing it in Chat changes no peer permission or publication tool. A separate alert-card pattern was inspected but deliberately not used after the operator requested the same chat-bubble composition with different background/decorations.
+The shared selector is the app-wide combobox adapted from Kibo `combobox-standard-1` (Popover + Command): its trigger keeps the width its container gives it and truncates the chosen name, and lists longer than seven entries get a search field; exposing it in Chat changes no peer permission or publication tool. A separate alert-card pattern was inspected but deliberately not used after the operator requested the same chat-bubble composition with different background/decorations.
 
 ## Mutual connections
 
