@@ -1,3 +1,4 @@
+import { TerminalTypist } from './terminal-typist';
 import {
   lazy,
   Suspense,
@@ -249,6 +250,7 @@ export function FloatingTerminal({
                   >
                     <div className="pb-3">
                       <DrawerCard
+                        computerId={computer.id}
                         item={item}
                         preview={previews.data?.[item.id]}
                         onFloat={from => bringUp(item.id, from)}
@@ -305,7 +307,17 @@ const runStyle = (style: Style): CSSProperties => {
   };
 };
 
-function DrawerCard({ item, preview, onFloat }: { item: Session; preview?: string; onFloat: (from: Rect) => void }) {
+function DrawerCard({
+  computerId,
+  item,
+  preview,
+  onFloat,
+}: {
+  computerId: string;
+  item: Session;
+  preview?: string;
+  onFloat: (from: Rect) => void;
+}) {
   return (
     <button
       type="button"
@@ -318,6 +330,7 @@ function DrawerCard({ item, preview, onFloat }: { item: Session; preview?: strin
         className="relative block overflow-hidden bg-[#141414] [container-type:inline-size]"
         style={{ aspectRatio: `${item.columns * 0.6} / ${item.rows * 1.15}` }}
       >
+        <TerminalTypist computerId={computerId} session={item.id} compact className="absolute right-1.5 top-1.5 z-10" />
         {preview !== undefined ? (
           <pre
             data-testid="terminal-preview"
@@ -474,6 +487,7 @@ function TerminalWindow({
         <TerminalEmulator
           key={session.id}
           computerId={computerId}
+          badge={<TerminalTypist computerId={computerId} session={session.id} />}
           sessionId={session.id}
           interactive={session.alive}
           title={session.name}

@@ -63,6 +63,7 @@ export function TerminalEmulator({
   onMeasure,
   titleLeading,
   inactive = false,
+  badge,
   onClosed,
 }: {
   computerId: string;
@@ -82,6 +83,8 @@ export function TerminalEmulator({
   titleLeading?: ReactNode;
   /** A floating window that is not the focused one: a quieter edge, shadow and title. */
   inactive?: boolean;
+  /** Shown in the title bar before the connection state (the agent typing into this terminal). */
+  badge?: ReactNode;
   /** The stream closed on its own (the session may have been resized elsewhere): time to re-read the session. */
   onClosed?: () => void;
   onMeasure?: (size: { width: number; height: number; chromeWidth: number; chromeHeight: number }) => void;
@@ -374,6 +377,7 @@ export function TerminalEmulator({
               {title}
             </span>
           )}
+          {badge}
           <span role="status" className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
             <span
               aria-hidden="true"

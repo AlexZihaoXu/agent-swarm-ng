@@ -56,6 +56,8 @@ export class ComputerUseService {
   private starting?: Promise<void>;
   private allowances = new Map<string, Allowance>();
   private terminalAllowances = new Map<string, TerminalAllowance>();
+  /** Told when an agent's terminal combo starts and ends (the dashboard shows who is typing where). */
+  onTerminalInput?: (event: { agentId: string; computerId: string; session: string; active: boolean }) => void;
   /** Terminals an agent deleted itself (computer:session → when), so the watcher does not report them back. */
   private agentDeletes = new Map<string, number>();
   deletedByAgent(computerId: string, session: string) {
@@ -373,6 +375,7 @@ export class ComputerUseService {
   ): Promise<CoreReceipt> {
     await this.ready();
     let spent: TerminalAllowance | undefined;
+    let computerId = '';
     const refund = () => {
       if (spent && this.terminalAllowances.get(agentId) === spent) spent.remaining++;
     };
@@ -392,15 +395,21 @@ export class ComputerUseService {
           );
         allowance.remaining--;
         spent = allowance;
+        computerId = claim.computerId;
+        this.onTerminalInput?.({ agentId, computerId, session: request.session, active: true });
         return claim;
       },
       request,
       signal,
-    ).catch(error => {
-      // Rejected before any input (validation, busy computer): an invalid combo spends nothing.
-      if (error instanceof ComputerUseError && !(error instanceof ComputerExecutionError)) refund();
-      throw error;
-    });
+    )
+      .catch(error => {
+        // Rejected before any input (validation, busy computer): an invalid combo spends nothing.
+        if (error instanceof ComputerUseError && !(error instanceof ComputerExecutionError)) refund();
+        throw error;
+      })
+      .finally(() => {
+        if (computerId) this.onTerminalInput?.({ agentId, computerId, session: request.session, active: false });
+      });
     if (!receipt.started) refund();
     return receipt;
   }

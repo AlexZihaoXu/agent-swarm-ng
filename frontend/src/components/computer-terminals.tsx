@@ -1,3 +1,4 @@
+import { TerminalTypist } from './terminal-typist';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as ContextMenu from '@radix-ui/react-context-menu';
@@ -363,6 +364,7 @@ export function TerminalWorkspace({
                     <TerminalEmulator
                       key={session.id}
                       computerId={computer.id}
+                      badge={<TerminalTypist computerId={computer.id} session={session.id} />}
                       onClosed={() => void client.invalidateQueries({ queryKey })}
                       sessionId={session.id}
                       columns={session.columns}

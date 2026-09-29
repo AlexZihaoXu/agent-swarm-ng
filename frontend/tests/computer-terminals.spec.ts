@@ -284,3 +284,35 @@ test('right-clicking a session renames it or changes its window size', async ({ 
     .poll(() => requests.find(r => r.operation === 'resize'))
     .toEqual({ operation: 'resize', session: '12345678-1234-1234-1234-123456789abc', columns: 80, rows: 24 });
 });
+
+test('an agent typing into a terminal shows its avatar there, which leaves a moment after it stops', async ({
+  page,
+}) => {
+  const { panel } = await open(page);
+  const emit = (active: boolean) =>
+    page.evaluate(
+      ([computerId, session, active]) =>
+        (window as unknown as { emitAgentEvent: (event: object) => void }).emitAgentEvent({
+          type: 'terminal_activity',
+          eventId: crypto.randomUUID(),
+          runId: 'platform',
+          agentId: 'avery',
+          channelId: `computer:${computerId}`,
+          computerId,
+          session,
+          active,
+          name: 'Avery',
+          avatar: { shape: 'bean', color: '#55bea9', seed: 7 },
+        }),
+      [id, sid, active] as const,
+    );
+  const typist = panel.getByRole('status', { name: 'Avery is typing in this terminal' });
+  await expect(typist).toHaveCount(0);
+  await emit(true);
+  await expect(typist).toBeVisible();
+  await expect(typist.locator('svg[data-avatar-shape]')).toHaveAttribute('data-avatar-state', 'typing');
+  await emit(false);
+  await expect(typist.locator('svg[data-avatar-shape]')).toHaveAttribute('data-avatar-state', 'idle');
+  await expect(typist).toBeVisible(); // lingers briefly between combos
+  await expect(typist).toHaveCount(0, { timeout: 6000 });
+});

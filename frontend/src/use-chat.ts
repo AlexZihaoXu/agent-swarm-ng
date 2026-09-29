@@ -1,3 +1,4 @@
+import { recordTerminalActivity } from '@/lib/terminal-typists';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
 import { consumeEvents } from '@/api/events';
@@ -348,6 +349,14 @@ export function useChat() {
       return;
     }
     if (typeof event.eventId === 'string' && remember(seenEvents.current, event.eventId)) return;
+    if (
+      event.type === 'terminal_activity' &&
+      ['agentId', 'computerId', 'session', 'name'].every(key => typeof event[key] === 'string') &&
+      typeof event.active === 'boolean'
+    ) {
+      recordTerminalActivity(event as Parameters<typeof recordTerminalActivity>[0]);
+      return;
+    }
     if (event.type === 'reactions_updated' && typeof event.channelId === 'string') {
       window.dispatchEvent(new CustomEvent('swarm-reactions-updated', { detail: event.channelId }));
       return;

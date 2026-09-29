@@ -120,6 +120,20 @@ export class AgentRuns {
       channelId,
     });
   }
+  /** An agent started or finished typing into a terminal; dashboards show it on that terminal. */
+  terminalActivity(
+    agentId: string,
+    detail: { computerId: string; session: string; active: boolean; name: string; avatar: unknown },
+  ) {
+    this.broadcast({
+      type: 'terminal_activity',
+      ...detail,
+      eventId: crypto.randomUUID(),
+      runId: 'platform',
+      agentId,
+      channelId: `computer:${detail.computerId}`,
+    });
+  }
   /** Standalone advisory branches are observable without pretending they are main chat runs. */
   activity(agentId: string, entry: ActivityEntry) {
     this.broadcast({

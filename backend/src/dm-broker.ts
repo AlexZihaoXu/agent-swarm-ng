@@ -69,6 +69,20 @@ export class DmBroker {
     this.timers = new AgentTimers(database, (agentId, kind, text, human) =>
       this.deliverPlatformEvent(agentId, kind, text, human),
     );
+    if (computers)
+      computers.onTerminalInput = ({ agentId, active, ...where }) =>
+        void this.database
+          .findAgent(agentId)
+          .then(agent => {
+            if (agent)
+              this.runs.terminalActivity(agentId, {
+                ...where,
+                active,
+                name: agent.name,
+                avatar: agent.avatar ? JSON.parse(agent.avatar) : null,
+              });
+          })
+          .catch(() => {});
     this.watcher = computers
       ? new TerminalWatcher(database, computers, (agentId, text) =>
           this.deliverPlatformEvent(agentId, 'computer', text, true),

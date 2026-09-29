@@ -148,7 +148,11 @@ it('a terminal view allows five combos on that session for 90 real seconds; inva
     reject = true;
     await expect(combo()).rejects.toThrow(/40.0 seconds/);
     reject = false;
+    const typing: boolean[] = [];
+    service.onTerminalInput = event => typing.push(event.active);
     for (let i = 0; i < 5; i++) await combo();
+    // Each combo tells the dashboard it started and ended (the terminal shows the typing agent).
+    expect(typing).toEqual([true, false, true, false, true, false, true, false, true, false]);
     await expect(combo()).rejects.toThrow(/View this terminal first/);
     await service.terminalView(agent.id, { kind: 'terminal', operation: 'view', session } as any);
     clock += 90_001;
