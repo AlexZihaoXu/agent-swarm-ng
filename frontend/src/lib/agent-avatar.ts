@@ -47,7 +47,16 @@ export const avatarColors = [
   { label: 'Cornflower', value: '#6795f8' },
   { label: 'Coral', value: '#f77d57' },
   { label: 'Rose', value: '#ee88b2' },
+  // Added with the extended traits; the first six keep existing default avatars unchanged.
+  { label: 'Lemon', value: '#eed35f' },
+  { label: 'Mint', value: '#7fd3a3' },
+  { label: 'Sky', value: '#61c1e6' },
+  { label: 'Lilac', value: '#c69cf0' },
+  { label: 'Cherry', value: '#e8656f' },
+  { label: 'Sage', value: '#a3bf8c' },
 ] as const;
+/** Colours that existed before the extended traits: default (unsaved) avatars keep choosing from these. */
+const classicColors = avatarColors.slice(0, 6);
 export type EyePose = readonly [readonly number[], readonly number[]];
 export const eyePoses = {
   idle: [
@@ -69,14 +78,133 @@ export const avatarStates: { value: AvatarState; label: string }[] = [
   { value: 'working', label: 'Working' },
   { value: 'typing', label: 'Typing' },
 ];
-export type AvatarAppearance = { shape: AvatarShape; color: string; seed: number; eyeStyle?: 'pill' | 'round' };
+export const avatarMouths = [
+  { value: 'none', label: 'None' },
+  { value: 'smile', label: 'Smile' },
+  { value: 'flat', label: 'Flat' },
+  { value: 'open', label: 'Open' },
+  { value: 'cat', label: 'Cat' },
+] as const;
+export const avatarMarkings = [
+  { value: 'none', label: 'None' },
+  { value: 'cheeks', label: 'Cheeks' },
+  { value: 'spots', label: 'Spots' },
+  { value: 'belly', label: 'Belly' },
+  { value: 'stripe', label: 'Stripe' },
+] as const;
+export const avatarAccessories = [
+  { value: 'none', label: 'None' },
+  { value: 'antenna', label: 'Antenna' },
+  { value: 'sprout', label: 'Sprout' },
+  { value: 'bow', label: 'Bow' },
+  { value: 'halo', label: 'Halo' },
+  { value: 'glasses', label: 'Glasses' },
+] as const;
+export type AvatarMouth = (typeof avatarMouths)[number]['value'];
+export type AvatarMarking = (typeof avatarMarkings)[number]['value'];
+export type AvatarAccessory = (typeof avatarAccessories)[number]['value'];
+/** Continuous traits and their ranges; every one defaults to the plain shape (0, or 1 for eye size). */
+export const avatarRanges = {
+  stretch: { min: -1, max: 1, label: 'Wide ↔ tall' },
+  taper: { min: -1, max: 1, label: 'Taper' },
+  wobble: { min: 0, max: 1, label: 'Wobble' },
+  eyeSize: { min: 0.75, max: 1.35, label: 'Eye size' },
+  eyeGap: { min: -1, max: 1, label: 'Eye spacing' },
+} as const;
+export type AvatarRange = keyof typeof avatarRanges;
+
+/**
+ * An agent's look. Only shape, colour and seed are required: every later trait is optional and its absence draws
+ * the original look, so avatars saved before a trait existed never change.
+ */
+export type AvatarAppearance = {
+  shape: AvatarShape;
+  color: string;
+  seed: number;
+  eyeStyle?: 'pill' | 'round';
+  stretch?: number;
+  taper?: number;
+  wobble?: number;
+  eyeSize?: number;
+  eyeGap?: number;
+  mouth?: AvatarMouth;
+  marking?: AvatarMarking;
+  /** Markings and accessories; a lighter tint of the body colour when not set. */
+  accent?: string;
+  accessory?: AvatarAccessory;
+};
+/** The original look from a seed; default avatars of agents that never saved one use it, so they never change. */
 export function appearanceFromSeed(seed: number): AvatarAppearance {
   return {
     shape: avatarShapes[Math.floor(variation(seed, 1) * avatarShapes.length)].id,
-    color: avatarColors[Math.floor(variation(seed, 2) * avatarColors.length)].value,
+    color: classicColors[Math.floor(variation(seed, 2) * classicColors.length)].value,
     seed,
     eyeStyle: variation(seed, 3) < 0.5 ? 'pill' : 'round',
   };
+}
+const round2 = (value: number) => Math.round(value * 100) / 100;
+const pick = <T>(items: readonly T[], amount: number) => items[Math.min(items.length - 1, Math.floor(amount * items.length))];
+/** Keeps a continuous trait inside its range, rounded to what the editor shows. */
+export const clampTrait = (trait: AvatarRange, value: number) =>
+  round2(Math.min(avatarRanges[trait].max, Math.max(avatarRanges[trait].min, value)));
+/**
+ * The full range of looks from a seed: shape, palette, proportions and, with moderate odds so most avatars stay
+ * simple, a mouth, markings and one accessory.
+ */
+export function richAppearanceFromSeed(seed: number): AvatarAppearance {
+  const v = (salt: number) => variation(seed, salt);
+  const color = pick(avatarColors, v(2)).value;
+  const accent = v(20) < 0.5 ? pick(avatarColors.filter(item => item.value !== color), v(21)).value : undefined;
+  return {
+    shape: pick(avatarShapes, v(1)).id,
+    color,
+    seed,
+    eyeStyle: v(3) < 0.5 ? 'pill' : 'round',
+    stretch: round2((v(11) - 0.5) * 1.2),
+    taper: round2((v(12) - 0.5) * 1),
+    wobble: v(13) < 0.35 ? round2(v(14) * 0.8) : 0,
+    eyeSize: round2(0.85 + v(15) * 0.35),
+    eyeGap: round2((v(16) - 0.5) * 1.2),
+    mouth: v(17) < 0.45 ? 'none' : pick(avatarMouths.slice(1), v(18)).value,
+    marking: v(19) < 0.5 ? 'none' : pick(avatarMarkings.slice(1), v(22)).value,
+    ...(accent ? { accent } : {}),
+    accessory: v(23) < 0.7 ? 'none' : pick(avatarAccessories.slice(1), v(24)).value,
+  };
+}
+/**
+ * A close relative of an avatar for the variations grid: one or two traits nudged or swapped, the rest kept, so
+ * the reader can steer by picking the nearest improvement.
+ */
+export function mutateAvatar(avatar: AvatarAppearance, salt: number): AvatarAppearance {
+  const v = (n: number) => variation(avatar.seed ^ (salt * 7919), n);
+  const next: AvatarAppearance = { ...avatar, seed: Math.floor(v(1) * 2147483647) };
+  const changes = v(2) < 0.5 ? 1 : 2;
+  for (let i = 0; i < changes; i++) {
+    const which = Math.floor(v(3 + i) * 9);
+    const nudge = (trait: AvatarRange, base: number) =>
+      (next[trait] = clampTrait(trait, (next[trait] ?? base) + (v(10 + i) - 0.5) * 0.8));
+    if (which === 0) next.shape = pick(avatarShapes, v(20 + i)).id;
+    else if (which === 1) next.color = pick(avatarColors, v(20 + i)).value;
+    else if (which === 2) nudge('stretch', 0);
+    else if (which === 3) nudge('taper', 0);
+    else if (which === 4) nudge('eyeSize', 1);
+    else if (which === 5) nudge('eyeGap', 0);
+    else if (which === 6) next.mouth = pick(avatarMouths, v(20 + i)).value;
+    else if (which === 7) next.marking = pick(avatarMarkings, v(20 + i)).value;
+    else next.accessory = pick(avatarAccessories, v(20 + i)).value;
+  }
+  return next;
+}
+/** The accent colour to draw: the saved one, or a lighter tint of the body. */
+export function accentColor(avatar: Pick<AvatarAppearance, 'color' | 'accent'>) {
+  if (avatar.accent) return avatar.accent;
+  const channel = (offset: number) => {
+    const value = parseInt(avatar.color.slice(offset, offset + 2), 16);
+    return Math.round(value + (255 - value) * 0.45)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${channel(1)}${channel(3)}${channel(5)}`;
 }
 export function defaultAvatar(id: string): AvatarAppearance {
   let hash = 2166136261;
@@ -84,7 +212,7 @@ export function defaultAvatar(id: string): AvatarAppearance {
   return appearanceFromSeed(hash >>> 1);
 }
 export function randomizeAvatar(previous?: AvatarAppearance): AvatarAppearance {
-  let next = appearanceFromSeed(crypto.getRandomValues(new Uint32Array(1))[0] >>> 1);
+  let next = richAppearanceFromSeed(crypto.getRandomValues(new Uint32Array(1))[0] >>> 1);
   if (previous && next.shape === previous.shape && next.color === previous.color) {
     next = {
       ...next,

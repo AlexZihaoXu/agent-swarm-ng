@@ -1,9 +1,13 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useId, useLayoutEffect, useRef } from 'react';
 import {
+  accentColor,
   avatarShapes,
   eyePath,
   eyePoses,
   interpolateEyes,
+  type AvatarAccessory,
+  type AvatarMarking,
+  type AvatarMouth,
   type AvatarShape,
   type AvatarState,
   type EyePose,
@@ -15,6 +19,7 @@ import {
   contourSpeed,
   eyelidTransform,
   faceMotion,
+  shapeOutline,
   type Point,
 } from '@/lib/avatar-motion';
 import { projectEye, type Gaze } from '@/lib/avatar-perspective';
@@ -44,6 +49,46 @@ function sampleContour(outline: SVGPathElement, path: string) {
   return points;
 }
 type AppearanceTransition = { started?: number; points: Point[]; tilt: number; roundness: number; narrow: number };
+const INK = '#18272a';
+/** Resting eye centres (left, right) that eye size and spacing are applied around. */
+const eyeCentres = [
+  [25, 28.5],
+  [38, 27.5],
+] as const;
+const mouthPaths: Record<Exclude<AvatarMouth, 'none' | 'open'>, string> = {
+  smile: 'M28.4 35.6 Q31.5 38.6 34.6 35.6',
+  flat: 'M29.2 36.6 H33.8',
+  cat: 'M28.2 35.6 Q29.85 37.8 31.5 35.8 Q33.15 37.8 34.8 35.6',
+};
+/** Accessories that sit on top of the head, drawn with the outline's highest point at the origin. */
+function TopAccessory({ kind, accent }: { kind: AvatarAccessory; accent: string }) {
+  if (kind === 'antenna')
+    return (
+      <>
+        <path d="M32 1.5 V-5" stroke={INK} strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="32" cy="-7" r="2.6" fill={accent} />
+      </>
+    );
+  if (kind === 'sprout')
+    return (
+      <>
+        <path d="M32 1.5 V-3.5" stroke="#3f8f5a" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M32 -3 C28 -3.5 26 -6.5 26.5 -9 C29.5 -8.5 31.8 -6 32 -3 Z" fill="#6cc28a" />
+        <path d="M32 -3.5 C36 -4 38.2 -7 37.6 -9.6 C34.6 -9 32.3 -6.6 32 -3.5 Z" fill="#8fd6a4" />
+      </>
+    );
+  if (kind === 'bow')
+    return (
+      <g fill={accent} stroke={INK} strokeWidth="0.8" strokeLinejoin="round">
+        <path d="M32 -1 L25 -5.5 Q23.5 -1 25 3 Z" />
+        <path d="M32 -1 L39 -5.5 Q40.5 -1 39 3 Z" />
+        <circle cx="32" cy="-1" r="2.1" />
+      </g>
+    );
+  if (kind === 'halo')
+    return <ellipse cx="32" cy="-5" rx="9.5" ry="2.6" fill="none" stroke="#f3d36b" strokeWidth="1.8" />;
+  return null;
+}
 export function AgentAvatarArt({
   shape,
   color,
@@ -53,11 +98,29 @@ export function AgentAvatarArt({
   size = 64,
   animated = false,
   look,
+  stretch = 0,
+  taper = 0,
+  wobble = 0,
+  eyeSize = 1,
+  eyeGap = 0,
+  mouth = 'none',
+  marking = 'none',
+  accent,
+  accessory = 'none',
 }: {
   shape: AvatarShape;
   color: string;
   seed?: number;
   eyeStyle?: 'pill' | 'round';
+  stretch?: number;
+  taper?: number;
+  wobble?: number;
+  eyeSize?: number;
+  eyeGap?: number;
+  mouth?: AvatarMouth;
+  marking?: AvatarMarking;
+  accent?: string;
+  accessory?: AvatarAccessory;
   state?: AvatarState;
   size?: number;
   animated?: boolean;
@@ -82,12 +145,28 @@ export function AgentAvatarArt({
   const tilt = useRef<number>(artwork.tilt),
     roundness = useRef(eyeStyle === 'round' ? 1 : 0);
   const narrow = useRef(shape === 'triangle' || shape === 'pear' ? 1 : 0);
-  const identity = `${shape}:${seed}:${eyeStyle}:${state}`;
+  const identity = `${shape}:${seed}:${eyeStyle}:${state}:${stretch}:${taper}:${wobble}`;
+  const face = useRef<SVGGElement>(null),
+    cheeks = useRef<SVGGElement>(null),
+    topping = useRef<SVGGElement>(null);
+  const ids = useId().replace(/[^a-zA-Z0-9]/g, '');
+  const bodyId = `avatar-body-${ids}`,
+    clipId = `avatar-clip-${ids}`;
+  // Fine details only where they can be seen: markings from 24px, accessories from 20px.
+  const detailed = size >= 24;
+  const wearing = size >= 20 ? accessory : 'none';
+  const onTop = wearing !== 'none' && wearing !== 'glasses';
+  const tint = accentColor({ color, accent });
+  const eyeWrap = (index: 0 | 1) => {
+    const [cx, cy] = eyeCentres[index];
+    const dx = (index ? 1 : -1) * eyeGap * 2.4;
+    return `translate(${cx + dx} ${cy}) scale(${eyeSize}) translate(${-cx} ${-cy})`;
+  };
   const previousIdentity = useRef(identity);
   useLayoutEffect(() => {
     const root = svg.current!,
       outline = body.current!;
-    const points = sampleContour(outline, artwork.path);
+    const points = shapeOutline(sampleContour(outline, artwork.path), { stretch, taper, wobble }, seed);
     if (previousIdentity.current !== identity && rendered.current) {
       transition.current = {
         points: rendered.current,
@@ -125,6 +204,9 @@ export function AgentAvatarArt({
       narrow.current = morph ? blend(morph.narrow, targetNarrow) : targetNarrow;
       head.current?.setAttribute('transform', `rotate(${tilt.current} 32 32)`);
       outline.setAttribute('d', curvePath(rendered.current));
+      // A top accessory rides the outline's highest point as the silhouette moves.
+      const top = rendered.current.reduce((best, point) => (point.y < best.y ? point : best));
+      topping.current?.setAttribute('transform', `translate(${(top.x - 32).toFixed(2)} ${top.y.toFixed(2)})`);
       if (progress === 1) transition.current = undefined;
       root.dataset.transition = transition.current ? 'running' : 'idle';
       const motion = ambient ? faceMotion(seed, time, state) : { blink: 0, x: 0, y: 0 };
@@ -146,6 +228,10 @@ export function AgentAvatarArt({
         rightEye = openEyes[1];
       leftView.current?.setAttribute('transform', projectEye(leftEye, gaze.current, shape, narrow.current).transform);
       rightView.current?.setAttribute('transform', projectEye(rightEye, gaze.current, shape, narrow.current).transform);
+      // Mouth, cheeks and the glasses bridge turn with the face like the eyes do.
+      const faceTransform = projectEye([31.5, 32, 31.5, 32, 31.6, 32], gaze.current, shape, narrow.current).transform;
+      face.current?.setAttribute('transform', faceTransform);
+      cheeks.current?.setAttribute('transform', faceTransform);
       left.current?.setAttribute('d', eyePath(leftEye));
       right.current?.setAttribute('d', eyePath(rightEye));
       leftLid.current?.setAttribute('transform', eyelidTransform(leftEye, motion.blink));
@@ -190,7 +276,22 @@ export function AgentAvatarArt({
       reduced.removeEventListener('change', reset);
       document.removeEventListener('visibilitychange', reset);
     };
-  }, [artwork.path, artwork.tilt, identity, shape, seed, eyeStyle, state, animated, look?.x, look?.y]);
+  }, [
+    artwork.path,
+    artwork.tilt,
+    identity,
+    shape,
+    seed,
+    eyeStyle,
+    state,
+    animated,
+    look?.x,
+    look?.y,
+    stretch,
+    taper,
+    wobble,
+    wearing,
+  ]);
   return (
     <svg
       ref={svg}
@@ -204,25 +305,100 @@ export function AgentAvatarArt({
       data-avatar-seed={seed}
       data-eye-style={eyeStyle}
       data-avatar-state={state}
+      data-mouth={mouth}
+      data-marking={marking}
+      data-accessory={wearing}
     >
-      <g ref={head} transform={`rotate(${artwork.tilt} 32 32)`}>
-        <path
-          ref={body}
-          d={artwork.path}
-          fill={color}
-          className="transition-[fill] duration-240 ease-out motion-reduce:transition-none"
-        />
-        <g ref={eyesGroup} fill="none" stroke="#18272a" strokeWidth="4.2" strokeLinecap="round">
-          <g ref={leftView} data-eye-view="left">
-            <g ref={leftLid} data-eyelid="left">
-              <path ref={left} d={eyePath(initial.current[0])} />
+      <defs>
+        <clipPath id={clipId}>
+          <use href={`#${bodyId}`} />
+        </clipPath>
+      </defs>
+      {/* Room above the head for an accessory: the whole figure settles slightly lower and smaller. */}
+      <g
+        style={{
+          transform: onTop ? 'translate(32px, 61px) scale(0.84) translate(-32px, -61px)' : 'none',
+          transition: 'transform 240ms ease-out',
+        }}
+      >
+        <g ref={head} transform={`rotate(${artwork.tilt} 32 32)`}>
+          <path
+            id={bodyId}
+            ref={body}
+            d={artwork.path}
+            fill={color}
+            className="transition-[fill] duration-240 ease-out motion-reduce:transition-none"
+          />
+          <g clipPath={`url(#${clipId})`} fill={tint} data-slot="avatar-markings">
+            {detailed && marking === 'spots' && (
+              <>
+                {[0, 1, 2].map(i => (
+                  <circle
+                    key={i}
+                    cx={14 + ((seed >>> (i * 3)) % 7) + i * 14}
+                    cy={40 + ((seed >>> (i * 5)) % 9)}
+                    r={2.2 + ((seed >>> (i * 7)) % 3) * 0.5}
+                    opacity="0.85"
+                  />
+                ))}
+              </>
+            )}
+            {marking === 'belly' && <ellipse cx="32" cy="52" rx="17" ry="11" opacity="0.8" />}
+            {detailed && marking === 'stripe' && <rect x="0" y="41" width="64" height="5" opacity="0.8" />}
+            <g ref={cheeks}>
+              {marking === 'cheeks' && (
+                <>
+                  <ellipse cx="20.5" cy="34.5" rx="3.2" ry="2" opacity="0.75" />
+                  <ellipse cx="42.5" cy="33.5" rx="3.2" ry="2" opacity="0.75" />
+                </>
+              )}
             </g>
           </g>
-          <g ref={rightView} data-eye-view="right">
-            <g ref={rightLid} data-eyelid="right">
-              <path ref={right} d={eyePath(initial.current[1])} />
+          <g ref={face} data-slot="avatar-features">
+            {mouth === 'open' ? (
+              <circle cx="31.5" cy="36.4" r="1.7" fill={INK} />
+            ) : (
+              mouth !== 'none' && (
+                <path d={mouthPaths[mouth]} fill="none" stroke={INK} strokeWidth="2.2" strokeLinecap="round" />
+              )
+            )}
+            {wearing === 'glasses' && (
+              <path
+                d={`M${29.6 - eyeGap * 2.4 + 4.6 * (eyeSize - 1)} 28 Q31.5 26.6 ${33.4 + eyeGap * 2.4 - 4.6 * (eyeSize - 1)} 27.6`}
+                fill="none"
+                stroke={INK}
+                strokeWidth="1.4"
+                strokeLinecap="round"
+              />
+            )}
+          </g>
+          <g ref={eyesGroup} fill="none" stroke={INK} strokeWidth="4.2" strokeLinecap="round">
+            <g ref={leftView} data-eye-view="left">
+              <g transform={eyeWrap(0)}>
+                {wearing === 'glasses' && (
+                  <circle cx={eyeCentres[0][0]} cy={eyeCentres[0][1]} r="5" fill="#ffffff22" strokeWidth="1.4" />
+                )}
+                <g ref={leftLid} data-eyelid="left">
+                  <path ref={left} d={eyePath(initial.current[0])} />
+                </g>
+              </g>
+            </g>
+            <g ref={rightView} data-eye-view="right">
+              <g transform={eyeWrap(1)}>
+                {wearing === 'glasses' && (
+                  <circle cx={eyeCentres[1][0]} cy={eyeCentres[1][1]} r="5" fill="#ffffff22" strokeWidth="1.4" />
+                )}
+                <g ref={rightLid} data-eyelid="right">
+                  <path ref={right} d={eyePath(initial.current[1])} />
+                </g>
+              </g>
             </g>
           </g>
+          {onTop && (
+            <g ref={topping} data-slot="avatar-accessory" transform="translate(0 7)">
+              <TopAccessory kind={wearing} accent={tint} />
+            </g>
+          )}
         </g>
       </g>
     </svg>

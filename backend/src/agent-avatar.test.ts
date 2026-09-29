@@ -73,3 +73,35 @@ it('saves avatar identity at creation and edits only appearance, surviving reope
     await reopened.close();
   }
 });
+
+it('accepts the extended traits within range and rejects anything outside them', async () => {
+  const { Value } = await import('@sinclair/typebox/value');
+  const { AvatarSchema, encodeAvatar } = await import('./agent-avatar');
+  const base = { shape: 'bean', color: '#55bea9', seed: 7 };
+  const full = {
+    ...base,
+    stretch: -1,
+    taper: 1,
+    wobble: 0.4,
+    eyeSize: 1.35,
+    eyeGap: -0.5,
+    mouth: 'cat',
+    marking: 'spots',
+    accent: '#E8656F',
+    accessory: 'glasses',
+  };
+  expect(Value.Check(AvatarSchema, base)).toBe(true);
+  expect(Value.Check(AvatarSchema, full)).toBe(true);
+  expect(JSON.parse(encodeAvatar(full as never)).accent).toBe('#e8656f');
+  for (const bad of [
+    { stretch: 1.5 },
+    { wobble: -0.1 },
+    { eyeSize: 2 },
+    { mouth: 'grin' },
+    { marking: 'tattoo' },
+    { accessory: 'crown' },
+    { accent: 'red' },
+    { sparkle: true },
+  ])
+    expect(Value.Check(AvatarSchema, { ...base, ...bad })).toBe(false);
+});

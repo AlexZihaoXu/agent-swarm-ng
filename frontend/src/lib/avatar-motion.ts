@@ -72,3 +72,31 @@ export function faceMotion(seed: number, seconds: number, state: AvatarState) {
     y: (variation(seed, 503 + cycle * 4) - 0.5) * 2.6 * envelope,
   };
 }
+
+/**
+ * The outline with the avatar's proportions applied: stretch (wide ↔ tall), taper (narrower top or bottom) and a
+ * seeded wobble for lumpier silhouettes. The result is rescaled to fit the 64-unit box with a small margin.
+ */
+export function shapeOutline(
+  points: Point[],
+  { stretch = 0, taper = 0, wobble = 0 }: { stretch?: number; taper?: number; wobble?: number },
+  seed: number,
+) {
+  if (!stretch && !taper && !wobble) return points;
+  const phase = (salt: number) => variation(seed, salt) * Math.PI * 2;
+  const shaped = points.map((point, i) => {
+    const angle = (i / points.length) * Math.PI * 2;
+    let dx = (point.x - 32) * (1 - 0.2 * stretch),
+      dy = (point.y - 32) * (1 + 0.2 * stretch);
+    // Positive taper narrows the top and widens the bottom; negative does the opposite.
+    dx *= 1 + taper * 0.28 * (dy / 28);
+    const radius = Math.hypot(dx, dy) || 1;
+    const lump =
+      wobble *
+      (Math.sin(angle * 3 + phase(31)) * 2 + Math.sin(angle * 5 + phase(32)) * 1.2 + Math.sin(angle * 2 + phase(33)));
+    return { x: 32 + dx + (dx / radius) * lump, y: 32 + dy + (dy / radius) * lump };
+  });
+  const extent = Math.max(...shaped.map(point => Math.max(Math.abs(point.x - 32), Math.abs(point.y - 32))));
+  const fit = extent > 28.5 ? 28.5 / extent : 1;
+  return shaped.map(point => ({ x: 32 + (point.x - 32) * fit, y: 32 + (point.y - 32) * fit }));
+}

@@ -1169,6 +1169,145 @@
                               "minimum": 0,
                               "maximum": 2147483647,
                               "type": "integer"
+                            },
+                            "stretch": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "taper": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "wobble": {
+                              "minimum": 0,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "eyeSize": {
+                              "minimum": 0.75,
+                              "maximum": 1.35,
+                              "type": "number"
+                            },
+                            "eyeGap": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "mouth": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "smile"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "flat"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "open"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "cat"
+                                  ]
+                                }
+                              ]
+                            },
+                            "marking": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "cheeks"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "spots"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "belly"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "stripe"
+                                  ]
+                                }
+                              ]
+                            },
+                            "accent": {
+                              "minLength": 7,
+                              "maxLength": 7,
+                              "pattern": "^#[0-9a-fA-F]{6}$",
+                              "type": "string"
+                            },
+                            "accessory": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "antenna"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "sprout"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "bow"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "halo"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "glasses"
+                                  ]
+                                }
+                              ]
                             }
                           }
                         },
@@ -1336,6 +1475,145 @@
                         "minimum": 0,
                         "maximum": 2147483647,
                         "type": "integer"
+                      },
+                      "stretch": {
+                        "minimum": -1,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "taper": {
+                        "minimum": -1,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "wobble": {
+                        "minimum": 0,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "eyeSize": {
+                        "minimum": 0.75,
+                        "maximum": 1.35,
+                        "type": "number"
+                      },
+                      "eyeGap": {
+                        "minimum": -1,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "mouth": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "none"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "smile"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "flat"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "open"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "cat"
+                            ]
+                          }
+                        ]
+                      },
+                      "marking": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "none"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "cheeks"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "spots"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "belly"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "stripe"
+                            ]
+                          }
+                        ]
+                      },
+                      "accent": {
+                        "minLength": 7,
+                        "maxLength": 7,
+                        "pattern": "^#[0-9a-fA-F]{6}$",
+                        "type": "string"
+                      },
+                      "accessory": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "none"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "antenna"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "sprout"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "bow"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "halo"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "glasses"
+                            ]
+                          }
+                        ]
                       }
                     }
                   },
@@ -1467,6 +1745,145 @@
                               "minimum": 0,
                               "maximum": 2147483647,
                               "type": "integer"
+                            },
+                            "stretch": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "taper": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "wobble": {
+                              "minimum": 0,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "eyeSize": {
+                              "minimum": 0.75,
+                              "maximum": 1.35,
+                              "type": "number"
+                            },
+                            "eyeGap": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "mouth": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "smile"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "flat"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "open"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "cat"
+                                  ]
+                                }
+                              ]
+                            },
+                            "marking": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "cheeks"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "spots"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "belly"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "stripe"
+                                  ]
+                                }
+                              ]
+                            },
+                            "accent": {
+                              "minLength": 7,
+                              "maxLength": 7,
+                              "pattern": "^#[0-9a-fA-F]{6}$",
+                              "type": "string"
+                            },
+                            "accessory": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "antenna"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "sprout"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "bow"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "halo"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "glasses"
+                                  ]
+                                }
+                              ]
                             }
                           }
                         },
@@ -1715,6 +2132,145 @@
                                     "minimum": 0,
                                     "maximum": 2147483647,
                                     "type": "integer"
+                                  },
+                                  "stretch": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "taper": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "wobble": {
+                                    "minimum": 0,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "eyeSize": {
+                                    "minimum": 0.75,
+                                    "maximum": 1.35,
+                                    "type": "number"
+                                  },
+                                  "eyeGap": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "mouth": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "smile"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "flat"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "open"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cat"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "marking": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cheeks"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "spots"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "belly"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "stripe"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "accent": {
+                                    "minLength": 7,
+                                    "maxLength": 7,
+                                    "pattern": "^#[0-9a-fA-F]{6}$",
+                                    "type": "string"
+                                  },
+                                  "accessory": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "antenna"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "sprout"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "bow"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "halo"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "glasses"
+                                        ]
+                                      }
+                                    ]
                                   }
                                 }
                               },
@@ -1922,6 +2478,145 @@
                                     "minimum": 0,
                                     "maximum": 2147483647,
                                     "type": "integer"
+                                  },
+                                  "stretch": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "taper": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "wobble": {
+                                    "minimum": 0,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "eyeSize": {
+                                    "minimum": 0.75,
+                                    "maximum": 1.35,
+                                    "type": "number"
+                                  },
+                                  "eyeGap": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "mouth": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "smile"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "flat"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "open"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cat"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "marking": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cheeks"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "spots"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "belly"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "stripe"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "accent": {
+                                    "minLength": 7,
+                                    "maxLength": 7,
+                                    "pattern": "^#[0-9a-fA-F]{6}$",
+                                    "type": "string"
+                                  },
+                                  "accessory": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "antenna"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "sprout"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "bow"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "halo"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "glasses"
+                                        ]
+                                      }
+                                    ]
                                   }
                                 }
                               },
@@ -2371,6 +3066,145 @@
                                           "minimum": 0,
                                           "maximum": 2147483647,
                                           "type": "integer"
+                                        },
+                                        "stretch": {
+                                          "minimum": -1,
+                                          "maximum": 1,
+                                          "type": "number"
+                                        },
+                                        "taper": {
+                                          "minimum": -1,
+                                          "maximum": 1,
+                                          "type": "number"
+                                        },
+                                        "wobble": {
+                                          "minimum": 0,
+                                          "maximum": 1,
+                                          "type": "number"
+                                        },
+                                        "eyeSize": {
+                                          "minimum": 0.75,
+                                          "maximum": 1.35,
+                                          "type": "number"
+                                        },
+                                        "eyeGap": {
+                                          "minimum": -1,
+                                          "maximum": 1,
+                                          "type": "number"
+                                        },
+                                        "mouth": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "none"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "smile"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "flat"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "open"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "cat"
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        "marking": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "none"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "cheeks"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "spots"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "belly"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "stripe"
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        "accent": {
+                                          "minLength": 7,
+                                          "maxLength": 7,
+                                          "pattern": "^#[0-9a-fA-F]{6}$",
+                                          "type": "string"
+                                        },
+                                        "accessory": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "none"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "antenna"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "sprout"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "bow"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "halo"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "glasses"
+                                              ]
+                                            }
+                                          ]
                                         }
                                       }
                                     },
@@ -2529,6 +3363,145 @@
                                             "minimum": 0,
                                             "maximum": 2147483647,
                                             "type": "integer"
+                                          },
+                                          "stretch": {
+                                            "minimum": -1,
+                                            "maximum": 1,
+                                            "type": "number"
+                                          },
+                                          "taper": {
+                                            "minimum": -1,
+                                            "maximum": 1,
+                                            "type": "number"
+                                          },
+                                          "wobble": {
+                                            "minimum": 0,
+                                            "maximum": 1,
+                                            "type": "number"
+                                          },
+                                          "eyeSize": {
+                                            "minimum": 0.75,
+                                            "maximum": 1.35,
+                                            "type": "number"
+                                          },
+                                          "eyeGap": {
+                                            "minimum": -1,
+                                            "maximum": 1,
+                                            "type": "number"
+                                          },
+                                          "mouth": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "none"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "smile"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "flat"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "open"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "cat"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "marking": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "none"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "cheeks"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "spots"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "belly"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "stripe"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "accent": {
+                                            "minLength": 7,
+                                            "maxLength": 7,
+                                            "pattern": "^#[0-9a-fA-F]{6}$",
+                                            "type": "string"
+                                          },
+                                          "accessory": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "none"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "antenna"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "sprout"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "bow"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "halo"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "glasses"
+                                                ]
+                                              }
+                                            ]
                                           }
                                         }
                                       },
@@ -2861,6 +3834,145 @@
                                     "minimum": 0,
                                     "maximum": 2147483647,
                                     "type": "integer"
+                                  },
+                                  "stretch": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "taper": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "wobble": {
+                                    "minimum": 0,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "eyeSize": {
+                                    "minimum": 0.75,
+                                    "maximum": 1.35,
+                                    "type": "number"
+                                  },
+                                  "eyeGap": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "mouth": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "smile"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "flat"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "open"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cat"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "marking": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cheeks"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "spots"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "belly"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "stripe"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "accent": {
+                                    "minLength": 7,
+                                    "maxLength": 7,
+                                    "pattern": "^#[0-9a-fA-F]{6}$",
+                                    "type": "string"
+                                  },
+                                  "accessory": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "antenna"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "sprout"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "bow"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "halo"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "glasses"
+                                        ]
+                                      }
+                                    ]
                                   }
                                 }
                               },
@@ -3019,6 +4131,145 @@
                                       "minimum": 0,
                                       "maximum": 2147483647,
                                       "type": "integer"
+                                    },
+                                    "stretch": {
+                                      "minimum": -1,
+                                      "maximum": 1,
+                                      "type": "number"
+                                    },
+                                    "taper": {
+                                      "minimum": -1,
+                                      "maximum": 1,
+                                      "type": "number"
+                                    },
+                                    "wobble": {
+                                      "minimum": 0,
+                                      "maximum": 1,
+                                      "type": "number"
+                                    },
+                                    "eyeSize": {
+                                      "minimum": 0.75,
+                                      "maximum": 1.35,
+                                      "type": "number"
+                                    },
+                                    "eyeGap": {
+                                      "minimum": -1,
+                                      "maximum": 1,
+                                      "type": "number"
+                                    },
+                                    "mouth": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "none"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "smile"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "flat"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "open"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "cat"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "marking": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "none"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "cheeks"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "spots"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "belly"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "stripe"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "accent": {
+                                      "minLength": 7,
+                                      "maxLength": 7,
+                                      "pattern": "^#[0-9a-fA-F]{6}$",
+                                      "type": "string"
+                                    },
+                                    "accessory": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "none"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "antenna"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "sprout"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "bow"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "halo"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "glasses"
+                                          ]
+                                        }
+                                      ]
                                     }
                                   }
                                 },
@@ -3319,6 +4570,145 @@
                                     "minimum": 0,
                                     "maximum": 2147483647,
                                     "type": "integer"
+                                  },
+                                  "stretch": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "taper": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "wobble": {
+                                    "minimum": 0,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "eyeSize": {
+                                    "minimum": 0.75,
+                                    "maximum": 1.35,
+                                    "type": "number"
+                                  },
+                                  "eyeGap": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "mouth": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "smile"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "flat"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "open"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cat"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "marking": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cheeks"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "spots"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "belly"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "stripe"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "accent": {
+                                    "minLength": 7,
+                                    "maxLength": 7,
+                                    "pattern": "^#[0-9a-fA-F]{6}$",
+                                    "type": "string"
+                                  },
+                                  "accessory": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "antenna"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "sprout"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "bow"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "halo"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "glasses"
+                                        ]
+                                      }
+                                    ]
                                   }
                                 }
                               },
@@ -3477,6 +4867,145 @@
                                       "minimum": 0,
                                       "maximum": 2147483647,
                                       "type": "integer"
+                                    },
+                                    "stretch": {
+                                      "minimum": -1,
+                                      "maximum": 1,
+                                      "type": "number"
+                                    },
+                                    "taper": {
+                                      "minimum": -1,
+                                      "maximum": 1,
+                                      "type": "number"
+                                    },
+                                    "wobble": {
+                                      "minimum": 0,
+                                      "maximum": 1,
+                                      "type": "number"
+                                    },
+                                    "eyeSize": {
+                                      "minimum": 0.75,
+                                      "maximum": 1.35,
+                                      "type": "number"
+                                    },
+                                    "eyeGap": {
+                                      "minimum": -1,
+                                      "maximum": 1,
+                                      "type": "number"
+                                    },
+                                    "mouth": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "none"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "smile"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "flat"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "open"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "cat"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "marking": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "none"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "cheeks"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "spots"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "belly"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "stripe"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "accent": {
+                                      "minLength": 7,
+                                      "maxLength": 7,
+                                      "pattern": "^#[0-9a-fA-F]{6}$",
+                                      "type": "string"
+                                    },
+                                    "accessory": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "none"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "antenna"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "sprout"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "bow"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "halo"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "glasses"
+                                          ]
+                                        }
+                                      ]
                                     }
                                   }
                                 },
@@ -3808,6 +5337,145 @@
                                     "minimum": 0,
                                     "maximum": 2147483647,
                                     "type": "integer"
+                                  },
+                                  "stretch": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "taper": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "wobble": {
+                                    "minimum": 0,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "eyeSize": {
+                                    "minimum": 0.75,
+                                    "maximum": 1.35,
+                                    "type": "number"
+                                  },
+                                  "eyeGap": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "mouth": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "smile"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "flat"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "open"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cat"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "marking": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cheeks"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "spots"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "belly"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "stripe"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "accent": {
+                                    "minLength": 7,
+                                    "maxLength": 7,
+                                    "pattern": "^#[0-9a-fA-F]{6}$",
+                                    "type": "string"
+                                  },
+                                  "accessory": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "antenna"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "sprout"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "bow"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "halo"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "glasses"
+                                        ]
+                                      }
+                                    ]
                                   }
                                 }
                               },
@@ -3966,6 +5634,145 @@
                                       "minimum": 0,
                                       "maximum": 2147483647,
                                       "type": "integer"
+                                    },
+                                    "stretch": {
+                                      "minimum": -1,
+                                      "maximum": 1,
+                                      "type": "number"
+                                    },
+                                    "taper": {
+                                      "minimum": -1,
+                                      "maximum": 1,
+                                      "type": "number"
+                                    },
+                                    "wobble": {
+                                      "minimum": 0,
+                                      "maximum": 1,
+                                      "type": "number"
+                                    },
+                                    "eyeSize": {
+                                      "minimum": 0.75,
+                                      "maximum": 1.35,
+                                      "type": "number"
+                                    },
+                                    "eyeGap": {
+                                      "minimum": -1,
+                                      "maximum": 1,
+                                      "type": "number"
+                                    },
+                                    "mouth": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "none"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "smile"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "flat"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "open"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "cat"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "marking": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "none"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "cheeks"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "spots"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "belly"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "stripe"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "accent": {
+                                      "minLength": 7,
+                                      "maxLength": 7,
+                                      "pattern": "^#[0-9a-fA-F]{6}$",
+                                      "type": "string"
+                                    },
+                                    "accessory": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "none"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "antenna"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "sprout"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "bow"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "halo"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "glasses"
+                                          ]
+                                        }
+                                      ]
                                     }
                                   }
                                 },
@@ -4439,6 +6246,145 @@
                                     "minimum": 0,
                                     "maximum": 2147483647,
                                     "type": "integer"
+                                  },
+                                  "stretch": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "taper": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "wobble": {
+                                    "minimum": 0,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "eyeSize": {
+                                    "minimum": 0.75,
+                                    "maximum": 1.35,
+                                    "type": "number"
+                                  },
+                                  "eyeGap": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "mouth": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "smile"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "flat"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "open"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cat"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "marking": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cheeks"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "spots"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "belly"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "stripe"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "accent": {
+                                    "minLength": 7,
+                                    "maxLength": 7,
+                                    "pattern": "^#[0-9a-fA-F]{6}$",
+                                    "type": "string"
+                                  },
+                                  "accessory": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "antenna"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "sprout"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "bow"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "halo"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "glasses"
+                                        ]
+                                      }
+                                    ]
                                   }
                                 }
                               },
@@ -4798,6 +6744,145 @@
                                   "minimum": 0,
                                   "maximum": 2147483647,
                                   "type": "integer"
+                                },
+                                "stretch": {
+                                  "minimum": -1,
+                                  "maximum": 1,
+                                  "type": "number"
+                                },
+                                "taper": {
+                                  "minimum": -1,
+                                  "maximum": 1,
+                                  "type": "number"
+                                },
+                                "wobble": {
+                                  "minimum": 0,
+                                  "maximum": 1,
+                                  "type": "number"
+                                },
+                                "eyeSize": {
+                                  "minimum": 0.75,
+                                  "maximum": 1.35,
+                                  "type": "number"
+                                },
+                                "eyeGap": {
+                                  "minimum": -1,
+                                  "maximum": 1,
+                                  "type": "number"
+                                },
+                                "mouth": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "none"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "smile"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "flat"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "open"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "cat"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "marking": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "none"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "cheeks"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "spots"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "belly"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "stripe"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "accent": {
+                                  "minLength": 7,
+                                  "maxLength": 7,
+                                  "pattern": "^#[0-9a-fA-F]{6}$",
+                                  "type": "string"
+                                },
+                                "accessory": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "none"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "antenna"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "sprout"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "bow"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "halo"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "glasses"
+                                      ]
+                                    }
+                                  ]
                                 }
                               }
                             },
@@ -5636,6 +7721,145 @@
                                     "minimum": 0,
                                     "maximum": 2147483647,
                                     "type": "integer"
+                                  },
+                                  "stretch": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "taper": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "wobble": {
+                                    "minimum": 0,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "eyeSize": {
+                                    "minimum": 0.75,
+                                    "maximum": 1.35,
+                                    "type": "number"
+                                  },
+                                  "eyeGap": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "mouth": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "smile"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "flat"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "open"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cat"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "marking": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cheeks"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "spots"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "belly"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "stripe"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "accent": {
+                                    "minLength": 7,
+                                    "maxLength": 7,
+                                    "pattern": "^#[0-9a-fA-F]{6}$",
+                                    "type": "string"
+                                  },
+                                  "accessory": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "antenna"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "sprout"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "bow"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "halo"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "glasses"
+                                        ]
+                                      }
+                                    ]
                                   }
                                 }
                               },
@@ -5928,6 +8152,145 @@
                         "minimum": 0,
                         "maximum": 2147483647,
                         "type": "integer"
+                      },
+                      "stretch": {
+                        "minimum": -1,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "taper": {
+                        "minimum": -1,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "wobble": {
+                        "minimum": 0,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "eyeSize": {
+                        "minimum": 0.75,
+                        "maximum": 1.35,
+                        "type": "number"
+                      },
+                      "eyeGap": {
+                        "minimum": -1,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "mouth": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "none"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "smile"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "flat"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "open"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "cat"
+                            ]
+                          }
+                        ]
+                      },
+                      "marking": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "none"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "cheeks"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "spots"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "belly"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "stripe"
+                            ]
+                          }
+                        ]
+                      },
+                      "accent": {
+                        "minLength": 7,
+                        "maxLength": 7,
+                        "pattern": "^#[0-9a-fA-F]{6}$",
+                        "type": "string"
+                      },
+                      "accessory": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "none"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "antenna"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "sprout"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "bow"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "halo"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "glasses"
+                            ]
+                          }
+                        ]
                       }
                     }
                   }
@@ -6105,6 +8468,145 @@
                               "minimum": 0,
                               "maximum": 2147483647,
                               "type": "integer"
+                            },
+                            "stretch": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "taper": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "wobble": {
+                              "minimum": 0,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "eyeSize": {
+                              "minimum": 0.75,
+                              "maximum": 1.35,
+                              "type": "number"
+                            },
+                            "eyeGap": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "mouth": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "smile"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "flat"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "open"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "cat"
+                                  ]
+                                }
+                              ]
+                            },
+                            "marking": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "cheeks"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "spots"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "belly"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "stripe"
+                                  ]
+                                }
+                              ]
+                            },
+                            "accent": {
+                              "minLength": 7,
+                              "maxLength": 7,
+                              "pattern": "^#[0-9a-fA-F]{6}$",
+                              "type": "string"
+                            },
+                            "accessory": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "antenna"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "sprout"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "bow"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "halo"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "glasses"
+                                  ]
+                                }
+                              ]
                             }
                           }
                         },
@@ -6685,6 +9187,145 @@
                               "minimum": 0,
                               "maximum": 2147483647,
                               "type": "integer"
+                            },
+                            "stretch": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "taper": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "wobble": {
+                              "minimum": 0,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "eyeSize": {
+                              "minimum": 0.75,
+                              "maximum": 1.35,
+                              "type": "number"
+                            },
+                            "eyeGap": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "mouth": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "smile"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "flat"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "open"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "cat"
+                                  ]
+                                }
+                              ]
+                            },
+                            "marking": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "cheeks"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "spots"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "belly"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "stripe"
+                                  ]
+                                }
+                              ]
+                            },
+                            "accent": {
+                              "minLength": 7,
+                              "maxLength": 7,
+                              "pattern": "^#[0-9a-fA-F]{6}$",
+                              "type": "string"
+                            },
+                            "accessory": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "antenna"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "sprout"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "bow"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "halo"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "glasses"
+                                  ]
+                                }
+                              ]
                             }
                           }
                         },

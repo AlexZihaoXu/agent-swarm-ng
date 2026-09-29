@@ -9,7 +9,13 @@ async function openCreate(page: Page) {
   await page.getByRole('menuitem', { name: 'Create new agent' }).click();
   await expect(page.getByRole('dialog', { name: 'Create new agent' })).toBeVisible();
 }
+/** Picks a choice: chips and swatches are radio groups; the look preview is a combobox. */
 async function select(page: Page, label: string, option: string) {
+  const group = page.getByRole('radiogroup', { name: label, exact: true });
+  if (await group.count()) {
+    await group.getByRole('radio', { name: option, exact: true }).click();
+    return;
+  }
   await page.getByLabel(label, { exact: true }).click();
   await page.getByRole('option', { name: option, exact: true }).click();
   await expect(page.getByRole('listbox', { includeHidden: true })).toHaveCount(0);
@@ -49,9 +55,7 @@ test('all silhouettes move; randomization is stable and preserves the state prev
   await expect(art.locator('g[stroke]')).toHaveAttribute('stroke-width', '8');
   await expect(art).toHaveAttribute('data-eye-style', 'round');
   await select(page, 'State preview', 'Idle');
-  await page.getByLabel('State preview').click();
-  await expect(page.getByRole('option')).toHaveCount(3);
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('radiogroup', { name: 'State preview' }).getByRole('radio')).toHaveCount(3);
   await page.getByRole('region', { name: 'Agent editor', exact: true }).evaluate(element => {
     element.scrollTop = 0;
   });
@@ -281,16 +285,39 @@ test('creation sends appearance but never the preview state', async ({ page }) =
   await page.getByLabel('Agent name', { exact: true }).fill('New avatar');
   await page.getByRole('button', { name: 'Preview Bean', exact: true }).click();
   await select(page, 'Eye shape', 'Circles');
+  await select(page, 'Mouth', 'Smile');
+  await select(page, 'Markings', 'Cheeks');
+  await select(page, 'Accessory', 'Antenna');
+  await select(page, 'Accent color', 'Cherry');
+  // Proportions: a slider moves by keyboard like any other.
+  await page.getByRole('button', { name: 'Fine tune proportions' }).click();
+  await page.getByRole('button', { name: 'Reset proportions' }).click();
+  await page.getByRole('slider', { name: 'Wide ↔ tall' }).focus();
+  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
+  const art = previewArt(page);
+  await expect(art).toHaveAttribute('data-mouth', 'smile');
+  await expect(art).toHaveAttribute('data-accessory', 'antenna');
+  await expect(art.locator('[data-slot="avatar-accessory"] circle')).toHaveAttribute('fill', '#e8656f');
   await select(page, 'State preview', 'Typing');
   await select(page, 'Endpoint', 'Fixture');
   await select(page, 'Model', 'test-model');
   await page.getByRole('button', { name: 'Create agent', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Settings for New avatar' })).toBeVisible();
-  expect(created?.avatar).toMatchObject({ shape: 'bean', eyeStyle: 'round' });
+  expect(created?.avatar).toMatchObject({
+    shape: 'bean',
+    eyeStyle: 'round',
+    mouth: 'smile',
+    marking: 'cheeks',
+    accessory: 'antenna',
+    accent: '#e8656f',
+    stretch: 0.2,
+  });
   expect(created?.avatar).not.toHaveProperty('state');
-  await expect(
-    page.getByRole('button', { name: 'Open settings for New avatar' }).locator('[data-avatar-state]'),
-  ).toHaveAttribute('data-avatar-state', 'idle');
+  const sidebar = page.getByRole('button', { name: 'Open settings for New avatar' }).locator('[data-avatar-state]');
+  await expect(sidebar).toHaveAttribute('data-avatar-state', 'idle');
+  await expect(sidebar).toHaveAttribute('data-mouth', 'smile');
+  // The 32px sidebar avatar is large enough to keep its accessory.
+  await expect(sidebar).toHaveAttribute('data-accessory', 'antenna');
 });
 
 test('mobile inline avatar settings scroll without overflow and unsaved changes discard', async ({ page }) => {
@@ -312,4 +339,28 @@ test('mobile inline avatar settings scroll without overflow and unsaved changes 
   await settings.getByRole('button', { name: 'Discard changes' }).click();
   await settings.getByRole('button', { name: 'Back to agents' }).click();
   await expect(card.locator('[data-avatar-shape]')).toHaveAttribute('data-avatar-seed', String(original.seed));
+});
+
+test('variations steer the look, Randomize reaches the extended traits, and Undo goes back', async ({ page }) => {
+  await openCreate(page);
+  const art = previewArt(page);
+  const before = await art.getAttribute('data-avatar-seed');
+  const variations = page.getByRole('group', { name: 'Variations' }).getByRole('button');
+  await expect(variations).toHaveCount(8);
+  await variations.nth(2).click();
+  await expect(art).not.toHaveAttribute('data-avatar-seed', before!);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(art).toHaveAttribute('data-avatar-seed', before!);
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled();
+  const first = await variations.first().innerHTML();
+  await page.getByRole('button', { name: 'More variations', exact: true }).click();
+  await expect.poll(() => variations.first().innerHTML()).not.toBe(first);
+  // Across a few rolls, the extended traits show up.
+  const seen = new Set<string>();
+  for (let i = 0; i < 12; i++) {
+    await page.getByRole('button', { name: 'Randomize', exact: true }).click();
+    for (const key of ['data-mouth', 'data-marking', 'data-accessory'])
+      seen.add(`${key}=${await art.getAttribute(key)}`);
+  }
+  expect([...seen].filter(item => !item.endsWith('=none')).length).toBeGreaterThan(2);
 });
