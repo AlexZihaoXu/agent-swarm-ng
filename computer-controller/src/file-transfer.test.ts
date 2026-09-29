@@ -15,7 +15,11 @@ async function* chunks(...parts: string[]) {
 }
 
 it('accepts absolute file paths outside virtual filesystems only', () => {
-  expect(transferPath('/home/agent/a/../b.txt')).toEqual({ path: '/home/agent/b.txt', directory: '/home/agent', name: 'b.txt' });
+  expect(transferPath('/home/agent/a/../b.txt')).toEqual({
+    path: '/home/agent/b.txt',
+    directory: '/home/agent',
+    name: 'b.txt',
+  });
   for (const bad of ['relative', '/', '/proc/1/environ', '/dev/sda', '/sys/x', '/tmp/', `/${'x'.repeat(256)}`])
     expect(() => transferPath(bad)).toThrow();
 });

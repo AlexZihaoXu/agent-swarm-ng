@@ -66,6 +66,17 @@ async function head(path: string, max: number) {
     await handle.close();
   }
 }
+/** Releases a source that was not (fully) read: a controller download, a blob file handle, or a generator. */
+async function closeStream(stream: AsyncIterable<Uint8Array>) {
+  const value = stream as { cancel?: () => Promise<void>; destroy?: () => void; return?: () => Promise<unknown> };
+  try {
+    if (typeof value.cancel === 'function') await value.cancel();
+    else if (typeof value.destroy === 'function') value.destroy();
+    else await value.return?.();
+  } catch {
+    /* already finished or closed */
+  }
+}
 const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }], details: {} });
 
 export type FileToolOptions = {
@@ -287,14 +298,16 @@ export function createFileTools(options: FileToolOptions): ToolDefinition[] {
       async execute(_call, args, signal) {
         const key = channelKey(args);
         const location = parseLocation(args.from);
+        // Check the destination before opening the source, so a refusal never leaves a transfer open.
+        if (!(await files.access(key, actor)).post) throw new Error('You cannot post files in that chat.');
         const source = await openSource(location);
-        signal?.throwIfAborted();
-        const file = await files.add({
-          channelKey: key,
-          uploader,
-          name: args.name ?? source.name,
-          source: source.stream,
-        });
+        let file;
+        try {
+          signal?.throwIfAborted();
+          file = await files.add({ channelKey: key, uploader, name: args.name ?? source.name, source: source.stream });
+        } finally {
+          await closeStream(source.stream);
+        }
         source.done();
         return result({
           fileId: file.id,
@@ -368,37 +381,49 @@ export function createFileTools(options: FileToolOptions): ToolDefinition[] {
           const copied = await scratch.copy(agentId, from.path, to.path);
           return result({ copied: true, from: describe(from), to: `scratch:${copied.to}`, files: copied.files });
         }
+        // Check the destination before opening the source, so a refusal never leaves a transfer open.
+        const computer = to.kind === 'computer' ? await assigned(to.computer) : null;
         const source = await openSource(from);
-        signal?.throwIfAborted();
-        if (to.kind === 'scratch') {
-          const max = (await options.settings.get()).scratchFileMaxKb * 1024;
-          const bytes = await collect(
-            source.stream,
-            max,
-            `That file is larger than a scratch file may be (${max} bytes). Copy it to a computer instead.`,
-          );
-          if (detectFile(source.name, bytes.subarray(0, 8192)).kind !== 'text')
-            throw new Error('Only UTF-8 text can go into the scratchpad. Copy other files to a computer.');
-          let text;
-          try {
-            text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-          } catch {
-            throw new Error('Only UTF-8 text can go into the scratchpad. Copy other files to a computer.');
+        try {
+          signal?.throwIfAborted();
+          if (to.kind === 'scratch') {
+            const max = (await options.settings.get()).scratchFileMaxKb * 1024;
+            const bytes = await collect(
+              source.stream,
+              max,
+              `That file is larger than a scratch file may be (${max} bytes). Copy it to a computer instead.`,
+            );
+            let text: string | undefined;
+            try {
+              if (detectFile(source.name, bytes.subarray(0, 8192)).kind === 'text')
+                text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+            } catch {
+              /* not UTF-8 */
+            }
+            if (text === undefined)
+              throw new Error('Only UTF-8 text can go into the scratchpad. Copy other files to a computer.');
+            const written = await scratch.write(agentId, to.path, text);
+            source.done();
+            return result({ copied: true, from: describe(from), to: `scratch:${written.path}`, size: written.size });
           }
-          const written = await scratch.write(agentId, to.path, text);
+          const written = await options.transfers!.importFile!(
+            computer!.id,
+            (to as { path: string }).path,
+            source.size,
+            source.stream,
+            signal,
+          );
           source.done();
-          return result({ copied: true, from: describe(from), to: `scratch:${written.path}`, size: written.size });
+          notify(computer!, `${agentName} copied a file to ${written.path} on ${computer!.name}.`);
+          return result({
+            copied: true,
+            from: describe(from),
+            to: `computer:${computer!.name}:${written.path}`,
+            size: written.size,
+          });
+        } finally {
+          await closeStream(source.stream);
         }
-        const computer = await assigned(to.computer);
-        const written = await options.transfers!.importFile!(computer.id, to.path, source.size, source.stream, signal);
-        source.done();
-        notify(computer, `${agentName} copied a file to ${written.path} on ${computer.name}.`);
-        return result({
-          copied: true,
-          from: describe(from),
-          to: `computer:${computer.name}:${written.path}`,
-          size: written.size,
-        });
       },
     }),
   ];

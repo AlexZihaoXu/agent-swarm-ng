@@ -19,6 +19,15 @@ export class BlobStore {
   }
   /** Stores bytes, refusing more than `maxBytes`. Returns the id, size and the first 8 KiB (for type detection). */
   async put(source: AsyncIterable<Uint8Array> | Uint8Array, maxBytes: number) {
+    const staged = await this.stage(source, maxBytes);
+    await this.commit(staged);
+    return staged;
+  }
+  /**
+   * Writes bytes to a temporary file (flushed) and hashes them, without publishing them yet: `commit` moves them
+   * into place (or drops them when that content already exists), `discard` removes them.
+   */
+  async stage(source: AsyncIterable<Uint8Array> | Uint8Array, maxBytes: number) {
     const temporary = join(this.root, 'tmp');
     await mkdir(temporary, { recursive: true, mode: 0o700 });
     const file = join(temporary, randomUUID());
@@ -46,12 +55,15 @@ export class BlobStore {
       throw error;
     }
     await handle.close();
-    const id = hash.digest('hex');
-    const target = this.path(id);
-    await mkdir(join(this.root, id.slice(0, 2)), { recursive: true, mode: 0o700 });
-    if (await this.exists(id)) await rm(file, { force: true });
-    else await rename(file, target);
-    return { id, size, head: Buffer.concat(head) };
+    return { id: hash.digest('hex'), size, head: Buffer.concat(head), temporary: file };
+  }
+  async commit(staged: { id: string; temporary: string }) {
+    await mkdir(join(this.root, staged.id.slice(0, 2)), { recursive: true, mode: 0o700 });
+    if (await this.exists(staged.id)) await rm(staged.temporary, { force: true });
+    else await rename(staged.temporary, this.path(staged.id));
+  }
+  async discard(staged: { temporary: string }) {
+    await rm(staged.temporary, { force: true });
   }
   async exists(id: string) {
     return stat(this.path(id)).then(

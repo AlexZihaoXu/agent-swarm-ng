@@ -884,7 +884,7 @@ export class ComputerManager {
       stat.resume();
       if (stat.statusCode === 404) throw new ResourceError(404, 'Path not found.');
       if (stat.statusCode !== 200) throw new ResourceError(400, 'Path is not available.');
-      const { size } = regularFile(stat.headers['x-docker-container-path-stat'] as string | undefined ?? null);
+      const { size } = regularFile((stat.headers['x-docker-container-path-stat'] as string | undefined) ?? null);
       if (size > limit) throw new ResourceError(413, 'The file is larger than the transfer limit.');
       const response = await this.docker.archive('GET', container, { path });
       if (response.statusCode !== 200) {
@@ -892,15 +892,22 @@ export class ComputerManager {
         throw new ResourceError(response.statusCode === 404 ? 404 : 400, 'Path is not available.');
       }
       const bytes = untarFirstFile(response, limit);
+      let closed = false;
+      // Idempotent: runs when the stream ends, fails, or is cancelled (even before it was read).
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        response.destroy();
+        done();
+      };
       const stream = (async function* () {
         try {
           yield* bytes;
         } finally {
-          response.destroy();
-          done();
+          close();
         }
       })();
-      return { name, size, stream };
+      return { name, size, stream, close };
     } catch (error) {
       done();
       throw error;
@@ -917,17 +924,40 @@ export class ComputerManager {
       folder.resume();
       if (folder.statusCode === 404)
         throw new ResourceError(404, 'The destination folder does not exist. Create it first.');
-      const response = await this.docker.archive(
-        'PUT',
-        container,
-        { path: directory, noOverwriteDirNonDir: 'true', copyUIDGID: '1' },
-        tarOneFile(name, size, body),
-      );
+      // Written under a hidden temporary name, then renamed over the target only when complete: a failed or
+      // cancelled copy never leaves a partial file where the old one was.
+      const partial = `.${crypto.randomUUID()}.swarm-partial`;
+      const target = `${directory === '/' ? '' : directory}/${name}`;
+      const temporary = `${directory === '/' ? '' : directory}/${partial}`;
+      const discard = () =>
+        this.docker.exec(container, ['/bin/rm', '-f', '--', temporary], 'root', 10_000).catch(() => {});
+      let response;
+      try {
+        response = await this.docker.archive(
+          'PUT',
+          container,
+          { path: directory, noOverwriteDirNonDir: 'true', copyUIDGID: '1' },
+          tarOneFile(partial, size, body),
+        );
+      } catch (error) {
+        await discard();
+        throw error;
+      }
       response.resume();
-      if (response.statusCode === 404)
-        throw new ResourceError(404, 'The destination folder does not exist. Create it first.');
-      if (response.statusCode !== 200) throw new ResourceError(400, 'Could not write the file there.');
-      return { path: `${directory === '/' ? '' : directory}/${name}`, size };
+      if (response.statusCode !== 200) {
+        await discard();
+        if (response.statusCode === 404)
+          throw new ResourceError(404, 'The destination folder does not exist. Create it first.');
+        throw new ResourceError(400, 'Could not write the file there.');
+      }
+      try {
+        // -T: never move into a directory of that name (a folder at the target is refused).
+        await this.docker.exec(container, ['/bin/mv', '-f', '-T', '--', temporary, target], 'root', 10_000);
+      } catch {
+        await discard();
+        throw new ResourceError(400, 'Could not replace the file there (is it a folder?).');
+      }
+      return { path: target, size };
     } finally {
       done();
     }

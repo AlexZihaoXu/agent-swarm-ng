@@ -21,6 +21,10 @@ export function useAttachments(channelKey: string | undefined) {
   const [items, setItems] = useState<Attachment[]>([]);
   const [notice, setNotice] = useState('');
   const uploads = useRef(new Map<string, AbortController>());
+  /** The message these files were sent with and their keys, until the server confirms it (a failed send keeps them). */
+  const sentWith = useRef<{ messageId: string; keys: Set<string> } | null>(null);
+  const count = useRef(0);
+  count.current = items.length;
   const cancelAll = () => {
     for (const controller of uploads.current.values()) controller.abort();
     uploads.current.clear();
@@ -28,6 +32,7 @@ export function useAttachments(channelKey: string | undefined) {
   useEffect(() => {
     setItems([]);
     setNotice('');
+    sentWith.current = null;
     return cancelAll;
   }, [channelKey]);
   const update = (key: string, change: Partial<Attachment>) =>
@@ -36,10 +41,12 @@ export function useAttachments(channelKey: string | undefined) {
   const add = (files: Iterable<File>) => {
     if (!channelKey) return;
     const picked = [...files];
-    const room = MAX_ATTACHMENTS - items.length;
+    // Counted across adds made before the next render (a drop and a paste together stay within the limit).
+    const room = MAX_ATTACHMENTS - count.current;
     setNotice(picked.length > room ? `Up to ${MAX_ATTACHMENTS} files go with one message.` : '');
     const added = picked.slice(0, Math.max(0, room)).map(file => ({ file, key: randomUuid() }));
     if (!added.length) return;
+    count.current += added.length;
     setItems(current => [
       ...current,
       ...added.map(({ file, key }) => ({
@@ -66,6 +73,7 @@ export function useAttachments(channelKey: string | undefined) {
     uploads.current.get(key)?.abort();
     uploads.current.delete(key);
     setItems(current => current.filter(item => item.key !== key));
+    count.current = Math.max(0, count.current - 1);
     setNotice('');
   };
   /** After a send: the uploaded files now belong to the message. */
@@ -73,6 +81,24 @@ export function useAttachments(channelKey: string | undefined) {
     cancelAll();
     setItems([]);
     setNotice('');
+    sentWith.current = null;
+  };
+  /** Files sent with a message whose save is not confirmed yet: kept (and resent with a retry) until `settle`. */
+  const hold = (messageId: string) => {
+    sentWith.current = { messageId, keys: new Set(items.map(item => item.key)) };
+  };
+  /** Removes the held files once their message is among the confirmed ones (files attached since then stay). */
+  const settle = (messageIds: Iterable<string>) => {
+    const held = sentWith.current;
+    if (!held) return;
+    for (const id of messageIds)
+      if (id === held.messageId) {
+        sentWith.current = null;
+        setItems(current => current.filter(item => !held.keys.has(item.key)));
+        count.current = Math.max(0, count.current - held.keys.size);
+        setNotice('');
+        return;
+      }
   };
   return {
     items,
@@ -80,6 +106,8 @@ export function useAttachments(channelKey: string | undefined) {
     add,
     remove,
     clear,
+    hold,
+    settle,
     ids: items.flatMap(item => (item.status === 'ready' && item.file ? [item.file.id] : [])),
     uploading: items.some(item => item.status === 'uploading'),
     failed: items.some(item => item.status === 'failed'),

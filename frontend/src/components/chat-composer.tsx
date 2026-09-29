@@ -45,7 +45,12 @@ export function ChatComposer({
     }
   }, [draft, name]);
   // A message needs text or at least one uploaded file, and waits for uploads to finish.
-  const sendable = !disabled && (Boolean(draft.trim()) || Boolean(attachments?.ids.length)) && !attachments?.uploading;
+  // Files that failed to upload must be removed (or re-attached) first, so none are silently left out.
+  const sendable =
+    !disabled &&
+    (Boolean(draft.trim()) || Boolean(attachments?.ids.length)) &&
+    !attachments?.uploading &&
+    !attachments?.failed;
   const send = () => {
     if (sendable) onSend();
   };
@@ -224,7 +229,7 @@ export function ChatComposer({
             <span aria-hidden="true" className="size-2.5 rounded-sm bg-current" />
           </Button>
         )}
-        {(!busy || draft.trim() || attachments?.ids.length) && (
+        {(!busy || Boolean(draft.trim()) || Boolean(attachments?.ids.length)) && (
           <Button
             type="submit"
             size="sm"

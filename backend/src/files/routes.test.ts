@@ -38,6 +38,13 @@ it('uploads any file as a raw stream, serves images inline and everything else a
     });
     expect(inline.headers['content-disposition']).toMatch(/^inline;/);
     expect(inline.rawPayload).toEqual(png);
+    // Bytes never change, but a file can be deleted: browsers revalidate and get 304 while it exists.
+    expect(inline.headers['cache-control']).toBe('private, no-cache');
+    const again = await app.inject({
+      url: `/api/files/${image.json().id}/content`,
+      headers: { 'if-none-match': String(inline.headers.etag) },
+    });
+    expect(again.statusCode).toBe(304);
     const forced = await app.inject(`/api/files/${image.json().id}/content?download=1`);
     expect(forced.headers['content-disposition']).toMatch(/^attachment;/);
 
@@ -96,12 +103,13 @@ it('attaches files to group messages, lists and deletes them with a tombstone, a
     const key = groupKey(group.id);
     const first = (await upload(key, 'notes.md', '# Notes\n')).json();
     const second = (await upload(key, 'shot.png', png)).json();
-    const posted = await app.inject({
-      method: 'POST',
-      url: `/api/groups/${group.id}/messages`,
-      payload: { message: '', clientMessageId: crypto.randomUUID(), fileIds: [first.id, second.id] },
-    });
+    const payload = { message: '', clientMessageId: crypto.randomUUID(), fileIds: [first.id, second.id] };
+    const posted = await app.inject({ method: 'POST', url: `/api/groups/${group.id}/messages`, payload });
     expect(posted.statusCode).toBe(202);
+    // A retry after a lost response returns the same message instead of refusing its files.
+    const retried = await app.inject({ method: 'POST', url: `/api/groups/${group.id}/messages`, payload });
+    expect(retried.statusCode).toBe(202);
+    expect(retried.json()).toMatchObject({ duplicate: true, message: { id: posted.json().message.id } });
     expect(posted.json().message.files.map((file: { id: string }) => file.id)).toEqual([first.id, second.id]);
     expect(
       (

@@ -108,8 +108,10 @@ export class HttpComputerController implements ComputerController {
   async exportFile(id: string, path: string, maxBytes: number, signal?: AbortSignal): Promise<GuestFile> {
     const query = new URLSearchParams({ path, max: String(maxBytes) });
     const response = await this.request(`/computers/${encodeURIComponent(id)}/export?${query}`, { signal }, 300_000);
-    const size = Number(response.headers.get('content-length'));
-    if (!response.body || !Number.isSafeInteger(size)) throw new ControllerError(503, 'Invalid file response.');
+    const length = response.headers.get('content-length');
+    const size = length === null ? NaN : Number(length);
+    if (!response.body || !Number.isSafeInteger(size) || size < 0)
+      throw new ControllerError(503, 'Invalid file response.');
     return {
       name: decodeURIComponent(response.headers.get('x-file-name') ?? '') || path.split('/').pop() || 'file',
       size,

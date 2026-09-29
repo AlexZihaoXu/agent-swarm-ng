@@ -133,6 +133,7 @@ Bun.serve<TerminalSocket>({
                 }
               },
               async cancel() {
+                file.close();
                 await file.stream.return(undefined);
               },
             }),

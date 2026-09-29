@@ -6,6 +6,8 @@ import { pathToFileURL } from 'node:url';
 import { PlatformStore } from './platform-store';
 import { prepareDatabase } from './test-database';
 import { buildApp } from './app';
+import { Scratchpad } from './scratchpad';
+import { SwarmSettingsStore } from './swarm-settings';
 import { EndpointStore } from './endpoint-store';
 import { CodexProvider, CODEX_CONNECTION } from './codex-provider';
 import { getModels } from '@earendil-works/pi-ai/compat';
@@ -35,6 +37,7 @@ let behavior:
   | 'triage-interrupt'
   | 'multipart'
   | 'dm-typing'
+  | 'files'
   | 'truncated' = 'tool';
 let captured: RequestBody[] = [];
 let authorization: string | undefined;
@@ -115,6 +118,23 @@ beforeAll(async () => {
                 final: step === 2,
               }),
             },
+          },
+        ],
+      });
+    } else if (behavior === 'files') {
+      // Upload a scratch file, then send it with the fileId the tool returned.
+      const tools = body.messages.filter(message => message.role === 'tool');
+      const uploaded = tools.length ? JSON.parse(String(tools[0].content)) : null;
+      const [name, args] = uploaded
+        ? ['send_message', { channelId, text: '', fileIds: [uploaded.fileId] }]
+        : ['upload_file', { from: 'scratch:report.md' }];
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            id: `files-${tools.length}`,
+            type: 'function',
+            function: { name, arguments: JSON.stringify(args) },
           },
         ],
       });
@@ -700,6 +720,31 @@ describe('Pi chat and platform channel boundary', () => {
         payload: { ...chatPayload(agent, 'again'), fileIds: [file.id] },
       });
       expect(again.statusCode).toBe(409);
+    } finally {
+      await app.close();
+    }
+  });
+  it('lets an agent upload a scratch file and send it with send_message fileIds', async () => {
+    behavior = 'files';
+    captured = [];
+    const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
+    const app = await testApp(database);
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      await new Scratchpad(database, new SwarmSettingsStore(database)).write(agent.id, 'report.md', '# Report\n');
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/chat',
+        payload: chatPayload(agent, 'Send me the report'),
+      });
+      const published = channelEvents(response.body).find(event => event.type === 'channel_message');
+      expect(published).toMatchObject({
+        text: '',
+        files: [{ name: 'report.md', kind: 'text', uploader: { kind: 'agent' } }],
+      });
+      const saved = (await app.inject(`/api/channels/${agent.channelId}/messages`)).json().messages.at(-1);
+      expect(saved.files).toMatchObject([{ name: 'report.md', status: 'available' }]);
+      expect((await app.inject(`/api/files/${saved.files[0].id}/text`)).json().text).toBe('# Report\n');
     } finally {
       await app.close();
     }

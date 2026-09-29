@@ -4,6 +4,7 @@ import { channelReply, channelReplyContext, dmReply, groupReply, replyExcerpt } 
 it('provides one bounded plain-text parent preview with trustworthy stored author metadata', () => {
   const row = { replyTo: { id: 'parent', role: 'user' as const, text: '  hello\n  ' + '🌊'.repeat(161) } };
   expect(replyExcerpt(row.replyTo.text)).toBe(`hello ${'🌊'.repeat(154)}…`);
+  expect(replyExcerpt(' ')).toBe('📎 Files'); // a message of files alone
   expect(channelReply(row)).toMatchObject({ id: 'parent', role: 'user' });
   expect(channelReplyContext(row, 'Agent')).toMatchObject({ author: 'Human', id: 'parent' });
   expect(groupReply({ replyTo: { ...row.replyTo, authorId: null, authorName: 'You' } })).toMatchObject({

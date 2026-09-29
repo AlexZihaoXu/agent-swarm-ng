@@ -129,9 +129,16 @@ export class GroupStore {
     );
     return { groups, nextCursor: rows.length > limit ? groups.at(-1)!.sequence : null };
   }
+  /** The message already saved for a submission (a retry), if any. */
+  async submitted(submissionKey: string) {
+    await this.store.initialize();
+    return this.store.client.groupMessage.findUnique({ where: { submissionKey }, select: { id: true } });
+  }
+  static humanKey = (clientMessageId: string) => `human:${clientMessageId}`;
+  static agentKey = (agentId: string, deliveryKey: string) => `agent:${agentId}:${deliveryKey}`;
   /** A message may be empty only when it carries files. */
   publishHuman(groupId: string, text: string, clientMessageId: string, replyToId?: string, hasFiles = false) {
-    return this.publish(groupId, text, `human:${clientMessageId}`, replyToId, undefined, undefined, hasFiles);
+    return this.publish(groupId, text, GroupStore.humanKey(clientMessageId), replyToId, undefined, undefined, hasFiles);
   }
   publishAgent(
     groupId: string,
@@ -142,7 +149,15 @@ export class GroupStore {
     replyToId?: string,
     hasFiles = false,
   ) {
-    return this.publish(groupId, text, `agent:${agentId}:${deliveryKey}`, replyToId, agentId, chainId, hasFiles);
+    return this.publish(
+      groupId,
+      text,
+      GroupStore.agentKey(agentId, deliveryKey),
+      replyToId,
+      agentId,
+      chainId,
+      hasFiles,
+    );
   }
   private async publish(
     groupId: string,

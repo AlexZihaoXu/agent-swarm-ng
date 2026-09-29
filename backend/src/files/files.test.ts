@@ -131,6 +131,13 @@ it('stores each content once, attaches files to messages, and keeps a tombstone 
     await expect(
       files.attach([first.id], { channelKey: key, messageKind: 'chat', messageId: 'm2', uploader: { kind: 'human' } }),
     ).rejects.toMatchObject({ status: 409 });
+    // Attaching again to the same message (a retried send) is harmless.
+    await files.attach([first.id], {
+      channelKey: key,
+      messageKind: 'chat',
+      messageId: 'm1',
+      uploader: { kind: 'human' },
+    });
     await files.attach([again.id], { channelKey: key, messageKind: 'chat', messageId: 'm2', uploader: agent(a) });
     expect((await files.list(key)).files.map(file => file.id)).toEqual([again.id, first.id]);
     // An agent may delete only its own file; the human any. Bytes stay while another file shares them.

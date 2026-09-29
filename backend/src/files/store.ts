@@ -111,38 +111,44 @@ export class FileStore {
       throw new FileError('File storage is full. Delete files or raise the limit in Settings → Swarm.', 507);
     let stored;
     try {
-      stored = await this.blobs.put(input.source, usage.maxFileBytes);
+      stored = await this.blobs.stage(input.source, usage.maxFileBytes);
     } catch (error) {
       if (error instanceof FileTooLargeError)
         throw new FileError(`Files are at most ${Math.round(usage.maxFileBytes / MB)} MB (Settings → Swarm).`, 413);
       throw error;
     }
-    const known = await this.database.client.fileBlob.findUnique({ where: { id: stored.id } });
-    if (!known && usage.bytes + stored.size > usage.budgetBytes) {
-      await this.blobs.remove(stored.id);
-      throw new FileError('File storage is full. Delete files or raise the limit in Settings → Swarm.', 507);
-    }
     const name = fileName(input.name);
     const { kind, mime } = detectFile(name, stored.head);
-    const row = await this.database.client.$transaction(async tx => {
-      if (!known)
+    // Publishing bytes and registering them is one step against cleanup, so a blob is never removed between.
+    const row = await this.exclusive(async () => {
+      try {
+        const known = await this.database.client.fileBlob.findUnique({ where: { id: stored.id } });
+        if (!known && (await this.usage()).bytes + stored.size > usage.budgetBytes)
+          throw new FileError('File storage is full. Delete files or raise the limit in Settings → Swarm.', 507);
+        await this.blobs.commit(stored);
+      } catch (error) {
+        await this.blobs.discard(stored);
+        throw error;
+      }
+      return this.database.client.$transaction(async tx => {
         await tx.fileBlob.upsert({
           where: { id: stored.id },
           create: { id: stored.id, size: stored.size },
           update: {},
         });
-      return tx.channelFile.create({
-        data: {
-          channelKey: input.channelKey,
-          uploaderKind: input.uploader.kind,
-          uploaderId: input.uploader.kind === 'agent' ? input.uploader.id : null,
-          uploaderName: input.uploader.kind === 'agent' ? input.uploader.name : 'You',
-          name,
-          mime,
-          kind,
-          size: stored.size,
-          blobId: stored.id,
-        },
+        return tx.channelFile.create({
+          data: {
+            channelKey: input.channelKey,
+            uploaderKind: input.uploader.kind,
+            uploaderId: input.uploader.kind === 'agent' ? input.uploader.id : null,
+            uploaderName: input.uploader.kind === 'agent' ? input.uploader.name : 'You',
+            name,
+            mime,
+            kind,
+            size: stored.size,
+            blobId: stored.id,
+          },
+        });
       });
     });
     return fileView(row);
@@ -204,9 +210,17 @@ export class FileStore {
   ) {
     if (!ids.length) return [];
     await this.attachable(ids, target);
-    await this.database.client.channelFile.updateMany({
-      where: { id: { in: ids } },
-      data: { messageKind: target.messageKind, messageId: target.messageId },
+    // Claimed only while still unsent and available: of two concurrent sends, exactly one gets the files.
+    await this.database.client.$transaction(async tx => {
+      const claimed = await tx.channelFile.updateMany({
+        where: {
+          id: { in: ids },
+          status: 'available',
+          OR: [{ messageId: null }, { messageId: target.messageId, messageKind: target.messageKind }],
+        },
+        data: { messageKind: target.messageKind, messageId: target.messageId },
+      });
+      if (claimed.count !== ids.length) throw new FileError('That file is already in a message.', 409);
     });
     return this.forMessages(target.messageKind, [target.messageId]).then(map => map.get(target.messageId) ?? []);
   }
@@ -315,7 +329,7 @@ export class FileStore {
         deletedAt: new Date(),
       },
     });
-    await this.collect([found.blobId]);
+    await this.exclusive(() => this.collect([found.blobId]));
     const deleted = (await this.get(id))!.view;
     this.onDeleted?.(deleted);
     return deleted;
@@ -324,12 +338,14 @@ export class FileStore {
   async deleteChannels(channelKeys: string[]) {
     if (!channelKeys.length) return;
     await this.database.initialize();
-    const rows = await this.database.client.channelFile.findMany({
-      where: { channelKey: { in: channelKeys } },
-      select: { blobId: true },
+    await this.exclusive(async () => {
+      const rows = await this.database.client.channelFile.findMany({
+        where: { channelKey: { in: channelKeys } },
+        select: { blobId: true },
+      });
+      await this.database.client.channelFile.deleteMany({ where: { channelKey: { in: channelKeys } } });
+      await this.collect(rows.map(row => row.blobId));
     });
-    await this.database.client.channelFile.deleteMany({ where: { channelKey: { in: channelKeys } } });
-    await this.collect(rows.map(row => row.blobId));
   }
   /** Deleting an agent deletes the files of its private chat and of its agent-to-agent DMs. */
   async deleteForAgent(agentId: string, channelIds: string[]) {
@@ -349,22 +365,30 @@ export class FileStore {
   async pruneUnsent(olderThanMs = 24 * 60 * 60 * 1000) {
     await this.database.initialize();
     const before = new Date(Date.now() - olderThanMs);
-    const rows = await this.database.client.channelFile.findMany({
-      where: { messageId: null, createdAt: { lt: before } },
-      select: { id: true, blobId: true },
+    return this.exclusive(async () => {
+      const where = { messageId: null, createdAt: { lt: before } };
+      const rows = await this.database.client.channelFile.findMany({ where, select: { id: true, blobId: true } });
+      if (!rows.length) return 0;
+      // The same conditions again: a file sent meanwhile is kept.
+      const { count } = await this.database.client.channelFile.deleteMany({
+        where: { ...where, id: { in: rows.map(row => row.id) } },
+      });
+      await this.collect(rows.map(row => row.blobId));
+      return count;
     });
-    if (!rows.length) return 0;
-    await this.database.client.channelFile.deleteMany({ where: { id: { in: rows.map(row => row.id) } } });
-    await this.collect(rows.map(row => row.blobId));
-    return rows.length;
   }
-  /** Removes blobs no file refers to any more. */
+  /** Removes blobs no file refers to any more. Callers hold `exclusive`, as uploads do while registering. */
   private async collect(blobIds: (string | null)[]) {
     for (const id of new Set(blobIds.filter((value): value is string => Boolean(value)))) {
-      const users = await this.database.client.channelFile.count({ where: { blobId: id } });
-      if (users) continue;
-      await this.database.client.fileBlob.deleteMany({ where: { id } });
-      await this.blobs.remove(id);
+      const { count } = await this.database.client.fileBlob.deleteMany({ where: { id, files: { none: {} } } });
+      if (count) await this.blobs.remove(id);
     }
+  }
+  private queue: Promise<unknown> = Promise.resolve();
+  /** Runs blob registration and cleanup one at a time (one backend process owns the files). */
+  private exclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.queue.then(operation, operation);
+    this.queue = result.catch(() => {});
+    return result;
   }
 }

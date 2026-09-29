@@ -255,7 +255,9 @@ export class DmBroker {
     await this.ready();
     context.signal.throwIfAborted();
     const upload = { channelKey: dmKey(senderId, recipientId), uploader: await this.uploader(senderId) };
-    await this.files.attachable(fileIds, upload);
+    // A retried call finds its files already on the message it saved the first time.
+    const retried = await this.store.delivered(`${context.runId}:${callId}`);
+    await this.files.attachable(fileIds, { ...upload, messageId: retried?.id });
     const chainId = inheritedChain ?? context.runId;
     if (!inheritedChain) {
       if (!this.linked.has(context.signal)) {
@@ -353,11 +355,16 @@ export class DmBroker {
     if (this.closing) throw new Error('Group delivery is unavailable.');
     await this.ready();
     const target = { channelKey: `group:${groupId}`, uploader: { kind: 'human' as const } };
-    await this.files.attachable(fileIds, target);
+    const retried = await this.groups.submitted(GroupStore.humanKey(clientMessageId));
+    await this.files.attachable(fileIds, { ...target, messageId: retried?.id });
     const publication = await this.groups.publishHuman(groupId, text, clientMessageId, replyToId, fileIds.length > 0);
     if (!publication.duplicate) {
-      await this.files.attach(fileIds, { ...target, messageKind: 'group', messageId: publication.message.id });
-      await this.dispatchGroup(publication);
+      // Delivery goes ahead even if attaching fails (it was checked just before), so no member misses the message.
+      try {
+        await this.files.attach(fileIds, { ...target, messageKind: 'group', messageId: publication.message.id });
+      } finally {
+        await this.dispatchGroup(publication);
+      }
     }
     return publication;
   }
@@ -375,7 +382,8 @@ export class DmBroker {
     if (this.closing || this.deleting.has(agentId)) throw new Error('Group delivery is unavailable.');
     await this.ready();
     const upload = { channelKey: groupKey(groupId), uploader: await this.uploader(agentId) };
-    await this.files.attachable(fileIds, upload);
+    const retried = await this.groups.submitted(GroupStore.agentKey(agentId, `${context.runId}:${callId}`));
+    await this.files.attachable(fileIds, { ...upload, messageId: retried?.id });
     const chainId = inheritedChain ?? context.runId;
     if (!inheritedChain) {
       await this.store.beginChain(agentId, chainId);
@@ -401,8 +409,11 @@ export class DmBroker {
       fileIds.length > 0,
     );
     if (!publication.duplicate) {
-      await this.files.attach(fileIds, { ...upload, messageKind: 'group', messageId: publication.message.id });
-      await this.dispatchGroup(publication);
+      try {
+        await this.files.attach(fileIds, { ...upload, messageKind: 'group', messageId: publication.message.id });
+      } finally {
+        await this.dispatchGroup(publication);
+      }
     }
     return {
       id: publication.message.id,

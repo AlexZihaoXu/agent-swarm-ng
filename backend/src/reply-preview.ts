@@ -1,6 +1,8 @@
 // Reply previews are one hop and plain text. Full parent text requires a separate authorized history read.
 export function replyExcerpt(text: string) {
   const normalized = text.replace(/\s+/gu, ' ').trim();
+  // Only a message of files alone has no text; its files are listed with the message itself.
+  if (!normalized) return '📎 Files';
   const points = Array.from(normalized);
   return points.length > 160 ? `${points.slice(0, 160).join('')}…` : normalized;
 }

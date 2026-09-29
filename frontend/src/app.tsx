@@ -330,6 +330,11 @@ export function App() {
   } = useRegisterSW();
   const draft = drafts[agent.channelId] ?? '';
   const attachments = useAttachments(agent.real ? chatFilesKey(agent.channelId) : undefined);
+  // Sent files leave the composer once the server confirms their message; a failed send keeps them to retry.
+  const confirmed = conversations[agent.channelId];
+  useEffect(() => {
+    attachments.settle((confirmed ?? []).flatMap(message => (message.sequence === undefined ? [] : [message.id])));
+  }, [confirmed]);
   const messages = conversations[agent.channelId] ?? [];
   const timeline = conversationTimeline(messages, inbox.messages);
   // Long histories render a bounded window that follows the reader; older pages load near the top.
@@ -518,7 +523,7 @@ export function App() {
       attachments.ids,
     );
     if (!messageId) return;
-    attachments.clear();
+    if (attachments.items.length) attachments.hold(messageId);
     if (target) pendingReplyAcks.current.set(messageId, { channelId: agent.channelId, targetId: target.id });
     pendingSend.current = messageId;
     inputRef.current?.focus();

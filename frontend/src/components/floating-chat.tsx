@@ -51,6 +51,10 @@ export function FloatingChat({
   const { chat } = state;
   const channel = agent.channelId;
   const attachments = useAttachments(agent.real ? chatFilesKey(channel) : undefined);
+  const confirmed = chat.conversations[channel];
+  useEffect(() => {
+    attachments.settle((confirmed ?? []).flatMap(message => (message.sequence === undefined ? [] : [message.id])));
+  }, [confirmed]);
   const area = useRef<HTMLDivElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<Box | null>(null);
@@ -247,7 +251,8 @@ export function FloatingChat({
                   // Your own message always shows, even when you had scrolled back.
                   nearBottom.current = true;
                   history.toLatest();
-                  if (chat.send(agent, chat.drafts[channel] ?? '', attachments.ids)) attachments.clear();
+                  const sent = chat.send(agent, chat.drafts[channel] ?? '', attachments.ids);
+                  if (sent && attachments.items.length) attachments.hold(sent);
                 }}
                 attachments={agent.real ? attachments : undefined}
                 busy={state.busy[channel]}

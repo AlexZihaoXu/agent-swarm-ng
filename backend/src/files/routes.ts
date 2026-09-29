@@ -185,12 +185,15 @@ export function registerFileRoutes(
       }
       if (view.status === 'deleted' || !blobId) return reply.code(410).send({ message: `"${view.name}" was deleted.` });
       const inline = !request.query.download && INLINE.has(view.mime);
+      // A file's bytes never change, but it can be deleted: browsers revalidate each time (cheap: 304).
+      const etag = `"${blobId}"`;
+      reply.header('ETag', etag).header('Cache-Control', 'private, no-cache');
+      if (request.headers['if-none-match'] === etag) return reply.code(304).send();
       return reply
         .header('Content-Type', inline ? view.mime : 'application/octet-stream')
         .header('Content-Disposition', contentDisposition(inline ? 'inline' : 'attachment', view.name))
         .header('Content-Length', String(view.size))
         .header('X-Content-Type-Options', 'nosniff')
-        .header('Cache-Control', 'private, max-age=3600')
         .header('Content-Security-Policy', "default-src 'none'; sandbox")
         .send(files.blobs.stream(blobId));
     },

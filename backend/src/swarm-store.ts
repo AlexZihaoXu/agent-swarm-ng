@@ -90,6 +90,11 @@ export class SwarmStore {
       throw new SwarmError('denied', 'This communication chain is no longer available.');
     return chain;
   }
+  /** The DM already saved for a delivery key (a retried tool call), if any. */
+  async delivered(deliveryKey: string) {
+    await this.store.initialize();
+    return this.store.client.dmMessage.findUnique({ where: { deliveryKey }, select: { id: true } });
+  }
   async send(input: {
     senderId: string;
     recipientId: string;
