@@ -11,7 +11,7 @@ const ctrl = (letter: string) => String.fromCharCode(letter.charCodeAt(0) & 0x1f
  * Keys a browser or phone keyboard cannot send (or keeps for itself, like Ctrl+W), as the bytes a real
  * terminal would produce. They travel over the same live stream as typing, so they act instantly.
  */
-const keyBar: { label: string; name: string; bytes: (appCursor: boolean) => string }[] = [
+const keyBar: { label: string; name: string; reserved?: true; bytes: (appCursor: boolean) => string }[] = [
   { label: 'Esc', name: 'Escape', bytes: () => '\x1b' },
   { label: 'Tab', name: 'Tab', bytes: () => '\t' },
   { label: '⌃C', name: 'Control C (interrupt)', bytes: () => ctrl('c') },
@@ -19,7 +19,10 @@ const keyBar: { label: string; name: string; bytes: (appCursor: boolean) => stri
   { label: '⌃Z', name: 'Control Z', bytes: () => ctrl('z') },
   { label: '⌃L', name: 'Control L', bytes: () => ctrl('l') },
   { label: '⌃R', name: 'Control R', bytes: () => ctrl('r') },
-  { label: '⌃W', name: 'Control W', bytes: () => ctrl('w') },
+  // Chrome, Edge and Firefox keep these for tabs/windows; a page can never receive them from the keyboard.
+  { label: '⌃W', name: 'Control W', reserved: true, bytes: () => ctrl('w') },
+  { label: '⌃T', name: 'Control T', reserved: true, bytes: () => ctrl('t') },
+  { label: '⌃N', name: 'Control N', reserved: true, bytes: () => ctrl('n') },
   { label: '↑', name: 'Up arrow', bytes: app => (app ? '\x1bOA' : '\x1b[A') },
   { label: '↓', name: 'Down arrow', bytes: app => (app ? '\x1bOB' : '\x1b[B') },
   { label: '←', name: 'Left arrow', bytes: app => (app ? '\x1bOD' : '\x1b[D') },
@@ -27,6 +30,19 @@ const keyBar: { label: string; name: string; bytes: (appCursor: boolean) => stri
   { label: 'PgUp', name: 'Page Up', bytes: () => '\x1b[5~' },
   { label: 'PgDn', name: 'Page Down', bytes: () => '\x1b[6~' },
 ];
+
+/** A touch screen means an on-screen keyboard without Esc, Tab, Ctrl or arrows; a physical keyboard has them all. */
+function useTouchKeyboard() {
+  const query = '(any-pointer: coarse)';
+  const [touch, setTouch] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const change = () => setTouch(media.matches);
+    media.addEventListener('change', change);
+    return () => media.removeEventListener('change', change);
+  }, []);
+  return touch;
+}
 
 /** Fixed geometry. No fit/resize, links, clipboard, image or attach addons. */
 export function TerminalEmulator({
@@ -50,6 +66,7 @@ export function TerminalEmulator({
   // Sends bytes over the live stream (set while connected); the key bar and the Ctrl latch use it.
   const send = useRef<((value: string) => void) | null>(null);
   const [ctrlLatched, setCtrlLatched] = useState(false);
+  const touch = useTouchKeyboard();
   const latched = useRef(false);
   latched.current = ctrlLatched;
   // The grid stays 120 × 36; it is scaled to fill the space like the desktop viewer, never resized.
@@ -343,35 +360,41 @@ export function TerminalEmulator({
             aria-label="Terminal keys"
             className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]"
           >
-            <button
-              type="button"
-              aria-pressed={ctrlLatched}
-              aria-label="Control (applies to the next letter)"
-              title="Ctrl: applies to the next letter you type"
-              disabled={!connectedNow}
-              onPointerDown={event => event.preventDefault()}
-              onClick={() => {
-                setCtrlLatched(value => !value);
-                terminal.current?.focus();
-              }}
-              className={keyClass(ctrlLatched)}
-            >
-              Ctrl
-            </button>
-            {keyBar.map(key => (
+            {touch ? (
               <button
-                key={key.name}
                 type="button"
-                aria-label={key.name}
-                title={key.name}
+                aria-pressed={ctrlLatched}
+                aria-label="Control (applies to the next letter)"
+                title="Ctrl: applies to the next letter you type"
                 disabled={!connectedNow}
                 onPointerDown={event => event.preventDefault()}
-                onClick={() => press(key.bytes(Boolean(terminal.current?.modes.applicationCursorKeysMode)))}
-                className={keyClass(false)}
+                onClick={() => {
+                  setCtrlLatched(value => !value);
+                  terminal.current?.focus();
+                }}
+                className={keyClass(ctrlLatched)}
               >
-                {key.label}
+                Ctrl
               </button>
-            ))}
+            ) : (
+              <span className="shrink-0 px-1 text-[11px] text-muted-foreground">Keys the browser keeps:</span>
+            )}
+            {keyBar
+              .filter(key => touch || key.reserved)
+              .map(key => (
+                <button
+                  key={key.name}
+                  type="button"
+                  aria-label={key.name}
+                  title={key.name}
+                  disabled={!connectedNow}
+                  onPointerDown={event => event.preventDefault()}
+                  onClick={() => press(key.bytes(Boolean(terminal.current?.modes.applicationCursorKeysMode)))}
+                  className={keyClass(false)}
+                >
+                  {key.label}
+                </button>
+              ))}
           </div>
           {status.startsWith('Disconnected') && (
             <Button

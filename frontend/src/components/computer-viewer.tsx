@@ -10,6 +10,7 @@ import { ComputerSwitcher } from './computer-switcher';
 import { ComputerIcon, TerminalIcon } from '@/components/ui/icons';
 import { m } from 'motion/react';
 import { glide } from '@/lib/motion';
+import { computerPath, computerTerminalPath } from '@/lib/dashboard-location';
 
 /** Only GNOME/X11 computers bypass portal consent; Wayland ones keep their normal gate. The controller reports which each is;
  * the build-time flag is only the fallback for a controller that does not say. */
@@ -31,6 +32,9 @@ export function ComputerViewer({
   onBack,
   agentState,
   onOpenComputer,
+  view = 'desktop',
+  terminalId = null,
+  onRoute,
 }: {
   computer: Computer;
   canManage: boolean;
@@ -38,13 +42,24 @@ export function ComputerViewer({
   agentState?: ComputerAgentState;
   /** Switch the viewer to another computer (from the All computers drawer). */
   onOpenComputer?: (id: string) => void;
+  /** Desktop or Terminal, from the URL (`/computers/:id` or `/computers/:id/terminal[/:session]`). */
+  view?: 'desktop' | 'terminal';
+  terminalId?: string | null;
+  /** Replace the address when the mode or terminal session changes, so a refresh returns here. */
+  onRoute?: (path: string) => void;
 }) {
   const id = computer.id;
   const running = computer.state === 'running' && canManage;
   const portalFree = portalFreeFor(computer);
   const [setupOpen, setSetupOpen] = useState(() => initialSetup(id, portalFree));
-  // Desktop and Terminal share this page. The stream stays connected while Terminal is shown, so switching back is instant.
-  const [view, setView] = useState<'desktop' | 'terminal'>('desktop');
+  // Desktop and Terminal share this page; the URL owns the mode. The stream stays connected while Terminal is shown,
+  // so switching back is instant.
+  const setView = (next: 'desktop' | 'terminal') =>
+    onRoute?.(next === 'terminal' ? computerTerminalPath(id, terminalId) : computerPath(id));
+  // Leaving the desktop (by button, refresh or Back) always locks human desktop input.
+  useEffect(() => {
+    if (view === 'terminal') setInputEnabled(false);
+  }, [view]);
   const [inputEnabled, setInputEnabled] = useState(false);
   const [frame, setFrame] = useState(Date.now());
   const [previewLoaded, setPreviewLoaded] = useState(false);
@@ -359,7 +374,15 @@ export function ComputerViewer({
       </header>
       {view === 'terminal' && running && (
         <div className="view-enter relative flex min-h-0 flex-1 flex-col pb-9">
-          <TerminalWorkspace computer={computer} connected={canManage} active />
+          <TerminalWorkspace
+            computer={computer}
+            connected={canManage}
+            active
+            initialSession={terminalId}
+            onSessionChange={session => {
+              if (session !== terminalId) onRoute?.(computerTerminalPath(id, session));
+            }}
+          />
           {onOpenComputer && <ComputerSwitcher currentId={id} onOpen={onOpenComputer} />}
         </div>
       )}

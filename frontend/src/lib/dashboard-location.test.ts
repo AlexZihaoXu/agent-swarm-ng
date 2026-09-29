@@ -6,6 +6,7 @@ import {
   chatAgentPath,
   chatGroupPath,
   computerPath,
+  computerTerminalPath,
   endpointPath,
   parseDashboardPath,
 } from './dashboard-location';
@@ -41,6 +42,17 @@ describe('dashboard paths', () => {
     });
     expect(parseDashboardPath('/chat/groups/new').kind).toBe('group-new');
     expect(parseDashboardPath('/chat/groups/team/edit').kind).toBe('group-edit');
+    expect(parseDashboardPath(computerTerminalPath('c-1'))).toMatchObject({
+      kind: 'computer',
+      computerId: 'c-1',
+      computerView: 'terminal',
+    });
+    expect(parseDashboardPath(computerTerminalPath('c-1', 's-9'))).toMatchObject({
+      kind: 'computer',
+      computerView: 'terminal',
+      terminalId: 's-9',
+    });
+    expect(parseDashboardPath('/computers/c-1/terminal/s-9/extra').kind).toBe('not-found');
     expect(parseDashboardPath('/computers/new').kind).toBe('computer-new');
     expect(parseDashboardPath('/computers/c-1/delete').kind).toBe('computer-delete');
     expect(parseDashboardPath('/computers/c-1/settings')).toMatchObject({

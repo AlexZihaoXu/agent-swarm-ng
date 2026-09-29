@@ -55,6 +55,8 @@ function ComputerDialog({ children }: { children: ReactNode }) {
 
 export function ComputersPanel({
   viewingId,
+  viewerView,
+  terminalId,
   dialog,
   deleteId,
   settingsId,
@@ -65,11 +67,13 @@ export function ComputersPanel({
 }: {
   agentState?: ComputerAgentState;
   viewingId: string | null;
+  viewerView: 'desktop' | 'terminal';
+  terminalId: string | null;
   dialog: 'new' | 'delete' | 'settings' | null;
   deleteId: string | null;
   settingsId: string | null;
   onOpen: (id: string) => void;
-  onNavigate: (path: string) => void;
+  onNavigate: (path: string, options?: { replace?: boolean }) => void;
   onBack: () => void;
 }) {
   const client = useQueryClient();
@@ -297,6 +301,9 @@ export function ComputersPanel({
             onBack();
           }}
           onOpenComputer={onOpen}
+          view={viewerView}
+          terminalId={terminalId}
+          onRoute={(path: string) => onNavigate(path, { replace: true })}
         />
       ) : (viewingId || (dialog === 'delete' && !selected) || (dialog === 'settings' && !settingsComputer)) &&
         query.isSuccess ? (

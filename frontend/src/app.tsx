@@ -1086,6 +1086,8 @@ export function App() {
               <ComputersPanel
                 agentState={{ agents, busy, peerBusy, typing, connected: eventsConnected }}
                 viewingId={route.kind === 'computer' ? (route.computerId ?? null) : null}
+                viewerView={route.computerView ?? 'desktop'}
+                terminalId={route.terminalId ?? null}
                 dialog={
                   route.kind === 'computer-new'
                     ? 'new'

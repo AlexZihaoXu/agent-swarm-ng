@@ -27,14 +27,23 @@ export function TerminalWorkspace({
   computer,
   connected,
   active,
+  initialSession = null,
+  onSessionChange,
 }: {
   computer: Computer;
   connected: boolean;
+  /** Session to show first (from the address in the viewer). */
+  initialSession?: string | null;
+  /** Reports the shown session so the viewer can keep it in the address. */
+  onSessionChange?: (session: string | null) => void;
   /** Mounted and on screen: polls the session list and attaches the console only while true. */
   active: boolean;
 }) {
   const client = useQueryClient();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialSession);
+  const reportSession = useRef(onSessionChange);
+  reportSession.current = onSessionChange;
+  useEffect(() => reportSession.current?.(selected), [selected]);
   const [creating, setCreating] = useState(false),
     [name, setName] = useState(''),
     [command, setCommand] = useState(''),

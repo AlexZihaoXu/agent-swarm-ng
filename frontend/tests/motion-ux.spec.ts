@@ -212,3 +212,36 @@ test('the desktop viewer switches to a terminal view and to other computers from
   await expect(page).toHaveURL(/\/computers\/lab$/);
   await expect(drawer).toHaveCount(0);
 });
+
+test('the viewer mode and terminal session live in the address, so a refresh returns to them', async ({ page }) => {
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({
+      json: {
+        controllerConnected: true,
+        computers: [{ id: 'desk', name: 'Desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0 }],
+      },
+    }),
+  );
+  const session = {
+    id: '12345678-1234-1234-1234-123456789abc',
+    name: 'build',
+    alive: true,
+    exitCode: null,
+    createdAt: 1,
+    columns: 120,
+    rows: 36,
+  };
+  await page.route('**/api/computers/*/terminals', route =>
+    route.fulfill({ json: { type: 'terminal', sessions: [session] } }),
+  );
+  await page.goto('/computers/desk');
+  await page.getByRole('tablist', { name: 'Computer view' }).getByRole('tab', { name: 'Terminal' }).click();
+  await expect(page).toHaveURL(`/computers/desk/terminal/${session.id}`);
+  await page.reload();
+  await expect(
+    page.getByRole('tablist', { name: 'Computer view' }).getByRole('tab', { name: 'Terminal' }),
+  ).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: /build/ })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tablist', { name: 'Computer view' }).getByRole('tab', { name: 'Desktop' }).click();
+  await expect(page).toHaveURL('/computers/desk');
+});

@@ -30,6 +30,9 @@ export type DashboardRoute = {
   peerId?: string;
   groupId?: string;
   computerId?: string;
+  /** The viewer's mode; the URL carries it so a refresh returns to the same view. */
+  computerView?: 'desktop' | 'terminal';
+  terminalId?: string;
   endpointId?: string;
   knowledgeId?: string;
   editorTab?: 'avatar' | 'settings';
@@ -43,6 +46,9 @@ export const chatAgentPath = (id: string) => `/chat/agents/${segment(id)}`;
 export const chatAgentDmPath = (id: string, peerId: string) => `${chatAgentPath(id)}/dm/${segment(peerId)}`;
 export const chatGroupPath = (id: string) => `/chat/groups/${segment(id)}`;
 export const computerPath = (id: string) => `/computers/${segment(id)}`;
+/** `/computers/:id/terminal[/:session]`. (`/computers/:id/desktop/` is the stream itself, not a dashboard view.) */
+export const computerTerminalPath = (id: string, session?: string | null) =>
+  `${computerPath(id)}/terminal${session ? `/${segment(session)}` : ''}`;
 export const endpointPath = (id: string) => `/settings/endpoints/${segment(id)}`;
 export const knowledgePath = (id?: string) =>
   id ? `/settings/knowledge/${id.split('/').map(segment).join('/')}` : '/settings/knowledge';
@@ -109,6 +115,8 @@ export function parseDashboardPath(pathname: string): DashboardRoute {
     if (parts.length === 2 && id === 'new') return { tab: 'computers', kind: 'computer-new' };
     if (parts.length === 2) return { tab: 'computers', kind: 'computer', computerId: id };
     if (parts.length === 3 && third === 'delete') return { tab: 'computers', kind: 'computer-delete', computerId: id };
+    if (third === 'terminal' && parts.length <= 4)
+      return { tab: 'computers', kind: 'computer', computerId: id, computerView: 'terminal', terminalId: fourth };
     if (parts.length === 3 && third === 'settings')
       return { tab: 'computers', kind: 'computer-settings', computerId: id };
   }

@@ -202,7 +202,7 @@ test('controls stay usable while the session list refreshes in the background', 
     if (route.request().postDataJSON()?.operation === 'list') await new Promise(resolve => setTimeout(resolve, 700));
     return route.fallback();
   });
-  const interrupt = panel.getByRole('button', { name: 'Control C (interrupt)', exact: true });
+  const interrupt = panel.getByRole('button', { name: 'Control W', exact: true });
   await expect(interrupt).toBeEnabled();
   // Polls run every 2 s and now take 700 ms: sample across several cycles. The button must never be disabled by a refresh.
   let disabled = 0;
@@ -212,30 +212,39 @@ test('controls stay usable while the session list refreshes in the background', 
   }
   expect(disabled).toBe(0);
   await interrupt.click();
-  await expect.poll(() => input.join('')).toContain('\x03');
+  await expect.poll(() => input.join('')).toContain('\x17');
   // Choosing another terminal keeps the panel populated instead of blanking to "Loading terminals…".
   await expect(panel.getByText('Loading terminals…')).toHaveCount(0);
 });
 
-test('the terminal takes focus on open, fits its frame, and the on-screen Ctrl applies to the next letter', async ({
-  page,
-}) => {
-  const { panel, input } = await open(page);
-  await expect(panel.locator('.xterm-helper-textarea')).toBeFocused();
-  // Scaled to fit rather than scrolled: the 120 × 36 grid stays whole inside its frame.
-  const frame = (await panel.getByTestId('terminal-viewport').boundingBox())!;
-  const screen = (await panel.locator('.xterm-screen').boundingBox())!;
-  expect(screen.width).toBeLessThanOrEqual(frame.width + 1);
-  expect(screen.height).toBeLessThanOrEqual(frame.height + 1);
-  await panel.getByRole('button', { name: 'Control (applies to the next letter)' }).click();
-  await expect(panel.getByRole('button', { name: 'Control (applies to the next letter)' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await page.keyboard.type('c');
-  await panel.getByRole('button', { name: 'Up arrow' }).click();
-  await expect.poll(() => input.join('')).toBe('\x03\x1b[A');
-  await expect(panel.locator('.xterm-helper-textarea')).toBeFocused();
+test('a physical keyboard gets only the keys the browser keeps; the rest are typed directly', async ({ page }) => {
+  const { panel } = await open(page);
+  const keys = panel.getByRole('toolbar', { name: 'Terminal keys' }).getByRole('button');
+  await expect(keys).toHaveText(['⌃W', '⌃T', '⌃N']);
+});
+
+test.describe('touch keyboards', () => {
+  test.use({ hasTouch: true });
+  test('the terminal takes focus on open, fits its frame, and the on-screen Ctrl applies to the next letter', async ({
+    page,
+  }) => {
+    const { panel, input } = await open(page);
+    await expect(panel.locator('.xterm-helper-textarea')).toBeFocused();
+    // Scaled to fit rather than scrolled: the 120 × 36 grid stays whole inside its frame.
+    const frame = (await panel.getByTestId('terminal-viewport').boundingBox())!;
+    const screen = (await panel.locator('.xterm-screen').boundingBox())!;
+    expect(screen.width).toBeLessThanOrEqual(frame.width + 1);
+    expect(screen.height).toBeLessThanOrEqual(frame.height + 1);
+    await panel.getByRole('button', { name: 'Control (applies to the next letter)' }).click();
+    await expect(panel.getByRole('button', { name: 'Control (applies to the next letter)' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await page.keyboard.type('c');
+    await panel.getByRole('button', { name: 'Up arrow' }).click();
+    await expect.poll(() => input.join('')).toBe('\x03\x1b[A');
+    await expect(panel.locator('.xterm-helper-textarea')).toBeFocused();
+  });
 });
 
 test('clicking the console keeps keyboard focus in it, and sessions are listed beside it', async ({ page }) => {
