@@ -136,9 +136,9 @@ def execute_terminal(value, token):
         child = subprocess.run(['/usr/bin/setpriv', '--reuid=1000', '--regid=1000', '--init-groups',
                                 '/usr/bin/python3', '-I', '/opt/swarm/computer-terminal.py', json.dumps(value)],
                                cwd='/workspace', env={**ENVIRONMENT, 'TERM': 'xterm-256color'}, stdin=subprocess.DEVNULL,
-                               # A combo may type for up to 30 seconds (validated by the helper before any input).
+                               # A combo may run for up to 10 seconds (validated by the helper before any input).
                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                               timeout=45 if value.get('operation') == 'actions' else 8)
+                               timeout=20 if value.get('operation') == 'actions' else 8)
         if child.returncode or len(child.stdout) > 2 * 1024 * 1024: raise RuntimeError('Terminal request settlement uncertain.')
         result = json.loads(child.stdout)
         if not isinstance(result, dict) or not ('result' in result or 'error' in result): raise RuntimeError('Invalid terminal receipt.')

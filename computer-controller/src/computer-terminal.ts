@@ -46,8 +46,10 @@ const fields: Record<string, string[]> = {
 };
 export const terminalSize = { columns: [40, 240], rows: [10, 80] } as const;
 const controlCharacters = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/;
-/** A combo's typing plus pauses may take at most this long. */
-export const actionsSeconds = 30;
+/** The same limits as desktop combos: typing and key repeats ≤5 s, ≤10 s with the pauses between actions. */
+export const actionSeconds = 5,
+  comboSeconds = 10,
+  maxRepeat = 50;
 export function validateTerminal(value: Record<string, any>, prepared = false) {
   if (typeof value.operation !== 'string' || !Object.hasOwn(fields, value.operation))
     fail('Unknown terminal operation.');
@@ -108,7 +110,7 @@ export function validateTerminal(value: Record<string, any>, prepared = false) {
       fail('pause must be 0..10 seconds.');
     if (!Array.isArray(value.actions) || value.actions.length < 1 || value.actions.length > 16)
       fail('actions: 1..16 items.');
-    let seconds = pause * (value.actions.length - 1);
+    let seconds = 0;
     for (const action of value.actions) {
       if (!action || typeof action !== 'object' || Array.isArray(action)) fail('Invalid action.');
       if (action.type === 'press') {
@@ -119,8 +121,8 @@ export function validateTerminal(value: Record<string, any>, prepared = false) {
           fail('Unsupported terminal key.');
         const repeat = action.repeat ?? 1,
           interval = action.interval ?? 0;
-        if (!Number.isInteger(repeat) || repeat < 1 || repeat > 200)
-          fail('repeat must be a whole number from 1 to 200.');
+        if (!Number.isInteger(repeat) || repeat < 1 || repeat > maxRepeat)
+          fail(`repeat must be a whole number from 1 to ${maxRepeat}.`);
         if (typeof interval !== 'number' || !Number.isFinite(interval) || interval < 0 || interval > 2)
           fail('interval must be 0..2 seconds.');
         seconds += (repeat - 1) * interval;
@@ -142,8 +144,11 @@ export function validateTerminal(value: Record<string, any>, prepared = false) {
         }
       } else fail('Action type must be type or press.');
     }
-    if (seconds > actionsSeconds)
-      fail(`This combo would take ${seconds.toFixed(1)} seconds; keep typing plus pauses within ${actionsSeconds}.`);
+    const total = seconds + pause * (value.actions.length - 1);
+    if (seconds > actionSeconds || total > comboSeconds)
+      fail(
+        `This combo would take ${seconds.toFixed(1)} seconds of typing and repeats (${total.toFixed(1)} with pauses); keep them within ${actionSeconds} and ${comboSeconds}.`,
+      );
   }
   if (value.operation === 'press' && !keys.has(value.key)) fail('Unsupported terminal key.');
   return value;

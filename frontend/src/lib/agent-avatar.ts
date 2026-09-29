@@ -143,7 +143,8 @@ export function appearanceFromSeed(seed: number): AvatarAppearance {
   };
 }
 const round2 = (value: number) => Math.round(value * 100) / 100;
-const pick = <T>(items: readonly T[], amount: number) => items[Math.min(items.length - 1, Math.floor(amount * items.length))];
+const pick = <T>(items: readonly T[], amount: number) =>
+  items[Math.min(items.length - 1, Math.floor(amount * items.length))];
 /** Keeps a continuous trait inside its range, rounded to what the editor shows. */
 export const clampTrait = (trait: AvatarRange, value: number) =>
   round2(Math.min(avatarRanges[trait].max, Math.max(avatarRanges[trait].min, value)));
@@ -154,7 +155,13 @@ export const clampTrait = (trait: AvatarRange, value: number) =>
 export function richAppearanceFromSeed(seed: number): AvatarAppearance {
   const v = (salt: number) => variation(seed, salt);
   const color = pick(avatarColors, v(2)).value;
-  const accent = v(20) < 0.5 ? pick(avatarColors.filter(item => item.value !== color), v(21)).value : undefined;
+  const accent =
+    v(20) < 0.5
+      ? pick(
+          avatarColors.filter(item => item.value !== color),
+          v(21),
+        ).value
+      : undefined;
   return {
     shape: pick(avatarShapes, v(1)).id,
     color,

@@ -91,7 +91,7 @@ const terminalAction = Type.Union([
         {
           key,
           repeat: Type.Optional(
-            Type.Integer({ minimum: 1, maximum: 200, description: 'Press the key this many times (default 1).' }),
+            Type.Integer({ minimum: 1, maximum: 50, description: 'Press the key this many times (default 1).' }),
           ),
           interval: Type.Optional(
             Type.Number({
@@ -185,7 +185,7 @@ export function createTerminalTools(service: ComputerUseService, agentId: string
       parameters: terminalActionsParameters,
       description:
         common +
-        'Execute 1–16 ordered keyboard actions in one session: keyboard.type (literal text, never key names; no Enter appended; typed newlines execute) at cpm characters per minute (default 800, max 3200, counting Unicode code points) or cpm:"instant" to paste at once, and keyboard.press (one enumerated key: Enter, Tab/BTab, Escape, BSpace, Delete/Insert, Space, arrows, Home/End/PageUp/PageDown, F1..F12, C-a..C-z incl. C-c to interrupt, M-a..M-z), optionally repeat 1..200 times with interval 0..2 s between (e.g. BSpace repeat 30 deletes 30 characters). Requires a terminal_view of THIS session within the past 90 real seconds with fewer than five combos since. The whole combo is validated before any input: typing time plus pauses and repeat intervals ≤30 seconds. Default pause between actions 0.2s. Input is not atomic: on an error, view before retrying; never retry blindly. Verify the outcome with terminal_view.',
+        'Execute 1–16 ordered keyboard actions in one session: keyboard.type (literal text, never key names; no Enter appended; typed newlines execute) at cpm characters per minute (default 800, max 3200, counting Unicode code points) or cpm:"instant" to paste at once, and keyboard.press (one enumerated key: Enter, Tab/BTab, Escape, BSpace, Delete/Insert, Space, arrows, Home/End/PageUp/PageDown, F1..F12, C-a..C-z incl. C-c to interrupt, M-a..M-z), optionally repeat 1..50 times with interval 0..2 s between (e.g. BSpace repeat 30 deletes 30 characters). Requires a terminal_view of THIS session within the past 90 real seconds with fewer than five combos since. The whole combo is validated before any input: like desktop combos, typing and repeat intervals ≤5 seconds, ≤10 seconds including pauses. Default pause between actions 0.2s. Input is not atomic: on an error, view before retrying; never retry blindly. Verify the outcome with terminal_view.',
       async execute(_call, { session, actions, per_action_pause }, signal) {
         return reply(
           await service.terminalActions(

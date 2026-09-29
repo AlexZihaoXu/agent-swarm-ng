@@ -137,10 +137,10 @@ it.each([
   [[{ type: 'type', text: 'y'.repeat(500) }]],
   [Array.from({ length: 17 }, () => ({ type: 'press', key: 'Enter' }))],
   [[{ type: 'click' }]],
-  [[{ type: 'press', key: 'BSpace', repeat: 201 }]],
+  [[{ type: 'press', key: 'BSpace', repeat: 51 }]],
   [[{ type: 'press', key: 'BSpace', repeat: 1.5 }]],
   [[{ type: 'press', key: 'BSpace', interval: 3 }]],
-  [[{ type: 'press', key: 'BSpace', repeat: 200, interval: 0.2 }]],
+  [[{ type: 'press', key: 'BSpace', repeat: 50, interval: 0.2 }]],
 ])('rejects a terminal combo before any input %#', actions =>
   expect(() => validateCore({ kind: 'terminal', operation: 'actions', session: id, actions })).toThrow(),
 );

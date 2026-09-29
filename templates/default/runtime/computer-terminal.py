@@ -34,8 +34,9 @@ FIELDS = {'create': ['name', 'command', 'cwd'], 'list': [], 'view': ['session', 
 SIZE_LIMITS = {'columns': (40, 240), 'rows': (10, 80)}
 # Typing speed in characters (Unicode code points) per minute; 'instant' pastes the text at once.
 DEFAULT_CPM, MAX_CPM = 800, 3200
-# A combo's typing time plus its pauses may not exceed this.
-ACTIONS_SECONDS = 30
+# The same limits as desktop combos: typing and key repeats at most 5 seconds, 10 including the pauses between.
+ACTION_SECONDS, COMBO_SECONDS = 5, 10
+MAX_REPEAT = 50
 
 
 def valid_text(text):
@@ -50,7 +51,7 @@ def actions_duration(value):
         raise ValueError('actions: 1..16 items.')
     if type(pause) not in (int, float) or not 0 <= pause <= 10:
         raise ValueError('pause must be 0..10 seconds.')
-    total = pause * (len(actions) - 1)
+    acting = 0
     for number, action in enumerate(actions, 1):
         kind = action.get('type') if isinstance(action, dict) else None
         if kind == 'type':
@@ -60,21 +61,23 @@ def actions_duration(value):
             if cpm != 'instant':
                 if type(cpm) not in (int, float) or not 0 < cpm <= MAX_CPM:
                     raise ValueError('Action ' + str(number) + ': cpm must be above 0 and at most 3200, or "instant".')
-                total += len(action['text']) * 60 / cpm
+                acting += len(action['text']) * 60 / cpm
         elif kind == 'press':
             if set(action) - {'type', 'key', 'repeat', 'interval'} or action.get('key') not in KEYS:
                 raise ValueError('Action ' + str(number) + ': unsupported key. Use documented terminal key names.')
             repeat, interval = action.get('repeat', 1), action.get('interval', 0)
-            if type(repeat) is not int or not 1 <= repeat <= 200:
-                raise ValueError('Action ' + str(number) + ': repeat must be a whole number from 1 to 200.')
+            if type(repeat) is not int or not 1 <= repeat <= MAX_REPEAT:
+                raise ValueError('Action ' + str(number) + ': repeat must be a whole number from 1 to ' + str(MAX_REPEAT) + '.')
             if type(interval) not in (int, float) or not 0 <= interval <= 2:
                 raise ValueError('Action ' + str(number) + ': interval must be 0..2 seconds.')
-            total += (repeat - 1) * interval
+            acting += (repeat - 1) * interval
         else:
             raise ValueError('Action ' + str(number) + ': type must be "type" or "press".')
-    if total > ACTIONS_SECONDS:
-        raise ValueError('This combo would take ' + str(round(total, 1)) + ' seconds; keep typing plus pauses within '
-                         + str(ACTIONS_SECONDS) + ' (cpm "instant" pastes long text at once).')
+    total = acting + pause * (len(actions) - 1)
+    if acting > ACTION_SECONDS or total > COMBO_SECONDS:
+        raise ValueError('This combo would take ' + str(round(acting, 1)) + ' seconds of typing and repeats ('
+                         + str(round(total, 1)) + ' with pauses); keep them within ' + str(ACTION_SECONDS) + ' and '
+                         + str(COMBO_SECONDS) + ' seconds (cpm "instant" pastes long text at once).')
     return total
 
 

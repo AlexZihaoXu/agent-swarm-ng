@@ -92,10 +92,11 @@ class TerminalValidation(unittest.TestCase):
                                ([{'type': 'press', 'key': 'Enter'}] * 2, 11),
                                ([{'type': 'click'}], 0.2),
                                ([{'type': 'press', 'key': 'BSpace', 'repeat': 0}], 0.2),
-                               ([{'type': 'press', 'key': 'BSpace', 'repeat': 201}], 0.2),
+                               ([{'type': 'press', 'key': 'BSpace', 'repeat': 51}], 0.2),
+                               ([{'type': 'press', 'key': 'Enter'}] * 16, 0.7),
                                ([{'type': 'press', 'key': 'BSpace', 'repeat': 2.5}], 0.2),
                                ([{'type': 'press', 'key': 'BSpace', 'interval': 3}], 0.2),
-                               ([{'type': 'press', 'key': 'BSpace', 'repeat': 200, 'interval': 0.2}], 0.2)]:
+                               ([{'type': 'press', 'key': 'BSpace', 'repeat': 50, 'interval': 0.2}], 0.2)]:
             with self.assertRaises(ValueError):
                 terminal.validate({'operation': 'actions', 'session': session, 'actions': actions, 'pause': pause})
 
