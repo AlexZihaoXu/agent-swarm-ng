@@ -9,6 +9,7 @@ import { BlobStore } from './blob-store';
 import { FileStore } from './store';
 import { createFileTools, parseLocation } from './file-tools';
 import { chatKey } from './access';
+import { ControllerError } from '../computer-controller-client';
 
 const text = (value: { content: { type: string; text?: string }[] }) => JSON.parse(value.content[0].text!);
 async function setup() {
@@ -36,8 +37,9 @@ async function setup() {
   };
   const transfers = {
     exportFile: async (_id: string, path: string) => {
+      if (path === '/offline') throw new TypeError('fetch failed');
       const bytes = disk.get(path);
-      if (!bytes) throw new Error('Path not found.');
+      if (!bytes) throw new ControllerError(404, 'Path not found.');
       return {
         name: path.split('/').pop()!,
         size: bytes.length,
@@ -145,6 +147,10 @@ it('copies between the scratchpad and assigned computers, text-only into the scr
       'not a computer assigned to you',
     );
     await expect(call(a, 'copy_file', { from: 'scratch:report.md', to: 'file:x' })).rejects.toThrow('upload_file');
+    // An unreachable controller is reported as such, not as a raw network error.
+    await expect(call(a, 'copy_file', { from: 'computer:Desk:/offline', to: 'scratch:x.md' })).rejects.toThrow(
+      'controller is unavailable',
+    );
     // A chat file (any type) can go onto a computer.
     const up = text(await call(a, 'upload_file', { from: 'computer:Desk:/home/agent/data.bin' }));
     expect(up).toMatchObject({ kind: 'other', size: 4 });

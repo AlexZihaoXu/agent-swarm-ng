@@ -2,7 +2,7 @@ import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent
 import { Type } from '@sinclair/typebox';
 import { open } from 'node:fs/promises';
 import { posix } from 'node:path';
-import type { ComputerController } from '../computer-controller-client';
+import { ControllerError, type ComputerController } from '../computer-controller-client';
 import type { ComputerUseService } from '../computer-use/service';
 import type { ScreenshotPool } from '../computer-use/image-pool';
 import type { Scratchpad } from '../scratchpad';
@@ -64,6 +64,18 @@ async function head(path: string, max: number) {
     return buffer.subarray(0, bytesRead);
   } finally {
     await handle.close();
+  }
+}
+/** The channel ID agents use for a file channel key (a private chat is named by its plain channel ID). */
+const channelOf = (key: string) => (key.startsWith('chat:') ? key.slice(5) : key);
+/** A controller that cannot be reached reads as such, not as a raw network error. */
+async function viaController<T>(operation: () => Promise<T>) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof ControllerError) throw new Error(error.message);
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    throw new Error('The computer controller is unavailable; try the copy again later.');
   }
 }
 /** Releases a source that was not (fully) read: a controller download, a blob file handle, or a generator. */
@@ -160,7 +172,8 @@ export function createFileTools(options: FileToolOptions): ToolDefinition[] {
       return { name: file.name, size: file.size, stream: files.blobs.stream(file.blobId), done: () => {} };
     }
     const computer = await assigned(location.computer);
-    const file = await options.transfers!.exportFile!(computer.id, location.path, await limit());
+    const max = await limit();
+    const file = await viaController(() => options.transfers!.exportFile!(computer.id, location.path, max));
     return {
       ...file,
       done: () => notify(computer, `${agentName} copied ${location.path} from ${computer.name}.`),
@@ -187,7 +200,7 @@ export function createFileTools(options: FileToolOptions): ToolDefinition[] {
         if (!(await files.access(key, actor)).view) throw new Error('You cannot see that chat.');
         const listed = await files.list(key, { query: args.query });
         return result({
-          channelId: key.startsWith('chat:') ? key.slice(5) : key,
+          channelId: channelOf(key),
           total: listed.files.length,
           files: listed.files.slice(0, args.limit ?? 20).map(file => ({
             fileId: file.id,
@@ -314,7 +327,7 @@ export function createFileTools(options: FileToolOptions): ToolDefinition[] {
           name: file.name,
           kind: file.kind,
           size: file.size,
-          channelId: key.startsWith('chat:') ? key.slice(5) : key,
+          channelId: channelOf(key),
           sent: false,
           next: 'Send it: send_message (or send_dm) with fileIds:[this fileId] in the same chat.',
         });
@@ -341,7 +354,7 @@ export function createFileTools(options: FileToolOptions): ToolDefinition[] {
           fileId: file.id,
           name: file.name,
           path: row.path,
-          channelId: key.startsWith('chat:') ? key.slice(5) : key,
+          channelId: channelOf(key),
           sent: false,
           next: 'Send it: send_message (or send_dm) with fileIds:[this fileId] in the same chat.',
         });
@@ -406,12 +419,14 @@ export function createFileTools(options: FileToolOptions): ToolDefinition[] {
             source.done();
             return result({ copied: true, from: describe(from), to: `scratch:${written.path}`, size: written.size });
           }
-          const written = await options.transfers!.importFile!(
-            computer!.id,
-            (to as { path: string }).path,
-            source.size,
-            source.stream,
-            signal,
+          const written = await viaController(() =>
+            options.transfers!.importFile!(
+              computer!.id,
+              (to as { path: string }).path,
+              source.size,
+              source.stream,
+              signal,
+            ),
           );
           source.done();
           notify(computer!, `${agentName} copied a file to ${written.path} on ${computer!.name}.`);
