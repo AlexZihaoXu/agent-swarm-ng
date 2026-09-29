@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useRetained } from '@/lib/use-retained';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -133,6 +134,9 @@ export function ComputersPanel({
   const selected = dialog === 'delete' ? (computers.find(computer => computer.id === deleteId) ?? null) : null;
   const settingsComputer =
     dialog === 'settings' ? (computers.find(computer => computer.id === settingsId) ?? null) : null;
+  // While a dialog animates closed it keeps showing its computer, instead of emptying at once.
+  const shownDelete = useRetained(selected, selected !== null);
+  const shownSettings = useRetained(settingsComputer, settingsComputer !== null);
   const editSettings =
     editDraft ??
     (settingsComputer && limitsQuery.data
@@ -655,7 +659,7 @@ export function ComputersPanel({
           }
         }}
       >
-        {settingsComputer && (
+        {shownSettings && (
           <ComputerDialog>
             <form
               onSubmit={event => {
@@ -663,7 +667,7 @@ export function ComputersPanel({
                 void submitSettings();
               }}
             >
-              <Dialog.Title className="text-lg font-semibold">Settings for {settingsComputer.name}</Dialog.Title>
+              <Dialog.Title className="text-lg font-semibold">Settings for {shownSettings.name}</Dialog.Title>
               <Dialog.Description className="mt-2 text-sm text-muted-foreground">
                 CPU and RAM changes apply without restarting the desktop. Lowering RAM below current use may kill
                 processes.
@@ -680,11 +684,11 @@ export function ComputersPanel({
                 <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
                   <p role="alert">
                     Changing timezone requires replacing the container.{' '}
-                    {settingsComputer.state === 'exited'
+                    {shownSettings.state === 'exited'
                       ? 'The computer is off: its home/workspace volumes stay intact. Power it on from the menu after saving.'
                       : 'Power off the computer from the menu first, then reopen Settings. No running desktop will be restarted automatically.'}
                   </p>
-                  {settingsComputer.state === 'exited' && (
+                  {shownSettings.state === 'exited' && (
                     <label className="mt-3 flex cursor-pointer items-start gap-2">
                       <input
                         type="checkbox"
@@ -722,14 +726,14 @@ export function ComputersPanel({
                   disabled={
                     settingsBusy ||
                     !parsedEdit ||
-                    (timezoneChanged && (settingsComputer.state !== 'exited' || !replaceConfirmed)) ||
+                    (timezoneChanged && (shownSettings.state !== 'exited' || !replaceConfirmed)) ||
                     !query.data?.controllerConnected
                   }
                 >
                   {settingsBusy
                     ? 'Saving…'
                     : timezoneChanged
-                      ? settingsComputer.state === 'exited'
+                      ? shownSettings.state === 'exited'
                         ? 'Replace stopped computer'
                         : 'Power off first'
                       : 'Save settings'}
@@ -748,7 +752,7 @@ export function ComputersPanel({
           }
         }}
       >
-        {selected && (
+        {shownDelete && (
           <ComputerDialog>
             <form
               onSubmit={event => {
@@ -762,7 +766,7 @@ export function ComputersPanel({
                 workspace. This cannot be undone.
               </Dialog.Description>
               <p id={`${confirmId}-help`} className="mt-5 break-words text-sm">
-                Type <strong className="select-text">{selected.name}</strong> exactly to confirm.
+                Type <strong className="select-text">{shownDelete.name}</strong> exactly to confirm.
               </p>
               <label htmlFor={confirmId} className="mt-4 block text-sm font-medium">
                 Confirm computer name
@@ -799,7 +803,7 @@ export function ComputersPanel({
                   variant="outline"
                   size="sm"
                   className="min-h-11 border-red-500/50 text-red-400 hover:bg-red-500/10 sm:min-h-0"
-                  disabled={deleteBusy || confirmation !== selected.name}
+                  disabled={deleteBusy || confirmation !== shownDelete.name}
                 >
                   {deleteBusy ? 'Deleting…' : 'Delete computer'}
                 </Button>

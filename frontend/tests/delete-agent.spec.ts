@@ -84,3 +84,26 @@ test('deleting an unselected saved agent does not change selection; last deletio
   await expect(cards).toHaveCount(0);
   await expect(page.getByText('Select or create an agent to configure.', { exact: true })).toBeVisible();
 });
+
+test('cancelling a delete keeps its own content while the dialog animates closed', async ({ page }) => {
+  await page.route('**/api/agents', route => route.fulfill({ json: { agents: [agent], nextCursor: null } }));
+  await page.route('**/api/channels/*/messages*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));
+  await page.goto('/');
+  const card = page.getByRole('button', { name: `Open settings for ${agent.name}`, exact: true });
+  await card.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Delete agent', exact: true }).click();
+  await expect(page.getByLabel('Confirm agent name')).toBeVisible();
+  // Watch every frame of the close: the other (Create agent) form must never show.
+  await page.evaluate(() => {
+    (window as unknown as { createSeen: boolean }).createSeen = false;
+    const watch = () => {
+      if (document.querySelector('[role="dialog"]')?.textContent?.includes('Create new agent'))
+        (window as unknown as { createSeen: boolean }).createSeen = true;
+      requestAnimationFrame(watch);
+    };
+    watch();
+  });
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as { createSeen: boolean }).createSeen)).toBe(false);
+});

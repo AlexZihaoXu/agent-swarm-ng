@@ -4,6 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CreateAgentForm } from '@/components/create-agent-form';
 import { DeleteAgentForm } from '@/components/delete-agent-form';
+import { useRetained } from '@/lib/use-retained';
 import type { ChatAgent, RealAgent } from '@/use-chat';
 import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { dialogOverlay } from '@/lib/styles';
@@ -32,6 +33,8 @@ export function AgentPanel({
   const [deleting, setDeleting] = useState(false);
   const deletingAgent = route.kind === 'agent-delete' ? agents.find(item => item.id === route.agentId) : undefined;
   const dialogOpen = route.kind === 'agent-new' || Boolean(deletingAgent);
+  // While it animates closed, the dialog keeps what it showed (Cancel must not flash the other form).
+  const shownDelete = useRetained(deletingAgent, dialogOpen);
   const close = () =>
     onNavigate(
       route.agentId && !window.matchMedia('(max-width: 767px)').matches ? agentPath(route.agentId) : '/agents',
@@ -138,10 +141,10 @@ export function AgentPanel({
             viewportClassName="max-h-[calc(90dvh-1rem)] [&>div]:!block"
           >
             <div className="p-4">
-              {deletingAgent ? (
+              {shownDelete ? (
                 <DeleteAgentForm
-                  key={deletingAgent.id}
-                  agent={deletingAgent}
+                  key={shownDelete.id}
+                  agent={shownDelete}
                   onDelete={onDelete}
                   onBusyChange={setDeleting}
                   onDone={onDeleted}
