@@ -997,9 +997,10 @@ export function App() {
                               Load earlier messages
                             </button>
                           )}
-                          {(historyLoading[agent.channelId] || history.olderHidden) && (
-                            <EdgeSkeleton label="Loading earlier messages…" />
-                          )}
+                          {/* Always present while more exists above, so starting a load never shifts the view. */}
+                          {(historyCursor[agent.channelId] != null ||
+                            historyLoading[agent.channelId] ||
+                            history.olderHidden) && <EdgeSkeleton label="Loading earlier messages…" />}
                         </>
                       )
                     )}

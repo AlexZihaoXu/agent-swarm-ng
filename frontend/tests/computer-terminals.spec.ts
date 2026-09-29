@@ -168,10 +168,13 @@ test('fixed120x36 terminal does not resize on a phone or resize request; reconne
 test('create, reserved-key controls and deliberate deletion remain available', async ({ page }) => {
   const { panel, requests, input } = await open(page);
   await panel.getByRole('button', { name: 'New terminal', exact: true }).click();
-  await panel.getByLabel('Terminal name', { exact: true }).fill('server');
-  await panel.getByLabel('Initial command').fill('npm run dev');
-  await panel.getByLabel('Working directory').fill('~/project');
-  await panel.getByRole('button', { name: 'Create terminal', exact: true }).click();
+  // The form is its own modal over the Terminals window.
+  const form = page.getByRole('dialog', { name: 'New terminal' });
+  await form.getByLabel('Terminal name', { exact: true }).fill('server');
+  await form.getByLabel('Initial command').fill('npm run dev');
+  await form.getByLabel('Working directory').fill('~/project');
+  await form.getByRole('button', { name: 'Create terminal', exact: true }).click();
+  await expect(form).toHaveCount(0);
   await expect(panel.getByRole('tab', { name: /server/ })).toHaveAttribute('aria-selected', 'true');
   expect(requests.find(r => r.operation === 'create')).toEqual({
     operation: 'create',

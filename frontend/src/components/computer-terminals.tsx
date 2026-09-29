@@ -10,7 +10,7 @@ import { m } from 'motion/react';
 import { glide } from '@/lib/motion';
 import { computerTerminal, type TerminalRequest, type TerminalResult } from '@/lib/computer-terminals';
 import type { Computer } from './computer-card';
-import { dialogOverlay } from '@/lib/styles';
+import { dialogMotion, dialogOverlay } from '@/lib/styles';
 const TerminalEmulator = lazy(() =>
   import('./terminal-emulator').then(module => ({ default: module.TerminalEmulator })),
 );
@@ -88,7 +88,7 @@ export function TerminalWorkspace({
   });
   const sessions = query.data?.sessions ?? [];
   const session = sessions.find(item => item.id === selected);
-  const showDetail = phoneDetail || creating || Boolean(session);
+  const showDetail = phoneDetail || Boolean(session);
   // A background refresh must not disable the controls: a click that lands mid-poll would be silently dropped.
   const actionable = available && !busy && !query.isError && session?.id === selected;
   useEffect(() => {
@@ -152,7 +152,6 @@ export function TerminalWorkspace({
                   setCreating(true);
                   setDeleting(false);
                   setError('');
-                  setPhoneDetail(true);
                 }}
               >
                 <PlusIcon />
@@ -174,7 +173,7 @@ export function TerminalWorkspace({
                 <p className="px-2 py-2 text-xs text-muted-foreground">No terminals yet. Use + to start one.</p>
               )}
               {sessions.map(item => {
-                const on = item.id === selected && !creating;
+                const on = item.id === selected;
                 return (
                   // Right-click (or long-press / Shift+F10) a session for its settings.
                   <ContextMenu.Root key={item.id}>
@@ -341,93 +340,15 @@ export function TerminalWorkspace({
               <ChevronLeftIcon />
               Sessions
             </button>
-            {creating && (
-              <form
-                className="view-enter m-auto w-full max-w-lg space-y-3 rounded-xl border border-white/15 bg-sidebar p-4 shadow-2xl shadow-black/40"
-                onSubmit={event => {
-                  event.preventDefault();
-                  void act(
-                    { operation: 'create', name, ...(command ? { command } : {}), ...(cwd ? { cwd } : {}) },
-                    result => {
-                      if (result.session) setSelected(result.session.id);
-                      setCreating(false);
-                      setName('');
-                      setCommand('');
-                    },
-                  );
-                }}
-              >
-                <h3 className="text-sm font-semibold">New terminal</h3>
-                <label className="block text-xs">
-                  Terminal name
-                  <input
-                    aria-label="Terminal name"
-                    className={`${field} mt-1 w-full`}
-                    value={name}
-                    pattern="[A-Za-z0-9](?:[A-Za-z0-9_]|-){0,47}"
-                    maxLength={48}
-                    required
-                    disabled={busy}
-                    onChange={event => setName(event.target.value)}
-                  />
-                </label>
-                <label className="block text-xs">
-                  Initial command
-                  <input
-                    aria-label="Initial command"
-                    placeholder="Optional; otherwise an interactive shell"
-                    className={`${field} mt-1 w-full font-mono`}
-                    value={command}
-                    maxLength={32768}
-                    disabled={busy}
-                    onChange={event => setCommand(event.target.value)}
-                  />
-                </label>
-                <label className="block text-xs">
-                  Working directory
-                  <input
-                    aria-label="Working directory"
-                    className={`${field} mt-1 w-full font-mono`}
-                    value={cwd}
-                    maxLength={4096}
-                    disabled={busy}
-                    onChange={event => setCwd(event.target.value)}
-                  />
-                </label>
-                <p className="text-[11px] text-muted-foreground">
-                  Names: letters, digits, hyphens and underscores. Commands run as the guest agent account, including
-                  its configured sudo permissions.
-                </p>
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="min-h-10"
-                    disabled={busy}
-                    onClick={() => setCreating(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" size="sm" className="min-h-10" disabled={busy || !name}>
-                    Create terminal
-                  </Button>
-                </div>
-              </form>
+            {selected && query.isSuccess && sessions.length > 0 && !sessions.some(item => item.id === selected) && (
+              <p role="status" className="m-auto text-sm text-muted-foreground">
+                This terminal was deleted. Select another terminal.
+              </p>
             )}
-            {!creating &&
-              selected &&
-              query.isSuccess &&
-              sessions.length > 0 &&
-              !sessions.some(item => item.id === selected) && (
-                <p role="status" className="m-auto text-sm text-muted-foreground">
-                  This terminal was deleted. Select another terminal.
-                </p>
-              )}
-            {!creating && !session && query.isSuccess && !sessions.length && (
+            {!session && query.isSuccess && !sessions.length && (
               <p className="m-auto text-sm text-muted-foreground">No terminals yet. Create one to start.</p>
             )}
-            {!creating && session && (
+            {session && (
               <div className="flex min-h-60 min-w-0 flex-1 flex-col pt-2">
                 {!session.alive && (
                   <p role="status" className="px-1 pb-1 text-center text-xs text-muted-foreground">
@@ -464,6 +385,89 @@ export function TerminalWorkspace({
           {error ? <span className="text-red-400">{error} Do not resend blindly.</span> : busy ? 'Sending…' : notice}
         </div>
       )}
+      {/* New terminal opens as its own modal over the Terminals window, like the app's other create dialogs. */}
+      <Dialog.Root open={creating} onOpenChange={open => !busy && setCreating(open)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className={dialogOverlay} />
+          <Dialog.Content
+            aria-describedby={undefined}
+            className={`fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl ${dialogMotion}`}
+          >
+            <form
+              className="space-y-3"
+              onSubmit={event => {
+                event.preventDefault();
+                void act(
+                  { operation: 'create', name, ...(command ? { command } : {}), ...(cwd ? { cwd } : {}) },
+                  result => {
+                    if (result.session) setSelected(result.session.id);
+                    setCreating(false);
+                    setName('');
+                    setCommand('');
+                  },
+                );
+              }}
+            >
+              <Dialog.Title className="text-lg font-semibold">New terminal</Dialog.Title>
+              <label className="block text-xs">
+                Terminal name
+                <input
+                  aria-label="Terminal name"
+                  className={`${field} mt-1 w-full`}
+                  value={name}
+                  pattern="[A-Za-z0-9](?:[A-Za-z0-9_]|-){0,47}"
+                  maxLength={48}
+                  required
+                  disabled={busy}
+                  onChange={event => setName(event.target.value)}
+                />
+              </label>
+              <label className="block text-xs">
+                Initial command
+                <input
+                  aria-label="Initial command"
+                  placeholder="Optional; otherwise an interactive shell"
+                  className={`${field} mt-1 w-full font-mono`}
+                  value={command}
+                  maxLength={32768}
+                  disabled={busy}
+                  onChange={event => setCommand(event.target.value)}
+                />
+              </label>
+              <label className="block text-xs">
+                Working directory
+                <input
+                  aria-label="Working directory"
+                  className={`${field} mt-1 w-full font-mono`}
+                  value={cwd}
+                  maxLength={4096}
+                  disabled={busy}
+                  onChange={event => setCwd(event.target.value)}
+                />
+              </label>
+              <p className="text-[11px] text-muted-foreground">
+                Names: letters, digits, hyphens and underscores. Commands run as the guest agent account, including its
+                configured sudo permissions.
+              </p>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="min-h-10"
+                  disabled={busy}
+                  onClick={() => setCreating(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" className="min-h-10" disabled={busy || !name}>
+                  Create terminal
+                </Button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
       <ConfirmDialog
         open={deleting && Boolean(session)}
         onOpenChange={setDeleting}

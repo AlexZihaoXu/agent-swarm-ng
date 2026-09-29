@@ -38,6 +38,7 @@ export function useMessageWindow<T>({
   const wantOlder = useRef(false);
   const jump = useRef(false);
   const rendered = useRef<{ first?: string; last?: string }>({});
+  const atNewest = useRef(true);
   const heldFirst = useRef<string | undefined>(undefined);
 
   useEffect(() => {
@@ -49,7 +50,9 @@ export function useMessageWindow<T>({
   const ids = items.map(idOf);
   const length = ids.length;
   let end = bounds.last !== undefined && !following.current ? ids.indexOf(bounds.last) + 1 : length;
-  if (end <= 0) end = length;
+  // A window that already reached the newest message keeps taking new arrivals (up to its size) while the
+  // reader is elsewhere; their place is kept by the anchor, and nothing already shown is dropped.
+  if (end <= 0 || (atNewest.current && end < length)) end = length;
   let start = bounds.first !== undefined ? ids.indexOf(bounds.first) : -1;
   if (start < 0 || start >= end) start = Math.max(0, end - max);
   // Older messages that were fetched because the reader asked for them join the window straight away.
@@ -59,6 +62,7 @@ export function useMessageWindow<T>({
   }
   if (end - start > max) end = start + max;
   const visible = items.slice(start, end);
+  atNewest.current = end === length;
 
   const measure = useCallback(() => {
     const root = viewport.current;

@@ -248,7 +248,10 @@ export function GroupConversation({
             Load earlier messages
           </button>
         )}
-        {(loadingOlder || window_.olderHidden) && <EdgeSkeleton label="Loading earlier messages…" />}
+        {/* Always present while more exists above, so starting a load never shifts the view. */}
+        {(history.data?.nextCursor != null || loadingOlder || window_.olderHidden) && (
+          <EdgeSkeleton label="Loading earlier messages…" />
+        )}
         <GroupMessages
           messages={window_.visible}
           members={group.data?.members ?? []}
