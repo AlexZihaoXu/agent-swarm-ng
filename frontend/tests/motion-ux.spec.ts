@@ -328,6 +328,10 @@ test('the desktop handle opens a Terminals drawer, and a session floats out fitt
     .getByRole('button', { name: 'Close deploy' })
     .click();
   await expect(page.getByRole('region', { name: 'Floating terminal deploy' })).toHaveCount(0);
+  // Closing a window opens the drawer, where its card comes back.
+  await expect(drawer.getByRole('button', { name: 'Float deploy' })).toBeVisible();
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(drawer).toHaveCount(0);
   await expect(floating).toContainText('Connected');
   // The window wraps the terminal: widths change, the shape follows.
   const before = (await floating.boundingBox())!;
@@ -352,7 +356,6 @@ test('the desktop handle opens a Terminals drawer, and a session floats out fitt
   // The red close light puts it back into the drawer.
   await floating.getByRole('button', { name: 'Close build' }).click();
   await expect(floating).toHaveCount(0);
-  await page.getByRole('button', { name: 'Terminals', exact: true }).click();
   await expect(drawer.getByRole('button', { name: 'Float build' })).toBeVisible();
   await expect(drawer.getByRole('button', { name: 'Float deploy' })).toBeVisible();
 });

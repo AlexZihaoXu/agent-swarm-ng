@@ -126,7 +126,14 @@ export function FloatingTerminal({
     setFloating(current => (current.some(out => out.id === id) ? current : [...current, { id, from }]));
     raiseWindow(`terminal:${id}`);
   };
-  const close = (id: string) => setFloating(current => current.filter(out => out.id !== id));
+  // Closing puts the terminal back in the drawer: the drawer opens, then the window shrinks into it as its card
+  // slides back into the list.
+  const close = (id: string) => {
+    const remove = () => setFloating(current => current.filter(out => out.id !== id));
+    if (drawer) return remove();
+    setDrawer(true);
+    window.setTimeout(remove, 180);
+  };
   // A terminal made from the drawer floats up straight away.
   const create = async (body: TerminalRequest) => {
     setCreateBusy(true);
@@ -351,7 +358,9 @@ function TerminalWindow({
     const room = viewer();
     const width = Math.min(760, room.width * 0.55);
     const step = (cascade % 6) * 28;
-    return place({ width, height: 0, x: room.right - width - 56 - step, y: room.top + room.height * 0.1 + step }, null);
+    // Chosen from the open drawer, it opens just left of it, so it can be seen growing out of its card.
+    const right = Math.min(room.right - 56, from ? from.left - 32 : Infinity);
+    return place({ width, height: 0, x: right - width - step, y: room.top + room.height * 0.1 + step }, null);
   });
   // It grows out of its drawer card; once open, it closes toward the right edge instead.
   const [origin, setOrigin] = useState<{ x: number; y: number } | null>(
