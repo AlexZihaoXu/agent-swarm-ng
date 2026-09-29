@@ -237,3 +237,16 @@ test('the terminal takes focus on open, fits its frame, and the on-screen Ctrl a
   await expect.poll(() => input.join('')).toBe('\x03\x1b[A');
   await expect(panel.locator('.xterm-helper-textarea')).toBeFocused();
 });
+
+test('clicking the console keeps keyboard focus in it, and sessions are listed beside it', async ({ page }) => {
+  const { panel, input } = await open(page);
+  await expect(panel.getByRole('tablist', { name: 'Terminal sessions' })).toHaveAttribute(
+    'aria-orientation',
+    'vertical',
+  );
+  await panel.getByRole('button', { name: 'Close terminals' }).focus();
+  await panel.getByTestId('terminal-viewport').click({ position: { x: 40, y: 40 } });
+  await expect(panel.locator('.xterm-helper-textarea')).toBeFocused();
+  await page.keyboard.type('ls');
+  await expect.poll(() => input.join('')).toBe('ls');
+});

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { Button } from '@/components/ui/button';
@@ -33,10 +33,13 @@ export function TerminalEmulator({
   computerId,
   sessionId,
   interactive,
+  title,
 }: {
   computerId: string;
   sessionId: string;
   interactive: boolean;
+  /** Shown in the window's title bar, like a desktop terminal app. */
+  title: string;
 }) {
   const host = useRef<HTMLDivElement>(null),
     terminal = useRef<Terminal | null>(null),
@@ -50,7 +53,10 @@ export function TerminalEmulator({
   const latched = useRef(false);
   latched.current = ctrlLatched;
   // The grid stays 120 × 36; it is scaled to fill the space like the desktop viewer, never resized.
-  const frame = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLDivElement>(null),
+    stage = useRef<HTMLDivElement>(null),
+    titleBar = useRef<HTMLDivElement>(null),
+    keysBar = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState({ scale: 1, width: 0, height: 0, pan: false });
   const inputAllowed = useRef(interactive);
   inputAllowed.current = interactive;
@@ -92,7 +98,12 @@ export function TerminalEmulator({
     // Mouse is local focus/scroll only. Even a guest enabling mouse reporting or alternate-scroll
     // cannot turn clicks/wheel/touches into guest input. onBinary (legacy mouse) is never attached.
     const stopMouse = (event: Event) => {
-      if (event.type === 'mousedown' && (event as MouseEvent).button === 0) term.focus();
+      // The grid is not itself focusable, so the browser's default mousedown would blur the terminal right after
+      // we focus it. Keep the default from running, then focus.
+      if (event.type === 'mousedown' && (event as MouseEvent).button === 0) {
+        event.preventDefault();
+        term.focus();
+      }
       event.stopPropagation();
     };
     const mouseEvents = [
@@ -228,25 +239,35 @@ export function TerminalEmulator({
     };
   }, [computerId, sessionId, attempt, visible]);
   useEffect(() => {
-    const outer = frame.current,
+    const area = stage.current,
       inner = host.current;
-    if (!outer || !inner) return;
+    if (!area || !inner) return;
     const measure = () => {
       const width = inner.offsetWidth,
         height = inner.offsetHeight;
       if (!width || !height) return;
-      const fitWidth = (outer.clientWidth - 16) / width,
-        fitHeight = (outer.clientHeight - 16) / height;
-      // Fill the frame, but not beyond 1.35× so a wide screen does not turn the text into a poster. When
-      // fitting the width would make text unreadable (phones), fit the rows instead and pan sideways.
+      const style = getComputedStyle(area);
+      // Room for the grid: the stage minus its padding, the window border, title bar, key bar and the grid's inset.
+      const roomWidth = area.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - 2 - 16;
+      const roomHeight =
+        area.clientHeight -
+        parseFloat(style.paddingTop) -
+        parseFloat(style.paddingBottom) -
+        2 -
+        16 -
+        (titleBar.current?.offsetHeight ?? 0) -
+        (keysBar.current?.offsetHeight ?? 0);
+      const fitWidth = roomWidth / width,
+        fitHeight = roomHeight / height;
+      // Fill the space, but not beyond 1.35× so a wide screen does not turn the text into a poster. When fitting
+      // the width would make text unreadable (phones), fit the rows instead and pan sideways inside the window.
       const pan = fitWidth < 0.6;
       const scale = pan ? Math.min(1, Math.max(0.6, fitHeight)) : Math.min(1.35, fitWidth, fitHeight);
       setFit({ scale, width, height, pan });
     };
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(outer);
-    observer.observe(inner);
+    for (const element of [area, inner, titleBar.current, keysBar.current]) if (element) observer.observe(element);
     return () => observer.disconnect();
   }, [attempt, visible]);
   const connectedNow = status.startsWith('Connected');
@@ -254,76 +275,115 @@ export function TerminalEmulator({
     send.current?.(value);
     terminal.current?.focus();
   };
+  const focusTerminal = (event: ReactMouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    terminal.current?.focus();
+  };
+  const gridWidth = fit.width * fit.scale + 16,
+    gridHeight = fit.height * fit.scale + 16;
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-terminal-emulator>
+    // The console is a centered app window: a clear edge, a title bar with the session and its state, the grid,
+    // and the key bar along the bottom. Clicking anywhere on it focuses the terminal.
+    <div
+      ref={stage}
+      data-terminal-emulator
+      className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden p-2 sm:p-4"
+    >
       <div
-        ref={frame}
-        className={`relative flex min-h-0 max-w-full flex-1 bg-[#141414] ${fit.pan ? 'items-start justify-start overflow-auto p-2' : 'items-center justify-center overflow-hidden'}`}
-        aria-label="Interactive terminal"
-        data-testid="terminal-viewport"
+        className="flex max-h-full min-h-0 max-w-full flex-col overflow-hidden rounded-xl border border-white/15 bg-[#141414] shadow-2xl shadow-black/60"
+        style={fit.pan ? { width: '100%', height: '100%' } : undefined}
       >
-        <div style={fit.width ? { width: fit.width * fit.scale, height: fit.height * fit.scale } : undefined}>
-          <div
-            ref={host}
-            className="w-max origin-top-left"
-            style={{ transform: fit.scale === 1 ? undefined : `scale(${fit.scale})` }}
-          />
-        </div>
-      </div>
-      <div className="flex min-w-0 shrink-0 items-center gap-2 border-t border-border bg-sidebar/40 px-2 py-1.5">
-        {/* Buttons keep focus in the terminal (no focus steal on press), so typing continues after a tap. */}
         <div
-          role="toolbar"
-          aria-label="Terminal keys"
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]"
+          ref={titleBar}
+          onMouseDown={focusTerminal}
+          className="flex h-8 shrink-0 items-center gap-3 border-b border-white/10 bg-[#1d1d1d] px-3"
         >
-          <button
-            type="button"
-            aria-pressed={ctrlLatched}
-            aria-label="Control (applies to the next letter)"
-            title="Ctrl: applies to the next letter you type"
-            disabled={!connectedNow}
-            onPointerDown={event => event.preventDefault()}
-            onClick={() => {
-              setCtrlLatched(value => !value);
-              terminal.current?.focus();
-            }}
-            className={keyClass(ctrlLatched)}
+          <span aria-hidden="true" className="flex shrink-0 gap-1.5">
+            <span className="size-2.5 rounded-full bg-white/15" />
+            <span className="size-2.5 rounded-full bg-white/15" />
+            <span className="size-2.5 rounded-full bg-white/15" />
+          </span>
+          <span className="min-w-0 flex-1 truncate text-center font-mono text-[11px] text-muted-foreground">
+            {title}
+          </span>
+          <span role="status" className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span
+              aria-hidden="true"
+              className={`size-1.5 rounded-full ${connectedNow ? 'bg-teal-400' : status.startsWith('Disconnected') ? 'bg-red-400' : 'bg-muted-foreground'}`}
+            />
+            <span className="sr-only md:not-sr-only">{status}</span>
+          </span>
+        </div>
+        <div
+          ref={frame}
+          onMouseDown={focusTerminal}
+          className={`relative ${fit.pan ? 'min-h-0 flex-1 overflow-auto' : 'shrink-0 overflow-hidden'}`}
+          style={fit.width && !fit.pan ? { width: gridWidth, height: gridHeight } : undefined}
+          aria-label="Interactive terminal"
+          data-testid="terminal-viewport"
+        >
+          <div
+            className="p-2"
+            style={fit.width ? { width: gridWidth, height: gridHeight, boxSizing: 'border-box' } : undefined}
           >
-            Ctrl
-          </button>
-          {keyBar.map(key => (
+            <div
+              ref={host}
+              className="w-max origin-top-left"
+              style={{ transform: fit.scale === 1 ? undefined : `scale(${fit.scale})` }}
+            />
+          </div>
+        </div>
+        <div
+          ref={keysBar}
+          className="flex min-w-0 shrink-0 items-center gap-2 border-t border-white/10 bg-[#1a1a1a] px-2 py-1.5"
+        >
+          {/* Buttons keep focus in the terminal (no focus steal on press), so typing continues after a tap. */}
+          <div
+            role="toolbar"
+            aria-label="Terminal keys"
+            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]"
+          >
             <button
-              key={key.name}
               type="button"
-              aria-label={key.name}
-              title={key.name}
+              aria-pressed={ctrlLatched}
+              aria-label="Control (applies to the next letter)"
+              title="Ctrl: applies to the next letter you type"
               disabled={!connectedNow}
               onPointerDown={event => event.preventDefault()}
-              onClick={() => press(key.bytes(Boolean(terminal.current?.modes.applicationCursorKeysMode)))}
-              className={keyClass(false)}
+              onClick={() => {
+                setCtrlLatched(value => !value);
+                terminal.current?.focus();
+              }}
+              className={keyClass(ctrlLatched)}
             >
-              {key.label}
+              Ctrl
             </button>
-          ))}
+            {keyBar.map(key => (
+              <button
+                key={key.name}
+                type="button"
+                aria-label={key.name}
+                title={key.name}
+                disabled={!connectedNow}
+                onPointerDown={event => event.preventDefault()}
+                onClick={() => press(key.bytes(Boolean(terminal.current?.modes.applicationCursorKeysMode)))}
+                className={keyClass(false)}
+              >
+                {key.label}
+              </button>
+            ))}
+          </div>
+          {status.startsWith('Disconnected') && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="min-h-9 shrink-0"
+              onClick={() => setAttempt(value => value + 1)}
+            >
+              Reconnect
+            </Button>
+          )}
         </div>
-        <span role="status" className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span
-            aria-hidden="true"
-            className={`size-1.5 rounded-full ${connectedNow ? 'bg-teal-400' : status.startsWith('Disconnected') ? 'bg-red-400' : 'bg-muted-foreground'}`}
-          />
-          <span className="sr-only sm:not-sr-only">{status}</span>
-        </span>
-        {status.startsWith('Disconnected') && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="min-h-9 shrink-0"
-            onClick={() => setAttempt(value => value + 1)}
-          >
-            Reconnect
-          </Button>
-        )}
       </div>
     </div>
   );
