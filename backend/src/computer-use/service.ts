@@ -36,6 +36,9 @@ export class ComputerExecutionError extends ComputerUseError {
 }
 const knowledge = ' Read Swarm Knowledge swarm/computers/use.';
 type Allowance = { token: string; until: number; remaining: number };
+/** What one terminal_view permits: five terminal_run_actions calls on that session within 90 real seconds. */
+const TERMINAL_ALLOWANCE = { seconds: 90, combos: 5 };
+type TerminalAllowance = Allowance & { session: string };
 type Active = { abort: AbortController; finished: Promise<unknown> };
 
 /** One backend owns admission; SQL uniqueness also protects against duplicate claims. */
@@ -43,6 +46,7 @@ export class ComputerUseService {
   private queue: Promise<unknown> = Promise.resolve();
   private starting?: Promise<void>;
   private allowances = new Map<string, Allowance>();
+  private terminalAllowances = new Map<string, TerminalAllowance>();
   private active = new Map<string, Active>();
   private uncertain = new Set<string>();
   constructor(
@@ -281,6 +285,67 @@ export class ComputerUseService {
   ): Promise<CoreReceipt> {
     await this.ready();
     return this.performCore(() => this.claim(agentId), request, signal, retain);
+  }
+  /** An agent's terminal_view; a successful look allows a few terminal_run_actions combos on that session. */
+  async terminalView(agentId: string, request: { session: string }, signal?: AbortSignal): Promise<CoreReceipt> {
+    await this.ready();
+    let token = '';
+    const receipt = await this.performCore(
+      async () => {
+        const claim = await this.claim(agentId);
+        token = claim.token;
+        return claim;
+      },
+      request,
+      signal,
+    );
+    if (!receipt.error)
+      this.terminalAllowances.set(agentId, {
+        token,
+        session: request.session,
+        until: this.now() + TERMINAL_ALLOWANCE.seconds * 1000,
+        remaining: TERMINAL_ALLOWANCE.combos,
+      });
+    return receipt;
+  }
+  /** An agent's terminal combo: spends one use of a recent view of the same session (returned if nothing started). */
+  async terminalActions(
+    agentId: string,
+    request: { session: string } & Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<CoreReceipt> {
+    await this.ready();
+    let spent: TerminalAllowance | undefined;
+    const refund = () => {
+      if (spent && this.terminalAllowances.get(agentId) === spent) spent.remaining++;
+    };
+    const receipt = await this.performCore(
+      async () => {
+        const claim = await this.claim(agentId);
+        const allowance = this.terminalAllowances.get(agentId);
+        if (
+          !allowance ||
+          allowance.token !== claim.token ||
+          allowance.session !== request.session ||
+          this.now() >= allowance.until ||
+          allowance.remaining <= 0
+        )
+          throw new ComputerUseError(
+            `View this terminal first: a terminal_view allows ${TERMINAL_ALLOWANCE.combos} terminal_run_actions calls on that session within ${TERMINAL_ALLOWANCE.seconds} real seconds. Read Swarm Knowledge swarm/computers/terminals.`,
+          );
+        allowance.remaining--;
+        spent = allowance;
+        return claim;
+      },
+      request,
+      signal,
+    ).catch(error => {
+      // Rejected before any input (validation, busy computer): an invalid combo spends nothing.
+      if (error instanceof ComputerUseError && !(error instanceof ComputerExecutionError)) refund();
+      throw error;
+    });
+    if (!receipt.started) refund();
+    return receipt;
   }
   /** Human viewer keyboard is concurrent like desktop input; agent tool fences remain unchanged. */
   async operatorTerminalKeyboard(computerId: string, send: () => void) {

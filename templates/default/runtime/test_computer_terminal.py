@@ -71,5 +71,24 @@ class TerminalValidation(unittest.TestCase):
         self.assertEqual(text, 'a\x1b[1;32mgo\x1b[0mbcd\n')
         self.assertLessEqual(len(terminal.screen_text('x' * 40000).encode()), 32768)
 
+    def test_action_combos_are_checked_whole_before_any_input(self):
+        session = '12345678-1234-1234-1234-123456789abc'
+        combo = {'operation': 'actions', 'session': session, 'actions': [
+            {'type': 'type', 'text': 'ls -la'}, {'type': 'press', 'key': 'Enter'},
+            {'type': 'type', 'text': 'x' * 30000, 'cpm': 'instant'}]}
+        terminal.validate(combo)
+        # 6 code points at the default 800 cpm plus two 0.2 s pauses.
+        self.assertAlmostEqual(terminal.actions_duration(combo), 6 * 60 / 800 + 0.4)
+        for actions, pause in [([], 0.2), ([{'type': 'press', 'key': 'rm -rf'}], 0.2),
+                               ([{'type': 'type', 'text': 'a', 'cpm': 0}], 0.2),
+                               ([{'type': 'type', 'text': 'a', 'cpm': 5000}], 0.2),
+                               ([{'type': 'type', 'text': 'a\x03'}], 0.2),
+                               ([{'type': 'type', 'text': 'y' * 500, 'cpm': 800}], 0.2),
+                               ([{'type': 'press', 'key': 'Enter'}] * 17, 0.2),
+                               ([{'type': 'press', 'key': 'Enter'}] * 2, 11),
+                               ([{'type': 'click'}], 0.2)]:
+            with self.assertRaises(ValueError):
+                terminal.validate({'operation': 'actions', 'session': session, 'actions': actions, 'pause': pause})
+
 
 if __name__ == '__main__': unittest.main()

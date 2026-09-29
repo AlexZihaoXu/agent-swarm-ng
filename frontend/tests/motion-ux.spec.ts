@@ -380,6 +380,56 @@ test('the desktop handle opens a Terminals drawer, and a session floats out fitt
   await expect(drawer.getByRole('button', { name: 'Float deploy' })).toBeVisible();
 });
 
+test('a session resized elsewhere reshapes its floating window without a reload', async ({ page }) => {
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({
+      json: {
+        controllerConnected: true,
+        computers: [
+          { id: 'desk', name: 'Desk', state: 'running', createdAt: 0, cpuPercent: 0, memoryBytes: 0, portalFree: true },
+        ],
+      },
+    }),
+  );
+  let size = { columns: 120, rows: 36 };
+  const session = () => ({
+    id: '12345678-1234-1234-1234-123456789abc',
+    name: 'build',
+    alive: true,
+    exitCode: null,
+    createdAt: 1,
+    ...size,
+  });
+  await page.route('**/api/computers/*/terminals', route =>
+    route.fulfill({ json: { type: 'terminal', sessions: [session()] } }),
+  );
+  const sockets: { close: () => void }[] = [];
+  await page.routeWebSocket('**/api/computers/*/terminals/*/stream', ws => {
+    sockets.push(ws);
+    ws.send(JSON.stringify({ type: 'ready', ...size }));
+  });
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.goto('/computers/desk');
+  await page.getByRole('button', { name: 'Terminals', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: 'Terminals' });
+  await drawer.getByRole('button', { name: 'Float build' }).click();
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click();
+  const floating = page.getByRole('region', { name: 'Floating terminal build' });
+  await expect(floating).toContainText('120 × 36');
+  const wide = (await floating.boundingBox())!;
+  // Another client (or an agent) resizes the session; its viewer stream restarts at the new size.
+  size = { columns: 80, rows: 24 };
+  for (const socket of sockets.splice(0)) socket.close();
+  await expect(floating).toContainText('80 × 24');
+  await expect(floating).toHaveCSS('transition-property', /width/);
+  await expect
+    .poll(async () => {
+      const box = (await floating.boundingBox())!;
+      return Math.round((box.width / box.height) * 10) / 10;
+    })
+    .not.toBe(Math.round((wide.width / wide.height) * 10) / 10);
+});
+
 test('the Terminals drawer creates a terminal and floats it straight up', async ({ page }) => {
   await page.route(/\/api\/computers(?:\?.*)?$/, route =>
     route.fulfill({

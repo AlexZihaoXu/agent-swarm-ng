@@ -3889,6 +3889,29 @@ export interface operations {
                     up?: number;
                 } | {
                     /** @enum {string} */
+                    operation: "delete";
+                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    session: string;
+                } | {
+                    /** @enum {string} */
+                    operation: "status";
+                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    session: string;
+                } | {
+                    /** @enum {string} */
+                    operation: "resize";
+                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    session: string;
+                    columns: number;
+                    rows: number;
+                } | {
+                    /** @enum {string} */
+                    operation: "rename";
+                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    session: string;
+                    name: string;
+                } | {
+                    /** @enum {string} */
                     operation: "type";
                     /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
                     session: string;
@@ -3904,29 +3927,6 @@ export interface operations {
                     operation: "interrupt";
                     /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
                     session: string;
-                } | {
-                    /** @enum {string} */
-                    operation: "delete";
-                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
-                    session: string;
-                } | {
-                    /** @enum {string} */
-                    operation: "status";
-                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
-                    session: string;
-                } | {
-                    /** @enum {string} */
-                    operation: "rename";
-                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
-                    session: string;
-                    name: string;
-                } | {
-                    /** @enum {string} */
-                    operation: "resize";
-                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
-                    session: string;
-                    columns: number;
-                    rows: number;
                 } | {
                     /** @enum {string} */
                     operation: "screens";

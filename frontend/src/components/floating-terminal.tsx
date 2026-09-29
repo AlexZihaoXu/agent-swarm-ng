@@ -10,7 +10,7 @@ import {
 import { parseAnsi, type Style } from '@/lib/ansi';
 import { createPortal } from 'react-dom';
 import * as Dialog from '@radix-ui/react-dialog';
-import { AnimatePresence, m } from 'motion/react';
+import { AnimatePresence, m, useReducedMotion } from 'motion/react';
 import { glide } from '@/lib/motion';
 import {
   dropWindow,
@@ -379,6 +379,11 @@ function TerminalWindow({
 }) {
   const id = `terminal:${session.id}`;
   const layer = useWindowLayer(id);
+  const client = useQueryClient();
+  // Moves and resizes by hand follow the pointer exactly; any other change of box (a new session size from
+  // another client or an agent, a window resize) eases into place.
+  const [dragging, setDragging] = useState(false);
+  const reduced = useReducedMotion();
   const [shape, setShape] = useState<Shape | null>(null);
   const [box, setBox] = useState<Box>(() => {
     const room = viewer();
@@ -419,6 +424,7 @@ function TerminalWindow({
     // Capture keeps the drag going while the pointer passes over the desktop stream's iframe.
     event.currentTarget.setPointerCapture(event.pointerId);
     gesture.current = { kind, x: event.clientX, y: event.clientY, start: box };
+    setDragging(true);
   };
   const move = (event: ReactPointerEvent<HTMLElement>) => {
     const drag = gesture.current;
@@ -433,11 +439,13 @@ function TerminalWindow({
   };
   const end = () => {
     gesture.current = null;
+    setDragging(false);
   };
 
   return (
     <m.section
       aria-label={`Floating terminal ${session.name}`}
+      data-dragging={dragging ? '' : undefined}
       initial={{ opacity: 0, scale: 0.12 }}
       animate={{ opacity: 1, scale: 1, transition: { ...glide, opacity: { duration: 0.16 } } }}
       exit={{ opacity: 0, scale: 0.12, transition: { duration: 0.2, ease: [0.4, 0, 1, 1] } }}
@@ -453,6 +461,10 @@ function TerminalWindow({
         height: box.height,
         zIndex: layer.zIndex,
         transformOrigin: `${point.x - box.x}px ${point.y - box.y}px`,
+        transition:
+          dragging || reduced
+            ? 'none'
+            : 'left 300ms ease-out, top 300ms ease-out, width 300ms ease-out, height 300ms ease-out',
       }}
       onPointerMove={move}
       onPointerUp={end}
@@ -460,7 +472,7 @@ function TerminalWindow({
     >
       <Suspense fallback={<div className="flex-1 rounded-xl border border-white/15 bg-[#141414]" />}>
         <TerminalEmulator
-          key={`${session.id}:${session.columns}x${session.rows}`}
+          key={session.id}
           computerId={computerId}
           sessionId={session.id}
           interactive={session.alive}
@@ -469,6 +481,7 @@ function TerminalWindow({
           rows={session.rows}
           fill
           inactive={!layer.focused}
+          onClosed={() => void client.invalidateQueries({ queryKey: terminalSessionsQuery(computerId).queryKey })}
           onMeasure={next =>
             setShape(previous =>
               previous &&

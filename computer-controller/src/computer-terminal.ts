@@ -34,6 +34,8 @@ const fields: Record<string, string[]> = {
   status: ['session'],
   type: ['session', 'text'],
   press: ['session', 'key'],
+  // An ordered combo of typing (at a set speed, or pasted) and key presses.
+  actions: ['session', 'actions', 'pause'],
   interrupt: ['session'],
   delete: ['session'],
   // Trusted operator only (the backend never offers these to agents).
@@ -43,6 +45,9 @@ const fields: Record<string, string[]> = {
   screens: [],
 };
 export const terminalSize = { columns: [40, 240], rows: [10, 80] } as const;
+const controlCharacters = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/;
+/** A combo's typing plus pauses may take at most this long. */
+export const actionsSeconds = 30;
 export function validateTerminal(value: Record<string, any>, prepared = false) {
   if (typeof value.operation !== 'string' || !Object.hasOwn(fields, value.operation))
     fail('Unknown terminal operation.');
@@ -95,7 +100,40 @@ export function validateTerminal(value: Record<string, any>, prepared = false) {
         fail(`${key} must be an integer from ${min} to ${max}.`);
   if (value.operation === 'type') {
     text('text', 32768);
-    if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value.text)) fail('Use press for control keys.');
+    if (controlCharacters.test(value.text)) fail('Use press for control keys.');
+  }
+  if (value.operation === 'actions') {
+    const pause = value.pause ?? 0.2;
+    if (typeof pause !== 'number' || !Number.isFinite(pause) || pause < 0 || pause > 10)
+      fail('pause must be 0..10 seconds.');
+    if (!Array.isArray(value.actions) || value.actions.length < 1 || value.actions.length > 16)
+      fail('actions: 1..16 items.');
+    let seconds = pause * (value.actions.length - 1);
+    for (const action of value.actions) {
+      if (!action || typeof action !== 'object' || Array.isArray(action)) fail('Invalid action.');
+      if (action.type === 'press') {
+        if (Object.keys(action).some(key => !['type', 'key'].includes(key)) || !keys.has(action.key))
+          fail('Unsupported terminal key.');
+      } else if (action.type === 'type') {
+        if (
+          Object.keys(action).some(key => !['type', 'text', 'cpm'].includes(key)) ||
+          typeof action.text !== 'string' ||
+          !action.text.length ||
+          Buffer.byteLength(action.text) > 32768 ||
+          action.text.includes('\0') ||
+          controlCharacters.test(action.text)
+        )
+          fail('Typed text must be 1..32768 UTF-8 bytes; press control keys.');
+        const cpm = action.cpm ?? 800;
+        if (cpm !== 'instant') {
+          if (typeof cpm !== 'number' || !Number.isFinite(cpm) || cpm <= 0 || cpm > 3200)
+            fail('cpm must be above 0 and at most 3200, or "instant".');
+          seconds += ([...action.text].length * 60) / cpm;
+        }
+      } else fail('Action type must be type or press.');
+    }
+    if (seconds > actionsSeconds)
+      fail(`This combo would take ${seconds.toFixed(1)} seconds; keep typing plus pauses within ${actionsSeconds}.`);
   }
   if (value.operation === 'press' && !keys.has(value.key)) fail('Unsupported terminal key.');
   return value;
@@ -180,6 +218,16 @@ export function terminalResult(result: any, operation: string, requestedSession?
   if (['type', 'press', 'interrupt'].includes(operation)) {
     if (result.accepted !== true) return invalid();
     return { ...safe, accepted: true };
+  }
+  if (operation === 'actions') {
+    if (
+      result.accepted !== true ||
+      !Number.isInteger(result.completed) ||
+      result.completed < 1 ||
+      result.completed > 16
+    )
+      return invalid();
+    return { ...safe, accepted: true, completed: result.completed };
   }
   return safe;
 }

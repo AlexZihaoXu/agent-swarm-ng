@@ -13,6 +13,16 @@ it.each([
   { operation: 'rename', session: id, name: 'server-2' },
   { operation: 'resize', session: id, columns: 80, rows: 24 },
   { operation: 'screens' },
+  {
+    operation: 'actions',
+    session: id,
+    actions: [
+      { type: 'type', text: 'ls', cpm: 1200 },
+      { type: 'press', key: 'Enter' },
+      { type: 'type', text: 'x'.repeat(9000), cpm: 'instant' },
+    ],
+    pause: 0.5,
+  },
 ])('accepts bounded terminal request %#', input =>
   expect(validateCore({ kind: 'terminal', ...input })).toMatchObject(input),
 );
@@ -116,3 +126,16 @@ it('passes live preview screens through only as bounded id/ansi pairs', () => {
   expect(() => terminalResult({ type: 'terminal', screens: [{ id: 'build', ansi: '' }] }, 'screens')).toThrow();
   expect(() => terminalResult({ type: 'terminal', screens: [{ id, ansi: 'x'.repeat(40000) }] }, 'screens')).toThrow();
 });
+
+it.each([
+  [[]],
+  [[{ type: 'press', key: 'kill-server' }]],
+  [[{ type: 'type', text: 'a', cpm: 0 }]],
+  [[{ type: 'type', text: 'a', cpm: 4000 }]],
+  [[{ type: 'type', text: 'a\u0003' }]],
+  [[{ type: 'type', text: 'y'.repeat(500) }]],
+  [Array.from({ length: 17 }, () => ({ type: 'press', key: 'Enter' }))],
+  [[{ type: 'click' }]],
+])('rejects a terminal combo before any input %#', actions =>
+  expect(() => validateCore({ kind: 'terminal', operation: 'actions', session: id, actions })).toThrow(),
+);

@@ -63,6 +63,7 @@ export function TerminalEmulator({
   onMeasure,
   titleLeading,
   inactive = false,
+  onClosed,
 }: {
   computerId: string;
   sessionId: string;
@@ -81,6 +82,8 @@ export function TerminalEmulator({
   titleLeading?: ReactNode;
   /** A floating window that is not the focused one: a quieter edge, shadow and title. */
   inactive?: boolean;
+  /** The stream closed on its own (the session may have been resized elsewhere): time to re-read the session. */
+  onClosed?: () => void;
   onMeasure?: (size: { width: number; height: number; chromeWidth: number; chromeHeight: number }) => void;
   /** Shown in the window's title bar, like a desktop terminal app. */
   title: string;
@@ -106,6 +109,8 @@ export function TerminalEmulator({
     keysBar = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState({ scale: 1, width: 0, height: 0, pan: false });
   const inputAllowed = useRef(interactive);
+  const closed = useRef(onClosed);
+  closed.current = onClosed;
   inputAllowed.current = interactive;
   useEffect(() => {
     const change = () => setVisible(!document.hidden);
@@ -191,6 +196,7 @@ export function TerminalEmulator({
       term.options.disableStdin = true;
       setStatus('Disconnected. Input may have been applied; inspect before repeating it.');
       socket.close();
+      closed.current?.();
     };
     const flush = () => {
       flushTimer = undefined;
@@ -323,7 +329,7 @@ export function TerminalEmulator({
     const observer = new ResizeObserver(measure);
     for (const element of [area, inner, titleBar.current, keysBar.current]) if (element) observer.observe(element);
     return () => observer.disconnect();
-  }, [attempt, visible, fill]);
+  }, [attempt, visible, fill, columns, rows]);
   const connectedNow = status.startsWith('Connected');
   const press = (value: string) => {
     send.current?.(value);
@@ -379,7 +385,8 @@ export function TerminalEmulator({
         <div
           ref={frame}
           onMouseDown={focusTerminal}
-          className={`relative ${fit.pan ? 'min-h-0 flex-1 overflow-auto' : fill ? 'flex min-h-0 flex-1 items-center justify-center overflow-hidden' : 'shrink-0 overflow-hidden'}`}
+          // A new session size (from any client or an agent) eases to its new box rather than jumping.
+          className={`relative ${fit.pan ? 'min-h-0 flex-1 overflow-auto' : fill ? 'flex min-h-0 flex-1 items-center justify-center overflow-hidden' : 'shrink-0 overflow-hidden transition-[width,height] duration-300 ease-out motion-reduce:transition-none'}`}
           style={fit.width && !fit.pan && !fill ? { width: gridWidth, height: gridHeight } : undefined}
           aria-label="Interactive terminal"
           data-testid="terminal-viewport"

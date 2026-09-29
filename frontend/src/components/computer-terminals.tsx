@@ -361,8 +361,9 @@ export function TerminalWorkspace({
                     }
                   >
                     <TerminalEmulator
-                      key={`${session.id}:${session.columns}x${session.rows}`}
+                      key={session.id}
                       computerId={computer.id}
+                      onClosed={() => void client.invalidateQueries({ queryKey })}
                       sessionId={session.id}
                       columns={session.columns}
                       rows={session.rows}

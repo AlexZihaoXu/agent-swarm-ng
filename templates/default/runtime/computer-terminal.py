@@ -27,10 +27,49 @@ KEYS.update('C-' + c for c in 'abcdefghijklmnopqrstuvwxyz')
 KEYS.update('M-' + c for c in 'abcdefghijklmnopqrstuvwxyz')
 FIELDS = {'create': ['name', 'command', 'cwd'], 'list': [], 'view': ['session', 'rows', 'up'],
           'status': ['session'], 'type': ['session', 'text'], 'press': ['session', 'key'],
+          'actions': ['session', 'actions', 'pause'],
           'interrupt': ['session'], 'delete': ['session'],
           # Operator-only: agents' tools never offer these.
           'rename': ['session', 'name'], 'resize': ['session', 'columns', 'rows'], 'screens': []}
 SIZE_LIMITS = {'columns': (40, 240), 'rows': (10, 80)}
+# Typing speed in characters (Unicode code points) per minute; 'instant' pastes the text at once.
+DEFAULT_CPM, MAX_CPM = 800, 3200
+# A combo's typing time plus its pauses may not exceed this.
+ACTIONS_SECONDS = 30
+
+
+def valid_text(text):
+    return isinstance(text, str) and text and len(text.encode()) <= 32768 and not any(
+        (ord(c) < 32 and c not in '\n\r\t') or ord(c) == 127 for c in text)
+
+
+def actions_duration(value):
+    """Validates a whole combo before any input and returns its planned seconds of typing and pauses."""
+    actions, pause = value.get('actions'), value.get('pause', 0.2)
+    if not isinstance(actions, list) or not 1 <= len(actions) <= 16:
+        raise ValueError('actions: 1..16 items.')
+    if type(pause) not in (int, float) or not 0 <= pause <= 10:
+        raise ValueError('pause must be 0..10 seconds.')
+    total = pause * (len(actions) - 1)
+    for number, action in enumerate(actions, 1):
+        kind = action.get('type') if isinstance(action, dict) else None
+        if kind == 'type':
+            if set(action) - {'type', 'text', 'cpm'} or not valid_text(action.get('text')):
+                raise ValueError('Action ' + str(number) + ': text must be 1..32768 UTF-8 bytes; press control keys.')
+            cpm = action.get('cpm', DEFAULT_CPM)
+            if cpm != 'instant':
+                if type(cpm) not in (int, float) or not 0 < cpm <= MAX_CPM:
+                    raise ValueError('Action ' + str(number) + ': cpm must be above 0 and at most 3200, or "instant".')
+                total += len(action['text']) * 60 / cpm
+        elif kind == 'press':
+            if set(action) - {'type', 'key'} or action.get('key') not in KEYS:
+                raise ValueError('Action ' + str(number) + ': unsupported key. Use documented terminal key names.')
+        else:
+            raise ValueError('Action ' + str(number) + ': type must be "type" or "press".')
+    if total > ACTIONS_SECONDS:
+        raise ValueError('This combo would take ' + str(round(total, 1)) + ' seconds; keep typing plus pauses within '
+                         + str(ACTIONS_SECONDS) + ' (cpm "instant" pastes long text at once).')
+    return total
 
 
 def validate(value):
@@ -55,10 +94,9 @@ def validate(value):
         for key, low, high in [('rows', 1, 200), ('up', 0, 10000)]:
             if key in value and (type(value[key]) is not int or not low <= value[key] <= high):
                 raise ValueError(key + ' must be an integer from ' + str(low) + ' to ' + str(high) + '.')
-    if operation == 'type':
-        text = value.get('text')
-        if not isinstance(text, str) or not text or len(text.encode()) > 32768 or any((ord(c) < 32 and c not in '\n\r\t') or ord(c) == 127 for c in text):
-            raise ValueError('Text must be 1..32768 UTF-8 bytes; use press for control keys.')
+    if operation == 'type' and not valid_text(value.get('text')):
+        raise ValueError('Text must be 1..32768 UTF-8 bytes; use press for control keys.')
+    if operation == 'actions': actions_duration(value)
     if operation == 'press' and (not isinstance(value.get('key'), str) or value['key'] not in KEYS):
         raise ValueError('Unsupported key. Use documented terminal key names.')
     return value
@@ -169,6 +207,26 @@ def sessions(reap=True):
 def public(item): return {key: value for key, value in item.items() if key != 'pane'}
 
 
+def paste(pane, text):
+    # A private paste buffer preserves literal text and multiline input. Bracketed paste where supported.
+    buffer = 'sw-' + str(uuid.uuid4())
+    tmux('load-buffer', '-b', buffer, '-', input=text.encode())
+    try: tmux('paste-buffer', '-p', '-b', buffer, '-t', pane)
+    finally:
+        # Named buffers are not bounded by tmux's automatic buffer limit. Remove even
+        # after a pane disappears between staging and paste; never leak failed drafts.
+        try: tmux('delete-buffer', '-b', buffer)
+        except ValueError: pass
+
+
+def type_timed(pane, text, cpm):
+    # One code point at a time, literally (never as key names), at the requested speed.
+    delay = 60 / cpm
+    for index, character in enumerate(text):
+        if index: time.sleep(delay)
+        tmux('send-keys', '-t', pane, '-l', '--', character)
+
+
 def execute(value):
     validate(value)
     if os.getuid() != 1000: raise RuntimeError('Terminal worker requires guest uid1000.')
@@ -216,18 +274,22 @@ def execute(value):
         tmux('set-window-option', '-t', pane, 'window-size', 'manual', ';',
              'resize-window', '-t', pane, '-x', str(value['columns']), '-y', str(value['rows']))
         return {'session': public(next(row for row in sessions() if row['id'] == session))}
-    if operation in ('type', 'press', 'interrupt'):
+    if operation in ('type', 'press', 'interrupt', 'actions'):
         if not item['alive']: raise ValueError('Terminal has exited; create another session.')
-        if operation == 'type':
-            # A private paste buffer preserves literal text and multiline input. Bracketed paste where supported.
-            buffer = 'sw-' + str(uuid.uuid4())
-            tmux('load-buffer', '-b', buffer, '-', input=value['text'].encode())
-            try: tmux('paste-buffer', '-p', '-b', buffer, '-t', pane)
-            finally:
-                # Named buffers are not bounded by tmux's automatic buffer limit. Remove even
-                # after a pane disappears between staging and paste; never leak failed drafts.
-                try: tmux('delete-buffer', '-b', buffer)
-                except ValueError: pass
+        if operation == 'type': paste(pane, value['text'])
+        elif operation == 'actions':
+            done = 0
+            for number, action in enumerate(value['actions'], 1):
+                if done: time.sleep(value.get('pause', 0.2))
+                try:
+                    if action['type'] == 'press': tmux('send-keys', '-t', pane, '--', action['key'])
+                    elif action.get('cpm', DEFAULT_CPM) == 'instant': paste(pane, action['text'])
+                    else: type_timed(pane, action['text'], action.get('cpm', DEFAULT_CPM))
+                except ValueError as error:
+                    raise ValueError('Action ' + str(number) + ' failed after ' + str(done) + ' completed: ' + str(error)
+                                     + ' Partial input may have reached the terminal; view it before retrying.')
+                done += 1
+            return {'session': public(item), 'accepted': True, 'completed': done}
         else: tmux('send-keys', '-t', pane, '--', 'C-c' if operation == 'interrupt' else value['key'])
         return {'session': public(item), 'accepted': True}
     if operation == 'delete':

@@ -9785,6 +9785,107 @@
                     "type": "object",
                     "required": [
                       "operation",
+                      "session"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "delete"
+                        ]
+                      },
+                      "session": {
+                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "operation",
+                      "session"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "status"
+                        ]
+                      },
+                      "session": {
+                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "operation",
+                      "session",
+                      "columns",
+                      "rows"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "resize"
+                        ]
+                      },
+                      "session": {
+                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "type": "string"
+                      },
+                      "columns": {
+                        "minimum": 40,
+                        "maximum": 240,
+                        "type": "integer"
+                      },
+                      "rows": {
+                        "minimum": 10,
+                        "maximum": 80,
+                        "type": "integer"
+                      }
+                    }
+                  },
+                  {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "operation",
+                      "session",
+                      "name"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "rename"
+                        ]
+                      },
+                      "session": {
+                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "type": "string"
+                      },
+                      "name": {
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,47}$",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "operation",
                       "session",
                       "text"
                     ],
@@ -10331,107 +10432,6 @@
                         "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
                         "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
                         "type": "string"
-                      }
-                    }
-                  },
-                  {
-                    "additionalProperties": false,
-                    "type": "object",
-                    "required": [
-                      "operation",
-                      "session"
-                    ],
-                    "properties": {
-                      "operation": {
-                        "type": "string",
-                        "enum": [
-                          "delete"
-                        ]
-                      },
-                      "session": {
-                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
-                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
-                        "type": "string"
-                      }
-                    }
-                  },
-                  {
-                    "additionalProperties": false,
-                    "type": "object",
-                    "required": [
-                      "operation",
-                      "session"
-                    ],
-                    "properties": {
-                      "operation": {
-                        "type": "string",
-                        "enum": [
-                          "status"
-                        ]
-                      },
-                      "session": {
-                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
-                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
-                        "type": "string"
-                      }
-                    }
-                  },
-                  {
-                    "additionalProperties": false,
-                    "type": "object",
-                    "required": [
-                      "operation",
-                      "session",
-                      "name"
-                    ],
-                    "properties": {
-                      "operation": {
-                        "type": "string",
-                        "enum": [
-                          "rename"
-                        ]
-                      },
-                      "session": {
-                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
-                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
-                        "type": "string"
-                      },
-                      "name": {
-                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,47}$",
-                        "type": "string"
-                      }
-                    }
-                  },
-                  {
-                    "additionalProperties": false,
-                    "type": "object",
-                    "required": [
-                      "operation",
-                      "session",
-                      "columns",
-                      "rows"
-                    ],
-                    "properties": {
-                      "operation": {
-                        "type": "string",
-                        "enum": [
-                          "resize"
-                        ]
-                      },
-                      "session": {
-                        "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
-                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
-                        "type": "string"
-                      },
-                      "columns": {
-                        "minimum": 40,
-                        "maximum": 240,
-                        "type": "integer"
-                      },
-                      "rows": {
-                        "minimum": 10,
-                        "maximum": 80,
-                        "type": "integer"
                       }
                     }
                   },
