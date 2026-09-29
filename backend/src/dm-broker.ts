@@ -89,6 +89,7 @@ export class DmBroker {
     this.activity = new ActivityStore(database);
     this.scratch = new Scratchpad(database, new SwarmSettingsStore(database));
     this.scratch.onActivity = ({ agentId, ...detail }) => runs.scratchActivity(agentId, detail);
+    this.files.onDeleted = file => runs.fileDeleted(file);
     this.timers = new AgentTimers(database, (agentId, kind, text, human) =>
       this.deliverPlatformEvent(agentId, kind, text, human),
     );

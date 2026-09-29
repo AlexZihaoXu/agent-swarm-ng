@@ -7,6 +7,7 @@ import { continuesGroup } from '@/lib/group-message-layout';
 import { cn } from '@/lib/utils';
 import { MessageReactions, useMessageReactions, ReactionLoadError } from '@/components/message-reactions';
 import { MessageReply } from '@/components/message-reply';
+import { MessageFiles } from '@/components/message-files';
 import type { GroupChat, GroupMessage } from '@/use-groups';
 
 const clock = clockTime;
@@ -36,6 +37,7 @@ export function GroupMessages({
         const previous = messages[index - 1];
         const continued = continuesGroup(previous, message);
         const human = message.role === 'user';
+        const bare = !message.text.trim() && !message.replyTo && Boolean(message.files?.length);
         const date = new Date(message.timestamp);
         const newDay = !previous || new Date(previous.timestamp).toDateString() !== date.toDateString();
         const avatar =
@@ -47,9 +49,11 @@ export function GroupMessages({
             tabIndex={channelId ? 0 : undefined}
             className={cn(
               'message-context-target w-fit max-w-full min-w-0 rounded-md whitespace-pre-wrap text-sm leading-5 [overflow-wrap:anywhere] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-              human
-                ? 'max-w-[90%] rounded-2xl bg-primary px-3.5 py-2 text-primary-foreground md:max-w-[75%]'
-                : 'max-w-[90%] rounded-2xl bg-foreground/[0.07] px-3.5 py-2 md:max-w-full md:rounded-md md:bg-transparent md:px-0 md:py-0.5',
+              bare
+                ? 'max-w-[90%] md:max-w-[75%]'
+                : human
+                  ? 'max-w-[90%] rounded-2xl bg-primary px-3.5 py-2 text-primary-foreground md:max-w-[75%]'
+                  : 'max-w-[90%] rounded-2xl bg-foreground/[0.07] px-3.5 py-2 md:max-w-full md:rounded-md md:bg-transparent md:px-0 md:py-0.5',
             )}
           >
             {message.replyTo && (
@@ -60,7 +64,12 @@ export function GroupMessages({
                 />
               </div>
             )}
-            <MessageMarkdown text={message.text} />
+            {message.text.trim() && <MessageMarkdown text={message.text} />}
+            {message.files?.length ? (
+              <div className={cn(!bare && 'mt-2')}>
+                <MessageFiles files={message.files} align={human ? 'end' : 'start'} />
+              </div>
+            ) : null}
             <time
               dateTime={date.toISOString()}
               title={date.toLocaleString()}

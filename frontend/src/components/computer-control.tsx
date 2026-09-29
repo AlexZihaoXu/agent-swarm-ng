@@ -24,7 +24,7 @@ export type ComputerAgentState = {
     /** Where older history continues on the server (null when all is loaded). */
     historyCursor: Record<string, unknown>;
     setDraft: (channelId: string, text: string) => void;
-    send: (agent: ChatAgent, text: string) => string | undefined;
+    send: (agent: ChatAgent, text: string, fileIds?: string[]) => string | undefined;
     stop: (channelId: string) => void;
     /** Loads the latest page, or with `older` the page before what is held. */
     loadHistory: (agent: ChatAgent, older?: boolean) => void;

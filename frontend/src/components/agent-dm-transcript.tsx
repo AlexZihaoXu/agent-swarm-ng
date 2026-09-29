@@ -7,6 +7,8 @@ import { ConversationMessages } from '@/components/conversation-messages';
 import type { AvatarAppearance } from '@/lib/agent-avatar';
 import { MessageMarkdown } from '@/components/message-markdown';
 import { MessageReply } from '@/components/message-reply';
+import { MessageFiles } from '@/components/message-files';
+import { dmFilesKey, replaceFile, type ChatFile } from '@/lib/chat-files';
 type Message =
   paths['/api/agents/{id}/dms/{peerId}']['get']['responses'][200]['content']['application/json']['messages'][number];
 type BubbleView = {
@@ -78,10 +80,16 @@ export function AgentDmTranscript({
       if (!conversation || conversation === `dm:${[agentId, peerId].sort().join(':')}`)
         void load(undefined, Boolean(conversation));
     };
+    const fileDeleted = (event: Event) => {
+      const file = (event as CustomEvent<ChatFile>).detail;
+      if (file.channelKey === dmFilesKey(agentId, peerId)) setMessages(current => replaceFile(current, file));
+    };
     window.addEventListener('swarm-dm-updated', refresh);
+    window.addEventListener('swarm-file-deleted', fileDeleted);
     return () => {
       request.current?.abort();
       window.removeEventListener('swarm-dm-updated', refresh);
+      window.removeEventListener('swarm-file-deleted', fileDeleted);
     };
   }, [agentId, peerId]);
   useLayoutEffect(() => {
@@ -137,6 +145,7 @@ export function AgentDmTranscript({
                     text: message.replyTo.text,
                   }
                 : null,
+              files: message.files,
             }))}
           />
         )}
@@ -178,7 +187,8 @@ export function AgentDmTranscript({
             <span className="text-muted-foreground">{message.status}</span>
           </header>
           {message.replyTo && <MessageReply author={message.replyTo.senderName} text={message.replyTo.text} />}
-          <MessageMarkdown text={message.text} />
+          {message.text.trim() && <MessageMarkdown text={message.text} />}
+          {message.files?.length ? <MessageFiles files={message.files} /> : null}
         </article>
       ))}
     </section>

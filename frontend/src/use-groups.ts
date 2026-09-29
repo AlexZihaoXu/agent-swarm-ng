@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import type { paths } from '@/api/schema';
+import { replaceFile, type ChatFile } from '@/lib/chat-files';
 
 export type GroupChat = paths['/api/groups/{id}']['get']['responses'][200]['content']['application/json'];
 export type GroupPage = paths['/api/groups/{id}/messages']['get']['responses'][200]['content']['application/json'];
@@ -41,6 +42,14 @@ export function useGroupEvents() {
       client.removeQueries({ queryKey: ['group-pending', groupId], exact: true });
       client.removeQueries({ queryKey: ['reactions', `group:${groupId}`] });
     };
+    // A deleted file becomes its tombstone in the group's loaded history.
+    const fileDeleted = (event: Event) => {
+      const file = (event as CustomEvent<ChatFile>).detail;
+      if (!file.channelKey.startsWith('group:')) return;
+      client.setQueryData<GroupPage>(['group-messages', file.channelKey.slice(6)], old =>
+        old ? { ...old, messages: replaceFile(old.messages, file) } : undefined,
+      );
+    };
     const reactions = (event: Event) => {
       void client.invalidateQueries({ queryKey: ['reactions', (event as CustomEvent<string>).detail] });
     };
@@ -51,11 +60,13 @@ export function useGroupEvents() {
       void client.invalidateQueries({ queryKey: ['group-messages'] });
     };
     window.addEventListener('swarm-reactions-updated', reactions);
+    window.addEventListener('swarm-file-deleted', fileDeleted);
     window.addEventListener('swarm-groups-updated', changed);
     window.addEventListener('swarm-group-deleted', deleted);
     window.addEventListener('swarm-groups-reconnected', reconnect);
     return () => {
       window.removeEventListener('swarm-reactions-updated', reactions);
+      window.removeEventListener('swarm-file-deleted', fileDeleted);
       window.removeEventListener('swarm-groups-updated', changed);
       window.removeEventListener('swarm-group-deleted', deleted);
       window.removeEventListener('swarm-groups-reconnected', reconnect);

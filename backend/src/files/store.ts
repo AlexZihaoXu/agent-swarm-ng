@@ -256,6 +256,8 @@ export class FileStore {
    * Deletes a file: its bytes go (unless another post shares them) and a tombstone keeps its name, who deleted it
    * and when. The human may delete any file; an agent only files it uploaded, in a channel it can still see.
    */
+  /** Hears each deletion, so open chats can show the tombstone. */
+  onDeleted?: (file: FileView) => void;
   async delete(id: string, actor: Actor, actorName: string) {
     const found = await this.get(id);
     if (!found) throw new FileError('No such file.', 404);
@@ -277,7 +279,9 @@ export class FileStore {
       },
     });
     await this.collect([found.blobId]);
-    return (await this.get(id))!.view;
+    const deleted = (await this.get(id))!.view;
+    this.onDeleted?.(deleted);
+    return deleted;
   }
   /** Deleting a channel deletes its files (their rows too, since the messages are gone). */
   async deleteChannels(channelKeys: string[]) {

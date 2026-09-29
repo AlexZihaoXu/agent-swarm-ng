@@ -135,6 +135,17 @@ export class AgentRuns {
     });
   }
   /** An agent writing to its scratchpad (the chat status line shows it, like typing). */
+  /** A chat file was deleted: open views swap it for its tombstone. */
+  fileDeleted(file: { channelKey: string }) {
+    this.broadcast({
+      type: 'file_deleted',
+      file,
+      eventId: crypto.randomUUID(),
+      runId: 'platform',
+      agentId: 'human',
+      channelId: `files:${file.channelKey}`,
+    });
+  }
   scratchActivity(agentId: string, detail: { path: string; active: boolean }) {
     this.broadcast({
       type: 'scratch_activity',

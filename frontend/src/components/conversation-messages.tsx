@@ -10,6 +10,7 @@ import { conversationTimeline } from '@/lib/conversation-timeline';
 import type { ChatMessage } from '@/chat-types';
 import { MessageReactions, useMessageReactions, ReactionLoadError } from '@/components/message-reactions';
 import { MessageReply } from '@/components/message-reply';
+import { MessageFiles } from '@/components/message-files';
 
 export function ConversationMessages({
   messages,
@@ -81,6 +82,8 @@ export function ConversationMessages({
             );
           const message = item.message;
           const senderColor = senderStyles?.[message.author].color;
+          // A message of only files shows them without a bubble around them.
+          const bare = !message.text.trim() && !message.replyTo && Boolean(message.files?.length);
           const bubble = (
             <div
               data-message-id={message.id}
@@ -94,9 +97,12 @@ export function ConversationMessages({
               }
               className={cn(
                 'message-enter message-context-target min-w-0 whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-5 [overflow-wrap:anywhere]',
-                message.author === 'user'
-                  ? 'origin-top-right bg-primary text-primary-foreground'
-                  : 'origin-top-left bg-foreground/[0.07]',
+                message.author === 'user' ? 'origin-top-right' : 'origin-top-left',
+                bare
+                  ? '!p-0'
+                  : message.author === 'user'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-foreground/[0.07]',
                 reactionChannel
                   ? 'max-w-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
                   : 'max-w-[85%] md:max-w-[75%]',
@@ -114,7 +120,12 @@ export function ConversationMessages({
                   />
                 </div>
               )}
-              <MessageMarkdown text={message.text} />
+              {message.text.trim() && <MessageMarkdown text={message.text} />}
+              {message.files?.length ? (
+                <div className={cn(!bare && 'mt-2')}>
+                  <MessageFiles files={message.files} align={message.author === 'user' ? 'end' : 'start'} />
+                </div>
+              ) : null}
             </div>
           );
           const content =

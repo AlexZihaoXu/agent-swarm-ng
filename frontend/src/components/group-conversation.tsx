@@ -17,6 +17,9 @@ import { cn } from '@/lib/utils';
 import { randomUuid } from '@/lib/random-uuid';
 import { replyExcerpt } from '@/lib/reply-preview';
 import { chatGroupPath } from '@/lib/dashboard-location';
+import { ChatFilesDialog } from '@/components/chat-files-dialog';
+import { groupFilesKey, messagePreview } from '@/lib/chat-files';
+import { useAttachments } from '@/lib/use-attachments';
 
 class GroupNotFoundError extends Error {}
 
@@ -71,6 +74,7 @@ export function GroupConversation({
     [loadingOlder, setLoadingOlder] = useState(false),
     [error, setError] = useState('');
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
+  const attachments = useAttachments(groupFilesKey(groupId));
   const viewport = useRef<HTMLDivElement>(null);
   const loadOlder = () => {
     setLoadingOlder(true);
@@ -94,7 +98,7 @@ export function GroupConversation({
   const nearBottom = useRef(true);
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const submission = useRef<{ id: string; text: string; replyToId?: string } | null>(null);
+  const submission = useRef<{ id: string; text: string; replyToId?: string; files: string } | null>(null);
   useLayoutEffect(() => {
     const element = viewport.current;
     if (!element) return;
@@ -109,16 +113,27 @@ export function GroupConversation({
   }, [messages.length, mobile]);
   const send = async () => {
     const text = draft.trim();
-    if (sending || !text) return;
+    const fileIds = attachments.ids;
+    if (sending || (!text && !fileIds.length) || attachments.uploading) return;
     setSending(true);
     setError('');
     const replyToId = replyTo?.id;
-    if (submission.current?.text !== text || submission.current.replyToId !== replyToId)
-      submission.current = { id: randomUuid(), text, replyToId };
+    // A retry of the same message keeps its id, so the server does not post it twice.
+    if (
+      submission.current?.text !== text ||
+      submission.current.replyToId !== replyToId ||
+      submission.current.files !== fileIds.join()
+    )
+      submission.current = { id: randomUuid(), text, replyToId, files: fileIds.join() };
     try {
       const { data, error } = await api.POST('/api/groups/{id}/messages', {
         params: { path: { id: groupId } },
-        body: { message: text, clientMessageId: submission.current!.id, replyToMessageId: replyToId },
+        body: {
+          message: text,
+          clientMessageId: submission.current!.id,
+          replyToMessageId: replyToId,
+          ...(fileIds.length ? { fileIds } : {}),
+        },
       });
       if (!data || error)
         throw new Error(error?.message ?? 'Could not confirm delivery. Reload history before retrying.');
@@ -128,6 +143,7 @@ export function GroupConversation({
       }));
       void client.invalidateQueries({ queryKey: ['groups'] });
       if (draftRef.current.trim() === text) onDraft('');
+      attachments.clear();
       setReplyTo(current => (current?.id === replyToId ? null : current));
       submission.current = null;
       nearBottom.current = true;
@@ -198,6 +214,7 @@ export function GroupConversation({
                 <span className="hidden md:inline">Edit group</span>
               </Button>
             </GroupEditor>
+            <ChatFilesDialog channelKey={groupFilesKey(groupId)} title={name} className="shrink-0 border md:size-9" />
             <DeleteGroupForm
               group={group.data}
               open={modal === 'delete'}
@@ -291,9 +308,13 @@ export function GroupConversation({
           onStop={() => working.forEach(member => onStop(member.channelId))}
           disabled={sending || !group.data || !history.data}
           inputRef={inputRef}
+          attachments={attachments}
           reply={
             replyTo
-              ? { author: replyTo.role === 'user' ? 'You' : replyTo.authorName, text: replyExcerpt(replyTo.text) }
+              ? {
+                  author: replyTo.role === 'user' ? 'You' : replyTo.authorName,
+                  text: replyExcerpt(messagePreview(replyTo.text, replyTo.files)),
+                }
               : undefined
           }
           onCancelReply={() => {

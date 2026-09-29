@@ -34,6 +34,9 @@ import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 import { ChatPanel } from '@/components/chat-panel';
 import { GroupConversation } from '@/components/group-conversation';
 import { ChatComposer } from '@/components/chat-composer';
+import { ChatFilesDialog } from '@/components/chat-files-dialog';
+import { chatFilesKey, dmFilesKey, messagePreview } from '@/lib/chat-files';
+import { useAttachments } from '@/lib/use-attachments';
 import { useGroupEvents } from '@/use-groups';
 import { useAgentSearch } from '@/use-agent-search';
 import { listTime } from '@/lib/format-time';
@@ -326,6 +329,7 @@ export function App() {
     updateServiceWorker,
   } = useRegisterSW();
   const draft = drafts[agent.channelId] ?? '';
+  const attachments = useAttachments(agent.real ? chatFilesKey(agent.channelId) : undefined);
   const messages = conversations[agent.channelId] ?? [];
   const timeline = conversationTimeline(messages, inbox.messages);
   // Long histories render a bounded window that follows the reader; older pages load near the top.
@@ -505,10 +509,16 @@ export function App() {
       agent,
       draft,
       target
-        ? { id: target.id, role: target.author === 'user' ? 'user' : 'assistant', text: replyExcerpt(target.text) }
+        ? {
+            id: target.id,
+            role: target.author === 'user' ? 'user' : 'assistant',
+            text: replyExcerpt(messagePreview(target.text, target.files)),
+          }
         : undefined,
+      attachments.ids,
     );
     if (!messageId) return;
+    attachments.clear();
     if (target) pendingReplyAcks.current.set(messageId, { channelId: agent.channelId, targetId: target.id });
     pendingSend.current = messageId;
     inputRef.current?.focus();
@@ -714,7 +724,7 @@ export function App() {
                             Date.now(),
                         )}
                         previewPrefix={lastMessage?.author === 'user' ? 'You: ' : ''}
-                        preview={lastMessage?.text ?? ''}
+                        preview={lastMessage ? messagePreview(lastMessage.text, lastMessage.files) : ''}
                       />
                     );
                   })}
@@ -961,6 +971,12 @@ export function App() {
                     retryActivity={retryActivity}
                     requestError={errors[agent.channelId]}
                   />
+                  {agent.real && (
+                    <ChatFilesDialog
+                      channelKey={peer ? dmFilesKey(agent.id, peer.id) : chatFilesKey(agent.channelId)}
+                      title={peer ? `${agent.name} and ${peer.name}` : agent.name}
+                    />
+                  )}
                 </div>
               </header>
 
@@ -1086,11 +1102,14 @@ export function App() {
                         historyLoading[agent.channelId] || (Boolean(agent.real) && !historyReady[agent.channelId])
                       }
                       inputRef={inputRef}
+                      attachments={agent.real ? attachments : undefined}
                       reply={
                         replyTargets[agent.channelId]
                           ? {
                               author: replyTargets[agent.channelId].author === 'user' ? 'You' : agent.name,
-                              text: replyExcerpt(replyTargets[agent.channelId].text),
+                              text: replyExcerpt(
+                                messagePreview(replyTargets[agent.channelId].text, replyTargets[agent.channelId].files),
+                              ),
                             }
                           : undefined
                       }
@@ -1158,7 +1177,7 @@ export function App() {
                     historyReady,
                     historyLoading,
                     setDraft,
-                    send: (target, text) => send(target, text),
+                    send: (target, text, fileIds) => send(target, text, undefined, fileIds),
                     stop,
                     historyCursor,
                     historyFailed,

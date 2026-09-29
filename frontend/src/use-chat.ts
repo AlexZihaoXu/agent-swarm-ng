@@ -9,6 +9,7 @@ import { createNotificationSound } from '@/lib/notification-sound';
 import { useRunEvents } from '@/use-run-events';
 import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 import { randomUuid } from '@/lib/random-uuid';
+import { chatFiles, isChatFile, replaceFile } from '@/lib/chat-files';
 import { useActivityHistory } from '@/use-activity-history';
 import { clockTime } from '@/lib/format-time';
 
@@ -53,6 +54,7 @@ const asMessage = (message: SavedMessage): ChatMessage => ({
   timestamp: message.timestamp,
   time: clock(message.timestamp),
   replyTo: message.replyTo,
+  ...(message.files?.length ? { files: message.files } : {}),
 });
 export const asAgent = (real: RealAgent): ChatAgent => ({
   avatar: real.avatar ?? defaultAvatar(real.id),
@@ -367,6 +369,19 @@ export function useChat() {
       recordScratchActivity(event as Parameters<typeof recordScratchActivity>[0]);
       return;
     }
+    if (event.type === 'file_deleted' && isChatFile(event.file)) {
+      const file = event.file;
+      if (file.channelKey.startsWith('chat:')) {
+        const channel = file.channelKey.slice(5);
+        setConversations(current => {
+          const messages = current[channel];
+          const next = messages && replaceFile(messages, file);
+          return next && next !== messages ? { ...current, [channel]: next } : current;
+        });
+      }
+      window.dispatchEvent(new CustomEvent('swarm-file-deleted', { detail: file }));
+      return;
+    }
     if (event.type === 'reactions_updated' && typeof event.channelId === 'string') {
       window.dispatchEvent(new CustomEvent('swarm-reactions-updated', { detail: event.channelId }));
       return;
@@ -486,6 +501,7 @@ export function useChat() {
         timestamp: event.timestamp ?? Date.now(),
         time: clock(event.timestamp),
         replyTo,
+        ...(chatFiles(event.files)?.length ? { files: chatFiles(event.files) } : {}),
       };
       setConversations(current => {
         const messages = current[channel] ?? [];
@@ -520,6 +536,7 @@ export function useChat() {
           clientMessageId: message.id,
           message: message.text,
           replyToMessageId: message.replyTo?.id,
+          ...(message.fileIds?.length ? { fileIds: message.fileIds } : {}),
         },
         parseAs: 'stream',
         signal: controller.signal,
@@ -570,11 +587,11 @@ export function useChat() {
       }
     }
   }
-  function send(agent: ChatAgent, text: string, replyTo?: ChatMessage['replyTo']) {
+  function send(agent: ChatAgent, text: string, replyTo?: ChatMessage['replyTo'], fileIds: string[] = []) {
     text = text.trim();
     if (
       !agent.real ||
-      !text ||
+      (!text && !fileIds.length) ||
       requests.current.has(agent.channelId) ||
       historyRequests.current.has(agent.channelId) ||
       !loadedHistory.current.has(agent.channelId)
@@ -582,9 +599,11 @@ export function useChat() {
       return;
     const pending = pendingMessages.current.get(agent.channelId);
     const message: ChatMessage =
-      pending?.text === text && (pending.replyTo?.id ?? null) === (replyTo?.id ?? null)
+      pending?.text === text &&
+      (pending.replyTo?.id ?? null) === (replyTo?.id ?? null) &&
+      (pending.fileIds ?? []).join() === fileIds.join()
         ? pending
-        : { id: randomUuid(), author: 'user', text, time: clock(), replyTo };
+        : { id: randomUuid(), author: 'user', text, time: clock(), replyTo, fileIds };
     pendingMessages.current.set(agent.channelId, message);
     setDrafts(current => ({ ...current, [agent.channelId]: '' }));
     setErrors(current => ({ ...current, [agent.channelId]: '' }));

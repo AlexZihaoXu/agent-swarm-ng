@@ -122,7 +122,20 @@ export function registerGroupRoutes(
           request.query.limit,
           request.query.search,
         );
-        return { groups: page.groups.map(groupView), nextCursor: page.nextCursor };
+        // The chat list previews a files-only last message by its files.
+        const files = await broker.files.forMessages(
+          'group',
+          page.groups.flatMap(group => (group.lastMessage ? [group.lastMessage.id] : [])),
+        );
+        return {
+          groups: page.groups.map(group => {
+            const view = groupView(group);
+            return view.lastMessage
+              ? { ...view, lastMessage: withGroupFiles(view.lastMessage, files.get(view.lastMessage.id)) }
+              : view;
+          }),
+          nextCursor: page.nextCursor,
+        };
       }),
   );
   app.post<{ Body: Static<typeof Edit> }>(
