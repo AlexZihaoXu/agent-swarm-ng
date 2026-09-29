@@ -9,7 +9,7 @@ export function AgentDmNotice({ notice, onOpen }: { notice: DmNotice; onOpen: ()
     <article
       aria-label={`Message received from ${notice.senderName}`}
       data-dm-notice={notice.id}
-      className="message-enter min-w-0 origin-top max-w-[85%] whitespace-pre-wrap rounded-2xl bg-teal-400/[0.09] px-3.5 py-2 text-sm leading-5 ring-1 ring-inset ring-teal-400/15 [overflow-wrap:anywhere] sm:max-w-[75%]"
+      className="message-enter min-w-0 origin-top-left [--enter-x:-14px] max-w-[85%] whitespace-pre-wrap rounded-2xl bg-teal-400/[0.09] px-3.5 py-2 text-sm leading-5 ring-1 ring-inset ring-teal-400/15 [overflow-wrap:anywhere] sm:max-w-[75%]"
     >
       <div className="mb-1 flex items-center gap-1.5 text-[11px] text-teal-200/80">
         <AgentAvatarArt {...(notice.senderAvatar ?? defaultAvatar(notice.senderId))} size={16} />

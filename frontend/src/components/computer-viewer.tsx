@@ -20,7 +20,7 @@ import {
   TerminalIcon,
   UnlockIcon,
 } from '@/components/ui/icons';
-import { m } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { glide } from '@/lib/motion';
 import { computerPath, computerTerminalPath } from '@/lib/dashboard-location';
 
@@ -75,6 +75,8 @@ export function ComputerViewer({
   const [inputEnabled, setInputEnabled] = useState(false);
   // The floating chat with the agent on this computer, opened from the header.
   const [chatAgent, setChatAgent] = useState<ChatAgent | null>(null);
+  // Where the chat was opened from in the header: the window grows out of it and shrinks back into it.
+  const [chatFrom, setChatFrom] = useState<DOMRect | null>(null);
   useEffect(() => setChatAgent(null), [id]);
   const [frame, setFrame] = useState(Date.now());
   const [previewLoaded, setPreviewLoaded] = useState(false);
@@ -327,7 +329,14 @@ export function ComputerViewer({
           key={id}
           computerId={id}
           agentState={agentState}
-          onOpenChat={agentState?.chat && view === 'desktop' ? setChatAgent : undefined}
+          onOpenChat={
+            agentState?.chat && view === 'desktop'
+              ? (agent, from) => {
+                  setChatFrom(from);
+                  setChatAgent(agent);
+                }
+              : undefined
+          }
         />
         {running && view === 'desktop' && (
           <Button
@@ -639,14 +648,17 @@ export function ComputerViewer({
         {running && !setupOpen && (
           <FloatingTerminal computer={computer} onExpand={session => onRoute?.(computerTerminalPath(id, session))} />
         )}
-        {running && !setupOpen && view === 'desktop' && chatAgent && agentState?.chat && (
-          <FloatingChat
-            key={chatAgent.id}
-            agent={agentState.agents.find(item => item.id === chatAgent.id) ?? chatAgent}
-            state={{ ...agentState, chat: agentState.chat }}
-            onMinimize={() => setChatAgent(null)}
-          />
-        )}
+        <AnimatePresence>
+          {running && !setupOpen && view === 'desktop' && chatAgent && agentState?.chat && (
+            <FloatingChat
+              key={chatAgent.id}
+              agent={agentState.agents.find(item => item.id === chatAgent.id) ?? chatAgent}
+              state={{ ...agentState, chat: agentState.chat }}
+              from={chatFrom}
+              onMinimize={() => setChatAgent(null)}
+            />
+          )}
+        </AnimatePresence>
         {onOpenComputer && <ComputerSwitcher currentId={id} onOpen={onOpenComputer} />}
       </div>
     </section>

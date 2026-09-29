@@ -66,11 +66,14 @@ export function ConversationMessages({
               tabIndex={reactionChannel && message.sequence !== undefined ? 0 : undefined}
               style={{
                 animationDelay: `${index >= entranceStart && index < entranceCount.current ? (index - entranceStart + 1) * 30 : 0}ms`,
+                '--enter-x': message.author === 'user' ? '14px' : '-14px',
                 ...(senderColor ? agentBubbleStyle(senderColor) : {}),
-              }}
+              } as React.CSSProperties}
               className={cn(
-                'message-enter message-context-target min-w-0 origin-top whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-5 [overflow-wrap:anywhere]',
-                message.author === 'user' ? 'bg-primary text-primary-foreground' : 'bg-foreground/[0.07]',
+                'message-enter message-context-target min-w-0 whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-5 [overflow-wrap:anywhere]',
+                message.author === 'user'
+                  ? 'origin-top-right bg-primary text-primary-foreground'
+                  : 'origin-top-left bg-foreground/[0.07]',
                 reactionChannel
                   ? 'max-w-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
                   : 'max-w-[85%] md:max-w-[75%]',

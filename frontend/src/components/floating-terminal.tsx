@@ -1,5 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import * as Dialog from '@radix-ui/react-dialog';
+import { AnimatePresence, m } from 'motion/react';
+import { glide } from '@/lib/motion';
+import { keepReachable, raiseWindow, useWindowLayer, type Box } from '@/lib/floating-windows';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { computerTerminal, terminalSessionsQuery, type TerminalRequest } from '@/lib/computer-terminals';
 import { ChevronLeftIcon, PlusIcon } from '@/components/ui/icons';
@@ -12,7 +16,6 @@ const TerminalEmulator = lazy(() =>
   import('./terminal-emulator').then(module => ({ default: module.TerminalEmulator })),
 );
 
-type Box = { x: number; y: number; width: number; height: number };
 type Shape = { width: number; height: number; chromeWidth: number; chromeHeight: number };
 const MIN_WIDTH = 320;
 
@@ -20,27 +23,24 @@ const MIN_WIDTH = 320;
 const fitted = (width: number, shape: Shape | null) =>
   shape ? shape.chromeHeight + ((width - shape.chromeWidth) * shape.height) / shape.width : width * 0.6;
 
-function place(box: Box, shape: Shape | null, area: { width: number; height: number }): Box {
-  let width = Math.min(Math.max(box.width, MIN_WIDTH), area.width - 16);
+/** Sizes the window to the terminal's shape within the page, then keeps it reachable. */
+function place(box: Box, shape: Shape | null): Box {
+  const room = { width: window.innerWidth, height: window.innerHeight };
+  let width = Math.min(Math.max(box.width, MIN_WIDTH), room.width - 16);
   let height = fitted(width, shape);
-  // Too tall for the viewer: narrow the window until its fitted height fits.
-  if (height > area.height - 16 && shape) {
-    width = shape.chromeWidth + ((area.height - 16 - shape.chromeHeight) * shape.width) / shape.height;
-    height = area.height - 16;
+  // Too tall for the page: narrow the window until its fitted height fits.
+  if (height > room.height - 16 && shape) {
+    width = shape.chromeWidth + ((room.height - 16 - shape.chromeHeight) * shape.width) / shape.height;
+    height = room.height - 16;
   }
-  return {
-    width,
-    height,
-    x: Math.min(Math.max(box.x, 8), area.width - width - 8),
-    y: Math.min(Math.max(box.y, 8), area.height - height - 8),
-  };
+  return keepReachable({ ...box, width, height });
 }
 
 /**
  * The desktop's right-edge handle ("‹", "‹ Terminals" on hover) opens a drawer of this computer's terminals with
  * their current screens rendered; choosing one brings it up as a floating window over the live desktop. The window
- * keeps the terminal's own shape, is dragged by its title bar and resized from its corner, stays inside the viewer,
- * and its one traffic light minimizes it back into the drawer.
+ * keeps the terminal's own shape, is dragged by its title bar (anywhere on the page, 64px always on screen) and
+ * resized from its corner, comes to the front when touched, and its one traffic light minimizes it back into the drawer.
  */
 export function FloatingTerminal({
   computer,
@@ -87,21 +87,22 @@ export function FloatingTerminal({
     },
   });
 
-  const bounds = () => {
-    const element = area.current?.parentElement;
-    return { width: element?.clientWidth ?? 800, height: element?.clientHeight ?? 600 };
-  };
+  const layer = useWindowLayer('terminal');
+  /** The viewer's box on the page: where the window first opens and where it grows from and shrinks back to. */
+  const viewer = () =>
+    area.current?.getBoundingClientRect() ?? { left: 0, top: 0, right: 800, width: 800, height: 600 };
   const bringUp = (id: string) => {
-    const room = bounds();
+    const room = viewer();
     setSession(id);
     setDrawer(false);
     setShape(null);
-    // Rises in from the right, where the drawer was; later opens keep where the operator put it.
-    setBox(
-      current =>
-        current ??
-        place({ width: Math.min(760, room.width * 0.55), height: 0, x: room.width, y: room.height * 0.1 }, null, room),
-    );
+    raiseWindow('terminal');
+    // Opens at the viewer's right side, where the drawer was; later opens keep where the operator put it.
+    setBox(current => {
+      if (current) return current;
+      const width = Math.min(760, room.width * 0.55);
+      return place({ width, height: 0, x: room.right - width - 56, y: room.top + room.height * 0.1 }, null);
+    });
   };
   // A terminal made from the drawer floats up straight away.
   const create = async (body: TerminalRequest) => {
@@ -130,11 +131,11 @@ export function FloatingTerminal({
   };
   // Once the console reports its grid, wrap the window around that shape.
   useEffect(() => {
-    if (shape) setBox(current => (current ? place(current, shape, bounds()) : current));
+    if (shape) setBox(current => (current ? place(current, shape) : current));
   }, [shape]);
   useEffect(() => {
     if (!session) return;
-    const refit = () => setBox(current => (current ? place(current, shape, bounds()) : current));
+    const refit = () => setBox(current => (current ? place(current, shape) : current));
     window.addEventListener('resize', refit);
     return () => window.removeEventListener('resize', refit);
   }, [session, shape]);
@@ -159,7 +160,6 @@ export function FloatingTerminal({
           ? { ...drag.start, x: drag.start.x + dx, y: drag.start.y + dy }
           : { ...drag.start, width: drag.start.width + dx },
         shape,
-        bounds(),
       ),
     );
   };
@@ -288,49 +288,70 @@ export function FloatingTerminal({
         error={createError}
         onSubmit={create}
       />
-      {current && box && (
-        <section
-          aria-label="Floating terminal"
-          className="float-window-enter pointer-events-auto absolute flex flex-col"
-          style={{ left: box.x, top: box.y, width: box.width, height: box.height }}
-          onPointerMove={move}
-          onPointerUp={end}
-          onPointerCancel={end}
-        >
-          <Suspense fallback={<div className="flex-1 rounded-xl border border-white/15 bg-[#141414]" />}>
-            <TerminalEmulator
-              key={`${current.id}:${current.columns}x${current.rows}`}
-              computerId={computer.id}
-              sessionId={current.id}
-              interactive={current.alive}
-              title={current.name}
-              columns={current.columns}
-              rows={current.rows}
-              fill
-              onMeasure={next =>
-                setShape(previous =>
-                  previous &&
-                  previous.width === next.width &&
-                  previous.height === next.height &&
-                  previous.chromeHeight === next.chromeHeight
-                    ? previous
-                    : next,
-                )
-              }
-              onTitlePointerDown={start('move')}
-              titleLeading={
-                // One traffic light: minimize back into the Terminals drawer ("−" appears on hover).
-                <MinimizeLight label="Minimize to Terminals" onClick={minimize} />
-              }
-            />
-          </Suspense>
-          <div
-            role="presentation"
-            title="Resize"
-            onPointerDown={start('resize')}
-            className="absolute -bottom-1 -right-1 z-10 size-4 cursor-nwse-resize touch-none"
-          />
-        </section>
+      {createPortal(
+        <AnimatePresence>
+          {current && box && (
+            // Grows out of the viewer's right edge, where the Terminals drawer lives, and shrinks back into it.
+            <m.section
+              key="floating-terminal"
+              aria-label="Floating terminal"
+              initial={{ opacity: 0, scale: 0.12 }}
+              animate={{ opacity: 1, scale: 1, transition: { ...glide, opacity: { duration: 0.16 } } }}
+              exit={{ opacity: 0, scale: 0.12, transition: { duration: 0.2, ease: [0.4, 0, 1, 1] } }}
+              data-floating-window
+              data-focused={layer.focused ? '' : undefined}
+              className="fixed flex flex-col"
+              onPointerDownCapture={() => raiseWindow('terminal')}
+              style={{
+                left: box.x,
+                top: box.y,
+                width: box.width,
+                height: box.height,
+                zIndex: layer.zIndex,
+                transformOrigin: `${viewer().right - box.x}px ${viewer().top + viewer().height / 2 - box.y}px`,
+              }}
+              onPointerMove={move}
+              onPointerUp={end}
+              onPointerCancel={end}
+            >
+              <Suspense fallback={<div className="flex-1 rounded-xl border border-white/15 bg-[#141414]" />}>
+                <TerminalEmulator
+                  key={`${current.id}:${current.columns}x${current.rows}`}
+                  computerId={computer.id}
+                  sessionId={current.id}
+                  interactive={current.alive}
+                  title={current.name}
+                  columns={current.columns}
+                  rows={current.rows}
+                  fill
+                  inactive={!layer.focused}
+                  onMeasure={next =>
+                    setShape(previous =>
+                      previous &&
+                      previous.width === next.width &&
+                      previous.height === next.height &&
+                      previous.chromeHeight === next.chromeHeight
+                        ? previous
+                        : next,
+                    )
+                  }
+                  onTitlePointerDown={start('move')}
+                  titleLeading={
+                    // One traffic light: minimize back into the Terminals drawer ("−" appears on hover).
+                    <MinimizeLight label="Minimize to Terminals" onClick={minimize} dim={!layer.focused} />
+                  }
+                />
+              </Suspense>
+              <div
+                role="presentation"
+                title="Resize"
+                onPointerDown={start('resize')}
+                className="absolute -bottom-1 -right-1 z-10 size-4 cursor-nwse-resize touch-none"
+              />
+            </m.section>
+          )}
+        </AnimatePresence>,
+        document.body,
       )}
     </div>
   );

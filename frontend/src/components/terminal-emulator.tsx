@@ -62,6 +62,7 @@ export function TerminalEmulator({
   onTitlePointerDown,
   onMeasure,
   titleLeading,
+  inactive = false,
 }: {
   computerId: string;
   sessionId: string;
@@ -78,6 +79,8 @@ export function TerminalEmulator({
   /** Reports the grid's natural size and the window chrome around it, so a floating window can match its shape. */
   /** Replaces the decorative window dots (a floating window puts its own control there). */
   titleLeading?: ReactNode;
+  /** A floating window that is not the focused one: a quieter edge, shadow and title. */
+  inactive?: boolean;
   onMeasure?: (size: { width: number; height: number; chromeWidth: number; chromeHeight: number }) => void;
   /** Shown in the window's title bar, like a desktop terminal app. */
   title: string;
@@ -338,10 +341,11 @@ export function TerminalEmulator({
     <div
       ref={stage}
       data-terminal-emulator
-      className={`flex min-h-0 min-w-0 flex-1 overflow-hidden ${fill ? '' : 'items-center justify-center p-2 sm:p-4'}`}
+      // Filling a floating window, nothing may clip the window's own shadow and rounded corners.
+      className={`flex min-h-0 min-w-0 flex-1 ${fill ? '' : 'items-center justify-center overflow-hidden p-2 sm:p-4'}`}
     >
       <div
-        className="flex max-h-full min-h-0 max-w-full flex-col overflow-hidden rounded-xl border border-white/15 bg-[#141414] shadow-2xl shadow-black/60"
+        className={`flex max-h-full min-h-0 max-w-full flex-col overflow-hidden rounded-xl border bg-[#141414] transition-[border-color,box-shadow] duration-200 ${inactive ? 'border-white/[0.08] shadow-lg shadow-black/40' : 'border-white/15 shadow-2xl shadow-black/60'}`}
         style={fill || fit.pan ? { width: '100%', height: '100%' } : undefined}
       >
         <div
@@ -358,7 +362,9 @@ export function TerminalEmulator({
             </span>
           )}
           {titleContent ?? (
-            <span className="min-w-0 flex-1 truncate text-center font-mono text-[11px] text-muted-foreground">
+            <span
+              className={`min-w-0 flex-1 truncate text-center font-mono text-[11px] transition-colors ${inactive ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}
+            >
               {title}
             </span>
           )}

@@ -149,6 +149,15 @@ test('the agent on a computer opens a floating chat over the desktop that sends 
   await page.getByRole('button', { name: `Chat with ${agent.name}` }).click();
   const window = page.getByRole('region', { name: `Chat with ${agent.name}` });
   await expect(window.getByRole('list', { name: 'Messages' })).toBeVisible();
+  // It grows out of the agent in the header (above the window), and its minimize light always shows its "−".
+  const origin = await window.evaluate(element => getComputedStyle(element).transformOrigin.split(' ').map(parseFloat));
+  expect(origin[1]).toBeLessThan(0);
+  await expect(window.getByRole('button', { name: `Minimize chat with ${agent.name}` }).locator('span')).toHaveCSS(
+    'opacity',
+    '1',
+  );
+  // Measure once it has finished growing.
+  await expect.poll(() => window.evaluate(element => getComputedStyle(element).transform)).toBe('none');
   const box = (await window.boundingBox())!;
   expect(box.x + box.width).toBeLessThanOrEqual(1280);
   const sent = page.waitForRequest(request => request.url().endsWith('/api/chat'));
@@ -162,10 +171,80 @@ test('the agent on a computer opens a floating chat over the desktop that sends 
   await page.mouse.move(box.x + box.width / 2 - 200, box.y + 112, { steps: 4 });
   await page.mouse.up();
   expect((await window.boundingBox())!.x).toBeLessThan(box.x - 150);
+  // It may leave the viewer (even the page edge) but 64px stay on screen to grab it again.
+  const moved = (await window.boundingBox())!;
+  await page.mouse.move(moved.x + moved.width / 2, moved.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(1700, 900, { steps: 4 });
+  await page.mouse.up();
+  const parked = (await window.boundingBox())!;
+  expect(parked.x).toBeLessThanOrEqual(1280 - 64 + 0.5);
+  expect(parked.x).toBeGreaterThan(1100);
+  expect(parked.y).toBeLessThanOrEqual(800 - 64 + 0.5);
   // The traffic light minimizes it back to the header; Open in Chat goes to the whole conversation.
   await window.getByRole('button', { name: `Minimize chat with ${agent.name}` }).click();
+  // It shrinks back into the header before it goes.
+  await expect.poll(() => window.evaluate(element => getComputedStyle(element).transform)).not.toBe('none');
   await expect(window).toHaveCount(0);
   await page.getByRole('button', { name: `Chat with ${agent.name}` }).click();
   await window.getByRole('button', { name: 'Open in Chat' }).click();
   await expect(page).toHaveURL(new RegExp(`/chat/agents/${agent.id}$`));
+});
+
+test('the chat and terminal windows show which one is focused, and the one touched last is on top', async ({
+  page,
+}) => {
+  const agent = sampleAgents[0];
+  const session = {
+    id: '12345678-1234-1234-1234-123456789abc',
+    name: 'build',
+    alive: true,
+    exitCode: null,
+    createdAt: 1,
+    columns: 120,
+    rows: 36,
+  };
+  await page.addInitScript(id => localStorage.setItem(`computer-consent:${id}`, 'yes'), desk.id);
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({ json: { computers: [{ ...desk, portalFree: true }], controllerConnected: true } }),
+  );
+  await page.route('**/api/computers/control', route =>
+    route.fulfill({ json: { holders: [{ computerId: desk.id, agent: { id: agent.id, name: agent.name } }] } }),
+  );
+  await page.route('**/api/computers/*/terminals', route =>
+    route.fulfill({ json: { type: 'terminal', sessions: [session] } }),
+  );
+  await page.routeWebSocket('**/api/computers/*/terminals/*/stream', ws =>
+    ws.send(JSON.stringify({ type: 'ready', columns: 120, rows: 36 })),
+  );
+  await page.route(`**/computers/${desk.id}/desktop/**`, route =>
+    route.request().url().endsWith('/api/health')
+      ? route.fulfill({ json: { status: 'ok' } })
+      : route.fulfill({ contentType: 'text/html', body: '<html><body>Desktop fixture</body></html>' }),
+  );
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/computers/${desk.id}`);
+  await page.getByRole('button', { name: 'Terminals', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Terminals' }).getByRole('button', { name: 'Float build' }).click();
+  const terminal = page.getByRole('region', { name: 'Floating terminal' });
+  await expect(terminal).toHaveAttribute('data-focused', '');
+  await page.getByRole('button', { name: `Chat with ${agent.name}` }).click();
+  const chat = page.getByRole('region', { name: `Chat with ${agent.name}` });
+  await expect(chat).toHaveAttribute('data-focused', '');
+  await expect(terminal).not.toHaveAttribute('data-focused');
+  const z = async (locator: typeof chat) => Number(await locator.evaluate(element => getComputedStyle(element).zIndex));
+  expect(await z(chat)).toBeGreaterThan(await z(terminal));
+  // Touching the terminal focuses it and brings it to the front.
+  await terminal.getByText('build').click();
+  await expect(terminal).toHaveAttribute('data-focused', '');
+  await expect(chat).not.toHaveAttribute('data-focused');
+  expect(await z(terminal)).toBeGreaterThan(await z(chat));
+  await expect(chat.getByRole('button', { name: /^Minimize chat/ })).not.toHaveCSS(
+    'background-color',
+    'rgb(254, 188, 46)',
+  );
+  // Touching anything else leaves neither focused.
+  await page.getByRole('navigation', { name: 'Computer location' }).click();
+  await expect(terminal).not.toHaveAttribute('data-focused');
+  await expect(chat).not.toHaveAttribute('data-focused');
 });

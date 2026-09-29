@@ -325,6 +325,9 @@ test('the desktop handle opens a Terminals drawer, and a session floats out fitt
   const after = (await floating.boundingBox())!;
   expect(after.width).toBeLessThan(before.width);
   expect(after.height).toBeLessThan(before.height);
+  // The window keeps its shadow: nothing inside the window clips it.
+  const frame = floating.locator('[data-terminal-emulator]');
+  await expect(frame).not.toHaveCSS('overflow', 'hidden');
   // The one traffic light minimizes back into the drawer.
   await floating.getByRole('button', { name: 'Minimize to Terminals' }).click();
   await expect(floating).toHaveCount(0);

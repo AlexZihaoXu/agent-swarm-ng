@@ -37,7 +37,7 @@ export function ComputerControl({
   computerId: string;
   agentState?: ComputerAgentState;
   /** Opens a floating chat with the agent holding the computer (only for agents in the loaded roster). */
-  onOpenChat?: (agent: ChatAgent) => void;
+  onOpenChat?: (agent: ChatAgent, from: DOMRect) => void;
 }) {
   const [holder, setHolder] = useState<{ id: string; name: string } | null>(null);
   const [error, setError] = useState(''),
@@ -162,7 +162,7 @@ export function ComputerControl({
                 type="button"
                 aria-label={`Chat with ${holder.name}`}
                 title={`Chat with ${holder.name}`}
-                onClick={() => onOpenChat(listed)}
+                onClick={event => onOpenChat(listed, event.currentTarget.getBoundingClientRect())}
                 className="-mx-1.5 flex min-w-0 items-center gap-2 rounded-lg px-1.5 py-1 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {presence}
