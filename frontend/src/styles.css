@@ -196,6 +196,16 @@
     transform: translateX(0);
   }
 }
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 @keyframes control-swap-in {
   from {
     opacity: 0;
@@ -256,6 +266,14 @@
   /* Every top-level tab enters from the side it sits on in the tab bar, so the content moves with the indicator. */
   .tab-enter {
     animation: tab-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  /* A detail pane swapping to another item: a quick fade with a hint of rise, no sideways travel. */
+  .view-enter {
+    animation: view-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  /* The one-line status above the composer eases in instead of popping. */
+  .status-enter {
+    animation: view-in 200ms ease-out both;
   }
   /* Send and Stop trade places with a small pop, so the change of mode is noticed without a jump. */
   .control-swap {

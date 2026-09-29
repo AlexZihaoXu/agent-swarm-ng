@@ -13,7 +13,12 @@ export function AgentTypingStatus({
 }) {
   if (!typing && !working) return null;
   return (
-    <p role="status" className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+    // Keyed by mode, so moving between "working" and "typing" replays the small entrance.
+    <p
+      key={typing ? 'typing' : 'working'}
+      role="status"
+      className="status-enter flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
+    >
       {typing ? (
         <>
           <TypingDots />

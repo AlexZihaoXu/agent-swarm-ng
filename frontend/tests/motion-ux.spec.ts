@@ -95,3 +95,23 @@ test('buttons give press feedback, and dialogs open over the shared blurred back
   await expect(page.getByRole('dialog', { name: 'Create group chat' })).toBeVisible();
   await expect(page.locator('[data-state="open"].fixed.inset-0').first()).toHaveCSS('backdrop-filter', 'blur(2px)');
 });
+
+test('agent settings offer jump links that follow the reader and land each heading in view', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 700 });
+  await page.goto('/agents/avery');
+  const pane = page.getByRole('region', { name: 'Settings for Avery' });
+  const nav = pane.getByRole('navigation', { name: 'Jump to section' });
+  await expect(nav.getByRole('link')).toHaveText(['Channels', 'Model', 'Computers', 'Avatar', 'Delete agent']);
+  await expect(nav.locator('[aria-current="location"]')).toHaveText('Channels');
+  await nav.getByRole('link', { name: 'Avatar' }).click();
+  await expect(nav.locator('[aria-current="location"]')).toHaveText('Avatar');
+  const heading = pane.getByRole('heading', { name: 'Avatar', exact: true });
+  await expect.poll(async () => (await heading.boundingBox())!.y).toBeGreaterThan((await nav.boundingBox())!.y);
+  const navBottom = (await nav.boundingBox())!.y + (await nav.boundingBox())!.height;
+  await expect.poll(async () => (await heading.boundingBox())!.y - navBottom).toBeLessThan(80);
+  expect((await heading.boundingBox())!.y).toBeGreaterThanOrEqual(navBottom);
+  await expect(pane.getByRole('region', { name: 'Avatar' })).toBeFocused();
+  // Scrolling by hand moves the highlight back.
+  await pane.getByRole('region', { name: 'Agent editor' }).evaluate(element => element.scrollTo({ top: 0 }));
+  await expect(nav.locator('[aria-current="location"]')).toHaveText('Channels');
+});

@@ -291,7 +291,10 @@ export function KnowledgeBrowser({ id, onNavigate }: { id?: string; onNavigate: 
           className={cn('phone-detail-enter min-h-0 min-w-0 flex-1 flex-col md:flex', id ? 'flex' : 'hidden')}
         >
           <ScrollArea label="Knowledge entry content" className="min-h-0 flex-1" viewportClassName="[&>div]:!block">
-            <div className="space-y-5 px-4 py-5 pb-[calc(5rem+env(safe-area-inset-bottom))] md:px-8 md:pb-8">
+            <div
+              key={id ?? 'none'}
+              className="view-enter space-y-5 px-4 py-5 pb-[calc(5rem+env(safe-area-inset-bottom))] md:px-8 md:pb-8"
+            >
               {id && (
                 <button
                   type="button"

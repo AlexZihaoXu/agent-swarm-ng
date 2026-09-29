@@ -13,6 +13,7 @@ import type { ChatAgent, RealAgent } from '@/use-chat';
 import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
+import { SectionNav } from '@/components/section-nav';
 import type { SettingsSection } from '@/lib/settings-sections';
 
 // Kibo's spacious section-form layout adapted to a left-aligned, scrollable
@@ -49,6 +50,7 @@ export function EditAgentForm({
     [attempt, setAttempt] = useState(0);
   const channels = `${agentPath(agent.id)}/edit/settings/channels`;
   const avatarSection = useRef<HTMLElement>(null);
+  const sectionList = useRef<HTMLDivElement>(null);
   // Existing Avatar bookmarks remain useful without recreating a section tab.
   useLayoutEffect(() => {
     if (route.editorTab === 'avatar') avatarSection.current?.scrollIntoView({ block: 'start' });
@@ -157,7 +159,7 @@ export function EditAgentForm({
     <section
       aria-label={`Settings for ${agent.name}`}
       className={cn(
-        'phone-detail-enter min-h-0 min-w-0 flex-1 flex-col md:motion-safe:animate-[fade-in_160ms_ease-out] md:flex',
+        'phone-detail-enter min-h-0 min-w-0 flex-1 flex-col md:motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)] md:flex',
         mobile ? 'flex' : 'hidden',
       )}
     >
@@ -198,7 +200,8 @@ export function EditAgentForm({
           className="min-h-0 flex-1"
           viewportClassName="[&>div]:!block"
         >
-          <div className="mx-auto w-full max-w-5xl space-y-8 px-4 pb-8 pt-6 md:px-6">
+          <SectionNav container={sectionList} />
+          <div ref={sectionList} className="mx-auto w-full max-w-5xl space-y-8 px-4 pb-8 pt-6 md:px-6">
             <section aria-label="Channels" className="space-y-4">
               <div>
                 <h3 className="text-lg font-semibold">Channels</h3>
