@@ -1068,6 +1068,7 @@ export function App() {
                     <div className="mb-1 flex h-5 min-w-0 items-center px-2">
                       <AgentTypingStatus
                         name={agent.name}
+                        agentId={agent.id}
                         typing={selfTyping}
                         working={busy[agent.channelId]}
                         connected={eventsConnected}

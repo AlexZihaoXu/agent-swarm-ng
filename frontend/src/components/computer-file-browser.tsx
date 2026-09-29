@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { dialogOverlay } from '@/lib/styles';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { FolderIcon } from '@/components/ui/icons';
+import { FileIcon } from '@/components/ui/file-icon';
 import {
   downloadComputerFile,
   FILE_DOWNLOAD_LIMIT,
@@ -22,22 +23,6 @@ import type { Computer } from './computer-card';
 const home = '/workspace';
 const inputClass =
   'h-10 min-w-0 rounded-md border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring sm:text-sm';
-function FileIcon({ directory }: { directory: boolean }) {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="size-4 shrink-0 text-muted-foreground"
-    >
-      <path d={directory ? 'M3 7V5h6l2 2h10v13H3z' : 'M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h6'} />
-    </svg>
-  );
-}
 function modified(time: number | null) {
   return time === null ? '—' : new Date(time).toLocaleDateString();
 }

@@ -1,6 +1,9 @@
 import { TerminalWatcher } from './computer-use/terminal-watcher';
 import { AgentTimers } from './agent-timers';
 import { createTimeTools } from './time-tools';
+import { Scratchpad } from './scratchpad';
+import { createScratchTools } from './scratch-tools';
+import { SwarmSettingsStore } from './swarm-settings';
 import type { AgentRuns, RunContext } from './agent-runs';
 import type { PlatformStore } from './platform-store';
 import type { EndpointStore } from './endpoint-store';
@@ -55,6 +58,8 @@ export class DmBroker {
   peerLimits = { queueTimeoutMs: 300000, executionTimeoutMs: 90000 };
   private linked = new WeakSet<AbortSignal>();
   readonly timers: AgentTimers;
+  /** Every agent's private scratchpad of text files. */
+  readonly scratch: Scratchpad;
   private watcher?: TerminalWatcher;
   /** One-shot watches on claimed computers (watch_terminal, watch_desktop). */
   readonly watches?: ComputerWatches;
@@ -73,6 +78,8 @@ export class DmBroker {
     this.reactions = new ReactionStore(database);
     this.sessions = new AgentSessionStore(database);
     this.activity = new ActivityStore(database);
+    this.scratch = new Scratchpad(database, new SwarmSettingsStore(database));
+    this.scratch.onActivity = ({ agentId, ...detail }) => runs.scratchActivity(agentId, detail);
     this.timers = new AgentTimers(database, (agentId, kind, text, human) =>
       this.deliverPlatformEvent(agentId, kind, text, human),
     );
@@ -553,6 +560,7 @@ ${preview.text}`
         ...this.knowledge.toolsFor(agentId),
         // Every agent's sense of time: current time, timers and reminders (no computer needed).
         ...createTimeTools(this.timers, agentId, () => humanAuthority, this.watches),
+        ...createScratchTools(this.scratch, agentId),
         ...computerTools,
       ],
       {

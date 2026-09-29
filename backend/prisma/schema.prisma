@@ -95,6 +95,7 @@ model Agent {
   computerNotices ComputerNotice[]
   timers           AgentTimer[]
   watches          ComputerWatch[]
+  scratchFiles     ScratchFile[]
   activity         Activity[]
 }
 
@@ -362,4 +363,18 @@ model SwarmSettings {
   scratchTotalMb    Int      @default(50)
   storageBudgetGb   Int      @default(10)
   updatedAt         DateTime @updatedAt
+}
+
+// An agent's scratchpad: private text files kept in the database, with folder paths (at most 3 folders deep).
+// For drafting and presenting artifacts; not memory. Nothing is deleted automatically.
+model ScratchFile {
+  id        String   @id @default(uuid())
+  agentId   String
+  path      String
+  content   String
+  size      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  @@unique([agentId, path])
 }

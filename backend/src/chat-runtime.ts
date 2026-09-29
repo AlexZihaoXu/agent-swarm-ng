@@ -1,4 +1,5 @@
 import { TIME_GUIDANCE } from './time-tools';
+import { SCRATCH_GUIDANCE } from './scratch-tools';
 import {
   createAgentSession,
   createExtensionRuntime,
@@ -394,6 +395,10 @@ export async function createChatSession(
   if (additionalTools.some(tool => tool.name === 'current_time')) {
     const current = resources.getSystemPrompt() ?? '';
     resources.getSystemPrompt = () => `${current}\n\n${TIME_GUIDANCE}`;
+  }
+  if (additionalTools.some(tool => tool.name === 'scratch_write')) {
+    const current = resources.getSystemPrompt() ?? '';
+    resources.getSystemPrompt = () => `${current}\n\n${SCRATCH_GUIDANCE}`;
   }
   if (additionalTools.some(tool => tool.name === 'use_computer')) {
     const current = resources.getSystemPrompt() ?? '';

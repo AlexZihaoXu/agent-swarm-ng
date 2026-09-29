@@ -230,6 +230,7 @@ export function FloatingChat({
               <div className="mb-1 flex h-5 min-w-0 items-center px-2">
                 <AgentTypingStatus
                   name={agent.name}
+                  agentId={agent.id}
                   typing={Boolean(state.typing[channel])}
                   working={state.busy[channel]}
                   connected={state.connected}

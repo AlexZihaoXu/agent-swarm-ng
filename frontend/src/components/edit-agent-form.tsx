@@ -1,3 +1,4 @@
+import { AgentScratchpad } from '@/components/agent-scratchpad';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import { surface } from '@/lib/motion';
@@ -226,6 +227,7 @@ export function EditAgentForm({
               />
             )}
             <AgentComputerSettings key={agent.id} agentId={agent.id} register={register} />
+            {agent.real && <AgentScratchpad agentId={agent.id} agentName={agent.name} />}
             <section ref={avatarSection} aria-label="Avatar" className="space-y-4">
               <div>
                 <h3 className="text-lg font-semibold">Avatar</h3>

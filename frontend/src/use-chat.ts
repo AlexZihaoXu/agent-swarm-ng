@@ -1,3 +1,4 @@
+import { recordScratchActivity } from '@/lib/scratch-writers';
 import { recordTerminalActivity } from '@/lib/terminal-typists';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
@@ -355,6 +356,15 @@ export function useChat() {
       typeof event.active === 'boolean'
     ) {
       recordTerminalActivity(event as Parameters<typeof recordTerminalActivity>[0]);
+      return;
+    }
+    if (
+      event.type === 'scratch_activity' &&
+      typeof event.agentId === 'string' &&
+      typeof event.path === 'string' &&
+      typeof event.active === 'boolean'
+    ) {
+      recordScratchActivity(event as Parameters<typeof recordScratchActivity>[0]);
       return;
     }
     if (event.type === 'reactions_updated' && typeof event.channelId === 'string') {

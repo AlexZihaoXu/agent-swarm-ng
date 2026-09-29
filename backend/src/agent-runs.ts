@@ -134,6 +134,17 @@ export class AgentRuns {
       channelId: `computer:${detail.computerId}`,
     });
   }
+  /** An agent writing to its scratchpad (the chat status line shows it, like typing). */
+  scratchActivity(agentId: string, detail: { path: string; active: boolean }) {
+    this.broadcast({
+      type: 'scratch_activity',
+      ...detail,
+      eventId: crypto.randomUUID(),
+      runId: 'platform',
+      agentId,
+      channelId: `scratch:${agentId}`,
+    });
+  }
   /** Standalone advisory branches are observable without pretending they are main chat runs. */
   activity(agentId: string, entry: ActivityEntry) {
     this.broadcast({

@@ -100,6 +100,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{id}/scratch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listScratch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/scratch/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["readScratchFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agents/{id}/settings": {
         parameters: {
             query?: never;
@@ -1053,6 +1085,133 @@ export interface operations {
             };
             /** @description Default Response */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    listScratch: {
+        parameters: {
+            query?: {
+                folder?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        folder: string;
+                        folders: {
+                            name: string;
+                            path: string;
+                            files: number;
+                            size: number;
+                        }[];
+                        files: {
+                            name: string;
+                            path: string;
+                            size: number;
+                            updatedAt: string;
+                        }[];
+                        usage: {
+                            files: number;
+                            bytes: number;
+                            maxFiles: number;
+                            maxBytes: number;
+                            maxFileBytes: number;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    readScratchFile: {
+        parameters: {
+            query: {
+                path: string;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        path: string;
+                        size: number;
+                        updatedAt: string;
+                        text: string;
+                        offset: number;
+                        lines: number;
+                        totalLines: number;
+                        truncated: boolean;
+                        partialLine: boolean;
+                        nextOffset: number | null;
+                        prevOffset: number | null;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

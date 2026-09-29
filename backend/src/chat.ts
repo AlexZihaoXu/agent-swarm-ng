@@ -1,3 +1,4 @@
+import { registerScratchRoutes } from './scratch-routes';
 import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import { EndpointStore } from './endpoint-store';
@@ -115,6 +116,7 @@ export function registerChat(
   const streams = createRunStreams(runs);
   const broker = new DmBroker(database, store, codex, runs, computers, screenshots);
   registerActivityRoutes(app, database, broker.activity);
+  registerScratchRoutes(app, database, broker.scratch);
   app.addHook('onListen', async () => {
     await broker.ready();
   });

@@ -16,7 +16,7 @@ The core separation: an agent is a persistent identity (concepts/agents). Channe
 Topics:
 - concepts/tools: every tool an agent can have, what it does and when to use it.
 - concepts/system: the platform's parts, what is saved, and what happens on restarts, shutdowns and power loss.
-- concepts/agents, concepts/channels, concepts/platform-events, concepts/time.
+- concepts/agents, concepts/channels, concepts/platform-events, concepts/time, concepts/scratchpad.
 - concepts/computers, with concepts/computers/desktop, concepts/computers/terminals, concepts/computers/files and concepts/computers/watches.
 
 Answering questions about the swarm itself (what can you do, what happens if it restarts, how do I give you a computer): read the relevant concept or practice and answer from it; practices/dashboard explains where things are in the app.`,
@@ -205,6 +205,33 @@ write({path, content}): creates parents, atomically replaces one UTF-8 file; exi
 bash({command, cwd?, timeout?}): synchronous, default 30 s, max 120 s. Returns exit code and stdout/stderr tails (each ≤25000 bytes / 1000 lines) with truncation flags. It runs in a private process namespace: when the command ends, its descendants are killed, even detached ones. There is no background process API; persistent programs belong in terminals (concepts/computers/terminals).
 
 These operations need a claim but no screenshot; write, edit and bash cancel the desktop input allowance. Cancellation cannot undo writes or requests already made. How to use them well: practices/files.`,
+} satisfies KnowledgeEntry;
+
+export const scratchpadConcept = {
+  id: 'concepts/scratchpad',
+  parentId: 'concepts',
+  title: 'Scratchpad',
+  summary:
+    'Your private text files kept by the platform (no computer needed): drafting, editing and presenting artifacts.',
+  source: 'docs/agent-files.md',
+  related: ['concepts/tools', 'practices/communication'],
+  content: `The scratchpad is a set of private text files the platform keeps for you, with or without a computer. It is for work you are shaping for someone: a plan, a report, a script, a demo page. Draft it there, refine it with precise edits instead of re-sending whole texts in chat, then present it to the human.
+
+What it is not: not memory (do not keep notes about yourself or your conversations there), not a computer's disk (programs cannot run on it), and not shared: other agents cannot see it. The human can browse it read-only in the dashboard (Agents → your settings → Scratchpad) and changes it only by asking you.
+
+Files and folders: paths such as "drafts/plan.md", at most 3 folders deep; names without "/", "\\", "." or ".." parts. Text only (UTF-8). Folders exist as long as they hold files.
+
+Tools:
+- scratch_list({folder?}): folders and files directly inside a folder, with sizes, plus your usage against the limits.
+- scratch_read({path, offset?, limit?}): a page of a file like the computer read tool: 1-based lines, 200 by default (up to 2000 lines, 50,000 bytes); scroll with nextOffset/prevOffset.
+- scratch_write({path, content}): create or replace a file.
+- scratch_edit({path, edits:[{oldText,newText}]}): 1–100 exact replacements; each oldText must appear exactly once and matches may not overlap; all are checked before anything changes. If the file changed meanwhile, read it again.
+- scratch_move({from, to}): move or rename a file or a whole folder; the destination must not exist.
+- scratch_delete({path}): delete a file, or a folder with everything in it. Permanent.
+
+Limits (set by the human in Settings → Swarm; scratch_list shows them): by default 1 MiB per file, 500 files and 50 MiB in all. Nothing is deleted automatically: when full, writes are refused until you delete something.
+
+While you write, the human's chat shows "<you> is writing <file> in its scratchpad…".`,
 } satisfies KnowledgeEntry;
 
 export const watchesConcept = {

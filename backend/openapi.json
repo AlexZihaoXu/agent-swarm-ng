@@ -1053,6 +1053,326 @@
         }
       }
     },
+    "/api/agents/{id}/scratch": {
+      "get": {
+        "operationId": "listScratch",
+        "parameters": [
+          {
+            "schema": {
+              "maxLength": 263,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "folder",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "folder",
+                    "folders",
+                    "files",
+                    "usage"
+                  ],
+                  "properties": {
+                    "folder": {
+                      "type": "string"
+                    },
+                    "folders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "name",
+                          "path",
+                          "files",
+                          "size"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "files": {
+                            "type": "integer"
+                          },
+                          "size": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "name",
+                          "path",
+                          "size",
+                          "updatedAt"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "integer"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "usage": {
+                      "type": "object",
+                      "required": [
+                        "files",
+                        "bytes",
+                        "maxFiles",
+                        "maxBytes",
+                        "maxFileBytes"
+                      ],
+                      "properties": {
+                        "files": {
+                          "type": "integer"
+                        },
+                        "bytes": {
+                          "type": "integer"
+                        },
+                        "maxFiles": {
+                          "type": "integer"
+                        },
+                        "maxBytes": {
+                          "type": "integer"
+                        },
+                        "maxFileBytes": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/scratch/file": {
+      "get": {
+        "operationId": "readScratchFile",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 263,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "path",
+            "required": true
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "offset",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 2000,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "path",
+                    "size",
+                    "updatedAt",
+                    "text",
+                    "offset",
+                    "lines",
+                    "totalLines",
+                    "truncated",
+                    "partialLine",
+                    "nextOffset",
+                    "prevOffset"
+                  ],
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "integer"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "lines": {
+                      "type": "integer"
+                    },
+                    "totalLines": {
+                      "type": "integer"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    },
+                    "partialLine": {
+                      "type": "boolean"
+                    },
+                    "nextOffset": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "prevOffset": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agents/{id}/settings": {
       "get": {
         "operationId": "getAgentSettings",
