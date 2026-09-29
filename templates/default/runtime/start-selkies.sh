@@ -32,7 +32,7 @@ while :; do
     selkies --wayland=true --wayland-host-display=wayland-0 \
         --addr=0.0.0.0 --port=8080 --subfolder="/computers/$id/desktop" \
         --enable-https=true --enable-basic-auth=false --enable-dual-mode=false --enable-resize=false \
-        --audio-enabled=false --gamepad-enabled=false --webcam-enabled=false \
+        --audio-enabled=true --audio-on-start=false --microphone-enabled=false --audio-device-name=swarm-output.monitor --gamepad-enabled=false --webcam-enabled=false \
         --enable-clipboard=false --file-transfers=none --printing-enabled=false \
         --ui-sidebar-show-audio-settings=false --ui-sidebar-show-gamepads=false \
         --ui-sidebar-show-webcam=false --ui-sidebar-show-clipboard=false \

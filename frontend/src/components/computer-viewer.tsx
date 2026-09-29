@@ -8,7 +8,7 @@ import { ComputerControl, type ComputerAgentState } from './computer-control';
 import { TerminalWorkspace } from './computer-terminals';
 import { ComputerSwitcher } from './computer-switcher';
 import { FloatingTerminal } from './floating-terminal';
-import { ComputerIcon, TerminalIcon } from '@/components/ui/icons';
+import { ComputerIcon, SoundOffIcon, SoundOnIcon, TerminalIcon } from '@/components/ui/icons';
 import { m } from 'motion/react';
 import { glide } from '@/lib/motion';
 import { computerPath, computerTerminalPath } from '@/lib/dashboard-location';
@@ -83,6 +83,19 @@ export function ComputerViewer({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const url = `/computers/${encodeURIComponent(id)}/desktop/`;
   const inputToggleRef = useRef<HTMLButtonElement>(null);
+  // Desktop sound starts off every time (the guest captures nothing until asked). Browsers decode the stream's
+  // audio only on secure (HTTPS) pages, so on a plain-HTTP dashboard the toggle explains instead of failing silently.
+  const [soundOn, setSoundOn] = useState(false);
+  const soundAvailable = typeof window !== 'undefined' && window.isSecureContext;
+  useEffect(() => {
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: 'swarm:desktop-audio', enabled: soundOn },
+      window.location.origin,
+    );
+  }, [soundOn]);
+  useEffect(() => {
+    if (view === 'terminal') setSoundOn(false);
+  }, [view]);
   useEffect(() => {
     setInputEnabled(false);
   }, [id, viewerKey]);
@@ -311,6 +324,28 @@ export function ComputerViewer({
             {inputEnabled ? 'Input live' : 'Input locked'}
           </Button>
         )}
+        {running && view === 'desktop' && (
+          <Button
+            type="button"
+            variant={soundOn ? 'default' : 'outline'}
+            size="sm"
+            aria-pressed={soundOn}
+            aria-disabled={!soundAvailable}
+            aria-label={soundOn ? 'Sound on' : 'Sound off'}
+            title={
+              soundAvailable
+                ? soundOn
+                  ? 'Mute desktop sound'
+                  : 'Play desktop sound'
+                : 'Desktop sound needs a secure (HTTPS) dashboard address'
+            }
+            onClick={() => soundAvailable && setSoundOn(on => !on)}
+            className={`min-h-11 shrink-0 gap-1.5 md:min-h-0 ${soundAvailable ? '' : 'opacity-50'}`}
+          >
+            {soundOn ? <SoundOnIcon /> : <SoundOffIcon />}
+            <span className="max-sm:sr-only">{soundOn ? 'Sound on' : 'Sound off'}</span>
+          </Button>
+        )}
         {running && view === 'desktop' && !setupOpen && (
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
@@ -408,6 +443,7 @@ export function ComputerViewer({
                 tabIndex={inputEnabled ? 0 : -1}
                 onLoad={() => {
                   setInputEnabled(false);
+                  setSoundOn(false);
                   iframeRef.current?.contentWindow?.postMessage(
                     { type: 'swarm:desktop-input', enabled: false },
                     window.location.origin,

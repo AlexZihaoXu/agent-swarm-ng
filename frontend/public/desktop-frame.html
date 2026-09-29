@@ -67,6 +67,15 @@
       });
     })();
   </script>
+  <!-- Desktop sound is off until the viewer asks for it (the server captures nothing until then).
+       Only the parent dashboard may toggle it; the Selkies client does the rest. -->
+  <script>
+    window.addEventListener('message', event => {
+      if (event.origin !== location.origin || event.source !== window.parent ||
+          event.data?.type !== 'swarm:desktop-audio' || typeof event.data.enabled !== 'boolean') return;
+      window.postMessage({ type: 'pipelineControl', pipeline: 'audio', enabled: event.data.enabled }, location.origin);
+    });
+  </script>
   <!-- The trusted dashboard can request only these fixed guest key chords.
        Browser-reserved shortcuts cannot be captured on the insecure Tailnet
        HTTP origin; the menu provides an explicit alternative. No guest HTML

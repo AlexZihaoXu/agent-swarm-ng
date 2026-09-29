@@ -75,3 +75,13 @@ export const FolderIcon = (props: ComponentProps<'svg'>) => (
     <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
   </Icon>
 );
+export const SoundOnIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="M11 5 6 9H2v6h4l5 4V5ZM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" />
+  </Icon>
+);
+export const SoundOffIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="M11 5 6 9H2v6h4l5 4V5ZM22 9l-6 6M16 9l6 6" />
+  </Icon>
+);
