@@ -22,11 +22,14 @@ export function SectionNav({
   container,
   label = 'Jump to section',
   className,
+  inline = false,
 }: {
   /** The element whose direct `section[aria-label]` children (each with an h3) are listed. */
   container: RefObject<HTMLElement | null>;
   label?: string;
   className?: string;
+  /** Sits inside a page header instead of as a sticky strip over the content. */
+  inline?: boolean;
 }) {
   const group = useId();
   const [items, setItems] = useState<Item[]>([]);
@@ -115,9 +118,19 @@ export function SectionNav({
   return (
     <nav
       aria-label={label}
-      className={cn('sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur', className)}
+      className={cn(
+        !inline && 'sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur',
+        inline && 'min-w-0',
+        className,
+      )}
     >
-      <div ref={strip} className="mx-auto w-full max-w-5xl overflow-x-auto px-4 py-2 [scrollbar-width:none] md:px-6">
+      <div
+        ref={strip}
+        className={cn(
+          'overflow-x-auto [scrollbar-width:none]',
+          !inline && 'mx-auto w-full max-w-5xl px-4 py-2 md:px-6',
+        )}
+      >
         <div className="inline-flex min-w-max items-center gap-0.5 rounded-lg bg-muted p-1">
           {items.map(item => {
             const on = item.id === active;
@@ -134,7 +147,7 @@ export function SectionNav({
                   const scroller = scrollParent(item.element);
                   if (scroller) {
                     // Land the heading just below this sticky strip rather than underneath it.
-                    const offset = (strip.current?.parentElement?.offsetHeight ?? 0) + 16;
+                    const offset = (inline ? 0 : (strip.current?.parentElement?.offsetHeight ?? 0)) + 16;
                     const top =
                       scroller.scrollTop +
                       item.element.getBoundingClientRect().top -

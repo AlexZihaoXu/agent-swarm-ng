@@ -12,6 +12,7 @@ export function PageHeader({
   action,
   width = 'max-w-none',
   sticky = false,
+  actionShrinks = false,
 }: {
   title: string;
   description?: ReactNode;
@@ -20,6 +21,8 @@ export function PageHeader({
   width?: string;
   /** Keeps the header in view when the page itself is the scroll container. */
   sticky?: boolean;
+  /** The action may narrow (and scroll inside itself) when the header is tight, like a row of section links. */
+  actionShrinks?: boolean;
 }) {
   return (
     <header className={cn('shrink-0 border-b border-border', sticky && 'sticky top-0 z-10 bg-background')}>
@@ -34,7 +37,7 @@ export function PageHeader({
           <h2 className="truncate text-lg font-semibold">{title}</h2>
           {description && <div className="text-xs text-muted-foreground">{description}</div>}
         </div>
-        {action && <div className="shrink-0">{action}</div>}
+        {action && <div className={actionShrinks ? 'min-w-0' : 'shrink-0'}>{action}</div>}
       </div>
     </header>
   );

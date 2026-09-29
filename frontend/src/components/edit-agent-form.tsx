@@ -182,15 +182,10 @@ export function EditAgentForm({
               Agents
             </button>
           }
-          description={
-            saved ? (
-              <p role="status">Saved.</p>
-            ) : (
-              <p className="truncate" title={agent.name}>
-                Name, model, channels, computers and appearance for {agent.name}
-              </p>
-            )
-          }
+          description={saved ? <p role="status">Saved.</p> : undefined}
+          // Wider screens jump between sections from the header; phones keep a sticky strip under it.
+          action={<SectionNav container={sectionList} inline className="hidden md:block" />}
+          actionShrinks
         />
         <ScrollArea
           label="Agent editor"
@@ -198,7 +193,7 @@ export function EditAgentForm({
           className="min-h-0 flex-1"
           viewportClassName="[&>div]:!block"
         >
-          <SectionNav container={sectionList} />
+          <SectionNav container={sectionList} className="md:hidden" />
           <div ref={sectionList} className="mx-auto w-full max-w-5xl space-y-8 px-4 pb-8 pt-6 md:px-6">
             <section aria-label="Channels" className="space-y-4">
               <div>
