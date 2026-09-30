@@ -16,12 +16,16 @@ export async function runTriageTurns(
   fork.agent.shouldStopAfterTurn = () => true;
   let turns = 0;
   let feedback = 'No valid decision was recorded.';
+  /** The last turn used a granted read-only tool: the branch is looking deeper, not making a mistake. */
+  let exploring = false;
   try {
     while (turns < TRIAGE_MAX_TURNS && !signal.aborted) {
       const prompt =
         turns === 0
           ? initial
-          : `Automatic private feedback (not a human message). Triage correction ${turns + 1}/${TRIAGE_MAX_TURNS}: ${feedback}\nReview any tool errors above and correct the call. Only ${toolName} is granted. Call it with valid arguments and a brief reason; do not perform the original task or output prose instead of a decision.`;
+          : exploring
+            ? `Automatic private note (not a human message), turn ${turns + 1}/${TRIAGE_MAX_TURNS}: look further if it helps, then call ${toolName}. Do not perform the original task.`
+            : `Automatic private feedback (not a human message). Triage correction ${turns + 1}/${TRIAGE_MAX_TURNS}: ${feedback}\nReview any tool errors above and correct the call. Only ${toolName} is granted. Call it with valid arguments and a brief reason; do not perform the original task or output prose instead of a decision.`;
       turns++;
       await fork.prompt(prompt, { expandPromptTemplates: false });
       if (signal.aborted) break;
@@ -30,6 +34,9 @@ export async function runTriageTurns(
       // Transport/auth/context errors are not model-correctable tool mistakes. No blind API retries or raw error leakage.
       if (message?.role === 'assistant' && message.stopReason === 'error')
         return `Triage provider request failed on turn ${turns}; no decision recorded.`;
+      exploring =
+        message?.role === 'assistant' &&
+        message.content.some(block => block.type === 'toolCall' && block.name !== toolName);
       feedback =
         message?.role === 'assistant' && message.stopReason === 'length'
           ? 'No valid decision: the previous response hit its output token limit. Keep reasoning brief and re-issue a complete decision call.'

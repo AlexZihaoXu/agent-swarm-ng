@@ -4,6 +4,7 @@ import {
   SessionManager,
   SettingsManager,
   type ModelRuntime,
+  type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
 import { getSupportedThinkingLevels, Type } from '@earendil-works/pi-ai';
 import { chatResources, createChatSession, type ChatConfiguration, type ChannelMessage } from './chat-runtime';
@@ -21,11 +22,13 @@ export type DecisionFork<A extends string> = {
   prompt: string;
   /** What any failure (timeout, provider error, no valid decision) means. */
   fallback: A;
+  /** Read-only tools the branch may use before deciding (looking deeper); never anything with side effects. */
+  tools?: ToolDefinition[];
 };
 
 /**
  * An ephemeral, decision-only model branch (reaction and admission triage): the agent's recent channel context,
- * one decision tool, no publication or other tools, at most 10 corrective turns and a 120 s deadline. Every failure
+ * one decision tool (plus any read-only tools it is lent to look deeper), no publication or side effects, at most 10 corrective turns and a 120 s deadline. Every failure
  * returns the fallback.
  */
 export async function runDecisionFork<A extends string>(
@@ -84,8 +87,8 @@ export async function runDecisionFork<A extends string>(
       modelRuntime: base.modelRuntime,
       thinkingLevel: levels.includes('low') ? 'low' : 'off',
       noTools: 'all',
-      tools: [tool.name],
-      customTools: [tool],
+      tools: [tool.name, ...(fork.tools ?? []).map(item => item.name)],
+      customTools: [tool, ...(fork.tools ?? [])],
       resourceLoader: resources,
       sessionManager: SessionManager.inMemory(),
       settingsManager: SettingsManager.inMemory({
@@ -96,8 +99,8 @@ export async function runDecisionFork<A extends string>(
     }));
     if (
       session.sessionFile ||
-      session.agent.state.tools.length !== 1 ||
-      session.agent.state.tools[0].name !== tool.name
+      session.agent.state.tools.length !== 1 + (fork.tools?.length ?? 0) ||
+      !session.agent.state.tools.some(item => item.name === tool.name)
     )
       throw new Error(`Unsafe ${fork.label} grant`);
     session.agent.state.messages = structuredClone(base.messages);

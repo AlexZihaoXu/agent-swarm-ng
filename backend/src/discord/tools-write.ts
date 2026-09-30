@@ -65,12 +65,15 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
       name: 'discord_send_message',
       label: 'Post on Discord',
       description:
-        'Post in a Discord channel or DM you may use: the reply channel of a Discord input, or one from discord_list_channels / discord_open_dm. Long text is split into 2,000-character messages (code blocks kept intact). replyToMessageId makes it a Discord reply. Mention a person with <@userId> (only people you name are pinged; never @everyone or roles). Attach files you uploaded to this channel with upload_file (channelId "discord:<id>") via fileIds, up to 10 and 20 MiB each. final:false keeps working (acknowledgments, progress); final:true (default) ends your turn. Everyone in the channel reads what you post.',
+        'Post in a Discord channel or DM you may use: the reply channel of a Discord input, or one from discord_list_channels / discord_open_dm. Long text is split into 2,000-character messages (code blocks kept intact). replyToMessageId makes it a Discord reply (quoting that message; it pings its author only with ping:true). Mention a person with <@userId> (only people you name are pinged; never @everyone or roles). Attach files you uploaded to this channel with upload_file (channelId "discord:<id>") via fileIds, up to 10 and 20 MiB each. final:false keeps working (acknowledgments, progress); final:true (default) ends your turn. Everyone in the channel reads what you post.',
       parameters: Type.Object(
         {
           channelId: Channel,
           text: Type.String({ maxLength: 20000 }),
           replyToMessageId: Type.Optional(Id),
+          ping: Type.Optional(
+            Type.Boolean({ description: 'With replyToMessageId: also notify the replied-to author (off by default).' }),
+          ),
           fileIds: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 10 })),
           final: Type.Optional(Type.Boolean()),
         },
@@ -108,7 +111,7 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
             message = await call(() =>
               api.channels.createMessage(channel.channelId, {
                 ...(parts[index] ? { content: parts[index] } : {}),
-                allowed_mentions: { parse: [], users, replied_user: true },
+                allowed_mentions: { parse: [], users, replied_user: args.ping === true },
                 ...(first && args.replyToMessageId
                   ? { message_reference: { message_id: args.replyToMessageId, fail_if_not_exists: false } }
                   : {}),

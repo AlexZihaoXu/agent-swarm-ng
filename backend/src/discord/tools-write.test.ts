@@ -128,7 +128,8 @@ it('posts like a member: split, replies, only named people pinged, files attache
     expect(receipt.posted).toHaveLength(2);
     const [first, second] = posts();
     expect(first.body).toMatchObject({
-      allowed_mentions: { parse: [], users: [OWNER], replied_user: true },
+      // A reply quotes, but pings its author only when asked (ping:true).
+      allowed_mentions: { parse: [], users: [OWNER], replied_user: false },
       message_reference: { message_id: '1300000000000000002' },
     });
     expect(first.files).toEqual(['plan.md:7']);

@@ -19,6 +19,7 @@ const CHANNEL = '3000000000000000002';
 let model: Server;
 let modelUrl = '';
 const prompts: string[] = [];
+const checks: { text: string; tools: string[] }[] = [];
 beforeAll(async () => {
   model = createServer(async (request, response) => {
     const chunks: Buffer[] = [];
@@ -33,22 +34,31 @@ beforeAll(async () => {
       );
     chunk({ role: 'assistant', content: '' });
     const answered = body.messages.some((message: { role: string }) => message.role === 'tool');
-    // The relevance check branch: it may only decide.
-    if (
-      !answered &&
-      body.tools?.some((tool: { function: { name: string } }) => tool.function.name === 'admission_decision')
-    ) {
+    // The relevance check branch: it looks deeper once (a read-only tool), then decides.
+    if (body.tools?.some((tool: { function: { name: string } }) => tool.function.name === 'admission_decision')) {
+      checks.push({ text, tools: body.tools.map((tool: { function: { name: string } }) => tool.function.name) });
+      const looked = body.messages.some((message: { role: string }) => message.role === 'tool');
       chunk({
         tool_calls: [
-          {
-            index: 0,
-            id: 'call-check',
-            type: 'function',
-            function: {
-              name: 'admission_decision',
-              arguments: JSON.stringify({ action: 'admit', reason: 'They are asking about the deploy.' }),
-            },
-          },
+          looked
+            ? {
+                index: 0,
+                id: 'call-check',
+                type: 'function',
+                function: {
+                  name: 'admission_decision',
+                  arguments: JSON.stringify({ action: 'admit', reason: 'They are asking about the deploy.' }),
+                },
+              }
+            : {
+                index: 0,
+                id: 'call-look',
+                type: 'function',
+                function: {
+                  name: 'discord_read_messages',
+                  arguments: JSON.stringify({ channelId: `discord:${CHANNEL}`, limit: 5 }),
+                },
+              },
         ],
       });
       chunk({}, 'tool_calls');
@@ -90,6 +100,8 @@ beforeEach(async () => {
   discord = await new MockDiscord().start();
   discord.tokens.set(TOKEN, { id: BOT, username: 'aether-bot' });
   discord.on(request => {
+    // Reading a channel (the relevance check may look deeper): nothing older than what it saw.
+    if (request.method === 'GET' && /^\/channels\/\d+\/messages$/.test(request.path)) return { json: [] };
     const post = /^\/channels\/(\d+)\/messages$/.exec(request.path);
     if (request.method === 'POST' && post)
       return {
@@ -231,6 +243,22 @@ it('checks untargeted server messages in a visible, cheap branch before giving t
     const activity = (await app.inject(`/api/agents/${agent.id}/activity`)).body;
     expect(activity).toContain('Discord relevance check');
     expect(activity).toContain('They are asking about the deploy.');
+    // The check read the new message in the flow of the conversation, and could look deeper (read-only only).
+    expect(checks[0].text).toContain('Recent conversation in this channel');
+    expect(checks[0].text).toContain('(Recently active here: Sam.)');
+    expect(checks[0].tools.sort()).toEqual(
+      [
+        'admission_decision',
+        'discord_find_member',
+        'discord_read_messages',
+        'discord_search_messages',
+        'discord_view_profile',
+      ].sort(),
+    );
+    expect(checks.length).toBe(2); // looked once, then decided
+    expect(
+      discord.requests.some(request => request.method === 'GET' && request.path === `/channels/${CHANNEL}/messages`),
+    ).toBe(true);
   } finally {
     await app.close();
     await database.close();
