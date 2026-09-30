@@ -434,7 +434,7 @@ model DiscordBot {
   botUserId   String?
   botName     String?
   /// Default admission for allowed server channels: "mention" | "check" | "all".
-  admission   String   @default("mention")
+  admission   String    @default("check")
   /// Whether people other than the owner (and our agents) may DM the bot.
   strangerDms Boolean  @default(false)
   /// After an outage, deliver missed DMs and mentions as one labelled batch.

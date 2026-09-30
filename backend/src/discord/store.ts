@@ -43,7 +43,7 @@ export class DiscordStore {
         agentId,
         botUserId: null,
         botName: null,
-        admission: 'mention',
+        admission: 'check',
         strangerDms: false,
         catchUp: true,
         createdAt: new Date(0),

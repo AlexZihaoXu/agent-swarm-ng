@@ -11,11 +11,46 @@ import { cn } from '@/lib/utils';
 
 type Config = paths['/api/agents/{id}/discord']['get']['responses'][200]['content']['application/json'];
 type Admission = Config['admission'];
-const admissionOptions: { value: Admission; label: string }[] = [
-  { value: 'mention', label: 'Only when mentioned' },
-  { value: 'check', label: 'When it seems relevant (model check)' },
-  { value: 'all', label: 'Every message' },
+const icon = (path: string) => (
+  <svg
+    aria-hidden="true"
+    viewBox="0 0 24 24"
+    className="size-4 text-muted-foreground"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d={path} />
+  </svg>
+);
+const admissionOptions: { value: Admission; label: string; icon: React.ReactNode }[] = [
+  // @: only when someone names it.
+  {
+    value: 'mention',
+    label: 'Only when mentioned',
+    icon: icon('M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0zm0 0v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1'),
+  },
+  // Sparkle: a quick model check decides.
+  {
+    value: 'check',
+    label: 'When it seems relevant (model check)',
+    icon: icon(
+      'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z',
+    ),
+  },
+  // Speech bubbles: everything said there.
+  {
+    value: 'all',
+    label: 'Every message',
+    icon: icon(
+      'M4 5h11a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm16 4h0a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1v3l-4-3h-2',
+    ),
+  },
 ];
+/** A channel's "As set above": it follows the bot's choice. */
+const inheritIcon = icon('M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11');
 const statusText: Record<Config['status']['state'], string> = {
   off: 'Not connected',
   connecting: 'Connecting…',
@@ -313,6 +348,7 @@ export function AgentDiscordSettings({
             channels={saved.channels}
             choices={draft.channels}
             admissionOptions={admissionOptions}
+            inheritIcon={inheritIcon}
             onChange={channels => change({ channels })}
             empty={saved.configured ? 'Add the bot to a server to choose channels here.' : 'Connect a bot first.'}
           />

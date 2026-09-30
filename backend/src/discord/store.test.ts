@@ -34,7 +34,7 @@ it('keeps saved Discord messages for the retention period and prunes older ones'
     // With the announced message pruned, everything left still reads as unread after it.
     expect((await store.unread(agent.id, '3000000000000000002', '1300000000000000001')).count).toBe(2);
     // Reading an agent's Discord policies never creates a row.
-    expect((await store.bot(agent.id)).admission).toBe('mention');
+    expect((await store.bot(agent.id)).admission).toBe('check');
     expect(await database.client.discordBot.count()).toBe(0);
   } finally {
     await database.close();
