@@ -6,6 +6,12 @@ export const SNOWFLAKE = /^\d{15,21}$/;
 
 export class DiscordSettingsError extends Error {}
 
+/** Where a channel is, as agents read it: "DM with sam", "Swarm Lab › #design", "Swarm Lab › Logo v2" (a thread). */
+export const placeOf = (channel: { kind: string; name: string; guildName: string | null }) =>
+  channel.kind === 'dm'
+    ? `DM with ${channel.name}`
+    : `${channel.guildName ?? 'Server'} › ${channel.kind === 'thread' ? channel.name : `#${channel.name}`}`;
+
 export type DiscoveredChannel = {
   channelId: string;
   guildId: string | null;

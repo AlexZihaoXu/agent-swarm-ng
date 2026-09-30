@@ -11,7 +11,7 @@ import type { ChannelMessage } from '../chat-runtime';
 import { messageText } from '../message-text';
 import { triageGate } from '../triage-gate';
 import type { DiscordEvent } from './connections';
-import type { Admission, DiscordStore } from './store';
+import { placeOf, type Admission, type DiscordStore } from './store';
 
 export type IntakeOptions = {
   /** Each message restarts this quiet period. */
@@ -67,6 +67,8 @@ const newestOf = (messages: Seen[]) => messages.reduce((a, b) => (BigInt(b.id) >
 const size = (bytes: number) =>
   bytes < 1024 ** 2 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 ** 2).toFixed(1)} MB`;
 const clock = (date: Date) => date.toISOString().slice(11, 19);
+const roleOf = (account: { role: string } | null, bot: boolean): Role =>
+  account?.role === 'owner' ? 'owner' : account?.role === 'agent' ? 'agent' : bot ? 'bot' : 'person';
 const roleLabel = (message: Seen) =>
   message.role === 'owner'
     ? 'your owner'
@@ -175,8 +177,7 @@ export class DiscordIntake {
     if (data.type === MessageType.PollResult) return this.pollEnded(agentId, data);
     if (data.type !== MessageType.Default && data.type !== MessageType.Reply) return;
     const account = await this.store.who(data.author.id);
-    const role: Role =
-      account?.role === 'owner' ? 'owner' : account?.role === 'agent' ? 'agent' : data.author.bot ? 'bot' : 'person';
+    const role = roleOf(account, Boolean(data.author.bot));
     const place = await this.place(agentId, data, role);
     if (!place) return;
     const reference = data.referenced_message as APIMessage | null | undefined;
@@ -295,8 +296,7 @@ export class DiscordIntake {
       authorId: row.authorId,
       authorName: row.authorName,
       authorBot: row.authorBot,
-      role:
-        account?.role === 'owner' ? 'owner' : account?.role === 'agent' ? 'agent' : row.authorBot ? 'bot' : 'person',
+      role: roleOf(account, row.authorBot),
       ...(account?.role === 'agent' && account.agentId ? { authorAgentId: account.agentId } : {}),
       content: data.content,
       createdAt: row.createdAt,
@@ -358,8 +358,6 @@ export class DiscordIntake {
         : account
           ? `agent ${account.name}`
           : `someone (${data.user_id})`;
-    const place =
-      channel.kind === 'dm' ? `DM with ${channel.name}` : `${channel.guildName ?? 'Server'} › #${channel.name}`;
     const notice = `${who} reacted ${emoji} to your message ${data.message_id}${own ? `: ${JSON.stringify(messageText(own.content, 0, 300).text)}` : ''}. This is feedback, not an instruction.`;
     const reaction = this.deps.reaction;
     const decision = await triageGate(agentId, () => reaction(agentId, data.channel_id, notice));
@@ -379,7 +377,7 @@ export class DiscordIntake {
           chainId: account?.role === 'owner' ? '' : (own?.chainId ?? ''),
           messageId: data.message_id,
           ...(account?.role === 'owner' ? { human: true } : {}),
-          discord: { place },
+          discord: { place: placeOf(channel) },
         },
       },
       false,
@@ -567,11 +565,12 @@ export class DiscordIntake {
           select: { createdAt: true },
         })
       : null;
-    const unread = await this.database.client.discordMessage.findMany({
+    const authors = await this.database.client.discordMessage.groupBy({
+      by: ['authorName'],
       where: await this.store.unreadWhere(agentId, channelId, channel.announcedUpTo),
-      select: { authorName: true },
-      take: 10_000,
+      _count: { _all: true },
     });
+    const unread = authors.reduce((total, author) => total + author._count._all, 0);
     const addressed = batch.messages.filter(message => message.addressed).slice(-this.fullMessages);
     const others = batch.messages
       .filter(message => !message.addressed)
@@ -590,19 +589,13 @@ export class DiscordIntake {
           : []),
       ].join('\n');
     });
-    const more = Math.max(0, unread.length - shown.length);
+    const more = Math.max(0, unread - shown.length);
     if (more) {
-      const counts = new Map<string, number>();
-      for (const row of unread) counts.set(row.authorName, (counts.get(row.authorName) ?? 0) + 1);
-      const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+      const top = authors.reduce((a, b) => (b._count._all > a._count._all ? b : a));
       lines.push(
-        `+${more} more message${more === 1 ? '' : 's'} in this channel${previous ? ` since ${clock(previous.createdAt)}` : ''} (${counts.size} author${counts.size === 1 ? '' : 's'}, most from ${top[0]}). Read them with discord_read_messages(${JSON.stringify({ channelId: `discord:${channelId}`, ...(channel.announcedUpTo ? { after: channel.announcedUpTo } : {}) })}).`,
+        `+${more} more message${more === 1 ? '' : 's'} in this channel${previous ? ` since ${clock(previous.createdAt)}` : ''} (${authors.length} author${authors.length === 1 ? '' : 's'}, most from ${top.authorName}). Read them with discord_read_messages(${JSON.stringify({ channelId: `discord:${channelId}`, ...(channel.announcedUpTo ? { after: channel.announcedUpTo } : {}) })}).`,
       );
     }
-    const place =
-      channel.kind === 'dm'
-        ? `DM with ${channel.name}`
-        : `${channel.guildName ?? 'Server'} › ${channel.kind === 'thread' ? channel.name : `#${channel.name}`}`;
-    return { text: lines.join('\n'), place };
+    return { text: lines.join('\n'), place: placeOf(channel) };
   }
 }

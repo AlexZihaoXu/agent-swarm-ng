@@ -11,6 +11,7 @@ import {
   type APIUser,
 } from 'discord-api-types/v10';
 import { messageText } from '../message-text';
+import { placeOf } from './store';
 import {
   allowedChannel,
   allowedServer,
@@ -110,7 +111,7 @@ export function createDiscordReadTools(context: DiscordToolContext): ToolDefinit
           if (!unread.count) continue;
           rows.push({
             channelId: `discord:${channel.channelId}`,
-            place: channel.kind === 'dm' ? `DM with ${channel.name}` : `${channel.guildName} › #${channel.name}`,
+            place: placeOf(channel),
             unread: unread.count,
             mentions: unread.mentions,
             latest: unread.latest?.toISOString(),

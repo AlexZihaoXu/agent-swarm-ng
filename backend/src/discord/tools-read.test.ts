@@ -116,6 +116,20 @@ it('reads a channel oldest first like the app, labels authors, and refuses chann
     expect(discord.requests.at(-1)!.query.get('around')).toMatch(/^\d+$/);
     await expect(call('discord_read_messages', { channelId: SECRET })).rejects.toThrow('not one you may use');
     await expect(call('discord_read_messages', { channelId: DESIGN, before: '1', after: '2' })).rejects.toThrow();
+    // A long rate limit fails the call with a wait time instead of stalling the turn.
+    discord.before(request =>
+      request.path === `/channels/${DESIGN}/messages`
+        ? {
+            status: 429,
+            json: { message: 'You are being rate limited.', retry_after: 30, global: false },
+            headers: { 'retry-after': '30', 'x-ratelimit-scope': 'user' },
+          }
+        : undefined,
+    );
+    await expect(call('discord_read_messages', { channelId: DESIGN })).rejects.toThrow(/try again in \d+ s/);
+    // A token revoked mid-run says so plainly.
+    discord.tokens.clear();
+    await expect(call('discord_read_pins', { channelId: DESIGN })).rejects.toThrow('no longer accepts');
   } finally {
     await connections.close();
     await database.close();

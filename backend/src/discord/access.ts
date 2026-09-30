@@ -1,5 +1,5 @@
 import type { REST } from '@discordjs/rest';
-import { DiscordAPIError } from '@discordjs/rest';
+import { DiscordAPIError, HTTPError, RateLimitError } from '@discordjs/rest';
 import { MessageType, type APIMessage } from 'discord-api-types/v10';
 import { messageText } from '../message-text';
 import type { DiscordConnections } from './connections';
@@ -44,7 +44,14 @@ export function bot(context: DiscordToolContext) {
 
 /** Discord's errors, said plainly (never raw request details). */
 export function discordError(error: unknown): never {
+  // Discord down or slow (5xx after the client's retries, or a timeout).
+  if (error instanceof HTTPError || (error instanceof Error && error.name === 'AbortError'))
+    throw new Error('Discord could not be reached; try again later.');
+  if (error instanceof RateLimitError)
+    throw new Error(`Discord is rate limiting; try again in ${Math.ceil(error.retryAfter / 1000)} s.`);
   if (error instanceof DiscordAPIError) {
+    if (error.status === 401)
+      throw new Error('Discord no longer accepts this bot’s token; your owner needs to paste a new one.');
     if (error.status === 403) throw new Error('Discord says you lack permission for that (server settings).');
     if (error.status === 404) throw new Error('Discord could not find that (it may have been deleted).');
     if (error.status === 429) throw new Error('Discord is rate limiting; wait a little and try again.');

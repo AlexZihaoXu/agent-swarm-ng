@@ -7,7 +7,9 @@ import { WebSocketServer, type WebSocket } from 'ws';
  * Gateway that performs the real handshake (Hello → Identify → READY → GUILD_CREATE), then lets a test push events.
  */
 export type MockRequest = { method: string; path: string; query: URLSearchParams; body: any; files: string[] };
-type Handler = (request: MockRequest) => { status?: number; json: unknown } | undefined;
+type Handler = (
+  request: MockRequest,
+) => { status?: number; json: unknown; headers?: Record<string, string> } | undefined;
 
 async function readBody(request: IncomingMessage) {
   const chunks: Buffer[] = [];
@@ -47,9 +49,9 @@ export class MockDiscord {
   async start() {
     this.server = createServer(async (request, response) => {
       const url = new URL(request.url ?? '/', 'http://mock');
-      const reply = (status: number, json: unknown) => {
-        if (status === 204) return void response.writeHead(204).end();
-        response.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(json));
+      const reply = (status: number, json: unknown, headers: Record<string, string> = {}) => {
+        if (status === 204) return void response.writeHead(204, headers).end();
+        response.writeHead(status, { 'content-type': 'application/json', ...headers }).end(JSON.stringify(json));
       };
       const token = String(request.headers.authorization ?? '').replace(/^Bot /, '');
       const user = this.tokens.get(token);
@@ -70,7 +72,7 @@ export class MockDiscord {
       this.requests.push(captured);
       for (const handler of this.handlers) {
         const result = handler(captured);
-        if (result) return reply(result.status ?? 200, result.json);
+        if (result) return reply(result.status ?? 200, result.json, result.headers);
       }
       if (path === '/users/@me')
         return reply(200, { id: user.id, username: user.username, global_name: null, bot: true });

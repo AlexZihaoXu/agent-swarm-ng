@@ -160,6 +160,8 @@ export class DiscordConnections implements DiscordConnectionControl {
       // Send through the global fetch, the same implementation as the global FormData uploads are built with
       // (the model SDK installs its own undici globally; the REST client's bundled one cannot send those bodies).
       makeRequest: (url, init) => fetch(url, init as RequestInit) as never,
+      // Short rate limits are waited out; a long one fails the tool call instead of stalling the turn.
+      rejectOnRateLimit: limit => limit.retryAfter > 10_000,
     }).setToken(token);
     const api = new API(rest);
     let me;

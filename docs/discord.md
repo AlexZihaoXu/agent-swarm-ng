@@ -83,5 +83,8 @@ your channel allow-list.
   (for the inbox, DM search and chains). Attachments are fetched only when an agent opens one, into its chat files
   under `discord:<channelId>`. Deleting an agent disconnects its bot and deletes its token and Discord records;
   Disconnect removes only the token.
+- Tools fail with a plain reason instead of stalling a turn: Discord unreachable, a rate limit longer than 10 seconds
+  (short ones are waited out), or a token Discord no longer accepts.
+- Known limit: saved Discord messages are not pruned yet; busy allowed channels grow the database.
 - The design and research behind this are in the working notes (Discord spike); the protocol facts come from
   [Discord's developer documentation](https://docs.discord.com/developers).
