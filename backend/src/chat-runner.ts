@@ -1,4 +1,9 @@
-import { SessionManager, type ModelRuntime, type ToolDefinition } from '@earendil-works/pi-coding-agent';
+import {
+  SessionManager,
+  type AgentSession,
+  type ModelRuntime,
+  type ToolDefinition,
+} from '@earendil-works/pi-coding-agent';
 import { createActivityRecorder } from './agent-activity';
 import { channelInput, createChatSession, type ChatConfiguration, type ChannelMessage } from './chat-runtime';
 import { createWebTools } from './web-tools';
@@ -7,6 +12,7 @@ import { evaluateInterruption } from './interruption-triage';
 import { triageGate } from './triage-gate';
 import { formatContextUsage } from './context-usage';
 import { createPublicationTyping } from './publication-typing';
+import type { BackgroundCompactor } from './background-compaction';
 import { AgentSessionStore } from './agent-session-store';
 import type { ActivityStore } from './activity-store';
 import { forkBasis, type ForkBasis } from './computer-use/watch-judge';
@@ -20,6 +26,12 @@ export type InboxHooks = {
   activityStore?: ActivityStore;
   /** The run's session as a fork would copy it: live while running, then as it ended. */
   session?: (basis: () => ForkBasis, ended: boolean) => void;
+  /** Background compaction: start a summary at atPercent of the context; report usage when the run ends. */
+  compaction?: {
+    compactor: BackgroundCompactor;
+    atPercent: number;
+    ended?: (usage: ReturnType<AgentSession['getContextUsage']>) => void;
+  };
 };
 
 export async function runChat(
@@ -56,6 +68,8 @@ export async function runChat(
     lastStopReason: string | undefined;
   let web: Awaited<ReturnType<typeof createWebTools>> | undefined;
   let session: Awaited<ReturnType<typeof createChatSession>> | undefined;
+  /** The session a background summary is being written from: kept alive until it settles. */
+  let summarizing: typeof session;
   let unsubscribe = () => {};
   let checkpoint = Promise.resolve();
   let checkpointFailure: unknown;
@@ -95,6 +109,68 @@ export async function runChat(
     if (hooks.sessionStore && !restored && session.sessionManager.getEntries().length)
       await hooks.sessionStore.save(channel.agentId, session.sessionManager);
     const live = session;
+    // Durable checkpoints are captured at a boundary and written in order, off the model's critical path.
+    const queueCheckpoint = () => {
+      try {
+        const snapshot = AgentSessionStore.capture(live.sessionManager);
+        checkpoint = checkpoint
+          .then(() => hooks.sessionStore!.save(channel.agentId, snapshot, { advancePublications: false }))
+          .catch(error => {
+            checkpointFailure = error;
+            void live.abort();
+          });
+      } catch (error) {
+        checkpointFailure = error;
+        void live.abort();
+      }
+    };
+    // Background compaction: a summary written while the agent works, applied between model calls.
+    const background = hooks.sessionStore ? hooks.compaction : undefined;
+    const agentId = channel.agentId;
+    const applySummary = () => {
+      const outcome = background?.compactor.splice(agentId, live);
+      if (outcome === 'spliced') {
+        activity.record(
+          'status',
+          'Background compaction applied',
+          'Earlier context was replaced by its summary; everything after it is kept verbatim.',
+        );
+        queueCheckpoint();
+      } else if (outcome === 'stale')
+        activity.record(
+          'status',
+          'Background compaction discarded',
+          'The summary no longer matched this context (it changed meanwhile).',
+        );
+      return outcome === 'spliced';
+    };
+    /** Before a model call: sleep if the context is nearly full while a summary is being written, then apply it. */
+    const beforeModelCall = async (callSignal: AbortSignal) => {
+      if (!background) return false;
+      const usage = live.getContextUsage();
+      const reserve = live.settingsManager.getCompactionSettings().reserveTokens;
+      if (
+        background.compactor.running(agentId) &&
+        usage?.tokens != null &&
+        usage.tokens > usage.contextWindow - reserve
+      ) {
+        activity.record(
+          'status',
+          'Sleeping',
+          'The context is nearly full: waiting for the background summary before continuing.',
+        );
+        await background.compactor.sleep(agentId, AbortSignal.any([signal, callSignal]));
+      }
+      return applySummary();
+    };
+    if (background) {
+      const next = live.agent.prepareNextTurnWithContext;
+      live.agent.prepareNextTurnWithContext = async (turn, turnSignal) => {
+        const spliced = await beforeModelCall(turnSignal ?? signal);
+        const context = spliced ? { ...turn.context, messages: live.agent.state.messages.slice() } : turn.context;
+        return next ? next({ ...turn, context }, turnSignal) : spliced ? { context } : undefined;
+      };
+    }
     hooks.session?.(() => forkBasis(live), false);
     signal.addEventListener('abort', abort, { once: true });
     signal.throwIfAborted();
@@ -120,17 +196,24 @@ export async function runChat(
       ) {
         // Capture the completed boundary now; a later provider turn may already be streaming
         // by the time the queued SQLite write acquires its short transaction.
-        try {
-          const snapshot = AgentSessionStore.capture(session!.sessionManager);
-          checkpoint = checkpoint
-            .then(() => hooks.sessionStore!.save(channel.agentId, snapshot, { advancePublications: false }))
-            .catch(error => {
-              checkpointFailure = error;
-              void session?.abort();
-            });
-        } catch (error) {
-          checkpointFailure = error;
-          void session?.abort();
+        queueCheckpoint();
+      }
+      // The context passed the agent's threshold: summarize its earlier part in the background.
+      if (
+        background &&
+        !signal.aborted &&
+        event.type === 'turn_end' &&
+        event.message.role === 'assistant' &&
+        !['aborted', 'error'].includes(event.message.stopReason)
+      ) {
+        const percent = live.getContextUsage()?.percent;
+        if (percent != null && percent >= background.atPercent && background.compactor.start(agentId, live)) {
+          summarizing = live;
+          activity.record(
+            'status',
+            'Background compaction started',
+            `Context at ${Math.round(percent)}% (starts at ${background.atPercent}%): summarizing earlier context while the agent keeps working.`,
+          );
         }
       }
       publicationTyping.onEvent(event);
@@ -155,6 +238,8 @@ export async function runChat(
     const stopReason = (): string | undefined => lastStopReason;
     while (inbox.hasPending() && !signal.aborted) {
       const batch = await inbox.take(signal);
+      // A summary finished since the last prompt (or while idle): this prompt's first model call already uses it.
+      await beforeModelCall(signal);
       if (activityFailed) throw new Error('Activity persistence failed.');
       if (hooks.prepare) batch.messages = await hooks.prepare(batch.messages);
       if (!batch.messages.length) continue;
@@ -185,6 +270,8 @@ export async function runChat(
               { triggerTurn: true },
             );
           }
+          // A summary that finished during the last model call joins this checkpoint.
+          applySummary();
           await checkpoint;
           await activity.flush();
           if (checkpointFailure) throw checkpointFailure;
@@ -297,7 +384,11 @@ export async function runChat(
       const ended = { ...forkBasis(session), messages: session.messages.slice(), streamingMessage: undefined };
       hooks.session?.(() => ended, true);
     }
-    session?.dispose();
+    if (session) hooks.compaction?.ended?.(session.getContextUsage());
+    const ending = session;
+    if (ending && summarizing === ending && hooks.compaction?.compactor.running(channel.agentId))
+      void hooks.compaction.compactor.settled(channel.agentId).finally(() => ending.dispose());
+    else session?.dispose();
     await web?.close();
     try {
       await activity.finish(signal.aborted, runFailed || activityFailed);

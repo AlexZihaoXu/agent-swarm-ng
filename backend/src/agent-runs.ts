@@ -120,6 +120,24 @@ export class AgentRuns {
       channelId,
     });
   }
+  private compactions = new Map<string, 'running' | 'sleeping'>();
+  /** An agent is summarizing its context in the background, or sleeping until that is done (null: neither). */
+  compaction(agentId: string, state: 'running' | 'sleeping' | null) {
+    if (state) this.compactions.set(agentId, state);
+    else this.compactions.delete(agentId);
+    this.broadcast({
+      type: 'compaction',
+      state,
+      eventId: crypto.randomUUID(),
+      runId: 'platform',
+      agentId,
+      channelId: 'platform',
+    });
+  }
+  /** Agents summarizing or sleeping now, for a reconnecting dashboard. */
+  compactionSnapshot() {
+    return Object.fromEntries(this.compactions);
+  }
   /** An agent started or finished typing into a terminal; dashboards show it on that terminal. */
   terminalActivity(
     agentId: string,

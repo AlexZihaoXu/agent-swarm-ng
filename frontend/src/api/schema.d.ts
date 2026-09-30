@@ -3733,6 +3733,12 @@ export interface operations {
                                     };
                                 }[];
                             } | null;
+                            compaction: {
+                                atPercent: number;
+                                /** @description 0 turns idle compaction off. */
+                                idleMinutes: number;
+                                idlePercent: number;
+                            };
                         }[];
                         nextCursor: number | null;
                     };
@@ -3844,6 +3850,12 @@ export interface operations {
                                 };
                             }[];
                         } | null;
+                        compaction: {
+                            atPercent: number;
+                            /** @description 0 turns idle compaction off. */
+                            idleMinutes: number;
+                            idlePercent: number;
+                        };
                     };
                 };
             };
@@ -4041,6 +4053,12 @@ export interface operations {
                     endpointId?: string;
                     model?: string;
                     thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+                    compaction?: {
+                        atPercent?: number;
+                        /** @description 0 turns idle compaction off. */
+                        idleMinutes?: number;
+                        idlePercent?: number;
+                    };
                 };
             };
         };
@@ -4116,6 +4134,12 @@ export interface operations {
                                 };
                             }[];
                         } | null;
+                        compaction: {
+                            atPercent: number;
+                            /** @description 0 turns idle compaction off. */
+                            idleMinutes: number;
+                            idlePercent: number;
+                        };
                     };
                 };
             };

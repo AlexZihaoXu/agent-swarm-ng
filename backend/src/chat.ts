@@ -55,6 +55,15 @@ const Message = Type.Object({
   files: Type.Optional(Type.Array(FileSchema)),
 });
 const Cursor = Type.Union([Type.Integer(), Type.Null()]);
+/** Background compaction (see background-compaction.ts): during work at atPercent; when idle, after idleMinutes at idlePercent. */
+const Compaction = Type.Object(
+  {
+    atPercent: Type.Integer({ minimum: 20, maximum: 90 }),
+    idleMinutes: Type.Integer({ minimum: 0, maximum: 1440, description: '0 turns idle compaction off.' }),
+    idlePercent: Type.Integer({ minimum: 10, maximum: 90 }),
+  },
+  { additionalProperties: false },
+);
 const Agent = Type.Object(
   {
     ...Selection.properties,
@@ -63,6 +72,7 @@ const Agent = Type.Object(
     channelId: Type.String(),
     createdAt: Type.Number(),
     lastMessage: Type.Union([Message, Type.Null()]),
+    compaction: Compaction,
   },
   { additionalProperties: false },
 );
@@ -113,6 +123,11 @@ function agentView(
     endpointId: agent.endpointId,
     model: agent.model,
     thinkingLevel: agent.thinkingLevel,
+    compaction: {
+      atPercent: agent.compactAtPercent,
+      idleMinutes: agent.idleCompactMinutes,
+      idlePercent: agent.idleCompactPercent,
+    },
     channelId: channel.id,
     lastMessage: channel.messages[0] ? messageView(channel.messages[0], files?.get(channel.messages[0].id)) : null,
   };
@@ -363,7 +378,9 @@ export function registerChat(
 
   app.patch<{
     Params: { id: string };
-    Body: Partial<Pick<Static<typeof Selection>, 'name' | 'endpointId' | 'model' | 'thinkingLevel'>>;
+    Body: Partial<Pick<Static<typeof Selection>, 'name' | 'endpointId' | 'model' | 'thinkingLevel'>> & {
+      compaction?: Partial<Static<typeof Compaction>>;
+    };
   }>(
     '/api/agents/:id',
     {
@@ -376,6 +393,7 @@ export function registerChat(
             endpointId: Type.Optional(Selection.properties.endpointId),
             model: Type.Optional(Selection.properties.model),
             thinkingLevel: Type.Optional(Thinking),
+            compaction: Type.Optional(Type.Partial(Compaction)),
           },
           { additionalProperties: false, minProperties: 1 },
         ),
@@ -386,8 +404,10 @@ export function registerChat(
       reply.header('Cache-Control', 'no-store');
       const id = request.params.id;
       if (closing) return reply.code(503).send({ message: 'The backend is shutting down.' });
-      // The same short lock as deletion: a turn in flight already captured its model and name.
-      if (active.has(id) || runs.has(id))
+      // The same short lock as deletion: a turn in flight already captured its model and name. The compaction
+      // policy alone can change at any time (it is read when the next summary starts).
+      const identity = Object.keys(request.body).some(key => key !== 'compaction');
+      if (active.has(id) || (identity && runs.has(id)))
         return reply
           .code(409)
           .send({ message: 'The agent is responding. Stop it and wait for the turn to finish before changing it.' });
@@ -410,8 +430,18 @@ export function registerChat(
           const problem = await checkSelection(next);
           if (problem)
             return reply.code(problem.status === 404 ? 400 : problem.status).send({ message: problem.message });
+          // A summary being written for the old model is not applied to the new one.
+          broker.forgetCompaction(id);
         }
-        return agentView(await database.updateAgent(id, next));
+        const policy = request.body.compaction ?? {};
+        return agentView(
+          await database.updateAgent(id, {
+            ...next,
+            compactAtPercent: policy.atPercent ?? record.compactAtPercent,
+            idleCompactMinutes: policy.idleMinutes ?? record.idleCompactMinutes,
+            idleCompactPercent: policy.idlePercent ?? record.idleCompactPercent,
+          }),
+        );
       } catch {
         return reply.code(503).send({ message: 'Could not update the agent. Try again.' });
       } finally {

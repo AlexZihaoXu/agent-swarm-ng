@@ -54,7 +54,15 @@ export class PlatformStore {
   }
   async updateAgent(
     id: string,
-    data: { name: string; endpointId: string; model: string; thinkingLevel: AgentInput['thinkingLevel'] },
+    data: {
+      name: string;
+      endpointId: string;
+      model: string;
+      thinkingLevel: AgentInput['thinkingLevel'];
+      compactAtPercent?: number;
+      idleCompactMinutes?: number;
+      idleCompactPercent?: number;
+    },
   ) {
     await this.initialize();
     return this.withLatestMessage(await this.client.agent.update({ where: { id }, data, include: agentSelection }));

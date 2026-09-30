@@ -11775,7 +11775,8 @@
                           "id",
                           "channelId",
                           "createdAt",
-                          "lastMessage"
+                          "lastMessage",
+                          "compaction"
                         ],
                         "properties": {
                           "name": {
@@ -12422,6 +12423,33 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "compaction": {
+                            "additionalProperties": false,
+                            "type": "object",
+                            "required": [
+                              "atPercent",
+                              "idleMinutes",
+                              "idlePercent"
+                            ],
+                            "properties": {
+                              "atPercent": {
+                                "minimum": 20,
+                                "maximum": 90,
+                                "type": "integer"
+                              },
+                              "idleMinutes": {
+                                "minimum": 0,
+                                "maximum": 1440,
+                                "description": "0 turns idle compaction off.",
+                                "type": "integer"
+                              },
+                              "idlePercent": {
+                                "minimum": 10,
+                                "maximum": 90,
+                                "type": "integer"
+                              }
+                            }
                           }
                         }
                       }
@@ -12770,7 +12798,8 @@
                     "id",
                     "channelId",
                     "createdAt",
-                    "lastMessage"
+                    "lastMessage",
+                    "compaction"
                   ],
                   "properties": {
                     "name": {
@@ -13417,6 +13446,33 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "compaction": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "atPercent",
+                        "idleMinutes",
+                        "idlePercent"
+                      ],
+                      "properties": {
+                        "atPercent": {
+                          "minimum": 20,
+                          "maximum": 90,
+                          "type": "integer"
+                        },
+                        "idleMinutes": {
+                          "minimum": 0,
+                          "maximum": 1440,
+                          "description": "0 turns idle compaction off.",
+                          "type": "integer"
+                        },
+                        "idlePercent": {
+                          "minimum": 10,
+                          "maximum": 90,
+                          "type": "integer"
+                        }
+                      }
                     }
                   }
                 }
@@ -13951,6 +14007,28 @@
                         ]
                       }
                     ]
+                  },
+                  "compaction": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "properties": {
+                      "atPercent": {
+                        "minimum": 20,
+                        "maximum": 90,
+                        "type": "integer"
+                      },
+                      "idleMinutes": {
+                        "minimum": 0,
+                        "maximum": 1440,
+                        "description": "0 turns idle compaction off.",
+                        "type": "integer"
+                      },
+                      "idlePercent": {
+                        "minimum": 10,
+                        "maximum": 90,
+                        "type": "integer"
+                      }
+                    }
                   }
                 }
               }
@@ -13985,7 +14063,8 @@
                     "id",
                     "channelId",
                     "createdAt",
-                    "lastMessage"
+                    "lastMessage",
+                    "compaction"
                   ],
                   "properties": {
                     "name": {
@@ -14632,6 +14711,33 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "compaction": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "atPercent",
+                        "idleMinutes",
+                        "idlePercent"
+                      ],
+                      "properties": {
+                        "atPercent": {
+                          "minimum": 20,
+                          "maximum": 90,
+                          "type": "integer"
+                        },
+                        "idleMinutes": {
+                          "minimum": 0,
+                          "maximum": 1440,
+                          "description": "0 turns idle compaction off.",
+                          "type": "integer"
+                        },
+                        "idlePercent": {
+                          "minimum": 10,
+                          "maximum": 90,
+                          "type": "integer"
+                        }
+                      }
                     }
                   }
                 }

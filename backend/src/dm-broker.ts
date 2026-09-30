@@ -26,7 +26,12 @@ import type { CodexProvider } from './codex-provider';
 import { SwarmStore, dmReplyInclude } from './swarm-store';
 import { createDmTools, type DmReceipt } from './dm-tools';
 import { resolveChatConnection } from './chat-connection';
-import type { AgentMessageSource, ChannelMessage, ChatConfiguration } from './chat-runtime';
+import {
+  createChatSession,
+  type AgentMessageSource,
+  type ChannelMessage,
+  type ChatConfiguration,
+} from './chat-runtime';
 import { runChat } from './chat-runner';
 import { createChatHistoryTools } from './chat-history-tools';
 import { messageText } from './message-text';
@@ -40,6 +45,7 @@ import { ReactionCoordinator } from './reaction-coordinator';
 import { channelReply, groupReplyContext, dmReplyContext } from './reply-preview';
 import { AgentSessionStore } from './agent-session-store';
 import { ActivityStore } from './activity-store';
+import { BackgroundCompactor } from './background-compaction';
 import { createActivityRecorder, type ActivityEntry } from './agent-activity';
 import type { ActivityTrace } from './activity-events';
 import { SwarmKnowledgePlugin } from './swarm-knowledge/plugin';
@@ -64,6 +70,11 @@ export class DmBroker {
   readonly reactions: ReactionStore;
   readonly sessions: AgentSessionStore;
   readonly activity: ActivityStore;
+  /** Background compaction for every agent (one summary in flight each); its state shows on the agent's avatar. */
+  readonly compactor: BackgroundCompactor;
+  /** When each agent's last run ended and how full its context was, for idle compaction. */
+  private idle = new Map<string, { at: number; percent: number }>();
+  private idleTimer?: ReturnType<typeof setInterval>;
   readonly knowledge: SwarmKnowledgePlugin;
   private reactionCoordinator: ReactionCoordinator;
   private starting?: Promise<void>;
@@ -106,6 +117,9 @@ export class DmBroker {
     this.reactions = new ReactionStore(database);
     this.sessions = new AgentSessionStore(database);
     this.activity = new ActivityStore(database);
+    this.compactor = new BackgroundCompactor({ state: (agentId, state) => runs.compaction(agentId, state) });
+    this.idleTimer = setInterval(() => void this.compactIdle().catch(() => {}), 60_000);
+    this.idleTimer.unref?.();
     this.settings = new SwarmSettingsStore(database);
     this.scratch = new Scratchpad(database, this.settings);
     this.scratch.onActivity = ({ agentId, ...detail }) => runs.scratchActivity(agentId, detail);
@@ -865,6 +879,14 @@ ${preview.text}`
       ],
       {
         sessionStore: this.sessions,
+        compaction: {
+          compactor: this.compactor,
+          atPercent: agent.compactAtPercent,
+          ended: usage => {
+            if (usage?.percent != null) this.idle.set(agentId, { at: Date.now(), percent: usage.percent });
+            else this.idle.delete(agentId);
+          },
+        },
         notices: notices.map(notice => notice.text),
         noticesSaved: () =>
           this.computers?.acknowledgeNotices(
@@ -939,8 +961,89 @@ ${preview.text}`
     const job = [...this.jobs.values()].find(item => item.run.runId === runId);
     await this.cancelChain(job?.chainId ?? runId);
   }
+  /** The agent's model changed or it is being deleted: a summary written for the old context is dropped. */
+  forgetCompaction(agentId: string) {
+    this.compactor.cancel(agentId);
+    this.idle.delete(agentId);
+  }
+  /**
+   * Idle compaction: an agent idle for its idleMinutes with its context at least idlePercent full gets its summary
+   * written now, from its saved session, so its next turn starts light (the summary waits in memory for that turn).
+   */
+  private async compactIdle() {
+    if (this.closing) return;
+    const now = Date.now();
+    for (const [agentId, note] of this.idle) {
+      const agent = await this.database.findAgent(agentId);
+      if (!agent || !agent.idleCompactMinutes || note.percent < agent.idleCompactPercent) {
+        this.idle.delete(agentId);
+        continue;
+      }
+      if (now - note.at < agent.idleCompactMinutes * 60_000) continue;
+      if (this.runs.has(agentId) || this.compactor.running(agentId)) continue;
+      this.idle.delete(agentId);
+      const manager = await this.sessions.load(agentId);
+      if (!manager) continue;
+      const controller = new AbortController();
+      const connection = await resolveChatConnection(agent.endpointId, this.endpoints, this.codex, controller.signal);
+      const activity = createActivityRecorder(
+        agentId,
+        agent.channels[0].id,
+        '',
+        event => this.runs.activity(agentId, (event as { entry: ActivityEntry }).entry),
+        `idle-compaction-${crypto.randomUUID()}`,
+        this.activity,
+      );
+      activity.protect(connection.apiKey ?? '');
+      await activity.start('Idle compaction');
+      // A temporary session over the saved context: it only lends its model and credentials to the summary.
+      const session = await createChatSession(
+        {
+          name: agent.name,
+          model: agent.model,
+          thinkingLevel: agent.thinkingLevel,
+          baseUrl: connection.baseUrl,
+          apiKey: connection.apiKey,
+          channel: { id: agent.channels[0].id, kind: 'platform-chat', agentId },
+        },
+        [],
+        async () => {
+          throw new Error('Idle compaction cannot publish.');
+        },
+        [],
+        connection.subscriptionRuntime,
+        manager,
+      );
+      let failed = false;
+      try {
+        const started = this.compactor.start(agentId, session, outcome => {
+          failed = outcome === 'failed';
+        });
+        activity.record(
+          'status',
+          started ? 'Idle compaction started' : 'Idle compaction skipped',
+          started
+            ? `Idle ${agent.idleCompactMinutes}+ min with context at ${Math.round(note.percent)}%: summarizing so the next turn starts light.`
+            : 'Nothing to summarize.',
+        );
+        await this.compactor.settled(agentId);
+        if (started)
+          activity.record(
+            'status',
+            failed ? 'Idle compaction failed' : 'Idle compaction ready',
+            failed
+              ? 'The summary could not be written; the next turn compacts if needed.'
+              : 'The next turn starts from the summary.',
+          );
+      } finally {
+        session.dispose();
+        await activity.finish(false, failed, 'Idle compaction').catch(() => {});
+      }
+    }
+  }
   async beforeDelete(agentId: string) {
     this.deleting.add(agentId);
+    this.forgetCompaction(agentId);
     await this.watches?.releasedBy(agentId);
     await this.reactionCoordinator.cancelAgent(agentId);
     await this.runs.settled(agentId);
@@ -958,6 +1061,8 @@ ${preview.text}`
   }
   close() {
     if (this.pruning) clearInterval(this.pruning);
+    clearInterval(this.idleTimer);
+    this.compactor.close();
     this.closing = true;
     this.timers.close();
     this.watcher?.close();

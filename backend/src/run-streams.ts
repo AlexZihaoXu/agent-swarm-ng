@@ -33,7 +33,7 @@ export function createRunStreams(runs: AgentRuns) {
       connections.delete(reply);
     });
     if (initialEvent) write(initialEvent);
-    if (!runId) write({ type: 'snapshot', runs: runs.snapshot() });
+    if (!runId) write({ type: 'snapshot', runs: runs.snapshot(), compactions: runs.compactionSnapshot() });
   }
   return {
     attach,
