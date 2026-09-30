@@ -66,6 +66,8 @@ export type ChatConfiguration = {
   baseUrl: string;
   apiKey?: string;
   channel: Channel;
+  /** The owner's own instructions for this agent (Agents → agent → Instructions), last in its system prompt. */
+  instructions?: string;
   publishPeer?: (
     channelId: string,
     text: string,
@@ -455,6 +457,12 @@ export async function createChatSession(
   if (additionalTools.some(tool => tool.name === 'use_computer')) {
     const current = resources.getSystemPrompt() ?? '';
     resources.getSystemPrompt = () => `${current}\n\n${COMPUTER_USE_GUIDANCE}`;
+  }
+  const instructions = config.instructions?.trim();
+  if (instructions) {
+    const current = resources.getSystemPrompt() ?? '';
+    resources.getSystemPrompt = () =>
+      `${current}\n\n## Your owner's instructions for you\nYour owner wrote these for you. Follow them in how you work; the platform rules above (permissions, delivering through send_message, safety) still come first.\n\n${instructions}\n`;
   }
   // Keep the retained tail below the auto-compaction threshold, including on 32K models.
   const reserveTokens = Math.min(16384, Math.max(1024, Math.floor(model.contextWindow / 4)));

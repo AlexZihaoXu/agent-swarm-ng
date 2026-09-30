@@ -813,6 +813,7 @@ ${preview.text}`
         baseUrl: connection.baseUrl,
         apiKey: connection.apiKey,
         channel,
+        instructions: agent.instructions,
         publishPeer: async (channelId, text, callId, replyToId, fileIds) => {
           if (channelId.startsWith('discord:'))
             throw new Error('send_message does not reach Discord. Use discord_send_message with this channelId.');

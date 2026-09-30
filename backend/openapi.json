@@ -11776,7 +11776,8 @@
                           "channelId",
                           "createdAt",
                           "lastMessage",
-                          "compaction"
+                          "compaction",
+                          "instructions"
                         ],
                         "properties": {
                           "name": {
@@ -12450,6 +12451,9 @@
                                 "type": "integer"
                               }
                             }
+                          },
+                          "instructions": {
+                            "type": "string"
                           }
                         }
                       }
@@ -12799,7 +12803,8 @@
                     "channelId",
                     "createdAt",
                     "lastMessage",
-                    "compaction"
+                    "compaction",
+                    "instructions"
                   ],
                   "properties": {
                     "name": {
@@ -13473,6 +13478,9 @@
                           "type": "integer"
                         }
                       }
+                    },
+                    "instructions": {
+                      "type": "string"
                     }
                   }
                 }
@@ -14029,6 +14037,10 @@
                         "type": "integer"
                       }
                     }
+                  },
+                  "instructions": {
+                    "maxLength": 20000,
+                    "type": "string"
                   }
                 }
               }
@@ -14064,7 +14076,8 @@
                     "channelId",
                     "createdAt",
                     "lastMessage",
-                    "compaction"
+                    "compaction",
+                    "instructions"
                   ],
                   "properties": {
                     "name": {
@@ -14738,6 +14751,9 @@
                           "type": "integer"
                         }
                       }
+                    },
+                    "instructions": {
+                      "type": "string"
                     }
                   }
                 }

@@ -3755,6 +3755,7 @@ export interface operations {
                                 idleMinutes: number;
                                 idlePercent: number;
                             };
+                            instructions: string;
                         }[];
                         nextCursor: number | null;
                     };
@@ -3872,6 +3873,7 @@ export interface operations {
                             idleMinutes: number;
                             idlePercent: number;
                         };
+                        instructions: string;
                     };
                 };
             };
@@ -4075,6 +4077,7 @@ export interface operations {
                         idleMinutes?: number;
                         idlePercent?: number;
                     };
+                    instructions?: string;
                 };
             };
         };
@@ -4156,6 +4159,7 @@ export interface operations {
                             idleMinutes: number;
                             idlePercent: number;
                         };
+                        instructions: string;
                     };
                 };
             };

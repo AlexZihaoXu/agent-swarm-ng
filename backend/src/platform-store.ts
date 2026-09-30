@@ -62,6 +62,7 @@ export class PlatformStore {
       compactAtPercent?: number;
       idleCompactMinutes?: number;
       idleCompactPercent?: number;
+      instructions?: string;
     },
   ) {
     await this.initialize();

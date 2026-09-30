@@ -84,6 +84,8 @@ model Agent {
   /// After this many idle minutes (0 = never), compact if the context is at least idleCompactPercent full.
   idleCompactMinutes Int             @default(30)
   idleCompactPercent Int             @default(50)
+  /// The owner's own instructions for this agent, appended to its system prompt (Markdown).
+  instructions       String          @default("")
   createdAt        DateTime          @default(now())
   channels         Channel[]
   dmAllowed        DmGrant[]         @relation("DmSenderGrant")

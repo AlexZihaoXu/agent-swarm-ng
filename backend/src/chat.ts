@@ -73,6 +73,8 @@ const Agent = Type.Object(
     createdAt: Type.Number(),
     lastMessage: Type.Union([Message, Type.Null()]),
     compaction: Compaction,
+    /** The owner's own instructions for this agent (Markdown), last in its system prompt. */
+    instructions: Type.String(),
   },
   { additionalProperties: false },
 );
@@ -123,6 +125,7 @@ function agentView(
     endpointId: agent.endpointId,
     model: agent.model,
     thinkingLevel: agent.thinkingLevel,
+    instructions: agent.instructions,
     compaction: {
       atPercent: agent.compactAtPercent,
       idleMinutes: agent.idleCompactMinutes,
@@ -380,6 +383,7 @@ export function registerChat(
     Params: { id: string };
     Body: Partial<Pick<Static<typeof Selection>, 'name' | 'endpointId' | 'model' | 'thinkingLevel'>> & {
       compaction?: Partial<Static<typeof Compaction>>;
+      instructions?: string;
     };
   }>(
     '/api/agents/:id',
@@ -394,6 +398,7 @@ export function registerChat(
             model: Type.Optional(Selection.properties.model),
             thinkingLevel: Type.Optional(Thinking),
             compaction: Type.Optional(Type.Partial(Compaction)),
+            instructions: Type.Optional(Type.String({ maxLength: 20000 })),
           },
           { additionalProperties: false, minProperties: 1 },
         ),
@@ -406,7 +411,8 @@ export function registerChat(
       if (closing) return reply.code(503).send({ message: 'The backend is shutting down.' });
       // The same short lock as deletion: a turn in flight already captured its model and name. The compaction
       // policy alone can change at any time (it is read when the next summary starts).
-      const identity = Object.keys(request.body).some(key => key !== 'compaction');
+      // Instructions too: the next turn reads them; a running turn keeps the ones it started with.
+      const identity = Object.keys(request.body).some(key => key !== 'compaction' && key !== 'instructions');
       if (active.has(id) || (identity && runs.has(id)))
         return reply
           .code(409)
@@ -440,6 +446,7 @@ export function registerChat(
             compactAtPercent: policy.atPercent ?? record.compactAtPercent,
             idleCompactMinutes: policy.idleMinutes ?? record.idleCompactMinutes,
             idleCompactPercent: policy.idlePercent ?? record.idleCompactPercent,
+            instructions: request.body.instructions ?? record.instructions,
           }),
         );
       } catch {

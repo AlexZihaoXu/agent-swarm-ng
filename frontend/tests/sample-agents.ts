@@ -69,6 +69,7 @@ export const sampleAgents: RealAgent[] = samples.map(agent => ({
   model: 'test-model',
   thinkingLevel: 'off',
   compaction: { atPercent: 65, idleMinutes: 30, idlePercent: 50 },
+  instructions: '',
   createdAt: sampleHistory[agent.id][0].timestamp,
   lastMessage: sampleHistory[agent.id].at(-1)!,
 }));
