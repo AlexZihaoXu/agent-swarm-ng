@@ -116,19 +116,49 @@ export class DiscordStore {
   /** Records the channels the bot can see now (keeps the owner's choices; a DM channel is always allowed). */
   async discovered(agentId: string, channels: DiscoveredChannel[]) {
     await this.database.initialize();
-    for (const channel of channels)
+    const named = new Map<string, string | null>();
+    for (const channel of channels) {
+      // A channel created later arrives without its server's name: it takes the name its server already has here.
+      let guildName = channel.guildName;
+      if (channel.guildId && !guildName) {
+        if (!named.has(channel.guildId))
+          named.set(
+            channel.guildId,
+            (
+              await this.database.client.discordChannel.findFirst({
+                where: { agentId, guildId: channel.guildId, guildName: { not: null } },
+                select: { guildName: true },
+              })
+            )?.guildName ?? null,
+          );
+        guildName = named.get(channel.guildId) ?? null;
+      }
       await this.database.client.discordChannel.upsert({
         where: { agentId_channelId: { agentId, channelId: channel.channelId } },
-        create: { agentId, ...channel, allowed: channel.kind === 'dm' },
+        create: { agentId, ...channel, guildName, allowed: channel.kind === 'dm' },
         update: {
           guildId: channel.guildId,
-          ...(channel.guildName ? { guildName: channel.guildName } : {}),
+          ...(guildName ? { guildName } : {}),
           ...(channel.parentId ? { parentId: channel.parentId } : {}),
           ...(channel.recipientId ? { recipientId: channel.recipientId } : {}),
           name: channel.name,
           kind: channel.kind,
         },
       });
+    }
+    // A server seen with its name names all its channels (earlier ones may have been saved without it).
+    const servers = new Map(
+      channels.flatMap(channel => (channel.guildId && channel.guildName ? [[channel.guildId, channel.guildName]] : [])),
+    );
+    for (const [guildId, name] of servers) await this.nameServer(agentId, guildId, name);
+  }
+  /** A server's name, for all its channels (discovery, or a rename). */
+  async nameServer(agentId: string, guildId: string, name: string) {
+    await this.database.initialize();
+    await this.database.client.discordChannel.updateMany({
+      where: { agentId, guildId, OR: [{ guildName: null }, { guildName: { not: name } }] },
+      data: { guildName: name },
+    });
   }
 
   /** The bot left or was removed from a server: its channels (and the owner's choices for them) go. */

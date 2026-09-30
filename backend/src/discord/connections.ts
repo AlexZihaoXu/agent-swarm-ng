@@ -200,6 +200,8 @@ export class DiscordConnections implements DiscordConnectionControl {
             ]),
           )
           .catch(() => {});
+      if (payload.t === GatewayDispatchEvents.GuildUpdate)
+        void this.store.nameServer(agentId, payload.d.id, payload.d.name).catch(() => {});
       if (payload.t === GatewayDispatchEvents.ChannelCreate || payload.t === GatewayDispatchEvents.ThreadCreate)
         void this.store
           .discovered(agentId, guildChannels(payload.d.guild_id ?? null, null, [payload.d]))
