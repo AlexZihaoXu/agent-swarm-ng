@@ -10,6 +10,8 @@ export type Attachment = {
   status: 'uploading' | 'ready' | 'failed';
   file?: ChatFile;
   error?: string;
+  /** A local preview of a picked image (an object URL, released when the file leaves the list). */
+  preview?: string;
 };
 export type Attachments = ReturnType<typeof useAttachments>;
 
@@ -35,6 +37,19 @@ export function useAttachments(channelKey: string | undefined) {
     sentWith.current = null;
     return cancelAll;
   }, [channelKey]);
+  // Release previews of files that left the list (sent, removed, or another chat).
+  const previews = useRef(new Set<string>());
+  useEffect(() => {
+    const kept = new Set(items.flatMap(item => (item.preview ? [item.preview] : [])));
+    for (const url of previews.current) if (!kept.has(url)) URL.revokeObjectURL(url);
+    previews.current = kept;
+  }, [items]);
+  useEffect(
+    () => () => {
+      for (const url of previews.current) URL.revokeObjectURL(url);
+    },
+    [],
+  );
   const update = (key: string, change: Partial<Attachment>) =>
     setItems(current => current.map(item => (item.key === key ? { ...item, ...change } : item)));
 
@@ -55,6 +70,7 @@ export function useAttachments(channelKey: string | undefined) {
         size: file.size,
         progress: 0,
         status: 'uploading' as const,
+        ...(file.type.startsWith('image/') ? { preview: URL.createObjectURL(file) } : {}),
       })),
     ]);
     for (const { file, key } of added) {

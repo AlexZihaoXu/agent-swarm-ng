@@ -91,6 +91,11 @@ test('files attach from the composer, upload with progress, and send with or wit
   const pending = composer.getByRole('list', { name: 'Files to send' });
   await expect(pending.getByRole('listitem')).toHaveCount(2);
   await expect(pending).toContainText('shot.png');
+  // An image shows a preview beside its name; other files keep the file icon.
+  const preview = pending.getByRole('listitem').filter({ hasText: 'shot.png' }).locator('img');
+  await expect(preview).toBeVisible();
+  await expect(preview).toHaveJSProperty('complete', true);
+  await expect(pending.getByRole('listitem').filter({ hasText: 'plan.py' }).locator('img')).toHaveCount(0);
   // No text is needed: files alone make a message.
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect.poll(() => sent.length).toBe(1);

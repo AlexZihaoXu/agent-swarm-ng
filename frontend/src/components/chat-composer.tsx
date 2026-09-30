@@ -97,7 +97,15 @@ export function ChatComposer({
                   key={file.key}
                   className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-sidebar/60 px-2 py-1 motion-safe:animate-[fade-in_120ms_ease-out]"
                 >
-                  <FileIcon />
+                  {file.preview ? (
+                    <img
+                      src={file.preview}
+                      alt=""
+                      className="size-10 shrink-0 rounded-md border border-border object-cover"
+                    />
+                  ) : (
+                    <FileIcon />
+                  )}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-medium" title={file.name}>
                       {file.name}
