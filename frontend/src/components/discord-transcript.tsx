@@ -49,10 +49,7 @@ export function useDiscordPlaces(agentId: string, enabled: boolean): DiscordPlac
             ? `Discord › ${channel.name}`
             : `Discord #${channel.name}`,
       short: channel.kind === 'dm' ? `@${channel.name}` : channel.kind === 'thread' ? channel.name : `#${channel.name}`,
-      place:
-        channel.kind === 'dm'
-          ? `DM with ${channel.name}`
-          : `${channel.guildName ?? 'Server'} › ${channel.kind === 'thread' ? channel.name : `#${channel.name}`}`,
+      place: channel.place,
     }));
 }
 

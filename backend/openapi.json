@@ -20199,6 +20199,7 @@
                           "guildName",
                           "parentId",
                           "name",
+                          "place",
                           "kind",
                           "allowed",
                           "admission",
@@ -20239,6 +20240,9 @@
                             ]
                           },
                           "name": {
+                            "type": "string"
+                          },
+                          "place": {
                             "type": "string"
                           },
                           "kind": {
@@ -20543,6 +20547,7 @@
                           "guildName",
                           "parentId",
                           "name",
+                          "place",
                           "kind",
                           "allowed",
                           "admission",
@@ -20583,6 +20588,9 @@
                             ]
                           },
                           "name": {
+                            "type": "string"
+                          },
+                          "place": {
                             "type": "string"
                           },
                           "kind": {
@@ -20836,6 +20844,7 @@
                           "guildName",
                           "parentId",
                           "name",
+                          "place",
                           "kind",
                           "allowed",
                           "admission",
@@ -20876,6 +20885,9 @@
                             ]
                           },
                           "name": {
+                            "type": "string"
+                          },
+                          "place": {
                             "type": "string"
                           },
                           "kind": {
@@ -21106,6 +21118,7 @@
                           "guildName",
                           "parentId",
                           "name",
+                          "place",
                           "kind",
                           "allowed",
                           "admission",
@@ -21146,6 +21159,9 @@
                             ]
                           },
                           "name": {
+                            "type": "string"
+                          },
+                          "place": {
                             "type": "string"
                           },
                           "kind": {

@@ -6218,6 +6218,7 @@ export interface operations {
                             guildName: string | null;
                             parentId: string | null;
                             name: string;
+                            place: string;
                             kind: string;
                             allowed: boolean;
                             admission: ("mention" | "check" | "all") | null;
@@ -6289,6 +6290,7 @@ export interface operations {
                             guildName: string | null;
                             parentId: string | null;
                             name: string;
+                            place: string;
                             kind: string;
                             allowed: boolean;
                             admission: ("mention" | "check" | "all") | null;
@@ -6364,6 +6366,7 @@ export interface operations {
                             guildName: string | null;
                             parentId: string | null;
                             name: string;
+                            place: string;
                             kind: string;
                             allowed: boolean;
                             admission: ("mention" | "check" | "all") | null;
@@ -6433,6 +6436,7 @@ export interface operations {
                             guildName: string | null;
                             parentId: string | null;
                             name: string;
+                            place: string;
                             kind: string;
                             allowed: boolean;
                             admission: ("mention" | "check" | "all") | null;

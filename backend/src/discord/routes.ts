@@ -40,6 +40,8 @@ const Channel = Type.Object({
   /** A thread's channel. */
   parentId: Type.Union([Type.String(), Type.Null()]),
   name: Type.String(),
+  /** How agents and Chat name it: "Swarm Lab › #design", "DM with sam". */
+  place: Type.String(),
   kind: Type.String(),
   allowed: Type.Boolean(),
   admission: Type.Union([Admission, Type.Null()]),
@@ -127,6 +129,7 @@ export function registerDiscordRoutes(
         guildName: channel.guildName,
         parentId: channel.parentId,
         name: channel.name,
+        place: placeOf(channel),
         kind: channel.kind,
         allowed: channel.allowed,
         admission: (channel.admission as (typeof ADMISSIONS)[number] | null) ?? null,
@@ -253,14 +256,10 @@ export function registerDiscordRoutes(
       if (!(await agent(reply, id))) return;
       const channel = await store.channel(id, channelId);
       if (!channel) return reply.code(404).send({ message: 'This bot has not seen that channel.' });
+      const header = { id: channelId, place: placeOf(channel), kind: channel.kind };
       const before = request.query.before ? await store.messageTime(id, request.query.before) : null;
       // The oldest loaded message is the first one pruning deletes: past it, there is nothing older left.
-      if (request.query.before && !before)
-        return {
-          channel: { id: channelId, place: placeOf(channel), kind: channel.kind },
-          messages: [],
-          nextCursor: null,
-        };
+      if (request.query.before && !before) return { channel: header, messages: [], nextCursor: null };
       const rows = await database.client.discordMessage.findMany({
         where: {
           agentId: id,
@@ -298,7 +297,7 @@ export function registerDiscordRoutes(
         page.map(row => row.id),
       );
       return {
-        channel: { id: channelId, place: placeOf(channel), kind: channel.kind },
+        channel: header,
         messages: page.map(row => {
           const account = people.get(row.authorId);
           const reply = row.replyToId ? replies.get(row.replyToId) : undefined;
