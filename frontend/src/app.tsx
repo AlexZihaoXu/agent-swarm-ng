@@ -13,7 +13,7 @@ import { JumpToLatest } from '@/components/jump-to-latest';
 import { useMessageWindow } from '@/lib/use-message-window';
 import { AgentPanel } from '@/components/agent-panel';
 import { EditAgentForm } from '@/components/edit-agent-form';
-import { AgentAvatar, AgentName } from '@/components/chat-identity';
+import { AgentAvatar, AgentName, CompactionCue } from '@/components/chat-identity';
 import { cn } from '@/lib/utils';
 import { useChat, type ChatAgent } from '@/use-chat';
 import type { ChatMessage } from '@/chat-types';
@@ -76,6 +76,43 @@ const loading = (
     Loading…
   </p>
 );
+
+function Avatar({
+  initials,
+  avatar,
+  typing = false,
+  ready = false,
+  working = false,
+  compaction = null,
+}: {
+  initials: string;
+  avatar?: AvatarAppearance;
+  typing?: boolean;
+  ready?: boolean;
+  working?: boolean;
+  compaction?: 'running' | 'sleeping' | null;
+}) {
+  return (
+    <span aria-hidden="true" className="relative size-8 shrink-0 text-xs font-medium text-foreground/75">
+      <AvatarFace avatarSize={32} ready={ready} typing={typing} working={working} size="md">
+        {avatar ? (
+          <AgentAvatarArt
+            {...avatar}
+            size={32}
+            state={compaction === 'sleeping' ? 'sleeping' : typing ? 'typing' : working ? 'working' : 'idle'}
+            animated
+          />
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/10">
+            {initials}
+          </span>
+        )}
+      </AvatarFace>
+      <PresenceIndicator ready={ready} typing={typing} working={working} size="md" />
+      <CompactionCue state={compaction} />
+    </span>
+  );
+}
 
 const emptyAgent: ChatAgent = { id: '', name: '', initials: '', time: '', channelId: '' };
 
@@ -705,10 +742,9 @@ export function App() {
                         selectionGroup="agents"
                         onClick={() => leave(() => navigate(agentPath(item.id)))}
                         avatar={
-                          <AgentAvatar
+                          <Avatar
                             initials={item.initials}
                             avatar={item.avatar}
-                            size="md"
                             ready={Boolean(item.real)}
                             typing={typingIn(item.channelId, item.channelId)}
                             working={busy[item.channelId]}

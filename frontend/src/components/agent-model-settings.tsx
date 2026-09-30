@@ -26,8 +26,10 @@ const memoryFields = [
   { key: 'idlePercent', label: '…if the context is at least (%)', hint: '10–90% full · default 50', min: 10, max: 90 },
 ] as const;
 type MemoryKey = (typeof memoryFields)[number]['key'];
+/** The saved policy (defaults when an older backend or record has none). */
+const policyOf = (agent: RealAgent) => agent.compaction ?? { atPercent: 65, idleMinutes: 30, idlePercent: 50 };
 const memoryOf = (agent: RealAgent) =>
-  Object.fromEntries(memoryFields.map(field => [field.key, String(agent.compaction[field.key])])) as Record<
+  Object.fromEntries(memoryFields.map(field => [field.key, String(policyOf(agent)[field.key])])) as Record<
     MemoryKey,
     string
   >;
@@ -56,7 +58,7 @@ export function AgentModelSettings({
   const [memory, setMemory] = useState(() => memoryOf(saved));
   const memoryChanges = Object.fromEntries(
     memoryFields.flatMap(field =>
-      Number(memory[field.key]) !== saved.compaction[field.key] ? [[field.key, Number(memory[field.key])]] : [],
+      Number(memory[field.key]) !== policyOf(saved)[field.key] ? [[field.key, Number(memory[field.key])]] : [],
     ),
   );
   const memoryInvalid = memoryFields.find(field => {

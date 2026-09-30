@@ -67,19 +67,7 @@ export function AgentAvatar({
         </span>
       </AvatarFace>
       <PresenceIndicator ready={ready} typing={typing} working={working} size={size} />
-      {compaction === 'running' && (
-        <span
-          data-slot="compaction-ring"
-          className="compaction-ring pointer-events-none absolute -inset-[3px] rounded-full"
-        />
-      )}
-      {compaction === 'sleeping' && (
-        <span data-slot="sleeping" className="avatar-zzz pointer-events-none absolute -right-1.5 top-0 z-20 size-4">
-          <span className="bottom-0 left-0 text-[9px]">z</span>
-          <span className="bottom-0 left-0 text-[11px]">z</span>
-          <span className="bottom-0 left-0 text-[13px]">z</span>
-        </span>
-      )}
+      <CompactionCue state={compaction} />
     </span>
   );
 }
@@ -89,4 +77,24 @@ export function AgentName({ name }: { name: string }) {
       <SlideUpFadeSwap text={name} />
     </h2>
   );
+}
+
+/** Background compaction on an avatar: an orbiting violet arc while summarizing; rising z's while asleep. */
+export function CompactionCue({ state }: { state?: 'running' | 'sleeping' | null }) {
+  if (state === 'running')
+    return (
+      <span
+        data-slot="compaction-ring"
+        className="compaction-ring pointer-events-none absolute -inset-[3px] rounded-full"
+      />
+    );
+  if (state === 'sleeping')
+    return (
+      <span data-slot="sleeping" className="avatar-zzz pointer-events-none absolute -right-1.5 top-0 z-20 size-4">
+        <span className="bottom-0 left-0 text-[9px]">z</span>
+        <span className="bottom-0 left-0 text-[11px]">z</span>
+        <span className="bottom-0 left-0 text-[13px]">z</span>
+      </span>
+    );
+  return null;
 }

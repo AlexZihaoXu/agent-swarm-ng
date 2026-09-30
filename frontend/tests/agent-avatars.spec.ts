@@ -58,7 +58,7 @@ test('all silhouettes move; randomization is stable and preserves the state prev
   await expect(art.locator('[data-slot="avatar-eyes"]')).toHaveAttribute('stroke-width', '8');
   await expect(art).toHaveAttribute('data-eye-style', 'round');
   await select(page, 'State preview', 'Idle');
-  await expect(page.getByRole('radiogroup', { name: 'State preview' }).getByRole('radio')).toHaveCount(3);
+  await expect(page.getByRole('radiogroup', { name: 'State preview' }).getByRole('radio')).toHaveCount(4);
   await page.getByRole('region', { name: 'Agent editor', exact: true }).evaluate(element => {
     element.scrollTop = 0;
   });
