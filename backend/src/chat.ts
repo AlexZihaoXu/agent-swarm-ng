@@ -14,6 +14,9 @@ import { createRunStreams } from './run-streams';
 import { AvatarSchema, type AgentAvatar } from './agent-avatar';
 import { resolveChatConnection, ConnectionError } from './chat-connection';
 import { DmBroker } from './dm-broker';
+import { DiscordIntake } from './discord/intake';
+import type { DiscordStore } from './discord/store';
+import type { DiscordConnections } from './discord/connections';
 import { registerSwarmRoutes } from './swarm-routes';
 import { registerGroupRoutes } from './group-routes';
 import { registerReactionRoutes } from './reaction-routes';
@@ -123,12 +126,23 @@ export function registerChat(
   screenshots?: ScreenshotPool,
   files?: FileStore,
   transfers?: DmBroker['transfers'],
+  discord?: { store: DiscordStore; connections: DiscordConnections },
 ) {
   const runs = new AgentRuns();
   const streams = createRunStreams(runs);
   const broker = new DmBroker(database, store, codex, runs, computers, screenshots, files);
   const channelFiles = broker.files;
   broker.transfers = transfers;
+  if (discord) {
+    // Discord messages become agent inputs through the intake (batching, admission, one triage at a time).
+    const intake = new DiscordIntake(database, discord.store, {
+      deliver: (agentId, input) => broker.deliverDiscord(agentId, input),
+      evaluate: (agentId, channelId, notice) => broker.evaluateAdmission(agentId, channelId, notice),
+    });
+    broker.discord = { ...discord, intake };
+    discord.connections.onEvent = event => void intake.handle(event).catch(() => {});
+    app.addHook('onClose', async () => intake.close());
+  }
   /** Private-chat messages with their files. */
   const withFiles = async (messages: Awaited<ReturnType<PlatformStore['appendMessage']>>[]) => {
     const map = await channelFiles.forMessages(

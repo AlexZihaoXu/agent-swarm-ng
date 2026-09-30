@@ -4,6 +4,7 @@ import { channelInput, createChatSession, type ChatConfiguration, type ChannelMe
 import { createWebTools } from './web-tools';
 import type { RunContext } from './agent-runs';
 import { evaluateInterruption } from './interruption-triage';
+import { triageGate } from './triage-gate';
 import { formatContextUsage } from './context-usage';
 import { createPublicationTyping } from './publication-typing';
 import { AgentSessionStore } from './agent-session-store';
@@ -191,12 +192,9 @@ export async function runChat(
         },
         async (messages, triageSignal) => {
           activity.record('status', 'Interruption triage', 'Evaluating new messages in a temporary full-context fork.');
-          const decision = await evaluateInterruption(
-            main,
-            channel.id,
-            messages,
-            triageSignal,
-            activity.branch('Interruption triage'),
+          // One triage at a time per agent (interruption, reaction, Discord admission).
+          const decision = await triageGate(channel.agentId, () =>
+            evaluateInterruption(main, channel.id, messages, triageSignal, activity.branch('Interruption triage')),
           );
           activity.record(
             'status',

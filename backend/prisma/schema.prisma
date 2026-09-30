@@ -448,6 +448,8 @@ model DiscordChannel {
   channelId     String
   guildId       String?
   guildName     String?
+  /// A thread's parent channel (threads follow their parent's allow-list unless set themselves).
+  parentId      String?
   name          String
   /// "dm" | "text" | "thread" | "forum" | "announcement" | "voice"
   kind          String

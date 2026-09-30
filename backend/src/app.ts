@@ -86,15 +86,18 @@ export async function buildApp({
   await files.blobs.clearTemporary();
   registerFileRoutes(app, platform, files, new Scratchpad(platform, swarmSettings));
   registerSwarmSettingsRoutes(app, swarmSettings);
-  registerChat(app, endpointStore, platform, codex, computers, screenshots, files, controller);
-  registerComputerRoutes(app, platform, controller, computers, swarmSettings);
-  registerComputerUseRoutes(app, computers, screenshots);
-  registerTerminalStreams(app, computers, controller);
-  registerKnowledgeRoutes(app);
   // Each agent's own Discord bot: tokens beside the database, connections owned by the backend.
   const discordTokens = new DiscordTokenStore(join(platform.dataDirectory, 'discord-bots.json'));
   const discordStore = new DiscordStore(platform);
   const discord = new DiscordConnections(discordTokens, discordStore, { api: discordApi });
+  registerChat(app, endpointStore, platform, codex, computers, screenshots, files, controller, {
+    store: discordStore,
+    connections: discord,
+  });
+  registerComputerRoutes(app, platform, controller, computers, swarmSettings);
+  registerComputerUseRoutes(app, computers, screenshots);
+  registerTerminalStreams(app, computers, controller);
+  registerKnowledgeRoutes(app);
   registerDiscordRoutes(app, platform, discordStore, discordTokens, discord);
   app.addHook('onListen', async () => {
     await discord.start();

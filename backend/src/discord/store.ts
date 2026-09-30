@@ -10,6 +10,7 @@ export type DiscoveredChannel = {
   channelId: string;
   guildId: string | null;
   guildName: string | null;
+  parentId?: string | null;
   name: string;
   kind: string;
 };
@@ -85,6 +86,7 @@ export class DiscordStore {
         update: {
           guildId: channel.guildId,
           ...(channel.guildName ? { guildName: channel.guildName } : {}),
+          ...(channel.parentId ? { parentId: channel.parentId } : {}),
           name: channel.name,
           kind: channel.kind,
         },

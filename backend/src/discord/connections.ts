@@ -252,6 +252,7 @@ function guildChannels(
         channelId: channel.id,
         guildId,
         guildName,
+        parentId: ('parent_id' in channel && channel.parent_id) || null,
         name: ('name' in channel && channel.name) || 'channel',
         kind,
       },

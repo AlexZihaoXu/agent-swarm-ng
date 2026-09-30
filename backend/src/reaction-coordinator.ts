@@ -6,6 +6,7 @@ import type { ChannelMessage } from './chat-runtime';
 import { resolveChatConnection } from './chat-connection';
 import { messageText } from './message-text';
 import { evaluateReaction } from './reaction-triage';
+import { triageGate } from './triage-gate';
 import { createActivityRecorder, type ActivityEntry } from './agent-activity';
 import type { ActivityStore } from './activity-store';
 
@@ -148,20 +149,22 @@ export class ReactionCoordinator {
         activity?.protect(connection.apiKey ?? '');
         const history = await this.database.context(channel.id);
         phase = 'evaluation';
-        const decision = await evaluateReaction(
-          {
-            name: agent.name,
-            model: agent.model,
-            thinkingLevel: agent.thinkingLevel,
-            baseUrl: connection.baseUrl,
-            apiKey: connection.apiKey,
-            channel,
-          },
-          history,
-          notice,
-          controller.signal,
-          connection.subscriptionRuntime,
-          activity?.branch('Reaction triage'),
+        const decision = await triageGate(agentId, () =>
+          evaluateReaction(
+            {
+              name: agent.name,
+              model: agent.model,
+              thinkingLevel: agent.thinkingLevel,
+              baseUrl: connection.baseUrl,
+              apiKey: connection.apiKey,
+              channel,
+            },
+            history,
+            notice,
+            controller.signal,
+            connection.subscriptionRuntime,
+            activity?.branch('Reaction triage'),
+          ),
         );
         const relevant =
           decision.action === 'engage' &&
