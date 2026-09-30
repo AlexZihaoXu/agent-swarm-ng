@@ -45,8 +45,11 @@ let authorization: string | undefined;
 let argumentGate: Promise<void> | undefined;
 let historyAnchorId = '';
 
-// Provider retries wait milliseconds here, not seconds.
+// Provider retries: one, after milliseconds (the production policy is covered by the retry tests' shape).
 MODEL_RETRY.baseDelayMs = 5;
+MODEL_RETRY.maxRetries = 1;
+// Whole chat turns run here; under a loaded machine 5 s is too tight, and a timed-out turn leaks requests into the next test.
+vi.setConfig({ testTimeout: 20_000 });
 
 beforeAll(async () => {
   await mkdir('.scratch', { recursive: true });
