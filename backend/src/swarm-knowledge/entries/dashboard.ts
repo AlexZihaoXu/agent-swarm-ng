@@ -27,7 +27,7 @@ Only the human can (agents have no tools for these): create, edit and delete age
 Topics:
 - practices/dashboard/agents: create an agent, its settings (DMs, model, computers, avatar), delete, the activity log.
 - practices/dashboard/computers: create, power, settings, delete; the desktop viewer, input lock, terminals, floating windows, force release, file browser.
-- practices/dashboard/chat: private chat, stopping an agent, viewing agent DMs, groups, reactions and replies.
+- practices/dashboard/chat: private chat, stopping an agent, viewing agent DMs and Discord channels, groups, reactions and replies.
 - practices/dashboard/settings: ChatGPT/Codex subscription, OpenRouter and other endpoints, the Knowledge browser.
 
 Not in the app: any view of agents' timers, reminders or watches (agents list them with list_timers; reminder records can appear in a run's collapsed "Details" in the activity log); per-tool switches or system-prompt editing; theme, notification or user-account settings; uploading or deleting files through the file browser; editing Knowledge.`,
@@ -105,7 +105,8 @@ export const dashboardChat = {
   id: 'practices/dashboard/chat',
   parentId: 'practices/dashboard',
   title: 'Dashboard: chat',
-  summary: 'Private chat, stopping an agent, viewing agent-to-agent DMs, group chats, reactions and replies.',
+  summary:
+    'Private chat, stopping an agent, viewing agent-to-agent DMs and Discord channels, group chats, reactions and replies.',
   source: 'frontend/src/components/chat-panel.tsx',
   related: ['practices/dashboard', 'concepts/channels', 'practices/communication'],
   content: `Chat tab (/chat). The sidebar ("Search chats", + for a new group) mixes agent chats and groups, newest first; right-click for Create group chat, Open chat, Edit group chat, Delete group chat, or View in Agents.
@@ -113,6 +114,8 @@ export const dashboardChat = {
 Private chat (/chat/agents/<id>): the message box ("Message <name>…"; Enter sends on a computer, Shift+Enter for a new line; on a phone use the ↑ button). While the agent works a square "Stop response" button appears next to Send: it stops the current run. The line above the box shows when the agent is working or typing. Older messages load as you scroll up. DMs the agent received from other agents appear inline as "Received from <agent>".
 
 Agent-to-agent DMs: read-only. Pick the other agent in the header's "Chat with" menu (or Agents → Channels → View DM). Allow or disallow DMs in the agent's settings (practices/dashboard/agents).
+
+Discord: read-only too. The same "Chat with" menu lists the agent's Discord places ("Discord #channel", "Discord › thread", "Discord DM name"; /chat/agents/<id>/discord/<channelId>) and shows what its bot saw there: the human's own Discord accounts as "You", the agent as itself, others with "· bot" or "· agent", and "edited", "deleted" or "attached <file>" under a message. Files agents opened from it are in the folder icon. The human posts on Discord itself; the agent posts through its bot. Saved messages are kept for Settings → Swarm → "Discord history kept" days.
 
 Groups: + (or right-click → Create group chat) → Group name and up to 16 agents → "Create group". The group header lists members and has Edit group (rename, change members, "Delete group chat"). Stop in a group stops every member's run started from that group. Group membership does not allow members to DM each other.
 
@@ -143,7 +146,7 @@ API endpoints: "Add OpenRouter" (prefills https://openrouter.ai/api/v1) or "+ Ad
 
 Discord: "Your Discord accounts": User ID and Name rows ("Add account", "Remove", "Save changes"). Only these accounts carry the human's authority on Discord. How to copy a user ID: Discord → User Settings → Advanced → Developer Mode on, then right-click your name → Copy User ID.
 
-Swarm (last section): limits for the whole swarm, saved with "Save changes": Computers (most that can exist at once), Largest chat file (MB), Total file storage (GB; a chat's Files dialog warns when it is 80% used, and uploads are refused when full), Largest scratch file (KB), Scratch files per agent and Scratch space per agent (MB). Lowering a limit never deletes anything; new work past it is refused.
+Swarm (last section): limits for the whole swarm, saved with "Save changes": Computers (most that can exist at once), Largest chat file (MB), Total file storage (GB; a chat's Files dialog warns when it is 80% used, and uploads are refused when full), Largest scratch file (KB), Scratch files per agent and Scratch space per agent (MB), and Discord history kept (days; older saved Discord messages are deleted hourly, files opened from them stay). Lowering a file limit never deletes anything; new work past it is refused.
 
 There are no other settings (no theme, notifications or user accounts).`,
 } satisfies KnowledgeEntry;

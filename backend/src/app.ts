@@ -99,11 +99,22 @@ export async function buildApp({
   registerComputerUseRoutes(app, computers, screenshots);
   registerTerminalStreams(app, computers, controller);
   registerKnowledgeRoutes(app);
-  registerDiscordRoutes(app, platform, discordStore, discordTokens, discord);
+  registerDiscordRoutes(app, platform, discordStore, discordTokens, discord, files);
+  // Saved Discord messages are kept for Settings → Swarm's period: pruned at start and hourly.
+  const pruneDiscord = () =>
+    swarmSettings
+      .get()
+      .then(settings => discordStore.prune(settings.discordHistoryDays))
+      .catch(error => app.log.warn({ err: error }, 'Could not prune Discord history'));
+  let pruning: ReturnType<typeof setInterval> | undefined;
   app.addHook('onListen', async () => {
+    void pruneDiscord();
+    pruning = setInterval(pruneDiscord, 60 * 60 * 1000);
+    pruning.unref?.();
     await discord.start();
   });
   app.addHook('onClose', async () => {
+    clearInterval(pruning);
     await discord.close();
   });
 

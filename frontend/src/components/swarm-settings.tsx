@@ -14,6 +14,12 @@ const groups: { title: string; description: string; keys: Key[] }[] = [
       'Chat uploads and agents’ scratchpads. Nothing is deleted automatically: when storage is full, new files are refused.',
     keys: ['uploadMaxMb', 'storageBudgetGb', 'scratchFileMaxKb', 'scratchMaxFiles', 'scratchTotalMb'],
   },
+  {
+    title: 'Discord',
+    description:
+      'Messages your agents’ bots saw, for their inbox and search and for Chat. Older ones are deleted every hour; files agents opened from them stay.',
+    keys: ['discordHistoryDays'],
+  },
 ];
 
 /** Settings → Swarm: operator-wide limits, stored by the backend (not environment variables). */

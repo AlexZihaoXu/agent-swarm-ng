@@ -2063,7 +2063,8 @@
                         "scratchFileMaxKb",
                         "scratchMaxFiles",
                         "scratchTotalMb",
-                        "storageBudgetGb"
+                        "storageBudgetGb",
+                        "discordHistoryDays"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -2082,6 +2083,9 @@
                           "type": "integer"
                         },
                         "storageBudgetGb": {
+                          "type": "integer"
+                        },
+                        "discordHistoryDays": {
                           "type": "integer"
                         }
                       }
@@ -2094,7 +2098,8 @@
                         "scratchFileMaxKb",
                         "scratchMaxFiles",
                         "scratchTotalMb",
-                        "storageBudgetGb"
+                        "storageBudgetGb",
+                        "discordHistoryDays"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -2233,6 +2238,33 @@
                           }
                         },
                         "storageBudgetGb": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "discordHistoryDays": {
                           "type": "object",
                           "required": [
                             "min",
@@ -2294,6 +2326,9 @@
                   },
                   "storageBudgetGb": {
                     "type": "integer"
+                  },
+                  "discordHistoryDays": {
+                    "type": "integer"
                   }
                 },
                 "additionalProperties": false,
@@ -2322,7 +2357,8 @@
                         "scratchFileMaxKb",
                         "scratchMaxFiles",
                         "scratchTotalMb",
-                        "storageBudgetGb"
+                        "storageBudgetGb",
+                        "discordHistoryDays"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -2341,6 +2377,9 @@
                           "type": "integer"
                         },
                         "storageBudgetGb": {
+                          "type": "integer"
+                        },
+                        "discordHistoryDays": {
                           "type": "integer"
                         }
                       }
@@ -2353,7 +2392,8 @@
                         "scratchFileMaxKb",
                         "scratchMaxFiles",
                         "scratchTotalMb",
-                        "storageBudgetGb"
+                        "storageBudgetGb",
+                        "discordHistoryDays"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -2492,6 +2532,33 @@
                           }
                         },
                         "storageBudgetGb": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "discordHistoryDays": {
                           "type": "object",
                           "required": [
                             "min",
@@ -20130,6 +20197,7 @@
                           "id",
                           "guildId",
                           "guildName",
+                          "parentId",
                           "name",
                           "kind",
                           "allowed",
@@ -20151,6 +20219,16 @@
                             ]
                           },
                           "guildName": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "parentId": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -20463,6 +20541,7 @@
                           "id",
                           "guildId",
                           "guildName",
+                          "parentId",
                           "name",
                           "kind",
                           "allowed",
@@ -20484,6 +20563,16 @@
                             ]
                           },
                           "guildName": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "parentId": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -20745,6 +20834,7 @@
                           "id",
                           "guildId",
                           "guildName",
+                          "parentId",
                           "name",
                           "kind",
                           "allowed",
@@ -20766,6 +20856,16 @@
                             ]
                           },
                           "guildName": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "parentId": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -21004,6 +21104,7 @@
                           "id",
                           "guildId",
                           "guildName",
+                          "parentId",
                           "name",
                           "kind",
                           "allowed",
@@ -21025,6 +21126,16 @@
                             ]
                           },
                           "guildName": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "parentId": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -21077,6 +21188,481 @@
                           }
                         }
                       }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/discord/channels/{channelId}/messages": {
+      "get": {
+        "operationId": "getAgentDiscordMessages",
+        "parameters": [
+          {
+            "schema": {
+              "pattern": "^\\d{15,21}$",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "pattern": "^\\d{15,21}$",
+              "type": "string"
+            },
+            "in": "path",
+            "name": "channelId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "channel",
+                    "messages",
+                    "nextCursor"
+                  ],
+                  "properties": {
+                    "channel": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "place",
+                        "kind"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "place": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "authorId",
+                          "authorName",
+                          "role",
+                          "text",
+                          "timestamp",
+                          "edited",
+                          "deleted",
+                          "replyTo",
+                          "attachments"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "authorId": {
+                            "type": "string"
+                          },
+                          "authorName": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "you"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "owner"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "agent"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "bot"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "person"
+                                ]
+                              }
+                            ]
+                          },
+                          "agentId": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "timestamp": {
+                            "type": "number"
+                          },
+                          "edited": {
+                            "type": "boolean"
+                          },
+                          "deleted": {
+                            "type": "boolean"
+                          },
+                          "replyTo": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "authorName",
+                                  "owner",
+                                  "text"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "authorName": {
+                                    "type": "string"
+                                  },
+                                  "owner": {
+                                    "type": "boolean"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "attachments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "name",
+                                "size"
+                              ],
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "size": {
+                                  "type": "number"
+                                }
+                              }
+                            }
+                          },
+                          "files": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "channelKey",
+                                "name",
+                                "mime",
+                                "kind",
+                                "size",
+                                "status",
+                                "uploader",
+                                "messageKind",
+                                "messageId",
+                                "createdAt"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "channelKey": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "mime": {
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "image"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "text"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "pdf"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "other"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "scratch"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "size": {
+                                  "type": "integer"
+                                },
+                                "status": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "available"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "deleted"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "uploader": {
+                                  "type": "object",
+                                  "required": [
+                                    "kind",
+                                    "id",
+                                    "name"
+                                  ],
+                                  "properties": {
+                                    "kind": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "human"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "agent"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "discord"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "id": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "messageKind": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "chat"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "dm"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "group"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "messageId": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "deleted": {
+                                  "type": "object",
+                                  "required": [
+                                    "by",
+                                    "at"
+                                  ],
+                                  "properties": {
+                                    "by": {
+                                      "type": "object",
+                                      "required": [
+                                        "kind",
+                                        "id",
+                                        "name"
+                                      ],
+                                      "properties": {
+                                        "kind": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "human"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "agent"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "discord"
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        "id": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string"
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ]
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    "at": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    }
+                                  }
+                                },
+                                "scratch": {
+                                  "type": "object",
+                                  "required": [
+                                    "agentId",
+                                    "path"
+                                  ],
+                                  "properties": {
+                                    "agentId": {
+                                      "type": "string"
+                                    },
+                                    "path": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   }
                 }

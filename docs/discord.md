@@ -80,11 +80,15 @@ your channel allow-list.
   Message Content intent, stops that bot with an explanation and no retries (failed requests count toward Discord's IP
   block); other failures back off and retry.
 - Discord data lives in the platform database: bot policies, channels, your account IDs, and messages the bots saw
-  (for the inbox, DM search and chains). Attachments are fetched only when an agent opens one, into its chat files
+  (for the inbox, DM search, chains and Chat). Attachments are fetched only when an agent opens one, into its chat files
   under `discord:<channelId>`. Deleting an agent disconnects its bot and deletes its token and Discord records;
   Disconnect removes only the token.
 - Tools fail with a plain reason instead of stalling a turn: Discord unreachable, a rate limit longer than 10 seconds
   (short ones are waited out), or a token Discord no longer accepts.
-- Known limit: saved Discord messages are not pruned yet; busy allowed channels grow the database.
+- Saved Discord messages are kept for **Settings → Swarm → Discord history kept** (default 30 days) and pruned hourly;
+  files agents opened from them stay. Unread counts stay correct across pruning.
+- **Watching:** Chat → the agent → "Chat with" lists its Discord places (allowed channels, their threads, DMs). Each
+  shows what the bot saw, read-only: your accounts as "You", edits, deletions and attachments marked, and the files
+  agents opened. You post on Discord itself; the agent posts through its bot.
 - The design and research behind this are in the working notes (Discord spike); the protocol facts come from
   [Discord's developer documentation](https://docs.discord.com/developers).

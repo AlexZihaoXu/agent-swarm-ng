@@ -13,6 +13,7 @@ export type DashboardRoute = {
     | 'chat-list'
     | 'chat-agent'
     | 'chat-agent-dm'
+    | 'chat-agent-discord'
     | 'chat-group'
     | 'group-new'
     | 'group-edit'
@@ -28,6 +29,8 @@ export type DashboardRoute = {
     | 'endpoint';
   agentId?: string;
   peerId?: string;
+  /** A Discord channel the agent's bot saw (read-only view). */
+  discordChannelId?: string;
   groupId?: string;
   computerId?: string;
   /** The viewer's mode; the URL carries it so a refresh returns to the same view. */
@@ -44,6 +47,8 @@ export const agentPath = (id: string) => `/agents/${segment(id)}`;
 export const agentDmPath = (id: string, peerId: string) => `${agentPath(id)}/dm/${segment(peerId)}`;
 export const chatAgentPath = (id: string) => `/chat/agents/${segment(id)}`;
 export const chatAgentDmPath = (id: string, peerId: string) => `${chatAgentPath(id)}/dm/${segment(peerId)}`;
+export const chatAgentDiscordPath = (id: string, channelId: string) =>
+  `${chatAgentPath(id)}/discord/${segment(channelId)}`;
 export const chatGroupPath = (id: string) => `/chat/groups/${segment(id)}`;
 export const computerPath = (id: string) => `/computers/${segment(id)}`;
 /** `/computers/:id/terminal[/:session]`. (`/computers/:id/desktop/` is the stream itself, not a dashboard view.) */
@@ -103,6 +108,8 @@ export function parseDashboardPath(pathname: string): DashboardRoute {
     if (parts.length === 3 && third && id === 'agents') return { tab: 'chat', kind: 'chat-agent', agentId: third };
     if (parts.length === 5 && id === 'agents' && fourth === 'dm')
       return { tab: 'chat', kind: 'chat-agent-dm', agentId: third, peerId: fifth };
+    if (parts.length === 5 && id === 'agents' && fourth === 'discord' && /^\d{15,21}$/.test(fifth))
+      return { tab: 'chat', kind: 'chat-agent-discord', agentId: third, discordChannelId: fifth };
     if (id === 'groups') {
       if (parts.length === 3 && third === 'new') return { tab: 'chat', kind: 'group-new' };
       if (parts.length === 3 && third) return { tab: 'chat', kind: 'chat-group', groupId: third };

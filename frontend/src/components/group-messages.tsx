@@ -11,17 +11,29 @@ import { MessageFiles } from '@/components/message-files';
 import type { GroupChat, GroupMessage } from '@/use-groups';
 
 const clock = clockTime;
+/** What the transcript shows: a group message, or another multi-author chat mapped onto one (Discord). */
+export type ShownMessage = Pick<
+  GroupMessage,
+  'id' | 'groupId' | 'role' | 'authorId' | 'authorName' | 'authorAvatar' | 'text' | 'timestamp' | 'files'
+> & {
+  replyTo?: { role: string; authorName: string; text: string } | null;
+  /** Shown small after the text: "edited", "deleted", attachments not opened. */
+  note?: string;
+};
 // Kibo scroll-area-layout-3, adapted to the requested adjacent-author blocks and time gutter.
-export function GroupMessages({
+export function GroupMessages<M extends ShownMessage>({
   messages,
   members,
   onReply,
+  reactions: withReactions = true,
 }: {
-  messages: GroupMessage[];
+  messages: M[];
   members: GroupChat['members'];
-  onReply?: (message: GroupMessage) => void;
+  onReply?: (message: M) => void;
+  /** Platform reactions exist only for the platform's own chats. */
+  reactions?: boolean;
 }) {
-  const channelId = messages.length ? `group:${messages[0].groupId}` : undefined;
+  const channelId = withReactions && messages.length ? `group:${messages[0].groupId}` : undefined;
   const reactions = useMessageReactions(
     channelId,
     messages.map(message => message.id),
@@ -39,7 +51,7 @@ export function GroupMessages({
         const human = message.role === 'user';
         const hasFiles = Boolean(message.files?.length);
         // Files sit below the text bubble as their own blocks; a message of only files has no text bubble.
-        const hasText = Boolean(message.text.trim() || message.replyTo);
+        const hasText = Boolean(message.text.trim() || message.replyTo || message.note);
         const date = new Date(message.timestamp);
         const newDay = !previous || new Date(previous.timestamp).toDateString() !== date.toDateString();
         const avatar =
@@ -72,6 +84,7 @@ export function GroupMessages({
               </div>
             )}
             {message.text.trim() && <MessageMarkdown text={message.text} />}
+            {message.note && <p className="mt-0.5 text-[11px] opacity-70">{message.note}</p>}
           </>
         );
         const target = cn(

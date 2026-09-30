@@ -1,7 +1,7 @@
 import type { PlatformStore } from './platform-store';
 
 /**
- * Operator-wide settings: how many computers may exist and the file-storage limits. They live in the platform
+ * Operator-wide settings: how many computers may exist, the file-storage limits and how long Discord history is kept. They live in the platform
  * database (one row) and are edited in Settings → Swarm; there are no environment variables for them.
  */
 export const swarmSettingBounds = {
@@ -11,6 +11,7 @@ export const swarmSettingBounds = {
   scratchMaxFiles: { min: 10, max: 10000, default: 500, label: 'Scratch files per agent', unit: '' },
   scratchTotalMb: { min: 1, max: 10240, default: 50, label: 'Scratch space per agent', unit: 'MB' },
   storageBudgetGb: { min: 1, max: 10000, default: 10, label: 'Total file storage', unit: 'GB' },
+  discordHistoryDays: { min: 1, max: 365, default: 30, label: 'Discord history kept', unit: 'days' },
 } as const;
 export type SwarmSettingKey = keyof typeof swarmSettingBounds;
 export type SwarmSettings = Record<SwarmSettingKey, number>;

@@ -804,6 +804,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{id}/discord/channels/{channelId}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAgentDiscordMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/discord/owner": {
         parameters: {
             query?: never;
@@ -1626,6 +1642,7 @@ export interface operations {
                             scratchMaxFiles: number;
                             scratchTotalMb: number;
                             storageBudgetGb: number;
+                            discordHistoryDays: number;
                         };
                         bounds: {
                             maxComputers: {
@@ -1664,6 +1681,13 @@ export interface operations {
                                 unit: string;
                             };
                             storageBudgetGb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            discordHistoryDays: {
                                 min: number;
                                 max: number;
                                 default: number;
@@ -1692,6 +1716,7 @@ export interface operations {
                     scratchMaxFiles?: number;
                     scratchTotalMb?: number;
                     storageBudgetGb?: number;
+                    discordHistoryDays?: number;
                 };
             };
         };
@@ -1710,6 +1735,7 @@ export interface operations {
                             scratchMaxFiles: number;
                             scratchTotalMb: number;
                             storageBudgetGb: number;
+                            discordHistoryDays: number;
                         };
                         bounds: {
                             maxComputers: {
@@ -1748,6 +1774,13 @@ export interface operations {
                                 unit: string;
                             };
                             storageBudgetGb: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            discordHistoryDays: {
                                 min: number;
                                 max: number;
                                 default: number;
@@ -6183,6 +6216,7 @@ export interface operations {
                             id: string;
                             guildId: string | null;
                             guildName: string | null;
+                            parentId: string | null;
                             name: string;
                             kind: string;
                             allowed: boolean;
@@ -6253,6 +6287,7 @@ export interface operations {
                             id: string;
                             guildId: string | null;
                             guildName: string | null;
+                            parentId: string | null;
                             name: string;
                             kind: string;
                             allowed: boolean;
@@ -6327,6 +6362,7 @@ export interface operations {
                             id: string;
                             guildId: string | null;
                             guildName: string | null;
+                            parentId: string | null;
                             name: string;
                             kind: string;
                             allowed: boolean;
@@ -6395,12 +6431,106 @@ export interface operations {
                             id: string;
                             guildId: string | null;
                             guildName: string | null;
+                            parentId: string | null;
                             name: string;
                             kind: string;
                             allowed: boolean;
                             admission: ("mention" | "check" | "all") | null;
                             paused: boolean;
                         }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getAgentDiscordMessages: {
+        parameters: {
+            query?: {
+                before?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+                channelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        channel: {
+                            id: string;
+                            place: string;
+                            kind: string;
+                        };
+                        messages: {
+                            id: string;
+                            authorId: string;
+                            authorName: string;
+                            role: "you" | "owner" | "agent" | "bot" | "person";
+                            agentId?: string;
+                            text: string;
+                            timestamp: number;
+                            edited: boolean;
+                            deleted: boolean;
+                            replyTo: {
+                                id: string;
+                                authorName: string;
+                                owner: boolean;
+                                text: string;
+                            } | null;
+                            attachments: {
+                                name: string;
+                                size: number;
+                            }[];
+                            files?: {
+                                id: string;
+                                channelKey: string;
+                                name: string;
+                                mime: string;
+                                kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                size: number;
+                                status: "available" | "deleted";
+                                uploader: {
+                                    kind: "human" | "agent" | "discord";
+                                    id: string | null;
+                                    name: string;
+                                };
+                                messageKind: "chat" | "dm" | "group" | null;
+                                messageId: string | null;
+                                createdAt: string;
+                                deleted?: {
+                                    by: {
+                                        kind: "human" | "agent" | "discord";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    at: string | null;
+                                };
+                                scratch?: {
+                                    agentId: string;
+                                    path: string;
+                                };
+                            }[];
+                        }[];
+                        nextCursor: string | null;
                     };
                 };
             };

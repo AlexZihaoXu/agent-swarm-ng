@@ -2,7 +2,10 @@ import { Type } from '@sinclair/typebox';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { PermissionFlagsBits } from 'discord-api-types/v10';
 import type { PlatformStore } from '../platform-store';
-import { ADMISSIONS, DiscordSettingsError, type DiscordStore } from './store';
+import { messageText } from '../message-text';
+import { FileSchema } from '../files/routes';
+import type { FileStore } from '../files/store';
+import { ADMISSIONS, authorRole, DiscordSettingsError, placeOf, type DiscordStore } from './store';
 import type { DiscordTokenStore } from './token-store';
 
 /** What a person in a server can do, and nothing a moderator could: the tools' needs, no more. */
@@ -34,6 +37,8 @@ const Channel = Type.Object({
   id: Type.String(),
   guildId: Type.Union([Type.String(), Type.Null()]),
   guildName: Type.Union([Type.String(), Type.Null()]),
+  /** A thread's channel. */
+  parentId: Type.Union([Type.String(), Type.Null()]),
   name: Type.String(),
   kind: Type.String(),
   allowed: Type.Boolean(),
@@ -53,6 +58,32 @@ const Config = Type.Object({
   catchUp: Type.Boolean(),
   channels: Type.Array(Channel),
 });
+const Transcript = Type.Object({
+  channel: Type.Object({ id: Type.String(), place: Type.String(), kind: Type.String() }),
+  messages: Type.Array(
+    Type.Object({
+      id: Type.String(),
+      authorId: Type.String(),
+      authorName: Type.String(),
+      /** "you" is the agent's own bot; "agent" another of our agents' bots. */
+      role: Type.Union(['you', 'owner', 'agent', 'bot', 'person'].map(value => Type.Literal(value))),
+      agentId: Type.Optional(Type.String()),
+      text: Type.String(),
+      timestamp: Type.Number(),
+      edited: Type.Boolean(),
+      deleted: Type.Boolean(),
+      replyTo: Type.Union([
+        Type.Object({ id: Type.String(), authorName: Type.String(), owner: Type.Boolean(), text: Type.String() }),
+        Type.Null(),
+      ]),
+      attachments: Type.Array(Type.Object({ name: Type.String(), size: Type.Number() })),
+      files: Type.Optional(Type.Array(FileSchema)),
+    }),
+  ),
+  /** Pass as `before` for the previous page; null at the start of what was saved. */
+  nextCursor: Type.Union([Type.String(), Type.Null()]),
+});
+const TRANSCRIPT_PAGE = 50;
 const Owner = Type.Object({
   accounts: Type.Array(Type.Object({ id: Snowflake, name: Type.String({ maxLength: 80 }) })),
 });
@@ -64,6 +95,7 @@ export function registerDiscordRoutes(
   store: DiscordStore,
   tokens: DiscordTokenStore,
   connections: DiscordConnectionControl,
+  files: FileStore,
 ) {
   const view = async (agentId: string) => {
     const [bot, channels, token] = await Promise.all([
@@ -86,6 +118,7 @@ export function registerDiscordRoutes(
         id: channel.channelId,
         guildId: channel.guildId,
         guildName: channel.guildName,
+        parentId: channel.parentId,
         name: channel.name,
         kind: channel.kind,
         allowed: channel.allowed,
@@ -197,6 +230,83 @@ export function registerDiscordRoutes(
     },
   );
 
+  // The dashboard's read-only view of what the agent's bot saw in one channel (humans post through agents).
+  app.get<{ Params: { id: string; channelId: string }; Querystring: { before?: string } }>(
+    '/api/agents/:id/discord/channels/:channelId/messages',
+    {
+      schema: {
+        operationId: 'getAgentDiscordMessages',
+        params: Type.Object({ id: Type.String({ minLength: 1, maxLength: 100 }), channelId: Snowflake }),
+        querystring: Type.Object({ before: Type.Optional(Snowflake) }, { additionalProperties: false }),
+        response: { 200: Transcript, 404: ErrorResponse },
+      },
+    },
+    async (request, reply) => {
+      const { id, channelId } = request.params;
+      if (!(await agent(reply, id))) return;
+      const channel = await store.channel(id, channelId);
+      if (!channel) return reply.code(404).send({ message: 'This bot has not seen that channel.' });
+      const before = request.query.before ? await store.messageTime(id, request.query.before) : null;
+      const rows = await database.client.discordMessage.findMany({
+        where: {
+          agentId: id,
+          channelId,
+          ...(before
+            ? { OR: [{ createdAt: { lt: before } }, { createdAt: before, id: { lt: request.query.before } }] }
+            : {}),
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: TRANSCRIPT_PAGE + 1,
+      });
+      const page = rows.slice(0, TRANSCRIPT_PAGE).reverse();
+      const bot = await store.bot(id);
+      const replies = new Map(
+        (
+          await database.client.discordMessage.findMany({
+            where: { agentId: id, id: { in: page.flatMap(row => (row.replyToId ? [row.replyToId] : [])) } },
+            select: { id: true, authorId: true, authorName: true, content: true },
+          })
+        ).map(row => [row.id, row]),
+      );
+      const people = new Map<string, Awaited<ReturnType<DiscordStore['who']>>>();
+      const authors = new Set([...page.map(row => row.authorId), ...[...replies.values()].map(row => row.authorId)]);
+      for (const authorId of authors) people.set(authorId, await store.who(authorId));
+      const opened = await files.forMessages(
+        'discord',
+        page.map(row => row.id),
+      );
+      return {
+        channel: { id: channelId, place: placeOf(channel), kind: channel.kind },
+        messages: page.map(row => {
+          const account = people.get(row.authorId);
+          const reply = row.replyToId ? replies.get(row.replyToId) : undefined;
+          const shown = opened.get(row.id);
+          return {
+            id: row.id,
+            authorId: row.authorId,
+            authorName: row.authorName,
+            role: row.authorId === bot.botUserId ? ('you' as const) : authorRole(account, row.authorBot),
+            ...(account?.role === 'agent' && account.agentId ? { agentId: account.agentId } : {}),
+            text: row.content,
+            timestamp: row.createdAt.getTime(),
+            edited: Boolean(row.editedAt),
+            deleted: Boolean(row.deletedAt),
+            replyTo: row.replyToId
+              ? {
+                  id: row.replyToId,
+                  authorName: reply?.authorName ?? 'someone',
+                  owner: people.get(reply?.authorId ?? '')?.role === 'owner',
+                  text: reply ? messageText(reply.content, 0, 200).text : '',
+                }
+              : null,
+            attachments: row.attachments ? (JSON.parse(row.attachments) as { name: string; size: number }[]) : [],
+            ...(shown?.length ? { files: shown } : {}),
+          };
+        }),
+        nextCursor: rows.length > TRANSCRIPT_PAGE ? page[0].id : null,
+      };
+    },
+  );
   app.get(
     '/api/discord/owner',
     { schema: { operationId: 'getDiscordOwner', response: { 200: Owner } } },

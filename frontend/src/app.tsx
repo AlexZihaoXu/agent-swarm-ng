@@ -22,6 +22,7 @@ import { useDmConversations } from '@/use-dm-conversations';
 import { useDmInbox } from '@/use-dm-inbox';
 import { AgentExchangeIcon } from '@/components/agent-exchange-icon';
 import { AgentDmTranscript } from '@/components/agent-dm-transcript';
+import { DiscordPlaceIcon, DiscordTranscript, useDiscordPlaces } from '@/components/discord-transcript';
 import { Select } from '@/components/ui/select';
 import { ConversationMessages } from '@/components/conversation-messages';
 import { isTypingInConversation } from '@/lib/conversation-typing';
@@ -46,6 +47,7 @@ import { ConversationRow } from '@/components/conversation-row';
 import {
   agentDmPath,
   agentPath,
+  chatAgentDiscordPath,
   chatAgentDmPath,
   chatAgentPath,
   chatGroupPath,
@@ -270,9 +272,18 @@ export function App() {
     peer: string;
     selected?: { id: string; name: string; avatar?: AvatarAppearance | null; channelId?: string };
   }>({ owner: '', peer: 'you' });
-  const conversationPeer =
-    route.kind === 'agent-dm' || route.kind === 'chat-agent-dm' ? (route.peerId ?? 'you') : 'you';
+  // A Discord channel the agent's bot saw is a read-only conversation too ("discord:<channelId>").
+  const discordPlaces = useDiscordPlaces(agent.id, Boolean(agent.real) && activeTab === 'chat');
+  const discordChannel = route.kind === 'chat-agent-discord' ? route.discordChannelId : undefined;
+  const discordPlace = discordPlaces.find(place => place.id === discordChannel);
+  const conversationPeer = discordChannel
+    ? `discord:${discordChannel}`
+    : route.kind === 'agent-dm' || route.kind === 'chat-agent-dm'
+      ? (route.peerId ?? 'you')
+      : 'you';
   const chooseConversation = (nextPeer: string) => {
+    if (nextPeer.startsWith('discord:'))
+      return navigate(chatAgentDiscordPath(agent.id, nextPeer.slice('discord:'.length)));
     setConversation({ owner: agent.id, peer: nextPeer, selected: peers.find(item => item.id === nextPeer) });
     navigate(
       activeTab === 'chat'
@@ -307,7 +318,15 @@ export function App() {
   const peerRecord = agents.find(item => item.id === conversationPeer);
   const peerChannel = peerRecord?.channelId ?? peer?.channelId ?? '';
   useEffect(() => {
-    if (conversationPeer === 'you' || peer || dmConversations.busy || dmConversations.failed || agentsLoading) return;
+    if (
+      conversationPeer === 'you' ||
+      discordChannel ||
+      peer ||
+      dmConversations.busy ||
+      dmConversations.failed ||
+      agentsLoading
+    )
+      return;
     if (dmConversations.cursor !== null) void dmConversations.load(dmConversations.cursor);
   }, [
     agent.id,
@@ -862,7 +881,19 @@ export function App() {
                       working={busy[agent.channelId]}
                     />
                     <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-[1_1_9rem]">
-                      {conversationPeer !== 'you' && peer ? (
+                      {discordChannel ? (
+                        <>
+                          <AgentName name={agent.name} />
+                          <AgentExchangeIcon />
+                          <DiscordPlaceIcon kind={discordPlace?.kind ?? 'text'} />
+                          <span
+                            className="min-w-0 truncate text-sm font-semibold"
+                            title={discordPlace?.place ?? 'Discord'}
+                          >
+                            {discordPlace?.place ?? 'Discord'}
+                          </span>
+                        </>
+                      ) : conversationPeer !== 'you' && peer ? (
                         <>
                           <AgentName name={agent.name} />
                           <AgentExchangeIcon />
@@ -911,6 +942,14 @@ export function App() {
                             label: peer.name === 'You' ? 'You (agent)' : peer.name,
                             icon: <AgentAvatarArt {...(peer.avatar ?? defaultAvatar(peer.id))} size={20} />,
                           })),
+                          ...discordPlaces.map(place => ({
+                            value: `discord:${place.id}`,
+                            label: place.label,
+                            icon: <DiscordPlaceIcon kind={place.kind} />,
+                          })),
+                          ...(discordChannel && !discordPlace
+                            ? [{ value: conversationPeer, label: 'Discord', icon: <DiscordPlaceIcon kind="text" /> }]
+                            : []),
                           ...(dmConversations.cursor !== null || dmConversations.failed
                             ? [
                                 {
@@ -929,7 +968,9 @@ export function App() {
                         triggerContent={
                           isPhone ? (
                             <>
-                              <span className="min-w-0 flex-1 truncate">{peer?.name ?? 'You'}</span>
+                              <span className="min-w-0 flex-1 truncate">
+                                {discordChannel ? (discordPlace?.short ?? 'Discord') : (peer?.name ?? 'You')}
+                              </span>
                               <svg
                                 aria-hidden="true"
                                 viewBox="0 0 12 12"
@@ -946,8 +987,14 @@ export function App() {
                           ) : (
                             <>
                               <span className="flex min-w-0 items-center gap-1">
-                                {peer && <AgentAvatarArt {...(peer.avatar ?? defaultAvatar(peer.id))} size={20} />}
-                                <span className="min-w-0 truncate">{peer?.name ?? 'You'}</span>
+                                {discordChannel ? (
+                                  <DiscordPlaceIcon kind={discordPlace?.kind ?? 'text'} />
+                                ) : (
+                                  peer && <AgentAvatarArt {...(peer.avatar ?? defaultAvatar(peer.id))} size={20} />
+                                )}
+                                <span className="min-w-0 truncate">
+                                  {discordChannel ? (discordPlace?.short ?? 'Discord') : (peer?.name ?? 'You')}
+                                </span>
                               </span>
                               <svg
                                 aria-hidden="true"
@@ -978,8 +1025,20 @@ export function App() {
                   />
                   {agent.real && (
                     <ChatFilesDialog
-                      channelKey={peer ? dmFilesKey(agent.id, peer.id) : chatFilesKey(agent.channelId)}
-                      title={peer ? `${agent.name} and ${peer.name}` : agent.name}
+                      channelKey={
+                        discordChannel
+                          ? `discord:${discordChannel}`
+                          : peer
+                            ? dmFilesKey(agent.id, peer.id)
+                            : chatFilesKey(agent.channelId)
+                      }
+                      title={
+                        discordChannel
+                          ? `${agent.name} on ${discordPlace?.place ?? 'Discord'}`
+                          : peer
+                            ? `${agent.name} and ${peer.name}`
+                            : agent.name
+                      }
                     />
                   )}
                 </div>
@@ -1065,6 +1124,15 @@ export function App() {
                     )}
                     {history.newerHidden && <EdgeSkeleton label="Loading newer messages…" />}
                   </>
+                ) : discordChannel ? (
+                  <DiscordTranscript
+                    key={`${agent.id}:${discordChannel}`}
+                    agentId={agent.id}
+                    channelId={discordChannel}
+                    agentName={agent.name}
+                    agentAvatar={agent.avatar ?? defaultAvatar(agent.id)}
+                    viewport={scrollRef}
+                  />
                 ) : peer ? (
                   <AgentDmTranscript
                     key={`${agent.id}:${peer.id}`}
@@ -1134,7 +1202,11 @@ export function App() {
                   aria-label="Agent conversation status"
                   className="shrink-0 border-t border-border px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 sm:py-3"
                 >
-                  {selfTyping || peerTyping ? (
+                  {discordChannel ? (
+                    <p className="text-center text-xs text-muted-foreground">
+                      Discord · read-only here; {agent.name} posts through its bot
+                    </p>
+                  ) : selfTyping || peerTyping ? (
                     <div className="flex min-h-5 items-center gap-3">
                       <div className="flex min-w-0 flex-1">
                         <AgentTypingStatus name={agent.name} typing={selfTyping} />

@@ -155,6 +155,7 @@ test('Settings → Swarm edits limits within their bounds, saves only changes, a
     scratchMaxFiles: { min: 10, max: 10000, default: 500, label: 'Scratch files per agent', unit: '' },
     scratchTotalMb: { min: 1, max: 10240, default: 50, label: 'Scratch space per agent', unit: 'MB' },
     storageBudgetGb: { min: 1, max: 10000, default: 10, label: 'Total file storage', unit: 'GB' },
+    discordHistoryDays: { min: 1, max: 365, default: 30, label: 'Discord history kept', unit: 'days' },
   };
   // In-memory settings: the shared test backend's real settings stay untouched.
   let settings = Object.fromEntries(Object.entries(bounds).map(([key, bound]) => [key, bound.default]));
@@ -177,9 +178,10 @@ test('Settings → Swarm edits limits within their bounds, saves only changes, a
   await expect(swarm.getByRole('alert')).toContainText('Largest chat file must be a whole number from 1 to 1024.');
   await expect(save).toBeDisabled();
   await swarm.getByLabel('Largest chat file (MB)', { exact: true }).fill('250');
+  await swarm.getByLabel('Discord history kept (days)', { exact: true }).fill('7');
   await save.click();
   await expect(swarm.getByRole('status')).toHaveText('Saved.');
-  expect(patches).toEqual([{ maxComputers: 5, uploadMaxMb: 250 }]);
+  expect(patches).toEqual([{ maxComputers: 5, uploadMaxMb: 250, discordHistoryDays: 7 }]);
   await swarm.getByLabel('Total file storage (GB)', { exact: true }).fill('20');
   await swarm.getByRole('button', { name: 'Discard changes' }).click();
   await expect(swarm.getByLabel('Total file storage (GB)', { exact: true })).toHaveValue('10');

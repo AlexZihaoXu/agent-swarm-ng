@@ -6,6 +6,11 @@ export const SNOWFLAKE = /^\d{15,21}$/;
 
 export class DiscordSettingsError extends Error {}
 
+/** Who wrote a Discord message, as the platform labels it: never decided by the message itself. */
+export type AuthorRole = 'owner' | 'agent' | 'bot' | 'person';
+export const authorRole = (account: { role: string } | null | undefined, bot: boolean): AuthorRole =>
+  account?.role === 'owner' ? 'owner' : account?.role === 'agent' ? 'agent' : bot ? 'bot' : 'person';
+
 /** Where a channel is, as agents read it: "DM with sam", "Swarm Lab › #design", "Swarm Lab › Logo v2" (a thread). */
 export const placeOf = (channel: { kind: string; name: string; guildName: string | null }) =>
   channel.kind === 'dm'
@@ -256,6 +261,14 @@ export class DiscordStore {
       where: { agentId_channelId: { agentId, channelId } },
       data: { ...data, ...(later ? { announcedUpTo: id } : {}) },
     });
+  }
+  /** Deletes saved messages older than the retention period (Settings → Swarm); returns how many. */
+  async prune(days: number) {
+    await this.database.initialize();
+    const { count } = await this.database.client.discordMessage.deleteMany({
+      where: { createdAt: { lt: new Date(Date.now() - days * 24 * 60 * 60 * 1000) } },
+    });
+    return count;
   }
   /** Who a Discord account is: the owner, one of our agents, or null (anyone else). */
   async who(discordUserId: string) {

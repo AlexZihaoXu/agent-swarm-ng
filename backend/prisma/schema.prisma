@@ -365,6 +365,8 @@ model SwarmSettings {
   scratchMaxFiles   Int      @default(500)
   scratchTotalMb    Int      @default(50)
   storageBudgetGb   Int      @default(10)
+  /// Days saved Discord messages are kept (older ones are pruned hourly).
+  discordHistoryDays Int     @default(30)
   updatedAt         DateTime @updatedAt
 }
 
@@ -499,4 +501,5 @@ model DiscordMessage {
 
   @@id([agentId, id])
   @@index([agentId, channelId, createdAt])
+  @@index([createdAt])
 }

@@ -11,7 +11,7 @@ import type { ChannelMessage } from '../chat-runtime';
 import { messageText } from '../message-text';
 import { triageGate } from '../triage-gate';
 import type { DiscordEvent } from './connections';
-import { placeOf, type Admission, type DiscordStore } from './store';
+import { authorRole as roleOf, placeOf, type Admission, type AuthorRole, type DiscordStore } from './store';
 
 export type IntakeOptions = {
   /** Each message restarts this quiet period. */
@@ -23,7 +23,7 @@ export type IntakeOptions = {
   /** Consecutive bot-only turns in a channel before the agent pauses there until a person speaks. */
   botTurnLimit?: number;
 };
-type Role = 'owner' | 'agent' | 'bot' | 'person';
+type Role = AuthorRole;
 export type Seen = {
   id: string;
   channelId: string;
@@ -67,8 +67,6 @@ const newestOf = (messages: Seen[]) => messages.reduce((a, b) => (BigInt(b.id) >
 const size = (bytes: number) =>
   bytes < 1024 ** 2 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 ** 2).toFixed(1)} MB`;
 const clock = (date: Date) => date.toISOString().slice(11, 19);
-const roleOf = (account: { role: string } | null, bot: boolean): Role =>
-  account?.role === 'owner' ? 'owner' : account?.role === 'agent' ? 'agent' : bot ? 'bot' : 'person';
 const roleLabel = (message: Seen) =>
   message.role === 'owner'
     ? 'your owner'

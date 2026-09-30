@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   agentDmPath,
   agentPath,
+  chatAgentDiscordPath,
   chatAgentDmPath,
   chatAgentPath,
   chatGroupPath,
@@ -28,6 +29,13 @@ describe('dashboard paths', () => {
       agentId: 'avery',
       peerId: 'morgan',
     });
+    expect(parseDashboardPath(chatAgentDiscordPath('avery', '3000000000000000002'))).toMatchObject({
+      kind: 'chat-agent-discord',
+      tab: 'chat',
+      agentId: 'avery',
+      discordChannelId: '3000000000000000002',
+    });
+    expect(parseDashboardPath('/chat/agents/avery/discord/general')).toMatchObject({ kind: 'not-found' });
     expect(parseDashboardPath(chatGroupPath('team'))).toMatchObject({ kind: 'chat-group', groupId: 'team' });
     expect(parseDashboardPath(computerPath('c-1'))).toMatchObject({ kind: 'computer', computerId: 'c-1' });
     expect(parseDashboardPath('/settings')).toMatchObject({ kind: 'settings' });

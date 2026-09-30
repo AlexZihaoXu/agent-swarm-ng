@@ -121,3 +121,94 @@ test('your Discord accounts in Settings: only long numeric IDs, saved together',
   await expect.poll(() => saved).toEqual({ accounts: [{ id: '400000000000000001', name: 'Alex' }] });
   await expect(section.getByText('Saved.')).toBeVisible();
 });
+
+test('Chat shows what an agent’s bot saw on Discord, read-only, with the channel’s files', async ({ page }) => {
+  const channel = '3000000000000000004';
+  await page.route(/\/api\/agents\/avery\/discord$/, route => route.fulfill({ json: config() }));
+  const message = (id: string, extra: object) => ({
+    id,
+    authorId: '4000000000000000002',
+    authorName: 'sam',
+    role: 'person',
+    text: '',
+    timestamp: Date.parse('2026-09-30T10:00:00Z') + Number(id.slice(-2)) * 60_000,
+    edited: false,
+    deleted: false,
+    replyTo: null,
+    attachments: [],
+    ...extra,
+  });
+  let pages = 0;
+  await page.route(new RegExp(`/api/agents/avery/discord/channels/${channel}/messages`), route => {
+    pages++;
+    const before = new URL(route.request().url()).searchParams.get('before');
+    return route.fulfill({
+      json: before
+        ? {
+            channel: { id: channel, place: 'Swarm Lab › #ideas', kind: 'forum' },
+            messages: [message('1300000000000000001', { text: 'the very first idea' })],
+            nextCursor: null,
+          }
+        : {
+            channel: { id: channel, place: 'Swarm Lab › #ideas', kind: 'forum' },
+            messages: [
+              message('1300000000000000010', {
+                text: 'what about a darker logo?',
+                attachments: [{ name: 'logo.png', size: 2048 }],
+              }),
+              message('1300000000000000011', {
+                authorId: '4000000000000000001',
+                authorName: 'alex',
+                role: 'owner',
+                text: 'Avery, try it',
+              }),
+              message('1300000000000000012', {
+                authorId: '1000000000000000001',
+                authorName: 'aether-bot',
+                role: 'you',
+                text: 'On it, here is a draft.',
+                edited: true,
+                replyTo: { id: '1300000000000000011', authorName: 'alex', owner: true, text: 'Avery, try it' },
+              }),
+              message('1300000000000000013', {
+                authorId: '1000000000000000002',
+                authorName: 'helper',
+                role: 'bot',
+                text: 'spam',
+                deleted: true,
+              }),
+            ],
+            nextCursor: '1300000000000000010',
+          },
+    });
+  });
+  await page.goto('/chat/agents/avery');
+  await page.getByRole('combobox', { name: 'Chat with' }).click();
+  // Allowed channels and DMs are listed; channels the owner did not allow are not.
+  await expect(page.getByRole('option', { name: 'Discord #design' })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'Discord DM alex' })).toBeVisible();
+  await page.getByRole('option', { name: 'Discord #ideas' }).click();
+  await expect(page).toHaveURL(new RegExp(`/chat/agents/avery/discord/${channel}$`));
+  const conversation = page.getByRole('region', { name: 'Conversation with Avery' });
+  await expect(conversation.getByText('Swarm Lab › #ideas').first()).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Chat with' })).toHaveText(/#ideas$/);
+  const messages = conversation.getByRole('region', { name: 'Discord messages' });
+  // Your Discord accounts show as You, also when quoted.
+  await expect(messages.getByText('You', { exact: true })).toHaveCount(2);
+  await expect(messages.getByText('what about a darker logo?')).toBeVisible();
+  await expect(messages.getByText('attached logo.png (2 KB)')).toBeVisible();
+  await expect(messages.getByText('On it, here is a draft.')).toBeVisible();
+  await expect(messages.getByText('edited', { exact: true })).toBeVisible();
+  await expect(messages.getByText('helper · bot')).toBeVisible();
+  await expect(messages.getByText('deleted', { exact: true })).toBeVisible();
+  // Read-only: no composer; people post on Discord and the agent posts through its bot.
+  await expect(conversation.getByRole('textbox')).toHaveCount(0);
+  await expect(conversation.getByText('Discord · read-only here; Avery posts through its bot')).toBeVisible();
+  await messages.getByRole('button', { name: 'Load earlier messages' }).click();
+  await expect(messages.getByText('the very first idea')).toBeVisible();
+  await expect(messages.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
+  // A reload returns to the same channel.
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Discord messages' }).getByText('Avery, try it').first()).toBeVisible();
+  expect(pages).toBeGreaterThan(1);
+});

@@ -6,6 +6,7 @@ import { buildApp } from '../app';
 import { MockDiscord } from './testing/mock-discord';
 import { INTENTS } from './connections';
 import { BOT_PERMISSIONS } from './routes';
+import { DiscordStore } from './store';
 
 const TOKEN = 'MTAwMDAwMDAwMDAwMDAwMDAx.GxYzAb.abcdefghijklmnopqrstuvwxyz0123';
 const BAD = 'MTAwMDAwMDAwMDAwMDAwMDAy.GxYzAb.zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz';
@@ -183,6 +184,74 @@ it('keeps the owner’s Discord accounts, which can never be one of our agents�
     });
     expect(bot.statusCode).toBe(400);
     expect(bot.json().message).toContain('aether-bot');
+  } finally {
+    await app.close();
+    await database.close();
+  }
+});
+
+it('shows the dashboard what an agent’s bot saw in a channel, newest page first, with who is who', async () => {
+  const { database, app, agent, url } = await setup();
+  try {
+    const store = new DiscordStore(database);
+    await store.identify(agent.id, '1000000000000000001', 'aether-bot');
+    await store.setOwnerAccounts([{ id: '4000000000000000001', name: 'Alex' }]);
+    await store.discovered(agent.id, [
+      {
+        channelId: '3000000000000000002',
+        guildId: '2000000000000000001',
+        guildName: 'Swarm Lab',
+        name: 'design',
+        kind: 'text',
+      },
+    ]);
+    const base = Date.parse('2026-09-30T10:00:00Z');
+    const save = (index: number, authorId: string, authorName: string, extra: object = {}) =>
+      database.client.discordMessage.create({
+        data: {
+          agentId: agent.id,
+          id: String(1300000000000000000n + BigInt(index)),
+          channelId: '3000000000000000002',
+          authorId,
+          authorName,
+          authorBot: authorId.startsWith('1'),
+          content: `message ${index}`,
+          createdAt: new Date(base + index * 1000),
+          ...extra,
+        },
+      });
+    for (let index = 1; index <= 55; index++) await save(index, '4000000000000000002', 'sam');
+    await save(56, '4000000000000000001', 'alex');
+    await save(57, '1000000000000000001', 'aether-bot', {
+      replyToId: '1300000000000000056',
+      editedAt: new Date(),
+      attachments: JSON.stringify([{ name: 'plan.md', size: 2048 }]),
+    });
+    await save(58, '1000000000000000009', 'other-bot', { deletedAt: new Date() });
+    const channel = `${url}/channels/3000000000000000002/messages`;
+    const page = (await app.inject(channel)).json();
+    expect(page.channel).toEqual({ id: '3000000000000000002', place: 'Swarm Lab › #design', kind: 'text' });
+    expect(page.messages).toHaveLength(50);
+    expect(page.messages[0].text).toBe('message 9');
+    expect(page.messages.slice(-4)).toMatchObject([
+      { text: 'message 55', role: 'person', authorName: 'sam' },
+      { text: 'message 56', role: 'owner', authorName: 'alex' },
+      {
+        text: 'message 57',
+        role: 'you',
+        edited: true,
+        replyTo: { id: '1300000000000000056', authorName: 'alex', owner: true, text: 'message 56' },
+        attachments: [{ name: 'plan.md', size: 2048 }],
+      },
+      { text: 'message 58', role: 'bot', deleted: true },
+    ]);
+    expect(page.nextCursor).toBe(page.messages[0].id);
+    const older = (await app.inject(`${channel}?before=${page.nextCursor}`)).json();
+    expect(older.messages.map((message: { text: string }) => message.text)).toEqual(
+      Array.from({ length: 8 }, (_, index) => `message ${index + 1}`),
+    );
+    expect(older.nextCursor).toBeNull();
+    expect((await app.inject(`${url}/channels/3000000000000000999/messages`)).statusCode).toBe(404);
   } finally {
     await app.close();
     await database.close();
