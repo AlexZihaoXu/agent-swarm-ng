@@ -138,6 +138,8 @@ export function registerChat(
     const intake = new DiscordIntake(database, discord.store, {
       deliver: (agentId, input, addressed) => broker.deliverDiscord(agentId, input, addressed),
       evaluate: (agentId, channelId, notice) => broker.evaluateAdmission(agentId, channelId, notice),
+      reaction: (agentId, channelId, notice) => broker.evaluateDiscordReaction(agentId, channelId, notice),
+      rest: agentId => discord.connections.api(agentId).rest,
     });
     broker.discord = { ...discord, intake };
     discord.connections.onEvent = event => void intake.handle(event).catch(() => {});

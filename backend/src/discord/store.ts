@@ -93,6 +93,11 @@ export class DiscordStore {
       });
   }
 
+  /** The bot left or was removed from a server: its channels (and the owner's choices for them) go. */
+  async forgetServer(agentId: string, guildId: string) {
+    await this.database.initialize();
+    await this.database.client.discordChannel.deleteMany({ where: { agentId, guildId } });
+  }
   /** The bot's own Discord identity, learned at login; it is one of our agents from then on. */
   async identify(agentId: string, botUserId: string, botName: string) {
     await this.bot(agentId);

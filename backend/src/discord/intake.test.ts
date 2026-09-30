@@ -4,7 +4,7 @@ import { GatewayDispatchEvents, type GatewayDispatchPayload } from 'discord-api-
 import { prepareDatabase } from '../test-database';
 import type { ChannelMessage } from '../chat-runtime';
 import { DiscordStore } from './store';
-import { DiscordIntake, type IntakeOptions } from './intake';
+import { DiscordIntake, type IntakeDeps, type IntakeOptions } from './intake';
 
 const BOT = '1000000000000000001';
 const OWNER = '4000000000000000001';
@@ -18,7 +18,11 @@ const DM = '5000000000000000001';
 let sequence = 0;
 const id = () => String(1300000000000000000n + BigInt(++sequence));
 
-async function setup(options: IntakeOptions = {}, evaluate?: (notice: string) => Promise<'admit' | 'ignore'>) {
+async function setup(
+  options: IntakeOptions = {},
+  evaluate?: (notice: string) => Promise<'admit' | 'ignore'>,
+  extra: Partial<IntakeDeps> = {},
+) {
   const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
   const agent = await database.createAgent({ name: 'Aether', endpointId: 'mock', model: 'm', thinkingLevel: 'off' });
   const other = await database.createAgent({ name: 'Morgan', endpointId: 'mock', model: 'm', thinkingLevel: 'off' });
@@ -39,6 +43,7 @@ async function setup(options: IntakeOptions = {}, evaluate?: (notice: string) =>
     {
       deliver: (_agentId, input) => delivered.push(input),
       ...(evaluate ? { evaluate: (_agentId, _channelId, notice) => evaluate(notice) } : {}),
+      ...extra,
     },
     { quietMs: 40, capMs: 150, ...options },
   );
@@ -79,7 +84,13 @@ async function setup(options: IntakeOptions = {}, evaluate?: (notice: string) =>
       })
       .then(() => messageId);
   };
-  return { database, agent, other, store, intake, delivered, send };
+  const event = (t: GatewayDispatchEvents, d: unknown) =>
+    intake.handle({
+      agentId: agent.id,
+      botUserId: BOT,
+      payload: { op: 0, s: ++sequence, t, d } as unknown as GatewayDispatchPayload,
+    });
+  return { database, agent, other, store, intake, delivered, send, event };
 }
 const owner = { id: OWNER, username: 'alex' };
 const stranger = { id: STRANGER, username: 'sam' };
@@ -228,6 +239,149 @@ it('pauses an agent in a channel after a run of bot-only turns until a person sp
     await send(DESIGN, { id: BOT, username: 'aether-bot', bot: true }, 'my own echo');
     await new Promise(resolve => setTimeout(resolve, 120));
     expect(delivered).toHaveLength(3);
+  } finally {
+    intake.close();
+    await database.close();
+  }
+});
+
+it('follows edits and deletions, wakes on reactions to its own messages and on its poll ending', async () => {
+  const reactions: string[] = [];
+  const { database, agent, store, intake, delivered, send, event } = await setup({ quietMs: 80 }, undefined, {
+    reaction: async (_agentId, _channelId, notice) => {
+      reactions.push(notice);
+      return notice.includes('👎') ? 'engage' : 'ignore';
+    },
+  });
+  try {
+    // An edit before the batch closes changes what the agent reads; a deleted message never reaches it.
+    const draft = await send(DM, owner, 'deploy to stagng');
+    const typo = await send(DM, owner, 'oops ignore this');
+    await event(GatewayDispatchEvents.MessageUpdate, {
+      id: draft,
+      channel_id: DM,
+      content: 'deploy to staging',
+      author: owner,
+    });
+    await event(GatewayDispatchEvents.MessageDelete, { id: typo, channel_id: DM });
+    await vi.waitFor(() => expect(delivered).toHaveLength(1));
+    expect(delivered[0].text).toContain('deploy to staging');
+    expect(delivered[0].text).not.toContain('oops');
+    expect(
+      (await database.client.discordMessage.findUnique({ where: { agentId_id: { agentId: agent.id, id: typo } } }))
+        ?.deletedAt,
+    ).not.toBeNull();
+    // An edit after the agent had it wakes it again, marked as an edit.
+    await event(GatewayDispatchEvents.MessageUpdate, {
+      id: draft,
+      channel_id: DM,
+      content: 'deploy to production',
+      author: owner,
+    });
+    await vi.waitFor(() => expect(delivered).toHaveLength(2));
+    expect(delivered[1].text).toContain('(edited)');
+    expect(delivered[1].text).toContain('deploy to production');
+    // Reactions: only on its own messages, through reaction triage.
+    await store.recordOwn(agent.id, {
+      id: '1400000000000000001',
+      channelId: DM,
+      authorId: BOT,
+      authorName: 'aether-bot',
+      content: 'Deployed.',
+      chainId: null,
+      createdAt: new Date(),
+    });
+    await event(GatewayDispatchEvents.MessageReactionAdd, {
+      user_id: OWNER,
+      channel_id: DM,
+      message_id: draft,
+      message_author_id: OWNER,
+      emoji: { id: null, name: '👍' },
+    });
+    await event(GatewayDispatchEvents.MessageReactionAdd, {
+      user_id: OWNER,
+      channel_id: DM,
+      message_id: '1400000000000000001',
+      message_author_id: BOT,
+      emoji: { id: null, name: '👍' },
+    });
+    await event(GatewayDispatchEvents.MessageReactionAdd, {
+      user_id: OWNER,
+      channel_id: DM,
+      message_id: '1400000000000000001',
+      message_author_id: BOT,
+      emoji: { id: null, name: '👎' },
+    });
+    expect(reactions).toHaveLength(2);
+    expect(reactions[0]).toContain('reacted 👍 to your message 1400000000000000001: "Deployed."');
+    await vi.waitFor(() => expect(delivered).toHaveLength(3));
+    expect(delivered[2].source).toMatchObject({ human: true, channelId: `discord:${DM}` });
+    // The end of its own poll wakes it.
+    await store.recordOwn(agent.id, {
+      id: '1400000000000000002',
+      channelId: DESIGN,
+      authorId: BOT,
+      authorName: 'aether-bot',
+      content: '',
+      chainId: null,
+      createdAt: new Date(),
+    });
+    await send(DESIGN, { id: '1', username: 'Discord' }, '', {
+      type: 46,
+      message_reference: { message_id: '1400000000000000002' },
+    });
+    await vi.waitFor(() => expect(delivered).toHaveLength(4));
+    expect(delivered[3].text).toContain('Your poll ended');
+    // Removed from a server: its channels are gone; an outage keeps them.
+    await event(GatewayDispatchEvents.GuildDelete, { id: GUILD, unavailable: true });
+    expect(await store.channel(agent.id, DESIGN)).not.toBeNull();
+    await event(GatewayDispatchEvents.GuildDelete, { id: GUILD });
+    expect(await store.channel(agent.id, DESIGN)).toBeNull();
+  } finally {
+    intake.close();
+    await database.close();
+  }
+});
+
+it('after an outage, delivers what was addressed to it once, marked, and leaves the rest as unread', async () => {
+  const missed = [
+    {
+      id: '1300000000000000901',
+      channel_id: DM,
+      author: { id: OWNER, username: 'alex', global_name: null },
+      content: 'are you there?',
+      timestamp: new Date().toISOString(),
+      mentions: [],
+      attachments: [],
+      type: 0,
+    },
+  ];
+  const general = [
+    {
+      id: '1300000000000000902',
+      channel_id: DESIGN,
+      author: { id: STRANGER, username: 'sam', global_name: null },
+      content: 'chatter',
+      timestamp: new Date().toISOString(),
+      mentions: [],
+      attachments: [],
+      type: 0,
+    },
+  ];
+  const { database, intake, delivered, send, event } = await setup({}, undefined, {
+    rest: () => ({ get: async (route: string) => (route.includes(DM) ? missed : general) }) as never,
+  });
+  try {
+    await send(DM, owner, 'hello'); // seen before the outage
+    await send(DESIGN, stranger, 'earlier');
+    await vi.waitFor(() => expect(delivered).toHaveLength(1));
+    await event(GatewayDispatchEvents.Ready, {});
+    await vi.waitFor(() => expect(delivered).toHaveLength(2));
+    expect(delivered[1].text).toContain('are you there?');
+    expect(delivered[1].text).toContain('(sent while you were offline)');
+    expect(await database.client.discordMessage.count({ where: { id: '1300000000000000902' } })).toBe(1); // saved, not delivered
+    await new Promise(resolve => setTimeout(resolve, 120));
+    expect(delivered).toHaveLength(2);
   } finally {
     intake.close();
     await database.close();
