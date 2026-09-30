@@ -1012,17 +1012,6 @@ export function App() {
                       />
                     </div>
                   </div>
-                  <AgentActivityPanel
-                    agent={agent}
-                    entries={activity[agent.id] ?? []}
-                    open={activityOpen}
-                    onOpenChange={setActivityOpen}
-                    history={activityHistory}
-                    loadActivity={loadActivity}
-                    expandActivity={expandActivity}
-                    retryActivity={retryActivity}
-                    requestError={errors[agent.channelId]}
-                  />
                   {agent.real && (
                     <ChatFilesDialog
                       channelKey={
@@ -1041,6 +1030,17 @@ export function App() {
                       }
                     />
                   )}
+                  <AgentActivityPanel
+                    agent={agent}
+                    entries={activity[agent.id] ?? []}
+                    open={activityOpen}
+                    onOpenChange={setActivityOpen}
+                    history={activityHistory}
+                    loadActivity={loadActivity}
+                    expandActivity={expandActivity}
+                    retryActivity={retryActivity}
+                    requestError={errors[agent.channelId]}
+                  />
                 </div>
               </header>
 
