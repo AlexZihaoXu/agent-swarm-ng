@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { DiscordChannelList } from '@/components/discord-channel-list';
+import { DiscordDmList, type DmPerson } from '@/components/discord-dm-list';
 import type { RegisterSection } from '@/lib/settings-sections';
 import { cn } from '@/lib/utils';
 
@@ -63,16 +64,16 @@ type Draft = {
   token: string;
   remove: boolean;
   admission: Admission;
-  strangerDms: boolean;
   catchUp: boolean;
+  dmAllowed: DmPerson[];
   channels: Record<string, { allowed: boolean; admission: Admission | null }>;
 };
 const draftOf = (config: Config): Draft => ({
   token: '',
   remove: false,
   admission: config.admission,
-  strangerDms: config.strangerDms,
   catchUp: config.catchUp,
+  dmAllowed: config.dmAllowed,
   channels: Object.fromEntries(
     config.channels.map(channel => [channel.id, { allowed: channel.allowed, admission: channel.admission }]),
   ),
@@ -146,7 +147,7 @@ export function AgentDiscordSettings({
         .map(([channelId, value]) => ({ id: channelId, allowed: value.allowed, admission: value.admission }));
       const policy = {
         ...(draft.admission !== saved.admission ? { admission: draft.admission } : {}),
-        ...(draft.strangerDms !== saved.strangerDms ? { strangerDms: draft.strangerDms } : {}),
+        ...(sameDms(draft.dmAllowed, saved.dmAllowed) ? {} : { dmAllowed: draft.dmAllowed }),
         ...(draft.catchUp !== saved.catchUp ? { catchUp: draft.catchUp } : {}),
         ...(channels.length ? { channels } : {}),
       };
@@ -307,11 +308,6 @@ export function AgentDiscordSettings({
             {(
               [
                 [
-                  'strangerDms',
-                  'DMs from other people',
-                  'People other than you and your agents may DM this bot. Turning it off also closes its DMs with them.',
-                ],
-                [
                   'catchUp',
                   'Catch up after an outage',
                   'Messages addressed to it while it was offline arrive once, marked.',
@@ -355,6 +351,7 @@ export function AgentDiscordSettings({
           {dms.length > 0 && (
             <p className="text-xs text-muted-foreground">DMs: {dms.map(channel => channel.name).join(', ')}.</p>
           )}
+          <DiscordDmList agentId={agentId} people={draft.dmAllowed} onChange={dmAllowed => change({ dmAllowed })} />
         </>
       )}
     </div>
@@ -364,8 +361,7 @@ export function AgentDiscordSettings({
 /** The draft's own changes (against what it was based on), on top of the newer server state. */
 function rebase(draft: Draft, before: Config, saved: Config): Draft {
   const [was, fresh] = [draftOf(before), draftOf(saved)];
-  const pick = <K extends 'admission' | 'strangerDms' | 'catchUp'>(key: K) =>
-    draft[key] !== was[key] ? draft[key] : fresh[key];
+  const pick = <K extends 'admission' | 'catchUp'>(key: K) => (draft[key] !== was[key] ? draft[key] : fresh[key]);
   const touched = Object.entries(draft.channels).filter(([channelId, value]) => {
     const old = was.channels[channelId];
     return old && (old.allowed !== value.allowed || old.admission !== value.admission);
@@ -373,15 +369,22 @@ function rebase(draft: Draft, before: Config, saved: Config): Draft {
   return {
     ...draft,
     admission: pick('admission'),
-    strangerDms: pick('strangerDms'),
+    dmAllowed: sameDms(draft.dmAllowed, was.dmAllowed) ? fresh.dmAllowed : draft.dmAllowed,
     catchUp: pick('catchUp'),
     channels: { ...fresh.channels, ...Object.fromEntries(touched) },
   };
 }
 
+const sameDms = (a: DmPerson[], b: DmPerson[]) =>
+  a.length === b.length && a.every((person, index) => person.id === b[index].id && person.name === b[index].name);
+
 function dirtyOf(draft: Draft, saved: Config) {
   if (draft.remove || draft.token.trim()) return true;
-  if (draft.admission !== saved.admission || draft.strangerDms !== saved.strangerDms || draft.catchUp !== saved.catchUp)
+  if (
+    draft.admission !== saved.admission ||
+    draft.catchUp !== saved.catchUp ||
+    !sameDms(draft.dmAllowed, saved.dmAllowed)
+  )
     return true;
   return saved.channels.some(channel => {
     const value = draft.channels[channel.id];

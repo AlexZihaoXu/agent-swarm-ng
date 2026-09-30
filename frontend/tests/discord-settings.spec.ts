@@ -6,7 +6,7 @@ const config = (over: object = {}) => ({
   bot: { id: '1000000000000000001', name: 'aether-bot' },
   inviteUrl: 'https://discord.com/oauth2/authorize?client_id=1000000000000000001&scope=bot&permissions=1',
   admission: 'mention',
-  strangerDms: false,
+  dmAllowed: [],
   catchUp: true,
   channels: [
     {
@@ -80,6 +80,15 @@ test('an agent’s Discord bot: paste a token, choose channels and when they wak
     }
     return route.fulfill({ json: current });
   });
+  await page.route(/\/api\/agents\/avery\/discord\/people/, route =>
+    route.fulfill({
+      json: {
+        people: new URL(route.request().url()).searchParams.get('search')
+          ? []
+          : [{ id: '4000000000000000002', name: 'Sam', bot: false }],
+      },
+    }),
+  );
   await page.goto('/agents/avery');
   const section = page.getByRole('region', { name: 'Channels' });
   await expect(section.getByText('Not connected')).toBeVisible();
@@ -118,16 +127,27 @@ test('an agent’s Discord bot: paste a token, choose channels and when they wak
   await dialog.getByRole('button', { name: 'Done' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(list.getByRole('region', { name: 'Study' }).getByText('#general')).toBeVisible();
-  // Wake on every message in #design, drop #ideas, and let strangers DM it.
+  // Wake on every message in #design, drop #ideas, and allow DMs from Sam (a whitelist).
   await list.getByRole('combobox', { name: 'When #design wakes it' }).click();
   await page.getByRole('option', { name: 'Every message' }).click();
   await list.getByRole('button', { name: 'Remove #ideas' }).click();
-  await section.getByRole('switch', { name: 'DMs from other people' }).click();
+  await expect(section.getByText('Nobody else yet.')).toBeVisible();
+  await section.getByRole('button', { name: 'Add people' }).click();
+  const people = page.getByRole('dialog', { name: 'Allow DMs from' });
+  await people.getByRole('option', { name: 'Sam' }).click();
+  // Someone the bot has not seen: by their Discord user ID.
+  await people.getByPlaceholder('Search people, or paste a Discord user ID…').fill('400000000000000077');
+  await people.getByRole('option', { name: '400000000000000077' }).click();
+  await people.getByRole('button', { name: 'Done' }).click();
+  await expect(section.getByRole('list', { name: 'People allowed to DM' }).getByRole('listitem')).toHaveCount(2);
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect.poll(() => calls.length).toBe(2);
   expect(calls[1].method).toBe('PATCH /api/agents/avery/discord');
   expect(calls[1].body).toEqual({
-    strangerDms: true,
+    dmAllowed: [
+      { id: '4000000000000000002', name: 'Sam' },
+      { id: '400000000000000077', name: '400000000000000077' },
+    ],
     channels: expect.arrayContaining([
       { id: '3000000000000000002', allowed: true, admission: 'all' },
       { id: '3000000000000000004', allowed: false, admission: null },
@@ -135,7 +155,7 @@ test('an agent’s Discord bot: paste a token, choose channels and when they wak
     ]),
   });
   await expect(list.getByText('#ideas')).toHaveCount(0);
-  await expect(section.getByRole('switch', { name: 'DMs from other people' })).toHaveAttribute('aria-checked', 'true');
+  await expect(section.getByRole('list', { name: 'People allowed to DM' })).toContainText('Sam');
 });
 
 test('your Discord accounts in Settings: only long numeric IDs, saved together', async ({ page }) => {

@@ -105,6 +105,7 @@ model Agent {
   discordChannels  DiscordChannel[]
   discordMessages  DiscordMessage[]
   activity         Activity[]
+  discordDmAllows  DiscordDmAllow[]
 }
 
 // A one-shot watch on a claimed computer. Checks run in memory; the row only lets a restart (which releases claims
@@ -440,8 +441,6 @@ model DiscordBot {
   botName     String?
   /// Default admission for allowed server channels: "mention" | "check" | "all".
   admission   String    @default("check")
-  /// Whether people other than the owner (and our agents) may DM the bot.
-  strangerDms Boolean  @default(false)
   /// After an outage, deliver missed DMs and mentions as one labelled batch.
   catchUp     Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -508,3 +507,16 @@ model DiscordMessage {
   @@index([agentId, channelId, createdAt])
   @@index([createdAt])
 }
+
+// Who may DM an agent's Discord bot besides the owner's accounts and our agents' bots (a whitelist; nobody else).
+model DiscordDmAllow {
+  agentId       String
+  agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  discordUserId String
+  /// A label for the owner (Discord name when added).
+  name          String
+  createdAt     DateTime @default(now())
+
+  @@id([agentId, discordUserId])
+}
+

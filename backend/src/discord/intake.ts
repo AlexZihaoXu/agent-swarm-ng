@@ -159,8 +159,8 @@ export class DiscordIntake {
   /** Where a message may be seen by this agent, and how it is admitted; null means the agent never sees it. */
   private async place(agentId: string, data: GatewayMessageCreateDispatchData, role: Role) {
     if (!data.guild_id) {
-      // A DM with the bot: always the owner and our agents; other people only if the owner allows it.
-      if ((role === 'person' || role === 'bot') && !(await this.store.bot(agentId)).strangerDms) return null;
+      // A DM with the bot: the owner, our agents and whoever is on its DM whitelist; nobody else.
+      if ((role === 'person' || role === 'bot') && !(await this.store.canDm(agentId, data.author.id))) return null;
       await this.store.discovered(agentId, [
         {
           channelId: data.channel_id,
@@ -533,7 +533,7 @@ export class DiscordIntake {
 
   private async process(batch: Batch) {
     const { agentId, channelId } = batch;
-    // The owner may have revoked the channel (or stranger DMs) while the batch waited.
+    // The owner may have revoked the channel (or removed a person from Allowed DMs) while the batch waited.
     const channel = await this.store.usable(agentId, channelId);
     if (!channel || !batch.messages.length) return;
     const bot = await this.store.bot(agentId);

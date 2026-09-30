@@ -20188,9 +20188,9 @@
                     "bot",
                     "inviteUrl",
                     "admission",
-                    "strangerDms",
                     "catchUp",
-                    "channels"
+                    "channels",
+                    "dmAllowed"
                   ],
                   "properties": {
                     "configured": {
@@ -20288,9 +20288,6 @@
                           ]
                         }
                       ]
-                    },
-                    "strangerDms": {
-                      "type": "boolean"
                     },
                     "catchUp": {
                       "type": "boolean"
@@ -20391,6 +20388,24 @@
                           }
                         }
                       }
+                    },
+                    "dmAllowed": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -20450,11 +20465,30 @@
                       }
                     ]
                   },
-                  "strangerDms": {
-                    "type": "boolean"
-                  },
                   "catchUp": {
                     "type": "boolean"
+                  },
+                  "dmAllowed": {
+                    "maxItems": 500,
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "properties": {
+                        "id": {
+                          "pattern": "^\\d{15,21}$",
+                          "type": "string"
+                        },
+                        "name": {
+                          "maxLength": 80,
+                          "type": "string"
+                        }
+                      }
+                    }
                   },
                   "channels": {
                     "maxItems": 500,
@@ -20536,9 +20570,9 @@
                     "bot",
                     "inviteUrl",
                     "admission",
-                    "strangerDms",
                     "catchUp",
-                    "channels"
+                    "channels",
+                    "dmAllowed"
                   ],
                   "properties": {
                     "configured": {
@@ -20637,9 +20671,6 @@
                         }
                       ]
                     },
-                    "strangerDms": {
-                      "type": "boolean"
-                    },
                     "catchUp": {
                       "type": "boolean"
                     },
@@ -20736,6 +20767,24 @@
                           },
                           "paused": {
                             "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "dmAllowed": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
                           }
                         }
                       }
@@ -20833,9 +20882,9 @@
                     "bot",
                     "inviteUrl",
                     "admission",
-                    "strangerDms",
                     "catchUp",
-                    "channels"
+                    "channels",
+                    "dmAllowed"
                   ],
                   "properties": {
                     "configured": {
@@ -20934,9 +20983,6 @@
                         }
                       ]
                     },
-                    "strangerDms": {
-                      "type": "boolean"
-                    },
                     "catchUp": {
                       "type": "boolean"
                     },
@@ -21033,6 +21079,24 @@
                           },
                           "paused": {
                             "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "dmAllowed": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
                           }
                         }
                       }
@@ -21107,9 +21171,9 @@
                     "bot",
                     "inviteUrl",
                     "admission",
-                    "strangerDms",
                     "catchUp",
-                    "channels"
+                    "channels",
+                    "dmAllowed"
                   ],
                   "properties": {
                     "configured": {
@@ -21208,9 +21272,6 @@
                         }
                       ]
                     },
-                    "strangerDms": {
-                      "type": "boolean"
-                    },
                     "catchUp": {
                       "type": "boolean"
                     },
@@ -21307,6 +21368,24 @@
                           },
                           "paused": {
                             "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "dmAllowed": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
                           }
                         }
                       }
@@ -21785,6 +21864,89 @@
                           "type": "null"
                         }
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/discord/people": {
+      "get": {
+        "operationId": "getAgentDiscordPeople",
+        "parameters": [
+          {
+            "schema": {
+              "maxLength": 80,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "search",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "people"
+                  ],
+                  "properties": {
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "bot"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "bot": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
                     }
                   }
                 }

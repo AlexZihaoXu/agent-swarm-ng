@@ -81,11 +81,17 @@ it('connects an agent’s bot with a saved token, learns its identity and channe
       url,
       payload: {
         admission: 'check',
-        strangerDms: true,
+        dmAllowed: [{ id: '4000000000000000009', name: 'Sam' }],
         channels: [{ id: '3000000000000000002', allowed: true, admission: 'all' }],
       },
     });
-    expect(changed.json()).toMatchObject({ admission: 'check', strangerDms: true });
+    expect(changed.json()).toMatchObject({
+      admission: 'check',
+      dmAllowed: [{ id: '4000000000000000009', name: 'Sam' }],
+    });
+    expect(
+      (await app.inject({ method: 'PATCH', url, payload: { dmAllowed: [{ id: 'sam', name: 'Sam' }] } })).statusCode,
+    ).toBe(400);
     expect(changed.json().channels.find((c: { id: string }) => c.id === '3000000000000000002')).toMatchObject({
       allowed: true,
       admission: 'all',

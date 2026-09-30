@@ -44,7 +44,6 @@ export class DiscordStore {
         botUserId: null,
         botName: null,
         admission: 'check',
-        strangerDms: false,
         catchUp: true,
         createdAt: new Date(0),
         updatedAt: new Date(0),
@@ -64,19 +63,55 @@ export class DiscordStore {
     return this.database.client.discordChannel.findUnique({ where: { agentId_channelId: { agentId, channelId } } });
   }
   /**
-   * A channel this agent may use now, or null: a DM with the owner or one of our agents (anyone else only while
-   * the owner allows stranger DMs), or a server channel the owner allowed (a thread follows its parent).
+   * A channel this agent may use now, or null: a DM with someone who may DM its bot (canDm), or a server channel
+   * the owner allowed (a thread follows its parent).
    */
   async usable(agentId: string, channelId: string) {
     const channel = await this.channel(agentId, channelId);
     if (!channel) return null;
     if (channel.kind === 'dm')
-      return (channel.recipientId && (await this.who(channel.recipientId))) || (await this.bot(agentId)).strangerDms
-        ? channel
-        : null;
+      return channel.recipientId && (await this.canDm(agentId, channel.recipientId)) ? channel : null;
     if (channel.allowed) return channel;
     const parent = channel.kind === 'thread' && channel.parentId ? await this.channel(agentId, channel.parentId) : null;
     return parent?.allowed ? channel : null;
+  }
+
+  /**
+   * Who may DM this agent's bot: the owner's accounts, our agents' bots, and the people on its DM whitelist; nobody
+   * else (their DMs are dropped unread).
+   */
+  async canDm(agentId: string, discordUserId: string) {
+    if (await this.who(discordUserId)) return true;
+    return Boolean(
+      await this.database.client.discordDmAllow.findUnique({
+        where: { agentId_discordUserId: { agentId, discordUserId } },
+      }),
+    );
+  }
+  async dmAllowed(agentId: string) {
+    await this.database.initialize();
+    return this.database.client.discordDmAllow.findMany({
+      where: { agentId },
+      orderBy: { createdAt: 'asc' },
+      take: 500,
+    });
+  }
+  /** People this bot has seen in its servers (for choosing whom to allow DMs from). */
+  async people(agentId: string, search = '') {
+    await this.database.initialize();
+    const bot = await this.bot(agentId);
+    const rows = await this.database.client.discordMessage.findMany({
+      where: {
+        agentId,
+        ...(bot.botUserId ? { authorId: { not: bot.botUserId } } : {}),
+        ...(search.trim() ? { authorName: { contains: search.trim() } } : {}),
+      },
+      distinct: ['authorId'],
+      orderBy: { createdAt: 'desc' },
+      select: { authorId: true, authorName: true, authorBot: true },
+      take: 50,
+    });
+    return rows.map(row => ({ id: row.authorId, name: row.authorName, bot: row.authorBot }));
   }
 
   /** Changes the owner's policies for one agent's bot. Unknown channels are refused. */
@@ -84,9 +119,10 @@ export class DiscordStore {
     agentId: string,
     input: {
       admission?: Admission;
-      strangerDms?: boolean;
       catchUp?: boolean;
       channels?: { channelId: string; allowed: boolean; admission?: Admission | null }[];
+      /** Replaces the DM whitelist. */
+      dmAllowed?: { id: string; name: string }[];
     },
   ) {
     if (input.admission && !ADMISSIONS.includes(input.admission)) throw new DiscordSettingsError('Unknown admission.');
@@ -94,7 +130,6 @@ export class DiscordStore {
     await this.database.client.$transaction(async tx => {
       const policy = {
         ...(input.admission ? { admission: input.admission } : {}),
-        ...(input.strangerDms !== undefined ? { strangerDms: input.strangerDms } : {}),
         ...(input.catchUp !== undefined ? { catchUp: input.catchUp } : {}),
       };
       await tx.discordBot.upsert({ where: { agentId }, create: { agentId, ...policy }, update: policy });
@@ -109,6 +144,21 @@ export class DiscordStore {
           },
         });
         if (!count) throw new DiscordSettingsError('That channel is not one this bot can see.');
+      }
+      if (input.dmAllowed) {
+        if (input.dmAllowed.length > 500) throw new DiscordSettingsError('At most 500 people.');
+        const people = [...new Map(input.dmAllowed.map(person => [person.id, person])).values()];
+        for (const person of people)
+          if (!SNOWFLAKE.test(person.id)) throw new DiscordSettingsError('A Discord user ID is a long number.');
+        await tx.discordDmAllow.deleteMany({ where: { agentId } });
+        if (people.length)
+          await tx.discordDmAllow.createMany({
+            data: people.map(person => ({
+              agentId,
+              discordUserId: person.id,
+              name: person.name.trim().slice(0, 80) || person.id,
+            })),
+          });
       }
     });
   }

@@ -56,10 +56,12 @@ const Config = Type.Object({
   bot: Type.Union([Type.Object({ id: Type.String(), name: Type.String() }), Type.Null()]),
   inviteUrl: Type.Union([Type.String(), Type.Null()]),
   admission: Admission,
-  strangerDms: Type.Boolean(),
   catchUp: Type.Boolean(),
   channels: Type.Array(Channel),
+  /** Who besides the owner and our agents may DM this bot (a whitelist). */
+  dmAllowed: Type.Array(Type.Object({ id: Type.String(), name: Type.String() })),
 });
+const Person = Type.Object({ id: Snowflake, name: Type.String({ maxLength: 80 }) }, { additionalProperties: false });
 const Transcript = Type.Object({
   channel: Type.Object({ id: Type.String(), place: Type.String(), kind: Type.String() }),
   messages: Type.Array(
@@ -107,10 +109,11 @@ export function registerDiscordRoutes(
   files: FileStore,
 ) {
   const view = async (agentId: string) => {
-    const [bot, channels, token] = await Promise.all([
+    const [bot, channels, token, dmAllowed] = await Promise.all([
       store.bot(agentId),
       store.channels(agentId),
       tokens.get(agentId),
+      store.dmAllowed(agentId),
     ]);
     return {
       configured: Boolean(token),
@@ -121,8 +124,8 @@ export function registerDiscordRoutes(
         ? `https://discord.com/oauth2/authorize?client_id=${bot.botUserId}&scope=bot&permissions=${BOT_PERMISSIONS}`
         : null,
       admission: bot.admission as (typeof ADMISSIONS)[number],
-      strangerDms: bot.strangerDms,
       catchUp: bot.catchUp,
+      dmAllowed: dmAllowed.map(person => ({ id: person.discordUserId, name: person.name })),
       channels: channels.map(channel => ({
         id: channel.channelId,
         guildId: channel.guildId,
@@ -192,9 +195,9 @@ export function registerDiscordRoutes(
     Params: { id: string };
     Body: {
       admission?: (typeof ADMISSIONS)[number];
-      strangerDms?: boolean;
       catchUp?: boolean;
       channels?: { id: string; allowed: boolean; admission?: (typeof ADMISSIONS)[number] | null }[];
+      dmAllowed?: { id: string; name: string }[];
     };
   }>(
     '/api/agents/:id/discord',
@@ -205,8 +208,8 @@ export function registerDiscordRoutes(
         body: Type.Object(
           {
             admission: Type.Optional(Admission),
-            strangerDms: Type.Optional(Type.Boolean()),
             catchUp: Type.Optional(Type.Boolean()),
+            dmAllowed: Type.Optional(Type.Array(Person, { maxItems: 500 })),
             channels: Type.Optional(
               Type.Array(
                 Type.Object(
@@ -326,6 +329,30 @@ export function registerDiscordRoutes(
         }),
         nextCursor: rows.length > TRANSCRIPT_PAGE ? page[0].id : null,
       };
+    },
+  );
+  // People this agent's bot has seen, for choosing whom to allow DMs from.
+  app.get<{ Params: { id: string }; Querystring: { search?: string } }>(
+    '/api/agents/:id/discord/people',
+    {
+      schema: {
+        operationId: 'getAgentDiscordPeople',
+        params: Params,
+        querystring: Type.Object(
+          { search: Type.Optional(Type.String({ maxLength: 80 })) },
+          { additionalProperties: false },
+        ),
+        response: {
+          200: Type.Object({
+            people: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), bot: Type.Boolean() })),
+          }),
+          404: ErrorResponse,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!(await agent(reply, request.params.id))) return reply;
+      return { people: await store.people(request.params.id, request.query.search) };
     },
   );
   app.get(

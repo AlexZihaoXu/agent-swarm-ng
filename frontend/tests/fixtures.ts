@@ -133,7 +133,7 @@ export const test = base.extend({
           bot: null,
           inviteUrl: null,
           admission: 'mention',
-          strangerDms: false,
+          dmAllowed: [],
           catchUp: true,
           channels: [],
         },

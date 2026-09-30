@@ -113,7 +113,8 @@ it('delivers the owner’s DM with human authority, and strangers’ DMs only wh
     await new Promise(resolve => setTimeout(resolve, 120));
     expect(delivered).toHaveLength(1);
     expect(await database.client.discordMessage.count({ where: { authorId: STRANGER } })).toBe(0);
-    await store.update(agent.id, { strangerDms: true });
+    // Only people on the agent's DM whitelist (besides the owner and our agents) reach it by DM.
+    await store.update(agent.id, { dmAllowed: [{ id: STRANGER, name: 'Sam' }] });
     await send(DM, stranger, 'hello again');
     await vi.waitFor(() => expect(delivered).toHaveLength(2));
     expect(delivered[1].source?.human).toBeUndefined();

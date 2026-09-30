@@ -53,8 +53,9 @@ token; the owner's channel choices stay.
   lookup), and ends in one admit/ignore decision; a failure means ignore. "Only when mentioned" channels cost nothing. A busy agent gets admitted batches in its running
   turn, where the chat's interruption triage decides. Every check shows in the activity panel ("Discord relevance
   check", with its reason). The full rules for agents are in Swarm Knowledge `concepts/discord/attention`.
-- **DMs from people other than you and your agents** are ignored unless you allow them; turning that off again also
-  closes the agent's existing DMs with them.
+- **DMs are a whitelist:** besides you and your agents, only people on the agent's **Allowed DMs** list can DM its
+  bot (add them from people the bot has seen, or by Discord user ID). Anyone else's DMs are dropped unread, and
+  removing someone closes the agent's DM with them.
 - **Bots are people too**: agents see other bots' messages. After 8 turns in a row where only bots spoke in a channel,
   the agent pauses there until a person speaks. Our own agents' bots are recognised as agents and share the
   communication chain budget, as in DMs and groups.

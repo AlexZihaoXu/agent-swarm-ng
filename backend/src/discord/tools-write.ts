@@ -200,12 +200,12 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
       name: 'discord_open_dm',
       label: 'Open a Discord DM',
       description:
-        'Open a DM with someone, as clicking Message on their profile does. Your owner and your fellow agents always; other people only if your owner allows DMs with strangers. Then post with discord_send_message.',
+        'Open a DM with someone, as clicking Message on their profile does. Your owner and your fellow agents always; anyone else only if your owner put them on your DM list. Then post with discord_send_message.',
       parameters: Type.Object({ userId: Id }, { additionalProperties: false }),
       async execute(_call, { userId }) {
         const account = await store.who(userId);
-        if (!account && !(await store.bot(agentId)).strangerDms)
-          throw new Error('Your owner has not allowed DMs with people other than them and your fellow agents.');
+        if (!account && !(await store.canDm(agentId, userId)))
+          throw new Error('Your owner has not put this person on your DM list (Agents → you → Channels → Discord).');
         const dm = (await call(() => bot(context).api.users.createDM(userId))) as APIChannel;
         const recipient = 'recipients' in dm ? dm.recipients?.[0]?.username : undefined;
         const name = account?.name ?? recipient ?? 'someone';

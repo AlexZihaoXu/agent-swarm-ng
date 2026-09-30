@@ -218,7 +218,7 @@ it('changes only its own messages, DMs only people the owner allows, reacts, sta
     await expect(
       call('discord_delete_message', { channelId: DESIGN, messageId: '1300000000000000002' }),
     ).rejects.toThrow();
-    await expect(call('discord_open_dm', { userId: STRANGER })).rejects.toThrow('not allowed DMs');
+    await expect(call('discord_open_dm', { userId: STRANGER })).rejects.toThrow('DM list');
     expect(await call('discord_open_dm', { userId: OWNER })).toMatchObject({
       channelId: 'discord:5000000000000000009',
       with: 'Alex',
@@ -270,11 +270,11 @@ it('changes only its own messages, DMs only people the owner allows, reacts, sta
       channelId: `discord:${DESIGN}`,
     });
     expect(posts().at(-1)!.body.poll).toMatchObject({ question: { text: 'Friday?' }, duration: 24 });
-    // A DM with someone else lasts only while the owner allows stranger DMs.
-    await store.update(agent.id, { strangerDms: true });
+    // A DM with someone else lasts only while they are on the agent's DM whitelist.
+    await store.update(agent.id, { dmAllowed: [{ id: STRANGER, name: 'Sam' }] });
     const { channelId: dm } = await call('discord_open_dm', { userId: STRANGER });
     expect(await call('discord_send_message', { channelId: dm, text: 'hi' })).toHaveProperty('posted');
-    await store.update(agent.id, { strangerDms: false });
+    await store.update(agent.id, { dmAllowed: [] });
     await expect(call('discord_send_message', { channelId: dm, text: 'still there?' })).rejects.toThrow(
       'not one you may use',
     );
