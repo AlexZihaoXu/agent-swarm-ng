@@ -1,5 +1,6 @@
 import { TIME_GUIDANCE } from './time-tools';
 import { SCRATCH_GUIDANCE } from './scratch-tools';
+import { DISCORD_GUIDANCE } from './discord/guidance';
 import {
   createAgentSession,
   createExtensionRuntime,
@@ -433,6 +434,10 @@ export async function createChatSession(
   if (additionalTools.some(tool => tool.name === 'current_time')) {
     const current = resources.getSystemPrompt() ?? '';
     resources.getSystemPrompt = () => `${current}\n\n${TIME_GUIDANCE}`;
+  }
+  if (additionalTools.some(tool => tool.name === 'discord_send_message')) {
+    const current = resources.getSystemPrompt() ?? '';
+    resources.getSystemPrompt = () => `${current}\n\n${DISCORD_GUIDANCE}`;
   }
   if (additionalTools.some(tool => tool.name === 'scratch_write')) {
     const current = resources.getSystemPrompt() ?? '';

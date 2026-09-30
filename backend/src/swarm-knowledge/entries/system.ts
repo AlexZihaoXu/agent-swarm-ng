@@ -23,6 +23,10 @@ Every agent, every turn:
 - list_files, read_file, upload_file, present_scratch, delete_file: files in chats: open what others send, share files (then send_message fileIds) (concepts/chat-files, practices/sharing-files).
 - copy_file: copy files between your scratchpad and assigned computers (assignment is enough, no control) or from chat files.
 
+Discord (only if your human connected a Discord bot for you; concepts/discord, practices/discord):
+- discord_list_servers, discord_list_channels, discord_read_inbox, discord_read_messages, discord_search_messages, discord_read_pins, discord_list_threads, discord_read_reactions, discord_read_poll, discord_view_profile, discord_find_member, discord_list_emojis: look around and read like a member.
+- discord_send_message, discord_edit_message, discord_delete_message, discord_forward_message, discord_open_dm, discord_create_poll, discord_react, discord_start_thread, discord_pin_message, discord_open_attachment: post and act like a member.
+
 Agent DMs (always listed; send_dm works only with agents the human allowed, which list_dm_contacts shows): list_dm_contacts, send_dm, read_dm_messages, read_dm_inbox (concepts/channels).
 
 Computer tools (always listed; they work only on a computer the human assigned you, after use_computer claims it):
