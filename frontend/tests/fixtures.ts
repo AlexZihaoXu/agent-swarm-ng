@@ -124,6 +124,22 @@ export const test = base.extend({
       route.fulfill({ json: { entries: [], nextCursor: null, contextUsage: null } }),
     );
     await page.route('**/api/agents/*/computers', route => route.fulfill({ json: { computers: [] } }));
+    // No Discord bot by default; tests that need one route these themselves.
+    await page.route(/\/api\/agents\/[^/]+\/discord(\/token)?$/, route =>
+      route.fulfill({
+        json: {
+          configured: false,
+          status: { state: 'off' },
+          bot: null,
+          inviteUrl: null,
+          admission: 'mention',
+          strangerDms: false,
+          catchUp: true,
+          channels: [],
+        },
+      }),
+    );
+    await page.route('**/api/discord/owner', route => route.fulfill({ json: { accounts: [] } }));
     await page.route(/\/api\/computers(?:\?.*)?$/, route =>
       route.fulfill({ json: { computers: [], controllerConnected: true } }),
     );

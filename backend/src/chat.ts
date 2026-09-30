@@ -17,6 +17,7 @@ import { DmBroker } from './dm-broker';
 import { DiscordIntake } from './discord/intake';
 import type { DiscordStore } from './discord/store';
 import type { DiscordConnections } from './discord/connections';
+import type { DiscordTokenStore } from './discord/token-store';
 import { registerSwarmRoutes } from './swarm-routes';
 import { registerGroupRoutes } from './group-routes';
 import { registerReactionRoutes } from './reaction-routes';
@@ -126,7 +127,7 @@ export function registerChat(
   screenshots?: ScreenshotPool,
   files?: FileStore,
   transfers?: DmBroker['transfers'],
-  discord?: { store: DiscordStore; connections: DiscordConnections },
+  discord?: { store: DiscordStore; connections: DiscordConnections; tokens: DiscordTokenStore },
 ) {
   const runs = new AgentRuns();
   const streams = createRunStreams(runs);
@@ -453,6 +454,12 @@ export function registerChat(
           return reply.code(400).send({ message: 'Type the exact agent name to confirm deletion.' });
         await broker.beforeDelete(id);
         await computers?.releaseAgent(id); // settles outstanding input; the claim row would cascade with the agent anyway
+        // Its Discord bot signs out and its token goes with it (its Discord rows cascade with the agent).
+        if (discord) {
+          await discord.connections.stop(id);
+          await discord.tokens.remove(id);
+          await database.client.discordAccount.deleteMany({ where: { agentId: id } });
+        }
         // Delete the record before its files: if this fails the agent is still whole, and leftover images only expire from the pool.
         if (!(await database.deleteAgent(id, request.body.confirmation)))
           return reply.code(404).send({ message: 'Agent not found.' });

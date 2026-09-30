@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentAvatarPreview } from '@/components/agent-avatar-preview';
 import { AgentChannelSettings } from '@/components/agent-channel-settings';
+import { AgentDiscordSettings } from '@/components/agent-discord-settings';
 import { AgentComputerSettings } from '@/components/agent-computer-settings';
 import { AgentModelSettings } from '@/components/agent-model-settings';
 import { defaultAvatar, sameAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
@@ -126,7 +127,7 @@ export function EditAgentForm({
     });
     return () => register('own');
   }, [dirty, register]);
-  const order = ['own', 'model', 'computers']; // fixed order, so the summary does not depend on which section mounted first
+  const order = ['own', 'discord', 'model', 'computers']; // fixed order, so the summary does not depend on which section mounted first
   const unsaved = [...sections.current.entries()]
     .filter(([, section]) => section.dirty)
     .sort(([a], [b]) => order.indexOf(a) - order.indexOf(b))
@@ -216,6 +217,16 @@ export function EditAgentForm({
                   }}
                   disabled={busy || !loaded}
                 />
+                {agent.real && (
+                  <div className="mt-6 border-t border-border pt-5">
+                    <AgentDiscordSettings
+                      key={`discord:${agent.id}`}
+                      agentId={agent.id}
+                      agentName={agent.name}
+                      register={register}
+                    />
+                  </div>
+                )}
               </div>
             </section>
             {agent.real && (

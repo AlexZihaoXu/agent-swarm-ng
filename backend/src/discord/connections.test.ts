@@ -99,6 +99,25 @@ it('connects an agent’s bot with a saved token, learns its identity and channe
     const file = join(root, 'discord-bots.json');
     expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ [agent.id]: TOKEN });
     expect((await stat(file)).mode & 0o777).toBe(0o600);
+    // Deleting the agent signs its bot out and deletes its token.
+    const doomed = await database.createAgent({ name: 'Doomed', endpointId: 'mock', model: 'm', thinkingLevel: 'off' });
+    discord.tokens.set('MTAwMDAwMDAwMDAwMDAwMDA5.GxYzAb.abcdefghijklmnopqrstuvwxyz0199', {
+      id: '1000000000000000009',
+      username: 'doomed-bot',
+    });
+    await app.inject({
+      method: 'PUT',
+      url: `/api/agents/${doomed.id}/discord/token`,
+      payload: { token: 'MTAwMDAwMDAwMDAwMDAwMDA5.GxYzAb.abcdefghijklmnopqrstuvwxyz0199' },
+    });
+    await vi.waitFor(() => expect(discord.connected).toBe(2), { timeout: 5000 });
+    expect(
+      (await app.inject({ method: 'DELETE', url: `/api/agents/${doomed.id}`, payload: { confirmation: 'Doomed' } }))
+        .statusCode,
+    ).toBe(200);
+    await vi.waitFor(() => expect(discord.connected).toBe(1));
+    expect(Object.keys(JSON.parse(await readFile(file, 'utf8')))).toEqual([agent.id]);
+    expect(await database.client.discordAccount.count({ where: { agentId: doomed.id } })).toBe(0);
     const removed = await app.inject({ method: 'DELETE', url: `${url}/token` });
     expect(removed.json()).toMatchObject({ configured: false, status: { state: 'off' } });
     await vi.waitFor(() => expect(discord.connected).toBe(0));

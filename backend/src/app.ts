@@ -93,6 +93,7 @@ export async function buildApp({
   registerChat(app, endpointStore, platform, codex, computers, screenshots, files, controller, {
     store: discordStore,
     connections: discord,
+    tokens: discordTokens,
   });
   registerComputerRoutes(app, platform, controller, computers, swarmSettings);
   registerComputerUseRoutes(app, computers, screenshots);

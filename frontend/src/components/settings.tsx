@@ -1,3 +1,4 @@
+import { DiscordOwnerSettings } from '@/components/discord-owner-settings';
 import { SwarmSettings } from '@/components/swarm-settings';
 import { useEffect, useId, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
@@ -527,6 +528,7 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
             Changing a saved URL clears its key unless you enter a replacement. Use HTTPS for remote providers.
           </p>
         </section>
+        <DiscordOwnerSettings card={settingsCard} />
         <SwarmSettings card={settingsCard} />
       </div>
     </div>
