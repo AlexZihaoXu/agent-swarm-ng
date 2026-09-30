@@ -915,6 +915,8 @@ ${preview.text}`
                   await this.store.chargeChain(chainId);
                   return chainId;
                 },
+                answersTurn: discordChannelId =>
+                  !humanBatch && sources.some(source => source.channelId === `discord:${discordChannelId}`),
               }),
             ]
           : []),

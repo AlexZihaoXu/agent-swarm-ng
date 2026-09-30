@@ -648,7 +648,7 @@ export class DiscordIntake {
     if (more) {
       const top = authors.reduce((a, b) => (b._count._all > a._count._all ? b : a));
       lines.push(
-        `+${more} more message${more === 1 ? '' : 's'} in this channel${previous ? ` since ${clock(previous.createdAt)}` : ''} (${authors.length} author${authors.length === 1 ? '' : 's'}, most from ${top.authorName}). Read them with discord_read_messages(${JSON.stringify({ channelId: `discord:${channelId}`, ...(channel.announcedUpTo ? { after: channel.announcedUpTo } : {}) })}).`,
+        `+${more} more message${more === 1 ? '' : 's'} in this channel${previous ? ` since ${clock(previous.createdAt)}` : ''} (${authors.length} author${authors.length === 1 ? '' : 's'}, most from ${JSON.stringify(top.authorName)}). Read them with discord_read_messages(${JSON.stringify({ channelId: `discord:${channelId}`, ...(channel.announcedUpTo ? { after: channel.announcedUpTo } : {}) })}).`,
       );
     }
     return { text: lines.join('\n'), place: placeOf(channel) };

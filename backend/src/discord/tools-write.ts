@@ -17,6 +17,11 @@ export type DiscordWriteContext = DiscordToolContext & {
    * Posts between our agents stop when the chain's budget runs out, as with DMs and groups.
    */
   chain: (channelId: string) => Promise<string | null>;
+  /**
+   * Whether a final post there answers this turn's input, so ends the turn. A turn your owner started in your private
+   * chat does not end on a Discord post: its result still goes back to them there. Every final post ends it if absent.
+   */
+  answersTurn?: (channelId: string) => boolean;
 };
 
 const Channel = Type.String({
@@ -65,7 +70,7 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
       name: 'discord_send_message',
       label: 'Post on Discord',
       description:
-        'Post in a Discord channel or DM you may use: the reply channel of a Discord input, or one from discord_list_channels / discord_open_dm. Long text is split into 2,000-character messages (code blocks kept intact). replyToMessageId makes it a Discord reply (quoting that message; it pings its author only with ping:true). Mention a person with <@userId> (only people you name are pinged; never @everyone or roles). Attach files you uploaded to this channel with upload_file (channelId "discord:<id>") via fileIds, up to 10 and 20 MiB each. final:false keeps working (acknowledgments, progress); final:true (default) ends your turn. Everyone in the channel reads what you post.',
+        'Post in a Discord channel or DM you may use: the reply channel of a Discord input, or one from discord_list_channels / discord_open_dm. Long text is split into 2,000-character messages (code blocks kept intact). replyToMessageId makes it a Discord reply (quoting that message; it pings its author only with ping:true). Mention a person with <@userId> (only people you name are pinged; never @everyone or roles). Attach files you uploaded to this channel with upload_file (channelId "discord:<id>") via fileIds, up to 10 and 20 MiB each. final:false keeps working (acknowledgments, progress); final:true (default) ends your turn when it answers a Discord input there (a task from your private chat still finishes there with send_message). Everyone in the channel reads what you post.',
       parameters: Type.Object(
         {
           channelId: Channel,
@@ -131,13 +136,18 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
         if (fileIds.length)
           await files.attach(fileIds, { channelKey: key, messageKind: 'discord', messageId: sent[0].id, uploader });
         const final = args.final ?? true;
+        const ends = final && (context.answersTurn?.(channel.channelId) ?? true);
         return result(
           {
             posted: sent.map(message => message.id),
             channelId: key,
-            note: final ? 'Posted. Turn complete.' : 'Posted. Continue the work; final:true only for the last part.',
+            note: ends
+              ? 'Posted. Turn complete.'
+              : final
+                ? 'Posted. This turn came from elsewhere: finish it there (for your private chat, send_message).'
+                : 'Posted. Continue the work; final:true only for the last part.',
           },
-          final,
+          ends,
         );
       },
     }),

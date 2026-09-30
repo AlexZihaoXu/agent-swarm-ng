@@ -95,6 +95,8 @@ async function setup() {
         chains.push(channelId);
         return 'chain-1';
       },
+      // This turn answers a Discord input in DESIGN; IDEAS came up in passing.
+      answersTurn: channelId => channelId === DESIGN,
     }).map(tool => [tool.name, tool]),
   );
   const call = async (name: string, params: object) => {
@@ -148,6 +150,10 @@ it('posts like a member: split, replies, only named people pinged, files attache
     expect(
       (await call('discord_send_message', { channelId: DESIGN, text: 'ack', final: false })).terminate,
     ).toBeUndefined();
+    // A final post elsewhere (say, one your owner asked for from your private chat) does not end the turn.
+    const elsewhere = await call('discord_send_message', { channelId: IDEAS, text: 'hi there' });
+    expect(elsewhere.terminate).toBeUndefined();
+    expect(elsewhere.note).toContain('finish it there');
     // A long post that fails partway says (and records) what was already posted.
     let posted = 0;
     discord.before(request =>
@@ -158,7 +164,7 @@ it('posts like a member: split, replies, only named people pinged, files attache
     await expect(call('discord_send_message', { channelId: DESIGN, text: 'word '.repeat(600) })).rejects.toThrow(
       /^Posted 1 of 2 parts \(\d+\), then: Discord says you lack permission/,
     );
-    expect(await database.client.discordMessage.count({ where: { agentId: agent.id } })).toBe(4);
+    expect(await database.client.discordMessage.count({ where: { agentId: agent.id } })).toBe(5);
     await expect(call('discord_send_message', { channelId: OTHER, text: 'hi' })).rejects.toThrow('not one you may use');
     await expect(call('discord_send_message', { channelId: DESIGN, text: ' ' })).rejects.toThrow('empty');
   } finally {
