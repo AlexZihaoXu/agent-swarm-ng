@@ -151,7 +151,13 @@ export class DiscordConnections implements DiscordConnectionControl {
     const token = await this.tokens.get(agentId);
     if (!token) return void this.live.delete(agentId);
     connection.status = { state: 'connecting' };
-    const rest = new REST({ version: '10', ...(this.options.api ? { api: this.options.api } : {}) }).setToken(token);
+    const rest = new REST({
+      version: '10',
+      ...(this.options.api ? { api: this.options.api } : {}),
+      // Send through the global fetch, the same implementation as the global FormData uploads are built with
+      // (the model SDK installs its own undici globally; the REST client's bundled one cannot send those bodies).
+      makeRequest: (url, init) => fetch(url, init as RequestInit) as never,
+    }).setToken(token);
     const api = new API(rest);
     let me;
     try {

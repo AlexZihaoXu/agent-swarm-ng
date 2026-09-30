@@ -196,6 +196,30 @@ export class DiscordStore {
       take: 25,
     });
   }
+  /** The bot's own post: recorded like the others, and the channel counts as read up to it (as in the app). */
+  async recordOwn(
+    agentId: string,
+    message: {
+      id: string;
+      channelId: string;
+      authorId: string;
+      authorName: string;
+      content: string;
+      chainId: string | null;
+      createdAt: Date;
+    },
+  ) {
+    await this.database.initialize();
+    await this.database.client.discordMessage.upsert({
+      where: { agentId_id: { agentId, id: message.id } },
+      create: { agentId, ...message, authorBot: true },
+      update: {},
+    });
+    await this.database.client.discordChannel.updateMany({
+      where: { agentId, channelId: message.channelId },
+      data: { announcedUpTo: message.id },
+    });
+  }
   /** Who a Discord account is: the owner, one of our agents, or null (anyone else). */
   async who(discordUserId: string) {
     await this.database.initialize();

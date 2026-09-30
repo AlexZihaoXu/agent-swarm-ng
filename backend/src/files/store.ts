@@ -20,7 +20,7 @@ export class FileError extends Error {
 }
 /** Who posted a file (a name snapshot keeps it meaningful after an agent is deleted). */
 export type Uploader = { kind: 'human' } | { kind: 'agent'; id: string; name: string };
-export type MessageKind = 'chat' | 'dm' | 'group';
+export type MessageKind = 'chat' | 'dm' | 'group' | 'discord';
 
 type Row = Awaited<ReturnType<PlatformStore['client']['channelFile']['findUniqueOrThrow']>>;
 /** A file as the dashboard and agents see it. A deleted file keeps its name, who deleted it and when. */
@@ -34,7 +34,7 @@ export function fileView(row: Row) {
     size: row.size,
     status: row.status as 'available' | 'deleted',
     uploader: {
-      kind: row.uploaderKind as 'human' | 'agent',
+      kind: row.uploaderKind as 'human' | 'agent' | 'discord',
       id: row.uploaderId,
       name: row.uploaderName,
     },
@@ -142,6 +142,77 @@ export class FileStore {
             uploaderKind: input.uploader.kind,
             uploaderId: input.uploader.kind === 'agent' ? input.uploader.id : null,
             uploaderName: input.uploader.kind === 'agent' ? input.uploader.name : 'You',
+            name,
+            mime,
+            kind,
+            size: stored.size,
+            blobId: stored.id,
+          },
+        });
+      });
+    });
+    return fileView(row);
+  }
+
+  /**
+   * A file someone posted on another app (Discord), fetched when an agent opens it. It belongs to its message
+   * there; opening it twice returns the same file. The storage budget and size limit still apply.
+   */
+  async ingest(input: {
+    channelKey: string;
+    messageKind: MessageKind;
+    messageId: string;
+    uploader: { kind: 'discord'; id: string; name: string };
+    name: string;
+    source: AsyncIterable<Uint8Array>;
+  }) {
+    await this.database.initialize();
+    const existing = await this.database.client.channelFile.findFirst({
+      where: {
+        channelKey: input.channelKey,
+        messageKind: input.messageKind,
+        messageId: input.messageId,
+        name: fileName(input.name),
+      },
+    });
+    if (existing?.status === 'available') return fileView(existing);
+    const usage = await this.usage();
+    if (usage.full)
+      throw new FileError('File storage is full. Delete files or raise the limit in Settings → Swarm.', 507);
+    let stored;
+    try {
+      stored = await this.blobs.stage(input.source, usage.maxFileBytes);
+    } catch (error) {
+      if (error instanceof FileTooLargeError)
+        throw new FileError(`Files are at most ${Math.round(usage.maxFileBytes / MB)} MB (Settings → Swarm).`, 413);
+      throw error;
+    }
+    const name = fileName(input.name);
+    const { kind, mime } = detectFile(name, stored.head);
+    const row = await this.exclusive(async () => {
+      try {
+        const known = await this.database.client.fileBlob.findUnique({ where: { id: stored.id } });
+        if (!known && (await this.usage()).bytes + stored.size > usage.budgetBytes)
+          throw new FileError('File storage is full. Delete files or raise the limit in Settings → Swarm.', 507);
+        await this.blobs.commit(stored);
+      } catch (error) {
+        await this.blobs.discard(stored);
+        throw error;
+      }
+      return this.database.client.$transaction(async tx => {
+        await tx.fileBlob.upsert({
+          where: { id: stored.id },
+          create: { id: stored.id, size: stored.size },
+          update: {},
+        });
+        return tx.channelFile.create({
+          data: {
+            channelKey: input.channelKey,
+            messageKind: input.messageKind,
+            messageId: input.messageId,
+            uploaderKind: input.uploader.kind,
+            uploaderId: input.uploader.id,
+            uploaderName: input.uploader.name,
             name,
             mime,
             kind,

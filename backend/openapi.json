@@ -665,6 +665,12 @@
                                     "enum": [
                                       "agent"
                                     ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "discord"
+                                    ]
                                   }
                                 ]
                               },
@@ -748,6 +754,12 @@
                                         "type": "string",
                                         "enum": [
                                           "agent"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "discord"
                                         ]
                                       }
                                     ]
@@ -1095,6 +1107,12 @@
                               "enum": [
                                 "agent"
                               ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "discord"
+                              ]
                             }
                           ]
                         },
@@ -1178,6 +1196,12 @@
                                   "type": "string",
                                   "enum": [
                                     "agent"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "discord"
                                   ]
                                 }
                               ]
@@ -1741,6 +1765,12 @@
                               "enum": [
                                 "agent"
                               ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "discord"
+                              ]
                             }
                           ]
                         },
@@ -1824,6 +1854,12 @@
                                   "type": "string",
                                   "enum": [
                                     "agent"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "discord"
                                   ]
                                 }
                               ]
@@ -5301,6 +5337,12 @@
                                           "enum": [
                                             "agent"
                                           ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "discord"
+                                          ]
                                         }
                                       ]
                                     },
@@ -5384,6 +5426,12 @@
                                               "type": "string",
                                               "enum": [
                                                 "agent"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "discord"
                                               ]
                                             }
                                           ]
@@ -6216,6 +6264,12 @@
                                                   "enum": [
                                                     "agent"
                                                   ]
+                                                },
+                                                {
+                                                  "type": "string",
+                                                  "enum": [
+                                                    "discord"
+                                                  ]
                                                 }
                                               ]
                                             },
@@ -6299,6 +6353,12 @@
                                                       "type": "string",
                                                       "enum": [
                                                         "agent"
+                                                      ]
+                                                    },
+                                                    {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "discord"
                                                       ]
                                                     }
                                                   ]
@@ -7220,6 +7280,12 @@
                                             "enum": [
                                               "agent"
                                             ]
+                                          },
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "discord"
+                                            ]
                                           }
                                         ]
                                       },
@@ -7303,6 +7369,12 @@
                                                 "type": "string",
                                                 "enum": [
                                                   "agent"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "discord"
                                                 ]
                                               }
                                             ]
@@ -8192,6 +8264,12 @@
                                             "enum": [
                                               "agent"
                                             ]
+                                          },
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "discord"
+                                            ]
                                           }
                                         ]
                                       },
@@ -8275,6 +8353,12 @@
                                                 "type": "string",
                                                 "enum": [
                                                   "agent"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "discord"
                                                 ]
                                               }
                                             ]
@@ -9195,6 +9279,12 @@
                                             "enum": [
                                               "agent"
                                             ]
+                                          },
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "discord"
+                                            ]
                                           }
                                         ]
                                       },
@@ -9278,6 +9368,12 @@
                                                 "type": "string",
                                                 "enum": [
                                                   "agent"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "discord"
                                                 ]
                                               }
                                             ]
@@ -10043,6 +10139,12 @@
                                           "enum": [
                                             "agent"
                                           ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "discord"
+                                          ]
                                         }
                                       ]
                                     },
@@ -10126,6 +10228,12 @@
                                               "type": "string",
                                               "enum": [
                                                 "agent"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "discord"
                                               ]
                                             }
                                           ]
@@ -10785,6 +10893,12 @@
                                         "enum": [
                                           "agent"
                                         ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "discord"
+                                        ]
                                       }
                                     ]
                                   },
@@ -10868,6 +10982,12 @@
                                             "type": "string",
                                             "enum": [
                                               "agent"
+                                            ]
+                                          },
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "discord"
                                             ]
                                           }
                                         ]
@@ -12085,6 +12205,12 @@
                                                   "enum": [
                                                     "agent"
                                                   ]
+                                                },
+                                                {
+                                                  "type": "string",
+                                                  "enum": [
+                                                    "discord"
+                                                  ]
                                                 }
                                               ]
                                             },
@@ -12168,6 +12294,12 @@
                                                       "type": "string",
                                                       "enum": [
                                                         "agent"
+                                                      ]
+                                                    },
+                                                    {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "discord"
                                                       ]
                                                     }
                                                   ]
@@ -13068,6 +13200,12 @@
                                             "enum": [
                                               "agent"
                                             ]
+                                          },
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "discord"
+                                            ]
                                           }
                                         ]
                                       },
@@ -13151,6 +13289,12 @@
                                                 "type": "string",
                                                 "enum": [
                                                   "agent"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "discord"
                                                 ]
                                               }
                                             ]
@@ -13485,6 +13629,12 @@
                                           "enum": [
                                             "agent"
                                           ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "discord"
+                                          ]
                                         }
                                       ]
                                     },
@@ -13568,6 +13718,12 @@
                                               "type": "string",
                                               "enum": [
                                                 "agent"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "discord"
                                               ]
                                             }
                                           ]
@@ -14259,6 +14415,12 @@
                                             "enum": [
                                               "agent"
                                             ]
+                                          },
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "discord"
+                                            ]
                                           }
                                         ]
                                       },
@@ -14342,6 +14504,12 @@
                                                 "type": "string",
                                                 "enum": [
                                                   "agent"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "discord"
                                                 ]
                                               }
                                             ]
@@ -14900,6 +15068,12 @@
                                         "enum": [
                                           "agent"
                                         ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "discord"
+                                        ]
                                       }
                                     ]
                                   },
@@ -14983,6 +15157,12 @@
                                             "type": "string",
                                             "enum": [
                                               "agent"
+                                            ]
+                                          },
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "discord"
                                             ]
                                           }
                                         ]

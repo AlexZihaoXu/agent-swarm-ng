@@ -43,6 +43,7 @@ export class MockDiscord {
     this.server = createServer(async (request, response) => {
       const url = new URL(request.url ?? '/', 'http://mock');
       const reply = (status: number, json: unknown) => {
+        if (status === 204) return void response.writeHead(204).end();
         response.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(json));
       };
       const token = String(request.headers.authorization ?? '').replace(/^Bot /, '');

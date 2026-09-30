@@ -8,7 +8,7 @@ import type { PlatformStore } from '../platform-store';
 import type { Scratchpad } from '../scratchpad';
 
 const Uploader = Type.Object({
-  kind: Type.Union([Type.Literal('human'), Type.Literal('agent')]),
+  kind: Type.Union([Type.Literal('human'), Type.Literal('agent'), Type.Literal('discord')]),
   id: Type.Union([Type.String(), Type.Null()]),
   name: Type.String(),
 });

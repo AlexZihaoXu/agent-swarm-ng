@@ -136,7 +136,7 @@ export function registerChat(
   if (discord) {
     // Discord messages become agent inputs through the intake (batching, admission, one triage at a time).
     const intake = new DiscordIntake(database, discord.store, {
-      deliver: (agentId, input) => broker.deliverDiscord(agentId, input),
+      deliver: (agentId, input, addressed) => broker.deliverDiscord(agentId, input, addressed),
       evaluate: (agentId, channelId, notice) => broker.evaluateAdmission(agentId, channelId, notice),
     });
     broker.discord = { ...discord, intake };

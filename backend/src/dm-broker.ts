@@ -11,6 +11,8 @@ import type { DiscordStore } from './discord/store';
 import type { DiscordConnections } from './discord/connections';
 import type { DiscordIntake } from './discord/intake';
 import { createDiscordReadTools } from './discord/tools-read';
+import { createDiscordWriteTools } from './discord/tools-write';
+import { Routes } from 'discord-api-types/v10';
 import { runDecisionFork } from './decision-fork';
 import type { ComputerController } from './computer-controller-client';
 import { BlobStore } from './files/blob-store';
@@ -193,7 +195,7 @@ export class DmBroker {
    * Hands an admitted Discord trigger to the agent like any other input: offered to its running turn (where
    * interruption triage applies) or queued as a new turn. Only the owner's messages carry human authority.
    */
-  deliverDiscord(agentId: string, input: ChannelMessage) {
+  deliverDiscord(agentId: string, input: ChannelMessage, addressed = false) {
     if (this.closing || this.deleting.has(agentId)) return;
     void (async () => {
       await this.ready();
@@ -201,13 +203,36 @@ export class DmBroker {
       if (!agent) return;
       const channelId = agent.channels[0].id;
       const human = Boolean(input.source?.human);
-      this.runs.offer(agentId, input, { type: 'discord_message', channelId }) ??
+      const run =
+        this.runs.offer(agentId, input, { type: 'discord_message', channelId }) ??
         this.runs.enqueue(
           { agentId, channelId, clientMessageId: input.id!, ...(human ? {} : { inputSource: 'agent' as const }) },
           context => this.runInbox(agentId, input, context),
           human ? undefined : this.peerLimits,
         );
+      // Someone spoke to the agent: Discord shows it typing while it works, as a person would (at most 90 s).
+      if (addressed && input.source)
+        this.discordTyping(agentId, input.source.channelId.replace(/^discord:/, ''), run.finished);
     })().catch(() => {});
+  }
+  private discordTyping(agentId: string, discordChannelId: string, until: Promise<unknown>) {
+    const tick = () => {
+      try {
+        const { rest } = this.discord!.connections.api(agentId);
+        void rest.post(Routes.channelTyping(discordChannelId)).catch(() => {});
+      } catch {
+        /* offline: nothing to show */
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 8000);
+    const limit = setTimeout(() => clearInterval(timer), 90_000);
+    timer.unref?.();
+    limit.unref?.();
+    void until.finally(() => {
+      clearInterval(timer);
+      clearTimeout(limit);
+    });
   }
   /**
    * The "check" admission policy: a decision-only branch sees recent messages in the channel and decides whether
@@ -736,7 +761,27 @@ ${preview.text}`
         ...createScratchTools(this.scratch, agentId),
         // An agent whose owner configured a Discord bot for it gets the Discord tools (checked again on every call).
         ...(this.discord && this.discord.connections.status(agentId).state !== 'off'
-          ? createDiscordReadTools({ agentId, store: this.discord.store, connections: this.discord.connections })
+          ? [
+              ...createDiscordReadTools({ agentId, store: this.discord.store, connections: this.discord.connections }),
+              ...createDiscordWriteTools({
+                agentId,
+                agentName: agent.name,
+                store: this.discord.store,
+                connections: this.discord.connections,
+                files: this.files,
+                // Posts count toward the communication chain like DMs and group posts (not work the owner started).
+                chain: async discordChannelId => {
+                  if (humanBatch) return null;
+                  const key = `discord:${discordChannelId}`;
+                  const inheritedChain =
+                    sources.find(source => source.channelId === key)?.chainId || inherited || undefined;
+                  const chainId = inheritedChain ?? context.runId;
+                  if (!inheritedChain) await this.store.beginChain(agentId, chainId);
+                  await this.store.chargeChain(chainId);
+                  return chainId;
+                },
+              }),
+            ]
           : []),
         ...createFileTools({
           agentId,

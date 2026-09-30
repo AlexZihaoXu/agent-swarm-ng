@@ -13,13 +13,18 @@ export type ChannelAccess = {
 const none: ChannelAccess = { exists: false, view: false, post: false, deleteAny: false };
 
 export type ChannelKey =
-  { kind: 'chat'; channelId: string } | { kind: 'dm'; a: string; b: string } | { kind: 'group'; groupId: string };
+  | { kind: 'chat'; channelId: string }
+  | { kind: 'dm'; a: string; b: string }
+  | { kind: 'group'; groupId: string }
+  | { kind: 'discord'; channelId: string };
 
 /** `chat:<channelId>`, `dm:<agentA>:<agentB>` (sorted, as DM conversations are named) or `group:<groupId>`. */
 export function parseChannelKey(key: string): ChannelKey | null {
   const [kind, ...rest] = String(key).split(':');
   if (kind === 'chat' && rest.length === 1 && rest[0]) return { kind: 'chat', channelId: rest[0] };
   if (kind === 'group' && rest.length === 1 && rest[0]) return { kind: 'group', groupId: rest[0] };
+  if (kind === 'discord' && rest.length === 1 && /^\d{15,21}$/.test(rest[0]))
+    return { kind: 'discord', channelId: rest[0] };
   if (kind === 'dm' && rest.length === 2 && rest[0] && rest[1] && rest[0] < rest[1])
     return { kind: 'dm', a: rest[0], b: rest[1] };
   return null;
@@ -55,6 +60,24 @@ export async function channelAccess(database: PlatformStore, key: string, actor:
         }),
       );
     return { exists: true, view: human || member, post: human || member, deleteAny: human };
+  }
+  if (parsed.kind === 'discord') {
+    // A Discord channel: agents whose owner allowed it (a thread follows its parent; DMs with their bot) may use
+    // its files; the human looks and deletes, but posts in Discord through the agents, not the dashboard.
+    const rows = await database.client.discordChannel.findMany({ where: { channelId: parsed.channelId } });
+    if (!rows.length) return none;
+    if (human) return { exists: true, view: true, post: false, deleteAny: true };
+    const row = rows.find(item => item.agentId === actor.id);
+    let allowed = Boolean(row?.allowed);
+    if (row && !allowed && row.kind === 'thread' && row.parentId)
+      allowed = Boolean(
+        (
+          await database.client.discordChannel.findUnique({
+            where: { agentId_channelId: { agentId: actor.id, channelId: row.parentId } },
+          })
+        )?.allowed,
+      );
+    return { exists: true, view: allowed, post: allowed, deleteAny: false };
   }
   // An agent-to-agent DM: the human can look (and delete) but never posts as either agent.
   const participant = !human && (actor.id === parsed.a || actor.id === parsed.b);

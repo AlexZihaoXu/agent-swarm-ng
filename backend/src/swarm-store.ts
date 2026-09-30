@@ -77,6 +77,15 @@ export class SwarmStore {
       })
     ).map(row => row.recipient);
   }
+  /** Spends one publication from a live communication chain (Discord posts count like DMs and group posts). */
+  async chargeChain(chainId: string) {
+    await this.store.initialize();
+    const budget = await this.store.client.dmChain.updateMany({
+      where: { ...liveChainWhere, id: chainId, remaining: { gt: 0 } },
+      data: { remaining: { decrement: 1 } },
+    });
+    if (!budget.count) throw new SwarmError('limit', 'The communication chain stopped or reached its message limit.');
+  }
   async beginChain(rootAgentId: string, id: string) {
     await this.store.initialize();
     if (!(await this.store.client.agent.findUnique({ where: { id: rootAgentId }, select: { id: true } })))

@@ -120,7 +120,7 @@ export function createFileTools(options: FileToolOptions): ToolDefinition[] {
     if (input.peerId) return `dm:${[agentId, input.peerId].sort().join(':')}`;
     const channel = input.channelId ?? options.channelId;
     if (channel === options.channelId) return `chat:${channel}`;
-    if (parseChannelKey(channel)?.kind === 'group' || parseChannelKey(channel)?.kind === 'dm') return channel;
+    if (['group', 'dm', 'discord'].includes(parseChannelKey(channel)?.kind ?? '')) return channel;
     throw new Error('Name your private channel, a group channel (group:…), or a DM (dm:… or peerId).');
   };
   /** A chat file the agent may see (it can see the channel it was sent in). */

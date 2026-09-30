@@ -1103,7 +1103,7 @@ export interface operations {
                             size: number;
                             status: "available" | "deleted";
                             uploader: {
-                                kind: "human" | "agent";
+                                kind: "human" | "agent" | "discord";
                                 id: string | null;
                                 name: string;
                             };
@@ -1112,7 +1112,7 @@ export interface operations {
                             createdAt: string;
                             deleted?: {
                                 by: {
-                                    kind: "human" | "agent";
+                                    kind: "human" | "agent" | "discord";
                                     id: string | null;
                                     name: string;
                                 };
@@ -1241,7 +1241,7 @@ export interface operations {
                         size: number;
                         status: "available" | "deleted";
                         uploader: {
-                            kind: "human" | "agent";
+                            kind: "human" | "agent" | "discord";
                             id: string | null;
                             name: string;
                         };
@@ -1250,7 +1250,7 @@ export interface operations {
                         createdAt: string;
                         deleted?: {
                             by: {
-                                kind: "human" | "agent";
+                                kind: "human" | "agent" | "discord";
                                 id: string | null;
                                 name: string;
                             };
@@ -1502,7 +1502,7 @@ export interface operations {
                         size: number;
                         status: "available" | "deleted";
                         uploader: {
-                            kind: "human" | "agent";
+                            kind: "human" | "agent" | "discord";
                             id: string | null;
                             name: string;
                         };
@@ -1511,7 +1511,7 @@ export interface operations {
                         createdAt: string;
                         deleted?: {
                             by: {
-                                kind: "human" | "agent";
+                                kind: "human" | "agent" | "discord";
                                 id: string | null;
                                 name: string;
                             };
@@ -2377,7 +2377,7 @@ export interface operations {
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
-                                    kind: "human" | "agent";
+                                    kind: "human" | "agent" | "discord";
                                     id: string | null;
                                     name: string;
                                 };
@@ -2386,7 +2386,7 @@ export interface operations {
                                 createdAt: string;
                                 deleted?: {
                                     by: {
-                                        kind: "human" | "agent";
+                                        kind: "human" | "agent" | "discord";
                                         id: string | null;
                                         name: string;
                                     };
@@ -2503,7 +2503,7 @@ export interface operations {
                                     size: number;
                                     status: "available" | "deleted";
                                     uploader: {
-                                        kind: "human" | "agent";
+                                        kind: "human" | "agent" | "discord";
                                         id: string | null;
                                         name: string;
                                     };
@@ -2512,7 +2512,7 @@ export interface operations {
                                     createdAt: string;
                                     deleted?: {
                                         by: {
-                                            kind: "human" | "agent";
+                                            kind: "human" | "agent" | "discord";
                                             id: string | null;
                                             name: string;
                                         };
@@ -2661,7 +2661,7 @@ export interface operations {
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
-                                    kind: "human" | "agent";
+                                    kind: "human" | "agent" | "discord";
                                     id: string | null;
                                     name: string;
                                 };
@@ -2670,7 +2670,7 @@ export interface operations {
                                 createdAt: string;
                                 deleted?: {
                                     by: {
-                                        kind: "human" | "agent";
+                                        kind: "human" | "agent" | "discord";
                                         id: string | null;
                                         name: string;
                                     };
@@ -2812,7 +2812,7 @@ export interface operations {
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
-                                    kind: "human" | "agent";
+                                    kind: "human" | "agent" | "discord";
                                     id: string | null;
                                     name: string;
                                 };
@@ -2821,7 +2821,7 @@ export interface operations {
                                 createdAt: string;
                                 deleted?: {
                                     by: {
-                                        kind: "human" | "agent";
+                                        kind: "human" | "agent" | "discord";
                                         id: string | null;
                                         name: string;
                                     };
@@ -3044,7 +3044,7 @@ export interface operations {
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
-                                    kind: "human" | "agent";
+                                    kind: "human" | "agent" | "discord";
                                     id: string | null;
                                     name: string;
                                 };
@@ -3053,7 +3053,7 @@ export interface operations {
                                 createdAt: string;
                                 deleted?: {
                                     by: {
-                                        kind: "human" | "agent";
+                                        kind: "human" | "agent" | "discord";
                                         id: string | null;
                                         name: string;
                                     };
@@ -3175,7 +3175,7 @@ export interface operations {
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
-                                    kind: "human" | "agent";
+                                    kind: "human" | "agent" | "discord";
                                     id: string | null;
                                     name: string;
                                 };
@@ -3184,7 +3184,7 @@ export interface operations {
                                 createdAt: string;
                                 deleted?: {
                                     by: {
-                                        kind: "human" | "agent";
+                                        kind: "human" | "agent" | "discord";
                                         id: string | null;
                                         name: string;
                                     };
@@ -3314,7 +3314,7 @@ export interface operations {
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
-                                    kind: "human" | "agent";
+                                    kind: "human" | "agent" | "discord";
                                     id: string | null;
                                     name: string;
                                 };
@@ -3323,7 +3323,7 @@ export interface operations {
                                 createdAt: string;
                                 deleted?: {
                                     by: {
-                                        kind: "human" | "agent";
+                                        kind: "human" | "agent" | "discord";
                                         id: string | null;
                                         name: string;
                                     };
@@ -3679,7 +3679,7 @@ export interface operations {
                                     size: number;
                                     status: "available" | "deleted";
                                     uploader: {
-                                        kind: "human" | "agent";
+                                        kind: "human" | "agent" | "discord";
                                         id: string | null;
                                         name: string;
                                     };
@@ -3688,7 +3688,7 @@ export interface operations {
                                     createdAt: string;
                                     deleted?: {
                                         by: {
-                                            kind: "human" | "agent";
+                                            kind: "human" | "agent" | "discord";
                                             id: string | null;
                                             name: string;
                                         };
@@ -3790,7 +3790,7 @@ export interface operations {
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
-                                    kind: "human" | "agent";
+                                    kind: "human" | "agent" | "discord";
                                     id: string | null;
                                     name: string;
                                 };
@@ -3799,7 +3799,7 @@ export interface operations {
                                 createdAt: string;
                                 deleted?: {
                                     by: {
-                                        kind: "human" | "agent";
+                                        kind: "human" | "agent" | "discord";
                                         id: string | null;
                                         name: string;
                                     };
@@ -3880,7 +3880,7 @@ export interface operations {
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
-                                    kind: "human" | "agent";
+                                    kind: "human" | "agent" | "discord";
                                     id: string | null;
                                     name: string;
                                 };
@@ -3889,7 +3889,7 @@ export interface operations {
                                 createdAt: string;
                                 deleted?: {
                                     by: {
-                                        kind: "human" | "agent";
+                                        kind: "human" | "agent" | "discord";
                                         id: string | null;
                                         name: string;
                                     };
@@ -4062,7 +4062,7 @@ export interface operations {
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
-                                    kind: "human" | "agent";
+                                    kind: "human" | "agent" | "discord";
                                     id: string | null;
                                     name: string;
                                 };
@@ -4071,7 +4071,7 @@ export interface operations {
                                 createdAt: string;
                                 deleted?: {
                                     by: {
-                                        kind: "human" | "agent";
+                                        kind: "human" | "agent" | "discord";
                                         id: string | null;
                                         name: string;
                                     };
@@ -4199,7 +4199,7 @@ export interface operations {
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
-                                    kind: "human" | "agent";
+                                    kind: "human" | "agent" | "discord";
                                     id: string | null;
                                     name: string;
                                 };
@@ -4208,7 +4208,7 @@ export interface operations {
                                 createdAt: string;
                                 deleted?: {
                                     by: {
-                                        kind: "human" | "agent";
+                                        kind: "human" | "agent" | "discord";
                                         id: string | null;
                                         name: string;
                                     };
