@@ -11,6 +11,7 @@ export type DiscoveredChannel = {
   guildId: string | null;
   guildName: string | null;
   parentId?: string | null;
+  recipientId?: string;
   name: string;
   kind: string;
 };
@@ -38,6 +39,21 @@ export class DiscordStore {
   async channel(agentId: string, channelId: string) {
     await this.database.initialize();
     return this.database.client.discordChannel.findUnique({ where: { agentId_channelId: { agentId, channelId } } });
+  }
+  /**
+   * A channel this agent may use now, or null: a DM with the owner or one of our agents (anyone else only while
+   * the owner allows stranger DMs), or a server channel the owner allowed (a thread follows its parent).
+   */
+  async usable(agentId: string, channelId: string) {
+    const channel = await this.channel(agentId, channelId);
+    if (!channel) return null;
+    if (channel.kind === 'dm')
+      return (channel.recipientId && (await this.who(channel.recipientId))) || (await this.bot(agentId)).strangerDms
+        ? channel
+        : null;
+    if (channel.allowed) return channel;
+    const parent = channel.kind === 'thread' && channel.parentId ? await this.channel(agentId, channel.parentId) : null;
+    return parent?.allowed ? channel : null;
   }
 
   /** Changes the owner's policies for one agent's bot. Unknown channels are refused. */
@@ -87,6 +103,7 @@ export class DiscordStore {
           guildId: channel.guildId,
           ...(channel.guildName ? { guildName: channel.guildName } : {}),
           ...(channel.parentId ? { parentId: channel.parentId } : {}),
+          ...(channel.recipientId ? { recipientId: channel.recipientId } : {}),
           name: channel.name,
           kind: channel.kind,
         },
@@ -116,7 +133,8 @@ export class DiscordStore {
     return this.database.client.discordAccount.findMany({ where: { role: 'owner' }, orderBy: { createdAt: 'asc' } });
   }
   /** Replaces the owner's Discord accounts (only these carry human authority on Discord). */
-  async setOwnerAccounts(accounts: { id: string; name: string }[]) {
+  async setOwnerAccounts(input: { id: string; name: string }[]) {
+    const accounts = [...new Map(input.map(account => [account.id, account])).values()];
     if (accounts.length > 20) throw new DiscordSettingsError('At most 20 accounts.');
     for (const account of accounts)
       if (!SNOWFLAKE.test(account.id)) throw new DiscordSettingsError('A Discord user ID is a long number.');
@@ -220,9 +238,17 @@ export class DiscordStore {
       create: { agentId, ...message, authorBot: true },
       update: {},
     });
-    await this.database.client.discordChannel.updateMany({
-      where: { agentId, channelId: message.channelId },
-      data: { announcedUpTo: message.id },
+    await this.announce(agentId, message.channelId, message.id);
+  }
+  /** Moves the channel's "announced up to" marker forward to a message (never back). */
+  async announce(agentId: string, channelId: string, id: string, data: object = {}) {
+    await this.database.initialize();
+    const channel = await this.channel(agentId, channelId);
+    if (!channel) return;
+    const later = !channel.announcedUpTo || BigInt(id) > BigInt(channel.announcedUpTo);
+    await this.database.client.discordChannel.update({
+      where: { agentId_channelId: { agentId, channelId } },
+      data: { ...data, ...(later ? { announcedUpTo: id } : {}) },
     });
   }
   /** Who a Discord account is: the owner, one of our agents, or null (anyone else). */

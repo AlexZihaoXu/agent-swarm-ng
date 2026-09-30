@@ -41,7 +41,9 @@ export type Seen = {
   /** Shown beside the message: "edited", "sent while you were offline". */
   note?: string;
 };
-type Batch = { agentId: string; channelId: string; messages: Seen[]; closedAt: number };
+/** The owner's messages batch apart from everyone else's, so no one else's text ever shares their authority. */
+type Lane = 'owner' | 'others';
+type Batch = { agentId: string; channelId: string; lane: Lane; messages: Seen[]; closedAt: number };
 type Window = { messages: Seen[]; quiet: ReturnType<typeof setTimeout>; cap: ReturnType<typeof setTimeout> };
 
 export type IntakeDeps = {
@@ -56,6 +58,11 @@ export type IntakeDeps = {
 };
 /** An edit to a message the agent already answered wakes it again only within this time. */
 const EDIT_WINDOW_MS = 5 * 60_000;
+/** One person's reaction (one emoji) to one message goes to reaction triage at most once in this time. */
+const REACTION_WINDOW_MS = 10 * 60_000;
+const LANES: Lane[] = ['owner', 'others'];
+const laneOf = (message: Seen): Lane => (message.role === 'owner' ? 'owner' : 'others');
+const newestOf = (messages: Seen[]) => messages.reduce((a, b) => (BigInt(b.id) > BigInt(a.id) ? b : a));
 
 const size = (bytes: number) =>
   bytes < 1024 ** 2 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 ** 2).toFixed(1)} MB`;
@@ -79,6 +86,7 @@ export class DiscordIntake {
   private windows = new Map<string, Window>();
   private queues = new Map<string, Batch[]>();
   private pumping = new Set<string>();
+  private reactions = new Map<string, number>();
   private closed = false;
   private readonly quietMs: number;
   private readonly capMs: number;
@@ -100,6 +108,7 @@ export class DiscordIntake {
   async handle(event: DiscordEvent) {
     if (this.closed) return;
     const { agentId, botUserId, payload } = event;
+    const received = new Date();
     switch (payload.t) {
       case GatewayDispatchEvents.MessageCreate:
         return this.message(agentId, botUserId, payload.d);
@@ -117,7 +126,7 @@ export class DiscordIntake {
         return;
       case GatewayDispatchEvents.Ready:
         // A new session (a restart or a long outage): Discord will not resend what was missed.
-        if ((await this.store.bot(agentId)).catchUp) await this.catchUp(agentId, botUserId);
+        if ((await this.store.bot(agentId)).catchUp) await this.catchUp(agentId, botUserId, received);
         return;
     }
   }
@@ -130,29 +139,28 @@ export class DiscordIntake {
     }
     this.windows.clear();
   }
+  private windowsOf(agentId: string, channelId: string) {
+    return LANES.flatMap(lane => this.windows.get(`${agentId}:${channelId}:${lane}`) ?? []);
+  }
 
   /** Where a message may be seen by this agent, and how it is admitted; null means the agent never sees it. */
   private async place(agentId: string, data: GatewayMessageCreateDispatchData, role: Role) {
-    const bot = await this.store.bot(agentId);
     if (!data.guild_id) {
       // A DM with the bot: always the owner and our agents; other people only if the owner allows it.
-      if ((role === 'person' || role === 'bot') && !bot.strangerDms) return null;
+      if ((role === 'person' || role === 'bot') && !(await this.store.bot(agentId)).strangerDms) return null;
       await this.store.discovered(agentId, [
-        { channelId: data.channel_id, guildId: null, guildName: null, name: data.author.username, kind: 'dm' },
+        {
+          channelId: data.channel_id,
+          guildId: null,
+          guildName: null,
+          recipientId: data.author.id,
+          name: data.author.username,
+          kind: 'dm',
+        },
       ]);
-      return { admission: 'all' as Admission, dm: true };
+      return { dm: true };
     }
-    const channel = await this.store.channel(agentId, data.channel_id);
-    if (!channel) return null;
-    const parent =
-      !channel.allowed && channel.kind === 'thread' && channel.parentId
-        ? await this.store.channel(agentId, channel.parentId)
-        : null;
-    if (!channel.allowed && !parent?.allowed) return null;
-    return {
-      admission: (channel.admission ?? parent?.admission ?? bot.admission) as Admission,
-      dm: false,
-    };
+    return (await this.store.usable(agentId, data.channel_id)) ? { dm: false } : null;
   }
 
   private async message(
@@ -199,24 +207,32 @@ export class DiscordIntake {
       attachments: data.attachments.map(file => ({ name: file.filename, size: file.size })),
       ...(options.catchUp ? { note: 'sent while you were offline' } : {}),
     };
-    await this.database.client.discordMessage.upsert({
-      where: { agentId_id: { agentId, id: seen.id } },
-      create: {
-        agentId,
-        id: seen.id,
-        channelId: seen.channelId,
-        guildId: data.guild_id ?? null,
-        authorId: seen.authorId,
-        authorName: seen.authorName,
-        authorBot: seen.authorBot,
-        content: seen.content,
-        replyToId: reference?.id ?? null,
-        mentionsBot: seen.addressed && !place.dm && role !== 'owner',
-        attachments: seen.attachments.length ? JSON.stringify(seen.attachments) : null,
-        createdAt: seen.createdAt,
-      },
-      update: {},
-    });
+    // Recorded once: a message both caught up on and delivered live wakes the agent once.
+    const created = await this.database.client.discordMessage
+      .create({
+        data: {
+          agentId,
+          id: seen.id,
+          channelId: seen.channelId,
+          guildId: data.guild_id ?? null,
+          authorId: seen.authorId,
+          authorName: seen.authorName,
+          authorBot: seen.authorBot,
+          content: seen.content,
+          replyToId: reference?.id ?? null,
+          mentionsBot: seen.addressed && !place.dm && role !== 'owner',
+          attachments: seen.attachments.length ? JSON.stringify(seen.attachments) : null,
+          createdAt: seen.createdAt,
+        },
+      })
+      .then(
+        () => true,
+        (error: unknown) => {
+          if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') return false;
+          throw error;
+        },
+      );
+    if (!created) return;
     // Catching up only wakes the agent for what was addressed to it; the rest reads as unread.
     if (options.catchUp && !seen.addressed) return;
     this.collect(agentId, seen);
@@ -256,7 +272,7 @@ export class DiscordIntake {
   ) {
     if (data.content === undefined || data.author?.id === botUserId) return;
     const waiting = [
-      ...(this.windows.get(`${agentId}:${data.channel_id}`)?.messages ?? []),
+      ...this.windowsOf(agentId, data.channel_id).flatMap(window => window.messages),
       ...(this.queues.get(agentId) ?? []).flatMap(batch => batch.messages),
     ].filter(message => message.id === data.id);
     for (const message of waiting) message.content = data.content;
@@ -269,7 +285,7 @@ export class DiscordIntake {
       data: { content: data.content, editedAt: new Date() },
     });
     if (waiting.length || Date.now() - row.createdAt.getTime() > EDIT_WINDOW_MS) return;
-    const channel = await this.store.channel(agentId, data.channel_id);
+    const channel = await this.store.usable(agentId, data.channel_id);
     const account = await this.store.who(row.authorId);
     const addressed = channel?.kind === 'dm' || row.mentionsBot || account?.role === 'owner';
     if (!channel || !addressed) return;
@@ -293,8 +309,8 @@ export class DiscordIntake {
   /** Deleted messages leave batches that have not reached the agent yet, and read as gone. */
   private async deleted(agentId: string, channelId: string, ids: string[]) {
     const gone = new Set(ids);
-    const window = this.windows.get(`${agentId}:${channelId}`);
-    if (window) window.messages = window.messages.filter(message => !gone.has(message.id));
+    for (const window of this.windowsOf(agentId, channelId))
+      window.messages = window.messages.filter(message => !gone.has(message.id));
     const queue = this.queues.get(agentId);
     if (queue) for (const batch of queue) batch.messages = batch.messages.filter(message => !gone.has(message.id));
     this.queues.set(
@@ -323,14 +339,15 @@ export class DiscordIntake {
     },
   ) {
     if (data.user_id === botUserId || data.message_author_id !== botUserId || !this.deps.reaction) return;
-    const channel = await this.store.channel(agentId, data.channel_id);
+    const channel = await this.store.usable(agentId, data.channel_id);
     if (!channel) return;
-    const allowed =
-      channel.allowed ||
-      (channel.kind === 'thread' && channel.parentId && (await this.store.channel(agentId, channel.parentId))?.allowed);
-    if (!allowed) return;
+    // Toggling a reaction does not buy more model calls.
+    const once = `${agentId}:${data.message_id}:${data.user_id}:${data.emoji.id ?? data.emoji.name}`;
+    const now = Date.now();
+    for (const [key, at] of this.reactions) if (now - at > REACTION_WINDOW_MS) this.reactions.delete(key);
+    if (this.reactions.has(once)) return;
+    this.reactions.set(once, now);
     const account = await this.store.who(data.user_id);
-    if (channel.kind === 'dm' && !account && !(await this.store.bot(agentId)).strangerDms) return;
     const own = await this.database.client.discordMessage.findUnique({
       where: { agentId_id: { agentId, id: data.message_id } },
     });
@@ -358,7 +375,8 @@ export class DiscordIntake {
           agentId: account?.agentId ?? `discord:${data.user_id}`,
           name: account?.name ?? 'Discord user',
           channelId: `discord:${data.channel_id}`,
-          chainId: '',
+          // A reaction continues the conversation its message belongs to (chain budgets apply).
+          chainId: account?.role === 'owner' ? '' : (own?.chainId ?? ''),
           messageId: data.message_id,
           ...(account?.role === 'owner' ? { human: true } : {}),
           discord: { place },
@@ -372,7 +390,7 @@ export class DiscordIntake {
    * After a new session, messages that were addressed to the agent while it was offline (DMs, mentions, the
    * owner) arrive once, marked as such. Everything else stays readable as unread.
    */
-  private async catchUp(agentId: string, botUserId: string) {
+  private async catchUp(agentId: string, botUserId: string, readyAt: Date) {
     let rest: REST | undefined;
     try {
       rest = this.deps.rest?.(agentId);
@@ -380,14 +398,21 @@ export class DiscordIntake {
       return; // offline again already
     }
     if (!rest) return;
-    const channels = (await this.store.channels(agentId)).filter(channel => channel.kind === 'dm' || channel.allowed);
-    for (const channel of channels) {
-      const last = await this.database.client.discordMessage.findFirst({
-        where: { agentId, channelId: channel.channelId },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true },
-      });
-      if (!last) continue; // nothing seen here yet: there is nothing to catch up on
+    // Where each channel stood before this session: messages arriving live meanwhile must not hide the gap.
+    const since = [];
+    for (const { channelId } of await this.store.channels(agentId)) {
+      const channel = await this.store.usable(agentId, channelId);
+      const last = channel
+        ? await this.database.client.discordMessage.findFirst({
+            where: { agentId, channelId, createdAt: { lt: readyAt } },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true },
+          })
+        : null;
+      // Nothing seen here yet: there is nothing to catch up on.
+      if (channel && last) since.push({ channel, last });
+    }
+    for (const { channel, last } of since) {
       let missed: APIMessage[];
       try {
         missed = (await rest.get(Routes.channelMessages(channel.channelId), {
@@ -407,30 +432,34 @@ export class DiscordIntake {
   }
 
   private collect(agentId: string, seen: Seen) {
-    const key = `${agentId}:${seen.channelId}`;
+    const lane = laneOf(seen);
+    const key = `${agentId}:${seen.channelId}:${lane}`;
     const existing = this.windows.get(key);
     if (existing) {
       existing.messages.push(seen);
       clearTimeout(existing.quiet);
-      existing.quiet = setTimeout(() => this.closeWindow(agentId, seen.channelId), this.quietMs);
+      existing.quiet = setTimeout(() => this.closeWindow(agentId, seen.channelId, lane), this.quietMs);
       return;
     }
     const window: Window = {
       messages: [seen],
-      quiet: setTimeout(() => this.closeWindow(agentId, seen.channelId), this.quietMs),
-      cap: setTimeout(() => this.closeWindow(agentId, seen.channelId), this.capMs),
+      quiet: setTimeout(() => this.closeWindow(agentId, seen.channelId, lane), this.quietMs),
+      cap: setTimeout(() => this.closeWindow(agentId, seen.channelId, lane), this.capMs),
     };
     this.windows.set(key, window);
   }
-  private closeWindow(agentId: string, channelId: string) {
-    const key = `${agentId}:${channelId}`;
+  private closeWindow(agentId: string, channelId: string, lane: Lane) {
+    const key = `${agentId}:${channelId}:${lane}`;
     const window = this.windows.get(key);
     if (!window) return;
     this.windows.delete(key);
     clearTimeout(window.quiet);
     clearTimeout(window.cap);
     const queue = this.queues.get(agentId) ?? [];
-    queue.push({ agentId, channelId, messages: window.messages, closedAt: Date.now() });
+    // A channel still waiting its turn gets one batch, not one per window: the queue stays bounded by channels.
+    const waiting = queue.find(batch => batch.channelId === channelId && batch.lane === lane);
+    if (waiting) waiting.messages.push(...window.messages);
+    else queue.push({ agentId, channelId, lane, messages: window.messages, closedAt: Date.now() });
     this.queues.set(agentId, queue);
     void this.pump(agentId);
   }
@@ -458,8 +487,9 @@ export class DiscordIntake {
 
   private async process(batch: Batch) {
     const { agentId, channelId } = batch;
-    const channel = await this.store.channel(agentId, channelId);
-    if (!channel) return;
+    // The owner may have revoked the channel (or stranger DMs) while the batch waited.
+    const channel = await this.store.usable(agentId, channelId);
+    if (!channel || !batch.messages.length) return;
     const bot = await this.store.bot(agentId);
     const addressed = batch.messages.some(message => message.addressed);
     const people = batch.messages.some(message => !message.authorBot);
@@ -471,28 +501,32 @@ export class DiscordIntake {
       });
     else if (channel.pausedAt) return;
     const notice = await this.trigger(batch, channel);
-    const admission = channel.kind === 'dm' ? 'all' : ((channel.admission ?? bot.admission) as Admission);
+    const parent =
+      channel.kind === 'thread' && !channel.admission && channel.parentId
+        ? await this.store.channel(agentId, channel.parentId)
+        : null;
+    const admission =
+      channel.kind === 'dm' ? 'all' : ((channel.admission ?? parent?.admission ?? bot.admission) as Admission);
     let admitted = addressed || admission === 'all';
     if (!admitted && admission === 'check' && this.deps.evaluate) {
       const evaluate = this.deps.evaluate;
       admitted = (await triageGate(agentId, () => evaluate(agentId, channelId, notice.text))) === 'admit';
     }
     if (!admitted) return; // saved; it reads as unread until the agent looks
-    const newest = batch.messages.at(-1)!;
+    const newest = newestOf(batch.messages);
     const botsOnly = !people;
     const turns = botsOnly ? channel.botOnlyTurns + 1 : 0;
-    await this.database.client.discordChannel.update({
-      where: { agentId_channelId: { agentId, channelId } },
-      data: {
-        announcedUpTo: newest.id,
-        ...(botsOnly ? { botOnlyTurns: turns, ...(turns >= this.botTurnLimit ? { pausedAt: new Date() } : {}) } : {}),
-      },
-    });
+    await this.store.announce(
+      agentId,
+      channelId,
+      newest.id,
+      botsOnly ? { botOnlyTurns: turns, ...(turns >= this.botTurnLimit ? { pausedAt: new Date() } : {}) } : {},
+    );
     const pause =
       botsOnly && turns >= this.botTurnLimit
         ? `\n[Only bots have spoken here for ${turns} turns in a row: you will not be woken by bots in this channel again until a person speaks.]`
         : '';
-    const owner = batch.messages.some(message => message.role === 'owner');
+    const owner = batch.lane === 'owner';
     const agentAuthor = [...batch.messages].reverse().find(message => message.authorAgentId);
     const chainId =
       owner || !agentAuthor

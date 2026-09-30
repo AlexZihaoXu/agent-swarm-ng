@@ -144,6 +144,17 @@ it('posts like a member: split, replies, only named people pinged, files attache
     expect(
       (await call('discord_send_message', { channelId: DESIGN, text: 'ack', final: false })).terminate,
     ).toBeUndefined();
+    // A long post that fails partway says (and records) what was already posted.
+    let posted = 0;
+    discord.before(request =>
+      request.method === 'POST' && request.path === `/channels/${DESIGN}/messages` && ++posted === 2
+        ? { status: 403, json: { message: 'Missing Permissions', code: 50013 } }
+        : undefined,
+    );
+    await expect(call('discord_send_message', { channelId: DESIGN, text: 'word '.repeat(600) })).rejects.toThrow(
+      /^Posted 1 of 2 parts \(\d+\), then: Discord says you lack permission/,
+    );
+    expect(await database.client.discordMessage.count({ where: { agentId: agent.id } })).toBe(4);
     await expect(call('discord_send_message', { channelId: OTHER, text: 'hi' })).rejects.toThrow('not one you may use');
     await expect(call('discord_send_message', { channelId: DESIGN, text: ' ' })).rejects.toThrow('empty');
   } finally {
@@ -255,6 +266,14 @@ it('changes only its own messages, DMs only people the owner allows, reacts, sta
       channelId: `discord:${DESIGN}`,
     });
     expect(posts().at(-1)!.body.poll).toMatchObject({ question: { text: 'Friday?' }, duration: 24 });
+    // A DM with someone else lasts only while the owner allows stranger DMs.
+    await store.update(agent.id, { strangerDms: true });
+    const { channelId: dm } = await call('discord_open_dm', { userId: STRANGER });
+    expect(await call('discord_send_message', { channelId: dm, text: 'hi' })).toHaveProperty('posted');
+    await store.update(agent.id, { strangerDms: false });
+    await expect(call('discord_send_message', { channelId: dm, text: 'still there?' })).rejects.toThrow(
+      'not one you may use',
+    );
   } finally {
     await connections.close();
     await database.close();

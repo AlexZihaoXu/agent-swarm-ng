@@ -18,6 +18,7 @@ async function readBody(request: IncomingMessage) {
 export class MockDiscord {
   readonly requests: MockRequest[] = [];
   readonly identifies: { token: string; intents: number }[] = [];
+  resumes = 0;
   private server!: Server;
   private gateway!: WebSocketServer;
   private sockets = new Set<WebSocket>();
@@ -37,6 +38,10 @@ export class MockDiscord {
   }
   on(handler: Handler) {
     this.handlers.push(handler);
+  }
+  /** A handler that goes before the ones already added. */
+  before(handler: Handler) {
+    this.handlers.unshift(handler);
   }
 
   async start() {
@@ -85,6 +90,10 @@ export class MockDiscord {
       socket.on('message', raw => {
         const payload = JSON.parse(String(raw));
         if (payload.op === 1) return socket.send(JSON.stringify({ op: 11 }));
+        if (payload.op === 6) {
+          this.resumes++;
+          return this.send(socket, 'RESUMED', {});
+        }
         if (payload.op !== 2) return;
         this.identifies.push({ token: payload.d.token, intents: payload.d.intents });
         const user = this.tokens.get(payload.d.token);
@@ -111,6 +120,10 @@ export class MockDiscord {
   /** Pushes a dispatch event to every connected bot. */
   dispatch(t: string, d: unknown) {
     for (const socket of this.sockets) this.send(socket, t, d);
+  }
+  /** Drops every connection the way a network blip does (the bots resume). */
+  drop() {
+    for (const socket of this.sockets) socket.close(4000, 'Dropped by mock.');
   }
   get connected() {
     return this.sockets.size;

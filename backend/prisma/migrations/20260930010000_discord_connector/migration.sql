@@ -15,6 +15,7 @@ CREATE TABLE "DiscordChannel" (
   "guildId" TEXT,
   "guildName" TEXT,
   "parentId" TEXT,
+  "recipientId" TEXT,
   "name" TEXT NOT NULL,
   "kind" TEXT NOT NULL,
   "allowed" BOOLEAN NOT NULL DEFAULT false,

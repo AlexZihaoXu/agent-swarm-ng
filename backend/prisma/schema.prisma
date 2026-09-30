@@ -450,6 +450,8 @@ model DiscordChannel {
   guildName     String?
   /// A thread's parent channel (threads follow their parent's allow-list unless set themselves).
   parentId      String?
+  /// A DM's other person (whose role decides whether the DM may be used).
+  recipientId   String?
   name          String
   /// "dm" | "text" | "thread" | "forum" | "announcement" | "voice"
   kind          String

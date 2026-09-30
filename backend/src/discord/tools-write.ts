@@ -100,10 +100,12 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
         const users = [...new Set([...args.text.matchAll(/<@!?(\d{15,21})>/g)].map(match => match[1]))].slice(0, 100);
         const parts = splitDiscord(args.text);
         const sent: APIMessage[] = [];
-        for (let index = 0; index < Math.max(1, parts.length); index++) {
+        const count = Math.max(1, parts.length);
+        for (let index = 0; index < count; index++) {
           const first = index === 0;
-          sent.push(
-            await call(() =>
+          let message: APIMessage;
+          try {
+            message = await call(() =>
               api.channels.createMessage(channel.channelId, {
                 ...(parts[index] ? { content: parts[index] } : {}),
                 allowed_mentions: { parse: [], users, replied_user: true },
@@ -112,10 +114,17 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
                   : {}),
                 ...(first && attachments.length ? { files: attachments } : {}),
               }),
-            ),
-          );
+            );
+          } catch (error) {
+            if (!sent.length) throw error;
+            throw new Error(
+              `Posted ${sent.length} of ${count} parts (${sent.map(item => item.id).join(', ')}), then: ${error instanceof Error ? error.message : 'Discord refused the rest.'}`,
+            );
+          }
+          // Recorded as soon as it is posted, so a later failure leaves no unrecorded post behind.
+          await record([message], chainId);
+          sent.push(message);
         }
-        await record(sent, chainId);
         if (fileIds.length)
           await files.attach(fileIds, { channelKey: key, messageKind: 'discord', messageId: sent[0].id, uploader });
         const final = args.final ?? true;
@@ -197,7 +206,9 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
         const dm = (await call(() => bot(context).api.users.createDM(userId))) as APIChannel;
         const recipient = 'recipients' in dm ? dm.recipients?.[0]?.username : undefined;
         const name = account?.name ?? recipient ?? 'someone';
-        await store.discovered(agentId, [{ channelId: dm.id, guildId: null, guildName: null, name, kind: 'dm' }]);
+        await store.discovered(agentId, [
+          { channelId: dm.id, guildId: null, guildName: null, recipientId: userId, name, kind: 'dm' },
+        ]);
         return result({ channelId: `discord:${dm.id}`, with: name });
       },
     }),
@@ -274,6 +285,7 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
         const channel = await allowedChannel(context, args.channelId);
         const { api, rest } = bot(context);
         let thread: APIThreadChannel;
+        let starter: { message: APIMessage; chainId: string | null } | undefined;
         if (channel.kind === 'forum') {
           if (!args.text) throw new Error('A forum post needs its first message (text).');
           const forum = (await call(() => rest.get(Routes.channel(channel.channelId)))) as APIChannel & {
@@ -287,14 +299,16 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
               );
             return tag.id;
           });
-          await context.chain(channel.channelId);
-          thread = (await call(() =>
+          const chainId = await context.chain(channel.channelId);
+          const post = (await call(() =>
             api.channels.createForumThread(channel.channelId, {
               name: args.name,
               message: { content: args.text!, allowed_mentions: { parse: [] } },
               ...(tags.length ? { applied_tags: tags } : {}),
             }),
-          )) as APIThreadChannel;
+          )) as APIThreadChannel & { message?: APIMessage };
+          thread = post;
+          if (post.message) starter = { message: { ...post.message, channel_id: post.id }, chainId };
         } else {
           thread = (await call(() =>
             api.channels.createThread(
@@ -305,10 +319,10 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
           )) as APIThreadChannel;
           if (args.text) {
             const chainId = await context.chain(thread.id);
-            const sent = await call(() =>
+            const message = await call(() =>
               api.channels.createMessage(thread.id, { content: args.text!, allowed_mentions: { parse: [] } }),
             );
-            await record([sent], chainId);
+            starter = { message, chainId };
           }
         }
         await store.discovered(agentId, [
@@ -321,6 +335,8 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
             kind: 'thread',
           },
         ]);
+        // Replies to its first message continue the same chain.
+        if (starter) await record([starter.message], starter.chainId);
         return result({ thread: `discord:${thread.id}`, name: args.name });
       },
     }),
@@ -354,6 +370,7 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
         )) as APIMessage;
         const attachment = message.attachments.find(item => item.id === args.attachmentId);
         if (!attachment) throw new Error('That message has no such attachment.');
+        const twins = message.attachments.filter(item => item.filename === attachment.filename);
         const response = await fetch(attachment.url, { signal, redirect: 'follow' });
         if (!response.ok || !response.body) throw new Error('Discord could not provide that file right now.');
         const file = await files.ingest({
@@ -365,7 +382,8 @@ export function createDiscordWriteTools(context: DiscordWriteContext): ToolDefin
             id: message.author.id,
             name: message.author.global_name ?? message.author.username,
           },
-          name: attachment.filename,
+          // Two attachments with one name on a message stay two files.
+          name: twins.length > 1 ? `${twins.indexOf(attachment) + 1}-${attachment.filename}` : attachment.filename,
           source: response.body as unknown as AsyncIterable<Uint8Array>,
         });
         return result({

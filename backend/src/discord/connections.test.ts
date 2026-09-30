@@ -95,6 +95,11 @@ it('connects an agent’s bot with a saved token, learns its identity and channe
         })
       ).statusCode,
     ).toBe(400);
+    // A dropped connection resumes (RESUMED, not READY) and is online again.
+    discord.drop();
+    await vi.waitFor(() => expect(discord.resumes).toBe(1), { timeout: 5000 });
+    await vi.waitFor(async () => expect((await app.inject(url)).json().status.state).toBe('online'));
+    expect(discord.identifies).toHaveLength(1);
     // The token is on disk only, private to the backend.
     const file = join(root, 'discord-bots.json');
     expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ [agent.id]: TOKEN });
@@ -163,6 +168,10 @@ it('keeps the owner’s Discord accounts, which can never be one of our agents�
       payload: { accounts: [{ id: '4000000000000000001', name: 'Alex' }] },
     });
     expect(set.json()).toEqual({ accounts: [{ id: '4000000000000000001', name: 'Alex' }] });
+    const twice = { id: '4000000000000000001', name: 'Alex' };
+    expect((await app.inject({ method: 'PUT', url: owner, payload: { accounts: [twice, twice] } })).json()).toEqual(
+      set.json(),
+    );
     expect(
       (await app.inject({ method: 'PUT', url: owner, payload: { accounts: [{ id: 'alex', name: 'Alex' }] } }))
         .statusCode,

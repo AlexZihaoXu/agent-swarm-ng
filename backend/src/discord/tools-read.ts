@@ -18,6 +18,7 @@ import {
   call,
   channelArg,
   messageView,
+  usableDms,
   whoIs,
   type DiscordToolContext,
 } from './access';
@@ -62,9 +63,10 @@ export function createDiscordReadTools(context: DiscordToolContext): ToolDefinit
             name: guild.name,
             channelsYouMayUse: channels.filter(channel => channel.guildId === guild.id && channel.allowed).length,
           })),
-          dms: channels
-            .filter(channel => channel.kind === 'dm')
-            .map(channel => ({ channelId: `discord:${channel.channelId}`, with: channel.name })),
+          dms: (await usableDms(context, channels)).map(channel => ({
+            channelId: `discord:${channel.channelId}`,
+            with: channel.name,
+          })),
         });
       },
     }),
@@ -100,7 +102,8 @@ export function createDiscordReadTools(context: DiscordToolContext): ToolDefinit
         'Where there is news for you on Discord: per channel and DM, messages since the last one you were notified about, and how many mention you. Reading never changes these counts; they move when new notifications reach you.',
       parameters: Type.Object({}, { additionalProperties: false }),
       async execute() {
-        const channels = (await store.channels(agentId)).filter(channel => channel.allowed || channel.kind === 'dm');
+        const all = await store.channels(agentId);
+        const channels = [...all.filter(channel => channel.allowed), ...(await usableDms(context, all))];
         const rows = [];
         for (const channel of channels) {
           const unread = await store.unread(agentId, channel.channelId, channel.announcedUpTo);

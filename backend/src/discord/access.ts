@@ -15,20 +15,21 @@ export type DiscordToolContext = {
 export const channelArg = (value: string) => value.replace(/^discord:/, '');
 
 /**
- * A channel this agent may use: a DM with its bot, or a server channel (or a thread under one) the owner allowed.
- * Checked on every call, so revoking a channel takes effect at once.
+ * A channel this agent may use (see DiscordStore.usable). Checked on every call, so revoking a channel takes effect at once.
  */
 export async function allowedChannel(context: DiscordToolContext, raw: string) {
-  const channelId = channelArg(raw);
-  const channel = await context.store.channel(context.agentId, channelId);
-  if (channel?.allowed) return channel;
-  if (
-    channel?.kind === 'thread' &&
-    channel.parentId &&
-    (await context.store.channel(context.agentId, channel.parentId))?.allowed
-  )
-    return channel;
+  const channel = await context.store.usable(context.agentId, channelArg(raw));
+  if (channel) return channel;
   throw new Error('That Discord channel is not one you may use (your owner allows channels in your settings).');
+}
+/** The DMs this agent may use now, among its channels. */
+export async function usableDms(context: DiscordToolContext, channels: { channelId: string; kind: string }[]) {
+  const dms = [];
+  for (const channel of channels.filter(item => item.kind === 'dm')) {
+    const usable = await context.store.usable(context.agentId, channel.channelId);
+    if (usable) dms.push(usable);
+  }
+  return dms;
 }
 /** Servers where the owner allowed at least one channel for this agent. */
 export async function allowedServer(context: DiscordToolContext, serverId: string) {

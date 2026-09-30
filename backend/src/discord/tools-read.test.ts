@@ -148,7 +148,9 @@ it('searches only allowed channels, searches DMs from what it has seen, and says
     expect(query.getAll('has')).toEqual(['image']);
     expect(query.get('min_id')).toMatch(/^\d+$/);
     // DMs: Discord offers bots no search, so it searches the messages this bot has seen.
-    await store.discovered(agent.id, [{ channelId: DM, guildId: null, guildName: null, name: 'alex', kind: 'dm' }]);
+    await store.discovered(agent.id, [
+      { channelId: DM, guildId: null, guildName: null, recipientId: OWNER, name: 'alex', kind: 'dm' },
+    ]);
     await database.client.discordMessage.create({
       data: {
         agentId: agent.id,

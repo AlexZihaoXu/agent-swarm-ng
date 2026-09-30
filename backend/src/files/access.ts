@@ -1,4 +1,5 @@
 import type { PlatformStore } from '../platform-store';
+import { DiscordStore } from '../discord/store';
 
 /** Who is acting on a channel's files: the human operator, or one agent. */
 export type Actor = { kind: 'human' } | { kind: 'agent'; id: string };
@@ -62,21 +63,12 @@ export async function channelAccess(database: PlatformStore, key: string, actor:
     return { exists: true, view: human || member, post: human || member, deleteAny: human };
   }
   if (parsed.kind === 'discord') {
-    // A Discord channel: agents whose owner allowed it (a thread follows its parent; DMs with their bot) may use
+    // A Discord channel: agents that may use it (DiscordStore.usable) may use
     // its files; the human looks and deletes, but posts in Discord through the agents, not the dashboard.
     const rows = await database.client.discordChannel.findMany({ where: { channelId: parsed.channelId } });
     if (!rows.length) return none;
     if (human) return { exists: true, view: true, post: false, deleteAny: true };
-    const row = rows.find(item => item.agentId === actor.id);
-    let allowed = Boolean(row?.allowed);
-    if (row && !allowed && row.kind === 'thread' && row.parentId)
-      allowed = Boolean(
-        (
-          await database.client.discordChannel.findUnique({
-            where: { agentId_channelId: { agentId: actor.id, channelId: row.parentId } },
-          })
-        )?.allowed,
-      );
+    const allowed = Boolean(await new DiscordStore(database).usable(actor.id, parsed.channelId));
     return { exists: true, view: allowed, post: allowed, deleteAny: false };
   }
   // An agent-to-agent DM: the human can look (and delete) but never posts as either agent.

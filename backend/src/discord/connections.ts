@@ -85,11 +85,10 @@ export class DiscordConnections implements DiscordConnectionControl {
   status(agentId: string): ConnectionStatus {
     return this.live.get(agentId)?.status ?? { state: 'off' };
   }
-  /** The bot's REST client, for tools. Throws when the bot is not online. */
+  /** The bot's REST client, for tools. REST keeps working while the Gateway reconnects; throws once the bot is stopped. */
   api(agentId: string) {
     const connection = this.live.get(agentId);
-    if (!connection?.api || connection.status.state !== 'online')
-      throw new Error('This agent’s Discord bot is not connected.');
+    if (!connection?.api) throw new Error('This agent’s Discord bot is not connected.');
     return { api: connection.api, rest: connection.rest!, botUserId: connection.botUserId! };
   }
   botUserId(agentId: string) {
@@ -105,14 +104,14 @@ export class DiscordConnections implements DiscordConnectionControl {
     if (this.closing) return;
     const connection: Connection = { status: { state: 'connecting' }, attempts: 0, generation: 0 };
     this.live.set(agentId, connection);
-    // Connecting runs in the background: the status says how it is going.
-    void this.connect(agentId, connection).catch(error => {
-      if (this.live.get(agentId) === connection)
-        this.scheduleRetry(
-          agentId,
-          connection,
-          error instanceof Error ? error.message : 'Discord could not be reached.',
-        );
+    this.run(agentId, connection);
+  }
+  /** Connecting runs in the background: the status says how it is going. */
+  private run(agentId: string, connection: Connection) {
+    const generation = connection.generation;
+    void this.connect(agentId, connection).catch(() => {
+      if (this.live.get(agentId) === connection && connection.generation === generation && !connection.fatal)
+        this.scheduleRetry(agentId, connection, 'Discord could not be reached.');
     });
   }
   async stop(agentId: string) {
@@ -139,8 +138,7 @@ export class DiscordConnections implements DiscordConnectionControl {
     connection.attempts++;
     const generation = connection.generation;
     connection.retry = setTimeout(() => {
-      if (this.live.get(agentId) === connection && connection.generation === generation)
-        void this.connect(agentId, connection);
+      if (this.live.get(agentId) === connection && connection.generation === generation) this.run(agentId, connection);
     }, delay);
     connection.retry.unref?.();
   }
@@ -148,7 +146,12 @@ export class DiscordConnections implements DiscordConnectionControl {
   private async connect(agentId: string, connection: Connection) {
     const generation = connection.generation;
     const current = () => this.live.get(agentId) === connection && connection.generation === generation;
+    // A retry replaces the previous attempt's Gateway, so a late recovery cannot deliver every event twice.
+    const previous = connection.gateway;
+    connection.gateway = undefined;
+    await Promise.resolve(previous?.destroy()).catch(() => {});
     const token = await this.tokens.get(agentId);
+    if (!current()) return;
     if (!token) return void this.live.delete(agentId);
     connection.status = { state: 'connecting' };
     const rest = new REST({
@@ -179,7 +182,8 @@ export class DiscordConnections implements DiscordConnectionControl {
     connection.gateway = gateway;
     gateway.on(WebSocketShardEvents.Dispatch, payload => {
       if (!current()) return;
-      if (payload.t === GatewayDispatchEvents.Ready) {
+      // A resumed session sends RESUMED instead of READY.
+      if (payload.t === GatewayDispatchEvents.Ready || payload.t === GatewayDispatchEvents.Resumed) {
         connection.status = { state: 'online' };
         connection.api = api;
         connection.attempts = 0;

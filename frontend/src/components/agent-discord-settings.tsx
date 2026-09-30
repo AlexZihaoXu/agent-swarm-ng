@@ -71,13 +71,13 @@ export function AgentDiscordSettings({
   });
   const saved = query.data;
   const [draft, setDraft] = useState<Draft | null>(null);
+  // A refetch keeps only what was changed here; everything else follows the server.
+  const previous = useRef<Config | undefined>(undefined);
   useEffect(() => {
-    if (saved)
-      setDraft(current =>
-        current && dirtyOf(current, saved)
-          ? { ...current, channels: { ...draftOf(saved).channels, ...current.channels } }
-          : draftOf(saved),
-      );
+    if (!saved) return;
+    const before = previous.current;
+    previous.current = saved;
+    setDraft(current => (current && before ? rebase(current, before, saved) : draftOf(saved)));
   }, [saved]);
   const [error, setError] = useState('');
   const dirty = Boolean(saved && draft && dirtyOf(draft, saved));
@@ -91,18 +91,16 @@ export function AgentDiscordSettings({
       if (!saved || !draft) return;
       setError('');
       const path = { params: { path: { id: agentId } } };
-      if (draft.remove) {
-        const { error } = await api.DELETE('/api/agents/{id}/discord/token', path);
-        if (error) throw new Error(error.message);
-      } else if (draft.token.trim()) {
-        const { error } = await api.PUT('/api/agents/{id}/discord/token', {
-          ...path,
-          body: { token: draft.token.trim() },
-        });
+      if (draft.remove || draft.token.trim()) {
+        const { error } = draft.remove
+          ? await api.DELETE('/api/agents/{id}/discord/token', path)
+          : await api.PUT('/api/agents/{id}/discord/token', { ...path, body: { token: draft.token.trim() } });
         if (error) {
           setError(error.message);
           throw new Error(error.message);
         }
+        // Done: a later failure must not send (and restart the bot with) the token again.
+        setDraft(current => (current ? { ...current, token: '', remove: false } : current));
       }
       const channels = Object.entries(draft.channels)
         .filter(([channelId, value]) => {
@@ -381,6 +379,24 @@ export function AgentDiscordSettings({
       )}
     </div>
   );
+}
+
+/** The draft's own changes (against what it was based on), on top of the newer server state. */
+function rebase(draft: Draft, before: Config, saved: Config): Draft {
+  const [was, fresh] = [draftOf(before), draftOf(saved)];
+  const pick = <K extends 'admission' | 'strangerDms' | 'catchUp'>(key: K) =>
+    draft[key] !== was[key] ? draft[key] : fresh[key];
+  const touched = Object.entries(draft.channels).filter(([channelId, value]) => {
+    const old = was.channels[channelId];
+    return old && (old.allowed !== value.allowed || old.admission !== value.admission);
+  });
+  return {
+    ...draft,
+    admission: pick('admission'),
+    strangerDms: pick('strangerDms'),
+    catchUp: pick('catchUp'),
+    channels: { ...fresh.channels, ...Object.fromEntries(touched) },
+  };
 }
 
 function dirtyOf(draft: Draft, saved: Config) {
