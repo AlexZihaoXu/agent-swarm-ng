@@ -174,7 +174,7 @@ it('your Discord DM reaches the agent as you, and its reply comes back through i
     // The agent saw a Discord input labelled as its owner, with the reply channel and the Discord tools.
     const prompt = prompts.find(text => text.includes('Can you look at the deploy?'))!;
     expect(prompt).toContain(`reply channel: discord:${DM}`);
-    expect(prompt).toContain('Alex (your owner)');
+    expect(prompt).toContain(String.raw`[your owner] \"Alex\"`);
     // Someone spoke to it: Discord showed it typing.
     expect(discord.requests.some(request => request.path === `/channels/${DM}/typing`)).toBe(true);
   } finally {
@@ -245,7 +245,7 @@ it('checks untargeted server messages in a visible, cheap branch before giving t
     expect(activity).toContain('They are asking about the deploy.');
     // The check read the new message in the flow of the conversation, and could look deeper (read-only only).
     expect(checks[0].text).toContain('Recent conversation in this channel');
-    expect(checks[0].text).toContain('(Recently active here: Sam.)');
+    expect(checks[0].text).toContain(String.raw`(Recently active here: [person] \"Sam\".)`);
     expect(checks[0].tools.sort()).toEqual(
       [
         'admission_decision',

@@ -408,9 +408,13 @@ export class DmBroker {
           ];
     const lines = rows.map(row => {
       const text = messageText(row.content, 0, 300);
-      return `${row.createdAt.toISOString().slice(11, 19)} · ${row.authorName} (${who(row)}) · message ${row.id}${row.replyToId ? ` · replying to ${row.replyToId}` : ''}: ${text.text || '(no text)'}${text.truncated ? ' […]' : ''}`;
+      return `${row.createdAt.toISOString().slice(11, 19)} · [${who(row)}] ${JSON.stringify(row.authorName)} · message ${row.id}${row.replyToId ? ` · replying to ${row.replyToId}` : ''}: ${text.text || '(no text)'}${text.truncated ? ' […]' : ''}`;
     });
-    const speakers = [...new Set(rows.map(row => (row.authorId === bot?.botUserId ? 'you' : row.authorName)))];
+    const speakers = [
+      ...new Set(
+        rows.map(row => (row.authorId === bot?.botUserId ? 'you' : `[${who(row)}] ${JSON.stringify(row.authorName)}`)),
+      ),
+    ];
     return `${lines.join('\n')}\n(Recently active here: ${speakers.join(', ')}.)`;
   }
   /** An agent as a file uploader (its name is kept with the file). */
@@ -851,7 +855,7 @@ ${preview.text}`
       async (text, replyToId, fileIds = []) => {
         if (!humanAuthority)
           throw new Error(
-            'Reply to the input’s explicit group or agent-thread channel, not the private human channel.',
+            'This turn did not come from your owner’s private chat, so you cannot post there now. Reply in the input’s own reply channel (discord_send_message for Discord, the group or agent thread otherwise), or stay silent; your owner reads your private chat when they write to you.',
           );
         const upload = { channelKey: chatKey(channel.id), uploader: await this.uploader(agentId) };
         await this.files.attachable(fileIds, upload);

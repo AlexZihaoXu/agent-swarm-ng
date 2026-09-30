@@ -632,9 +632,11 @@ export class DiscordIntake {
     const lines = shown.map(message => {
       const body = messageText(message.content, 0, 1500);
       return [
-        `${clock(message.createdAt)} · ${message.authorName} (${roleLabel(message)}) · message ${message.id}${message.note ? ` (${message.note})` : ''}:${
+        // The platform's label first, in brackets; the display name quoted: a name like "Sam (your owner)" is
+        // chosen by its author and proves nothing.
+        `${clock(message.createdAt)} · [${roleLabel(message)}] ${JSON.stringify(message.authorName)} · message ${message.id}${message.note ? ` (${message.note})` : ''}:${
           message.replyTo
-            ? ` [replying to ${message.replyTo.author}'s message ${message.replyTo.id}: ${JSON.stringify(message.replyTo.text)}]`
+            ? ` [replying to ${JSON.stringify(message.replyTo.author)}'s message ${message.replyTo.id}: ${JSON.stringify(message.replyTo.text)}]`
             : ''
         } ${body.text || '(no text)'}${body.truncated ? ' […]' : ''}`,
         ...(message.attachments.length
