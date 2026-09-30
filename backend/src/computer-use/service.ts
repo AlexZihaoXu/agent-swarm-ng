@@ -247,6 +247,22 @@ export class ComputerUseService {
     );
   }
   /**
+   * A screenshot the agent saves rather than looks at (save_screenshot): the same capture of the computer it holds,
+   * but it grants no input allowance (the agent has not seen it) and nothing goes into the image pool.
+   */
+  async snapshot(agentId: string, request: unknown, signal?: AbortSignal) {
+    await this.ready();
+    let claim!: Awaited<ReturnType<ComputerUseService['claim']>>;
+    const frame = await this.screenshot(
+      async () => (claim = await this.claim(agentId)),
+      request,
+      signal,
+      undefined,
+      undefined,
+    );
+    return { frame, computer: { id: claim.computerId, name: claim.computer.name } };
+  }
+  /**
    * A watch's look at the computer its agent holds: the same capture, but it grants the agent no input allowance
    * (the agent looks for itself after waking) and it waits out a busy computer instead of failing.
    */

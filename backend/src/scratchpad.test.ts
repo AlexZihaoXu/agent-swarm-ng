@@ -4,6 +4,9 @@ import { prepareDatabase } from './test-database';
 import { Scratchpad, scratchPath } from './scratchpad';
 import { SwarmSettingsStore } from './swarm-settings';
 import { applyEdits, pageText } from './text-page';
+import { createCanvas } from '@napi-rs/canvas';
+
+const png = () => createCanvas(8, 4).encode('png');
 
 async function setup() {
   const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
@@ -149,6 +152,14 @@ it('gives every agent scratch tools that return its mistakes as tool errors', as
       isError: true,
     });
     expect(await call('scratch_list', {})).toMatchObject({ folders: [{ name: 'demo' }] });
+    // An image comes back as an image for a vision model; a text-only model is told it cannot see it.
+    await pad.writeImage(agent.id, 'shot.png', await png(), 'image/png');
+    const seen = await tools.scratch_read.execute('call', { path: 'shot.png' } as never, undefined, undefined, {
+      model: { input: ['text', 'image'] },
+    } as never);
+    expect(seen.content.map(part => part.type)).toEqual(['text', 'image']);
+    expect(JSON.parse((seen.content[0] as { text: string }).text)).toMatchObject({ path: 'shot.png', kind: 'image' });
+    await expect(call('scratch_read', { path: 'shot.png' })).rejects.toThrow('cannot see images');
   } finally {
     await database.close();
   }
@@ -172,6 +183,25 @@ it('lets the dashboard browse an agent’s scratchpad read-only', async () => {
       (await app.inject({ method: 'GET', url: `/api/agents/${agent.id}/scratch/file?path=missing.md` })).statusCode,
     ).toBe(404);
     expect((await app.inject({ method: 'GET', url: '/api/agents/nobody/scratch' })).statusCode).toBe(404);
+    // An image shows as a picture, served as its own type.
+    const bytes = await png();
+    await pad.writeImage(agent.id, 'drafts/shot.png', bytes, 'image/png');
+    expect((await app.inject(`/api/agents/${agent.id}/scratch?folder=drafts`)).json().files).toMatchObject([
+      { name: 'report.md', kind: 'text' },
+      { name: 'shot.png', kind: 'image' },
+    ]);
+    const image = await app.inject(
+      `/api/agents/${agent.id}/scratch/image?path=${encodeURIComponent('drafts/shot.png')}`,
+    );
+    expect([image.statusCode, image.headers['content-type'], image.rawPayload.equals(bytes)]).toEqual([
+      200,
+      'image/png',
+      true,
+    ]);
+    expect(
+      (await app.inject(`/api/agents/${agent.id}/scratch/image?path=${encodeURIComponent('drafts/report.md')}`))
+        .statusCode,
+    ).toBe(400);
     // No way to change it from the dashboard.
     expect((await app.inject({ method: 'POST', url: `/api/agents/${agent.id}/scratch`, payload: {} })).statusCode).toBe(
       404,

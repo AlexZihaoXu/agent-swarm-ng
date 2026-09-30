@@ -129,6 +129,16 @@ it('separates assignments from one active holder, preserves an old claim when a 
   await f.service.use(f.b.id, 'Desk');
   expect((await f.service.list(f.a.id))[0].holder?.id).toBe(f.b.id);
 });
+it('saves a screenshot of the held computer without granting input allowance', async () => {
+  const f = await fixture();
+  await expect(f.service.snapshot(f.a.id, { kind: 'glance', quality: 'full' })).rejects.toThrow(/use_computer/);
+  await f.service.use(f.a.id, 'Desk');
+  const saved = await f.service.snapshot(f.a.id, { kind: 'glance', quality: 'full' });
+  expect(saved.computer.name).toBe('Desk');
+  expect(saved.frame.width).toBeGreaterThan(0);
+  // The agent has not seen it: input still needs a look.
+  await expect(f.service.run(f.a.id, {})).rejects.toThrow(/look/i);
+});
 it('grants two combos for thirty real seconds, refunds preflight rejection, invalidates release', async () => {
   const f = await fixture();
   await f.service.use(f.a.id, 'Desk');

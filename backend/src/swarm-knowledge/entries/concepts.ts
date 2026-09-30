@@ -142,6 +142,8 @@ export const desktopConcept = {
   related: ['practices/desktop', 'practices/browser', 'concepts/computers'],
   content: `Screenshots. glance({quality?}) captures the whole screen: low (default) 33% of width/height, medium 50%, high 75%, full 100% (native). look_at({x,y,size}) returns a native-resolution crop centred on x,y with radius size. A vision-capable model is required. A successful look allows two run_actions combos within the next 30 real seconds; another look resets it.
 
+Saving a screenshot to share: save_screenshot({to, x?, y?, size?}) takes a fresh screenshot of the computer you hold without showing it to you and saves it as an image: to:"scratch:shots/login.png" or "computer:<name>:/home/guest/login.jpg". The whole desktop at full resolution by default, or the look_at region x, y, size. Name it .jpg (as captured, smaller) or .png. Then upload_file({from:"scratch:shots/login.png", channelId}) and send its fileId (send_message, or discord_send_message with channelId "discord:<id>"). It grants no input allowance; look first if you need to see it, and mind what is on screen before sharing it.
+
 Coordinates. Everything uses the full desktop's normalized [0,999] space, not image pixels. look_at({x:200,y:200,size:50}) crops [150,150,250,250]; a crop that would leave the screen shifts to fit (a span of [-200,100] becomes [0,300]) and one larger than the screen becomes [0,999]. The result's bounds are the actual crop: use them, not your request. A pixel (u,v) in a returned image of width W and height H is at x=left+(u+0.5)/W*(right-left), y=top+(v+0.5)/H*(bottom-top). A normalized square is not square in pixels on a wide screen.
 
 Combos. run_actions({actions, per_action_pause?}) runs 1–16 ordered actions:
@@ -214,28 +216,28 @@ export const scratchpadConcept = {
   parentId: 'concepts',
   title: 'Scratchpad',
   summary:
-    'Your private text files kept by the platform (no computer needed): drafting, editing and presenting artifacts.',
+    'Your private text files and images kept by the platform (no computer needed): drafting, editing and presenting artifacts.',
   source: 'docs/agent-files.md',
   related: ['concepts/tools', 'practices/communication'],
-  content: `The scratchpad is a set of private text files the platform keeps for you, with or without a computer. It is for work you are shaping for someone: a plan, a report, a script, a demo page. Draft it there, refine it with precise edits instead of re-sending whole texts in chat, then present it to the human.
+  content: `The scratchpad is a set of private text files (and images) the platform keeps for you, with or without a computer. It is for work you are shaping for someone: a plan, a report, a script, a demo page. Draft it there, refine it with precise edits instead of re-sending whole texts in chat, then present it to the human.
 
 What it is not: not memory (do not keep notes about yourself or your conversations there), not a computer's disk (programs cannot run on it), and not shared: other agents cannot see it. The human can browse it read-only in the dashboard (Agents → your settings → Scratchpad) and changes it only by asking you.
 
-Files and folders: paths such as "drafts/plan.md", at most 3 folders deep; names without "/", "\\", "." or ".." parts. Text only (UTF-8). Folders exist as long as they hold files.
+Files and folders: paths such as "drafts/plan.md", at most 3 folders deep; names without "/", "\\", "." or ".." parts. Files are UTF-8 text or images (PNG, JPEG, WebP, GIF; from save_screenshot or copy_file). Folders exist as long as they hold files.
 
 Tools:
 - scratch_list({folder?}): folders and files directly inside a folder, with sizes, plus your usage against the limits.
-- scratch_read({path, offset?, limit?}): a page of a file like the computer read tool: 1-based lines, 200 by default (up to 2000 lines, 50,000 bytes); scroll with nextOffset/prevOffset.
+- scratch_read({path, offset?, limit?}): a page of a file like the computer read tool: 1-based lines, 200 by default (up to 2000 lines, 50,000 bytes); scroll with nextOffset/prevOffset. An image comes back as an image (vision models).
 - scratch_write({path, content}): create or replace a file.
-- scratch_edit({path, edits:[{oldText,newText}]}): 1–100 exact replacements; each oldText must appear exactly once and matches may not overlap; all are checked before anything changes. If the file changed meanwhile, read it again.
+- scratch_edit({path, edits:[{oldText,newText}]}): text files only; 1–100 exact replacements; each oldText must appear exactly once and matches may not overlap; all are checked before anything changes. If the file changed meanwhile, read it again.
 - scratch_move({from, to}): move or rename a file or a whole folder; the destination must not exist.
 - scratch_delete({path}): delete a file, or a folder with everything in it. Permanent.
 
 Limits (set by the human in Settings → Swarm; scratch_list shows them): by default 1 MiB per file, 500 files and 50 MiB in all. Nothing is deleted automatically: when full, writes are refused until you delete something.
 
-Copying: copy_file moves files between the scratchpad and your assigned computers in either direction, and scratch → scratch keeps an older version beside a new one (copy_file({from:"scratch:plan.md", to:"scratch:plan-v1.md"})). Only UTF-8 text can come into the scratchpad.
+Copying: copy_file moves files between the scratchpad and your assigned computers in either direction, and scratch → scratch keeps an older version beside a new one (copy_file({from:"scratch:plan.md", to:"scratch:plan-v1.md"})). Only UTF-8 text and images can come into the scratchpad.
 
-Presenting: present_scratch shows a file live in a chat (the human sees it update as you edit); upload_file sends a fixed copy that can be downloaded. Both return a fileId you then send with send_message fileIds (concepts/chat-files, practices/sharing-files).
+Presenting: present_scratch shows a text file live in a chat (the human sees it update as you edit); upload_file sends a fixed copy that can be downloaded (the way to share an image, in a chat or on Discord). Both return a fileId you then send with send_message fileIds (concepts/chat-files, practices/sharing-files).
 
 While you write, the human's chat shows "<you> is writing <file> in its scratchpad…".`,
 } satisfies KnowledgeEntry;
@@ -285,9 +287,9 @@ Tools:
 - list_files({channelId?|peerId?, query?}): files sent in a chat (default your private chat; group:<id>; dm:<…> or a peerId), newest first.
 - read_file({fileId, offset?, limit?, page?, view?}): text as pages (1-based lines, 200 by default, up to 2000, nextOffset to continue; up to 16 MiB); images as an image (vision models); PDFs as extracted text of up to 20 pages starting at page, or view:"image" to see one page rendered (layout, tables, figures, scanned pages). Other types cannot be opened here: copy_file them to an assigned computer and use its tools there.
 - upload_file({from, channelId?|peerId?, name?}): puts a copy of a file into a chat from scratch:<path>, computer:<name or ID>:<absolute path> or file:<fileId>. It is not sent yet: send it with send_message (or send_dm) fileIds:[…] in the same chat, text optional. Unsent uploads disappear after a day.
-- present_scratch({path, channelId?|peerId?}): a live preview of one of your scratch files instead of a copy; send its fileId the same way. Anyone in that chat can read the file through it while it exists.
+- present_scratch({path, channelId?|peerId?}): a live preview of one of your scratch text files instead of a copy (images: upload_file); send its fileId the same way. Anyone in that chat can read the file through it while it exists.
 - delete_file({fileId}): delete a file you uploaded.
-- copy_file({from, to}): copy one file between scratch:<path> and computer:<name or ID>:<absolute path> in any direction, or from file:<fileId> into either. It needs only your assignment to the computer, not control, and does not interrupt whoever holds it; the holder is told about the copy. Onto a computer: any file, into an existing folder, owned by the guest user, replacing a file of the same name. Into the scratchpad: UTF-8 text within its limits.
+- copy_file({from, to}): copy one file between scratch:<path> and computer:<name or ID>:<absolute path> in any direction, or from file:<fileId> into either. It needs only your assignment to the computer, not control, and does not interrupt whoever holds it; the holder is told about the copy. Onto a computer: any file, into an existing folder, owned by the guest user, replacing a file of the same name. Into the scratchpad: UTF-8 text or an image within its limits.
 
 Limits (Settings → Swarm): the largest file (100 MB by default) and total storage (10 GB); when storage is full, uploads are refused until files are deleted. Nothing is deleted automatically.`,
 } satisfies KnowledgeEntry;

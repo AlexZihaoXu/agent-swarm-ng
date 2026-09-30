@@ -35,13 +35,16 @@ export function scratchPath(raw: string, { folder = false } = {}) {
   return segments.join('/');
 }
 const inFolder = (path: string, folder: string) => !folder || path.startsWith(`${folder}/`);
+/** The images a scratchpad keeps (as bytes, beside its text files). */
+export const SCRATCH_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const kindOf = (mime: string | null) => (mime ? ('image' as const) : ('text' as const));
 const byteSize = (text: string) => Buffer.byteLength(text, 'utf8');
 
 type Activity = (event: { agentId: string; path: string; active: boolean }) => void;
 
 /**
- * An agent's scratchpad: text files kept as database rows under folder paths. Private to the agent (the dashboard
- * can browse it read-only), text only (UTF-8), never deleted automatically, bounded by Settings → Swarm limits.
+ * An agent's scratchpad: text files (UTF-8) and images kept as database rows under folder paths. Private to the agent
+ * (the dashboard can browse it read-only), never deleted automatically, bounded by Settings → Swarm limits.
  */
 export class Scratchpad {
   /** Told while an agent writes to its scratchpad (the chat shows it, like typing). */
@@ -55,7 +58,7 @@ export class Scratchpad {
     await this.database.initialize();
     return this.database.client.scratchFile.findMany({
       where: { agentId },
-      select: { path: true, size: true, updatedAt: true },
+      select: { path: true, size: true, mime: true, updatedAt: true },
       orderBy: { path: 'asc' },
     });
   }
@@ -84,12 +87,19 @@ export class Scratchpad {
     if (folder && !rows.some(row => inFolder(row.path, folder)))
       throw new ScratchError(`There is no folder "${folder}".`);
     const folders = new Map<string, { files: number; size: number }>();
-    const files: { name: string; path: string; size: number; updatedAt: string }[] = [];
+    const files: { name: string; path: string; kind: 'text' | 'image'; size: number; updatedAt: string }[] = [];
     for (const row of rows) {
       if (!inFolder(row.path, folder)) continue;
       const rest = folder ? row.path.slice(folder.length + 1) : row.path;
       const slash = rest.indexOf('/');
-      if (slash < 0) files.push({ name: rest, path: row.path, size: row.size, updatedAt: row.updatedAt.toISOString() });
+      if (slash < 0)
+        files.push({
+          name: rest,
+          path: row.path,
+          kind: kindOf(row.mime),
+          size: row.size,
+          updatedAt: row.updatedAt.toISOString(),
+        });
       else {
         const name = rest.slice(0, slash);
         const entry = folders.get(name) ?? { files: 0, size: 0 };
@@ -120,9 +130,10 @@ export class Scratchpad {
   async read(agentId: string, rawPath: string, offset?: number, limit?: number) {
     const path = scratchPath(rawPath);
     const row = await this.file(agentId, path);
+    if (row.mime) throw new ScratchError(`"${path}" is an image (${row.mime}), not text.`);
     return { path, size: row.size, updatedAt: row.updatedAt.toISOString(), ...pageText(row.content, offset, limit) };
   }
-  /** The whole file (for copying and previews). */
+  /** The whole file (for copying and previews): an image has `data` and `mime`, text has `content`. */
   async content(agentId: string, rawPath: string) {
     const path = scratchPath(rawPath);
     return this.file(agentId, path);
@@ -178,15 +189,36 @@ export class Scratchpad {
       await this.database.client.scratchFile.upsert({
         where: { agentId_path: { agentId, path } },
         create: { agentId, path, content, size },
-        update: { content, size },
+        update: { content, size, data: null, mime: null },
       });
       return { path, size, created: !existing, lines: content ? content.split('\n').length : 0 };
+    });
+  }
+  /** Creates or replaces an image (PNG, JPEG, WebP or GIF bytes). */
+  async writeImage(agentId: string, rawPath: string, data: Uint8Array, mime: string) {
+    const path = scratchPath(rawPath);
+    if (!SCRATCH_IMAGE_TYPES.includes(mime)) throw new ScratchError('Images are PNG, JPEG, WebP or GIF.');
+    const size = data.byteLength;
+    return this.writing(agentId, path, async () => {
+      await this.admit(agentId, new Map([[path, size]]));
+      const existing = await this.database.client.scratchFile.findUnique({
+        where: { agentId_path: { agentId, path } },
+        select: { id: true },
+      });
+      const bytes = new Uint8Array(data);
+      await this.database.client.scratchFile.upsert({
+        where: { agentId_path: { agentId, path } },
+        create: { agentId, path, content: '', data: bytes, mime, size },
+        update: { content: '', data: bytes, mime, size },
+      });
+      return { path, size, mime, created: !existing };
     });
   }
   /** Exact replacements in one file, all checked before anything changes. */
   async edit(agentId: string, rawPath: string, edits: TextEdit[]) {
     const path = scratchPath(rawPath);
     const row = await this.file(agentId, path);
+    if (row.mime) throw new ScratchError(`"${path}" is an image; it cannot be edited as text.`);
     const content = applyEdits(row.content, edits);
     return this.writing(agentId, path, async () => {
       await this.admit(agentId, new Map([[path, byteSize(content)]]));
@@ -248,7 +280,13 @@ export class Scratchpad {
     if (to.startsWith(`${from}/`)) throw new ScratchError('A folder cannot be copied inside itself.');
     const { kind, paths } = await this.selection(agentId, from);
     const rows = await this.database.client.scratchFile.findMany({ where: { agentId, path: { in: paths } } });
-    const copies = rows.map(row => ({ path: this.target(from, to, row.path), content: row.content, size: row.size }));
+    const copies = rows.map(row => ({
+      path: this.target(from, to, row.path),
+      content: row.content,
+      data: row.data,
+      mime: row.mime,
+      size: row.size,
+    }));
     const existing = new Set((await this.rows(agentId)).map(row => row.path));
     for (const copy of copies)
       if (existing.has(copy.path)) throw new ScratchError(`"${copy.path}" already exists; choose another name.`);

@@ -3270,6 +3270,7 @@
                         "required": [
                           "name",
                           "path",
+                          "kind",
                           "size",
                           "updatedAt"
                         ],
@@ -3279,6 +3280,22 @@
                           },
                           "path": {
                             "type": "string"
+                          },
+                          "kind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "text"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "image"
+                                ]
+                              }
+                            ]
                           },
                           "size": {
                             "type": "integer"
@@ -3477,6 +3494,71 @@
               }
             }
           },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/scratch/image": {
+      "get": {
+        "operationId": "scratchImage",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 263,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "path",
+            "required": true
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
           "400": {
             "description": "Default Response",
             "content": {

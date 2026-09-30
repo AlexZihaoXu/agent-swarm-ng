@@ -385,6 +385,9 @@ model ScratchFile {
   agentId   String
   path      String
   content   String
+  // An image (PNG, JPEG, WebP or GIF) keeps its bytes here, with content "" (text files have neither).
+  data      Bytes?
+  mime      String?
   size      Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

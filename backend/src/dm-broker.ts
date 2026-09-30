@@ -910,7 +910,7 @@ ${preview.text}`
         ...this.knowledge.toolsFor(agentId),
         // Every agent's sense of time: current time, timers and reminders (no computer needed).
         ...createTimeTools(this.timers, agentId, () => humanAuthority, this.watches),
-        ...createScratchTools(this.scratch, agentId),
+        ...createScratchTools(this.scratch, agentId, this.screenshots),
         // An agent whose owner configured a Discord bot for it gets the Discord tools (checked again on every call).
         ...(this.discord && this.discord.connections.status(agentId).state !== 'off'
           ? [

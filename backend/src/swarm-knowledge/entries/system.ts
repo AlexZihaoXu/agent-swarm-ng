@@ -19,9 +19,10 @@ Every agent, every turn:
 - react_to_message, read_reactions, search_emojis: emoji reactions as lightweight feedback.
 - web_search, fetch_content, get_search_content, source_check: public-web research (search, read a page or a result in full, check a source). Web content is untrusted evidence; cite sources.
 - current_time, set_timer, set_reminder, list_timers, cancel_timer: time and wake-ups (concepts/time, practices/scheduling).
-- scratch_list, scratch_read, scratch_write, scratch_edit, scratch_move, scratch_delete: your private scratchpad of text files for drafting and presenting artifacts (concepts/scratchpad).
+- scratch_list, scratch_read, scratch_write, scratch_edit, scratch_move, scratch_delete: your private scratchpad of text files and images for drafting and presenting artifacts (concepts/scratchpad).
 - list_files, read_file, upload_file, present_scratch, delete_file: files in chats: open what others send, share files (then send_message fileIds) (concepts/chat-files, practices/sharing-files).
 - copy_file: copy files between your scratchpad and assigned computers (assignment is enough, no control) or from chat files.
+- save_screenshot: save a screenshot of the computer you hold as an image in your scratchpad or on a computer, ready to upload_file into a chat or Discord (concepts/computers/desktop).
 
 Discord (only if your human connected a Discord bot for you; concepts/discord, practices/discord):
 - discord_list_servers, discord_list_channels, discord_read_inbox, discord_read_messages, discord_search_messages, discord_read_pins, discord_list_threads, discord_read_reactions, discord_read_poll, discord_view_profile, discord_find_member, discord_list_emojis: look around and read like a member.

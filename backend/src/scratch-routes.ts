@@ -18,7 +18,13 @@ const listing = Type.Object({
     Type.Object({ name: Type.String(), path: Type.String(), files: Type.Integer(), size: Type.Integer() }),
   ),
   files: Type.Array(
-    Type.Object({ name: Type.String(), path: Type.String(), size: Type.Integer(), updatedAt: Type.String() }),
+    Type.Object({
+      name: Type.String(),
+      path: Type.String(),
+      kind: Type.Union([Type.Literal('text'), Type.Literal('image')]),
+      size: Type.Integer(),
+      updatedAt: Type.String(),
+    }),
   ),
   usage,
 });
@@ -89,5 +95,30 @@ export function registerScratchRoutes(app: FastifyInstance, database: PlatformSt
       guard(reply, request.params.id, () =>
         pad.read(request.params.id, request.query.path, request.query.offset, request.query.limit),
       ),
+  );
+  // An image file's bytes, for the preview. Served as the stored image type only, never as a document.
+  app.get<{ Params: { id: string }; Querystring: { path: string } }>(
+    '/api/agents/:id/scratch/image',
+    {
+      schema: {
+        operationId: 'scratchImage',
+        params,
+        querystring: Type.Object(
+          { path: Type.String({ minLength: 1, maxLength: 263 }) },
+          { additionalProperties: false },
+        ),
+        response: { 400: error, 404: error },
+      },
+    },
+    (request, reply) =>
+      guard(reply, request.params.id, async () => {
+        const row = await pad.content(request.params.id, request.query.path);
+        if (!row.mime || !row.data) throw new ScratchError(`"${row.path}" is not an image.`);
+        return reply
+          .header('Content-Type', row.mime)
+          .header('X-Content-Type-Options', 'nosniff')
+          .header('Content-Security-Policy', "default-src 'none'")
+          .send(Buffer.from(row.data));
+      }),
   );
 }

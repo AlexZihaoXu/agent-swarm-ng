@@ -39,9 +39,12 @@ export function AgentScratchpad({ agentId, agentName }: { agentId: string; agent
   useEffect(() => {
     if (folder && listing.isError) setFolder('');
   }, [folder, listing.isError]);
+  // An image file opens as a picture (its listing entry says so, and when it last changed); text opens as pages.
+  const entry = file === null ? undefined : listing.data?.files.find(item => item.path === file);
+  const image = entry?.kind === 'image' ? entry : null;
   const preview = useQuery({
     queryKey: ['scratch-file', agentId, file, revision, pages],
-    enabled: file !== null,
+    enabled: file !== null && !image,
     queryFn: async ({ signal }) => {
       const { data, error } = await api.GET('/api/agents/{id}/scratch/file', {
         params: { path: { id: agentId }, query: { path: file!, limit: 200 * pages } },
@@ -70,7 +73,7 @@ export function AgentScratchpad({ agentId, agentName }: { agentId: string; agent
       <div>
         <h3 className="text-lg font-semibold">Scratchpad</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Text files {agentName} drafts and presents. Read-only here: ask {agentName} to change them.
+          Text files and images {agentName} drafts and presents. Read-only here: ask {agentName} to change them.
         </p>
       </div>
       <div className="min-w-0 space-y-3 rounded-lg border border-border bg-sidebar/30 p-4">
@@ -90,7 +93,18 @@ export function AgentScratchpad({ agentId, agentName }: { agentId: string; agent
             </p>
           )}
         </div>
-        {file !== null ? (
+        {file !== null && image ? (
+          <div key={file} className="min-w-0 space-y-2 motion-safe:animate-[fade-in_120ms_ease-out]">
+            <p className="text-xs text-muted-foreground">
+              {fileSize(image.size)} · image · updated {new Date(image.updatedAt).toLocaleString()} · Read-only
+            </p>
+            <img
+              src={`/api/agents/${encodeURIComponent(agentId)}/scratch/image?path=${encodeURIComponent(file)}&v=${encodeURIComponent(image.updatedAt)}`}
+              alt={file.split('/').pop()}
+              className="max-h-[32rem] max-w-full rounded-lg border border-border bg-sidebar object-contain"
+            />
+          </div>
+        ) : file !== null ? (
           <div key={file} className="min-w-0 space-y-2 motion-safe:animate-[fade-in_120ms_ease-out]">
             {preview.isError && (
               <p role="alert" className="text-sm text-red-400">

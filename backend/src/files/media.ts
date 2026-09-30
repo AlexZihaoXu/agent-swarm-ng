@@ -12,6 +12,19 @@ const PDF_TEXT_CHARACTERS = 50_000;
 
 export class MediaError extends Error {}
 
+/** Re-encodes an image (a JPEG screenshot, say) as PNG at its own size. */
+export async function toPng(bytes: Uint8Array) {
+  let image;
+  try {
+    image = await loadImage(Buffer.from(bytes));
+  } catch {
+    throw new MediaError('This image could not be decoded.');
+  }
+  const canvas = createCanvas(image.width, image.height);
+  canvas.getContext('2d').drawImage(image, 0, 0);
+  return canvas.encode('png');
+}
+
 /** Decodes an image (PNG, JPEG, GIF first frame, WebP) and re-encodes it small enough for a model. */
 export async function fitImage(bytes: Uint8Array) {
   let image;
