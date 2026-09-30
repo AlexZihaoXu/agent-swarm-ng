@@ -195,19 +195,22 @@ export class AgentSessionStore {
       });
       if (previous && previous.sessionId !== header.id)
         throw new Error('Cannot checkpoint a different session for this agent.');
-      const activeCount = previous ? previous.entryCount - previous.activeStart : 0;
-      if (activeCount > entries.length) throw new Error('Cannot checkpoint a divergent private agent session.');
-      if (activeCount) {
+      // Where the saved leaf sits in this snapshot. A live session can hold entries older than the saved active
+      // start (a compaction applied during the run archived them), so align by the leaf, not by count.
+      const leafIndex = previous ? entries.findIndex(entry => entry.id === previous.leafId) : -1;
+      if (previous && leafIndex < 0) throw new Error('Cannot checkpoint a divergent private agent session.');
+      if (previous) {
         const last = await tx.agentSessionEntry.findUnique({
-          where: { agentId_position: { agentId, position: previous!.entryCount - 1 } },
+          where: { agentId_position: { agentId, position: previous.entryCount - 1 } },
           select: { payload: true, parentId: true },
         });
-        const candidate = entries[activeCount - 1];
-        const normalized =
-          activeCount === 1 && previous!.activeStart ? { ...candidate, parentId: last?.parentId } : candidate;
+        const candidate = entries[leafIndex];
+        // A restored session's first entry is re-rooted; the archive keeps its original parent.
+        const normalized = leafIndex === 0 && previous.activeStart ? { ...candidate, parentId: last?.parentId } : candidate;
         if (!last || last.payload !== JSON.stringify(normalized))
           throw new Error('Cannot checkpoint a divergent private agent session.');
       }
+      const activeCount = leafIndex + 1;
       if (entries.length === activeCount && options.advancePublications === false) return;
       if (entries.length - activeCount > MAX_CHECKPOINT_ENTRIES)
         throw new Error('Private agent session checkpoint is too large.');
@@ -233,8 +236,12 @@ export class AgentSessionStore {
       const latestCompaction = [...entries].reverse().find(entry => entry.type === 'compaction');
       const keptIndex = latestCompaction
         ? entries.findIndex(entry => entry.id === latestCompaction.firstKeptEntryId)
-        : 0;
-      if (keptIndex < 0) throw new Error('Private agent session compaction is invalid.');
+        : -1;
+      if (latestCompaction && keptIndex < 0) throw new Error('Private agent session compaction is invalid.');
+      // The archive position of a snapshot entry, counted from the saved leaf.
+      const positionOf = (index: number) => (previous?.entryCount ?? 0) + (index - activeCount);
+      const activeStart =
+        keptIndex < 0 ? (previous?.activeStart ?? 0) : Math.max(previous?.activeStart ?? 0, positionOf(keptIndex));
       // During an active provider run, another tool may publish after the frozen Pi
       // boundary but before this SQLite write. Advance cursors only after inference
       // is idle; a stale cursor may repeat context, but never hide a committed effect.
@@ -253,7 +260,7 @@ export class AgentSessionStore {
         where: { agentId, entryCount: previous?.entryCount ?? 0, leafId: previous?.leafId ?? null },
         data: {
           entryCount: (previous?.entryCount ?? 0) + rows.length,
-          activeStart: (previous?.activeStart ?? 0) + keptIndex,
+          activeStart,
           leafId: parent,
           ...cursors,
         },

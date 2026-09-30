@@ -172,3 +172,33 @@ it('persists a completed compaction as one consistent private checkpoint', async
     await database.close();
   }
 });
+
+it('keeps checkpointing the same live session after a compaction moved the active start', async () => {
+  const { database, agent, sessions } = await fixture();
+  try {
+    const session = SessionManager.inMemory();
+    session.appendMessage({ role: 'user', content: 'Old detail', timestamp: 1 });
+    session.appendMessage({ role: 'user', content: 'More old detail', timestamp: 2 });
+    const kept = session.appendMessage({ role: 'user', content: 'Retained detail', timestamp: 3 });
+    await sessions.save(agent.id, session);
+    // A compaction applied mid-run (background compaction), then the run keeps going in the same session.
+    session.appendCompaction('Old details summarized', kept, 100);
+    await sessions.save(agent.id, session);
+    session.appendMessage({ role: 'user', content: 'Next turn', timestamp: 4 });
+    await sessions.save(agent.id, session);
+    session.appendMessage({ role: 'user', content: 'And another', timestamp: 5 });
+    await sessions.save(agent.id, session);
+    const restored = (await sessions.load(agent.id))!;
+    expect(restored.buildSessionContext()).toEqual(session.buildSessionContext());
+    // The same after a restore that began mid-branch (its first entry re-rooted), with a second compaction.
+    const next = restored.appendMessage({ role: 'user', content: 'After restore', timestamp: 6 });
+    await sessions.save(agent.id, restored);
+    restored.appendCompaction('Everything summarized', next, 120);
+    await sessions.save(agent.id, restored);
+    restored.appendMessage({ role: 'user', content: 'Latest', timestamp: 7 });
+    await sessions.save(agent.id, restored);
+    expect((await sessions.load(agent.id))!.buildSessionContext()).toEqual(restored.buildSessionContext());
+  } finally {
+    await database.close();
+  }
+});
