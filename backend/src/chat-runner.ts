@@ -246,11 +246,15 @@ export async function runChat(
                 : incomplete
                   ? 'Turn incomplete'
                   : 'Turn ended',
-        peerOnly
-          ? 'Agent-thread inputs processed.'
-          : published
-            ? `${published} channel message(s) published.`
-            : 'No channel message published.',
+        providerFailed || missingFinal || incomplete
+          ? published
+            ? `${published} channel message(s) published before it stopped.`
+            : 'Nothing was published: the people waiting received no reply.'
+          : peerOnly
+            ? 'Inputs from other agents or apps processed.'
+            : published
+              ? `${published} channel message(s) published.`
+              : 'No channel message published.',
       );
     }
     inbox.close();

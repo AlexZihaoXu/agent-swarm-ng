@@ -11,7 +11,7 @@ import { SwarmSettingsStore } from './swarm-settings';
 import { EndpointStore } from './endpoint-store';
 import { CodexProvider, CODEX_CONNECTION } from './codex-provider';
 import { getModels } from '@earendil-works/pi-ai/compat';
-import { createChatSession, modelCapabilities } from './chat-runtime';
+import { createChatSession, MODEL_RETRY, modelCapabilities } from './chat-runtime';
 import { ActivityStore } from './activity-store';
 
 type RequestBody = {
@@ -29,6 +29,7 @@ let behavior:
   | 'wrong-channel'
   | 'after-reminder'
   | 'http-error'
+  | 'transient-error'
   | 'publication-error'
   | 'research'
   | 'ack-raw'
@@ -44,6 +45,9 @@ let authorization: string | undefined;
 let argumentGate: Promise<void> | undefined;
 let historyAnchorId = '';
 
+// Provider retries wait milliseconds here, not seconds.
+MODEL_RETRY.baseDelayMs = 5;
+
 beforeAll(async () => {
   await mkdir('.scratch', { recursive: true });
   folder = await mkdtemp(join('.scratch', 'pi-chat-test-'));
@@ -53,6 +57,11 @@ beforeAll(async () => {
     const body: RequestBody = JSON.parse(Buffer.concat(chunks).toString());
     captured.push(body);
     authorization = request.headers.authorization;
+    // The provider is briefly unavailable once, then answers.
+    if (behavior === 'transient-error' && captured.length === 1) {
+      response.writeHead(503).end('PRIVATE PROVIDER ERROR: service unavailable');
+      return;
+    }
     if (behavior === 'http-error') {
       response.writeHead(500).end('PRIVATE PROVIDER ERROR !literal-key-$NOT_AN_ENV_LOOKUP');
       return;
@@ -1111,6 +1120,21 @@ describe('Pi chat and platform channel boundary', () => {
     }
   });
 
+  it('retries a briefly unavailable provider and still delivers the reply', async () => {
+    behavior = 'transient-error';
+    captured = [];
+    const app = await testApp();
+    try {
+      const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
+      const response = await app.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent) });
+      expect(captured.length).toBeGreaterThanOrEqual(2);
+      expect(response.body).toContain('Published hello');
+      expect(response.body).not.toContain('PRIVATE PROVIDER ERROR');
+    } finally {
+      await app.close();
+    }
+  });
+
   it.each(['http-error', 'truncated'] as const)(
     'records an unsuccessful model request without reminding (%s)',
     async mode => {
@@ -1120,7 +1144,8 @@ describe('Pi chat and platform channel boundary', () => {
       try {
         const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
         const response = await app.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent) });
-        expect(captured).toHaveLength(1);
+        // A permanent failure is retried (the model request only), then reported.
+        expect(captured).toHaveLength(mode === 'http-error' ? 1 + MODEL_RETRY.maxRetries : 1);
         expect(response.body).toContain('"type":"error"');
         expect(JSON.stringify(channelEvents(response.body))).not.toContain('PRIVATE');
         expect(response.body).not.toContain('!literal-key-$NOT_AN_ENV_LOOKUP');
@@ -1128,7 +1153,10 @@ describe('Pi chat and platform channel boundary', () => {
         expect(saved).not.toContain('!literal-key-$NOT_AN_ENV_LOOKUP');
         expect(saved).not.toContain('PRIVATE PROVIDER ERROR');
         if (mode === 'http-error') expect(saved).toContain('The provider request failed. Check the model connection.');
-        expect(saved).toContain('Run failed');
+        // Retries fill the newest activity page; its last entry says nobody got a reply.
+        expect(saved).toContain(
+          mode === 'http-error' ? 'Nothing was published: the people waiting received no reply.' : 'Run failed',
+        );
       } finally {
         await app.close();
       }

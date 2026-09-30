@@ -308,6 +308,12 @@ async function createEndpointRuntime(config: ChatConfiguration) {
   return { model, modelRuntime };
 }
 
+/**
+ * Transient provider failures (503, overload, rate limits, dropped streams) are retried with backoff (2, 4, 8 s): only
+ * the model request is re-sent, never a tool call. Stop cancels a waiting retry. Tests shorten the delay.
+ */
+export const MODEL_RETRY = { maxRetries: 3, baseDelayMs: 2000 };
+
 export async function createChatSession(
   config: ChatConfiguration,
   history: ChannelMessage[],
@@ -461,7 +467,7 @@ export async function createChatSession(
     sessionManager: manager,
     settingsManager: SettingsManager.inMemory({
       compaction: { enabled: Boolean(restoredManager), reserveTokens, keepRecentTokens },
-      retry: { enabled: false },
+      retry: { enabled: true, ...MODEL_RETRY },
       transport: 'sse',
     }),
   });
