@@ -306,9 +306,8 @@ export class DiscordIntake {
           select: { createdAt: true },
         })
       : null;
-    const since = previous?.createdAt ?? new Date(0);
     const unread = await this.database.client.discordMessage.findMany({
-      where: { agentId, channelId, createdAt: { gt: since }, deletedAt: null },
+      where: await this.store.unreadWhere(agentId, channelId, channel.announcedUpTo),
       select: { authorName: true },
       take: 10_000,
     });

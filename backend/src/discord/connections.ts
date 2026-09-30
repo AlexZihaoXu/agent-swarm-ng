@@ -90,7 +90,7 @@ export class DiscordConnections implements DiscordConnectionControl {
     const connection = this.live.get(agentId);
     if (!connection?.api || connection.status.state !== 'online')
       throw new Error('This agent’s Discord bot is not connected.');
-    return { api: connection.api, botUserId: connection.botUserId! };
+    return { api: connection.api, rest: connection.rest!, botUserId: connection.botUserId! };
   }
   botUserId(agentId: string) {
     return this.live.get(agentId)?.botUserId;

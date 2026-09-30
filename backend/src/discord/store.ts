@@ -132,6 +132,70 @@ export class DiscordStore {
     ]);
     return this.ownerAccounts();
   }
+  async messageTime(agentId: string, id: string) {
+    await this.database.initialize();
+    return (
+      (
+        await this.database.client.discordMessage.findUnique({
+          where: { agentId_id: { agentId, id } },
+          select: { createdAt: true },
+        })
+      )?.createdAt ?? null
+    );
+  }
+  /**
+   * Seen messages after a given one (the last announced to the agent): later in time, or in the same millisecond
+   * with a later id (ids of one channel have the same length, so they compare as text).
+   */
+  async unreadWhere(agentId: string, channelId: string, afterId: string | null) {
+    const base = { agentId, channelId, deletedAt: null };
+    if (!afterId) return base;
+    const time = await this.messageTime(agentId, afterId);
+    if (!time) return base;
+    return { ...base, OR: [{ createdAt: { gt: time } }, { createdAt: time, id: { gt: afterId } }] };
+  }
+  async unread(agentId: string, channelId: string, afterId: string | null) {
+    await this.database.initialize();
+    const where = await this.unreadWhere(agentId, channelId, afterId);
+    const [count, mentions, latest] = await Promise.all([
+      this.database.client.discordMessage.count({ where }),
+      this.database.client.discordMessage.count({ where: { ...where, mentionsBot: true } }),
+      this.database.client.discordMessage.findFirst({
+        where,
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+    ]);
+    return { count, mentions, latest: latest?.createdAt ?? null };
+  }
+  /** A literal search over messages this bot has seen in one channel (Discord offers bots no DM search). */
+  async searchSeen(
+    agentId: string,
+    channelId: string,
+    filter: { query?: string; from?: string; after?: Date; before?: Date; offset: number },
+  ) {
+    await this.database.initialize();
+    return this.database.client.discordMessage.findMany({
+      where: {
+        agentId,
+        channelId,
+        deletedAt: null,
+        ...(filter.query ? { content: { contains: filter.query } } : {}),
+        ...(filter.from ? { authorId: filter.from } : {}),
+        ...(filter.after || filter.before
+          ? {
+              createdAt: {
+                ...(filter.after ? { gt: filter.after } : {}),
+                ...(filter.before ? { lt: filter.before } : {}),
+              },
+            }
+          : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: filter.offset,
+      take: 25,
+    });
+  }
   /** Who a Discord account is: the owner, one of our agents, or null (anyone else). */
   async who(discordUserId: string) {
     await this.database.initialize();

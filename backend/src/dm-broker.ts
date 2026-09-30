@@ -10,6 +10,7 @@ import { createFileTools } from './files/file-tools';
 import type { DiscordStore } from './discord/store';
 import type { DiscordConnections } from './discord/connections';
 import type { DiscordIntake } from './discord/intake';
+import { createDiscordReadTools } from './discord/tools-read';
 import { runDecisionFork } from './decision-fork';
 import type { ComputerController } from './computer-controller-client';
 import { BlobStore } from './files/blob-store';
@@ -733,6 +734,10 @@ ${preview.text}`
         // Every agent's sense of time: current time, timers and reminders (no computer needed).
         ...createTimeTools(this.timers, agentId, () => humanAuthority, this.watches),
         ...createScratchTools(this.scratch, agentId),
+        // An agent whose owner configured a Discord bot for it gets the Discord tools (checked again on every call).
+        ...(this.discord && this.discord.connections.status(agentId).state !== 'off'
+          ? createDiscordReadTools({ agentId, store: this.discord.store, connections: this.discord.connections })
+          : []),
         ...createFileTools({
           agentId,
           agentName: agent.name,
