@@ -24,12 +24,17 @@ test('an agent compacting in the background shows an orbiting arc; asleep, close
   await expect(conversation.locator('[data-slot="compaction-ring"]').first()).toBeVisible();
   await expect(chats.locator('[data-slot="compaction-ring"]').first()).toBeVisible();
   await expect(conversation.getByText('is compacting its memory in the background')).toBeVisible();
+  // The activity panel shows it too.
+  await conversation.getByRole('button', { name: 'Agent activity' }).click();
+  const panel = page.getByRole('dialog', { name: /Agent activity/ });
+  await expect(panel.getByRole('status', { name: 'Background compaction' })).toContainText('Compacting…');
   await page.screenshot({ path: '../.scratch/shots/compaction-running.png' });
   // Context full before the summary: the agent sleeps.
   await emit(compaction('sleeping'));
   await expect(conversation.locator('[data-slot="sleeping"]').first()).toBeVisible();
   await expect(conversation.locator('[data-slot="compaction-ring"]')).toHaveCount(0);
   await expect(conversation.getByText('is asleep until its memory is compacted')).toBeVisible();
+  await expect(panel.getByRole('status', { name: 'Background compaction' })).toContainText('Sleeping…');
   await page.waitForTimeout(900);
   await page.screenshot({ path: '../.scratch/shots/compaction-sleeping.png' });
   await emit(compaction(null));

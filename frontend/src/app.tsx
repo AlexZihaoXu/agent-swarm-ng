@@ -1054,6 +1054,7 @@ export function App() {
                     expandActivity={expandActivity}
                     retryActivity={retryActivity}
                     requestError={errors[agent.channelId]}
+                    compaction={compactions[agent.id]}
                   />
                 </div>
               </header>

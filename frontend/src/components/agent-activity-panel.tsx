@@ -417,8 +417,11 @@ export function AgentActivityPanel({
   expandActivity,
   retryActivity,
   requestError,
+  compaction = null,
 }: {
   agent: ChatAgent;
+  /** Background compaction right now: summarizing older context, or asleep until that is done. */
+  compaction?: 'running' | 'sleeping' | null;
   entries: ActivityEntry[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -660,6 +663,31 @@ export function AgentActivityPanel({
                   expand={expand}
                 />
               ))}
+              {compaction && (
+                <section
+                  role="status"
+                  aria-label="Background compaction"
+                  className="card-enter rounded-xl border border-violet-400/30 bg-violet-400/5 p-3"
+                >
+                  <div className="flex min-w-0 items-center gap-2 text-xs">
+                    {compaction === 'sleeping' ? (
+                      <span aria-hidden="true" className="shrink-0 font-semibold text-violet-300">
+                        zzz
+                      </span>
+                    ) : (
+                      <span aria-hidden="true" className="relative size-3 shrink-0">
+                        <span className="compaction-ring absolute inset-0 rounded-full" />
+                      </span>
+                    )}
+                    <span className="font-medium">{compaction === 'sleeping' ? 'Sleeping…' : 'Compacting…'}</span>
+                    <span className="min-w-0 truncate text-muted-foreground">
+                      {compaction === 'sleeping'
+                        ? 'Context is full; continuing once the summary is ready'
+                        : 'Summarizing older context in the background'}
+                    </span>
+                  </div>
+                </section>
+              )}
             </div>
           </ScrollArea>
         </Dialog.Content>
