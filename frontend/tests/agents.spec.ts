@@ -198,7 +198,38 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await createAndOpenChat(page);
   await page.getByLabel(`Message ${real.name}`).fill('Hello');
   await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByRole('status')).toHaveText('Agent is working…');
+  await expect(page.getByRole('status')).toContainText(`${real.name} is working`);
+  // A named tool call says what the agent is doing, until something unnamed runs for a while.
+  await emitChannel(page, {
+    type: 'activity',
+    agentId: real.id,
+    entry: {
+      id: 'doing-1',
+      runId: 'doing-run',
+      channelId: real.channelId,
+      kind: 'tool_call',
+      label: 'web_search',
+      text: '{}',
+      timestamp: Date.now(),
+      state: 'complete',
+    },
+  });
+  await expect(page.getByRole('status')).toContainText(`${real.name} is browsing the web`);
+  await emitChannel(page, {
+    type: 'activity',
+    agentId: real.id,
+    entry: {
+      id: 'doing-2',
+      runId: 'doing-run',
+      channelId: real.channelId,
+      kind: 'tool_call',
+      label: 'read_knowledge',
+      text: '{}',
+      timestamp: Date.now(),
+      state: 'complete',
+    },
+  });
+  await expect(page.getByRole('status')).toContainText(`${real.name} is reading Knowledge`);
   const avatar = chatAvatar(page);
   const working = avatar.locator('[data-slot="online-indicator"]');
   await expect(working).toHaveAttribute('data-state', 'working');
@@ -232,7 +263,8 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   const dotBox = (await working.boundingBox())!;
   await expect(avatar.locator('[data-slot="avatar-face"]')).not.toHaveCSS('mask-image', 'none');
   await emitChannel(page, { type: 'typing', channelId: 'wrong-channel', active: true, targets: ['wrong-channel'] });
-  await expect(page.getByRole('status')).toHaveText('Agent is working…');
+  // Typing elsewhere changes nothing here: the last named activity stays.
+  await expect(page.getByRole('status')).toContainText(`${real.name} is reading Knowledge`);
   await emitChannel(page, { type: 'typing', channelId: real.channelId, active: true, targets: [real.channelId] });
   await expect(page.getByRole('status')).toHaveText('Real agent is typing…');
   await expect(
@@ -266,7 +298,7 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
     text: 'Finished message',
     timestamp: Date.now(),
   });
-  await expect(page.getByRole('status')).toHaveText('Agent is working…');
+  await expect(page.getByRole('status')).toContainText(`${real.name} is reading Knowledge`);
   await emitChannel(page, { type: 'done' });
   await page.evaluate(() => (window as unknown as { finishChannel: () => void }).finishChannel());
   await expect(page.getByRole('status')).not.toBeVisible();

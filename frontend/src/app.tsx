@@ -1178,6 +1178,7 @@ export function App() {
                         working={busy[agent.channelId]}
                         compaction={compactions[agent.id]}
                         connected={eventsConnected}
+                        activity={activity[agent.id]}
                       />
                     </div>
                     <ChatComposer

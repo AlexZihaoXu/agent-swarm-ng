@@ -1,5 +1,9 @@
+import { useEffect, useState } from 'react';
 import { TypingDots } from '@/components/typing-indicator';
+import { SlideUpFadeSwap } from '@/components/ui/slide-up-fade-swap';
 import { useScratchWriter } from '@/lib/scratch-writers';
+import { describeDoing } from '@/lib/agent-doing';
+import type { ActivityEntry } from '@/use-chat';
 
 export function AgentTypingStatus({
   name,
@@ -8,6 +12,7 @@ export function AgentTypingStatus({
   compaction = null,
   connected = true,
   agentId,
+  activity,
 }: {
   name: string;
   typing: boolean;
@@ -17,8 +22,19 @@ export function AgentTypingStatus({
   connected?: boolean;
   /** Shows when this agent is writing to its scratchpad (typing a message still comes first). */
   agentId?: string;
+  /** The agent's activity: names what it is doing ("reading Knowledge", "browsing the web"…) while it works. */
+  activity?: readonly ActivityEntry[];
 }) {
   const writing = useScratchWriter(agentId);
+  // Re-read the activity every second while working, so unnamed work falls back to "working" on time.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!working || !activity) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [working, activity]);
+  const doing = (working && activity && describeDoing(activity, now)) || 'working';
   if (!typing && !working && !writing && !compaction) return null;
   // Asleep outranks everything but typing; background tidying only shows when nothing else is happening.
   const mode = typing
@@ -66,10 +82,11 @@ export function AgentTypingStatus({
             <span className="font-mono text-foreground/80">{writing}</span> in its scratchpad…
           </span>
         </>
-      ) : connected ? (
-        'Agent is working…'
       ) : (
-        'Agent is working · reconnecting…'
+        <span className="flex min-w-0 items-baseline gap-1 truncate">
+          <strong className="font-medium text-foreground">{name}</strong> is <SlideUpFadeSwap text={doing} />…
+          {!connected && ' · reconnecting…'}
+        </span>
       )}
     </p>
   );
