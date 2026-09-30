@@ -1,9 +1,7 @@
 import { useId, useState } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import { Command } from 'cmdk';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
-import { dialogMotion, dialogOverlay } from '@/lib/styles';
+import { PickerDialog, PickerGroup, PickerItem } from '@/components/picker-dialog';
 
 type Admission = 'mention' | 'check' | 'all';
 type Channel = {
@@ -45,10 +43,13 @@ export function DiscordChannelList({
   admissionOptions,
   onChange,
   empty,
+  inheritIcon,
 }: {
   channels: Channel[];
   choices: Record<string, ChannelChoice>;
-  admissionOptions: { value: Admission; label: string }[];
+  admissionOptions: { value: Admission; label: string; icon?: React.ReactNode }[];
+  /** Icon for "As set above". */
+  inheritIcon?: React.ReactNode;
   onChange: (choices: Record<string, ChannelChoice>) => void;
   /** Shown when the bot sees no server yet. */
   empty: string;
@@ -129,7 +130,10 @@ export function DiscordChannelList({
                             onValueChange={next =>
                               set([[channel, { admission: next === 'default' ? null : (next as Admission) }]])
                             }
-                            options={[{ value: 'default', label: 'As set above' }, ...admissionOptions]}
+                            options={[
+                              { value: 'default', label: 'As set above', icon: inheritIcon },
+                              ...admissionOptions,
+                            ]}
                             triggerClassName="!h-11 sm:!h-8 !text-xs"
                           />
                         </div>
@@ -151,138 +155,45 @@ export function DiscordChannelList({
           ))}
         </div>
       )}
-      <Dialog.Root open={open} onOpenChange={setOpen}>
-        <Dialog.Portal>
-          <Dialog.Overlay className={dialogOverlay} />
-          <Dialog.Content
-            className={`fixed left-1/2 top-[max(1rem,12dvh)] z-50 flex max-h-[min(80dvh,36rem)] w-[calc(100%-1rem)] max-w-lg -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl ${dialogMotion}`}
-          >
-            <Dialog.Title className="sr-only">Add channels</Dialog.Title>
-            <Dialog.Description className="sr-only">
-              Search the servers and channels this bot can see. Choosing one adds or removes it; save the page to apply.
-            </Dialog.Description>
-            <Command
-              label="Servers and channels"
-              filter={(_, search, keywords) =>
-                keywords?.join(' ').toLowerCase().includes(search.trim().toLowerCase()) ? 1 : 0
-              }
-              className="flex min-h-0 flex-1 flex-col"
-            >
-              <div className="flex items-center gap-2 border-b border-border px-3">
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  className="size-4 shrink-0 text-muted-foreground"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
+      <PickerDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Add channels"
+        placeholder="Search servers and channels…"
+        empty="No server or channel by that name."
+        status={`${count} chosen · save the page to apply`}
+      >
+        {servers.map(server => {
+          const whole = server.channels.filter(channel => channel.kind !== 'thread');
+          const all = whole.every(channel => choice(channel).allowed);
+          return (
+            <PickerGroup key={server.id} heading={server.name}>
+              <PickerItem
+                value={`server:${server.id}`}
+                keywords={[server.name, 'all channels', 'server']}
+                checked={all}
+                onSelect={() => set(whole.map(channel => [channel, { allowed: !all }]))}
+              >
+                <span className="min-w-0 truncate">All channels in {server.name}</span>
+              </PickerItem>
+              {server.channels.map(channel => (
+                <PickerItem
+                  key={channel.id}
+                  value={channel.id}
+                  keywords={[channel.name, server.name]}
+                  checked={choice(channel).allowed}
+                  onSelect={() => set([[channel, { allowed: !choice(channel).allowed }]])}
                 >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
-                </svg>
-                <Command.Input
-                  autoFocus
-                  placeholder="Search servers and channels…"
-                  className="h-12 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                />
-                <Dialog.Close asChild>
-                  <button
-                    type="button"
-                    aria-label="Close"
-                    className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    ×
-                  </button>
-                </Dialog.Close>
-              </div>
-              <Command.List className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
-                <Command.Empty className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  No server or channel by that name.
-                </Command.Empty>
-                {servers.map(server => {
-                  const whole = server.channels.filter(channel => channel.kind !== 'thread');
-                  const all = whole.every(channel => choice(channel).allowed);
-                  return (
-                    <Command.Group
-                      key={server.id}
-                      heading={server.name}
-                      className="border-b border-border py-1 last:border-b-0 [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-muted-foreground"
-                    >
-                      <Item
-                        value={`server:${server.id}`}
-                        keywords={[server.name, 'all channels', 'server']}
-                        checked={all}
-                        onSelect={() => set(whole.map(channel => [channel, { allowed: !all }]))}
-                      >
-                        All channels in {server.name}
-                      </Item>
-                      {server.channels.map(channel => (
-                        <Item
-                          key={channel.id}
-                          value={channel.id}
-                          keywords={[channel.name, server.name]}
-                          checked={choice(channel).allowed}
-                          onSelect={() => set([[channel, { allowed: !choice(channel).allowed }]])}
-                        >
-                          {label(channel)}
-                          {channel.kind === 'forum' && <span className="text-xs text-muted-foreground"> · forum</span>}
-                        </Item>
-                      ))}
-                    </Command.Group>
-                  );
-                })}
-              </Command.List>
-            </Command>
-            <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border px-3 py-2">
-              <p className="text-xs text-muted-foreground">{count} chosen · save the page to apply</p>
-              <Dialog.Close asChild>
-                <Button type="button" size="sm" className="min-h-10">
-                  Done
-                </Button>
-              </Dialog.Close>
-            </footer>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+                  <span className="min-w-0 truncate">
+                    {label(channel)}
+                    {channel.kind === 'forum' && <span className="text-xs text-muted-foreground"> · forum</span>}
+                  </span>
+                </PickerItem>
+              ))}
+            </PickerGroup>
+          );
+        })}
+      </PickerDialog>
     </div>
-  );
-}
-
-/** One choice in the dialog: selecting it toggles, a check shows it is chosen. */
-function Item({
-  value,
-  keywords,
-  checked,
-  onSelect,
-  children,
-}: {
-  value: string;
-  keywords: string[];
-  checked: boolean;
-  onSelect: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Command.Item
-      value={value}
-      keywords={keywords}
-      onSelect={onSelect}
-      aria-checked={checked}
-      className="relative flex min-h-11 cursor-pointer items-center rounded-md py-2 pl-3 pr-9 text-sm outline-none select-none transition-colors duration-100 hover:bg-muted data-[selected=true]:bg-muted motion-reduce:transition-none sm:min-h-9"
-    >
-      <span className="min-w-0 truncate">{children}</span>
-      {checked && (
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          className="absolute right-3 size-4"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.7"
-        >
-          <path d="m5 12 4 4L19 6" />
-        </svg>
-      )}
-    </Command.Item>
   );
 }

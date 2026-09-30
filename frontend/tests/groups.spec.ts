@@ -106,10 +106,20 @@ for (const mobile of [false, true])
     await expect(page.getByRole('combobox', { name: 'Chat with' })).toBeVisible();
     if (mobile) await page.getByRole('button', { name: 'Back to chats' }).click();
     await page.getByRole('button', { name: 'Create group chat', exact: true }).click();
-    const dialog = page.getByRole('dialog');
+    const dialog = page.getByRole('dialog', { name: 'Create group chat' });
     await dialog.getByLabel('Group name').fill('Research');
-    await dialog.getByRole('checkbox', { name: 'Avery', exact: true }).check();
-    await dialog.getByRole('checkbox', { name: 'Morgan', exact: true }).check();
+    // Members: a short chosen list; the rest are found through Add agents.
+    await expect(dialog.getByText('No agents yet. Add up to 16.')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Add agents' }).click();
+    const picker = page.getByRole('dialog', { name: 'Add agents' });
+    await picker.getByRole('option', { name: 'Avery', exact: true }).click();
+    await picker.getByPlaceholder('Search agents…').fill('Mor');
+    await picker.getByRole('option', { name: 'Morgan', exact: true }).click();
+    await picker.getByRole('button', { name: 'Done' }).click();
+    const chosen = dialog.getByRole('list', { name: 'Chosen agents' });
+    await expect(chosen.getByText('Avery')).toBeVisible();
+    await expect(chosen.getByText('Morgan')).toBeVisible();
+    await expect(dialog.getByText('Agents (2/16)')).toBeVisible();
     await dialog.getByRole('button', { name: 'Create group', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Research', exact: true })).toBeVisible();
     await expect(page.getByRole('combobox', { name: 'Chat with' })).toHaveCount(0);

@@ -106,7 +106,9 @@ test('Chat sidebar context menu can create a group from an empty list', async ({
   await page.getByRole('menuitem', { name: 'Create group chat' }).click();
   const dialog = page.getByRole('dialog', { name: 'Create group chat' });
   await dialog.getByLabel('Group name').fill('Planning');
-  await dialog.getByRole('checkbox', { name: 'Avery', exact: true }).check();
+  await dialog.getByRole('button', { name: 'Add agents' }).click();
+  await page.getByRole('dialog', { name: 'Add agents' }).getByRole('option', { name: 'Avery', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Add agents' }).getByRole('button', { name: 'Done' }).click();
   await dialog.getByRole('button', { name: 'Create group' }).click();
   await expect(page.getByRole('button', { name: 'Open group chat Planning' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Planning', exact: true })).toBeVisible();

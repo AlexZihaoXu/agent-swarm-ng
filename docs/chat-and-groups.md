@@ -58,7 +58,7 @@ This is prompt guidance, not a guarantee of model judgment. Access checks and pu
 
 ## Reference and validation notes
 
-Read the swarm vision and Kibo entry guide. Inspected exact sources and the previously captured rendered previews for `scroll-area-layout-3`, `tabs-standard-1`, `checkbox-standard-8`, and `dialog-standard-1`. The original avatar/name/time composition fits; five-minute grouping and hover/focus gutter behavior are application adaptations requested in the supplied screenshots. Reuse the current composer rather than adding demo dependencies.
+Read the swarm vision and Kibo entry guide. Inspected exact sources and the previously captured rendered previews for `scroll-area-layout-3`, `tabs-standard-1`, `checkbox-standard-8`, and `dialog-standard-1`. Group members later moved to a chosen list plus an "Add agents" search (`scroll-area-layout-1`, `command-dialog-3`, shared with Discord channels). The original avatar/name/time composition fits; five-minute grouping and hover/focus gutter behavior are application adaptations requested in the supplied screenshots. Reuse the current composer rather than adding demo dependencies.
 
 Windows browser automation remains paused after a failed-logon counter reading of 10. No additional Windows browser was launched. A dedicated nonroot Linux/Docker browser was used instead, with the repository's Chromium seccomp profile, no-new-privileges, enabled Chromium sandbox, one worker, no retries and stop-on-first-failure. Chrome reports namespace, PID/network namespace and Seccomp-BPF sandboxes active; Yama ptrace protection is unavailable. No personal profile, developer model credentials, or paid inference is used.
 

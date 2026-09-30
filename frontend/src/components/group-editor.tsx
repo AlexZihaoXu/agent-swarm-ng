@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
@@ -7,8 +7,9 @@ import { AgentAvatar } from '@/components/chat-identity';
 import { defaultAvatar } from '@/lib/agent-avatar';
 import type { GroupChat } from '@/use-groups';
 import { dialogOverlay, dialogMotion } from '@/lib/styles';
+import { PickerDialog, PickerGroup, PickerItem } from '@/components/picker-dialog';
 
-// Kibo dialog-standard-1 and checkbox-standard-8: retain the dialog and labelled list composition.
+// Kibo dialog-standard-1; members as a short chosen list plus an Add agents search (scroll-area-layout-1, command-dialog-3).
 export function GroupEditor({
   group,
   children,
@@ -55,6 +56,19 @@ export function GroupEditor({
       ]),
     ).values(),
   ].filter(agent => agent.name.toLowerCase().includes(search.toLowerCase()));
+  // Chosen agents stay listed whatever the search shows.
+  const known = useRef(new Map<string, (typeof agents)[number]>());
+  for (const agent of [...(group?.members ?? []), ...(options.data?.pages.flatMap(page => page.agents) ?? [])])
+    known.current.set(agent.id, agent);
+  const chosen = [...selected].flatMap(id => known.current.get(id) ?? []);
+  const toggle = (id: string) =>
+    setSelected(current => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < 16) next.add(id);
+      return next;
+    });
+  const [picking, setPicking] = useState(false);
   const save = async () => {
     if (saving || !name.trim() || !selected.size) return;
     setSaving(true);
@@ -121,60 +135,87 @@ export function GroupEditor({
                 className="h-11 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9"
               />
             </label>
-            <fieldset disabled={saving} className="space-y-3">
-              <legend className="mb-2 text-sm font-medium">
-                Agents <span className="text-muted-foreground">({selected.size}/16)</span>
-              </legend>
-              <input
-                aria-label="Search group members"
-                type="search"
-                value={search}
-                maxLength={80}
-                onChange={event => setSearch(event.target.value)}
-                placeholder="Search agents"
-                className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8"
-              />
-              <div className="max-h-56 space-y-3 overflow-y-auto py-1">
-                {agents.map(agent => (
-                  <label
-                    key={agent.id}
-                    className="flex min-h-11 cursor-pointer items-center gap-2 text-sm has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 sm:min-h-0"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.has(agent.id)}
-                      disabled={!selected.has(agent.id) && selected.size >= 16}
-                      onChange={event =>
-                        setSelected(current => {
-                          const next = new Set(current);
-                          if (event.target.checked) next.add(agent.id);
-                          else next.delete(agent.id);
-                          return next;
-                        })
-                      }
-                      className="size-4 accent-primary"
-                    />
-                    <AgentAvatar initials={agent.name.slice(0, 2)} avatar={agent.avatar ?? defaultAvatar(agent.id)} />
-                    <span className="truncate">{agent.name}</span>
-                  </label>
-                ))}
-                {!agents.length && !options.isPending && (
-                  <p className="text-sm text-muted-foreground">No agents found. Create agents in the Agents tab.</p>
-                )}
-                {(options.isPending || options.isError || options.hasNextPage) && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="min-h-11 sm:min-h-0"
-                    disabled={options.isFetching}
-                    onClick={() => void (options.isError ? options.refetch() : options.fetchNextPage())}
-                  >
-                    {options.isFetching ? 'Loading…' : options.isError ? 'Retry loading agents' : 'More agents'}
-                  </Button>
-                )}
+            {/* Chosen agents in a short list (Kibo scroll-area-layout-1); the rest behind Add agents. */}
+            <div role="group" aria-labelledby="group-agents-title" className="space-y-2">
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <p id="group-agents-title" className="text-sm font-medium">
+                  Agents <span className="text-muted-foreground">({selected.size}/16)</span>
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11 sm:min-h-8"
+                  disabled={saving}
+                  onClick={() => setPicking(true)}
+                >
+                  Add agents
+                </Button>
               </div>
-            </fieldset>
+              {chosen.length ? (
+                <ul
+                  aria-label="Chosen agents"
+                  className="max-h-56 overflow-y-auto overscroll-contain rounded-md border border-border bg-background p-1"
+                >
+                  {chosen.map(agent => (
+                    <li
+                      key={agent.id}
+                      className="flex min-h-11 min-w-0 items-center gap-2 rounded-md px-2 py-1 hover:bg-muted/50 sm:min-h-9"
+                    >
+                      <AgentAvatar initials={agent.name.slice(0, 2)} avatar={agent.avatar ?? defaultAvatar(agent.id)} />
+                      <span className="min-w-0 flex-1 truncate text-sm">{agent.name}</span>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${agent.name}`}
+                        title="Remove"
+                        disabled={saving}
+                        onClick={() => toggle(agent.id)}
+                        className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:size-8"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+                  No agents yet. Add up to 16.
+                </p>
+              )}
+            </div>
+            <PickerDialog
+              open={picking}
+              onOpenChange={setPicking}
+              title="Add agents"
+              placeholder="Search agents…"
+              empty={options.isPending ? 'Loading agents…' : 'No agents found. Create agents in the Agents tab.'}
+              status={`${selected.size} of 16 chosen`}
+              search={{ value: search, onChange: setSearch }}
+            >
+              <PickerGroup>
+                {agents.map(agent => (
+                  <PickerItem
+                    key={agent.id}
+                    value={agent.id}
+                    checked={selected.has(agent.id)}
+                    disabled={!selected.has(agent.id) && selected.size >= 16}
+                    onSelect={() => toggle(agent.id)}
+                  >
+                    <AgentAvatar initials={agent.name.slice(0, 2)} avatar={agent.avatar ?? defaultAvatar(agent.id)} />
+                    <span className="min-w-0 truncate">{agent.name}</span>
+                  </PickerItem>
+                ))}
+                {(options.isError || options.hasNextPage) && (
+                  <PickerItem
+                    value="load-more"
+                    disabled={options.isFetching}
+                    onSelect={() => void (options.isError ? options.refetch() : options.fetchNextPage())}
+                  >
+                    {options.isFetching ? 'Loading…' : options.isError ? 'Retry loading agents' : 'More agents…'}
+                  </PickerItem>
+                )}
+              </PickerGroup>
+            </PickerDialog>
             {error && (
               <p role="alert" className="text-sm text-red-400">
                 {error}
