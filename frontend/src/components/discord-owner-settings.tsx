@@ -74,7 +74,7 @@ export function DiscordOwnerSettings({ card }: { card: string }) {
             <ul aria-label="Your Discord accounts" className="space-y-2">
               {draft.map((account, index) => (
                 <li key={index} className="flex min-w-0 flex-wrap items-end gap-2">
-                  <label className="min-w-40 flex-1 space-y-1 text-xs font-medium">
+                  <label className="flex-[2_1_12rem] space-y-1 text-xs font-medium">
                     User ID
                     <input
                       value={account.id}
@@ -89,7 +89,7 @@ export function DiscordOwnerSettings({ card }: { card: string }) {
                       className={`${inputClass} font-mono`}
                     />
                   </label>
-                  <label className="min-w-32 flex-1 space-y-1 text-xs font-medium">
+                  <label className="min-w-0 flex-[1_1_8rem] space-y-1 text-xs font-medium">
                     Name
                     <input
                       value={account.name}

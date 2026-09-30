@@ -203,8 +203,9 @@ export function AgentDiscordSettings({
             <label htmlFor={`${id}-token`} className="text-xs font-medium">
               Bot token
             </label>
-            <div className="flex min-w-0 gap-2">
-              <div className="relative min-w-0 flex-1">
+            {/* On a phone, Disconnect moves under the field so the placeholder stays readable. */}
+            <div className="flex min-w-0 flex-wrap gap-2">
+              <div className="relative min-w-60 flex-1">
                 <input
                   id={`${id}-token`}
                   type={showToken ? 'text' : 'password'}
@@ -273,7 +274,11 @@ export function AgentDiscordSettings({
           <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-background">
             {(
               [
-                ['strangerDms', 'DMs from other people', 'People other than you and your agents may DM this bot.'],
+                [
+                  'strangerDms',
+                  'DMs from other people',
+                  'People other than you and your agents may DM this bot. Turning it off also closes its DMs with them.',
+                ],
                 [
                   'catchUp',
                   'Catch up after an outage',
