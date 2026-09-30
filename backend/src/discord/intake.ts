@@ -57,7 +57,7 @@ type Window = {
 export type IntakeDeps = {
   /** Hands an admitted trigger to the agent (its inbox; interruption triage applies there). */
   deliver: (agentId: string, input: ChannelMessage, addressed: boolean) => void;
-  /** The "check" admission policy: a decision-only model branch; failures mean ignore. */
+  /** The relevance check for untargeted messages: a cheap decision-only branch; failures mean ignore. */
   evaluate?: (agentId: string, channelId: string, notice: string) => Promise<'admit' | 'ignore'>;
   /** Reaction triage for reactions on the agent's own messages; failures mean ignore. */
   reaction?: (agentId: string, channelId: string, notice: string) => Promise<'engage' | 'ignore'>;
@@ -551,9 +551,14 @@ export class DiscordIntake {
       channel.kind === 'thread' && !channel.admission && channel.parentId
         ? await this.store.channel(agentId, channel.parentId)
         : null;
-    const admission =
-      channel.kind === 'dm' ? 'all' : ((channel.admission ?? parent?.admission ?? bot.admission) as Admission);
-    let admitted = addressed || admission === 'all';
+    const admission = (
+      channel.kind === 'dm' ? bot.admission : (channel.admission ?? parent?.admission ?? bot.admission)
+    ) as Admission;
+    // Low latency where it matters, few tokens where it does not: the owner, messages aimed at the agent (DM,
+    // mention, reply) and "every message" channels go straight to a turn (which may stay silent; an agent at work
+    // gets them in its running turn, where interruption triage applies). Untargeted chatter costs nothing in
+    // "only when mentioned" channels and one cheap, visible check in "when it seems relevant" ones.
+    let admitted = batch.lane === 'owner' || addressed || admission === 'all';
     if (!admitted && admission === 'check' && this.deps.evaluate) {
       const evaluate = this.deps.evaluate;
       admitted = (await triageGate(agentId, () => evaluate(agentId, channelId, notice.text))) === 'admit';

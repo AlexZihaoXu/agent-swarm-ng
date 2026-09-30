@@ -12,6 +12,8 @@ const TOKEN = 'MTAwMDAwMDAwMDAwMDAwMDAx.GxYzAb.abcdefghijklmnopqrstuvwxyz0123';
 const BOT = '1000000000000000001';
 const OWNER = '4000000000000000001';
 const DM = '5000000000000000001';
+const GUILD = '2000000000000000001';
+const CHANNEL = '3000000000000000002';
 
 /** A model that answers a Discord input once with discord_send_message in its reply channel. */
 let model: Server;
@@ -31,6 +33,28 @@ beforeAll(async () => {
       );
     chunk({ role: 'assistant', content: '' });
     const answered = body.messages.some((message: { role: string }) => message.role === 'tool');
+    // The relevance check branch: it may only decide.
+    if (
+      !answered &&
+      body.tools?.some((tool: { function: { name: string } }) => tool.function.name === 'admission_decision')
+    ) {
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            id: 'call-check',
+            type: 'function',
+            function: {
+              name: 'admission_decision',
+              arguments: JSON.stringify({ action: 'admit', reason: 'They are asking about the deploy.' }),
+            },
+          },
+        ],
+      });
+      chunk({}, 'tool_calls');
+      response.end('data: [DONE]\n\n');
+      return;
+    }
     const channel = /reply channel: (discord:\d+)/.exec(text)?.[1];
     if (
       !answered &&
@@ -141,6 +165,72 @@ it('your Discord DM reaches the agent as you, and its reply comes back through i
     expect(prompt).toContain('Alex (your owner)');
     // Someone spoke to it: Discord showed it typing.
     expect(discord.requests.some(request => request.path === `/channels/${DM}/typing`)).toBe(true);
+  } finally {
+    await app.close();
+    await database.close();
+  }
+}, 30_000);
+
+it('checks untargeted server messages in a visible, cheap branch before giving them a turn', async () => {
+  const root = join(process.env.SQLITE_TEST_ROOT!, crypto.randomUUID());
+  await mkdir(root, { recursive: true });
+  const database = await prepareDatabase(join(root, 'platform.db'));
+  const endpoints = new EndpointStore(join(root, 'endpoints.json'));
+  await endpoints.save({ id: 'endpoint', name: 'Mock', baseUrl: modelUrl, apiKey: 'key' });
+  discord.guilds = [
+    {
+      id: GUILD,
+      name: 'Swarm Lab',
+      unavailable: false,
+      channels: [{ id: CHANNEL, type: 0, name: 'design' }],
+      threads: [],
+    },
+  ];
+  const app = await buildApp({ database, endpointStore: endpoints, discordApi: discord.api, computerController: null });
+  try {
+    const agent = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/agents',
+        payload: { name: 'Aether', endpointId: 'endpoint', model: 'test-model', thinkingLevel: 'off' },
+      })
+    ).json();
+    await app.inject({ method: 'PUT', url: `/api/agents/${agent.id}/discord/token`, payload: { token: TOKEN } });
+    await vi.waitFor(
+      async () => expect((await app.inject(`/api/agents/${agent.id}/discord`)).json().channels).toHaveLength(1),
+      { timeout: 5000 },
+    );
+    // "When it seems relevant" is the default; allow the channel.
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/agents/${agent.id}/discord`,
+      payload: { channels: [{ id: CHANNEL, allowed: true }] },
+    });
+    discord.dispatch('MESSAGE_CREATE', {
+      id: '1300000000000000002',
+      channel_id: CHANNEL,
+      guild_id: GUILD,
+      author: { id: '4000000000000000002', username: 'sam', global_name: 'Sam' },
+      content: 'has anyone checked the deploy?',
+      timestamp: new Date().toISOString(),
+      edited_timestamp: null,
+      mentions: [],
+      attachments: [],
+      embeds: [],
+      type: 0,
+    });
+    await vi.waitFor(
+      () =>
+        expect(
+          discord.requests.some(
+            request => request.method === 'POST' && request.path === `/channels/${CHANNEL}/messages`,
+          ),
+        ).toBe(true),
+      { timeout: 15_000 },
+    );
+    const activity = (await app.inject(`/api/agents/${agent.id}/activity`)).body;
+    expect(activity).toContain('Discord relevance check');
+    expect(activity).toContain('They are asking about the deploy.');
   } finally {
     await app.close();
     await database.close();

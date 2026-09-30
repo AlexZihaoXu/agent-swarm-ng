@@ -13,6 +13,7 @@ import {
   scratchpadConcept,
   chatFilesConcept,
   discordConcept,
+  discordAttentionConcept,
 } from './concepts';
 import { toolsConcept, systemConcept } from './system';
 import {
@@ -45,6 +46,7 @@ export const swarmKnowledge = new KnowledgeCatalog(
     scratchpadConcept,
     chatFilesConcept,
     discordConcept,
+    discordAttentionConcept,
     computersConcept,
     desktopConcept,
     terminalsConcept,

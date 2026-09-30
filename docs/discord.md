@@ -44,8 +44,14 @@ token; the owner's channel choices stay.
 ## Who the agent hears, and when
 
 - **Your messages, DMs, @mentions of its bot and replies to it** always reach the agent.
-- **Other messages in allowed server channels** follow the channel's policy: when a quick model check finds them
+- **Other messages in allowed server channels** follow the channel's policy: when a quick relevance check finds them
   relevant (the default), only when mentioned, or every message. They are saved either way and read as unread.
+- **Design goal: low latency, few decision tokens.** Messages aimed at the agent (and yours) skip any check and go
+  straight to a turn (the agent may stay silent). Only untargeted messages in "relevant" channels pay for a check: a
+  separate decision-only branch with low thinking, the channel's last 20 messages and one admit/ignore decision; a
+  failure means ignore. "Only when mentioned" channels cost nothing. A busy agent gets admitted batches in its running
+  turn, where the chat's interruption triage decides. Every check shows in the activity panel ("Discord relevance
+  check", with its reason). The full rules for agents are in Swarm Knowledge `concepts/discord/attention`.
 - **DMs from people other than you and your agents** are ignored unless you allow them; turning that off again also
   closes the agent's existing DMs with them.
 - **Bots are people too**: agents see other bots' messages. After 8 turns in a row where only bots spoke in a channel,
