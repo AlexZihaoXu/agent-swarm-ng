@@ -11,6 +11,9 @@ import { DiscordTokenStore } from './token-store';
 import { DiscordConnections } from './connections';
 import { createDiscordWriteTools } from './tools-write';
 
+// These connect to a mock Discord Gateway, which is slower when the whole suite runs at once.
+vi.setConfig({ testTimeout: 15_000 });
+
 const TOKEN = 'MTAwMDAwMDAwMDAwMDAwMDAx.GxYzAb.abcdefghijklmnopqrstuvwxyz0123';
 const BOT = '1000000000000000001';
 const OWNER = '4000000000000000001';

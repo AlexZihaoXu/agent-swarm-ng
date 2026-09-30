@@ -37,7 +37,19 @@ export class DiscordStore {
 
   async bot(agentId: string) {
     await this.database.initialize();
-    return this.database.client.discordBot.upsert({ where: { agentId }, create: { agentId }, update: {} });
+    // Reading never writes: an agent without Discord settings has the defaults.
+    return (
+      (await this.database.client.discordBot.findUnique({ where: { agentId } })) ?? {
+        agentId,
+        botUserId: null,
+        botName: null,
+        admission: 'mention',
+        strangerDms: false,
+        catchUp: true,
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+      }
+    );
   }
   async channels(agentId: string) {
     await this.database.initialize();
@@ -78,16 +90,14 @@ export class DiscordStore {
     },
   ) {
     if (input.admission && !ADMISSIONS.includes(input.admission)) throw new DiscordSettingsError('Unknown admission.');
-    await this.bot(agentId);
+    await this.database.initialize();
     await this.database.client.$transaction(async tx => {
-      await tx.discordBot.update({
-        where: { agentId },
-        data: {
-          ...(input.admission ? { admission: input.admission } : {}),
-          ...(input.strangerDms !== undefined ? { strangerDms: input.strangerDms } : {}),
-          ...(input.catchUp !== undefined ? { catchUp: input.catchUp } : {}),
-        },
-      });
+      const policy = {
+        ...(input.admission ? { admission: input.admission } : {}),
+        ...(input.strangerDms !== undefined ? { strangerDms: input.strangerDms } : {}),
+        ...(input.catchUp !== undefined ? { catchUp: input.catchUp } : {}),
+      };
+      await tx.discordBot.upsert({ where: { agentId }, create: { agentId, ...policy }, update: policy });
       for (const channel of input.channels ?? []) {
         if (channel.admission && !ADMISSIONS.includes(channel.admission))
           throw new DiscordSettingsError('Unknown admission.');
@@ -128,9 +138,13 @@ export class DiscordStore {
   }
   /** The bot's own Discord identity, learned at login; it is one of our agents from then on. */
   async identify(agentId: string, botUserId: string, botName: string) {
-    await this.bot(agentId);
+    await this.database.initialize();
     await this.database.client.$transaction([
-      this.database.client.discordBot.update({ where: { agentId }, data: { botUserId, botName } }),
+      this.database.client.discordBot.upsert({
+        where: { agentId },
+        create: { agentId, botUserId, botName },
+        update: { botUserId, botName },
+      }),
       this.database.client.discordAccount.upsert({
         where: { discordUserId: botUserId },
         create: { discordUserId: botUserId, role: 'agent', agentId, name: botName },
@@ -263,12 +277,24 @@ export class DiscordStore {
     });
   }
   /** Deletes saved messages older than the retention period (Settings → Swarm); returns how many. */
-  async prune(days: number) {
+  async prune(days: number, batch = 500) {
     await this.database.initialize();
-    const { count } = await this.database.client.discordMessage.deleteMany({
-      where: { createdAt: { lt: new Date(Date.now() - days * 24 * 60 * 60 * 1000) } },
-    });
-    return count;
+    const before = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    let total = 0;
+    // Short transactions: a large backlog goes in batches so intake and publications keep writing meanwhile.
+    for (;;) {
+      const rows = await this.database.client.discordMessage.findMany({
+        where: { createdAt: { lt: before } },
+        select: { id: true },
+        take: batch,
+      });
+      if (!rows.length) return total;
+      const { count } = await this.database.client.discordMessage.deleteMany({
+        where: { createdAt: { lt: before }, id: { in: rows.map(row => row.id) } },
+      });
+      total += count;
+      if (rows.length < batch) return total;
+    }
   }
   /** Who a Discord account is: the owner, one of our agents, or null (anyone else). */
   async who(discordUserId: string) {

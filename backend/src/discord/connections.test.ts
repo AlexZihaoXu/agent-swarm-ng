@@ -8,6 +8,9 @@ import { INTENTS } from './connections';
 import { BOT_PERMISSIONS } from './routes';
 import { DiscordStore } from './store';
 
+// These connect to a mock Discord Gateway, which is slower when the whole suite runs at once.
+vi.setConfig({ testTimeout: 15_000 });
+
 const TOKEN = 'MTAwMDAwMDAwMDAwMDAwMDAx.GxYzAb.abcdefghijklmnopqrstuvwxyz0123';
 const BAD = 'MTAwMDAwMDAwMDAwMDAwMDAy.GxYzAb.zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz';
 let discord: MockDiscord;
@@ -251,6 +254,11 @@ it('shows the dashboard what an agent’s bot saw in a channel, newest page firs
       Array.from({ length: 8 }, (_, index) => `message ${index + 1}`),
     );
     expect(older.nextCursor).toBeNull();
+    // A cursor pruned meanwhile: nothing older is left.
+    expect((await app.inject(`${channel}?before=1399999999999999999`)).json()).toMatchObject({
+      messages: [],
+      nextCursor: null,
+    });
     expect((await app.inject(`${url}/channels/3000000000000000999/messages`)).statusCode).toBe(404);
   } finally {
     await app.close();

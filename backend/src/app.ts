@@ -108,10 +108,10 @@ export async function buildApp({
       .catch(error => app.log.warn({ err: error }, 'Could not prune Discord history'));
   let pruning: ReturnType<typeof setInterval> | undefined;
   app.addHook('onListen', async () => {
+    await discord.start();
     void pruneDiscord();
     pruning = setInterval(pruneDiscord, 60 * 60 * 1000);
     pruning.unref?.();
-    await discord.start();
   });
   app.addHook('onClose', async () => {
     clearInterval(pruning);

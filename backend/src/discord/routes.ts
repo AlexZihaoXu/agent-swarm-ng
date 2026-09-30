@@ -84,6 +84,13 @@ const Transcript = Type.Object({
   nextCursor: Type.Union([Type.String(), Type.Null()]),
 });
 const TRANSCRIPT_PAGE = 50;
+const attachmentsOf = (saved: string | null): { name: string; size: number }[] => {
+  try {
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+};
 const Owner = Type.Object({
   accounts: Type.Array(Type.Object({ id: Snowflake, name: Type.String({ maxLength: 80 }) })),
 });
@@ -247,6 +254,13 @@ export function registerDiscordRoutes(
       const channel = await store.channel(id, channelId);
       if (!channel) return reply.code(404).send({ message: 'This bot has not seen that channel.' });
       const before = request.query.before ? await store.messageTime(id, request.query.before) : null;
+      // The oldest loaded message is the first one pruning deletes: past it, there is nothing older left.
+      if (request.query.before && !before)
+        return {
+          channel: { id: channelId, place: placeOf(channel), kind: channel.kind },
+          messages: [],
+          nextCursor: null,
+        };
       const rows = await database.client.discordMessage.findMany({
         where: {
           agentId: id,
@@ -268,9 +282,17 @@ export function registerDiscordRoutes(
           })
         ).map(row => [row.id, row]),
       );
-      const people = new Map<string, Awaited<ReturnType<DiscordStore['who']>>>();
-      const authors = new Set([...page.map(row => row.authorId), ...[...replies.values()].map(row => row.authorId)]);
-      for (const authorId of authors) people.set(authorId, await store.who(authorId));
+      const people = new Map(
+        (
+          await database.client.discordAccount.findMany({
+            where: {
+              discordUserId: {
+                in: [...new Set([...page, ...replies.values()].map(row => row.authorId))],
+              },
+            },
+          })
+        ).map(account => [account.discordUserId, account]),
+      );
       const opened = await files.forMessages(
         'discord',
         page.map(row => row.id),
@@ -299,7 +321,7 @@ export function registerDiscordRoutes(
                   text: reply ? messageText(reply.content, 0, 200).text : '',
                 }
               : null,
-            attachments: row.attachments ? (JSON.parse(row.attachments) as { name: string; size: number }[]) : [],
+            attachments: attachmentsOf(row.attachments),
             ...(shown?.length ? { files: shown } : {}),
           };
         }),

@@ -435,6 +435,8 @@ it('after an outage, delivers what was addressed to it once, marked, and leaves 
     await send(DM, owner, 'hello'); // seen before the outage
     await send(DESIGN, stranger, 'earlier');
     await vi.waitFor(() => expect(delivered).toHaveLength(1));
+    // The DM went quiet past the retention period: its saved messages were pruned, its unread marker was not.
+    await database.client.discordMessage.deleteMany({ where: { channelId: DM } });
     await event(GatewayDispatchEvents.Ready, {});
     await vi.waitFor(() => expect(delivered).toHaveLength(2));
     expect(delivered[1].text).toContain('are you there?');

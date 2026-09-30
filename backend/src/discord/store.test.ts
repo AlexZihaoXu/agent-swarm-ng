@@ -25,11 +25,17 @@ it('keeps saved Discord messages for the retention period and prunes older ones'
     await saved('1300000000000000001', 31 * DAY);
     await saved('1300000000000000002', 29 * DAY);
     await saved('1300000000000000003', 0);
-    expect(await store.prune(30)).toBe(1);
+    await saved('1300000000000000004', 40 * DAY);
+    await saved('1300000000000000005', 50 * DAY);
+    // In short batches (here 2 at a time), so a backlog never holds one long write.
+    expect(await store.prune(30, 2)).toBe(3);
     const left = await database.client.discordMessage.findMany({ select: { id: true }, orderBy: { id: 'asc' } });
     expect(left.map(row => row.id)).toEqual(['1300000000000000002', '1300000000000000003']);
     // With the announced message pruned, everything left still reads as unread after it.
     expect((await store.unread(agent.id, '3000000000000000002', '1300000000000000001')).count).toBe(2);
+    // Reading an agent's Discord policies never creates a row.
+    expect((await store.bot(agent.id)).admission).toBe('mention');
+    expect(await database.client.discordBot.count()).toBe(0);
   } finally {
     await database.close();
   }

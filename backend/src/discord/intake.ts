@@ -398,21 +398,23 @@ export class DiscordIntake {
     const since = [];
     for (const { channelId } of await this.store.channels(agentId)) {
       const channel = await this.store.usable(agentId, channelId);
-      const last = channel
+      const saved = channel
         ? await this.database.client.discordMessage.findFirst({
             where: { agentId, channelId, createdAt: { lt: readyAt } },
             orderBy: { createdAt: 'desc' },
             select: { id: true },
           })
         : null;
+      // A channel quiet past the retention period has no saved messages left, but its marker survives pruning.
+      const after = saved?.id ?? channel?.announcedUpTo;
       // Nothing seen here yet: there is nothing to catch up on.
-      if (channel && last) since.push({ channel, last });
+      if (channel && after) since.push({ channel, after });
     }
-    for (const { channel, last } of since) {
+    for (const { channel, after } of since) {
       let missed: APIMessage[];
       try {
         missed = (await rest.get(Routes.channelMessages(channel.channelId), {
-          query: new URLSearchParams({ after: last.id, limit: '50' }),
+          query: new URLSearchParams({ after, limit: '50' }),
         })) as APIMessage[];
       } catch {
         continue;

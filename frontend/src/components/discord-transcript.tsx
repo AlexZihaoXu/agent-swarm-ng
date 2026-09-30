@@ -21,6 +21,9 @@ export function useDiscordPlaces(agentId: string, enabled: boolean): DiscordPlac
   const query = useQuery({
     queryKey: ['agent-discord', agentId],
     enabled,
+    // New DMs and threads appear as the bot finds them.
+    refetchInterval: 60_000,
+    retry: 1,
     queryFn: async ({ signal }) => {
       const { data, error } = await api.GET('/api/agents/{id}/discord', { params: { path: { id: agentId } }, signal });
       if (!data) throw new Error(error?.message ?? 'Could not load the Discord settings.');
@@ -84,22 +87,28 @@ export function DiscordTranscript({
   channelId,
   agentName,
   agentAvatar,
+  avatarOf,
   viewport,
 }: {
   agentId: string;
   channelId: string;
   agentName: string;
   agentAvatar: AvatarAppearance;
+  /** Another of our agents' avatar, for messages from its bot. */
+  avatarOf: (agentId: string) => AvatarAppearance | null | undefined;
   viewport: RefObject<HTMLDivElement | null>;
 }) {
   const [messages, setMessages] = useState<Message[]>([]),
     [cursor, setCursor] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false),
+  // "ready" after the first page; "older" while Load earlier runs (refreshes stay quiet).
+  const [ready, setReady] = useState(false),
+    [older, setOlder] = useState(false),
     [error, setError] = useState('');
+  const shownIds = useRef(new Set<string>());
   const loaded = useRef(false);
   const position = useRef<{ height: number; older: boolean; bottom: boolean } | null>(null);
   async function load(before?: string, signal?: AbortSignal) {
-    setBusy(true);
+    if (before) setOlder(true);
     try {
       const { data, error } = await api.GET('/api/agents/{id}/discord/channels/{channelId}/messages', {
         params: { path: { id: agentId, channelId }, query: before ? { before } : {} },
@@ -112,22 +121,34 @@ export function DiscordTranscript({
         position.current = {
           height: element.scrollHeight,
           older: Boolean(before),
-          bottom: !loaded.current || element.scrollHeight - element.scrollTop - element.clientHeight < 80,
+          bottom: !shownIds.current.size || element.scrollHeight - element.scrollTop - element.clientHeight < 80,
         };
-      // A refresh can change newer messages (edits, deletions) but never forgets older pages already read.
-      setMessages(current => merge(current, data.messages));
-      if (before || !loaded.current) setCursor(data.nextCursor);
+      // More arrived between refreshes than one page holds: start again from the newest rather than leave a gap.
+      const gap =
+        !before &&
+        shownIds.current.size > 0 &&
+        data.nextCursor !== null &&
+        !data.messages.some(message => shownIds.current.has(message.id));
+      const next = before || !gap ? merge(messagesRef.current, data.messages) : data.messages;
+      messagesRef.current = next;
+      shownIds.current = new Set(next.map(message => message.id));
+      setMessages(next);
+      if (before || gap || !loaded.current) setCursor(data.nextCursor);
       loaded.current = true;
+      setReady(true);
       setError('');
     } catch (failure) {
       if (!signal?.aborted)
         setError(failure instanceof Error ? failure.message : 'Could not load this Discord channel.');
     } finally {
-      if (!signal?.aborted) setBusy(false);
+      if (before && !signal?.aborted) setOlder(false);
     }
   }
+  const messagesRef = useRef<Message[]>([]);
+  const unmounted = useRef<AbortController | null>(null);
   useEffect(() => {
     const controller = new AbortController();
+    unmounted.current = controller;
     void load(undefined, controller.signal);
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') void load(undefined, controller.signal);
@@ -161,7 +182,7 @@ export function DiscordTranscript({
           : message.role === 'agent'
             ? `${message.authorName} · agent`
             : message.authorName,
-      authorAvatar: own ? agentAvatar : null,
+      authorAvatar: own ? agentAvatar : message.agentId ? (avatarOf(message.agentId) ?? null) : null,
       text: message.text,
       timestamp: message.timestamp,
       files: message.files,
@@ -183,8 +204,10 @@ export function DiscordTranscript({
             type="button"
             variant="outline"
             size="sm"
-            disabled={busy}
-            onClick={() => void load(error && !messages.length ? undefined : (cursor ?? undefined))}
+            disabled={older}
+            onClick={() =>
+              void load(error && !messages.length ? undefined : (cursor ?? undefined), unmounted.current?.signal)
+            }
           >
             {error && !messages.length ? 'Retry' : 'Load earlier messages'}
           </Button>
@@ -197,7 +220,7 @@ export function DiscordTranscript({
       )}
       {!messages.length && !error && (
         <p role="status" className="px-5 py-8 text-center text-sm text-muted-foreground">
-          {busy ? 'Loading messages…' : `${agentName}’s bot has not seen any messages here yet.`}
+          {ready ? `${agentName}’s bot has not seen any messages here yet.` : 'Loading messages…'}
         </p>
       )}
       {shown.length > 0 && <GroupMessages messages={shown} members={[]} reactions={false} />}

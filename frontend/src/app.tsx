@@ -1124,13 +1124,14 @@ export function App() {
                     )}
                     {history.newerHidden && <EdgeSkeleton label="Loading newer messages…" />}
                   </>
-                ) : discordChannel ? (
+                ) : discordChannel && agent.real ? (
                   <DiscordTranscript
                     key={`${agent.id}:${discordChannel}`}
                     agentId={agent.id}
                     channelId={discordChannel}
                     agentName={agent.name}
                     agentAvatar={agent.avatar ?? defaultAvatar(agent.id)}
+                    avatarOf={id => agents.find(item => item.id === id)?.avatar}
                     viewport={scrollRef}
                   />
                 ) : peer ? (
