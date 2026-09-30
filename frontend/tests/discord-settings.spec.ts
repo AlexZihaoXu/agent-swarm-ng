@@ -32,6 +32,17 @@ const config = (over: object = {}) => ({
       paused: true,
     },
     {
+      id: '3000000000000000007',
+      guildId: '7',
+      guildName: 'Study',
+      name: 'general',
+      place: 'Study › #general',
+      kind: 'text',
+      allowed: false,
+      admission: null,
+      paused: false,
+    },
+    {
       id: '5000000000000000001',
       guildId: null,
       guildName: null,
@@ -92,17 +103,38 @@ test('an agent’s Discord bot: paste a token, choose channels and when they wak
     /oauth2\/authorize/,
   );
   await expect(section.getByText('paused: only bots spoke lately')).toBeVisible();
-  // Allow #design, wake on every message there, and let strangers DM it.
-  await section.getByLabel('#design').check();
-  await section.getByRole('combobox', { name: 'When #design wakes it' }).click();
+  // Only chosen channels are listed, grouped by server; the rest are found through Add channels.
+  const list = section.getByRole('region', { name: 'Chosen channels' });
+  await expect(list.getByText('#ideas')).toBeVisible();
+  await expect(list.getByText('#design')).toHaveCount(0);
+  await expect(section.getByText('Channels it may use · 1 of 3')).toBeVisible();
+  await section.getByRole('button', { name: 'Add channels' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByPlaceholder('Search servers and channels…').fill('des');
+  await expect(dialog.getByRole('option', { name: '#general' })).toHaveCount(0);
+  await dialog.getByRole('option', { name: '#design' }).click();
+  await dialog.getByPlaceholder('Search servers and channels…').fill('study');
+  await dialog.getByRole('option', { name: 'All channels in Study' }).click();
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(list.getByRole('region', { name: 'Study' }).getByText('#general')).toBeVisible();
+  // Wake on every message in #design, drop #ideas, and let strangers DM it.
+  await list.getByRole('combobox', { name: 'When #design wakes it' }).click();
   await page.getByRole('option', { name: 'Every message' }).click();
+  await list.getByRole('button', { name: 'Remove #ideas' }).click();
   await section.getByRole('switch', { name: 'DMs from other people' }).click();
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect.poll(() => calls.length).toBe(2);
-  expect(calls[1]).toEqual({
-    method: 'PATCH /api/agents/avery/discord',
-    body: { strangerDms: true, channels: [{ id: '3000000000000000002', allowed: true, admission: 'all' }] },
+  expect(calls[1].method).toBe('PATCH /api/agents/avery/discord');
+  expect(calls[1].body).toEqual({
+    strangerDms: true,
+    channels: expect.arrayContaining([
+      { id: '3000000000000000002', allowed: true, admission: 'all' },
+      { id: '3000000000000000004', allowed: false, admission: null },
+      { id: '3000000000000000007', allowed: true, admission: null },
+    ]),
   });
+  await expect(list.getByText('#ideas')).toHaveCount(0);
   await expect(section.getByRole('switch', { name: 'DMs from other people' })).toHaveAttribute('aria-checked', 'true');
 });
 

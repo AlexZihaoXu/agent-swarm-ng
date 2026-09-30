@@ -5,6 +5,7 @@ import type { paths } from '@/api/schema';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { DiscordChannelList } from '@/components/discord-channel-list';
 import type { RegisterSection } from '@/lib/settings-sections';
 import { cn } from '@/lib/utils';
 
@@ -136,10 +137,6 @@ export function AgentDiscordSettings({
   }, [dirty, register]);
 
   const change = (next: Partial<Draft>) => setDraft(current => (current ? { ...current, ...next } : current));
-  const servers = new Map<string, NonNullable<Config>['channels']>();
-  for (const channel of saved?.channels ?? [])
-    if (channel.kind !== 'dm')
-      servers.set(channel.guildName ?? 'Server', [...(servers.get(channel.guildName ?? 'Server') ?? []), channel]);
   const dms = saved?.channels.filter(channel => channel.kind === 'dm') ?? [];
   const state = saved?.status.state ?? 'off';
 
@@ -312,74 +309,16 @@ export function AgentDiscordSettings({
               Your messages, DMs, mentions and replies to it always wake it. Everything else stays readable as unread.
             </p>
           </div>
-          <fieldset className="space-y-3">
-            <legend className="text-xs font-medium">Channels it may use</legend>
-            {!servers.size && (
-              <p className="text-xs text-muted-foreground">
-                {saved.configured ? 'Add the bot to a server to choose channels here.' : 'Connect a bot first.'}
-              </p>
-            )}
-            {[...servers.entries()].map(([server, channels]) => (
-              <div key={server} className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground">{server}</p>
-                {channels.map(channel => {
-                  const value = draft.channels[channel.id] ?? {
-                    allowed: channel.allowed,
-                    admission: channel.admission,
-                  };
-                  return (
-                    <div key={channel.id} className="flex min-h-11 min-w-0 flex-wrap items-center gap-2 sm:min-h-0">
-                      <input
-                        id={`${id}-channel-${channel.id}`}
-                        type="checkbox"
-                        checked={value.allowed}
-                        onChange={event =>
-                          change({
-                            channels: { ...draft.channels, [channel.id]: { ...value, allowed: event.target.checked } },
-                          })
-                        }
-                        className="size-4 shrink-0 cursor-pointer rounded border-border accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                      />
-                      <label htmlFor={`${id}-channel-${channel.id}`} className="min-w-0 flex-1 truncate text-sm">
-                        {channel.kind === 'thread' ? `↳ ${channel.name}` : `#${channel.name}`}
-                        {channel.kind === 'forum' && <span className="text-xs text-muted-foreground"> · forum</span>}
-                        {channel.paused && (
-                          <span className="text-xs text-amber-400"> · paused: only bots spoke lately</span>
-                        )}
-                      </label>
-                      {value.allowed && channel.kind !== 'thread' && (
-                        <div className="w-full sm:w-56">
-                          <Select
-                            id={`${id}-channel-admission-${channel.id}`}
-                            ariaLabel={`When #${channel.name} wakes it`}
-                            value={value.admission ?? 'default'}
-                            onValueChange={next =>
-                              change({
-                                channels: {
-                                  ...draft.channels,
-                                  [channel.id]: {
-                                    ...value,
-                                    admission: next === 'default' ? null : (next as Admission),
-                                  },
-                                },
-                              })
-                            }
-                            options={[{ value: 'default', label: 'As set above' }, ...admissionOptions]}
-                            triggerClassName="!h-11 sm:!h-8 !text-xs"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-            {dms.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                DMs: {dms.map(channel => channel.name).join(', ')}. Threads follow their channel unless chosen here.
-              </p>
-            )}
-          </fieldset>
+          <DiscordChannelList
+            channels={saved.channels}
+            choices={draft.channels}
+            admissionOptions={admissionOptions}
+            onChange={channels => change({ channels })}
+            empty={saved.configured ? 'Add the bot to a server to choose channels here.' : 'Connect a bot first.'}
+          />
+          {dms.length > 0 && (
+            <p className="text-xs text-muted-foreground">DMs: {dms.map(channel => channel.name).join(', ')}.</p>
+          )}
         </>
       )}
     </div>
@@ -467,7 +406,7 @@ function DiscordSetupGuide({ open, agentName }: { open: boolean; agentName: stri
           polls and pins.
         </li>
         <li>
-          Tick the channels {agentName} may use below. Then add your own Discord user ID in{' '}
+          Use Add channels below to pick where {agentName} may talk. Then add your own Discord user ID in{' '}
           <b className="text-foreground">Settings → Discord</b> so it knows your messages are yours.
         </li>
       </ol>

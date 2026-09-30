@@ -32,8 +32,9 @@ Steps (Discord Developer Portal labels as of September 2026):
    permission there. The link asks only for what a member needs: view channels, send messages (and in threads),
    create public threads, read message history, attach files, embed links, add reactions, use external emojis, send
    polls and pin messages. No moderation or administrator rights.
-6. Back in the agent's Discord settings, tick the channels it may use (threads follow their channel) and choose when
-   server messages wake it.
+6. Back in the agent's Discord settings, choose **Add channels** and search for the servers or channels it may use
+   ("All channels in …" adds a whole server; threads follow their channel). The chosen ones are listed by server,
+   each with when it wakes the agent and × to remove it.
 7. In **Settings → Discord**, add your own Discord user ID: in Discord, User Settings → Advanced → turn on Developer
    Mode, then right-click your name (on a phone, open your profile) and choose Copy User ID.
 
