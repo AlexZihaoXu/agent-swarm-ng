@@ -16,8 +16,10 @@ import { authorRole as roleOf, placeOf, type Admission, type AuthorRole, type Di
 export type IntakeOptions = {
   /** Each message restarts this quiet period. */
   quietMs?: number;
-  /** A batch never waits longer than this from its first message. */
+  /** A batch never waits longer than this from its first message; a burst older than this only gets pointers. */
   capMs?: number;
+  /** A channel quiet this long: its next message goes to the agent at once (null: always batch). */
+  restMs?: number | null;
   /** Messages a trigger shows in full; the rest become "+N more". */
   fullMessages?: number;
   /** Consecutive bot-only turns in a channel before the agent pauses there until a person speaks. */
@@ -43,8 +45,14 @@ export type Seen = {
 };
 /** The owner's messages batch apart from everyone else's, so no one else's text ever shares their authority. */
 type Lane = 'owner' | 'others';
-type Batch = { agentId: string; channelId: string; lane: Lane; messages: Seen[]; closedAt: number };
-type Window = { messages: Seen[]; quiet: ReturnType<typeof setTimeout>; cap: ReturnType<typeof setTimeout> };
+/** A pointer batch shows only what is addressed to the agent; the rest is "+N more" to read in the chat. */
+type Batch = { agentId: string; channelId: string; lane: Lane; messages: Seen[]; closedAt: number; pointer: boolean };
+type Window = {
+  messages: Seen[];
+  quiet: ReturnType<typeof setTimeout>;
+  cap: ReturnType<typeof setTimeout>;
+  pointer: boolean;
+};
 
 export type IntakeDeps = {
   /** Hands an admitted trigger to the agent (its inbox; interruption triage applies there). */
@@ -77,8 +85,9 @@ const roleLabel = (message: Seen) =>
         : 'person';
 
 /**
- * Turns Discord messages into agent inputs. Per channel, a batch collects messages until 3 s pass without a new
- * one, or 10 s after its first message. Each agent handles one batch at a time (addressed batches first), and its
+ * Turns Discord messages into agent inputs. Per channel, the first message after 15 s of quiet goes to the agent at
+ * once; the rest of a burst is batched until 1.5 s pass without a new message, or 5 s after the batch's first, and a
+ * burst older than 5 s only gets pointers ("+N more", read the chat) besides what is addressed to the agent. Each agent handles one batch at a time (addressed batches first), and its
  * triage never runs in parallel. A trigger shows a bounded number of messages; the rest become "+N more" with a
  * read hint: the agent reads the chat itself.
  */
@@ -87,9 +96,12 @@ export class DiscordIntake {
   private queues = new Map<string, Batch[]>();
   private pumping = new Set<string>();
   private reactions = new Map<string, number>();
+  /** Per channel: when someone last spoke, and when the current burst began. */
+  private activity = new Map<string, { last: number; burst: number }>();
   private closed = false;
   private readonly quietMs: number;
   private readonly capMs: number;
+  private readonly restMs: number | null;
   private readonly fullMessages: number;
   private readonly botTurnLimit: number;
 
@@ -99,8 +111,9 @@ export class DiscordIntake {
     private deps: IntakeDeps,
     options: IntakeOptions = {},
   ) {
-    this.quietMs = options.quietMs ?? 3000;
-    this.capMs = options.capMs ?? 10_000;
+    this.quietMs = options.quietMs ?? 1500;
+    this.capMs = options.capMs ?? 5000;
+    this.restMs = options.restMs === undefined ? 15_000 : options.restMs;
     this.fullMessages = options.fullMessages ?? 10;
     this.botTurnLimit = options.botTurnLimit ?? 8;
   }
@@ -429,9 +442,31 @@ export class DiscordIntake {
     }
   }
 
+  /**
+   * The first message after a quiet spell goes to the agent at once; the rest of the burst is batched (each message
+   * restarts the quiet period, up to the cap); once the burst is older than the cap, batches only point at the chat.
+   */
   private collect(agentId: string, seen: Seen) {
     const lane = laneOf(seen);
     const key = `${agentId}:${seen.channelId}:${lane}`;
+    const now = Date.now();
+    const place = `${agentId}:${seen.channelId}`;
+    const before = this.activity.get(place);
+    const rested = this.restMs !== null && (!before || now - before.last >= this.restMs);
+    const burst = rested || !before ? now : before.burst;
+    this.activity.set(place, { last: now, burst });
+    if (this.activity.size > 5000)
+      for (const [other, value] of this.activity)
+        if (now - value.last > (this.restMs ?? 60_000)) this.activity.delete(other);
+    if (rested && !this.windowsOf(agentId, seen.channelId).length)
+      return this.enqueue({
+        agentId,
+        channelId: seen.channelId,
+        lane,
+        messages: [seen],
+        closedAt: now,
+        pointer: false,
+      });
     const existing = this.windows.get(key);
     if (existing) {
       existing.messages.push(seen);
@@ -441,6 +476,7 @@ export class DiscordIntake {
     }
     const window: Window = {
       messages: [seen],
+      pointer: now - burst >= this.capMs,
       quiet: setTimeout(() => this.closeWindow(agentId, seen.channelId, lane), this.quietMs),
       cap: setTimeout(() => this.closeWindow(agentId, seen.channelId, lane), this.capMs),
     };
@@ -453,13 +489,25 @@ export class DiscordIntake {
     this.windows.delete(key);
     clearTimeout(window.quiet);
     clearTimeout(window.cap);
-    const queue = this.queues.get(agentId) ?? [];
+    this.enqueue({
+      agentId,
+      channelId,
+      lane,
+      messages: window.messages,
+      closedAt: Date.now(),
+      pointer: window.pointer,
+    });
+  }
+  private enqueue(batch: Batch) {
+    const queue = this.queues.get(batch.agentId) ?? [];
     // A channel still waiting its turn gets one batch, not one per window: the queue stays bounded by channels.
-    const waiting = queue.find(batch => batch.channelId === channelId && batch.lane === lane);
-    if (waiting) waiting.messages.push(...window.messages);
-    else queue.push({ agentId, channelId, lane, messages: window.messages, closedAt: Date.now() });
-    this.queues.set(agentId, queue);
-    void this.pump(agentId);
+    const waiting = queue.find(item => item.channelId === batch.channelId && item.lane === batch.lane);
+    if (waiting) {
+      waiting.messages.push(...batch.messages);
+      waiting.pointer &&= batch.pointer;
+    } else queue.push(batch);
+    this.queues.set(batch.agentId, queue);
+    void this.pump(batch.agentId);
   }
 
   /** One batch at a time per agent: batches addressed to it first, then the oldest. */
@@ -572,9 +620,9 @@ export class DiscordIntake {
     });
     const unread = authors.reduce((total, author) => total + author._count._all, 0);
     const addressed = batch.messages.filter(message => message.addressed).slice(-this.fullMessages);
-    const others = batch.messages
-      .filter(message => !message.addressed)
-      .slice(-Math.max(0, this.fullMessages - addressed.length));
+    const others = batch.pointer
+      ? []
+      : batch.messages.filter(message => !message.addressed).slice(-Math.max(0, this.fullMessages - addressed.length));
     const shown = [...addressed, ...others].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     const lines = shown.map(message => {
       const body = messageText(message.content, 0, 1500);

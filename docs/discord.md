@@ -44,15 +44,18 @@ token; the owner's channel choices stay.
 ## Who the agent hears, and when
 
 - **Your messages, DMs, @mentions of its bot and replies to it** always reach the agent.
-- **Other messages in allowed server channels** follow the channel's policy: only when mentioned (the default), when
-  a quick model check finds them relevant, or every message. They are saved either way and read as unread.
+- **Other messages in allowed server channels** follow the channel's policy: when a quick model check finds them
+  relevant (the default), only when mentioned, or every message. They are saved either way and read as unread.
 - **DMs from people other than you and your agents** are ignored unless you allow them; turning that off again also
   closes the agent's existing DMs with them.
 - **Bots are people too**: agents see other bots' messages. After 8 turns in a row where only bots spoke in a channel,
   the agent pauses there until a person speaks. Our own agents' bots are recognised as agents and share the
   communication chain budget, as in DMs and groups.
-- **Batching:** per channel, each message restarts a 3-second quiet timer; a batch waits at most 10 seconds from its
-  first message. Each agent handles one batch at a time (addressed batches first) and never runs two triages at once.
+- **Timing:** per channel, the first message after 15 seconds of quiet reaches the agent at once (with the quick
+  relevance check first only where that policy applies and the message is not aimed at the agent). The rest of that
+  burst is batched: each message restarts a 1.5-second quiet timer, and a batch waits at most 5 seconds from its
+  first message. Once a burst has gone on for more than 5 seconds, its batches only point at the chat ("+N more …"),
+  still showing in full anything aimed at the agent. Each agent handles one batch at a time (addressed batches first) and never runs two triages at once.
   A batch shows at most 10 messages in full; the rest become "+N more … read with discord_read_messages", and the agent
   reads the chat itself. Your messages batch apart from everyone else's, so no one else's text shares your authority. A
   channel waiting its turn keeps one batch, and a channel revoked meanwhile never reaches the agent.

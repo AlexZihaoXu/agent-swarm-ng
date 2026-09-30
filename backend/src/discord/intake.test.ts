@@ -45,7 +45,8 @@ async function setup(
       ...(evaluate ? { evaluate: (_agentId, _channelId, notice) => evaluate(notice) } : {}),
       ...extra,
     },
-    { quietMs: 40, capMs: 150, ...options },
+    // The instant first message has its own test; elsewhere every message is batched.
+    { quietMs: 40, capMs: 150, restMs: null, ...options },
   );
   const send = (
     channelId: string,
@@ -151,7 +152,7 @@ it('ignores channels outside the allow-list, stays silent on undirected messages
   }
 });
 
-it('batches a burst: 3 s quiet (reset by each message), at most 10 s, and a bounded trigger', async () => {
+it('batches a burst: a quiet period (reset by each message), a cap, and a bounded trigger', async () => {
   const { database, agent, store, intake, delivered, send } = await setup({ quietMs: 60, capMs: 200, fullMessages: 3 });
   try {
     await store.update(agent.id, { channels: [{ channelId: DESIGN, allowed: true, admission: 'all' }] });
@@ -172,6 +173,41 @@ it('batches a burst: 3 s quiet (reset by each message), at most 10 s, and a boun
     await database.close();
   }
 });
+
+it('answers the first message after a quiet spell at once, batches the burst, and points at a long one', async () => {
+  const { database, agent, store, intake, delivered, send } = await setup({ quietMs: 400, capMs: 1000, restMs: 1600 });
+  try {
+    await store.update(agent.id, { channels: [{ channelId: DESIGN, allowed: true, admission: 'all' }] });
+    // The channel was quiet: the first message goes to the agent at once, before any quiet period could pass.
+    await send(DESIGN, stranger, 'hello?');
+    await vi.waitFor(() => expect(delivered).toHaveLength(1), { timeout: 250, interval: 5 });
+    expect(delivered[0].text).toContain('hello?');
+    // The rest of the burst is batched; once the burst is older than the cap, batches only point at the chat,
+    // except what is addressed to the agent, which is always shown in full.
+    for (let index = 0; index < 50; index++) {
+      await send(DESIGN, stranger, `spam ${index}`);
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    await send(DESIGN, stranger, '<@1000000000000000001> you there?', { mentions: [{ id: BOT }] });
+    await vi.waitFor(() => expect(delivered.at(-1)!.text).toContain('you there?'), { timeout: 4000 });
+    expect(delivered[1].text).toContain('· message '); // the first batch of the burst, in full
+    // Later batches of the long burst only point at the chat, but whatever is addressed to the agent is always
+    // shown in full (a pointer and the mention may arrive as one batch when the agent was busy).
+    const later = delivered.slice(2);
+    expect(later.length).toBeGreaterThanOrEqual(1);
+    for (const batch of later)
+      expect(batch.text.match(/· message /g) ?? []).toHaveLength(batch.text.includes('you there?') ? 1 : 0);
+    expect(later.some(batch => /\+\d+ more messages? in this channel/.test(batch.text))).toBe(true);
+    // Quiet again: the next first message is instant too.
+    await new Promise(resolve => setTimeout(resolve, 1700));
+    const before = delivered.length;
+    await send(DESIGN, stranger, 'back again');
+    await vi.waitFor(() => expect(delivered).toHaveLength(before + 1), { timeout: 250, interval: 5 });
+  } finally {
+    intake.close();
+    await database.close();
+  }
+}, 15_000);
 
 it('handles one batch at a time per agent, addressed first, and never runs two triages at once', async () => {
   let running = 0,
