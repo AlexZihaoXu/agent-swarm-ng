@@ -77,35 +77,6 @@ const loading = (
   </p>
 );
 
-function Avatar({
-  initials,
-  avatar,
-  typing = false,
-  ready = false,
-  working = false,
-}: {
-  initials: string;
-  avatar?: AvatarAppearance;
-  typing?: boolean;
-  ready?: boolean;
-  working?: boolean;
-}) {
-  return (
-    <span aria-hidden="true" className="relative size-8 shrink-0 text-xs font-medium text-foreground/75">
-      <AvatarFace avatarSize={32} ready={ready} typing={typing} working={working} size="md">
-        {avatar ? (
-          <AgentAvatarArt {...avatar} size={32} state={typing ? 'typing' : working ? 'working' : 'idle'} animated />
-        ) : (
-          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/10">
-            {initials}
-          </span>
-        )}
-      </AvatarFace>
-      <PresenceIndicator ready={ready} typing={typing} working={working} size="md" />
-    </span>
-  );
-}
-
 const emptyAgent: ChatAgent = { id: '', name: '', initials: '', time: '', channelId: '' };
 
 export function App() {
@@ -141,6 +112,7 @@ export function App() {
     expandActivity,
     retryActivity,
     activityHistory,
+    compactions,
   } = useChat();
   const location = useLocation();
   const navigate = useNavigate();
@@ -642,6 +614,7 @@ export function App() {
               agents={agents}
               conversations={conversations}
               busy={busy}
+              compactions={compactions}
               typingIn={typingIn}
               selectedAgent={agent.id}
               selectedGroup={selectedGroup}
@@ -732,12 +705,14 @@ export function App() {
                         selectionGroup="agents"
                         onClick={() => leave(() => navigate(agentPath(item.id)))}
                         avatar={
-                          <Avatar
+                          <AgentAvatar
                             initials={item.initials}
                             avatar={item.avatar}
+                            size="md"
                             ready={Boolean(item.real)}
                             typing={typingIn(item.channelId, item.channelId)}
                             working={busy[item.channelId]}
+                            compaction={compactions[item.id]}
                           />
                         }
                         name={item.name}
@@ -861,6 +836,7 @@ export function App() {
                       ready={Boolean(agent.real)}
                       typing={selfTyping}
                       working={busy[agent.channelId]}
+                      compaction={compactions[agent.id]}
                     />
                     <span
                       role="heading"
@@ -879,6 +855,7 @@ export function App() {
                       ready={Boolean(agent.real)}
                       typing={selfTyping}
                       working={busy[agent.channelId]}
+                      compaction={compactions[agent.id]}
                     />
                     <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-[1_1_9rem]">
                       {discordChannel ? (
@@ -903,6 +880,7 @@ export function App() {
                             ready={Boolean(peer)}
                             working={busy[peerChannel]}
                             typing={peerTyping}
+                            compaction={compactions[peer.id]}
                           />
                           <span className="min-w-0 truncate text-sm font-semibold" title={peer.name}>
                             {peer.name}
@@ -1161,6 +1139,7 @@ export function App() {
                         agentId={agent.id}
                         typing={selfTyping}
                         working={busy[agent.channelId]}
+                        compaction={compactions[agent.id]}
                         connected={eventsConnected}
                       />
                     </div>

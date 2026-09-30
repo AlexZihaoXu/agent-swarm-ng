@@ -71,12 +71,18 @@ export const eyePoses = {
     [25, 23.5, 25, 28, 25, 32.5],
     [38, 22.5, 38, 27, 38, 31.5],
   ],
+  // Closed, relaxed lids (◡ ◡): the open pills morph down into them.
+  sleeping: [
+    [21.5, 28.5, 25, 31.5, 28.5, 28.5],
+    [34.5, 27.5, 38, 30.5, 41.5, 27.5],
+  ],
 } as const satisfies Record<string, EyePose>;
 export type AvatarState = keyof typeof eyePoses;
 export const avatarStates: { value: AvatarState; label: string }[] = [
   { value: 'idle', label: 'Idle' },
   { value: 'working', label: 'Working' },
   { value: 'typing', label: 'Typing' },
+  { value: 'sleeping', label: 'Sleeping' },
 ];
 export const avatarMouths = [
   { value: 'none', label: 'None' },

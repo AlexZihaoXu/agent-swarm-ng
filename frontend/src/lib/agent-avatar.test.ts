@@ -13,10 +13,10 @@ import {
 import { blendContour, curvePath, contourPath, contourSpeed, eyelidTransform, faceMotion } from './avatar-motion';
 
 describe('agent avatar identity and motion', () => {
-  it('provides eight distinct silhouettes, named colors and only three runtime states', () => {
+  it('provides eight distinct silhouettes, named colors and four runtime states', () => {
     expect(avatarShapes).toHaveLength(8);
     expect(new Set(avatarShapes.map(shape => shape.path)).size).toBe(8);
-    expect(avatarStates.map(state => state.value)).toEqual(['idle', 'working', 'typing']);
+    expect(avatarStates.map(state => state.value)).toEqual(['idle', 'working', 'typing', 'sleeping']);
     for (const shape of avatarShapes) expect(shape.path).toMatch(/^M.*Z$/);
     for (const color of avatarColors) expect(color.value).toMatch(/^#[a-f\d]{6}$/i);
   });
@@ -76,7 +76,9 @@ describe('agent avatar identity and motion', () => {
     }
   });
   it('speeds up active contours and closes eyelids without rotating or narrowing their width', () => {
-    expect(contourSpeed).toEqual({ idle: 1, working: 8, typing: 12 });
+    expect(contourSpeed).toEqual({ idle: 1, working: 8, typing: 12, sleeping: 0.5 });
+    // Asleep: eyes closed and still (no blink, no glances).
+    expect(faceMotion(3, 5, 'sleeping')).toEqual({ blink: 0, x: 0, y: 0 });
     expect(eyelidTransform(eyePoses.idle[0], 0)).toBe('translate(25 28.5) scale(1 1) translate(-25 -28.5)');
     expect(eyelidTransform(eyePoses.idle[0], 1)).toBe('translate(25 28.5) scale(1 0.06) translate(-25 -28.5)');
     expect(eyelidTransform([25, 28, 25, 28, 25, 28], 1)).toContain('scale(1 0.06)');

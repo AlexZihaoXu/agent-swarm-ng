@@ -34,3 +34,29 @@ Computer screenshot tool results keep their text metadata and an image reference
 An isolated Prisma `migrate deploy` applied every migration including the session tables/index. Unit/integration tests exercise entry-tree round trips, incremental SQLite checkpoints and cascades, completed-context restoration after app rebuild, cross-channel continuity, publication-gap reconciliation, membership revocation and group deletion without loss of already observed private context, real Pi compaction with incomplete-summary fallback, multiple compacted active tails, and absence of internal output from public chat. A separate isolated Bun backend process was stopped and restarted with the same test database: the second request received the first request's private model output and tool result, while published chat and private entries remained distinct. No production database or credentials were used for that smoke test. The complete backend suite passed (161 tests in 39 files), along with backend/frontend typechecks, frontend production build, generated API drift check, whitespace checks, and six focused delete-dialog browser checks. Deployment used an isolated image smoke test, an idle-run check and brief frontend/backend maintenance window, a protected pre-migration SQLite snapshot, then the additive migration against the existing project `.local` mount. Both services returned healthy; six mocked browser checks passed against the deployed frontend. No real-model session-restoration test has been performed on the live app.
 
 Provider-hidden state and an in-flight token stream cannot be restored exactly. Automatic replay of interrupted jobs, autonomous scheduling, cross-process coordination, a separate agent-memory erasure command, and a user-facing private-session archive browser remain separate scope. Pi compaction summaries are lossy; archived rows remain private application data and are **not** channel history.
+
+## Background compaction
+
+Agents no longer stop to compact. `backend/src/background-compaction.ts` summarizes a snapshot of the session's
+branch while the agent keeps working, and applies the result as an ordinary compaction entry at a safe point: between
+two model calls (a wrapper around the SDK's `prepareNextTurnWithContext`) or before a run's first prompt. Everything
+after the snapshot stays verbatim; a summary that no longer matches the branch (another compaction happened, or the
+snapshot is off-branch) is discarded. Applying a summary queues a checkpoint save like any completed boundary.
+
+- **Triggers (per agent, Agents → agent → Model → Memory):** during work at `compactAtPercent` of the context (default
+  65); when idle for `idleCompactMinutes` (default 30, 0 = never) with the context at least `idleCompactPercent` full
+  (default 50), from a temporary session over the saved checkpoint. Idle summaries wait in memory and are applied
+  when the next run's session starts, so its first model call is already light. Summaries are never written into a
+  saved checkpoint outside a run (a concurrent run's save could be overwritten).
+- **Sleeping:** if the context passes the SDK's own threshold (window − reserve) while a summary is being written,
+  the next model call waits for it; the dashboard shows the agent asleep (closed eyes, zzz). The SDK's blocking
+  compaction remains the fallback if a summary fails.
+- **Lifetime:** one summary per agent; a run whose summary is still in flight keeps its session until it settles.
+  Stop cancels a waiting sleep; changing the model or deleting the agent drops the summary; a restart loses only the
+  unfinished work.
+- **Events:** `compaction` events (`running`, `sleeping`, null) and a `compactions` map in the events snapshot drive the
+  avatar indicators; activity records "Background compaction started/applied/discarded", "Sleeping" and "Idle
+  compaction".
+- **SDK coupling (Pi 0.85.1):** `prepareCompaction` is mirrored (not exported) and the private
+  `_getSummarizationRequestAuth` supplies credentials; `background-compaction*.test.ts` guard both on upgrades.
+

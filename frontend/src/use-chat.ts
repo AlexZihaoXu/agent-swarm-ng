@@ -106,6 +106,8 @@ export function useChat() {
   const activeRuns = useRef(new Map<string, Run>());
   const peerRuns = useRef(new Map<string, Run>());
   const [peerBusy, setPeerBusy] = useState<Record<string, boolean>>({});
+  /** Agents compacting their memory in the background, or asleep until it is done. */
+  const [compactions, setCompactions] = useState<Record<string, 'running' | 'sleeping'>>({});
   const refreshPeerBusy = () =>
     setPeerBusy(Object.fromEntries([...peerRuns.current.values()].map(run => [run.agentId, true])));
   const requests = useRef(new Map<string, AbortController>());
@@ -307,6 +309,25 @@ export function useChat() {
 
   function applyEvent(event: Record<string, any>) {
     if (event.type === 'heartbeat') return;
+    if (event.type === 'compaction' && typeof event.agentId === 'string') {
+      const agentId = event.agentId;
+      const state = event.state === 'running' || event.state === 'sleeping' ? event.state : null;
+      setCompactions(current => {
+        const next = { ...current };
+        if (state) next[agentId] = state;
+        else delete next[agentId];
+        return next;
+      });
+      return;
+    }
+    if (event.type === 'snapshot' && event.compactions && typeof event.compactions === 'object')
+      setCompactions(
+        Object.fromEntries(
+          Object.entries(event.compactions as Record<string, unknown>).filter(
+            (entry): entry is [string, 'running' | 'sleeping'] => entry[1] === 'running' || entry[1] === 'sleeping',
+          ),
+        ),
+      );
     if (event.type === 'snapshot' && Array.isArray(event.runs)) {
       const runs = event.runs.filter(
         (run: Run) =>
@@ -664,6 +685,7 @@ export function useChat() {
   for (const agent of agents) if (peerBusy[agent.id]) visibleBusy[agent.channelId] = true;
   return {
     agents,
+    compactions,
     conversations,
     drafts,
     busy: visibleBusy,

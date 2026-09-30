@@ -41,6 +41,7 @@ export function ChatPanel({
   agents,
   conversations,
   busy,
+  compactions,
   typingIn,
   selectedAgent,
   selectedGroup,
@@ -59,6 +60,8 @@ export function ChatPanel({
   agents: ChatAgent[];
   conversations: Record<string, ChatMessage[]>;
   busy: Record<string, boolean>;
+  /** Agents compacting their memory, or asleep until that is done. */
+  compactions: Record<string, 'running' | 'sleeping'>;
   typingIn: (channel: string, destination: string) => boolean;
   selectedAgent: string;
   selectedGroup: string;
@@ -231,6 +234,7 @@ export function ChatPanel({
                             ready={Boolean(item.agent.real)}
                             working={busy[item.agent.channelId]}
                             typing={typingIn(item.agent.channelId, item.agent.channelId)}
+                            compaction={compactions[item.agent.id]}
                           />
                         )
                       }

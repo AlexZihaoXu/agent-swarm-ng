@@ -1,6 +1,7 @@
 import { variation, type AvatarState } from './agent-avatar';
 export type Point = { x: number; y: number };
-export const contourSpeed: Record<AvatarState, number> = { idle: 1, working: 8, typing: 12 };
+/** How fast the outline moves: asleep it barely breathes. */
+export const contourSpeed: Record<AvatarState, number> = { idle: 1, working: 8, typing: 12, sleeping: 0.5 };
 const smooth = (x: number) => {
   const t = Math.max(0, Math.min(1, x));
   return t * t * (3 - 2 * t);
@@ -51,6 +52,8 @@ export function eyelidTransform(eye: readonly number[], blink: number) {
   return `translate(${rounded(x)} ${rounded(y)}) scale(1 ${openness}) translate(${rounded(-x)} ${rounded(-y)})`;
 }
 export function faceMotion(seed: number, seconds: number, state: AvatarState) {
+  // Asleep: eyes stay closed and still.
+  if (state === 'sleeping') return { blink: 0, x: 0, y: 0 };
   const time = seconds + variation(seed, 10) * 8;
   const blinkCycle = Math.floor(time / 8),
     blinkPhase = time % 8;

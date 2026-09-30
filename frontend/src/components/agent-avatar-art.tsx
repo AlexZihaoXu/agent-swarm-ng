@@ -195,12 +195,16 @@ export function AgentAvatarArt({
         points,
         seed,
         time * contourSpeed[state],
-        state === 'idle' ? 0 : state === 'working' ? 0.6 : 1,
+        state === 'idle' || state === 'sleeping' ? 0 : state === 'working' ? 0.6 : 1,
       );
       rendered.current = morph && progress < 1 ? blendContour(morph.points, target, eased) : target;
       const blend = (from: number, to: number) => from + (to - from) * eased;
       tilt.current = morph ? blend(morph.tilt, artwork.tilt) : artwork.tilt;
-      roundness.current = morph ? blend(morph.roundness, eyeStyle === 'round' ? 1 : 0) : eyeStyle === 'round' ? 1 : 0;
+      // Closed eyes are arcs whatever the eye style.
+      const targetRound = eyeStyle === 'round' && state !== 'sleeping' ? 1 : 0;
+      roundness.current = morph
+        ? blend(morph.roundness, targetRound)
+        : roundness.current + (targetRound - roundness.current) * (allowMotion ? step : 1);
       const targetNarrow = shape === 'triangle' || shape === 'pear' ? 1 : 0;
       narrow.current = morph ? blend(morph.narrow, targetNarrow) : targetNarrow;
       head.current?.setAttribute('transform', `rotate(${tilt.current} 32 32)`);
