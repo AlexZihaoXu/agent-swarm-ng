@@ -16,7 +16,8 @@ export class MessageInbox {
   add(message: ChannelMessage) {
     if (this.closed) return false;
     this.pending.push(message);
-    this.receivedAt = Date.now();
+    // A Discord batch already waited out its channel's quiet period: it does not restart the pause.
+    if (!message.source?.discord) this.receivedAt = Date.now();
     this.revision++;
     this.wake?.();
     this.triage?.abort();

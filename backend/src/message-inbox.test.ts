@@ -25,6 +25,39 @@ describe('message admission and interruption races', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect((await take).messages.map(m => m.text)).toEqual(['hi', 'do the task']);
   });
+  it('takes a Discord batch at once (it already waited out its own quiet period), without cutting others short', async () => {
+    vi.useFakeTimers();
+    const signal = new AbortController().signal;
+    const discord = {
+      role: 'user' as const,
+      text: 'batch',
+      source: {
+        agentId: 'discord:1',
+        name: 'sam',
+        channelId: 'discord:2',
+        chainId: '',
+        messageId: '3',
+        discord: { place: 'x' },
+      },
+    };
+    const alone = new MessageInbox();
+    alone.add(discord);
+    const taken = vi.fn();
+    void alone.take(signal).then(taken);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(taken).toHaveBeenCalled();
+    // A dashboard message a moment earlier still gets its full pause.
+    const mixed = new MessageInbox();
+    mixed.add(message('hi'));
+    await vi.advanceTimersByTimeAsync(500);
+    mixed.add(discord);
+    const later = vi.fn();
+    void mixed.take(signal).then(later);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(later).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(later).toHaveBeenCalled();
+  });
   it('cancels triage when main finishes, without interrupting completed work', async () => {
     const inbox = new MessageInbox(0),
       main = deferred<void>();
