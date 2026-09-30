@@ -104,6 +104,7 @@ test('agent settings offer jump links that follow the reader and land each headi
   await expect(nav.getByRole('link')).toHaveText([
     'Channels',
     'Model',
+    'Instructions',
     'Computers',
     'Scratchpad',
     'Avatar',
