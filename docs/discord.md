@@ -68,7 +68,7 @@ token; the owner's channel choices stay.
 
 Twenty-two tools, all prefixed `discord_`, mirroring what a member sees and does: list servers and channels, the
 inbox (unread and mentions since the last notification), read and search messages (Discord's server search; DMs are
-searched from what the bot has seen), pins, threads and forum posts, reactions, polls, profiles and emoji; post
+searched from what the bot has seen, within the history kept), pins, threads and forum posts, reactions, polls, profiles and emoji; post
 (split at 2,000 characters, code blocks intact, replies, files up to 20 MiB, only named people pinged), edit or
 delete their own messages, forward, open DMs (your policy applies), start polls and threads, react, pin, and open
 attachments into their chat files. Never @everyone, roles, moderation, webhooks or slash commands. Every call rechecks

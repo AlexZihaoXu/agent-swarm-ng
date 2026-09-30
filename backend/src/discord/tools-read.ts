@@ -180,7 +180,7 @@ export function createDiscordReadTools(context: DiscordToolContext): ToolDefinit
       name: 'discord_search_messages',
       label: 'Search Discord',
       description:
-        'Search Discord like the search box: text plus filters from (author id), channelId, has (image, file, link, poll, embed, video, sound, sticker), mentions (user id), pinned, after/before (ISO). Searches only channels you may use in one server (serverId), newest first, 25 per page (offset to page). In a DM (channelId of a DM) it searches the messages you have seen there.',
+        'Search Discord like the search box: text plus filters from (author id), channelId, has (image, file, link, poll, embed, video, sound, sticker), mentions (user id), pinned, after/before (ISO). Searches only channels you may use in one server (serverId), newest first, 25 per page (offset to page). In a DM (channelId of a DM) it searches the messages you have seen there, as far back as your owner keeps Discord history.',
       parameters: Type.Object(
         {
           query: Type.Optional(Type.String({ maxLength: 500 })),
