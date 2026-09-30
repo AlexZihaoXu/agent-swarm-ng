@@ -175,7 +175,7 @@ it('your Discord DM reaches the agent as you, and its reply comes back through i
     const prompt = prompts.find(text => text.includes('Can you look at the deploy?'))!;
     expect(prompt).toContain(`reply channel: discord:${DM}`);
     expect(prompt).toContain(String.raw`[your owner] \"Alex\"`);
-    // Someone spoke to it: Discord showed it typing.
+    // It wrote a reply there: Discord showed it typing (only while writing, not while reading).
     expect(discord.requests.some(request => request.path === `/channels/${DM}/typing`)).toBe(true);
   } finally {
     await app.close();

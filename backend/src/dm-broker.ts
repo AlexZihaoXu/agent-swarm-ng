@@ -26,7 +26,7 @@ import { evaluateReaction } from './reaction-triage';
 import type { ComputerController } from './computer-controller-client';
 import { BlobStore } from './files/blob-store';
 import { join } from 'node:path';
-import type { AgentRuns, RunContext } from './agent-runs';
+import type { AgentRuns, RunContext, RunEvent } from './agent-runs';
 import type { PlatformStore } from './platform-store';
 import type { EndpointStore } from './endpoint-store';
 import type { CodexProvider } from './codex-provider';
@@ -127,6 +127,7 @@ export class DmBroker {
     this.compactor = new BackgroundCompactor({ state: (agentId, state) => runs.compaction(agentId, state) });
     this.idleTimer = setInterval(() => void this.compactIdle().catch(() => {}), 60_000);
     this.idleTimer.unref?.();
+    runs.subscribe(event => this.discordTyping(event));
     this.settings = new SwarmSettingsStore(database);
     this.scratch = new Scratchpad(database, this.settings);
     this.scratch.onActivity = ({ agentId, ...detail }) => runs.scratchActivity(agentId, detail);
@@ -220,7 +221,7 @@ export class DmBroker {
    * Hands an admitted Discord trigger to the agent like any other input: offered to its running turn (where
    * interruption triage applies) or queued as a new turn. Only the owner's messages carry human authority.
    */
-  deliverDiscord(agentId: string, input: ChannelMessage, addressed = false) {
+  deliverDiscord(agentId: string, input: ChannelMessage) {
     if (this.closing || this.deleting.has(agentId)) return;
     void (async () => {
       await this.ready();
@@ -228,36 +229,52 @@ export class DmBroker {
       if (!agent) return;
       const channelId = agent.channels[0].id;
       const human = Boolean(input.source?.human);
-      const run =
-        this.runs.offer(agentId, input, { type: 'discord_message', channelId }) ??
+      if (!this.runs.offer(agentId, input, { type: 'discord_message', channelId }))
         this.runs.enqueue(
           { agentId, channelId, clientMessageId: input.id!, ...(human ? {} : { inputSource: 'agent' as const }) },
           context => this.runInbox(agentId, input, context),
           human ? undefined : this.peerLimits,
         );
-      // Someone spoke to the agent: Discord shows it typing while it works, as a person would (at most 90 s).
-      if (addressed && input.source)
-        this.discordTyping(agentId, input.source.channelId.replace(/^discord:/, ''), run.finished);
     })().catch(() => {});
   }
-  private discordTyping(agentId: string, discordChannelId: string, until: Promise<unknown>) {
-    const tick = () => {
-      try {
-        const { rest } = this.discord!.connections.api(agentId);
-        void rest.post(Routes.channelTyping(discordChannelId)).catch(() => {});
-      } catch {
-        /* offline: nothing to show */
+  /** Discord channels each agent's bot shows typing in: agent → channel → refresh timers. */
+  private discordTypists = new Map<string, Map<string, { refresh: NodeJS.Timeout; limit: NodeJS.Timeout }>>();
+  /**
+   * Discord shows the bot typing only while the agent writes a post there, as a person would: not while it reads or
+   * decides to stay silent. Discord's indicator fades after ~10 s, so it is refreshed (for at most 90 s a post).
+   */
+  private discordTyping(event: RunEvent) {
+    if (event.type !== 'typing' || !this.discord) return;
+    const targets = new Set(
+      (Array.isArray(event.targets) ? event.targets : [])
+        .filter((target): target is string => typeof target === 'string' && target.startsWith('discord:'))
+        .map(target => target.slice('discord:'.length)),
+    );
+    const typing = this.discordTypists.get(event.agentId) ?? new Map();
+    this.discordTypists.set(event.agentId, typing);
+    for (const [channelId, timers] of typing)
+      if (!targets.has(channelId)) {
+        clearInterval(timers.refresh);
+        clearTimeout(timers.limit);
+        typing.delete(channelId);
       }
-    };
-    tick();
-    const timer = setInterval(tick, 8000);
-    const limit = setTimeout(() => clearInterval(timer), 90_000);
-    timer.unref?.();
-    limit.unref?.();
-    void until.finally(() => {
-      clearInterval(timer);
-      clearTimeout(limit);
-    });
+    for (const channelId of targets) {
+      if (typing.has(channelId)) continue;
+      const tick = () => {
+        try {
+          const { rest } = this.discord!.connections.api(event.agentId);
+          void rest.post(Routes.channelTyping(channelId)).catch(() => {});
+        } catch {
+          /* offline: nothing to show */
+        }
+      };
+      tick();
+      const refresh = setInterval(tick, 8000);
+      const limit = setTimeout(() => clearInterval(refresh), 90_000);
+      refresh.unref?.();
+      limit.unref?.();
+      typing.set(channelId, { refresh, limit });
+    }
   }
   /**
    * The "check" admission policy: a decision-only branch sees recent messages in the channel and decides whether

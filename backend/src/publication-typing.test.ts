@@ -31,4 +31,9 @@ it('tracks streamed send_dm arguments, destination changes, overlapping calls, a
   streamed('again', 'send_dm', { recipientId: 'b', text: 'Draft' });
   tracker.clear();
   expect(events.at(-1)).toEqual({ type: 'typing', active: false, targets: [] });
+  // A Discord post targets its channel, whichever way the model spells it.
+  streamed('discord', 'discord_send_message', { channelId: '1554698975058206770', text: 'Hey' });
+  expect(events.at(-1)).toEqual({ type: 'typing', active: true, targets: ['discord:1554698975058206770'] });
+  streamed('discord', 'discord_send_message', { channelId: 'discord:1554698975058206770', text: 'Hey!' });
+  expect(events).toHaveLength(7); // the same target: no new event
 });

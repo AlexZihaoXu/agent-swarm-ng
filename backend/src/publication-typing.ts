@@ -1,10 +1,14 @@
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
-/** Typing is publication intent, not plain model output; destinations contain IDs, never draft text. */
+/**
+ * Typing is publication intent, not plain model output; destinations contain IDs, never draft text. A Discord post
+ * targets "discord:<channel id>" (its bot shows typing there).
+ */
 export function createPublicationTyping(agentId: string, emit: (event: object) => void) {
   const pending = new Map<string, string | undefined>();
   let previous = '';
-  const publication = (name: string) => name === 'send_message' || name === 'send_dm';
+  const publication = (name: string) =>
+    name === 'send_message' || name === 'send_dm' || name === 'discord_send_message';
   const update = () => {
     const targets = [...new Set([...pending.values()].filter((id): id is string => Boolean(id)))].sort();
     const event = { type: 'typing', active: targets.length > 0, targets };
@@ -45,7 +49,9 @@ export function createPublicationTyping(agentId: string, emit: (event: object) =
           value.length <= 220
             ? tool.name === 'send_dm'
               ? `dm:${[agentId, value].sort().join(':')}`
-              : value
+              : tool.name === 'discord_send_message'
+                ? `discord:${value.replace(/^discord:/, '')}`
+                : value
             : undefined;
         pending.set(tool.id, target);
         update();

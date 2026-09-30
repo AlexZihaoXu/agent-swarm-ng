@@ -56,7 +56,7 @@ type Window = {
 
 export type IntakeDeps = {
   /** Hands an admitted trigger to the agent (its inbox; interruption triage applies there). */
-  deliver: (agentId: string, input: ChannelMessage, addressed: boolean) => void;
+  deliver: (agentId: string, input: ChannelMessage) => void;
   /** The relevance check for untargeted messages: a cheap decision-only branch; failures mean ignore. */
   evaluate?: (agentId: string, channelId: string, notice: string) => Promise<'admit' | 'ignore'>;
   /** Reaction triage for reactions on the agent's own messages; failures mean ignore. */
@@ -373,26 +373,22 @@ export class DiscordIntake {
     const reaction = this.deps.reaction;
     const decision = await triageGate(agentId, () => reaction(agentId, data.channel_id, notice));
     if (decision !== 'engage') return;
-    this.deps.deliver(
-      agentId,
-      {
-        role: 'user',
-        id: crypto.randomUUID(),
-        text: notice,
-        timestamp: Date.now(),
-        source: {
-          agentId: account?.agentId ?? `discord:${data.user_id}`,
-          name: account?.name ?? 'Discord user',
-          channelId: `discord:${data.channel_id}`,
-          // A reaction continues the conversation its message belongs to (chain budgets apply).
-          chainId: account?.role === 'owner' ? '' : (own?.chainId ?? ''),
-          messageId: data.message_id,
-          ...(account?.role === 'owner' ? { human: true } : {}),
-          discord: { place: placeOf(channel) },
-        },
+    this.deps.deliver(agentId, {
+      role: 'user',
+      id: crypto.randomUUID(),
+      text: notice,
+      timestamp: Date.now(),
+      source: {
+        agentId: account?.agentId ?? `discord:${data.user_id}`,
+        name: account?.name ?? 'Discord user',
+        channelId: `discord:${data.channel_id}`,
+        // A reaction continues the conversation its message belongs to (chain budgets apply).
+        chainId: account?.role === 'owner' ? '' : (own?.chainId ?? ''),
+        messageId: data.message_id,
+        ...(account?.role === 'owner' ? { human: true } : {}),
+        discord: { place: placeOf(channel) },
       },
-      false,
-    );
+    });
   }
 
   /**
@@ -588,25 +584,21 @@ export class DiscordIntake {
               select: { chainId: true },
             })
           )?.chainId ?? '');
-    this.deps.deliver(
-      agentId,
-      {
-        role: 'user',
-        id: crypto.randomUUID(),
-        text: notice.text + pause,
-        timestamp: Date.now(),
-        source: {
-          agentId: agentAuthor?.authorAgentId ?? `discord:${newest.authorId}`,
-          name: owner ? 'Human' : newest.authorName,
-          channelId: `discord:${channelId}`,
-          chainId,
-          messageId: newest.id,
-          ...(owner ? { human: true } : {}),
-          discord: { place: notice.place },
-        },
+    this.deps.deliver(agentId, {
+      role: 'user',
+      id: crypto.randomUUID(),
+      text: notice.text + pause,
+      timestamp: Date.now(),
+      source: {
+        agentId: agentAuthor?.authorAgentId ?? `discord:${newest.authorId}`,
+        name: owner ? 'Human' : newest.authorName,
+        channelId: `discord:${channelId}`,
+        chainId,
+        messageId: newest.id,
+        ...(owner ? { human: true } : {}),
+        discord: { place: notice.place },
       },
-      addressed,
-    );
+    });
   }
 
   /** The bounded text of a trigger: some messages in full (addressed first), then "+N more" with a read hint. */
