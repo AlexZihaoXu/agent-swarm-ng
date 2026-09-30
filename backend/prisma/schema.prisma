@@ -96,6 +96,9 @@ model Agent {
   timers           AgentTimer[]
   watches          ComputerWatch[]
   scratchFiles     ScratchFile[]
+  discordBot       DiscordBot?
+  discordChannels  DiscordChannel[]
+  discordMessages  DiscordMessage[]
   activity         Activity[]
 }
 
@@ -419,4 +422,77 @@ model ChannelFile {
   @@index([channelKey, createdAt])
   @@index([messageKind, messageId])
   @@index([blobId])
+}
+
+/// An agent's own Discord bot (its token lives in .local/discord-bots.json, never here). Policies are the owner's.
+model DiscordBot {
+  agentId     String   @id
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  /// Learned when the bot logs in.
+  botUserId   String?
+  botName     String?
+  /// Default admission for allowed server channels: "mention" | "check" | "all".
+  admission   String   @default("mention")
+  /// Whether people other than the owner (and our agents) may DM the bot.
+  strangerDms Boolean  @default(false)
+  /// After an outage, deliver missed DMs and mentions as one labelled batch.
+  catchUp     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// A Discord channel as one agent's bot knows it: its allow-list entry and intake state.
+model DiscordChannel {
+  agentId       String
+  agent         Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  channelId     String
+  guildId       String?
+  guildName     String?
+  name          String
+  /// "dm" | "text" | "thread" | "forum" | "announcement" | "voice"
+  kind          String
+  allowed       Boolean   @default(false)
+  /// Overrides the bot's default admission for this channel.
+  admission     String?
+  /// The newest message a trigger announced to the agent ("unread" starts after it).
+  announcedUpTo String?
+  /// Consecutive turns here started only by bots (reset when a person speaks).
+  botOnlyTurns  Int       @default(0)
+  pausedAt      DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  @@id([agentId, channelId])
+}
+
+/// Who a Discord account is to the swarm: the owner (human authority) or one of our agents' bots.
+model DiscordAccount {
+  discordUserId String   @id
+  role          String
+  agentId       String?
+  name          String
+  createdAt     DateTime @default(now())
+}
+
+/// Messages an agent's bot saw in its allowed channels and DMs (for the inbox, DM search and chains).
+model DiscordMessage {
+  agentId     String
+  agent       Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  id          String
+  channelId   String
+  guildId     String?
+  authorId    String
+  authorName  String
+  authorBot   Boolean   @default(false)
+  content     String
+  /// Our agents' publications carry their communication chain, so other agents inherit its budget.
+  chainId     String?
+  replyToId   String?
+  mentionsBot Boolean   @default(false)
+  attachments String?
+  createdAt   DateTime
+  editedAt    DateTime?
+  deletedAt   DateTime?
+
+  @@id([agentId, id])
+  @@index([agentId, channelId, createdAt])
 }

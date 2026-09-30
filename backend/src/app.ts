@@ -24,6 +24,10 @@ import { FileStore } from './files/store';
 import { BlobStore } from './files/blob-store';
 import { registerFileRoutes } from './files/routes';
 import { Scratchpad } from './scratchpad';
+import { DiscordTokenStore } from './discord/token-store';
+import { DiscordStore } from './discord/store';
+import { DiscordConnections } from './discord/connections';
+import { registerDiscordRoutes } from './discord/routes';
 
 export async function buildApp({
   fetcher,
@@ -31,12 +35,15 @@ export async function buildApp({
   database,
   codex = new CodexProvider(),
   computerController,
+  discordApi,
 }: {
   fetcher?: typeof fetch;
   endpointStore?: EndpointStore;
   database?: PlatformStore;
   codex?: CodexProvider;
   computerController?: ComputerController | null;
+  /** Discord's REST base (tests point it at a mock). */
+  discordApi?: string;
 } = {}) {
   const app = Fastify({ logger: true });
   const hostAllowed = allowedHosts();
@@ -84,6 +91,17 @@ export async function buildApp({
   registerComputerUseRoutes(app, computers, screenshots);
   registerTerminalStreams(app, computers, controller);
   registerKnowledgeRoutes(app);
+  // Each agent's own Discord bot: tokens beside the database, connections owned by the backend.
+  const discordTokens = new DiscordTokenStore(join(platform.dataDirectory, 'discord-bots.json'));
+  const discordStore = new DiscordStore(platform);
+  const discord = new DiscordConnections(discordTokens, discordStore, { api: discordApi });
+  registerDiscordRoutes(app, platform, discordStore, discordTokens, discord);
+  app.addHook('onListen', async () => {
+    await discord.start();
+  });
+  app.addHook('onClose', async () => {
+    await discord.close();
+  });
 
   await app.ready();
   return app;

@@ -772,6 +772,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{id}/discord": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAgentDiscord"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateAgentDiscord"];
+        trace?: never;
+    };
+    "/api/agents/{id}/discord/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setAgentDiscordToken"];
+        post?: never;
+        delete: operations["removeAgentDiscordToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discord/owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getDiscordOwner"];
+        put: operations["setDiscordOwner"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/providers/openai-codex": {
         parameters: {
             query?: never;
@@ -6089,6 +6137,345 @@ export interface operations {
             };
             /** @description Default Response */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getAgentDiscord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        configured: boolean;
+                        status: {
+                            state: "off" | "connecting" | "online" | "error";
+                            message?: string;
+                        };
+                        bot: {
+                            id: string;
+                            name: string;
+                        } | null;
+                        inviteUrl: string | null;
+                        admission: "mention" | "check" | "all";
+                        strangerDms: boolean;
+                        catchUp: boolean;
+                        channels: {
+                            id: string;
+                            guildId: string | null;
+                            guildName: string | null;
+                            name: string;
+                            kind: string;
+                            allowed: boolean;
+                            admission: ("mention" | "check" | "all") | null;
+                            paused: boolean;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    updateAgentDiscord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    admission?: "mention" | "check" | "all";
+                    strangerDms?: boolean;
+                    catchUp?: boolean;
+                    channels?: {
+                        id: string;
+                        allowed: boolean;
+                        admission?: ("mention" | "check" | "all") | null;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        configured: boolean;
+                        status: {
+                            state: "off" | "connecting" | "online" | "error";
+                            message?: string;
+                        };
+                        bot: {
+                            id: string;
+                            name: string;
+                        } | null;
+                        inviteUrl: string | null;
+                        admission: "mention" | "check" | "all";
+                        strangerDms: boolean;
+                        catchUp: boolean;
+                        channels: {
+                            id: string;
+                            guildId: string | null;
+                            guildName: string | null;
+                            name: string;
+                            kind: string;
+                            allowed: boolean;
+                            admission: ("mention" | "check" | "all") | null;
+                            paused: boolean;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    setAgentDiscordToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        configured: boolean;
+                        status: {
+                            state: "off" | "connecting" | "online" | "error";
+                            message?: string;
+                        };
+                        bot: {
+                            id: string;
+                            name: string;
+                        } | null;
+                        inviteUrl: string | null;
+                        admission: "mention" | "check" | "all";
+                        strangerDms: boolean;
+                        catchUp: boolean;
+                        channels: {
+                            id: string;
+                            guildId: string | null;
+                            guildName: string | null;
+                            name: string;
+                            kind: string;
+                            allowed: boolean;
+                            admission: ("mention" | "check" | "all") | null;
+                            paused: boolean;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    removeAgentDiscordToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        configured: boolean;
+                        status: {
+                            state: "off" | "connecting" | "online" | "error";
+                            message?: string;
+                        };
+                        bot: {
+                            id: string;
+                            name: string;
+                        } | null;
+                        inviteUrl: string | null;
+                        admission: "mention" | "check" | "all";
+                        strangerDms: boolean;
+                        catchUp: boolean;
+                        channels: {
+                            id: string;
+                            guildId: string | null;
+                            guildName: string | null;
+                            name: string;
+                            kind: string;
+                            allowed: boolean;
+                            admission: ("mention" | "check" | "all") | null;
+                            paused: boolean;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getDiscordOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        accounts: {
+                            id: string;
+                            name: string;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    setDiscordOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    accounts: {
+                        id: string;
+                        name: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        accounts: {
+                            id: string;
+                            name: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
