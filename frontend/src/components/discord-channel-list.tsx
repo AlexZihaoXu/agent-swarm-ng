@@ -68,7 +68,7 @@ export function DiscordChannelList({
   const count = chosen.reduce((total, server) => total + server.channels.length, 0);
 
   return (
-    <section aria-labelledby={`${id}-title`} className="space-y-2">
+    <div role="group" aria-labelledby={`${id}-title`} className="space-y-2">
       <div className="flex min-w-0 items-center justify-between gap-2">
         <p id={`${id}-title`} className="text-xs font-medium">
           Channels it may use{' '}
@@ -244,7 +244,7 @@ export function DiscordChannelList({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-    </section>
+    </div>
   );
 }
 
