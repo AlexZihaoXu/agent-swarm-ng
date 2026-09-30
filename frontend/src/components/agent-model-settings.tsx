@@ -86,7 +86,7 @@ export function AgentModelSettings({
   async function save() {
     if (busy || !dirty) return;
     if (memoryInvalid) {
-      throw new Error('Fix the memory settings first.');
+      throw new Error('Fix the active context settings first.');
     }
     if (!ready) {
       const message = 'Choose a name, endpoint and model first.';
@@ -230,9 +230,9 @@ export function AgentModelSettings({
         </fieldset>
         {/* Background compaction: the agent summarizes older context without stopping (see Knowledge). */}
         <fieldset disabled={busy} className="min-w-0 space-y-3 border-t border-border pt-4">
-          <legend className="sr-only">Memory</legend>
+          <legend className="sr-only">Active context</legend>
           <div>
-            <p className="text-sm font-medium">Memory</p>
+            <p className="text-sm font-medium">Active context</p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               Older context is summarized in the background so the agent never stops to compact. If its context fills
               before the summary is ready, it sleeps until it is.

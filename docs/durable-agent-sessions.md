@@ -43,7 +43,7 @@ two model calls (a wrapper around the SDK's `prepareNextTurnWithContext`) or bef
 after the snapshot stays verbatim; a summary that no longer matches the branch (another compaction happened, or the
 snapshot is off-branch) is discarded. Applying a summary queues a checkpoint save like any completed boundary.
 
-- **Triggers (per agent, Agents → agent → Model → Memory):** during work at `compactAtPercent` of the context (default
+- **Triggers (per agent, Agents → agent → Model → Active context):** during work at `compactAtPercent` of the context (default
   65); when idle for `idleCompactMinutes` (default 30, 0 = never) with the context at least `idleCompactPercent` full
   (default 50), from a temporary session over the saved checkpoint. Idle summaries wait in memory and are applied
   when the next run's session starts, so its first model call is already light. Summaries are never written into a

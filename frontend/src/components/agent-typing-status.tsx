@@ -12,7 +12,7 @@ export function AgentTypingStatus({
   name: string;
   typing: boolean;
   working?: boolean;
-  /** Background compaction: tidying its memory, or asleep until that is done. */
+  /** Background compaction: compacting its active context, or asleep until that is done. */
   compaction?: 'running' | 'sleeping' | null;
   connected?: boolean;
   /** Shows when this agent is writing to its scratchpad (typing a message still comes first). */
@@ -46,7 +46,7 @@ export function AgentTypingStatus({
             zzz
           </span>
           <span className="truncate">
-            <strong className="font-medium text-foreground">{name}</strong> is asleep until its memory is compacted…
+            <strong className="font-medium text-foreground">{name}</strong> is asleep until its context is compacted…
           </span>
         </>
       ) : mode === 'compacting' ? (
@@ -55,7 +55,7 @@ export function AgentTypingStatus({
             <span className="compaction-ring absolute inset-0 rounded-full" />
           </span>
           <span className="truncate">
-            <strong className="font-medium text-foreground">{name}</strong> is compacting its memory in the background
+            <strong className="font-medium text-foreground">{name}</strong> is compacting its context in the background
           </span>
         </>
       ) : writing ? (

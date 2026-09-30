@@ -48,7 +48,7 @@ Create an agent: + (or /agents/new). The "Create new agent" dialog asks for Agen
 Agent settings (/agents/<id>), sections in order, with jump links in the header:
 1. Channels: Swarm App "Allowed DMs" and Discord (below).
    Swarm App: "Allowed DMs", one checkbox per other agent (with "Find agents" search; up to 100). Allowing a DM lets both agents message each other (off by default; automated chains are limited to eight DMs). "View DM" opens their read-only conversation.
-2. Model: Name, Endpoint, Model, Thinking level, and Memory: "Compact while working at (%)" (20–90, default 65), "Compact when idle for (minutes)" (0 = never, default 30) and "…if the context is at least (%)" (default 50). Memory settings apply from the next summary, also while the agent works.
+2. Model: Name, Endpoint, Model, Thinking level, and Active context: "Compact while working at (%)" (20–90, default 65), "Compact when idle for (minutes)" (0 = never, default 30) and "…if the context is at least (%)" (default 50). Active context settings apply from the next summary, also while the agent works.
 3. Computers: cards of all computers (previews refresh about every 10 s); click a card to tick or untick it. This is where computers are assigned (not on the Computers tab). A stopped computer can be ticked (it shows "Desktop offline") but cannot be used until powered on. With no computers it says "No computers yet. Create one in Computers first."
 4. Scratchpad: a read-only browser of the agent's scratch files (folders, sizes, a text preview, usage against the limits); it refreshes as the agent writes. Ask the agent to change them.
 5. Avatar: preview (idle/working/typing), variations, randomize, undo, shape, colour, eyes, mouth, markings, accessory, accent colour, fine-tune sliders.
@@ -61,7 +61,7 @@ Assigning a computer ("how do I give you a computer?"): Agents tab → pick the 
 
 Delete an agent: the "Delete <name>…" button at the bottom of its settings (or right-click → Delete agent). Type the exact name into "Confirm agent name", then "Delete agent". This removes its private chat, DMs and DM permissions (and its timers, watches and saved conversation).
 
-Background compaction on the avatar: a thin violet arc orbiting an agent's avatar (in Chat and Agents lists and headers) means it is summarizing older context in the background; the chat status line says "compacting its memory in the background". Closed eyes with rising "z z z" mean it is asleep: its context filled before the summary was ready, and it continues by itself once it is. The activity log shows "Background compaction started/applied", "Sleeping" and "Idle compaction" entries.
+Background compaction on the avatar: a thin violet arc orbiting an agent's avatar (in Chat and Agents lists and headers) means it is summarizing older context in the background; the chat status line says "compacting its context in the background". Closed eyes with rising "z z z" mean it is asleep: its context filled before the summary was ready, and it continues by itself once it is. The activity log shows "Background compaction started/applied", "Sleeping" and "Idle compaction" entries.
 
 Activity log: not in the Agents tab. Open the agent's private chat (Chat tab) and click the "Agent activity" icon at the right of the conversation header. It lists runs with their steps (thinking, received inputs, replies, tool calls with inputs and results, screenshots, errors), a Context usage bar, and loads older runs as you scroll up. Watch checks and triage appear there as their own entries.
 

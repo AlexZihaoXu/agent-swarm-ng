@@ -18,7 +18,7 @@ export function AgentAvatar({
   typing?: boolean;
   ready?: boolean;
   working?: boolean;
-  /** Background compaction: summarizing its memory (an orbiting arc), or asleep until that is done (zzz). */
+  /** Background compaction: summarizing its active context (an orbiting arc), or asleep until that is done (zzz). */
   compaction?: 'running' | 'sleeping' | null;
   size?: 'sm' | 'md';
 }) {
