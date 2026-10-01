@@ -772,6 +772,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/computers/{id}/recordings/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["stopComputerRecordings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/computers/{id}/release": {
         parameters: {
             query?: never;
@@ -1851,6 +1867,14 @@ export interface operations {
                             scratchTotalMb: number;
                             storageBudgetGb: number;
                             discordHistoryDays: number;
+                            recordingLeaseSeconds: number;
+                            recordingReminderSeconds: number;
+                            recordingMaxMinutes: number;
+                            recordingDesktopKbps: number;
+                            recordingDesktopFps: number;
+                            recordingTerminalFps: number;
+                            recordingPadBeforeMs: number;
+                            recordingPadAfterMs: number;
                         };
                         bounds: {
                             maxComputers: {
@@ -1896,6 +1920,62 @@ export interface operations {
                                 unit: string;
                             };
                             discordHistoryDays: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingLeaseSeconds: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingReminderSeconds: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingMaxMinutes: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingDesktopKbps: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingDesktopFps: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingTerminalFps: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingPadBeforeMs: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingPadAfterMs: {
                                 min: number;
                                 max: number;
                                 default: number;
@@ -1925,6 +2005,14 @@ export interface operations {
                     scratchTotalMb?: number;
                     storageBudgetGb?: number;
                     discordHistoryDays?: number;
+                    recordingLeaseSeconds?: number;
+                    recordingReminderSeconds?: number;
+                    recordingMaxMinutes?: number;
+                    recordingDesktopKbps?: number;
+                    recordingDesktopFps?: number;
+                    recordingTerminalFps?: number;
+                    recordingPadBeforeMs?: number;
+                    recordingPadAfterMs?: number;
                 };
             };
         };
@@ -1944,6 +2032,14 @@ export interface operations {
                             scratchTotalMb: number;
                             storageBudgetGb: number;
                             discordHistoryDays: number;
+                            recordingLeaseSeconds: number;
+                            recordingReminderSeconds: number;
+                            recordingMaxMinutes: number;
+                            recordingDesktopKbps: number;
+                            recordingDesktopFps: number;
+                            recordingTerminalFps: number;
+                            recordingPadBeforeMs: number;
+                            recordingPadAfterMs: number;
                         };
                         bounds: {
                             maxComputers: {
@@ -1989,6 +2085,62 @@ export interface operations {
                                 unit: string;
                             };
                             discordHistoryDays: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingLeaseSeconds: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingReminderSeconds: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingMaxMinutes: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingDesktopKbps: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingDesktopFps: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingTerminalFps: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingPadBeforeMs: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            recordingPadAfterMs: {
                                 min: number;
                                 max: number;
                                 default: number;
@@ -6363,6 +6515,97 @@ export interface operations {
                                 name: string;
                             };
                         }[];
+                        recordings: {
+                            computerId: string;
+                            agent: {
+                                id: string;
+                                name: string;
+                            };
+                            sources: string[];
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    stopComputerRecordings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        stopped: number;
                     };
                 };
             };

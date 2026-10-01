@@ -19,9 +19,12 @@ export function ComputerCard({
   canManage,
   index = 0,
   onOpen,
+  recording = [],
 }: {
   computer: Computer;
   canManage: boolean;
+  /** Agents recording this computer now (start_recording). */
+  recording?: string[];
   /** Position in the grid, for the entrance cascade. */
   index?: number;
   onOpen: (computer: Computer) => void;
@@ -169,6 +172,17 @@ export function ComputerCard({
           </div>
         )}
         <span className="absolute bottom-2 left-2 rounded-md bg-black/75 px-2 py-1 text-xs text-white">{status}</span>
+        {recording.length > 0 && (
+          <span
+            role="status"
+            aria-label={`Being recorded by ${recording.join(', ')}`}
+            title={`Being recorded by ${recording.join(', ')}`}
+            className="absolute right-2 top-2 flex items-center gap-1.5 rounded-md bg-black/75 px-2 py-1 text-[11px] font-medium text-white"
+          >
+            <span aria-hidden="true" className="size-2 rounded-full bg-red-500 motion-safe:animate-pulse" />
+            Rec
+          </span>
+        )}
       </button>
       <div className="space-y-2 px-3 py-2.5">
         <div className="flex min-w-0 items-center justify-between gap-2">

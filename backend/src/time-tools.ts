@@ -10,6 +10,7 @@ import {
   type AgentTimers,
 } from './agent-timers';
 import type { ComputerWatches } from './computer-use/watches';
+import type { AgentRecordings } from './computer-use/recordings';
 
 const reply = (value: unknown, isError = false) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value) }],
@@ -57,6 +58,7 @@ export function createTimeTools(
   agentId: string,
   humanAuthority: () => boolean,
   watches?: ComputerWatches,
+  recordings?: AgentRecordings,
 ): AgentTool[] {
   return classify({ current_time: 'r', set_timer: 'w', set_reminder: 'w', list_timers: 'r', cancel_timer: 'w' }, [
     defineTool({
@@ -120,11 +122,16 @@ export function createTimeTools(
       name: 'list_timers',
       label: 'List timers',
       description:
-        'Your pending timers and reminders, soonest first, with their ids, notes and next firing time, and your computer watches (watch_terminal/watch_desktop) and monitors (monitor), under watches, with their next check or output and timeout.',
+        'Your pending timers and reminders, soonest first, with their ids, notes and next firing time, and your computer watches (watch_terminal/watch_desktop) and monitors (monitor), under watches, with their next check or output and timeout, and your recordings (start_recording).',
       parameters: Type.Object({}, { additionalProperties: false }),
       async execute() {
         const watching = watches?.list(agentId) ?? [];
-        return reply({ timers: await timers.list(agentId), ...(watching.length ? { watches: watching } : {}) });
+        const recording = recordings?.list(agentId) ?? [];
+        return reply({
+          timers: await timers.list(agentId),
+          ...(watching.length ? { watches: watching } : {}),
+          ...(recording.length ? { recordings: recording } : {}),
+        });
       },
     }),
     defineTool({

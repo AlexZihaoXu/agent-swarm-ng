@@ -116,6 +116,7 @@ model Agent {
   timers           AgentTimer[]
   watches          ComputerWatch[]
   scratchFiles     ScratchFile[]
+  recordings       AgentRecording[]
   discordBot       DiscordBot?
   discordChannels  DiscordChannel[]
   discordMessages  DiscordMessage[]
@@ -125,6 +126,19 @@ model Agent {
 
 // A one-shot watch on a claimed computer. Checks run in memory; the row only lets a restart (which releases claims
 // and so ends watches) tell the agent its watch is gone.
+/// An agent recording in progress (start_recording): kept so a restart can stop and save it and tell the agent.
+model AgentRecording {
+  id         String   @id
+  agentId    String
+  computerId String
+  label      String
+  folder     String
+  createdAt  DateTime @default(now())
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+}
+
 model ComputerWatch {
   id         String   @id @default(uuid())
   agentId    String
@@ -388,6 +402,14 @@ model SwarmSettings {
   storageBudgetGb   Int      @default(10)
   /// Days saved Discord messages are kept (older ones are pruned hourly).
   discordHistoryDays Int     @default(30)
+  recordingLeaseSeconds    Int @default(300)
+  recordingReminderSeconds Int @default(150)
+  recordingMaxMinutes      Int @default(30)
+  recordingDesktopKbps     Int @default(1000)
+  recordingDesktopFps      Int @default(30)
+  recordingTerminalFps     Int @default(15)
+  recordingPadBeforeMs     Int @default(2500)
+  recordingPadAfterMs      Int @default(2500)
   /// Host folders new computers keep their files in (Settings → Computers → Storage); null = Docker volumes.
   computerKeepFolder  String?
   computerCacheFolder String?

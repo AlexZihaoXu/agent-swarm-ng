@@ -219,6 +219,14 @@ test('Settings → Computer storage chooses host folders only once their marker 
   await expect(storage.getByRole('status')).toContainText('not ready');
   await keep.fill('/srv/agent-swarm/keep');
   await storage.getByLabel('Cache folder').fill('/srv/agent-swarm/cache');
+  // It shows where a computer's files would go with these folders.
+  const layout = storage.getByRole('region', { name: "Where each computer's files go" });
+  await expect(layout).toContainText('Keep: /srv/agent-swarm/keep/computers/<computer-id>/');
+  await expect(layout).toContainText('Cache: /srv/agent-swarm/cache/computers/<computer-id>/');
+  await expect(layout).toContainText('/home/agent→ root/home/agent');
+  await expect(layout).toContainText('/tmp→ root/tmp');
+  await layout.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: '../.scratch/shots/storage-layout.png', fullPage: false });
   await storage.getByRole('button', { name: 'Save changes' }).click();
   await expect(storage.getByRole('status')).toHaveText('Saved. New computers use these folders.');
   expect(puts.at(-1)).toEqual({ keepFolder: '/srv/agent-swarm/keep', cacheFolder: '/srv/agent-swarm/cache' });

@@ -9,6 +9,11 @@ USER root
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xserver-xorg-core xserver-xorg-video-dummy && rm -rf /var/lib/apt/lists/*
 COPY templates/default/runtime/desktop-session-xorg120.sh /opt/swarm/desktop-session.sh
 COPY templates/default/runtime/xorg-dummy-120.conf /opt/swarm/xorg-dummy.conf
-RUN chmod 0755 /opt/swarm/desktop-session.sh && chmod 0644 /opt/swarm/xorg-dummy.conf \
+# Agent recordings (recording.py) and the input scripts that log their events for it. A late layer, so the
+# cached desktop layers stay; python3-pil draws terminal screens. Before the storage baseline, so it counts as
+# part of the image.
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-pil && rm -rf /var/lib/apt/lists/*
+COPY templates/default/runtime/recording.py templates/default/runtime/computer-use.py templates/default/runtime/computer-terminal.py /opt/swarm/
+RUN chmod 0755 /opt/swarm/desktop-session.sh && chmod 0644 /opt/swarm/xorg-dummy.conf /opt/swarm/*.py \
     && /opt/swarm/computer-storage-baseline.sh
 USER agent

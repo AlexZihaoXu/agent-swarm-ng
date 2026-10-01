@@ -339,5 +339,6 @@ export function createTerminalTools(
         },
       }),
     ],
+    { terminal_run_actions: 'terminal' },
   );
 }

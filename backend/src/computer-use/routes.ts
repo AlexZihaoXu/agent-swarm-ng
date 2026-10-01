@@ -16,6 +16,20 @@ const computer = Type.Object({
 });
 
 export function registerComputerUseRoutes(app: FastifyInstance, service: ComputerUseService, images: ScreenshotPool) {
+  const recordingsView = () => {
+    const groups = new Map<string, { computerId: string; agent: { id: string; name: string }; sources: string[] }>();
+    for (const item of service.recordings?.all() ?? []) {
+      const key = `${item.computerId}:${item.agentId}`;
+      const group = groups.get(key) ?? {
+        computerId: item.computerId,
+        agent: { id: item.agentId, name: item.agentName },
+        sources: [],
+      };
+      group.sources.push(item.label);
+      groups.set(key, group);
+    }
+    return [...groups.values()];
+  };
   registerComputerTerminalRoutes(app, service);
   app.get<{ Params: { id: string } }>(
     '/api/agents/:id/computers',
@@ -72,6 +86,10 @@ export function registerComputerUseRoutes(app: FastifyInstance, service: Compute
             holders: Type.Array(Type.Object({ computerId: Type.String(), agent: holder })),
             /** Agents reading a computer without holding it (anyone assigned may read at any time). */
             readers: Type.Array(Type.Object({ computerId: Type.String(), agent: holder })),
+            /** Agents recording a computer (start_recording), with the sources they record. */
+            recordings: Type.Array(
+              Type.Object({ computerId: Type.String(), agent: holder, sources: Type.Array(Type.String()) }),
+            ),
           }),
           ...errors,
         },
@@ -81,9 +99,31 @@ export function registerComputerUseRoutes(app: FastifyInstance, service: Compute
       reply.header('Cache-Control', 'no-store');
       try {
         const [holders, readers] = await Promise.all([service.holders(), service.readers()]);
-        return { holders, readers };
+        return { holders, readers, recordings: recordingsView() };
       } catch {
         return reply.code(503).send({ message: 'Could not read computer control.' });
+      }
+    },
+  );
+  // The human stops every recording on a computer: they are saved and their agents told.
+  app.post<{ Params: { id: string } }>(
+    '/api/computers/:id/recordings/stop',
+    {
+      schema: {
+        operationId: 'stopComputerRecordings',
+        params,
+        body: Type.Object({}, { additionalProperties: false }),
+        response: { 200: Type.Object({ stopped: Type.Integer() }), ...errors },
+      },
+    },
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      const count = service.recordings?.forComputer(request.params.id).length ?? 0;
+      try {
+        await service.recordings?.stopComputer(request.params.id, 'stopped by the human');
+        return { stopped: count };
+      } catch {
+        return reply.code(503).send({ message: 'Could not stop the recordings.' });
       }
     },
   );

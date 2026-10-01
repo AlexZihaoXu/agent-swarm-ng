@@ -249,6 +249,8 @@ export function registerComputerRoutes(
         // Mark it deleting first: a computer that is not 'running' cannot be claimed, so no agent can take it again
         // between the release below and the removal.
         const record = await store.markDeleting(request.params.id, request.body.confirmation);
+        // Its recordings end with it (their folders are deleted too); their agents are told.
+        use?.recordings?.dropComputer(record.id);
         if ((await use?.holders())?.some(holder => holder.computerId === record.id)) await use?.forceRelease(record.id);
         await controller.remove(record.id, record.name, storageOf(record));
         if (!(await store.finalizeDelete(record.id, record.name)) && (await store.get(record.id)))
@@ -304,7 +306,11 @@ export function registerComputerRoutes(
               await store.setDesiredState(record.id, 'stopped').catch(() => {});
             throw error;
           }
-        } else await controller.stop(record.id, record.name);
+        } else {
+          // Recordings on it are saved before it goes (its /tmp, where they are cut, does not survive).
+          await use?.recordings?.stopComputer(record.id, 'the computer was turned off').catch(() => {});
+          await controller.stop(record.id, record.name);
+        }
         return reply
           .code(202)
           .send({ accepted: true, action: request.body.action, desiredState: updated.desiredState });

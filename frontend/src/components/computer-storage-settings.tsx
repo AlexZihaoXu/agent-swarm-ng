@@ -134,6 +134,7 @@ export function ComputerStorageSettings({ card }: { card: string }) {
                 </div>
               );
             })}
+            <StorageLayout keep={draft.keepFolder.trim()} cache={draft.cacheFolder.trim()} />
             <p className="text-xs leading-relaxed text-muted-foreground">
               The marker shows that someone with access to this machine chose the folder (this page cannot pick one on
               its own), and that its disk is mounted: a computer will not start while its folder’s marker is missing.
@@ -165,6 +166,56 @@ export function ComputerStorageSettings({ card }: { card: string }) {
           </div>
         )}
       </div>
+    </section>
+  );
+}
+
+/** Each place inside a computer, and where its files end up with these folders (kept paths as in the image). */
+const LAYOUT: { kind: Kind; inside: string; host: string; note: string }[] = [
+  { kind: 'keep', inside: '/home/agent', host: 'root/home/agent', note: 'home: projects, settings, ~/Videos' },
+  { kind: 'keep', inside: '/usr/local', host: 'root/usr/local', note: 'tools installed there' },
+  { kind: 'keep', inside: 'Also keep paths', host: 'root/<path>', note: "added in a computer's settings" },
+  { kind: 'keep', inside: 'apt installs', host: 'system/', note: 'reinstalled after a rebuild' },
+  { kind: 'keep', inside: '/keep/startup', host: 'startup/', note: 'scripts run at every start' },
+  { kind: 'cache', inside: '/home/agent/.cache', host: 'root/home/agent/.cache', note: 'uv, pip, npm, browsers' },
+  { kind: 'cache', inside: '/var/cache/apt/archives', host: 'root/var/cache/apt/archives', note: 'apt downloads' },
+  { kind: 'cache', inside: '/tmp', host: 'root/tmp', note: 'emptied at every start' },
+];
+
+/** Where a new computer's files go with the folders as typed: a host path, or its own Docker volume. */
+function StorageLayout({ keep, cache }: { keep: string; cache: string }) {
+  const base = (kind: Kind) => {
+    const folder = kind === 'keep' ? keep : cache;
+    return folder ? `${folder.replace(/\/+$/, '')}/computers/<computer-id>/` : null;
+  };
+  return (
+    <section aria-label="Where each computer's files go" className="space-y-2 rounded-lg border border-border p-3">
+      <p className="text-xs font-medium">Where each new computer&apos;s files go</p>
+      {(['keep', 'cache'] as const).map(kind => (
+        <div key={kind} className="space-y-1">
+          <p className="break-all text-xs text-muted-foreground">
+            {kind === 'keep' ? 'Keep' : 'Cache'}:{' '}
+            {base(kind) ? (
+              <code className="font-mono text-[11px] text-foreground">{base(kind)}</code>
+            ) : (
+              <>its own Docker volume (in Docker&apos;s storage)</>
+            )}
+          </p>
+          <ul className="grid gap-x-3 gap-y-0.5 text-[11px] sm:grid-cols-[auto_auto_1fr]">
+            {LAYOUT.filter(row => row.kind === kind).map(row => (
+              <li key={row.inside} className="contents">
+                <code className="font-mono text-foreground">{row.inside}</code>
+                <span className="font-mono text-muted-foreground">→ {row.host}</span>
+                <span className="text-muted-foreground max-sm:mb-1">{row.note}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      <p className="text-[11px] text-muted-foreground">
+        Deleting a computer deletes its folders. Clear cache empties the Cache part. Existing computers keep the folders
+        they were created with.
+      </p>
     </section>
   );
 }

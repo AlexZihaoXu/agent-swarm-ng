@@ -182,6 +182,15 @@ export function ComputersPanel({
       return data?.holders ?? [];
     },
   });
+  // Who is recording which computer (a red Rec badge on its card).
+  const recordings = useQuery({
+    queryKey: ['computer-recordings'],
+    refetchInterval: 5000,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/api/computers/control', { signal });
+      return data?.recordings ?? [];
+    },
+  });
   const [menuTarget, setMenuTarget] = useState<Computer | null>(null);
   const [filesTarget, setFilesTarget] = useState<Computer | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
@@ -530,6 +539,9 @@ export function ComputersPanel({
                         computer={computer}
                         canManage={Boolean(query.data?.controllerConnected)}
                         onOpen={target => onOpen(target.id)}
+                        recording={(recordings.data ?? [])
+                          .filter(item => item.computerId === computer.id)
+                          .map(item => item.agent.name)}
                       />
                     ))}
                   </div>

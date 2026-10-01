@@ -46,6 +46,8 @@ export function ComputerControl({
 }) {
   const [holder, setHolder] = useState<{ id: string; name: string } | null>(null);
   const [readers, setReaders] = useState<{ id: string; name: string }[]>([]);
+  const [recording, setRecording] = useState<{ agent: { id: string; name: string }; sources: string[] }[]>([]);
+  const [stoppingRecording, setStoppingRecording] = useState(false);
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [known, setKnown] = useState(false);
@@ -61,6 +63,7 @@ export function ComputerControl({
         if (!result.data) throw new Error('Control status unavailable.');
         setHolder(result.data.holders.find(item => item.computerId === computerId)?.agent ?? null);
         setReaders((result.data.readers ?? []).filter(item => item.computerId === computerId).map(item => item.agent));
+        setRecording((result.data.recordings ?? []).filter(item => item.computerId === computerId));
         setError('');
         setKnown(true);
       } catch {
@@ -182,6 +185,39 @@ export function ComputerControl({
       ) : (
         <span role="status" className="text-muted-foreground">
           {known ? 'No agent holds control' : error ? 'Control status unavailable' : 'Checking control…'}
+        </span>
+      )}
+      {recording.length > 0 && (
+        <span className="flex items-center gap-1.5">
+          <span
+            role="status"
+            title={recording.map(item => `${item.agent.name}: ${item.sources.join(', ')}`).join('\n')}
+            aria-label={`Recording: ${recording.map(item => `${item.agent.name} (${item.sources.join(', ')})`).join(', ')}`}
+            className="flex items-center gap-1.5 rounded-full bg-red-500/15 px-2 py-0.5 font-medium text-red-300"
+          >
+            <span aria-hidden="true" className="size-2 rounded-full bg-red-500 motion-safe:animate-pulse" />
+            Recording · {recording.map(item => item.agent.name).join(', ')}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={stoppingRecording}
+            onClick={async () => {
+              setStoppingRecording(true);
+              try {
+                await api.POST('/api/computers/{id}/recordings/stop', {
+                  params: { path: { id: computerId } },
+                  body: {},
+                });
+                setRecording([]);
+              } finally {
+                setStoppingRecording(false);
+              }
+            }}
+          >
+            {stoppingRecording ? 'Saving…' : 'Stop recording'}
+          </Button>
         </span>
       )}
       {readers.length > 0 && (

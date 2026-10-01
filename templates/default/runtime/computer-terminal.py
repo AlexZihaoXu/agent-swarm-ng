@@ -14,6 +14,11 @@ import time
 import subprocess
 import sys
 import uuid
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    from recording import journal  # agent recordings: terminal events (best effort)
+except Exception:  # pragma: no cover - an older image without the recorder
+    def journal(_kind, _event): pass
 
 ROOT = Path('/run/user/1000/swarm-terminals')
 HOME = '/home/agent'
@@ -320,6 +325,7 @@ def execute(value):
             done = 0
             for number, action in enumerate(value['actions'], 1):
                 if done: time.sleep(value.get('pause', 0.2))
+                began = time.time()
                 try:
                     if action['type'] == 'press': press(pane, action['key'], action.get('repeat', 1), action.get('interval', 0))
                     elif action.get('cpm', DEFAULT_CPM) == 'instant': paste(pane, action['text'])
@@ -328,6 +334,9 @@ def execute(value):
                     raise ValueError('Action ' + str(number) + ' failed after ' + str(done) + ' completed: ' + str(error)
                                      + ' Partial input may have reached the terminal; view it before retrying.')
                 done += 1
+                # Agent recordings of this terminal clip around its actions (never other terminals).
+                journal('terminal', dict({key: action[key] for key in ('text', 'key', 'repeat') if key in action},
+                                         session=session, type='terminal.' + action['type'], t0=began, t1=time.time()))
             return {'session': public(item), 'accepted': True, 'completed': done}
         else: tmux('send-keys', '-t', pane, '--', 'C-c' if operation == 'interrupt' else value['key'])
         return {'session': public(item), 'accepted': True}

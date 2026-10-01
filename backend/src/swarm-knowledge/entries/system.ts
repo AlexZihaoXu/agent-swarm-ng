@@ -40,6 +40,7 @@ Computer tools (always listed; they work only on a computer the human assigned y
 - terminal_create, terminal_list, terminal_view, terminal_status, terminal_run_actions, terminal_resize, terminal_delete: persistent terminals (concepts/computers/terminals, practices/terminals, practices/harnesses).
 - watch_terminal, watch_desktop: wake me when a condition is met, once or once per occurrence with repeat (concepts/computers/watches, practices/waiting).
 - monitor: wake me with the output lines of a command on the computer I hold, no model in the loop (concepts/computers/watches, practices/waiting).
+- start_recording, renew_recording, mark_clip, stop_recording, recording_events: record a desktop (with sound) or terminals, whole or as clips around your actions, kept alive by a lease (concepts/computers/recording).
 
 Not available to agents: creating, starting, stopping or deleting computers; assigning computers or connecting agents (the human does these in the dashboard, practices/dashboard); changing your own settings or permissions; host files or shells; cron-style schedules. If the human asks for one of these, explain how they can do it.
 

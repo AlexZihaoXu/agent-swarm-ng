@@ -98,101 +98,105 @@ export function createComputerTools(
   return [
     ...createCoreTools(service, images, agentId),
     ...createTerminalTools(service, agentId, images),
-    ...classify({ list_computers: 'r', use_computer: 'claim', glance: 'r', look_at: 'r', run_actions: 'rw' }, [
-      defineTool({
-        name: 'list_computers',
-        label: 'List assigned computers',
-        description:
-          'List computers assigned to you and their current agent holder. Assignment is not control. Read practices/computer-use before first computer use.',
-        parameters: object({}),
-        async execute() {
-          return textResult({ computers: await service.list(agentId) });
-        },
-      }),
-      defineTool({
-        name: 'use_computer',
-        label: 'Select or release computer',
-        description:
-          'Select an assigned computer by exact name or ID to read it: glance, look_at, file read and terminal_list/view/status work at any time, even while another agent holds it, and never disturb them. To change it (run_actions, terminal input, write/edit/bash, terminal create/resize/delete, watches, monitor) claim it with write:true: one agent holds a computer at a time (refused while another holds it; ask them to release, or the human to Force release; you cannot override them); humans may still interact. write:false gives up your claim and keeps reading; computer:null releases everything. Selecting another computer gives up the claim on the old one. Releasing leaves persistent tmux programs running.',
-        parameters: object({
-          computer: Type.Union([Type.String({ minLength: 1, maxLength: 100 }), Type.Null()]),
-          write: Type.Optional(
-            Type.Boolean({
-              description:
-                'true: claim it to change it. false: give up your claim and keep reading. Omitted: read (a claim you already hold on this computer is kept).',
-            }),
-          ),
+    ...classify(
+      { list_computers: 'r', use_computer: 'claim', glance: 'r', look_at: 'r', run_actions: 'rw' },
+      [
+        defineTool({
+          name: 'list_computers',
+          label: 'List assigned computers',
+          description:
+            'List computers assigned to you and their current agent holder. Assignment is not control. Read practices/computer-use before first computer use.',
+          parameters: object({}),
+          async execute() {
+            return textResult({ computers: await service.list(agentId) });
+          },
         }),
-        async execute(_call, { computer, write }, signal) {
-          signal?.throwIfAborted();
-          // Watches live on the claim they were set under: giving it up ends them (quietly: this is your own choice).
-          const { result, ended } = watches
-            ? await watches.releasing(agentId, () => service.use(agentId, computer, write))
-            : { result: await service.use(agentId, computer, write), ended: 0 };
-          const watchesEnded = ended ? { watchesEnded: ended } : {};
-          return textResult(
-            computer === null
-              ? { ...result, ...watchesEnded }
-              : {
-                  ...result,
-                  ...watchesEnded,
-                  mode: result.write
-                    ? 'You hold it: you may read and change it.'
-                    : 'Reading: you may look and read; claim it with write:true to change anything.',
-                  knowledge:
-                    'Before any other computer tool: if concepts/computers, practices/computer-use and the concept and practice entries for the surfaces you will use (desktop, terminals, files, watches) are not in your retained context, read them now with read_knowledge.',
-                },
-          );
-        },
-      }),
-      defineTool({
-        name: 'glance',
-        label: 'Look at whole desktop',
-        description:
-          'Fresh screenshot of the full desktop of the computer you read or hold. low(default)=33%, medium=50%, high=75%, full=100% native dimensions. Low is for orientation only, not accurate reading. Use high for broad readable context; full for exact text/fine details across the screen, or look_at for one region. If unclear, increase detail/crop rather than guess or repeat low. Returns image and [0,999] bounds; successful look resets 2 action combos for 30 real seconds.',
-        parameters: lookParameters.glance,
-        async execute(_call, params, signal, _update, ctx) {
-          return capture({ kind: 'glance', ...params }, signal, Boolean(ctx.model?.input.includes('image')));
-        },
-      }),
-      defineTool({
-        name: 'look_at',
-        label: 'Look at desktop region',
-        description:
-          'Read exact text or inspect fine details in one region, especially when a scaled glance is unclear. Fresh native-resolution crop around center x,y and radius size, all in [0,999] desktop coordinates. Shift to fit when possible; oversized axes become full screen. Returns adjusted exact image bounds. Resets 2 combos/30 seconds.',
-        parameters: lookParameters.look_at,
-        async execute(_call, params, signal, _update, ctx) {
-          return capture({ kind: 'look_at', ...params }, signal, Boolean(ctx.model?.input.includes('image')));
-        },
-      }),
-      defineTool({
-        name: 'run_actions',
-        label: 'Run desktop combo',
-        description:
-          'Execute 1–16 ordered actions on your claimed computer. Read practices/desktop for examples. Requires a successful glance/look_at in past 30 seconds with fewer than two started combos. Validate ALL before input: balanced keys/buttons, <=5 seconds action time, <=10 seconds with pauses only between. Invalid calls consume no use but time elapses. Move uses [0,999], Bezier, 8000px/s default max24000; typing 800CPM default max3200 counting Unicode codepoints. Recommended/default between-action pause is 0.2s; it is not a readiness guarantee. Verify the application outcome with an adequately detailed screenshot. Input is not atomic: report partial errors and look again, never retry blindly.',
-        parameters: object({
-          actions: Type.Array(action, { minItems: 1, maxItems: 16 }),
-          per_action_pause: Type.Optional(Type.Number({ minimum: 0, maximum: 10, default: 0.2 })),
+        defineTool({
+          name: 'use_computer',
+          label: 'Select or release computer',
+          description:
+            'Select an assigned computer by exact name or ID to read it: glance, look_at, file read and terminal_list/view/status work at any time, even while another agent holds it, and never disturb them. To change it (run_actions, terminal input, write/edit/bash, terminal create/resize/delete, watches, monitor) claim it with write:true: one agent holds a computer at a time (refused while another holds it; ask them to release, or the human to Force release; you cannot override them); humans may still interact. write:false gives up your claim and keeps reading; computer:null releases everything. Selecting another computer gives up the claim on the old one. Releasing leaves persistent tmux programs running.',
+          parameters: object({
+            computer: Type.Union([Type.String({ minLength: 1, maxLength: 100 }), Type.Null()]),
+            write: Type.Optional(
+              Type.Boolean({
+                description:
+                  'true: claim it to change it. false: give up your claim and keep reading. Omitted: read (a claim you already hold on this computer is kept).',
+              }),
+            ),
+          }),
+          async execute(_call, { computer, write }, signal) {
+            signal?.throwIfAborted();
+            // Watches live on the claim they were set under: giving it up ends them (quietly: this is your own choice).
+            const { result, ended } = watches
+              ? await watches.releasing(agentId, () => service.use(agentId, computer, write))
+              : { result: await service.use(agentId, computer, write), ended: 0 };
+            const watchesEnded = ended ? { watchesEnded: ended } : {};
+            return textResult(
+              computer === null
+                ? { ...result, ...watchesEnded }
+                : {
+                    ...result,
+                    ...watchesEnded,
+                    mode: result.write
+                      ? 'You hold it: you may read and change it.'
+                      : 'Reading: you may look and read; claim it with write:true to change anything.',
+                    knowledge:
+                      'Before any other computer tool: if concepts/computers, practices/computer-use and the concept and practice entries for the surfaces you will use (desktop, terminals, files, watches) are not in your retained context, read them now with read_knowledge.',
+                  },
+            );
+          },
         }),
-        async execute(_call, { actions, per_action_pause }, signal) {
-          const receipt = await service.run(
-            agentId,
-            {
-              actions: actions.map(item => ({ ...('params' in item ? item.params : {}), type: item.name })),
-              per_action_pause,
-            },
-            signal,
-          );
-          return { ...textResult(receipt), isError: Boolean(receipt.error) };
-        },
-      }),
-    ]),
+        defineTool({
+          name: 'glance',
+          label: 'Look at whole desktop',
+          description:
+            'Fresh screenshot of the full desktop of the computer you read or hold. low(default)=33%, medium=50%, high=75%, full=100% native dimensions. Low is for orientation only, not accurate reading. Use high for broad readable context; full for exact text/fine details across the screen, or look_at for one region. If unclear, increase detail/crop rather than guess or repeat low. Returns image and [0,999] bounds; successful look resets 2 action combos for 30 real seconds.',
+          parameters: lookParameters.glance,
+          async execute(_call, params, signal, _update, ctx) {
+            return capture({ kind: 'glance', ...params }, signal, Boolean(ctx.model?.input.includes('image')));
+          },
+        }),
+        defineTool({
+          name: 'look_at',
+          label: 'Look at desktop region',
+          description:
+            'Read exact text or inspect fine details in one region, especially when a scaled glance is unclear. Fresh native-resolution crop around center x,y and radius size, all in [0,999] desktop coordinates. Shift to fit when possible; oversized axes become full screen. Returns adjusted exact image bounds. Resets 2 combos/30 seconds.',
+          parameters: lookParameters.look_at,
+          async execute(_call, params, signal, _update, ctx) {
+            return capture({ kind: 'look_at', ...params }, signal, Boolean(ctx.model?.input.includes('image')));
+          },
+        }),
+        defineTool({
+          name: 'run_actions',
+          label: 'Run desktop combo',
+          description:
+            'Execute 1–16 ordered actions on your claimed computer. Read practices/desktop for examples. Requires a successful glance/look_at in past 30 seconds with fewer than two started combos. Validate ALL before input: balanced keys/buttons, <=5 seconds action time, <=10 seconds with pauses only between. Invalid calls consume no use but time elapses. Move uses [0,999], Bezier, 8000px/s default max24000; typing 800CPM default max3200 counting Unicode codepoints. Recommended/default between-action pause is 0.2s; it is not a readiness guarantee. Verify the application outcome with an adequately detailed screenshot. Input is not atomic: report partial errors and look again, never retry blindly.',
+          parameters: object({
+            actions: Type.Array(action, { minItems: 1, maxItems: 16 }),
+            per_action_pause: Type.Optional(Type.Number({ minimum: 0, maximum: 10, default: 0.2 })),
+          }),
+          async execute(_call, { actions, per_action_pause }, signal) {
+            const receipt = await service.run(
+              agentId,
+              {
+                actions: actions.map(item => ({ ...('params' in item ? item.params : {}), type: item.name })),
+                per_action_pause,
+              },
+              signal,
+            );
+            return { ...textResult(receipt), isError: Boolean(receipt.error) };
+          },
+        }),
+      ],
+      { run_actions: 'desktop' },
+    ),
   ];
 }
 
 export const COMPUTER_USE_GUIDANCE = `## Assigned computers and desktop use
 Knowledge first: if concepts/computers and practices/computer-use, plus the concept and practice for each surface you will use (desktop: concepts/computers/desktop, practices/desktop, practices/browser; terminals: concepts/computers/terminals, practices/terminals; files: concepts/computers/files, practices/files; waiting: concepts/computers/watches, practices/waiting), are not in your retained context (a new or compacted conversation, or you simply do not remember reading them), read them with read_knowledge BEFORE calling use_computer or any other computer tool, even for a task that looks simple. Acknowledge an actionable human request first, then read. These entries teach tool examples, coordinates, timing, screenshots, terminals, watches, CAPTCHA/account rules and release etiquette. Re-read relevant guidance if uncertain or a tool reports a rule failure.
-While you hold a computer you receive platform computer events when one of its terminals exits or is closed by someone else; decide whether to inspect it, report to the human, or clean it up (practices/terminals). Never wait inside a turn for something slow on the computer: watch_terminal/watch_desktop wake you when a condition you describe is met (a build finishes, Claude Code waits for input, a dialog appears; once, or once per occurrence with repeat), and monitor wakes you with the output lines of a command for signals it can detect exactly (a log line, a file, a port), with no model checks; then end your turn (practices/waiting). terminal_view colors:true attaches an image of the view with its colours when colour carries meaning.
+While you hold a computer you receive platform computer events when one of its terminals exits or is closed by someone else; decide whether to inspect it, report to the human, or clean it up (practices/terminals). Never wait inside a turn for something slow on the computer: watch_terminal/watch_desktop wake you when a condition you describe is met (a build finishes, Claude Code waits for input, a dialog appears; once, or once per occurrence with repeat), and monitor wakes you with the output lines of a command for signals it can detect exactly (a log line, a file, a port), with no model checks; then end your turn (practices/waiting). terminal_view colors:true attaches an image of the view with its colours when colour carries meaning. To show people what happened, start_recording records a desktop (with sound) or terminals, whole or as clips around your actions; read concepts/computers/recording first.
 Use list_computers to see assigned resources. use_computer({computer}) selects one to read: glance, look_at, file read and terminal_list/view/status, at any time, even while another agent holds it, without disturbing them. To change anything (input, write/edit/bash, terminals, watches, monitor) claim it with use_computer({computer, write:true}); then glance/look_at before acting. A successful look at the computer you hold permits only two run_actions combos in 30 real seconds. Input remains subject to execution-time checks. Only one agent holds a computer; the human can interact concurrently. Ask a holder to release using an already-permitted chat; if stuck, ask the human for Force release. Release when done using use_computer({computer:null}) (write:false gives up only the claim) unless explicitly asked to keep it dedicated. Restart releases claims and the next-turn notice explains recovery. Never mistake saved screenshots or old claims for fresh authority.
 Choose screenshot detail by purpose: low is for orientation, NOT accurate reading. Use high for broad readable context, glance({quality:"full"}) for exact text/fine details across the screen, or look_at for a targeted native-resolution crop. If unclear, increase detail/crop or deliberately zoom; do not guess or repeat low-resolution views for the same unreadable detail. After input, verify the actual application outcome at adequate detail before claiming success. Recommended/default per_action_pause is 0.2 seconds between actions; a pause is not proof the UI is ready.
 Report a blocking CAPTCHA BEFORE trying it; one attempt maximum by default, report its result immediately and do not try again without human approval. If you observe the human's Google account signed into Chrome, warn about possible account restrictions from automation and await informed permission before Google services; use a non-Google route meanwhile. Read the browser Knowledge entry for the scope and examples.

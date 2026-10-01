@@ -64,6 +64,16 @@ export class ComputerUseService {
   onTerminalInput?: (event: { agentId: string; computerId: string; session: string; active: boolean }) => void;
   /** Told when an agent deletes a terminal itself (its watches on it end quietly). */
   onAgentTerminalDelete?: (event: { agentId: string; computerId: string; session: string }) => void;
+  /**
+   * Agent recordings (set by the broker): the dashboard shows and stops them, and a computer about to stop, be
+   * replaced or be deleted saves them first.
+   */
+  recordings?: {
+    forComputer(computerId: string): { id: string; agentId: string; agentName: string; label: string }[];
+    all(): { id: string; agentId: string; agentName: string; computerId: string; label: string }[];
+    stopComputer(computerId: string, reason: string): Promise<void>;
+    dropComputer(computerId: string): void;
+  };
   /** A claim is about to end: its monitors stop first (they can act on the computer). `forced`: not the agent's own. */
   onClaimEnding?: (computerId: string, forced: boolean) => Promise<void>;
   /** Terminals an agent deleted itself (computer:session → when), so the watcher does not report them back. */
@@ -718,6 +728,45 @@ export class ComputerUseService {
         computerId,
         'The human force released your computer. Use use_computer again; take a new screenshot before GUI input.',
       ),
+    );
+  }
+  /**
+   * A computer the agent may read (recordings): the one named (assigned to it, running), else the one it reads or
+   * holds now. Never changes what it reads or holds. `holder` is whoever holds it for writing, if anyone.
+   */
+  async readable(agentId: string, target?: string) {
+    await this.ready();
+    let computerId: string, name: string;
+    if (target) {
+      const rows = await this.database.client.computerAssignment.findMany({
+        where: { agentId },
+        include: { computer: true },
+        take: 100,
+      });
+      const match =
+        rows.find(row => row.computerId === target) ??
+        rows.find(row => row.computer.name.toLocaleLowerCase() === target.toLocaleLowerCase());
+      if (!match)
+        throw new ComputerUseError(
+          'Choose one assigned computer by ID or exact name; use list_computers.' + knowledge,
+          403,
+        );
+      if (match.computer.state !== 'running' || match.computer.desiredState !== 'running')
+        throw new ComputerUseError('Computer is not running.', 409);
+      ({ computerId, name } = { computerId: match.computerId, name: match.computer.name });
+    } else {
+      const read = await this.reader(agentId);
+      ({ computerId, name } = { computerId: read.computerId, name: read.computer.name });
+    }
+    const claim = await this.database.client.computerClaim.findUnique({ where: { computerId } });
+    return { computerId, name, holder: claim?.agentId ?? null };
+  }
+  /** Whether the agent is still assigned this computer. */
+  async assigned(agentId: string, computerId: string) {
+    return Boolean(
+      await this.database.client.computerAssignment.findUnique({
+        where: { agentId_computerId: { agentId, computerId } },
+      }),
     );
   }
   /** What an agent holds and reads now (a heartbeat restores it if it is dropped). */

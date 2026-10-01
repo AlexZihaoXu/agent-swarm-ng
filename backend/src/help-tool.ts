@@ -1,6 +1,6 @@
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import { Type } from '@sinclair/typebox';
-import { ACCESS_MEANING, accessOf, classify, type AgentTool, type ToolAccess } from './tool-access';
+import { ACCESS_MEANING, accessOf, classify, recordingEventsOf, type AgentTool, type ToolAccess } from './tool-access';
 
 /** The Knowledge entries that document each family of tools (first match wins). */
 const KNOWLEDGE: [RegExp, string[]][] = [
@@ -10,6 +10,7 @@ const KNOWLEDGE: [RegExp, string[]][] = [
   [/^(glance|look_at|run_actions)$/, ['concepts/computers/desktop', 'practices/desktop']],
   [/^(use_computer|list_computers)$/, ['concepts/computers', 'practices/computer-use']],
   [/^(watch_|monitor$)/, ['concepts/computers/watches', 'practices/waiting']],
+  [/(_recording|^mark_clip|^recording_events)$/, ['concepts/computers/recording']],
   [/^(scratch_|present_scratch$)/, ['concepts/scratchpad']],
   [
     /^(list_files|read_file|upload_file|delete_file|copy_file|save_screenshot)$/,
@@ -25,6 +26,11 @@ const KNOWLEDGE: [RegExp, string[]][] = [
 ];
 const knowledgeOf = (name: string) => KNOWLEDGE.find(([pattern]) => pattern.test(name))?.[1] ?? [];
 const FIELDS = ['class', 'params', 'description', 'knowledge'] as const;
+/** The second label: whose recordings this tool's actions are events of. */
+const recordingEvents = (tool: AgentTool) => {
+  const kind = recordingEventsOf(tool);
+  return kind ? ` · ${kind} recording events` : '';
+};
 type Field = (typeof FIELDS)[number];
 
 /**
@@ -81,10 +87,12 @@ export function createHelpTool(
         const simple = fields.size === 1 && fields.has('class');
         for (const tool of chosen) {
           if (simple) {
-            lines.push(`${tool.name}: ${accessOf(tool)}`);
+            lines.push(`${tool.name}: ${accessOf(tool)}${recordingEvents(tool)}`);
             continue;
           }
-          const parts: string[] = [`# ${tool.name}${fields.has('class') ? ` (${accessOf(tool) as ToolAccess})` : ''}`];
+          const parts: string[] = [
+            `# ${tool.name}${fields.has('class') ? ` (${accessOf(tool) as ToolAccess}${recordingEvents(tool)})` : ''}`,
+          ];
           if (fields.has('description')) parts.push(tool.description);
           if (fields.has('params')) parts.push(`params: ${JSON.stringify(tool.parameters)}`);
           if (fields.has('knowledge')) {

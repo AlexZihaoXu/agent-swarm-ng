@@ -5,6 +5,7 @@ import type { ComputerConfiguration } from './computer-configuration';
 import { ComputerUseService } from './computer-use-service';
 import { MAX_USE_BODY } from './computer-use';
 import { ComputerCoreService } from './computer-core-service';
+import type { RecordingOp } from './recording';
 import { fileAttachment, type FileOperation } from './operator-files';
 import { terminalSockets, type TerminalSocket } from './terminal-stream';
 import { authorized } from './auth';
@@ -279,6 +280,14 @@ Bun.serve<TerminalSocket>({
             },
           });
         return json(output.result);
+      }
+      const recordingMatch = /^\/computers\/([^/]+)\/recording\/(start|mark|update|stop|list|terminals)$/.exec(
+        pathname,
+      );
+      if (recordingMatch) {
+        if (request.method !== 'POST') return json({ message: 'Method not allowed.' }, 405);
+        const id = decodeURIComponent(recordingMatch[1]);
+        return json(await manager.recording(id, recordingMatch[2] as RecordingOp, await body(request, 32 * 1024)));
       }
       const coreMatch = /^\/computers\/([^/]+)\/core\/(prepare|execute|cancel)$/.exec(pathname);
       if (coreMatch) {

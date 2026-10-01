@@ -63,6 +63,8 @@ import { ComputerMonitors } from './computer-use/monitors';
 import { ComputerWatches } from './computer-use/watches';
 import { createWatchJudge, type ForkBasis } from './computer-use/watch-judge';
 import { createWatchTools } from './computer-use/watch-tools';
+import { AgentRecordings } from './computer-use/recordings';
+import { createRecordingTools } from './computer-use/recording-tools';
 import type { AgentTool } from './tool-access';
 import { createNoteTool, heartbeatPrompt, HeartbeatScheduler, type HeartbeatBranch } from './heartbeat';
 
@@ -103,7 +105,9 @@ export class DmBroker {
   /** Settings → Swarm (file and scratchpad limits). */
   readonly settings: SwarmSettingsStore;
   /** Streams files in and out of computers for copy_file and upload_file (set when a controller exists). */
-  transfers?: Pick<ComputerController, 'exportFile' | 'importFile' | 'monitor'> | null;
+  transfers?: Pick<ComputerController, 'exportFile' | 'importFile' | 'monitor' | 'recording'> | null;
+  /** Agent recordings (start_recording), with their leases. */
+  readonly recordings?: AgentRecordings;
   private pruning?: ReturnType<typeof setInterval>;
   private watcher?: TerminalWatcher;
   /** One-shot watches on claimed computers (watch_terminal, watch_desktop). */
@@ -184,6 +188,16 @@ export class DmBroker {
       };
       computers.onAgentTerminalDelete = ({ agentId, computerId, session }) =>
         void watches.terminalDeleted(agentId, computerId, session).catch(() => {});
+    }
+    if (computers) {
+      this.recordings = new AgentRecordings(
+        database,
+        computers,
+        () => this.transfers?.recording?.bind(this.transfers),
+        this.settings,
+        (agentId, text, human) => void this.deliverPlatformEvent(agentId, 'computer', text, human),
+      );
+      computers.recordings = this.recordings;
     }
     this.watcher = computers
       ? new TerminalWatcher(database, computers, (agentId, text) =>
@@ -538,6 +552,8 @@ export class DmBroker {
       this.watcher?.start();
       // Watches end with claims on a restart; their agents hear so once.
       void this.watches?.start().catch(() => {});
+      // Recordings a restart interrupted are saved; their agents hear so on their next turn.
+      void this.recordings?.ready().catch(() => {});
       void this.computers?.ready().catch(() => {});
       // Uploads never sent within a day are removed, now and hourly.
       void this.files.pruneUnsent().catch(() => {});
@@ -883,6 +899,9 @@ ${preview.text}`
         ? [
             ...createComputerTools(this.computers, this.screenshots, agentId, this.watches),
             ...(this.watches ? createWatchTools(this.watches, agentId, () => humanAuthority) : []),
+            ...(this.recordings
+              ? createRecordingTools(this.recordings, agentId, () => humanAuthority, this.screenshots, this.settings)
+              : []),
           ]
         : [];
     // A heartbeat leaves no trace unless it changes something: what the agent holds now is put back if it is dropped,
@@ -983,7 +1002,7 @@ ${preview.text}`
         ),
         ...this.knowledge.toolsFor(agentId),
         // Every agent's sense of time: current time, timers and reminders (no computer needed).
-        ...createTimeTools(this.timers, agentId, () => humanAuthority, this.watches),
+        ...createTimeTools(this.timers, agentId, () => humanAuthority, this.watches, this.recordings),
         ...createScratchTools(this.scratch, agentId, this.screenshots),
         // An agent whose owner configured a Discord bot for it gets the Discord tools (checked again on every call).
         ...(this.discord && this.discord.connections.status(agentId).state !== 'off'
@@ -1215,6 +1234,7 @@ ${preview.text}`
     this.deleting.add(agentId);
     this.forgetCompaction(agentId);
     await this.watches?.releasedBy(agentId);
+    await this.recordings?.releasedBy(agentId).catch(() => {});
     await this.reactionCoordinator.cancelAgent(agentId);
     await this.runs.settled(agentId);
     const related = [...this.jobs.values()].filter(
@@ -1238,6 +1258,7 @@ ${preview.text}`
     this.heartbeats.close();
     this.watcher?.close();
     this.watches?.close();
+    this.recordings?.close();
     this.reactionCoordinator.close();
   }
   async settled() {

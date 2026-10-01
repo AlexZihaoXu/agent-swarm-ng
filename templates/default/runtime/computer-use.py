@@ -19,6 +19,7 @@ import uuid
 
 from computer_use_protocol import BUTTONS, SCROLL, bezier_points, capture_geometry, rounded, validate_combo
 from computer_use_x11 import X11
+from recording import journal
 
 ROOT = Path('/run/user/1000/swarm-computer-use')
 
@@ -155,6 +156,7 @@ def execute(value, x11):
         for index, a in enumerate(value['actions']):
             check()
             kind = a['type']
+            began = time.time()
             if paths[index] is not None:
                 start = time.monotonic()
                 for at, x, y in paths[index]:
@@ -187,6 +189,9 @@ def execute(value, x11):
                     ledger['mapping'] = None
                     save()
             result['completed'] = index + 1
+            # Agent recordings (desktop source) clip around these: exact start and end of each action.
+            journal('desktop', dict({key: a[key] for key in ('x', 'y', 'key', 'text', 'direction', 'amount', 'button') if key in a},
+                                    type=kind, t0=began, t1=time.time()))
             if index < len(value['actions']) - 1:
                 sleep(value.get('per_action_pause', .2))
     except (ValueError, Cancelled) as error:

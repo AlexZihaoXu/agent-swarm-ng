@@ -269,6 +269,7 @@ test('agents reading a computer show as overlapping avatars apart from the holde
     route.fulfill({
       json: {
         holders: [{ computerId: desk.id, agent: { id: holder.id, name: holder.name } }],
+        recordings: [{ computerId: desk.id, agent: extra, sources: ['desktop'] }],
         readers: [...others.map(agent => ({ id: agent.id, name: agent.name })), extra, { id: 'r6', name: 'Ash' }].map(
           agent => ({ computerId: desk.id, agent }),
         ),
@@ -285,6 +286,9 @@ test('agents reading a computer show as overlapping avatars apart from the holde
   await expect(readers).toHaveAccessibleName(
     `Reading this computer: ${[...others.map(a => a.name), 'Sky', 'Ash'].join(', ')}`,
   );
+  // Recording shows in red with a way to stop it.
+  await expect(page.getByRole('status', { name: /^Recording: / })).toContainText('Recording · Sky');
+  await expect(page.getByRole('button', { name: 'Stop recording' })).toBeVisible();
   // Four faces overlap; the rest are counted.
   await expect(readers.getByText('+1')).toBeVisible();
   await expect(readers).toContainText('reading');

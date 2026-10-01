@@ -310,6 +310,32 @@ Tools:
 Limits (Settings → Swarm): the largest file (100 MB by default) and total storage (10 GB); when storage is full, uploads are refused until files are deleted. Nothing is deleted automatically.`,
 } satisfies KnowledgeEntry;
 
+export const recordingConcept = {
+  id: 'concepts/computers/recording',
+  parentId: 'concepts/computers',
+  title: 'Recording',
+  summary:
+    'start_recording: video of a desktop (with sound) or a terminal, whole or as clips around events, kept alive by a lease you renew.',
+  source: 'docs/agent-computer-use.md',
+  related: ['concepts/computers/desktop', 'concepts/computers/terminals', 'practices/sharing-files', 'concepts/tools'],
+  content: `Record a computer to show people what happened. Recording only watches: it needs read access (use_computer without write is enough), works while another agent holds the computer (they are told), and never types or clicks.
+
+Sources: start_recording({sources: [...], mode}) takes up to 3 at once, all on one computer:
+- "desktop": the screen at up to 60 fps (Settings default 30), the cursor, and the computer's sound. GPU H.264, capped at the Settings bitrate (variable below it).
+- {terminal: <session ID from terminal_list>}: that one terminal, at up to 30 fps (default 15), drawn with its colours, plus an exact .cast log of everything it printed.
+Several sources started together (or while you record that computer) share one folder; recording other things later starts a new one.
+
+Modes:
+- "session": everything, one video per source.
+- "events": only clips around events; the rest is never kept. Events of a desktop recording are your desktop actions (each action of run_actions); events of a terminal recording are the actions you type into that terminal (terminal_run_actions); actions in another terminal never count for it, and nothing else (watches, monitors, other tools) counts at all. mark_clip({label}) marks a moment in every events-mode recording of yours. Choose types and padding with events, e.g. [{on:"mouse.move_to", before:2.5, after:2.5}, {on:"keyboard.type", before:1.5, after:3}, "mark"]; padding counts from the start and the end of an action (typing for 4 s with after:3 keeps until 3 s after it ends). Omit events for all of the sources' events at the Settings padding. recording_events lists the types. Clips that overlap or nearly touch merge. With both a desktop and a terminal source, one events list serves both: each keeps its own kinds. help shows which tools record which events ("desktop recording events", "terminal recording events").
+
+Lease: a recording lasts the lease (Settings, default 5 min) from its start or your last renew_recording; halfway you get a reminder event. renew_recording renews all of yours at once and may change the event rules. Unrenewed, it stops and saves by itself and you are told. It also stops at the longest recording (default 30 min), when the computer is turned off (saved first), when your assignment is removed, and on a platform restart (saved; you hear on your next turn). Deleting the computer deletes it unsaved. Only renew when you still need it.
+
+Saved: in ~/Videos/agent-recordings/<time>_<your name>/ on the recorded computer: clip-01-desktop.mp4, clip-01-terminal-<name>.mp4 (+ .cast) and so on, and events.log (one line per event: UTC time, time into the recording, source, file and time in it, and the action; typed text is written unless you start with hide_typed:true, which you must use when typing passwords, tokens or other secrets). stop_recording saves now and returns the files with one contact sheet of stills: check it before sharing. To share, upload_file from computer:<name>:<path> into the chat, then send_message (or discord_send_message) with the fileId; mind the size (Discord's limit is small: re-encode with ffmpeg in a terminal if needed). To combine sources (side by side, picture in picture, one after another), use ffmpeg in a terminal, with events.log to line them up.
+
+People see a red Recording indicator on the computer and can stop it (you are told, and it is saved).`,
+} satisfies KnowledgeEntry;
+
 export const watchesConcept = {
   id: 'concepts/computers/watches',
   parentId: 'concepts/computers',

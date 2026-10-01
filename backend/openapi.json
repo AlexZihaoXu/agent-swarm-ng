@@ -2295,7 +2295,15 @@
                         "scratchMaxFiles",
                         "scratchTotalMb",
                         "storageBudgetGb",
-                        "discordHistoryDays"
+                        "discordHistoryDays",
+                        "recordingLeaseSeconds",
+                        "recordingReminderSeconds",
+                        "recordingMaxMinutes",
+                        "recordingDesktopKbps",
+                        "recordingDesktopFps",
+                        "recordingTerminalFps",
+                        "recordingPadBeforeMs",
+                        "recordingPadAfterMs"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -2317,6 +2325,30 @@
                           "type": "integer"
                         },
                         "discordHistoryDays": {
+                          "type": "integer"
+                        },
+                        "recordingLeaseSeconds": {
+                          "type": "integer"
+                        },
+                        "recordingReminderSeconds": {
+                          "type": "integer"
+                        },
+                        "recordingMaxMinutes": {
+                          "type": "integer"
+                        },
+                        "recordingDesktopKbps": {
+                          "type": "integer"
+                        },
+                        "recordingDesktopFps": {
+                          "type": "integer"
+                        },
+                        "recordingTerminalFps": {
+                          "type": "integer"
+                        },
+                        "recordingPadBeforeMs": {
+                          "type": "integer"
+                        },
+                        "recordingPadAfterMs": {
                           "type": "integer"
                         }
                       }
@@ -2330,7 +2362,15 @@
                         "scratchMaxFiles",
                         "scratchTotalMb",
                         "storageBudgetGb",
-                        "discordHistoryDays"
+                        "discordHistoryDays",
+                        "recordingLeaseSeconds",
+                        "recordingReminderSeconds",
+                        "recordingMaxMinutes",
+                        "recordingDesktopKbps",
+                        "recordingDesktopFps",
+                        "recordingTerminalFps",
+                        "recordingPadBeforeMs",
+                        "recordingPadAfterMs"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -2496,6 +2536,222 @@
                           }
                         },
                         "discordHistoryDays": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingLeaseSeconds": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingReminderSeconds": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingMaxMinutes": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingDesktopKbps": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingDesktopFps": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingTerminalFps": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingPadBeforeMs": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingPadAfterMs": {
                           "type": "object",
                           "required": [
                             "min",
@@ -2560,6 +2816,30 @@
                   },
                   "discordHistoryDays": {
                     "type": "integer"
+                  },
+                  "recordingLeaseSeconds": {
+                    "type": "integer"
+                  },
+                  "recordingReminderSeconds": {
+                    "type": "integer"
+                  },
+                  "recordingMaxMinutes": {
+                    "type": "integer"
+                  },
+                  "recordingDesktopKbps": {
+                    "type": "integer"
+                  },
+                  "recordingDesktopFps": {
+                    "type": "integer"
+                  },
+                  "recordingTerminalFps": {
+                    "type": "integer"
+                  },
+                  "recordingPadBeforeMs": {
+                    "type": "integer"
+                  },
+                  "recordingPadAfterMs": {
+                    "type": "integer"
                   }
                 },
                 "additionalProperties": false,
@@ -2589,7 +2869,15 @@
                         "scratchMaxFiles",
                         "scratchTotalMb",
                         "storageBudgetGb",
-                        "discordHistoryDays"
+                        "discordHistoryDays",
+                        "recordingLeaseSeconds",
+                        "recordingReminderSeconds",
+                        "recordingMaxMinutes",
+                        "recordingDesktopKbps",
+                        "recordingDesktopFps",
+                        "recordingTerminalFps",
+                        "recordingPadBeforeMs",
+                        "recordingPadAfterMs"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -2611,6 +2899,30 @@
                           "type": "integer"
                         },
                         "discordHistoryDays": {
+                          "type": "integer"
+                        },
+                        "recordingLeaseSeconds": {
+                          "type": "integer"
+                        },
+                        "recordingReminderSeconds": {
+                          "type": "integer"
+                        },
+                        "recordingMaxMinutes": {
+                          "type": "integer"
+                        },
+                        "recordingDesktopKbps": {
+                          "type": "integer"
+                        },
+                        "recordingDesktopFps": {
+                          "type": "integer"
+                        },
+                        "recordingTerminalFps": {
+                          "type": "integer"
+                        },
+                        "recordingPadBeforeMs": {
+                          "type": "integer"
+                        },
+                        "recordingPadAfterMs": {
                           "type": "integer"
                         }
                       }
@@ -2624,7 +2936,15 @@
                         "scratchMaxFiles",
                         "scratchTotalMb",
                         "storageBudgetGb",
-                        "discordHistoryDays"
+                        "discordHistoryDays",
+                        "recordingLeaseSeconds",
+                        "recordingReminderSeconds",
+                        "recordingMaxMinutes",
+                        "recordingDesktopKbps",
+                        "recordingDesktopFps",
+                        "recordingTerminalFps",
+                        "recordingPadBeforeMs",
+                        "recordingPadAfterMs"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -2790,6 +3110,222 @@
                           }
                         },
                         "discordHistoryDays": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingLeaseSeconds": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingReminderSeconds": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingMaxMinutes": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingDesktopKbps": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingDesktopFps": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingTerminalFps": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingPadBeforeMs": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "recordingPadAfterMs": {
                           "type": "object",
                           "required": [
                             "min",
@@ -20685,7 +21221,8 @@
                   "type": "object",
                   "required": [
                     "holders",
-                    "readers"
+                    "readers",
+                    "recordings"
                   ],
                   "properties": {
                     "holders": {
@@ -20747,6 +21284,181 @@
                           }
                         }
                       }
+                    },
+                    "recordings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "computerId",
+                          "agent",
+                          "sources"
+                        ],
+                        "properties": {
+                          "computerId": {
+                            "type": "string"
+                          },
+                          "agent": {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "name"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "sources": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/computers/{id}/recordings/stop": {
+      "post": {
+        "operationId": "stopComputerRecordings",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "stopped"
+                  ],
+                  "properties": {
+                    "stopped": {
+                      "type": "integer"
                     }
                   }
                 }

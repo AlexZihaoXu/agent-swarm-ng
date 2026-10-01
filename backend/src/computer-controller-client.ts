@@ -36,6 +36,12 @@ export interface ComputerController {
     body: AsyncIterable<Uint8Array>,
     signal?: AbortSignal,
   ): Promise<{ path: string; size: number }>;
+  /** Agent recordings inside the guest (recording.py). */
+  recording?(
+    id: string,
+    op: 'start' | 'mark' | 'update' | 'stop' | 'list' | 'terminals',
+    input: object,
+  ): Promise<Record<string, any>>;
   limits(): Promise<ComputerLimits>;
   create(
     id: string,
@@ -144,6 +150,15 @@ export class HttpComputerController implements ComputerController {
     );
     if (!response.body) throw new ControllerError(503, 'The monitor stream is unavailable.');
     return response.body;
+  }
+  /** Agent recordings (the guest's recording.py); stop may encode for minutes. */
+  async recording(id: string, op: 'start' | 'mark' | 'update' | 'stop' | 'list' | 'terminals', input: object) {
+    const response = await this.request(
+      `/computers/${encodeURIComponent(id)}/recording/${op}`,
+      { method: 'POST', body: JSON.stringify(input) },
+      op === 'stop' ? 900_000 : 30_000,
+    );
+    return (await response.json()) as Record<string, any>;
   }
   terminalSocket(id: string, session: string) {
     const url = new URL(

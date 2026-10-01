@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { posix } from 'node:path';
 import { DockerApi, DockerApiError } from './docker-api';
+import { validateRecording, type RecordingOp } from './recording';
 import { MAX_TRANSFER, regularFile, tarOneFile, transferPath, untarFirstFile } from './file-transfer';
 import {
   decodeFileResult,
@@ -1414,6 +1415,30 @@ export class ComputerManager {
       145_000,
       3 * 1024 * 1024,
     );
+  }
+
+  /** Agent recordings: the guest's recording.py as the guest account (stop may encode for minutes). */
+  async recording(idRaw: string, op: RecordingOp, input: unknown) {
+    const id = validateId(idRaw);
+    const value = validateRecording(op, input);
+    const computer = await this.container(this.names.desktop(id), id, 'desktop');
+    if (!computer) throw new ResourceError(404, 'Computer not found.');
+    if (!computer.State.Running) throw new ResourceError(503, 'Computer is not running.');
+    const output = await this.docker.exec(
+      computer.Id,
+      ['/usr/bin/python3', '/opt/swarm/recording.py', op, JSON.stringify(value)],
+      'agent',
+      op === 'stop' ? 900_000 : 30_000,
+      8 * 1024 * 1024,
+    );
+    let result: Record<string, unknown>;
+    try {
+      result = JSON.parse(output.toString().trim().split('\n').at(-1) ?? '');
+    } catch {
+      throw new ResourceError(503, 'The recorder gave no answer; update this computer to record.');
+    }
+    if (typeof result.error === 'string') throw new ResourceError(409, result.error);
+    return result;
   }
 
   async pointer(idRaw: string, x: number, y: number) {

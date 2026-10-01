@@ -7,6 +7,13 @@ import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
  */
 export type ToolAccess = 'r' | 'w' | 'rw' | 'claim';
 const access = Symbol('tool access');
+const records = Symbol('recording events');
+/**
+ * A second label: the tool's actions are events of agent recordings of this kind (start_recording). Desktop and
+ * terminal recordings are separate: run_actions counts only for desktop recordings, terminal_run_actions only for
+ * recordings of the terminal it types into. No other tool counts.
+ */
+export type RecordingEvents = 'desktop' | 'terminal';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AgentTool = ToolDefinition<any, any> & { readonly [access]: ToolAccess };
 
@@ -18,10 +25,21 @@ export function classify<Name extends string>(
   classes: Record<Name, ToolAccess>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tools: ToolDefinition<any, any>[],
+  recording: Partial<Record<Name, RecordingEvents>> = {},
 ): AgentTool[] {
   for (const tool of tools)
     if (!Object.hasOwn(classes, tool.name)) throw new Error(`Tool ${tool.name} has no access class.`);
-  return tools.map(tool => Object.assign(tool, { [access]: classes[tool.name as Name] }) as AgentTool);
+  return tools.map(
+    tool =>
+      Object.assign(tool, {
+        [access]: classes[tool.name as Name],
+        ...(recording[tool.name as Name] ? { [records]: recording[tool.name as Name] } : {}),
+      }) as AgentTool,
+  );
+}
+
+export function recordingEventsOf(tool: { name: string }): RecordingEvents | undefined {
+  return (tool as { [records]?: RecordingEvents })[records];
 }
 
 export function accessOf(tool: { name: string }): ToolAccess | undefined {
