@@ -91,6 +91,14 @@ model Agent {
   idleCompactPercent Int             @default(50)
   /// The owner's own instructions for this agent, appended to its system prompt (Markdown).
   instructions       String          @default("")
+  /// Heartbeat: a periodic wake-up that reads freely and is dropped unless it changes something.
+  heartbeatEnabled   Boolean         @default(false)
+  heartbeatMinutes   Int             @default(30)
+  /// Active hours in the server's time zone ("HH:MM"); both empty means all day.
+  heartbeatFrom      String          @default("")
+  heartbeatTo        String          @default("")
+  /// What the owner wants checked on each heartbeat (plain text).
+  heartbeatChecklist String          @default("")
   createdAt        DateTime          @default(now())
   channels         Channel[]
   dmAllowed        DmGrant[]         @relation("DmSenderGrant")

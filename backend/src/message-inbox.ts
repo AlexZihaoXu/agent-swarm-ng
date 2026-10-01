@@ -12,6 +12,8 @@ export class MessageInbox {
   private changed?: () => void;
   private triage?: AbortController;
   private note?: string;
+  /** Told when a message arrives (a heartbeat becomes a real turn). */
+  onAdd?: () => void;
   constructor(private debounceMs = 1500) {}
   add(message: ChannelMessage) {
     if (this.closed) return false;
@@ -22,6 +24,7 @@ export class MessageInbox {
     this.wake?.();
     this.triage?.abort();
     this.changed?.();
+    this.onAdd?.();
     return true;
   }
   prepend(message: ChannelMessage) {

@@ -703,6 +703,28 @@ export class ComputerUseService {
       ),
     );
   }
+  /** What an agent holds and reads now (a heartbeat restores it if it is dropped). */
+  async heldState(agentId: string) {
+    await this.ready();
+    const claim = await this.database.client.computerClaim.findUnique({
+      where: { agentId },
+      include: { computer: { select: { name: true } } },
+    });
+    return {
+      claim: claim ? { id: claim.computerId, name: claim.computer.name } : null,
+      reading: this.reading.get(agentId) ?? null,
+    };
+  }
+  /** A dropped heartbeat leaves no trace: a claim it took is released and the reading selection put back. */
+  async restoreHeld(agentId: string, before: Awaited<ReturnType<ComputerUseService['heldState']>>) {
+    await this.ready();
+    await this.exclusive(async () => {
+      const claim = await this.database.client.computerClaim.findUnique({ where: { agentId } });
+      if (claim && claim.computerId !== before.claim?.id) await this.release(claim.computerId);
+      if (before.reading) this.reading.set(agentId, before.reading);
+      else this.reading.delete(agentId);
+    });
+  }
   async releaseAgent(agentId: string) {
     await this.ready();
     await this.exclusive(async () => {

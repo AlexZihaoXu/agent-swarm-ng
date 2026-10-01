@@ -3857,6 +3857,15 @@ export interface operations {
                                 idleMinutes: number;
                                 idlePercent: number;
                             };
+                            heartbeat: {
+                                enabled: boolean;
+                                minutes: number;
+                                from: "" | string;
+                                to: "" | string;
+                                checklist: string;
+                            } & {
+                                timeZone: string;
+                            };
                             instructions: string;
                         }[];
                         nextCursor: number | null;
@@ -3974,6 +3983,15 @@ export interface operations {
                             /** @description 0 turns idle compaction off. */
                             idleMinutes: number;
                             idlePercent: number;
+                        };
+                        heartbeat: {
+                            enabled: boolean;
+                            minutes: number;
+                            from: "" | string;
+                            to: "" | string;
+                            checklist: string;
+                        } & {
+                            timeZone: string;
                         };
                         instructions: string;
                     };
@@ -4179,6 +4197,13 @@ export interface operations {
                         idleMinutes?: number;
                         idlePercent?: number;
                     };
+                    heartbeat?: {
+                        enabled?: boolean;
+                        minutes?: number;
+                        from?: "" | string;
+                        to?: "" | string;
+                        checklist?: string;
+                    };
                     instructions?: string;
                 };
             };
@@ -4260,6 +4285,15 @@ export interface operations {
                             /** @description 0 turns idle compaction off. */
                             idleMinutes: number;
                             idlePercent: number;
+                        };
+                        heartbeat: {
+                            enabled: boolean;
+                            minutes: number;
+                            from: "" | string;
+                            to: "" | string;
+                            checklist: string;
+                        } & {
+                            timeZone: string;
                         };
                         instructions: string;
                     };
@@ -5834,7 +5868,7 @@ export interface operations {
                 } | {
                     /** @enum {string} */
                     operation: "view";
-                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    /** @description Exact session ID returned by terminal_create/list, scoped to the computer you read or hold. */
                     session: string;
                     /** @description Rows to show (default: one screen of the session). */
                     rows?: number;
@@ -5845,42 +5879,42 @@ export interface operations {
                 } | {
                     /** @enum {string} */
                     operation: "delete";
-                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    /** @description Exact session ID returned by terminal_create/list, scoped to the computer you read or hold. */
                     session: string;
                 } | {
                     /** @enum {string} */
                     operation: "status";
-                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    /** @description Exact session ID returned by terminal_create/list, scoped to the computer you read or hold. */
                     session: string;
                 } | {
                     /** @enum {string} */
                     operation: "resize";
-                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    /** @description Exact session ID returned by terminal_create/list, scoped to the computer you read or hold. */
                     session: string;
                     columns: number;
                     rows: number;
                 } | {
                     /** @enum {string} */
                     operation: "rename";
-                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    /** @description Exact session ID returned by terminal_create/list, scoped to the computer you read or hold. */
                     session: string;
                     name: string;
                 } | {
                     /** @enum {string} */
                     operation: "type";
-                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    /** @description Exact session ID returned by terminal_create/list, scoped to the computer you read or hold. */
                     session: string;
                     text: string;
                 } | {
                     /** @enum {string} */
                     operation: "press";
-                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    /** @description Exact session ID returned by terminal_create/list, scoped to the computer you read or hold. */
                     session: string;
                     key: "Enter" | "Tab" | "BTab" | "Escape" | "BSpace" | "Delete" | "Insert" | "Space" | "Up" | "Down" | "Left" | "Right" | "Home" | "End" | "PageUp" | "PageDown" | "F1" | "F2" | "F3" | "F4" | "F5" | "F6" | "F7" | "F8" | "F9" | "F10" | "F11" | "F12" | "C-a" | "M-a" | "C-b" | "M-b" | "C-c" | "M-c" | "C-d" | "M-d" | "C-e" | "M-e" | "C-f" | "M-f" | "C-g" | "M-g" | "C-h" | "M-h" | "C-i" | "M-i" | "C-j" | "M-j" | "C-k" | "M-k" | "C-l" | "M-l" | "C-m" | "M-m" | "C-n" | "M-n" | "C-o" | "M-o" | "C-p" | "M-p" | "C-q" | "M-q" | "C-r" | "M-r" | "C-s" | "M-s" | "C-t" | "M-t" | "C-u" | "M-u" | "C-v" | "M-v" | "C-w" | "M-w" | "C-x" | "M-x" | "C-y" | "M-y" | "C-z" | "M-z";
                 } | {
                     /** @enum {string} */
                     operation: "interrupt";
-                    /** @description Exact session ID returned by terminal_create/list, scoped to your currently claimed computer. */
+                    /** @description Exact session ID returned by terminal_create/list, scoped to the computer you read or hold. */
                     session: string;
                 } | {
                     /** @enum {string} */

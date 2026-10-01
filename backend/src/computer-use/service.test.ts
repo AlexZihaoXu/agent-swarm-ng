@@ -282,3 +282,24 @@ it('lets any assigned agent read a held computer without disturbing the holder; 
   await f.service.use(f.b.id, null);
   await expect(f.service.capture(f.b.id, { mode: 'glance' })).rejects.toThrow(/use_computer/);
 });
+
+it('puts back what an agent held and read when its heartbeat is dropped', async () => {
+  const f = await fixture();
+  const other = await f.db.client.computer.create({
+    data: { name: 'Other', requestKey: crypto.randomUUID(), state: 'running' },
+  });
+  await f.service.assign(f.a.id, [f.computer.id, other.id]);
+  await f.service.use(f.a.id, 'Other');
+  const before = await f.service.heldState(f.a.id);
+  expect(before).toEqual({ claim: null, reading: other.id });
+  // The heartbeat claimed Desk, then was dropped: the claim goes, the reading selection comes back.
+  await f.service.use(f.a.id, 'Desk', true);
+  await f.service.restoreHeld(f.a.id, before);
+  expect(await f.service.heldState(f.a.id)).toEqual(before);
+  expect(await f.service.holders()).toEqual([]);
+  // A claim held before the heartbeat stays.
+  await f.service.use(f.a.id, 'Desk', true);
+  const holding = await f.service.heldState(f.a.id);
+  await f.service.restoreHeld(f.a.id, holding);
+  expect((await f.service.holders()).map(claim => claim.agent.name)).toEqual(['A']);
+});

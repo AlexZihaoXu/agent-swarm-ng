@@ -11,6 +11,7 @@ import { AgentDiscordSettings } from '@/components/agent-discord-settings';
 import { AgentComputerSettings } from '@/components/agent-computer-settings';
 import { AgentModelSettings } from '@/components/agent-model-settings';
 import { AgentInstructionsSettings } from '@/components/agent-instructions-settings';
+import { AgentHeartbeatSettings } from '@/components/agent-heartbeat-settings';
 import { defaultAvatar, sameAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 import type { ChatAgent, RealAgent } from '@/use-chat';
 import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
@@ -241,6 +242,14 @@ export function EditAgentForm({
             {agent.real && (
               <AgentInstructionsSettings
                 key={`instructions:${agent.id}`}
+                agent={{ ...agent, real: agent.real }}
+                onSaved={onModelSaved}
+                register={register}
+              />
+            )}
+            {agent.real && (
+              <AgentHeartbeatSettings
+                key={`heartbeat:${agent.id}`}
                 agent={{ ...agent, real: agent.real }}
                 onSaved={onModelSaved}
                 register={register}

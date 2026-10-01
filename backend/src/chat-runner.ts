@@ -5,7 +5,8 @@ import {
   type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
 import { createActivityRecorder } from './agent-activity';
-import type { AgentTool } from './tool-access';
+import { accessOf, type AgentTool } from './tool-access';
+import { HEARTBEAT_NOTE_QUESTION, heartbeatPromotion, promotes, type HeartbeatBranch } from './heartbeat';
 import { channelInput, createChatSession, type ChatConfiguration, type ChannelMessage } from './chat-runtime';
 import { createWebTools } from './web-tools';
 import type { RunContext } from './agent-runs';
@@ -27,6 +28,11 @@ export type InboxHooks = {
   activityStore?: ActivityStore;
   /** The run's session as a fork would copy it: live while running, then as it ended. */
   session?: (basis: () => ForkBasis, ended: boolean) => void;
+  /**
+   * A heartbeat: the run is a branch of the saved session, saved only once promoted (its first change, or a real
+   * message arriving). Unpromoted at the end, it asks once for a note and is dropped (`dropped` gets the note).
+   */
+  heartbeat?: { branch: HeartbeatBranch; dropped: (note?: string) => Promise<void> };
   /** Background compaction: start a summary at atPercent of the context; report usage when the run ends. */
   compaction?: {
     compactor: BackgroundCompactor;
@@ -74,13 +80,14 @@ export async function runChat(
   let unsubscribe = () => {};
   let checkpoint = Promise.resolve();
   let checkpointFailure: unknown;
+  let dropped = false;
   const abort = () => {
     void session?.abort();
   };
   const clearTyping = publicationTyping.clear;
   try {
     signal.throwIfAborted();
-    await activity.start();
+    await activity.start(hooks.heartbeat ? 'Heartbeat active' : undefined);
     phase = 'loading web tools';
     web = await createWebTools();
     signal.throwIfAborted();
@@ -110,8 +117,14 @@ export async function runChat(
     if (hooks.sessionStore && !restored && session.sessionManager.getEntries().length)
       await hooks.sessionStore.save(channel.agentId, session.sessionManager);
     const live = session;
+    // A heartbeat's branch is saved only from its promotion on; everything else is saved as it goes.
+    const heartbeat = hooks.heartbeat;
+    let promoted = !heartbeat,
+      notePhase = false,
+      promotionNotice: string | undefined;
     // Durable checkpoints are captured at a boundary and written in order, off the model's critical path.
     const queueCheckpoint = () => {
+      if (!promoted) return;
       try {
         const snapshot = AgentSessionStore.capture(live.sessionManager);
         checkpoint = checkpoint
@@ -125,6 +138,48 @@ export async function runChat(
         void live.abort();
       }
     };
+    const promote = (reason: string) => {
+      if (promoted) return false;
+      promoted = true;
+      if (heartbeat) heartbeat.branch.promoted = true;
+      activity.record('status', 'Heartbeat promoted', `It became a real turn: ${reason}.`);
+      queueCheckpoint();
+      return true;
+    };
+    if (heartbeat) {
+      const access = new Map<string, ReturnType<typeof accessOf>>([
+        ['send_message', 'w'],
+        ['help', 'r'],
+        ...[...historyTools, ...web.tools].map(tool => [tool.name, accessOf(tool)] as const),
+      ]);
+      const promotedCalls = new Set<string>();
+      const before = live.agent.beforeToolCall;
+      live.agent.beforeToolCall = async (context, callSignal) => {
+        const name = context.toolCall.name;
+        if (!promoted && notePhase && name !== 'leave_note')
+          return { block: true, reason: 'Only leave_note is available now, or end without a note.' };
+        if (!promoted && promotes(access.get(name), heartbeat.branch, context.args) && promote(`you called ${name}`))
+          promotedCalls.add(context.toolCall.id);
+        return before?.(context, callSignal);
+      };
+      const after = live.agent.afterToolCall;
+      live.agent.afterToolCall = async (context, callSignal) => {
+        const result = await after?.(context, callSignal);
+        if (!promotedCalls.delete(context.toolCall.id)) return result;
+        const content = result?.content ?? context.result.content;
+        return {
+          ...result,
+          content: [
+            { type: 'text' as const, text: heartbeatPromotion(`you called ${context.toolCall.name}`) },
+            ...content,
+          ],
+        };
+      };
+      // A real message arriving makes the heartbeat a real turn: that message is answered in it.
+      inbox.onAdd = () => {
+        if (promote('a new message arrived')) promotionNotice = heartbeatPromotion('a new message arrived');
+      };
+    }
     // Background compaction: a summary written while the agent works, applied between model calls.
     const background = hooks.sessionStore ? hooks.compaction : undefined;
     const agentId = channel.agentId;
@@ -147,7 +202,8 @@ export async function runChat(
     };
     /** Before a model call: sleep if the context is nearly full while a summary is being written, then apply it. */
     const beforeModelCall = async (callSignal: AbortSignal) => {
-      if (!background) return false;
+      // An unpromoted heartbeat leaves summaries alone: it may be dropped.
+      if (!background || !promoted) return false;
       const usage = live.getContextUsage();
       const reserve = live.settingsManager.getCompactionSettings().reserveTokens;
       if (
@@ -202,6 +258,7 @@ export async function runChat(
       // The context passed the agent's threshold: summarize its earlier part in the background.
       if (
         background &&
+        promoted &&
         !signal.aborted &&
         event.type === 'turn_end' &&
         event.message.role === 'assistant' &&
@@ -253,6 +310,13 @@ export async function runChat(
           { customType: 'interruption-decision', display: false, content: batch.note },
           { triggerTurn: false },
         );
+      if (promotionNotice) {
+        await main.sendCustomMessage(
+          { customType: 'heartbeat-promoted', display: false, content: promotionNotice },
+          { triggerTurn: false },
+        );
+        promotionNotice = undefined;
+      }
       const interrupted = await inbox.during(
         async () => {
           await main.prompt(batch.messages.map(item => channelInput(channel.id, item.text, item)).join('\n\n'), {
@@ -271,12 +335,21 @@ export async function runChat(
               { triggerTurn: true },
             );
           }
+          // A quiet heartbeat asks once for a note before it is dropped.
+          if (heartbeat && !promoted && !signal.aborted && !inbox.hasPending() && stopReason() !== 'error') {
+            notePhase = true;
+            await main.sendCustomMessage(
+              { customType: 'heartbeat-note', display: false, content: HEARTBEAT_NOTE_QUESTION },
+              { triggerTurn: true },
+            );
+            notePhase = false;
+          }
           // A summary that finished during the last model call joins this checkpoint.
           applySummary();
           await checkpoint;
           await activity.flush();
           if (checkpointFailure) throw checkpointFailure;
-          if (!signal.aborted) await hooks.sessionStore?.save(channel.agentId, main.sessionManager);
+          if (!signal.aborted && promoted) await hooks.sessionStore?.save(channel.agentId, main.sessionManager);
         },
         async (messages, triageSignal) => {
           activity.record('status', 'Interruption triage', 'Evaluating new messages in a temporary full-context fork.');
@@ -346,6 +419,17 @@ export async function runChat(
       );
     }
     inbox.close();
+    if (heartbeat && !promoted) {
+      dropped = true;
+      activity.record(
+        'status',
+        'Heartbeat dropped',
+        heartbeat.branch.note
+          ? `Nothing changed. Note kept in its context: ${heartbeat.branch.note}`
+          : 'Nothing changed; nothing was kept in its context.',
+      );
+      await heartbeat.dropped(heartbeat.branch.note);
+    }
   } catch {
     runFailed = !signal.aborted;
     activity.record(
@@ -385,14 +469,15 @@ export async function runChat(
       const ended = { ...forkBasis(session), messages: session.messages.slice(), streamingMessage: undefined };
       hooks.session?.(() => ended, true);
     }
-    if (session) hooks.compaction?.ended?.(session.getContextUsage());
+    // A dropped heartbeat is not activity (idle compaction keeps counting from the last real turn).
+    if (session && !dropped) hooks.compaction?.ended?.(session.getContextUsage());
     const ending = session;
     if (ending && summarizing === ending && hooks.compaction?.compactor.running(channel.agentId))
       void hooks.compaction.compactor.settled(channel.agentId).finally(() => ending.dispose());
     else session?.dispose();
     await web?.close();
     try {
-      await activity.finish(signal.aborted, runFailed || activityFailed);
+      await activity.finish(signal.aborted, runFailed || activityFailed, hooks.heartbeat ? 'Heartbeat' : undefined);
     } catch {
       emit({ type: 'error', message: 'Operator activity could not be saved. Published messages remain in chat.' });
     }

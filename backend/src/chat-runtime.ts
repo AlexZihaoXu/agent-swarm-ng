@@ -43,7 +43,7 @@ export type AgentMessageSource = {
   human?: boolean;
   reaction?: boolean;
   /** A platform event for this agent (its own timer or reminder, or a computer event), not a message. */
-  platform?: 'timer' | 'reminder' | 'computer';
+  platform?: 'timer' | 'reminder' | 'computer' | 'heartbeat';
   /** A batch of Discord messages: where they were written. Authors are labelled in the text by the platform. */
   discord?: { place: string };
 };

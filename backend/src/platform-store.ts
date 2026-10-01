@@ -63,6 +63,11 @@ export class PlatformStore {
       idleCompactMinutes?: number;
       idleCompactPercent?: number;
       instructions?: string;
+      heartbeatEnabled?: boolean;
+      heartbeatMinutes?: number;
+      heartbeatFrom?: string;
+      heartbeatTo?: string;
+      heartbeatChecklist?: string;
     },
   ) {
     await this.initialize();

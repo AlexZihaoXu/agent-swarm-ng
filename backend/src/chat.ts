@@ -64,6 +64,18 @@ const Compaction = Type.Object(
   },
   { additionalProperties: false },
 );
+/** Heartbeat (see heartbeat.ts): a periodic wake-up in a branch that is dropped unless it changes something. */
+const Clock = Type.Union([Type.Literal(''), Type.String({ pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' })]);
+const Heartbeat = Type.Object(
+  {
+    enabled: Type.Boolean(),
+    minutes: Type.Integer({ minimum: 5, maximum: 1440 }),
+    from: Clock,
+    to: Clock,
+    checklist: Type.String({ maxLength: 4000 }),
+  },
+  { additionalProperties: false },
+);
 const Agent = Type.Object(
   {
     ...Selection.properties,
@@ -73,6 +85,7 @@ const Agent = Type.Object(
     createdAt: Type.Number(),
     lastMessage: Type.Union([Message, Type.Null()]),
     compaction: Compaction,
+    heartbeat: Type.Intersect([Heartbeat, Type.Object({ timeZone: Type.String() })]),
     /** The owner's own instructions for this agent (Markdown), last in its system prompt. */
     instructions: Type.String(),
   },
@@ -126,6 +139,14 @@ function agentView(
     model: agent.model,
     thinkingLevel: agent.thinkingLevel,
     instructions: agent.instructions,
+    heartbeat: {
+      enabled: agent.heartbeatEnabled,
+      minutes: agent.heartbeatMinutes,
+      from: agent.heartbeatFrom,
+      to: agent.heartbeatTo,
+      checklist: agent.heartbeatChecklist,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
     compaction: {
       atPercent: agent.compactAtPercent,
       idleMinutes: agent.idleCompactMinutes,
@@ -383,6 +404,7 @@ export function registerChat(
     Params: { id: string };
     Body: Partial<Pick<Static<typeof Selection>, 'name' | 'endpointId' | 'model' | 'thinkingLevel'>> & {
       compaction?: Partial<Static<typeof Compaction>>;
+      heartbeat?: Partial<Static<typeof Heartbeat>>;
       instructions?: string;
     };
   }>(
@@ -398,6 +420,7 @@ export function registerChat(
             model: Type.Optional(Selection.properties.model),
             thinkingLevel: Type.Optional(Thinking),
             compaction: Type.Optional(Type.Partial(Compaction)),
+            heartbeat: Type.Optional(Type.Partial(Heartbeat)),
             instructions: Type.Optional(Type.String({ maxLength: 20000 })),
           },
           { additionalProperties: false, minProperties: 1 },
@@ -412,7 +435,9 @@ export function registerChat(
       // The same short lock as deletion: a turn in flight already captured its model and name. The compaction
       // policy alone can change at any time (it is read when the next summary starts).
       // Instructions too: the next turn reads them; a running turn keeps the ones it started with.
-      const identity = Object.keys(request.body).some(key => key !== 'compaction' && key !== 'instructions');
+      const identity = Object.keys(request.body).some(
+        key => !['compaction', 'instructions', 'heartbeat'].includes(key),
+      );
       if (active.has(id) || (identity && runs.has(id)))
         return reply
           .code(409)
@@ -440,6 +465,11 @@ export function registerChat(
           broker.forgetCompaction(id);
         }
         const policy = request.body.compaction ?? {};
+        const beat = request.body.heartbeat ?? {};
+        const from = beat.from ?? record.heartbeatFrom,
+          to = beat.to ?? record.heartbeatTo;
+        if (Boolean(from) !== Boolean(to))
+          return reply.code(400).send({ message: 'Set both heartbeat hours, or neither for all day.' });
         return agentView(
           await database.updateAgent(id, {
             ...next,
@@ -447,6 +477,11 @@ export function registerChat(
             idleCompactMinutes: policy.idleMinutes ?? record.idleCompactMinutes,
             idleCompactPercent: policy.idlePercent ?? record.idleCompactPercent,
             instructions: request.body.instructions ?? record.instructions,
+            heartbeatEnabled: beat.enabled ?? record.heartbeatEnabled,
+            heartbeatMinutes: beat.minutes ?? record.heartbeatMinutes,
+            heartbeatFrom: from,
+            heartbeatTo: to,
+            heartbeatChecklist: beat.checklist?.trim() ?? record.heartbeatChecklist,
           }),
         );
       } catch {

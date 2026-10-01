@@ -64,6 +64,7 @@ import { ComputerWatches } from './computer-use/watches';
 import { createWatchJudge, type ForkBasis } from './computer-use/watch-judge';
 import { createWatchTools } from './computer-use/watch-tools';
 import type { AgentTool } from './tool-access';
+import { createNoteTool, heartbeatPrompt, HeartbeatScheduler, type HeartbeatBranch } from './heartbeat';
 
 type Job = {
   senderId: string;
@@ -85,6 +86,8 @@ export class DmBroker {
   private idle = new Map<string, { at: number; percent: number }>();
   private idleTimer?: ReturnType<typeof setInterval>;
   readonly knowledge: SwarmKnowledgePlugin;
+  /** Each agent's heartbeat (Agents → agent → Heartbeat), started when due and the agent is idle. */
+  readonly heartbeats: HeartbeatScheduler;
   private reactionCoordinator: ReactionCoordinator;
   private starting?: Promise<void>;
   private closing = false;
@@ -211,6 +214,11 @@ export class DmBroker {
       if (entry) emit({ type: 'activity', agentId: run.agentId, append: false, entry });
     });
     this.knowledge = new SwarmKnowledgePlugin(database);
+    this.heartbeats = new HeartbeatScheduler(
+      database,
+      agentId => !this.runs.has(agentId) && !this.compactor.running(agentId) && !this.deleting.has(agentId),
+      (agentId, checklist) => this.startHeartbeat(agentId, checklist),
+    );
     this.reactionCoordinator = new ReactionCoordinator(
       database,
       endpoints,
@@ -489,6 +497,34 @@ export class DmBroker {
       )
     );
   }
+  /** A heartbeat: a platform event run as a branch of the agent's session (heartbeat.ts). */
+  async startHeartbeat(agentId: string, checklist: string) {
+    if (this.closing || this.deleting.has(agentId)) return;
+    await this.ready();
+    const agent = await this.database.findAgent(agentId);
+    if (!agent) return;
+    const channelId = agent.channels[0].id;
+    const id = crypto.randomUUID();
+    const input: ChannelMessage = {
+      role: 'user',
+      id,
+      text: heartbeatPrompt(checklist),
+      timestamp: Date.now(),
+      // Set up by the owner, so it may answer in the private chat like the owner's own timers.
+      source: {
+        agentId: 'platform',
+        name: 'Platform',
+        channelId,
+        chainId: '',
+        messageId: id,
+        human: true,
+        platform: 'heartbeat',
+      },
+    };
+    this.runs.enqueue({ agentId, channelId, clientMessageId: id, inputSource: 'agent' }, context =>
+      this.runInbox(agentId, input, context, { heartbeat: true }),
+    );
+  }
   async notifyHumanReaction(channelId: string, messageId: string, emoji: string) {
     await this.ready();
     return this.reactionCoordinator.offer(channelId, messageId, emoji);
@@ -502,6 +538,7 @@ export class DmBroker {
       await this.activity.interruptActive();
       // Pending timers are rows: after a restart or power loss they resume here.
       this.timers.start();
+      this.heartbeats.begin();
       this.watcher?.start();
       // Watches end with claims on a restart; their agents hear so once.
       void this.watches?.start().catch(() => {});
@@ -758,7 +795,12 @@ export class DmBroker {
       true,
     );
   }
-  async runInbox(agentId: string, incoming: ChannelMessage, context: RunContext) {
+  async runInbox(
+    agentId: string,
+    incoming: ChannelMessage,
+    context: RunContext,
+    options: { heartbeat?: boolean } = {},
+  ) {
     await this.ready();
     const agent = await this.database.findAgent(agentId);
     if (!agent) throw new Error('Agent no longer exists.');
@@ -847,8 +889,19 @@ ${preview.text}`
             ...(this.watches ? createWatchTools(this.watches, agentId, () => humanAuthority) : []),
           ]
         : [];
+    // A heartbeat leaves no trace unless it changes something: what the agent holds now is put back if it is dropped,
+    // and only a change to a claim it already held promotes it.
+    const held = options.heartbeat ? await this.computers?.heldState(agentId).catch(() => undefined) : undefined;
+    const branch: HeartbeatBranch | undefined = options.heartbeat
+      ? {
+          claimPromotes: args =>
+            Boolean(held?.claim) &&
+            (args.write === false || (args.computer !== held!.claim!.id && args.computer !== held!.claim!.name)),
+        }
+      : undefined;
     // Notices are best effort: an unreachable controller must not block the turn (its tools report the problem).
-    const notices = (await this.computers?.notices(agentId).catch(() => [])) ?? [];
+    // A heartbeat leaves them for the next real turn.
+    const notices = options.heartbeat ? [] : ((await this.computers?.notices(agentId).catch(() => [])) ?? []);
     await runChat(
       context,
       {
@@ -859,6 +912,7 @@ ${preview.text}`
         apiKey: connection.apiKey,
         channel,
         instructions: agent.instructions,
+        ...(branch ? { heartbeat: () => !branch.promoted } : {}),
         publishPeer: async (channelId, text, callId, replyToId, fileIds) => {
           if (channelId.startsWith('discord:'))
             throw new Error('send_message does not reach Discord. Use discord_send_message with this channelId.');
@@ -974,13 +1028,27 @@ ${preview.text}`
           notifyHolder: (holderId, text) => void this.deliverPlatformEvent(holderId, 'computer', text, false),
         }),
         ...computerTools,
+        ...(branch ? [createNoteTool(branch)] : []),
       ],
       {
         sessionStore: this.sessions,
+        ...(branch
+          ? {
+              heartbeat: {
+                branch,
+                dropped: async (note?: string) => {
+                  if (held) await this.computers?.restoreHeld(agentId, held).catch(() => {});
+                  if (note) await this.keepHeartbeatNote(agentId, note);
+                },
+              },
+            }
+          : {}),
         compaction: {
           compactor: this.compactor,
           atPercent: agent.compactAtPercent,
           ended: usage => {
+            // Real work (a promoted heartbeat too): the next heartbeat counts from now.
+            this.heartbeats.active(agentId);
             if (usage?.percent != null) this.idle.set(agentId, { at: Date.now(), percent: usage.percent });
             else this.idle.delete(agentId);
           },
@@ -1039,6 +1107,14 @@ ${preview.text}`
         },
       },
     );
+  }
+  /** A dropped heartbeat's note joins the agent's saved context (never chat). */
+  private async keepHeartbeatNote(agentId: string, note: string) {
+    const manager = await this.sessions.load(agentId);
+    if (!manager) return;
+    const time = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    manager.appendCustomMessageEntry('heartbeat-note', `[heartbeat ${time} UTC, note to self] ${note}`, false);
+    await this.sessions.save(agentId, manager, { advancePublications: false });
   }
   cancelChain(chainId: string) {
     const existing = this.cancelling.get(chainId);
@@ -1163,6 +1239,7 @@ ${preview.text}`
     this.compactor.close();
     this.closing = true;
     this.timers.close();
+    this.heartbeats.close();
     this.watcher?.close();
     this.watches?.close();
     this.reactionCoordinator.close();

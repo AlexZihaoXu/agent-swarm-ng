@@ -11919,6 +11919,7 @@
                           "createdAt",
                           "lastMessage",
                           "compaction",
+                          "heartbeat",
                           "instructions"
                         ],
                         "properties": {
@@ -12600,6 +12601,75 @@
                               }
                             }
                           },
+                          "heartbeat": {
+                            "type": "object",
+                            "allOf": [
+                              {
+                                "additionalProperties": false,
+                                "type": "object",
+                                "required": [
+                                  "enabled",
+                                  "minutes",
+                                  "from",
+                                  "to",
+                                  "checklist"
+                                ],
+                                "properties": {
+                                  "enabled": {
+                                    "type": "boolean"
+                                  },
+                                  "minutes": {
+                                    "minimum": 5,
+                                    "maximum": 1440,
+                                    "type": "integer"
+                                  },
+                                  "from": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          ""
+                                        ]
+                                      },
+                                      {
+                                        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                                        "type": "string"
+                                      }
+                                    ]
+                                  },
+                                  "to": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          ""
+                                        ]
+                                      },
+                                      {
+                                        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                                        "type": "string"
+                                      }
+                                    ]
+                                  },
+                                  "checklist": {
+                                    "maxLength": 4000,
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "required": [
+                                  "timeZone"
+                                ],
+                                "properties": {
+                                  "timeZone": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            ]
+                          },
                           "instructions": {
                             "type": "string"
                           }
@@ -12952,6 +13022,7 @@
                     "createdAt",
                     "lastMessage",
                     "compaction",
+                    "heartbeat",
                     "instructions"
                   ],
                   "properties": {
@@ -13632,6 +13703,75 @@
                           "type": "integer"
                         }
                       }
+                    },
+                    "heartbeat": {
+                      "type": "object",
+                      "allOf": [
+                        {
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "enabled",
+                            "minutes",
+                            "from",
+                            "to",
+                            "checklist"
+                          ],
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "minutes": {
+                              "minimum": 5,
+                              "maximum": 1440,
+                              "type": "integer"
+                            },
+                            "from": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    ""
+                                  ]
+                                },
+                                {
+                                  "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            "to": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    ""
+                                  ]
+                                },
+                                {
+                                  "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            "checklist": {
+                              "maxLength": 4000,
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "timeZone"
+                          ],
+                          "properties": {
+                            "timeZone": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
                     },
                     "instructions": {
                       "type": "string"
@@ -14198,6 +14338,52 @@
                       }
                     }
                   },
+                  "heartbeat": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "minutes": {
+                        "minimum": 5,
+                        "maximum": 1440,
+                        "type": "integer"
+                      },
+                      "from": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              ""
+                            ]
+                          },
+                          {
+                            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "to": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              ""
+                            ]
+                          },
+                          {
+                            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "checklist": {
+                        "maxLength": 4000,
+                        "type": "string"
+                      }
+                    }
+                  },
                   "instructions": {
                     "maxLength": 20000,
                     "type": "string"
@@ -14237,6 +14423,7 @@
                     "createdAt",
                     "lastMessage",
                     "compaction",
+                    "heartbeat",
                     "instructions"
                   ],
                   "properties": {
@@ -14917,6 +15104,75 @@
                           "type": "integer"
                         }
                       }
+                    },
+                    "heartbeat": {
+                      "type": "object",
+                      "allOf": [
+                        {
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "enabled",
+                            "minutes",
+                            "from",
+                            "to",
+                            "checklist"
+                          ],
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "minutes": {
+                              "minimum": 5,
+                              "maximum": 1440,
+                              "type": "integer"
+                            },
+                            "from": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    ""
+                                  ]
+                                },
+                                {
+                                  "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            "to": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    ""
+                                  ]
+                                },
+                                {
+                                  "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            "checklist": {
+                              "maxLength": 4000,
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "timeZone"
+                          ],
+                          "properties": {
+                            "timeZone": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
                     },
                     "instructions": {
                       "type": "string"
@@ -18883,7 +19139,7 @@
                       },
                       "session": {
                         "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
-                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to the computer you read or hold.",
                         "type": "string"
                       },
                       "rows": {
@@ -18920,7 +19176,7 @@
                       },
                       "session": {
                         "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
-                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to the computer you read or hold.",
                         "type": "string"
                       }
                     }
@@ -18941,7 +19197,7 @@
                       },
                       "session": {
                         "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
-                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to the computer you read or hold.",
                         "type": "string"
                       }
                     }
@@ -18964,7 +19220,7 @@
                       },
                       "session": {
                         "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
-                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to the computer you read or hold.",
                         "type": "string"
                       },
                       "columns": {
@@ -18996,7 +19252,7 @@
                       },
                       "session": {
                         "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
-                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to the computer you read or hold.",
                         "type": "string"
                       },
                       "name": {
@@ -19022,7 +19278,7 @@
                       },
                       "session": {
                         "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
-                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to the computer you read or hold.",
                         "type": "string"
                       },
                       "text": {
@@ -19049,7 +19305,7 @@
                       },
                       "session": {
                         "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
-                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to the computer you read or hold.",
                         "type": "string"
                       },
                       "key": {
@@ -19554,7 +19810,7 @@
                       },
                       "session": {
                         "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
-                        "description": "Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.",
+                        "description": "Exact session ID returned by terminal_create/list, scoped to the computer you read or hold.",
                         "type": "string"
                       }
                     }

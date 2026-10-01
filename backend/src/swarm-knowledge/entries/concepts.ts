@@ -84,6 +84,8 @@ export const timeConcept = {
   related: ['practices/scheduling', 'practices/waiting', 'concepts/platform-events', 'concepts/computers/watches'],
   content: `These work for every agent, with or without a computer.
 
+Heartbeat (if your owner turned it on in your settings): you wake up on your own every so often (a platform heartbeat event with your owner's checklist). It is a private branch: r tools (reading chats, files, computers, Knowledge; help({class:"r"}) lists them) are free and leave nothing in your context. Your first change (a w or rw tool: a message, a timer, a watch, typing or running a command) makes it your real turn, and you are told; a real message arriving does too. If nothing needs doing, end without changing anything: you are then asked once whether to leave a short note for yourself (leave_note, kept in your context; earlier notes show what you checked before), and the rest is dropped. Do not change things just to be seen working.
+
 current_time({timezone?}): the current UTC time, Unix milliseconds and the local time in an IANA zone (the platform's zone by default). It is the only reliable source of the date and time; message timestamps and memory are not.
 
 Timer: set_timer({seconds, note?}) wakes the agent once after 1..2592000 seconds (up to 30 days), accurate to about a second, with its note (up to 256 characters).
