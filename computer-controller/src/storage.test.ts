@@ -1,7 +1,14 @@
 import { expect, it, vi } from 'vitest';
 import { DockerApi } from './docker-api';
 import { ComputerManager } from './manager';
-import { mountedStorage, storageMounts, validateFolder, validateKeptPaths, validateStorage } from './storage';
+import {
+  archivePath,
+  mountedStorage,
+  storageMounts,
+  validateFolder,
+  validateKeptPaths,
+  validateStorage,
+} from './storage';
 
 const id = '8f5b0e5c-1f2a-4b3c-9d4e-5f6a7b8c9d0e';
 const name = 'Workspace-TEST';
@@ -183,4 +190,17 @@ it('refuses host folders inside Docker’s own storage, and symlinks where a com
   expect(scripts).toHaveLength(0);
   await manager.remove(id, name, { keepFolder: '/srv/keep', cacheFolder: null, keptPaths: ['/home/agent'] });
   expect(scripts[0].script).toContain(`for p in /base/computers /base/computers/${id}; do if [ -L "$p" ]`);
+});
+
+it('finds kept and cached guest paths where they really live for file copies', () => {
+  const kept = ['/home/agent', '/usr/local', '/var/lib/postgresql'];
+  expect(archivePath('/home/agent/Desktop/a.mp4', kept, true)).toBe('/keep/root/home/agent/Desktop/a.mp4');
+  expect(archivePath('/home/agent', kept, true)).toBe('/keep/root/home/agent');
+  expect(archivePath('/home/agent/.cache/uv/x', kept, true)).toBe('/cache/root/home/agent/.cache/uv/x');
+  expect(archivePath('/tmp/out.jpg', kept, true)).toBe('/cache/root/tmp/out.jpg');
+  expect(archivePath('/var/lib/postgresql/data', kept, true)).toBe('/keep/root/var/lib/postgresql/data');
+  // Not kept: the container's own filesystem. Older computers without the two mounts: unchanged.
+  expect(archivePath('/etc/hosts', kept, true)).toBe('/etc/hosts');
+  expect(archivePath('/home/agentx/a', kept, true)).toBe('/home/agentx/a');
+  expect(archivePath('/home/agent/a', kept, false)).toBe('/home/agent/a');
 });

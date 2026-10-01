@@ -130,6 +130,23 @@ export function mountedStorage(
   return result;
 }
 
+/** Paths a computer keeps in its Cache folder (computer-storage.sh CACHE_PATHS). */
+export const CACHE_PATHS = ['/home/agent/.cache', '/var/cache/apt/archives', '/tmp'];
+/**
+ * Where Docker's archive API (file copies) finds a guest path. Kept and cached paths are bind-mounted inside the
+ * computer at boot, out of Docker's sight, from its two mounts' root/ folders: the deepest matching path decides
+ * (~/.cache is cached although the home is kept). Other paths, and computers without the two mounts, are as they are.
+ */
+export function archivePath(path: string, kept: string[], mounted: boolean) {
+  if (!mounted) return path;
+  const within = (base: string) => path === base || path.startsWith(`${base}/`);
+  const deepest = (paths: string[]) => paths.filter(within).sort((a, b) => b.length - a.length)[0];
+  const cache = deepest(CACHE_PATHS),
+    keep = deepest(kept);
+  if (cache && (!keep || cache.length >= keep.length)) return `/cache/root${path}`;
+  if (keep) return `/keep/root${path}`;
+  return path;
+}
 export const keptPathsEnvironment = (paths: string[]) => `COMPUTER_KEPT_PATHS=${paths.join(':')}`;
 export function keptPathsOf(env: string[] | undefined) {
   const value = env?.find(item => item.startsWith('COMPUTER_KEPT_PATHS='));

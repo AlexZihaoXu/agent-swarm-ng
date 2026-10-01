@@ -17,6 +17,7 @@ import {
   STORAGE_CLASSES,
   computerFolder,
   keptPathsEnvironment,
+  archivePath,
   keptPathsOf,
   mountedStorage,
   storageLabel,
@@ -1148,21 +1149,25 @@ export class ComputerManager {
       if (left > 0) this.transfers.set(id, left);
       else this.transfers.delete(id);
     };
-    return { container: computer.Id, done };
+    // Kept and cached paths live in the two mounts (bound inside the computer at boot, invisible to the archive API).
+    const storage = mountedStorage(id, computer.Mounts);
+    const kept = keptPathsOf(computer.Config?.Env);
+    const archived = (path: string) => archivePath(path, kept, Boolean(storage.keep && storage.cache));
+    return { container: computer.Id, done, archived };
   }
   /** Streams one regular guest file out (for agent file copies); the caller bounds the size. */
   async exportFile(idRaw: string, rawPath: string, maxBytes: number) {
     const { path, name } = transferPath(rawPath);
     const limit = Math.min(Math.max(0, Math.trunc(maxBytes) || 0), MAX_TRANSFER);
-    const { container, done } = await this.transferTarget(idRaw);
+    const { container, done, archived } = await this.transferTarget(idRaw);
     try {
-      const stat = await this.docker.archive('HEAD', container, { path });
+      const stat = await this.docker.archive('HEAD', container, { path: archived(path) });
       stat.resume();
       if (stat.statusCode === 404) throw new ResourceError(404, 'Path not found.');
       if (stat.statusCode !== 200) throw new ResourceError(400, 'Path is not available.');
       const { size } = regularFile((stat.headers['x-docker-container-path-stat'] as string | undefined) ?? null);
       if (size > limit) throw new ResourceError(413, 'The file is larger than the transfer limit.');
-      const response = await this.docker.archive('GET', container, { path });
+      const response = await this.docker.archive('GET', container, { path: archived(path) });
       if (response.statusCode !== 200) {
         response.resume();
         throw new ResourceError(response.statusCode === 404 ? 404 : 400, 'Path is not available.');
@@ -1194,9 +1199,9 @@ export class ComputerManager {
     const { directory, name } = transferPath(rawPath);
     if (!Number.isSafeInteger(size) || size < 0 || size > MAX_TRANSFER)
       throw new ResourceError(400, 'Invalid file size.');
-    const { container, done } = await this.transferTarget(idRaw);
+    const { container, done, archived } = await this.transferTarget(idRaw);
     try {
-      const folder = await this.docker.archive('HEAD', container, { path: directory });
+      const folder = await this.docker.archive('HEAD', container, { path: archived(directory) });
       folder.resume();
       if (folder.statusCode === 404)
         throw new ResourceError(404, 'The destination folder does not exist. Create it first.');
@@ -1213,7 +1218,8 @@ export class ComputerManager {
           'PUT',
           container,
           // Written as the guest's root (user namespaces make tar owners unreliable), then handed to the guest user.
-          { path: directory, noOverwriteDirNonDir: 'true' },
+          // The archive goes where the folder really lives; the guest commands below use its own paths.
+          { path: archived(directory), noOverwriteDirNonDir: 'true' },
           tarOneFile(partial, size, body),
         );
       } catch (error) {
