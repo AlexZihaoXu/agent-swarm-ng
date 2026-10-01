@@ -7,6 +7,7 @@
 # (colon-separated, set by the controller); the cache paths are fixed. A path kept for the first time is seeded
 # with what is already there, so nothing is hidden. /tmp is emptied at every start.
 set -eu
+export LC_ALL=C
 
 CACHE_PATHS='/home/agent/.cache:/var/cache/apt/archives:/tmp'
 
@@ -39,35 +40,59 @@ allowed() {
     return 0
 }
 
+# Kept paths (not the fixed cache paths) never cover a cache path, and no part of a path may be a symlink: keeping
+# /var/run would follow it onto /run.
+keepable() {
+    case "$1" in
+        /tmp | /tmp/* | /var/run | /var/run/* | /var/lock | /var/lock/* | /var/cache/apt/archives | /var/cache/apt/archives/*) return 1 ;;
+    esac
+}
+no_symlinks() {
+    prefix=''
+    for part in $(printf '%s' "$1" | tr '/' ' '); do
+        prefix="$prefix/$part"
+        [ -L "$prefix" ] && return 1
+    done
+    return 0
+}
+
+# Seed into a temporary copy, then rename: a copy that fails (a full disk) or is interrupted is never mounted and
+# is tried again at the next start, instead of hiding the real contents behind a partial copy for good.
+seed() {
+    path=$1 source=$2
+    rm -rf "$source.seeding"
+    if [ -d "$path" ]; then
+        mkdir "$source.seeding" || return 1
+        if [ "$path" != /tmp ]; then cp -a "$path/." "$source.seeding/" || return 1; fi
+        # The folder itself keeps the path's owner and mode.
+        chown "$(stat -c %u:%g "$path")" "$source.seeding" && chmod "$(stat -c %a "$path")" "$source.seeding" || return 1
+    elif [ -f "$path" ]; then
+        cp -a "$path" "$source.seeding" || return 1
+    else
+        # Nothing there yet (~/.cache on a fresh computer): owned like its nearest existing parent, so the agent
+        # can write in its home and a new /var/lib/<service> belongs to root.
+        mkdir "$source.seeding" || return 1
+        parent=$(dirname "$path")
+        while [ ! -e "$parent" ]; do parent=$(dirname "$parent"); done
+        chown "$(stat -c %u:%g "$parent")" "$source.seeding" || return 1
+    fi
+    mv "$source.seeding" "$source"
+}
+
 bind() {
     class=$1 path=$2
     source=/$class/root$path
     if [ ! -e "$source" ] && [ ! -L "$source" ]; then
-        mkdir -p "$(dirname "$source")"
-        if [ -d "$path" ]; then
-            # First time kept: seed with what is there, ownership and modes included.
-            mkdir -p "$source"
-            [ "$path" = /tmp ] || cp -a "$path/." "$source/"
-            say "seeded $class$path"
-        elif [ -f "$path" ]; then
-            cp -a "$path" "$source"
-            say "seeded $class$path (file)"
-        else
-            # Nothing there yet (~/.cache on a fresh computer): owned like its nearest existing parent, so the agent
-            # can write in its home and a new /var/lib/<service> belongs to root.
-            mkdir -p "$source"
-            parent=$(dirname "$path")
-            while [ ! -e "$parent" ]; do parent=$(dirname "$parent"); done
-            chown "$(stat -c %u:%g "$parent")" "$source"
-        fi
+        mkdir -p "$(dirname "$source")" || return 1
+        seed "$path" "$source" || { rm -rf "$source.seeding"; return 1; }
+        say "seeded $class$path"
     fi
     if [ -d "$source" ]; then
         # The mount point (inside an already kept folder, such as ~/.cache in the kept home) is owned like what is
         # mounted on it, so a later seed from it never makes the folder root's.
-        [ -d "$path" ] || { mkdir -p "$path" && chown "$(stat -c %u:%g "$source")" "$path"; }
+        [ -d "$path" ] || { mkdir -p "$path" && chown "$(stat -c %u:%g "$source")" "$path"; } || return 1
     elif [ ! -e "$path" ]; then
-        mkdir -p "$(dirname "$path")"
-        : >"$path"
+        mkdir -p "$(dirname "$path")" && : >"$path" || return 1
     fi
     mount --bind "$source" "$path"
 }
@@ -82,7 +107,7 @@ list=$(
 )
 printf '%s\n' "$list" | while read -r class path; do
     [ -n "$path" ] || continue
-    if allowed "$path"; then
+    if allowed "$path" && no_symlinks "$path" && { [ "$class" = cache ] || keepable "$path"; }; then
         bind "$class" "$path" || say "could not keep $path (left as it is in the image)"
     else
         say "refused to keep $path: not a path that can be kept"

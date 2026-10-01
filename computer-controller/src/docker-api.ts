@@ -119,6 +119,19 @@ export class DockerApi {
     return attachExec(this.socketPath, created.Id, signal, onOutput, onEnd);
   }
 
+  /** Whether a path exists in a container (running or stopped). */
+  async archiveExists(container: string, path: string) {
+    try {
+      await this.request(
+        'HEAD',
+        `/containers/${encodeURIComponent(container)}/archive?path=${encodeURIComponent(path)}`,
+      );
+      return true;
+    } catch (error) {
+      if (error instanceof DockerApiError && error.status === 404) return false;
+      throw error;
+    }
+  }
   /**
    * Streams one path out of a container (running or stopped) into a directory of another, as Docker's archive API
    * does for `docker cp`: ownership and modes travel in the tar. Returns false when the source path does not exist.

@@ -381,10 +381,40 @@ export class ComputerManager {
       await this.docker.request('DELETE', `${this.path('containers', created.Id)}?force=true&v=false`).catch(() => {});
     }
   }
-  /** A host folder must exist and carry its marker (its disk is really mounted, and the host owner chose it). */
-  private markerScript(kind: StorageClass, folder: string) {
-    // Short: the backend shows at most 200 characters of a controller message.
-    return `test -f /base/${MARKER[kind]} || { echo "The ${storageLabel[kind]} folder is not ready: its disk may not be mounted, or ${folder} has no ${MARKER[kind]} file." >&2; exit 3; }`;
+  private dockerRoot?: string;
+  /**
+   * A host Keep/Cache folder is used only when: it is outside Docker's own storage, it exists, it carries its marker
+   * (the host owner chose it, and its disk is really mounted) and, for a computer, its `computers` and
+   * `computers/<id>` folders are real folders rather than symlinks a guest could have planted. `create` makes the
+   * computer's folder. Messages stay short: the backend shows at most 200 characters.
+   */
+  private async checkBase(kind: StorageClass, folder: string, id?: string, create = false) {
+    this.dockerRoot ??=
+      (await this.docker.json<{ DockerRootDir?: string }>('GET', '/info', undefined, 256 * 1024)).DockerRootDir ??
+      '/var/lib/docker';
+    const label = storageLabel[kind];
+    if (folder === this.dockerRoot || folder.startsWith(`${this.dockerRoot}/`))
+      throw new ResourceError(409, `The ${label} folder cannot be inside Docker's own storage.`);
+    const own = id ? `/base/computers/${validateId(id)}` : null;
+    const script = [
+      `test -f /base/${MARKER[kind]} || { echo "The ${label} folder is not ready: its disk may not be mounted, or ${folder} has no ${MARKER[kind]} file." >&2; exit 3; }`,
+      ...(own
+        ? [
+            `for p in /base/computers ${own}; do if [ -L "$p" ]; then echo "The ${label} folder has a symlink where a computer folder belongs; refusing it." >&2; exit 3; fi; done`,
+          ]
+        : []),
+      ...(own && create ? [`mkdir -p ${own}`] : []),
+    ].join('\n');
+    try {
+      await this.helper([this.baseMount(folder)], script, 30_000);
+    } catch (error) {
+      if (error instanceof DockerApiError)
+        throw new ResourceError(
+          409,
+          `The ${label} folder ${folder} does not exist on the host: mount its disk, or recreate it with its marker.`,
+        );
+      throw error;
+    }
   }
   private baseMount(folder: string): StorageMount {
     return { Type: 'bind', Source: folder, Target: '/base' };
@@ -394,58 +424,42 @@ export class ComputerManager {
     const folder = validateFolder(raw, kind);
     if (!folder) return;
     await this.approvedImage(this.image);
-    try {
-      await this.helper([this.baseMount(folder)], this.markerScript(kind, folder), 30_000);
-    } catch (error) {
-      if (error instanceof DockerApiError)
-        throw new ResourceError(409, `The ${storageLabel[kind]} folder ${folder} does not exist on the host.`);
-      throw error;
-    }
+    await this.checkBase(kind, folder);
   }
   /** Before a computer is created: its own volumes, or its folders under the chosen host folders. */
   private async prepareStorage(id: string, storage: ComputerStorage) {
     for (const kind of STORAGE_CLASSES) {
       const folder = kind === 'keep' ? storage.keepFolder : storage.cacheFolder;
-      if (!folder) {
-        await this.ensureVolume(id, kind);
-        continue;
-      }
-      try {
-        await this.helper(
-          [this.baseMount(folder)],
-          `${this.markerScript(kind, folder)}; mkdir -p /base/computers/${validateId(id)}`,
-          30_000,
-        );
-      } catch (error) {
-        if (error instanceof DockerApiError)
-          throw new ResourceError(409, `The ${storageLabel[kind]} folder ${folder} does not exist on the host.`);
-        throw error;
-      }
+      if (folder) await this.checkBase(kind, folder, id, true);
+      else await this.ensureVolume(id, kind);
     }
   }
-  /** Where a computer's storage is, from its container: refuses to go on if a host folder's disk is missing. */
+  /** Where a computer's storage is, from its container: refuses to go on if a host folder is not usable. */
   private async checkMountedStorage(id: string, computer: Container) {
     const mounted = mountedStorage(id, computer.Mounts);
     for (const kind of STORAGE_CLASSES) {
       const place = mounted[kind];
-      if (place?.kind === 'bind')
-        await this.helper([this.baseMount(place.folder)], this.markerScript(kind, place.folder), 30_000);
+      if (place?.kind === 'bind') await this.checkBase(kind, place.folder, id);
     }
     return mounted;
   }
   /**
-   * A path kept for the first time on a rebuild may already hold data in the old container (a database whose folder
-   * the operator just added): carry it into the Keep folder, unless the Keep folder already has that path.
+   * A path kept for the first time on a rebuild may already hold live data in the old container (a database whose
+   * folder the operator just added): carry it into the Keep folder. A copy the Keep folder still has from an earlier
+   * time the path was kept is older than that, so it is moved aside to /keep/replaced/<time>/, never deleted. When
+   * the old container has nothing there, the Keep folder's copy (if any) is used as it is.
    */
   private async carryOver(oldId: string, path: string, mounts: StorageMount[]) {
+    if (!(await this.docker.archiveExists(oldId, path))) return;
     const keep = mounts.find(mount => mount.Target === '/keep')!;
     const parent = posix.dirname(path);
+    const aside = `/keep/replaced/${new Date().toISOString().replace(/[:.]/g, '-')}`;
     await this.helper(
       [keep],
-      `mkdir -p '/keep/root${parent}' && if [ -e '/keep/root${path}' ] || [ -L '/keep/root${path}' ]; then echo kept; else echo copy; fi`,
+      `mkdir -p '/keep/root${parent}' && if [ -e '/keep/root${path}' ] || [ -L '/keep/root${path}' ]; then mkdir -p '${aside}${parent}' && mv '/keep/root${path}' '${aside}${path}'; fi`,
       60_000,
-      async (helperId, stdout) => {
-        if (stdout.trim() === 'copy') await this.docker.copyArchive(oldId, path, helperId, `/keep/root${parent}`);
+      async helperId => {
+        await this.docker.copyArchive(oldId, path, helperId, `/keep/root${parent}`);
       },
     );
   }
@@ -833,37 +847,41 @@ export class ComputerManager {
       const folder = place?.kind === 'bind' ? place.folder : kind === 'keep' ? saved?.keepFolder : saved?.cacheFolder;
       return folder ? [{ kind, folder }] : [];
     });
-    for (const { kind, folder } of folders)
-      await this.helper([this.baseMount(folder)], this.markerScript(kind, folder), 30_000);
+    for (const { kind, folder } of folders) await this.checkBase(kind, folder, id);
     // All present resources have passed ownership/name checks before any deletion.
     if (media) await this.docker.request('DELETE', `${this.path('containers', media.Id)}?force=true&v=false`);
     if (computer) await this.docker.request('DELETE', `${this.path('containers', computer.Id)}?force=true&v=false`);
     if (gateway) await this.docker.request('DELETE', `${this.path('containers', gateway.Id)}?force=true&v=false`);
-    for (const { folder } of folders)
-      await this.helper([this.baseMount(folder)], `rm -rf /base/computers/${validateId(id)}`, 600_000);
     for (const volume of volumes) await this.docker.request('DELETE', this.path('volumes', volume.Name));
     if (network) await this.docker.request('DELETE', this.path('networks', network.Id));
     this.previewCache.delete(`${id}:thumb`);
     this.previewCache.delete(`${id}:full`);
+    return folders;
   }
   async remove(idRaw: string, nameRaw: string, storage?: unknown) {
     const id = validateId(idRaw),
       name = validateName(nameRaw);
-    return this.exclusive(() => this.removeOwned(id, name, storage));
+    const folders = await this.exclusive(() => this.removeOwned(id, name, storage));
+    // Its host folders go last, outside the lock: a large folder must not hold up every other computer. A retry
+    // (the backend keeps the record until this succeeds) finds them through the saved storage.
+    for (const { folder } of folders)
+      await this.helper([this.baseMount(folder)], `rm -rf /base/computers/${id}`, 600_000);
   }
 
   /** Empties a powered-off computer's Cache folder (everything there can be fetched again). */
   async clearCache(idRaw: string, nameRaw: string) {
     const id = validateId(idRaw),
       name = validateName(nameRaw);
-    return this.exclusive(async () => {
+    const cache = await this.exclusive(async () => {
       const desktop = await this.container(this.names.desktop(id), id, 'desktop', name);
       if (!desktop) throw new ResourceError(404, 'Computer not found.');
       if (desktop.State.Running) throw new ResourceError(409, 'Power off this computer before clearing its cache.');
       await this.checkMountedStorage(id, desktop);
-      const cache = this.storageMountsOf(id, desktop).find(mount => mount.Target === '/cache')!;
-      await this.helper([cache], 'rm -rf /cache/root', 600_000);
+      return this.storageMountsOf(id, desktop).find(mount => mount.Target === '/cache')!;
     });
+    // Outside the lock: emptying a large cache must not hold up other computers (a start meanwhile only finds less
+    // cached, which is what a cache is for).
+    await this.helper([cache], 'rm -rf /cache/root', 600_000);
   }
 
   /** How much a computer's Keep and Cache folders hold, in bytes. */
@@ -873,7 +891,12 @@ export class ComputerManager {
     const desktop = await this.container(this.names.desktop(id), id, 'desktop', name);
     if (!desktop) throw new ResourceError(404, 'Computer not found.');
     await this.checkMountedStorage(id, desktop);
-    const output = await this.helper(this.storageMountsOf(id, desktop), 'du -sb /keep /cache', 300_000);
+    // Files can vanish mid-count on a running computer (its /tmp): du then exits 1 but still reports the totals.
+    const output = await this.helper(
+      this.storageMountsOf(id, desktop),
+      'du -sb /keep /cache 2>/dev/null; true',
+      300_000,
+    );
     const sizes = Object.fromEntries(
       output
         .trim()

@@ -3,6 +3,8 @@
 # reinstalled after an image update or rebuild (computer-storage-replay.sh). Writes /keep/system/apt-packages.txt
 # (manually installed packages not in the image) and apt-files/ (apt sources and keys the image does not have).
 set -eu
+# The baseline and the record compare sorted lists: one byte order for both.
+export LC_ALL=C
 baseline=/usr/lib/agent-swarm/baseline
 system=/keep/system
 mountpoint -q /keep 2>/dev/null || exit 0

@@ -22,10 +22,12 @@ export const MARKER: Record<StorageClass, string> = {
 };
 export const storageLabel: Record<StorageClass, string> = { keep: 'Keep', cache: 'Cache' };
 
-/** Never the system itself, kernel filesystems, the two mounts or the runtime. */
+/** Never the system itself, kernel filesystems, the two mounts, the runtime or the Cache paths (/tmp is emptied). */
 const REFUSED = [
   /^\/$/,
-  /^\/(bin|sbin|lib|lib64|boot|proc|sys|dev|run|keep|cache)(\/|$)/,
+  /^\/(bin|sbin|lib|lib64|boot|proc|sys|dev|run|keep|cache|tmp)(\/|$)/,
+  /^\/var\/(run|lock)(\/|$)/,
+  /^\/var\/cache\/apt\/archives(\/|$)/,
   /^\/(usr|etc|var|opt)$/,
   /^\/opt\/swarm(\/|$)/,
   /^\/usr\/lib\/agent-swarm(\/|$)/,
@@ -51,6 +53,11 @@ export function validateKeptPaths(input: unknown): string[] {
         `"${String(path)}" cannot be kept: use an absolute folder or file outside the system folders.`,
       );
   if (!paths.includes('/home/agent')) paths.unshift('/home/agent');
+  // No kept path inside another (keeping /var/lib after /var/lib/postgresql would cover the system's own files).
+  for (const outer of paths as string[])
+    for (const inner of paths as string[])
+      if (inner !== outer && inner.startsWith(`${outer}/`))
+        throw new ResourceError(400, `"${inner}" is inside "${outer}": keep one or the other.`);
   return paths as string[];
 }
 
@@ -64,11 +71,13 @@ export function validateFolder(input: unknown, kind: StorageClass): string | nul
     input === '/' ||
     posix.normalize(input) !== input ||
     input.endsWith('/') ||
-    /[:,\u0000-\u001f\u007f]/.test(input)
+    !/^\/[A-Za-z0-9._@+/-]+$/.test(input) ||
+    // Never inside a computer's own storage (where a guest could plant a marker or symlinks).
+    /\/computers\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\/|$)/i.test(input)
   )
     throw new ResourceError(
       400,
-      `The ${storageLabel[kind]} folder must be an absolute host path such as /srv/agent-swarm.`,
+      `The ${storageLabel[kind]} folder must be an absolute host path such as /srv/agent-swarm (letters, digits, . _ @ + - only), outside any computer's storage.`,
     );
   return input;
 }

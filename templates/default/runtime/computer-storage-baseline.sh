@@ -2,6 +2,8 @@
 # Image build, last step of every computer Dockerfile: note what the image itself installed, so a computer records
 # (and later reinstalls) only what it added (computer-storage-record.sh).
 set -eu
+# The baseline and the record compare sorted lists: one byte order for both.
+export LC_ALL=C
 baseline=/usr/lib/agent-swarm/baseline
 mkdir -p "$baseline"
 apt-mark showmanual | sort -u >"$baseline/manual-packages"

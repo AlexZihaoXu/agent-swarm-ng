@@ -304,7 +304,8 @@ export class HttpComputerController implements ComputerController {
     await this.request(
       `/computers/${encodeURIComponent(id)}/settings/replacement`,
       { method: 'POST', body: JSON.stringify({ name, ...settings, ...options }) },
-      60_000,
+      // Newly kept paths are carried over from the old computer first: a large database folder takes minutes.
+      900_000,
     );
   }
   async pointer(id: string, x: number, y: number) {

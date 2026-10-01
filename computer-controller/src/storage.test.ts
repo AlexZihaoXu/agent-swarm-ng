@@ -33,13 +33,29 @@ it('keeps only safe paths, always the home folder', () => {
   ])
     expect(() => validateKeptPaths([bad]), bad).toThrow('cannot be kept');
   expect(() => validateKeptPaths(Array.from({ length: 33 }, (_, index) => `/srv/${index}`))).toThrow('at most 32');
+  // Cache paths and their neighbours cannot be kept; kept paths may not nest (a parent would cover the system's files).
+  for (const bad of ['/tmp', '/tmp/build', '/var/run', '/var/lock/x', '/var/cache/apt/archives'])
+    expect(() => validateKeptPaths([bad]), bad).toThrow('cannot be kept');
+  expect(() => validateKeptPaths(['/var/lib/postgresql', '/var/lib'])).toThrow('inside "/var/lib"');
+  expect(() => validateKeptPaths(['/home/agent/projects'])).toThrow('inside "/home/agent"');
 });
 
 it('accepts only absolute, plain host folders, and empty for the default volumes', () => {
   expect(validateFolder('', 'keep')).toBeNull();
   expect(validateFolder(null, 'cache')).toBeNull();
   expect(validateFolder('/srv/agent-swarm', 'keep')).toBe('/srv/agent-swarm');
-  for (const bad of ['srv', '/', '/srv/', '/srv/../etc', '/srv:/etc', '/srv,x', '/srv\nx'])
+  for (const bad of [
+    'srv',
+    '/',
+    '/srv/',
+    '/srv/../etc',
+    '/srv:/etc',
+    '/srv,x',
+    '/srv\nx',
+    '/srv/$(reboot)',
+    '/srv/"x"',
+    `/srv/keep/computers/${id}/root/home/agent`,
+  ])
     expect(() => validateFolder(bad, 'keep'), bad).toThrow('absolute host path');
   expect(validateStorage(undefined)).toEqual({
     keepFolder: null,
@@ -132,11 +148,10 @@ it('deletes a computer’s host folders with it, but only once their disks are t
   });
 });
 
-it('carries a newly kept path over from the old computer, unless the Keep folder already has it', async () => {
-  const { docker, scripts } = helperDocker(script => ({
-    code: 0,
-    stdout: script.includes('/var/lib/redis') ? 'kept\n' : 'copy\n',
-  }));
+it('carries a newly kept path over from the old computer when it has data there', async () => {
+  const { docker, scripts } = helperDocker(() => ({ code: 0 }));
+  // The old computer has /var/lib/postgresql but not /var/lib/redis.
+  vi.spyOn(docker, 'archiveExists').mockImplementation(async (_container, path) => path === '/var/lib/postgresql');
   const copies: string[][] = [];
   vi.spyOn(docker, 'copyArchive').mockImplementation(async (from, path, to, directory) => {
     copies.push([from, path, to, directory]);
@@ -149,7 +164,23 @@ it('carries a newly kept path over from the old computer, unless the Keep folder
   ).carryOver.bind(manager);
   await carryOver('old-desktop', '/var/lib/postgresql', [keep]);
   await carryOver('old-desktop', '/var/lib/redis', [keep]);
+  expect(scripts).toHaveLength(1);
   expect(scripts[0]).toMatchObject({ mounts: [keep] });
-  expect(scripts[0].script).toContain("mkdir -p '/keep/root/var/lib'");
+  // An older copy in the Keep folder is moved aside, never deleted, before the live data comes over.
+  expect(scripts[0].script).toMatch(
+    /mv '\/keep\/root\/var\/lib\/postgresql' '\/keep\/replaced\/[^']+\/var\/lib\/postgresql'/,
+  );
   expect(copies).toEqual([['old-desktop', '/var/lib/postgresql', 'helper-1', '/keep/root/var/lib']]);
+});
+
+it('refuses host folders inside Docker’s own storage, and symlinks where a computer’s folder belongs', async () => {
+  const { docker, scripts } = helperDocker(() => ({ code: 0 }));
+  const manager = new ComputerManager(docker, 'swarm-ng-test', '{}');
+  await expect(manager.checkFolder('keep', '/var/lib/docker/volumes/x/_data')).rejects.toMatchObject({
+    code: 409,
+    message: expect.stringContaining('Docker'),
+  });
+  expect(scripts).toHaveLength(0);
+  await manager.remove(id, name, { keepFolder: '/srv/keep', cacheFolder: null, keptPaths: ['/home/agent'] });
+  expect(scripts[0].script).toContain(`for p in /base/computers /base/computers/${id}; do if [ -L "$p" ]`);
 });

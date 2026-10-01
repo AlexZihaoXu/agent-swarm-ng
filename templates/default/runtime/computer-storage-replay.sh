@@ -38,8 +38,12 @@ if [ -s "$system/apt-packages.txt" ]; then
         if timeout 1200 apt-get update && DEBIAN_FRONTEND=noninteractive timeout 1200 apt-get install -y $missing; then
             say "reinstalled"
         else
-            problems="$problems apt"
-            say "reinstalling failed; the list is kept and tried again at the next start"
+            # One package that no longer exists (after an image update, say) must not stop the others.
+            say "reinstalling together failed; trying one package at a time"
+            for package in $missing; do
+                DEBIAN_FRONTEND=noninteractive timeout 600 apt-get install -y "$package" >/dev/null 2>&1 \
+                    || { problems="$problems apt:$package"; say "could not reinstall $package"; }
+            done
         fi
     fi
 fi
