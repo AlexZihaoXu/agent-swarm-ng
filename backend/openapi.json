@@ -602,6 +602,12 @@
                               {
                                 "type": "string",
                                 "enum": [
+                                  "video"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
                                   "text"
                                 ]
                               },
@@ -1039,6 +1045,12 @@
                           "type": "string",
                           "enum": [
                             "image"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "video"
                           ]
                         },
                         {
@@ -1697,6 +1709,12 @@
                           "type": "string",
                           "enum": [
                             "image"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "video"
                           ]
                         },
                         {
@@ -5423,6 +5441,12 @@
                                     {
                                       "type": "string",
                                       "enum": [
+                                        "video"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
                                         "text"
                                       ]
                                     },
@@ -6345,6 +6369,12 @@
                                               "type": "string",
                                               "enum": [
                                                 "image"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "video"
                                               ]
                                             },
                                             {
@@ -7366,6 +7396,12 @@
                                       {
                                         "type": "string",
                                         "enum": [
+                                          "video"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
                                           "text"
                                         ]
                                       },
@@ -8345,6 +8381,12 @@
                                         "type": "string",
                                         "enum": [
                                           "image"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "video"
                                         ]
                                       },
                                       {
@@ -9365,6 +9407,12 @@
                                       {
                                         "type": "string",
                                         "enum": [
+                                          "video"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
                                           "text"
                                         ]
                                       },
@@ -10225,6 +10273,12 @@
                                     {
                                       "type": "string",
                                       "enum": [
+                                        "video"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
                                         "text"
                                       ]
                                     },
@@ -10974,6 +11028,12 @@
                                     "type": "string",
                                     "enum": [
                                       "image"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "video"
                                     ]
                                   },
                                   {
@@ -12293,6 +12353,12 @@
                                             {
                                               "type": "string",
                                               "enum": [
+                                                "video"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
                                                 "text"
                                               ]
                                             },
@@ -13320,6 +13386,12 @@
                                       {
                                         "type": "string",
                                         "enum": [
+                                          "video"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
                                           "text"
                                         ]
                                       },
@@ -13774,6 +13846,12 @@
                                       "type": "string",
                                       "enum": [
                                         "image"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "video"
                                       ]
                                     },
                                     {
@@ -14593,6 +14671,12 @@
                                       {
                                         "type": "string",
                                         "enum": [
+                                          "video"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
                                           "text"
                                         ]
                                       },
@@ -15271,6 +15355,12 @@
                                     "type": "string",
                                     "enum": [
                                       "image"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "video"
                                     ]
                                   },
                                   {
@@ -21738,6 +21828,12 @@
                                       "type": "string",
                                       "enum": [
                                         "image"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "video"
                                       ]
                                     },
                                     {

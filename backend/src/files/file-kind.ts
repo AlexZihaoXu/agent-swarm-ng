@@ -1,5 +1,5 @@
-/** What the chat can do with a file: show an image, preview text, read a PDF, or only offer a download. */
-export type FileKind = 'image' | 'text' | 'pdf' | 'other';
+/** What the chat can do with a file: show an image, play a video, preview text, read a PDF, or only offer a download. */
+export type FileKind = 'image' | 'video' | 'text' | 'pdf' | 'other';
 
 const textTypes: Record<string, string> = {
   md: 'text/markdown',
@@ -28,6 +28,17 @@ const textTypes: Record<string, string> = {
 const extension = (name: string) => name.toLowerCase().match(/\.([a-z0-9]{1,10})$/)?.[1] ?? '';
 const starts = (head: Uint8Array, bytes: number[], at = 0) => bytes.every((byte, index) => head[at + index] === byte);
 const ascii = (text: string) => [...text].map(character => character.charCodeAt(0));
+/** ISO media brands that are video (MP4, M4V, QuickTime, 3GP); others (M4A audio, HEIC/AVIF images) are not. */
+const VIDEO_BRANDS = /^(isom|iso[2-9]|mp4[12]|avc1|M4V[ HP]|qt {2}|dash|3gp[4-9]|3g2[a-c]|mmp4|f4v )$/;
+function videoType(head: Uint8Array) {
+  if (starts(head, ascii('ftyp'), 4)) {
+    const brand = String.fromCharCode(...head.subarray(8, 12));
+    if (VIDEO_BRANDS.test(brand)) return brand === 'qt  ' ? 'video/quicktime' : 'video/mp4';
+  }
+  if (starts(head, [0x1a, 0x45, 0xdf, 0xa3]) && new TextDecoder().decode(head.subarray(0, 64)).includes('webm'))
+    return 'video/webm';
+  return null;
+}
 
 /** Looks like UTF-8 text: no NUL bytes and valid UTF-8 (a character cut at the end of the sample is fine). */
 function isText(head: Uint8Array) {
@@ -57,6 +68,8 @@ export function detectFile(name: string, head: Uint8Array): { kind: FileKind; mi
   if (starts(head, [0xff, 0xd8, 0xff])) return { kind: 'image', mime: 'image/jpeg' };
   if (starts(head, ascii('GIF87a')) || starts(head, ascii('GIF89a'))) return { kind: 'image', mime: 'image/gif' };
   if (starts(head, ascii('RIFF')) && starts(head, ascii('WEBP'), 8)) return { kind: 'image', mime: 'image/webp' };
+  const video = videoType(head);
+  if (video) return { kind: 'video', mime: video };
   if (starts(head, ascii('%PDF-'))) return { kind: 'pdf', mime: 'application/pdf' };
   const ext = extension(name);
   if (head.length === 0 || isText(head)) return { kind: 'text', mime: textTypes[ext] ?? 'text/plain' };

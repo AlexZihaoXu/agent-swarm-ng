@@ -38,6 +38,16 @@ it('knows images and PDFs by their bytes, text by being UTF-8, and everything el
     kind: 'other',
     mime: 'application/octet-stream',
   });
+  // Videos by their container: MP4/QuickTime brands and WebM; M4A audio and HEIC images stay plain files.
+  const ftyp = (brand: string) => new Uint8Array([0, 0, 0, 0x20, ...bytes(`ftyp${brand}`)]);
+  expect(detectFile('clip.mp4', ftyp('isom'))).toEqual({ kind: 'video', mime: 'video/mp4' });
+  expect(detectFile('clip', ftyp('mp42'))).toEqual({ kind: 'video', mime: 'video/mp4' });
+  expect(detectFile('clip.mov', ftyp('qt  '))).toEqual({ kind: 'video', mime: 'video/quicktime' });
+  expect(detectFile('song.m4a', ftyp('M4A '))).toMatchObject({ kind: 'other' });
+  expect(detectFile('photo.heic', ftyp('heic'))).toMatchObject({ kind: 'other' });
+  const ebml = (docType: string) => new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x82, 0x84, ...bytes(docType)]);
+  expect(detectFile('clip.webm', ebml('webm'))).toEqual({ kind: 'video', mime: 'video/webm' });
+  expect(detectFile('clip.mkv', ebml('matroska'))).toMatchObject({ kind: 'other' });
   // A multi-byte character cut at the end of the sample is still text.
   expect(detectFile('a.txt', bytes('héllo').subarray(0, 2))).toMatchObject({ kind: 'text' });
   expect(fileName('../../etc/passwd')).toBe('passwd');

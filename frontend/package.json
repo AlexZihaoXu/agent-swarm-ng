@@ -29,6 +29,7 @@
     "@tiptap/pm": "^3",
     "@tiptap/react": "^3",
     "@tiptap/starter-kit": "^3",
+    "@videojs/react": "10.0.0-rc.4",
     "@xterm/xterm": "6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

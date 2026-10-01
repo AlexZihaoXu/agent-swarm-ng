@@ -74,6 +74,43 @@ it('uploads any file as a raw stream, serves images inline and everything else a
   }
 });
 
+it('serves videos inline in byte ranges so players can seek', async () => {
+  const { database, app, agent, upload } = await setup();
+  try {
+    const video = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypisom'), Buffer.alloc(88, 7)]);
+    const posted = await upload(chatKey(agent.channels[0].id), 'clip.mp4', video);
+    expect(posted.json()).toMatchObject({ kind: 'video', mime: 'video/mp4', size: 100 });
+    const url = `/api/files/${posted.json().id}/content`;
+    const whole = await app.inject(url);
+    expect([whole.statusCode, whole.headers['content-type'], whole.headers['accept-ranges']]).toEqual([
+      200,
+      'video/mp4',
+      'bytes',
+    ]);
+    expect(whole.headers['content-disposition']).toMatch(/^inline;/);
+    const part = await app.inject({ url, headers: { range: 'bytes=4-11' } });
+    expect([part.statusCode, part.headers['content-range'], part.headers['content-length']]).toEqual([
+      206,
+      'bytes 4-11/100',
+      '8',
+    ]);
+    expect(part.body).toBe('ftypisom');
+    const tail = await app.inject({ url, headers: { range: 'bytes=-10' } });
+    expect([tail.headers['content-range'], tail.rawPayload.length]).toEqual(['bytes 90-99/100', 10]);
+    const open = await app.inject({ url, headers: { range: 'bytes=95-' } });
+    expect(open.headers['content-range']).toBe('bytes 95-99/100');
+    const outside = await app.inject({ url, headers: { range: 'bytes=200-' } });
+    expect([outside.statusCode, outside.headers['content-range']]).toEqual([416, 'bytes */100']);
+    // A range for an older version (If-Range mismatch) or a malformed one gets the whole file.
+    const stale = await app.inject({ url, headers: { range: 'bytes=0-1', 'if-range': '"old"' } });
+    expect([stale.statusCode, stale.rawPayload.length]).toEqual([200, 100]);
+    expect((await app.inject({ url, headers: { range: 'bytes=1-2,5-6' } })).statusCode).toBe(200);
+  } finally {
+    await app.close();
+    await database.close();
+  }
+});
+
 it('refuses uploads over the per-file limit or the storage budget without leaving partial files', async () => {
   const { root, database, app, agent, upload } = await setup();
   try {

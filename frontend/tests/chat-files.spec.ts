@@ -4,11 +4,18 @@ const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64',
 );
-const file = (id: string, name: string, kind: 'image' | 'text' | 'pdf' | 'other', extra: object = {}) => ({
+const file = (id: string, name: string, kind: 'image' | 'video' | 'text' | 'pdf' | 'other', extra: object = {}) => ({
   id,
   channelKey: 'chat:avery',
   name,
-  mime: kind === 'image' ? 'image/png' : kind === 'text' ? 'text/plain' : 'application/octet-stream',
+  mime:
+    kind === 'image'
+      ? 'image/png'
+      : kind === 'video'
+        ? 'video/mp4'
+        : kind === 'text'
+          ? 'text/plain'
+          : 'application/octet-stream',
   kind,
   size: 2048,
   status: 'available',
@@ -115,6 +122,47 @@ test('files attach from the composer, upload with progress, and send with or wit
     .setInputFiles({ name: 'x.txt', mimeType: 'text/plain', buffer: Buffer.from('x') });
   await composer.getByRole('button', { name: 'Remove x.txt' }).click();
   await expect(composer.getByRole('list', { name: 'Files to send' })).toHaveCount(0);
+});
+
+test('a video plays in the chat with Video.js, under its name, size and download link', async ({ page }) => {
+  await mockFileContent(page);
+  const clip = file('f-clip', 'MAKE-IT-MOVE-720p.mp4', 'video', { size: 8 * 1024 ** 2 });
+  await page.route('**/api/channels/avery/messages*', route =>
+    route.fulfill({
+      json: {
+        messages: [
+          {
+            id: 'with-video',
+            channelId: 'avery',
+            sequence: 1,
+            role: 'assistant',
+            text: 'MAKE IT MOVE is ready.',
+            timestamp: Date.now(),
+            replyTo: null,
+            files: [clip],
+          },
+        ],
+        nextCursor: null,
+      },
+    }),
+  );
+  await page.goto('/chat/agents/avery');
+  const files = page.getByRole('group', { name: '1 file' });
+  const video = files.locator('video');
+  await expect(video).toHaveAttribute('src', '/api/files/f-clip/content');
+  await expect(video).toHaveAttribute('aria-label', 'Video: MAKE-IT-MOVE-720p.mp4');
+  await expect(video).toHaveAttribute('preload', 'metadata');
+  // The player's own controls, and the file's name as a download beside its size.
+  await expect(files.getByRole('button', { name: /play/i }).first()).toBeVisible();
+  const download = files.getByRole('link', { name: 'MAKE-IT-MOVE-720p.mp4' });
+  await expect(download).toHaveAttribute('href', '/api/files/f-clip/content?download=1');
+  await expect(files.getByText('8.0 MB')).toBeVisible();
+  // Speed is one click away in the name bar (it steps through the player's rates; Settings → Speed lists them).
+  const speed = files.getByRole('button', { name: 'Playback rate 1' });
+  await expect(speed).toHaveText('1×');
+  await speed.click();
+  await expect(files.getByRole('button', { name: 'Playback rate 1.2' })).toHaveText('1.2×');
+  expect(await video.evaluate((element: HTMLVideoElement) => element.playbackRate)).toBe(1.2);
 });
 
 test('other files link to a download, deleted ones show who deleted them, and the Files dialog deletes', async ({

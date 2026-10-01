@@ -1147,7 +1147,7 @@ export interface operations {
                             channelKey: string;
                             name: string;
                             mime: string;
-                            kind: "image" | "text" | "pdf" | "other" | "scratch";
+                            kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                             size: number;
                             status: "available" | "deleted";
                             uploader: {
@@ -1285,7 +1285,7 @@ export interface operations {
                         channelKey: string;
                         name: string;
                         mime: string;
-                        kind: "image" | "text" | "pdf" | "other" | "scratch";
+                        kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                         size: number;
                         status: "available" | "deleted";
                         uploader: {
@@ -1546,7 +1546,7 @@ export interface operations {
                         channelKey: string;
                         name: string;
                         mime: string;
-                        kind: "image" | "text" | "pdf" | "other" | "scratch";
+                        kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                         size: number;
                         status: "available" | "deleted";
                         uploader: {
@@ -2476,7 +2476,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -2602,7 +2602,7 @@ export interface operations {
                                     channelKey: string;
                                     name: string;
                                     mime: string;
-                                    kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                    kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                                     size: number;
                                     status: "available" | "deleted";
                                     uploader: {
@@ -2760,7 +2760,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -2911,7 +2911,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -3143,7 +3143,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -3274,7 +3274,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -3413,7 +3413,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -3778,7 +3778,7 @@ export interface operations {
                                     channelKey: string;
                                     name: string;
                                     mime: string;
-                                    kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                    kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                                     size: number;
                                     status: "available" | "deleted";
                                     uploader: {
@@ -3896,7 +3896,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -3993,7 +3993,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -4182,7 +4182,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -4326,7 +4326,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {
@@ -6622,7 +6622,7 @@ export interface operations {
                                 channelKey: string;
                                 name: string;
                                 mime: string;
-                                kind: "image" | "text" | "pdf" | "other" | "scratch";
+                                kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
                                 size: number;
                                 status: "available" | "deleted";
                                 uploader: {

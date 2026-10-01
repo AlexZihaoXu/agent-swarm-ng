@@ -20,6 +20,7 @@ export const FileSchema = Type.Object({
   mime: Type.String(),
   kind: Type.Union([
     Type.Literal('image'),
+    Type.Literal('video'),
     Type.Literal('text'),
     Type.Literal('pdf'),
     Type.Literal('other'),
@@ -47,7 +48,31 @@ const error = Type.Object({ message: Type.String() });
 const errors = { 400: error, 403: error, 404: error, 409: error, 410: error, 413: error, 507: error };
 const ChannelKey = Type.String({ minLength: 3, maxLength: 200 });
 /** Images shown inline; everything else downloads (never rendered by the browser). */
-const INLINE = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const INLINE = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+]);
+/** One `bytes=` range of a file of `size` bytes (inclusive end), null when unusable, 'unsatisfiable' when outside it. */
+function byteRange(header: string | undefined, size: number) {
+  const match = header ? /^bytes=(\d*)-(\d*)$/.exec(header.trim()) : null;
+  if (!match || (!match[1] && !match[2])) return null;
+  let start: number, end: number;
+  if (!match[1]) {
+    // The last N bytes.
+    start = Math.max(0, size - Number(match[2]));
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+  }
+  if (start >= size || start > end) return 'unsatisfiable' as const;
+  return { start, end };
+}
 /** How much of a text file the dashboard preview reads. */
 export const PREVIEW_BYTES = 1024 * 1024;
 
@@ -189,13 +214,23 @@ export function registerFileRoutes(
       const etag = `"${blobId}"`;
       reply.header('ETag', etag).header('Cache-Control', 'private, no-cache');
       if (request.headers['if-none-match'] === etag) return reply.code(304).send();
-      return reply
+      reply
         .header('Content-Type', inline ? view.mime : 'application/octet-stream')
         .header('Content-Disposition', contentDisposition(inline ? 'inline' : 'attachment', view.name))
-        .header('Content-Length', String(view.size))
+        .header('Accept-Ranges', 'bytes')
         .header('X-Content-Type-Options', 'nosniff')
-        .header('Content-Security-Policy', "default-src 'none'; sandbox")
-        .send(files.blobs.stream(blobId));
+        .header('Content-Security-Policy', "default-src 'none'; sandbox");
+      // Players seek by asking for parts of the file (one byte range; a stale If-Range gets the whole file).
+      const ifRange = request.headers['if-range'];
+      const range = !ifRange || ifRange === etag ? byteRange(request.headers.range, view.size) : null;
+      if (range === 'unsatisfiable') return reply.code(416).header('Content-Range', `bytes */${view.size}`).send();
+      if (range)
+        return reply
+          .code(206)
+          .header('Content-Range', `bytes ${range.start}-${range.end}/${view.size}`)
+          .header('Content-Length', String(range.end - range.start + 1))
+          .send(files.blobs.stream(blobId, range));
+      return reply.header('Content-Length', String(view.size)).send(files.blobs.stream(blobId));
     },
   );
 

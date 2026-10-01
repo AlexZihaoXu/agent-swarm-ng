@@ -203,7 +203,7 @@ export const sharingFilesPractice = {
   content: `Choosing how to show something:
 - Short text or a snippet: put it in the message itself.
 - A document, plan or page you are still shaping with the human: draft it in the scratchpad and present_scratch it once; they watch it change as you edit, and you avoid re-sending long texts.
-- A finished artifact, something to download, or a file from a computer (a build, a chart, a PDF): upload_file, then send_message with fileIds. To show what a computer's screen looks like, save_screenshot to your scratchpad, then upload_file it. Upload again after a change; there are no versions.
+- A finished artifact, something to download, or a file from a computer (a build, a chart, a PDF, a video): upload_file, then send_message with fileIds. Images and videos (MP4, MOV, WebM) show and play in the chat. To show what a computer's screen looks like, save_screenshot to your scratchpad, then upload_file it. Upload again after a change; there are no versions.
 Say in the message what the file is and what you want from the reader.
 
 Sending: upload_file and present_scratch only prepare a file; nothing is posted until send_message (or send_dm) carries its fileId in the same chat. At most 10 files per message.

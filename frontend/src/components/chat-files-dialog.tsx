@@ -16,6 +16,7 @@ const inputClass =
   'h-10 min-w-0 rounded-md border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring sm:text-sm';
 const kindLabel: Record<ChatFile['kind'], string> = {
   image: 'Image',
+  video: 'Video',
   text: 'Text',
   pdf: 'PDF',
   other: 'File',

@@ -30,7 +30,7 @@ export function fileView(row: Row) {
     channelKey: row.channelKey,
     name: row.name,
     mime: row.mime,
-    kind: row.kind as 'image' | 'text' | 'pdf' | 'other' | 'scratch',
+    kind: row.kind as 'image' | 'video' | 'text' | 'pdf' | 'other' | 'scratch',
     size: row.size,
     status: row.status as 'available' | 'deleted',
     uploader: {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FileIcon } from '@/components/ui/file-icon';
 import { fileSize } from '@/lib/computer-files';
@@ -8,6 +8,7 @@ import { useScratchRevision } from '@/lib/scratch-writers';
 import 'highlight.js/styles/github-dark.css';
 import './message-markdown.css';
 
+const ChatVideoPlayer = lazy(() => import('@/components/chat-video-player'));
 const PREVIEW_LINES = 12;
 const EXPANDED_LINES = 400;
 const linkClass =
@@ -192,6 +193,33 @@ function TextFile({ file }: { file: ChatFile }) {
   );
 }
 
+/** A video: the same name/size bar as a text preview (with a speed button once the player loads), over a player. */
+function VideoFile({ file }: { file: ChatFile }) {
+  const bar = (speed?: ReactNode) => (
+    <div className="flex min-w-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5">
+      <FileIcon />
+      <DownloadLink file={file} className="text-xs" />
+      <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{fileSize(file.size)}</span>
+      {speed}
+    </div>
+  );
+  return (
+    // A set width (a video has no size until it loads; the message column would shrink it to its name).
+    <div className="w-[28rem] max-w-full min-w-0 overflow-hidden rounded-lg border border-border bg-sidebar text-foreground">
+      <Suspense
+        fallback={
+          <>
+            {bar()}
+            <div aria-label="Loading video player" className="aspect-video w-full bg-black" />
+          </>
+        }
+      >
+        <ChatVideoPlayer src={fileContentUrl(file.id)} name={file.name} renderBar={bar} />
+      </Suspense>
+    </div>
+  );
+}
+
 /** Images as a grid: one large, several as squares. Each opens full size in a new tab. */
 function ImageGrid({ images }: { images: ChatFile[] }) {
   const single = images.length === 1;
@@ -218,7 +246,7 @@ function ImageGrid({ images }: { images: ChatFile[] }) {
   );
 }
 
-/** A message's files, below its text: images together, then text previews, then other files. */
+/** A message's files, below its text: images together, then text previews, videos and other files. */
 export function MessageFiles({ files, align = 'start' }: { files: ChatFile[]; align?: 'start' | 'end' }) {
   if (!files.length) return null;
   const images = files.filter(file => file.status === 'available' && file.kind === 'image');
@@ -236,6 +264,8 @@ export function MessageFiles({ files, align = 'start' }: { files: ChatFile[]; al
           <DeletedFile key={file.id} file={file} />
         ) : file.kind === 'text' || file.kind === 'scratch' ? (
           <TextFile key={file.id} file={file} />
+        ) : file.kind === 'video' ? (
+          <VideoFile key={file.id} file={file} />
         ) : (
           <GenericFile key={file.id} file={file} />
         ),

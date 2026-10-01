@@ -77,7 +77,7 @@ export function isChatFile(value: unknown): value is ChatFile {
     typeof file?.id === 'string' &&
     typeof file.name === 'string' &&
     typeof file.size === 'number' &&
-    ['image', 'text', 'pdf', 'other', 'scratch'].includes(file.kind) &&
+    ['image', 'video', 'text', 'pdf', 'other', 'scratch'].includes(file.kind) &&
     ['available', 'deleted'].includes(file.status)
   );
 }
