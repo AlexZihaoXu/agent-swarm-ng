@@ -37,6 +37,11 @@ model Computer {
   cpuCores   Int?
   memoryGiB  Int?
   timezone   String?
+  // Where its Keep and Cache folders live (host folders chosen in Settings when it was created; null = its own
+  // Docker volumes), and the paths it keeps beyond the home folder (JSON array of absolute paths).
+  keepFolder  String?
+  cacheFolder String?
+  keptPaths   String   @default("[\"/home/agent\",\"/usr/local\"]")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   assignments ComputerAssignment[]
@@ -375,6 +380,9 @@ model SwarmSettings {
   storageBudgetGb   Int      @default(10)
   /// Days saved Discord messages are kept (older ones are pruned hourly).
   discordHistoryDays Int     @default(30)
+  /// Host folders new computers keep their files in (Settings → Computers → Storage); null = Docker volumes.
+  computerKeepFolder  String?
+  computerCacheFolder String?
   updatedAt         DateTime @updatedAt
 }
 

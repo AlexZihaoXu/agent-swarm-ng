@@ -13,6 +13,7 @@ import { generateComputerName } from '@/lib/computer-name';
 import { defaultComputerSettings, parseComputerSettings, type ComputerSettingsDraft } from '@/lib/computer-settings';
 import { ComputerCard, type Computer } from './computer-card';
 import { ComputerViewer } from './computer-viewer';
+import { ComputerStorageFields, keptOf } from '@/components/computer-storage-fields';
 import { ComputerResourceFields } from './computer-resource-fields';
 import { ComputerFileBrowser } from './computer-file-browser';
 import { ComputerTerminals } from './computer-terminals';
@@ -104,6 +105,9 @@ export function ComputersPanel({
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [replaceConfirmed, setReplaceConfirmed] = useState(false);
+  // Storage changes made in Settings that rebuild the computer: the paths it keeps, and Update image.
+  const [keptDraft, setKeptDraft] = useState<string[] | null>(null);
+  const [updateImage, setUpdateImage] = useState(false);
   const suggestedSettings = limitsQuery.data ? defaultComputerSettings(limitsQuery.data) : null;
   const formSettings = settingsDraft ?? suggestedSettings;
   const parsedSettings =
@@ -150,6 +154,11 @@ export function ComputersPanel({
   const timezoneChanged = Boolean(
     settingsComputer && editSettings && editSettings.timezone !== settingsComputer.timezone,
   );
+  const keptChanged = Boolean(
+    settingsComputer && keptDraft && keptDraft.join('\n') !== keptOf(settingsComputer).join('\n'),
+  );
+  // These only apply by rebuilding the powered-off computer (its Keep and Cache folders stay).
+  const rebuild = timezoneChanged || keptChanged || updateImage;
   const viewing = computers.find(computer => computer.id === viewingId);
   const focusGridTab = useRef(false);
   useEffect(() => {
@@ -224,16 +233,21 @@ export function ComputersPanel({
       !settingsComputer ||
       !parsedEdit ||
       settingsBusy ||
-      (timezoneChanged && (settingsComputer.state !== 'exited' || !replaceConfirmed))
+      (rebuild && (settingsComputer.state !== 'exited' || !replaceConfirmed))
     )
       return;
     setSettingsBusy(true);
     setSettingsError('');
     try {
-      const result = timezoneChanged
+      const result = rebuild
         ? await api.POST('/api/computers/{id}/settings/replacement', {
             params: { path: { id: settingsComputer.id } },
-            body: { ...parsedEdit, confirmReplacement: true },
+            body: {
+              ...parsedEdit,
+              confirmReplacement: true,
+              ...(keptChanged && keptDraft ? { keptPaths: keptDraft } : {}),
+              ...(updateImage ? { image: 'current' as const } : {}),
+            },
           })
         : await api.PATCH('/api/computers/{id}/settings', {
             params: { path: { id: settingsComputer.id } },
@@ -373,7 +387,7 @@ export function ComputersPanel({
                   >
                     <Dialog.Title className="text-lg font-semibold">Create computer</Dialog.Title>
                     <Dialog.Description className="mt-2 text-sm text-muted-foreground">
-                      Create a separate Ubuntu desktop with a persistent home folder.
+                      Create a separate Ubuntu desktop whose files and installs are kept.
                     </Dialog.Description>
                     <label htmlFor={createId} className="mt-5 block text-sm font-medium">
                       Computer name
@@ -597,6 +611,8 @@ export function ComputersPanel({
                       }
                       onSelect={() => {
                         setEditDraft(null);
+                        setKeptDraft(null);
+                        setUpdateImage(false);
                         setSettingsError('');
                         setReplaceConfirmed(false);
                         if (menuTarget) onNavigate(`${computerPath(menuTarget.id)}/settings`);
@@ -655,6 +671,8 @@ export function ComputersPanel({
         onOpenChange={open => {
           if (!open && !settingsBusy) {
             setEditDraft(null);
+            setKeptDraft(null);
+            setUpdateImage(false);
             onBack();
           }
         }}
@@ -680,12 +698,21 @@ export function ComputersPanel({
                   disabled={settingsBusy}
                 />
               )}
-              {timezoneChanged && (
+              <ComputerStorageFields
+                computer={shownSettings}
+                kept={keptDraft ?? keptOf(shownSettings)}
+                onKeptChange={setKeptDraft}
+                updateImage={updateImage}
+                onUpdateImageChange={setUpdateImage}
+                disabled={settingsBusy}
+              />
+              {rebuild && (
                 <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
                   <p role="alert">
-                    Changing timezone requires replacing the container.{' '}
+                    {updateImage ? 'Updating the image' : keptChanged ? 'Changing what it keeps' : 'Changing timezone'}{' '}
+                    rebuilds the computer.{' '}
                     {shownSettings.state === 'exited'
-                      ? 'The computer is off: its home volume stays intact. Power it on from the menu after saving.'
+                      ? 'The computer is off: its Keep and Cache folders stay. Power it on from the menu after saving.'
                       : 'Power off the computer from the menu first, then reopen Settings. No running desktop will be restarted automatically.'}
                   </p>
                   {shownSettings.state === 'exited' && (
@@ -697,7 +724,7 @@ export function ComputersPanel({
                         onChange={event => setReplaceConfirmed(event.target.checked)}
                         className="mt-1"
                       />
-                      I understand this will replace the stopped container, preserving its home folder
+                      I understand this will rebuild the stopped computer, keeping its Keep and Cache folders
                     </label>
                   )}
                 </div>
@@ -726,15 +753,15 @@ export function ComputersPanel({
                   disabled={
                     settingsBusy ||
                     !parsedEdit ||
-                    (timezoneChanged && (shownSettings.state !== 'exited' || !replaceConfirmed)) ||
+                    (rebuild && (shownSettings.state !== 'exited' || !replaceConfirmed)) ||
                     !query.data?.controllerConnected
                   }
                 >
                   {settingsBusy
                     ? 'Saving…'
-                    : timezoneChanged
+                    : rebuild
                       ? shownSettings.state === 'exited'
-                        ? 'Replace stopped computer'
+                        ? 'Rebuild stopped computer'
                         : 'Power off first'
                       : 'Save settings'}
                 </Button>
@@ -762,7 +789,7 @@ export function ComputersPanel({
             >
               <Dialog.Title className="text-lg font-semibold">Delete computer</Dialog.Title>
               <Dialog.Description className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                This permanently deletes the computer, its container, and all files in its persistent home folder. This
+                This permanently deletes the computer, its container, and all files in its Keep and Cache folders. This
                 cannot be undone.
               </Dialog.Description>
               <p id={`${confirmId}-help`} className="mt-5 break-words text-sm">
@@ -834,7 +861,7 @@ export function ComputersPanel({
         description={
           <>
             Shuts down <strong className="text-foreground">{powerOffTarget?.name}</strong>. Open programs and every
-            terminal session end. Files in its home folder stay; /tmp is emptied.
+            terminal session end. Its kept files stay; /tmp is emptied.
             {(() => {
               const holder = holders.data?.find(item => item.computerId === powerOffTarget?.id);
               return holder ? (

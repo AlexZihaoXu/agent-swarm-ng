@@ -147,6 +147,26 @@ COPY audio/60-swarm-output.conf /etc/pipewire/pipewire.conf.d/60-swarm-output.co
 COPY audio/80-swarm-no-bluetooth.lua /etc/wireplumber/bluetooth.lua.d/80-swarm-no-bluetooth.lua
 RUN glib-compile-schemas /usr/share/glib-2.0/schemas
 
+# Keep/Cache storage (computer-storage*.sh): /usr/local is a kept folder, so the image's own tools live in
+# /usr/lib/agent-swarm and are linked from /usr/bin; global npm installs go to /usr/local, npm's cache to
+# ~/.cache. apt keeps downloaded packages (the Cache folder's archive makes reinstalling fast) and records what a
+# computer adds. A late layer, so the cached desktop and tool layers stay.
+RUN set -eu \
+    && mkdir -p /usr/lib/agent-swarm/node/bin /usr/lib/agent-swarm/node/lib /usr/lib/agent-swarm/node/etc /usr/lib/agent-swarm/bin \
+    && mv /usr/local/bin/node /usr/lib/agent-swarm/node/bin/node \
+    && mv /usr/local/lib/node_modules /usr/lib/agent-swarm/node/lib/node_modules \
+    && for tool in npm npx pi; do ln -s "$(readlink /usr/local/bin/$tool)" /usr/lib/agent-swarm/node/bin/$tool && rm /usr/local/bin/$tool; done \
+    && mv /usr/local/bin/bun /usr/local/bin/uv /usr/local/bin/uvx /usr/lib/agent-swarm/bin/ \
+    && for tool in node npm npx pi; do ln -s /usr/lib/agent-swarm/node/bin/$tool /usr/bin/$tool; done \
+    && for tool in bun uv uvx; do ln -s /usr/lib/agent-swarm/bin/$tool /usr/bin/$tool; done \
+    && printf '%s\n' 'prefix=/usr/local' 'cache=${HOME}/.cache/npm' > /usr/lib/agent-swarm/node/etc/npmrc \
+    && test -z "$(ls -A /usr/local/bin)" \
+    && node --version && npm --version && pi --version && bun --version && uv --version \
+    && rm -f /etc/apt/apt.conf.d/docker-clean \
+    && printf '%s\n' 'Binary::apt::APT::Keep-Downloaded-Packages "true";' 'APT::Keep-Downloaded-Packages "true";' \
+       'DPkg::Post-Invoke { "if [ -x /opt/swarm/computer-storage-record.sh ]; then /opt/swarm/computer-storage-record.sh || true; fi"; };' \
+       > /etc/apt/apt.conf.d/90agent-swarm-storage
+
 # Operator-built HTTP/LAN variant uses JPEG/createImageBitmap instead of
 # browser-secure-context WebCodecs; H.264/H.265 builds retain JPEG as a
 # negotiated HTTP fallback rather than enabling software codecs implicitly.
@@ -156,7 +176,7 @@ ENV COMPUTER_STREAM_ENCODER=$COMPUTER_STREAM_ENCODER
 
 # Docker initializes fresh named volumes from these image directories.
 # Do not declare anonymous VOLUMEs or overwrite existing user files at startup.
-RUN chown agent:agent /workspace
+RUN chown agent:agent /workspace && /opt/swarm/computer-storage-baseline.sh
 # This is intentionally the Linux editor, including when Docker runs on WSL2.
 ENV HOME=/home/agent DONT_PROMPT_WSL_INSTALL=1
 USER agent

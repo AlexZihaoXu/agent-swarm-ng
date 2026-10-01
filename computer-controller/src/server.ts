@@ -115,8 +115,23 @@ Bun.serve<TerminalSocket>({
           input.name,
           'settings' in input ? (input.settings as ComputerConfiguration) : undefined,
           'maxComputers' in input ? (input.maxComputers as number | undefined) : undefined,
+          'storage' in input ? input.storage : undefined,
         );
         return json({ created: true }, 201);
+      }
+      if (pathname === '/computers/storage/check' && request.method === 'POST') {
+        const input = await body(request);
+        if (
+          !input ||
+          typeof input !== 'object' ||
+          !('kind' in input) ||
+          (input.kind !== 'keep' && input.kind !== 'cache') ||
+          !('folder' in input) ||
+          typeof input.folder !== 'string'
+        )
+          throw new ResourceError(400, 'Invalid storage check.');
+        await manager.checkFolder(input.kind, input.folder);
+        return json({ ready: true });
       }
       const terminalMatch = /^\/computers\/([^/]+)\/terminals\/([^/]+)\/stream$/.exec(pathname);
       if (terminalMatch) {
@@ -223,17 +238,28 @@ Bun.serve<TerminalSocket>({
             return json(await computerUse.cancel(id));
         }
       }
-      const match = /^\/computers\/([^/]+)(\/preview|\/input|\/power|\/settings|\/settings\/replacement)?$/.exec(
-        pathname,
-      );
+      const match =
+        /^\/computers\/([^/]+)(\/preview|\/input|\/power|\/settings|\/settings\/replacement|\/cache\/clear|\/storage)?$/.exec(
+          pathname,
+        );
       if (!match) return json({ message: 'Not found.' }, 404);
       const id = decodeURIComponent(match[1]);
       if (request.method === 'DELETE' && !match[2]) {
         const input = await body(request);
         if (!input || typeof input !== 'object' || !('name' in input) || typeof input.name !== 'string')
           throw new ResourceError(400, 'Invalid computer deletion.');
-        await manager.remove(id, input.name);
+        await manager.remove(id, input.name, 'storage' in input ? input.storage : undefined);
         return json({ deleted: true });
+      }
+      if (request.method === 'POST' && (match[2] === '/cache/clear' || match[2] === '/storage')) {
+        const input = await body(request);
+        if (!input || typeof input !== 'object' || !('name' in input) || typeof input.name !== 'string')
+          throw new ResourceError(400, 'Invalid storage request.');
+        if (match[2] === '/cache/clear') {
+          await manager.clearCache(id, input.name);
+          return json({ cleared: true });
+        }
+        return json({ storage: await manager.storageUsage(id, input.name) });
       }
       if (request.method === 'POST' && match[2] === '/power') {
         // Power control keeps the expected name so a renamed or foreign
@@ -264,11 +290,21 @@ Bun.serve<TerminalSocket>({
           !('timezone' in input)
         )
           throw new ResourceError(400, 'Invalid computer settings.');
-        await manager.replaceStopped(id, input.name, {
-          cpuCores: input.cpuCores as number,
-          memoryGiB: input.memoryGiB as number,
-          timezone: input.timezone as string,
-        });
+        if ('image' in input && input.image !== 'current' && input.image !== 'same')
+          throw new ResourceError(400, 'Invalid computer image choice.');
+        await manager.replaceStopped(
+          id,
+          input.name,
+          {
+            cpuCores: input.cpuCores as number,
+            memoryGiB: input.memoryGiB as number,
+            timezone: input.timezone as string,
+          },
+          {
+            ...('image' in input ? { image: input.image as 'current' | 'same' } : {}),
+            ...('keptPaths' in input ? { keptPaths: input.keptPaths } : {}),
+          },
+        );
         return json({ replaced: true });
       }
       if (request.method === 'PATCH' && match[2] === '/settings') {

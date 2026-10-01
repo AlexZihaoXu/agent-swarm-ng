@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { buildApp } from './app';
 import { prepareDatabase } from './test-database';
-import type { ComputerController, ComputerObservation } from './computer-controller-client';
+import { ControllerError, type ComputerController, type ComputerObservation } from './computer-controller-client';
 import { ComputerStore, type ComputerSettings } from './computer-store';
 
 async function fixture() {
@@ -716,6 +716,106 @@ it('tells the dashboard which computers are portal-free X11 and what the compute
     expect((await app.inject({ method: 'GET', url: '/api/computers/settings-limits' })).json().maxComputers).toBe(4);
     await app.inject({ method: 'PATCH', url: '/api/settings/swarm', payload: { maxComputers: 7 } });
     expect((await app.inject({ method: 'GET', url: '/api/computers/settings-limits' })).json().maxComputers).toBe(7);
+  } finally {
+    await app.close();
+    await database.close();
+  }
+});
+
+it('keeps computers’ files where Settings → Storage says when they are made, and rebuilds, clears and measures them', async () => {
+  const { app, database, calls, controller, observed } = await fixture();
+  const storageCalls: unknown[] = [];
+  controller.create = async (id, name, settings, _max, storage) => {
+    storageCalls.push(['create', storage]);
+    observed.set(id, {
+      status: 'running',
+      cpuPercent: null,
+      memoryBytes: null,
+      memoryLimitBytes: null,
+      cpuCount: null,
+    });
+  };
+  controller.remove = async (id, _name, storage) => {
+    storageCalls.push(['remove', storage]);
+    observed.delete(id);
+  };
+  controller.replaceStopped = async (_id, _name, _settings, options) => {
+    storageCalls.push(['rebuild', options]);
+  };
+  controller.checkStorageFolder = async (kind, folder) => {
+    if (folder === '/mnt/unplugged') throw new ControllerError(409, `The ${kind} folder is not ready.`);
+  };
+  controller.clearCache = async id => void calls.push(`clear:${id}`);
+  controller.storageUsage = async () => [
+    { kind: 'keep', bytes: 2048, folder: '/srv/keep' },
+    { kind: 'cache', bytes: 512, folder: null },
+  ];
+  try {
+    // Unset by default: computers use their own Docker volumes.
+    expect((await app.inject('/api/computer-storage')).json()).toEqual({
+      keepFolder: null,
+      cacheFolder: null,
+      markers: { keep: '.agent-swarm-keep-root', cache: '.agent-swarm-cache-root' },
+    });
+    // A folder without its marker (or whose disk is missing) is refused and nothing is saved.
+    const refused = await app.inject({
+      method: 'PUT',
+      url: '/api/computer-storage',
+      payload: { keepFolder: '/mnt/unplugged', cacheFolder: null },
+    });
+    expect([refused.statusCode, refused.json().message]).toEqual([409, 'The keep folder is not ready.']);
+    expect((await app.inject('/api/computer-storage')).json().keepFolder).toBeNull();
+    await app.inject({
+      method: 'PUT',
+      url: '/api/computer-storage',
+      payload: { keepFolder: '/srv/keep', cacheFolder: '' },
+    });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/computers',
+      payload: { name: 'Stored', requestKey: crypto.randomUUID() },
+    });
+    expect(created.json()).toMatchObject({
+      keepFolder: '/srv/keep',
+      cacheFolder: null,
+      keptPaths: ['/home/agent', '/usr/local'],
+      outdated: false,
+    });
+    const id = created.json().id;
+    expect(storageCalls[0]).toEqual([
+      'create',
+      { keepFolder: '/srv/keep', cacheFolder: null, keptPaths: ['/home/agent', '/usr/local'] },
+    ]);
+    // Changing Settings later does not move it.
+    await app.inject({ method: 'PUT', url: '/api/computer-storage', payload: { keepFolder: null, cacheFolder: null } });
+    // Clearing its cache and rebuilding it need it powered off.
+    expect((await app.inject({ method: 'POST', url: `/api/computers/${id}/cache/clear` })).statusCode).toBe(409);
+    await app.inject({ method: 'POST', url: `/api/computers/${id}/power`, payload: { action: 'stop' } });
+    expect((await app.inject({ method: 'POST', url: `/api/computers/${id}/cache/clear` })).json()).toEqual({
+      cleared: true,
+    });
+    expect(calls).toContain(`clear:${id}`);
+    const rebuilt = await app.inject({
+      method: 'POST',
+      url: `/api/computers/${id}/settings/replacement`,
+      payload: {
+        cpuCores: 4,
+        memoryGiB: 4,
+        timezone: 'America/Toronto',
+        confirmReplacement: true,
+        keptPaths: ['/var/lib/postgresql'],
+        image: 'current',
+      },
+    });
+    expect(rebuilt.json().keptPaths).toEqual(['/home/agent', '/var/lib/postgresql']);
+    expect(storageCalls[1]).toEqual(['rebuild', { image: 'current', keptPaths: ['/var/lib/postgresql'] }]);
+    expect((await app.inject(`/api/computers/${id}/storage`)).json().storage).toHaveLength(2);
+    // Deleting it deletes its folders where they are, whatever Settings says now.
+    await app.inject({ method: 'DELETE', url: `/api/computers/${id}`, payload: { confirmation: 'Stored' } });
+    expect(storageCalls.at(-1)).toEqual([
+      'remove',
+      { keepFolder: '/srv/keep', cacheFolder: null, keptPaths: ['/home/agent', '/var/lib/postgresql'] },
+    ]);
   } finally {
     await app.close();
     await database.close();

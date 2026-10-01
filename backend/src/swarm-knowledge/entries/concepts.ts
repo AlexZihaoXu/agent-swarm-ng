@@ -110,7 +110,7 @@ export const computersConcept = {
     'concepts/computers/files',
     'concepts/computers/watches',
   ],
-  content: `A computer is a shared guest machine (Ubuntu with a GNOME desktop, Chrome, VS Code), separate from agents and channels. Agent tools act only inside the guest, as its user "agent" (home /home/agent, which is also the working directory; sudo as configured), never on the platform host. Where things live: the home folder (including the Desktop the human sees) is the one persistent place; /tmp is disposable and wiped every time the computer starts.
+  content: `A computer is a shared guest machine (Ubuntu with a GNOME desktop, Chrome, VS Code), separate from agents and channels. Agent tools act only inside the guest, as its user "agent" (home /home/agent, which is also the working directory; sudo as configured), never on the platform host. Where things live: the home folder (including the Desktop the human sees) and /usr/local are kept, apt installs are reinstalled after a rebuild, ~/.cache is a cache the human may clear, and /tmp is wiped every time the computer starts (concepts/computers/files).
 
 Assignment: the human lists which computers an agent may use (in its settings). Assignment is eligibility, not control. list_computers shows assigned computers and their current holders.
 
@@ -195,18 +195,26 @@ export const filesConcept = {
   id: 'concepts/computers/files',
   parentId: 'concepts/computers',
   title: 'Files and commands',
-  summary: 'read/edit/write/bash on the held computer: paths, bounds, synchronous lifetime, image files.',
+  summary:
+    'read/edit/write/bash on the held computer: paths, bounds, what survives a rebuild (Keep/Cache), where to put files.',
   source: 'docs/agent-computer-use.md',
   related: ['practices/files', 'concepts/computers/terminals'],
   content: `read, write, edit and bash act only in the computer you hold; every call rechecks assignment and claim. They run as the guest user with its permissions (including configured sudo): broad access to that computer, never to the platform host or its credentials.
 
 Paths: guest absolute paths, ~/ (/home/agent), or relative to /home/agent. bash's cwd defaults to /home/agent; cd and environment changes do not carry to the next call.
 
+What survives (Keep and Cache): a computer can be rebuilt (a timezone or storage change, an image update), which replaces its system with a fresh copy of the image. What it keeps comes back:
+- Kept: the home folder (including ~/Desktop, dotfiles, ~/.local, nvm and venvs) and /usr/local, plus any folders the human added in the computer's Settings (for example /var/lib/postgresql with /etc/postgresql). Kept paths live in the computer's Keep folder and survive restarts, rebuilds and image updates.
+- Reinstalled: packages installed with apt (sudo apt install …), with any apt sources and keys added for them, are recorded and reinstalled in the background after a rebuild (a few minutes at most; the desktop does not wait). /keep/boot.log and /keep/boot-status say how that went.
+- Cached: ~/.cache (uv, pip, npm, Playwright, browser caches) and apt's downloads live in the Cache folder: they survive restarts, but the human may clear them at any time, so keep nothing there that cannot be fetched again.
+- Disposable: /tmp is emptied at every start.
+- Everything else outside these (other system folders, sudo pip install into the system Python, programs a vendor installer put in /opt) is reset to the image on a rebuild. Prefer: a venv or uv (in home) for Python, npm -g (goes to /usr/local) or nvm for Node, apt for system packages. A service's data (a database) needs its folder kept: ask the human to add it (agents cannot change kept paths).
+- Startup: executable scripts in /keep/startup/ run as root, in name order, at every start (after the reinstall), each at most 5 minutes. Use them to start services that must be running (for example "service postgresql start"), since nothing else starts them.
+
 Where to put files:
-- Work that matters (projects, results, anything the human or you will come back to): in the home folder; on ~/Desktop when the human should see it there. Home is persistent: it survives restarts and power-off.
-- Disposable files (logs you will grep or monitor, intermediate build output, screenshots or downloads you will upload and no longer need, scratch experiments): in /tmp. /tmp is wiped every time the computer starts, so never keep anything there that must last. Use a subfolder per task (/tmp/<task>/…) so you can find and remove your own files.
+- Work that matters (projects, results, anything the human or you will come back to): in the home folder; on ~/Desktop when the human should see it there.
+- Disposable files (logs you will grep or monitor, intermediate build output, screenshots or downloads you will upload and no longer need, scratch experiments): in /tmp, in a subfolder per task (/tmp/<task>/…) so you can find and remove your own files.
 - Drafts you are shaping for the human (text and images) belong in your scratchpad, not on a computer (concepts/scratchpad).
-Computers created before 2026-10-01 may still have an old /workspace folder; do not use it for new work.
 
 read({path, offset?, limit?}): one page of UTF-8 text, 200 lines by default (up to 2000 lines / 50000 bytes), 1-based offsets, nextOffset and prevOffset to scroll. Invalid bytes are replaced for viewing. PNG/JPEG/GIF/WebP/BMP files come back as images (first frame, ≤4096 px per side, 16 million pixels, 2 MiB); they share the image pool and are not desktop screenshots.
 

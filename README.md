@@ -142,6 +142,17 @@ docker compose up --build -d
 docker compose -f compose.yaml -f compose.dev.yaml up --build
 ```
 
+### Computer storage
+
+Each computer keeps its files in two places: a **Keep** folder (code, settings, and everything it installs, which comes back after a rebuild or image update) and a **Cache** folder (anything that can be fetched again; safe to clear). By default both are the computer's own Docker volumes, so nothing needs setting up. To keep computers' files on a disk of your choice, create the folders on the host, mark them, then choose them in **Settings → Computer storage** (new computers use them; existing ones stay where they are):
+
+```sh
+mkdir -p /srv/agent-swarm/keep /srv/agent-swarm/cache
+touch /srv/agent-swarm/keep/.agent-swarm-keep-root /srv/agent-swarm/cache/.agent-swarm-cache-root
+```
+
+The marker files are how the dashboard proves the folder was chosen by someone with access to the host; a computer also refuses to start while its marker is missing (for example, a removable disk that did not mount). Computers write there as root, so use a filesystem mounted `nosuid` (on ZFS, `zfs set setuid=off`). Back up the Keep folder. Details: [docs/computers.md](docs/computers.md).
+
 ## Project status
 
 The platform includes persisted agent and computer identities, chat history, endpoint preferences, generated API types, tests, and Compose files. Long-term memory, external channels, general resource-permission groups and platform user authentication remain unimplemented; agent computer assignments/control are described in [Agent computer use](docs/agent-computer-use.md) and computers in [Computers](docs/computers.md). No app-level login or second GNOME consent restricts allowed Tailnet peers. Accepted runs continue without an open dashboard. Completed Pi working context has private SQLite checkpoints; new operator traces persist separately (pruned after `ACTIVITY_RETENTION_DAYS`, default 30), while interrupted runs do not resume after a backend restart. Restart releases computer claims and queues a notice for each affected agent's next normal turn. Platform and standalone workspace data use separate persistent storage; neither is the future long-term memory system. Dated rollout notes and benchmarks are in [docs/history.md](docs/history.md).

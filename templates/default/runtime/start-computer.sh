@@ -23,10 +23,13 @@ case ${COMPUTER_TIMEZONE:-} in
            printf '%s\n' "$COMPUTER_TIMEZONE" > /etc/timezone
        fi ;;
 esac
-# /tmp is the disposable place: emptied at every start (logs, monitor files, intermediate output). Done before
-# the desktop creates its sockets, so stale X locks from the previous run go too. Persistent work lives in home.
-find /tmp -mindepth 1 -delete
-chmod 1777 /tmp
+# Kept and cached folders (Keep/Cache) in place and /tmp emptied, before the desktop creates its sockets (stale X
+# locks from the previous run go too). Reinstalling apt packages and startup scripts follow in the background.
+/opt/swarm/computer-storage.sh >>/run/computer-storage.log 2>&1 || { cat /run/computer-storage.log >&2; exit 1; }
+if mountpoint -q /keep; then
+    cat /run/computer-storage.log >>/keep/boot.log
+    setsid /opt/swarm/computer-storage-replay.sh >>/keep/boot.log 2>&1 </dev/null &
+fi
 mkdir -p /run/dbus /run/user/1000
 chown agent:agent /run/user/1000
 chmod 0700 /run/user/1000
@@ -42,7 +45,7 @@ exec runuser -u agent -- env \
     XDG_RUNTIME_DIR=/run/user/1000 \
     XDG_CURRENT_DESKTOP=ubuntu:GNOME \
     XDG_SESSION_TYPE=wayland \
-    XDG_DATA_DIRS=/usr/share/ubuntu:/usr/local/share:/usr/share \
+    XDG_DATA_DIRS=/usr/lib/agent-swarm/share:/usr/share/ubuntu:/usr/local/share:/usr/share \
     GNOME_SHELL_SESSION_MODE=ubuntu \
     LIBGL_ALWAYS_SOFTWARE=1 \
     dbus-run-session -- /opt/swarm/desktop-session.sh

@@ -16398,7 +16398,11 @@
                           "memoryBytes",
                           "memoryLimitBytes",
                           "cpuCount",
-                          "portalFree"
+                          "portalFree",
+                          "keepFolder",
+                          "cacheFolder",
+                          "keptPaths",
+                          "outdated"
                         ],
                         "properties": {
                           "id": {
@@ -16484,6 +16488,42 @@
                             ]
                           },
                           "portalFree": {
+                            "anyOf": [
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "keepFolder": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "cacheFolder": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "keptPaths": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "outdated": {
                             "anyOf": [
                               {
                                 "type": "boolean"
@@ -16640,7 +16680,11 @@
                     "memoryBytes",
                     "memoryLimitBytes",
                     "cpuCount",
-                    "portalFree"
+                    "portalFree",
+                    "keepFolder",
+                    "cacheFolder",
+                    "keptPaths",
+                    "outdated"
                   ],
                   "properties": {
                     "id": {
@@ -16734,6 +16778,42 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "keepFolder": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cacheFolder": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "keptPaths": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "outdated": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   }
                 }
@@ -16758,7 +16838,11 @@
                     "memoryBytes",
                     "memoryLimitBytes",
                     "cpuCount",
-                    "portalFree"
+                    "portalFree",
+                    "keepFolder",
+                    "cacheFolder",
+                    "keptPaths",
+                    "outdated"
                   ],
                   "properties": {
                     "id": {
@@ -16844,6 +16928,42 @@
                       ]
                     },
                     "portalFree": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "keepFolder": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cacheFolder": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "keptPaths": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "outdated": {
                       "anyOf": [
                         {
                           "type": "boolean"
@@ -17410,7 +17530,11 @@
                     "memoryBytes",
                     "memoryLimitBytes",
                     "cpuCount",
-                    "portalFree"
+                    "portalFree",
+                    "keepFolder",
+                    "cacheFolder",
+                    "keptPaths",
+                    "outdated"
                   ],
                   "properties": {
                     "id": {
@@ -17496,6 +17620,42 @@
                       ]
                     },
                     "portalFree": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "keepFolder": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cacheFolder": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "keptPaths": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "outdated": {
                       "anyOf": [
                         {
                           "type": "boolean"
@@ -17622,6 +17782,31 @@
                     "enum": [
                       true
                     ]
+                  },
+                  "keptPaths": {
+                    "maxItems": 32,
+                    "type": "array",
+                    "items": {
+                      "minLength": 1,
+                      "maxLength": 255,
+                      "type": "string"
+                    }
+                  },
+                  "image": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "current"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "same"
+                        ]
+                      }
+                    ]
                   }
                 }
               }
@@ -17659,7 +17844,11 @@
                     "memoryBytes",
                     "memoryLimitBytes",
                     "cpuCount",
-                    "portalFree"
+                    "portalFree",
+                    "keepFolder",
+                    "cacheFolder",
+                    "keptPaths",
+                    "outdated"
                   ],
                   "properties": {
                     "id": {
@@ -17745,6 +17934,42 @@
                       ]
                     },
                     "portalFree": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "keepFolder": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cacheFolder": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "keptPaths": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "outdated": {
                       "anyOf": [
                         {
                           "type": "boolean"
@@ -18001,6 +18226,500 @@
                   ],
                   "properties": {
                     "accepted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/computer-storage": {
+      "get": {
+        "operationId": "getComputerStorage",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "keepFolder",
+                    "cacheFolder",
+                    "markers"
+                  ],
+                  "properties": {
+                    "keepFolder": {
+                      "anyOf": [
+                        {
+                          "minLength": 1,
+                          "maxLength": 1024,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cacheFolder": {
+                      "anyOf": [
+                        {
+                          "minLength": 1,
+                          "maxLength": 1024,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "markers": {
+                      "type": "object",
+                      "required": [
+                        "keep",
+                        "cache"
+                      ],
+                      "properties": {
+                        "keep": {
+                          "type": "string"
+                        },
+                        "cache": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "setComputerStorage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "keepFolder",
+                  "cacheFolder"
+                ],
+                "properties": {
+                  "keepFolder": {
+                    "anyOf": [
+                      {
+                        "minLength": 1,
+                        "maxLength": 1024,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "cacheFolder": {
+                    "anyOf": [
+                      {
+                        "minLength": 1,
+                        "maxLength": 1024,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "keepFolder",
+                    "cacheFolder",
+                    "markers"
+                  ],
+                  "properties": {
+                    "keepFolder": {
+                      "anyOf": [
+                        {
+                          "minLength": 1,
+                          "maxLength": 1024,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cacheFolder": {
+                      "anyOf": [
+                        {
+                          "minLength": 1,
+                          "maxLength": 1024,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "markers": {
+                      "type": "object",
+                      "required": [
+                        "keep",
+                        "cache"
+                      ],
+                      "properties": {
+                        "keep": {
+                          "type": "string"
+                        },
+                        "cache": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/computers/{id}/storage": {
+      "get": {
+        "operationId": "getComputerStorageUsage",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 80,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "storage"
+                  ],
+                  "properties": {
+                    "storage": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "kind",
+                          "bytes",
+                          "folder"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "keep"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "cache"
+                                ]
+                              }
+                            ]
+                          },
+                          "bytes": {
+                            "type": "number"
+                          },
+                          "folder": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/computers/{id}/cache/clear": {
+      "post": {
+        "operationId": "clearComputerCache",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 80,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "cleared"
+                  ],
+                  "properties": {
+                    "cleared": {
                       "type": "boolean"
                     }
                   }

@@ -1,5 +1,6 @@
 import { DiscordOwnerSettings } from '@/components/discord-owner-settings';
 import { SwarmSettings } from '@/components/swarm-settings';
+import { ComputerStorageSettings } from '@/components/computer-storage-settings';
 import { useEffect, useId, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import { surface } from '@/lib/motion';
@@ -9,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { randomUuid } from '@/lib/random-uuid';
 import { PageHeader } from '@/components/page-header';
-import { settingsCard } from '@/lib/styles';
+import { settingsCard, settingsInput } from '@/lib/styles';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { endpointPath, type DashboardRoute } from '@/lib/dashboard-location';
 
@@ -18,8 +19,7 @@ type TestResult =
   | { state: 'success'; models: string[] }
   | { state: 'error'; message: string };
 
-const inputClass =
-  'h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10';
+const inputClass = settingsInput;
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
 
@@ -530,6 +530,7 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
         </section>
         <DiscordOwnerSettings card={settingsCard} />
         <SwarmSettings card={settingsCard} />
+        <ComputerStorageSettings card={settingsCard} />
       </div>
     </div>
   );

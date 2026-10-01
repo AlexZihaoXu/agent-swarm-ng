@@ -83,7 +83,7 @@ Create a computer: "Create computer" (or right-click empty space → New compute
 
 Power: ⋯ → Power on (starts at once) / Power off (asks to confirm, and warns if an agent is using it). Powering off ends its terminals and running programs; files on its disk remain. After the host machine restarts, computers that were on start again by themselves; ones powered off stay off.
 
-Settings: ⋯ → Settings. CPU and memory apply live; changing the timezone requires the computer powered off, a confirmation tick and "Replace stopped computer".
+Settings: ⋯ → Settings. CPU and memory apply live. Storage shows where the computer's Keep and Cache folders are and how much they hold, with Clear cache (while it is off), "Also keep" (extra folders or files to keep beyond the home folder, such as /var/lib/postgresql) and, when the card says "Update available", "Update to the latest computer image". Changing the timezone, what it keeps, or its image rebuilds the computer: power it off, tick the confirmation and press "Rebuild stopped computer" (its kept files stay; apt packages are reinstalled at its next start).
 
 Delete: ⋯ → Remove → type the name into "Confirm computer name" → "Delete computer".
 
@@ -150,6 +150,8 @@ API endpoints: "Add OpenRouter" (prefills https://openrouter.ai/api/v1) or "+ Ad
 Discord: "Your Discord accounts": User ID and Name rows ("Add account", "Remove", "Save changes"). Only these accounts carry the human's authority on Discord. How to copy a user ID: Discord → User Settings → Advanced → Developer Mode on, then right-click your name → Copy User ID.
 
 Swarm (last section): limits for the whole swarm, saved with "Save changes": Computers (most that can exist at once), Largest chat file (MB), Total file storage (GB; a chat's Files dialog warns when it is 80% used, and uploads are refused when full), Largest scratch file (KB), Scratch files per agent and Scratch space per agent (MB), and Discord history kept (days; older saved Discord messages are deleted hourly, files opened from them stay). Lowering a file limit never deletes anything; new work past it is refused.
+
+Computer storage (after Swarm): the host folders new computers keep their files in. Keep folder: code, projects, settings and everything a computer installs (back it up). Cache folder: downloads and caches that can be fetched again. Empty uses Docker's own storage. A folder is accepted only if the person running the host created its marker file in it (the page shows the touch command), and a computer will not start while its folder's marker is missing (for example, its disk is not mounted). Existing computers stay where they were created.
 
 There are no other settings (no theme, notifications or user accounts).`,
 } satisfies KnowledgeEntry;

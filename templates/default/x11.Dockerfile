@@ -16,7 +16,9 @@ COPY templates/default/runtime/launch-chrome-x11.sh /opt/swarm/launch-chrome.sh
 # Prefer the system-wide GNOME desktop entry without editing the upstream one.
 # Non-GPU computers still use the unmodified Chrome launch behavior.
 RUN chmod 0755 /opt/swarm/desktop-session.sh /opt/swarm/start-selkies.sh /opt/swarm/render-preview.sh /opt/swarm/launch-chrome.sh \
-    && mkdir -p /usr/local/share/applications \
+    && mkdir -p /usr/lib/agent-swarm/share/applications \
     && sed 's#Exec=/usr/bin/google-chrome-stable#Exec=/opt/swarm/launch-chrome.sh#g' \
-       /usr/share/applications/google-chrome.desktop > /usr/local/share/applications/google-chrome.desktop
+       /usr/share/applications/google-chrome.desktop > /usr/lib/agent-swarm/share/applications/google-chrome.desktop \
+    && rm -f /usr/local/share/applications/google-chrome.desktop \
+    && /opt/swarm/computer-storage-baseline.sh
 USER agent

@@ -175,6 +175,14 @@ export function ComputerCard({
           <h3 className="min-w-0 flex-1 truncate text-sm font-semibold" title={computer.name}>
             {computer.name}
           </h3>
+          {computer.outdated && (
+            <span
+              title="A newer computer image exists: Settings → Update to the latest computer image"
+              className="shrink-0 rounded-full bg-sky-500/15 px-1.5 py-px text-[10px] font-medium text-sky-300"
+            >
+              Update available
+            </span>
+          )}
           <Button
             type="button"
             variant="outline"

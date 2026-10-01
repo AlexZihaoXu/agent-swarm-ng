@@ -1,4 +1,15 @@
-export type ResourceRole = 'desktop' | 'egress' | 'media' | 'private-network' | 'egress-network' | 'home' | 'workspace';
+export type ResourceRole =
+  | 'desktop'
+  | 'egress'
+  | 'media'
+  | 'private-network'
+  | 'egress-network'
+  | 'keep'
+  | 'cache'
+  | 'storage-helper'
+  // Volumes of computers made before Keep/Cache storage (removed with their computer).
+  | 'home'
+  | 'workspace';
 export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const NAMESPACE = /^[a-z0-9][a-z0-9-]{0,29}$/;
 
@@ -57,7 +68,7 @@ export class ComputerNames {
   privateNetwork(id: string) {
     return `${this.desktop(id)}-private`;
   }
-  volume(id: string, role: 'home' | 'workspace') {
+  volume(id: string, role: 'keep' | 'cache' | 'home' | 'workspace') {
     return `${this.desktop(id)}-${role}`;
   }
   labels(id: string | null, role: ResourceRole, name?: string): Record<string, string> {

@@ -11,6 +11,22 @@ import {
 } from './operator-files';
 import { ComputerNames, ResourceError, validateId, validateName, type ResourceRole } from './resources';
 import {
+  MARKER,
+  STORAGE_CLASSES,
+  computerFolder,
+  keptPathsEnvironment,
+  keptPathsOf,
+  mountedStorage,
+  storageLabel,
+  storageMounts,
+  validateFolder,
+  validateKeptPaths,
+  validateStorage,
+  type ComputerStorage,
+  type StorageClass,
+  type StorageMount,
+} from './storage';
+import {
   deriveComputerLimits,
   validateComputerConfiguration,
   type ComputerConfiguration,
@@ -22,6 +38,7 @@ type Container = {
   Image?: string;
   Config: { Labels?: Record<string, string>; Env?: string[] };
   State: { Running: boolean; Status: string };
+  Mounts?: { Type?: string; Source?: string; Name?: string; Destination?: string }[];
   HostConfig?: {
     Devices?: { PathOnHost: string; PathInContainer: string; CgroupPermissions: string }[] | null;
     NanoCpus?: number;
@@ -103,9 +120,8 @@ export function desktopCreateBody(input: {
   renderDevice: string;
   cpuLimit: number;
   memoryGiB: number;
-  homeVolume: string;
-  /** Only computers created before /workspace was retired (2026-10-01) keep their old, separate volume. */
-  workspaceVolume?: string;
+  /** Its Keep and Cache mounts (storage.ts). */
+  mounts: StorageMount[];
 }) {
   return {
     // Hostname is a top-level Config field, NOT part of HostConfig: Docker
@@ -140,11 +156,8 @@ export function desktopCreateBody(input: {
       MemorySwap: input.memoryGiB * 2 * 1024 ** 3,
       PidsLimit: 1024,
       RestartPolicy: { Name: 'no' },
-      // Home is the one persistent place; /tmp is wiped at each start (start-computer.sh).
-      Mounts: [
-        { Type: 'volume', Source: input.homeVolume, Target: '/home/agent' },
-        ...(input.workspaceVolume ? [{ Type: 'volume', Source: input.workspaceVolume, Target: '/workspace' }] : []),
-      ],
+      // Only /keep and /cache: the guest binds the kept paths from them at every start (computer-storage.sh).
+      Mounts: input.mounts,
     },
   };
 }
@@ -242,7 +255,7 @@ export class ComputerManager {
     if (value) this.names.assertOwned(value.Labels, id, role);
     return value;
   }
-  private async volume(name: string, id: string, role: 'home' | 'workspace') {
+  private async volume(name: string, id: string, role: 'keep' | 'cache' | 'home' | 'workspace') {
     const value = await this.docker.optional<Volume>(this.path('volumes', name));
     if (value) this.names.assertOwned(value.Labels, id, role);
     return value;
@@ -301,12 +314,126 @@ export class ComputerManager {
     if (Object.keys(inspected.Config?.Labels ?? {}).some(label => label.startsWith('com.docker.compose.')))
       throw new ResourceError(503, 'Build approved computer images directly without Compose project labels.');
   }
-  private async ensureVolume(id: string, role: 'home' | 'workspace') {
+  private async ensureVolume(id: string, role: 'keep' | 'cache') {
     const name = this.names.volume(id, role);
     if (await this.volume(name, id, role)) return;
     await this.docker.request('POST', '/volumes/create', { Name: name, Labels: this.names.labels(id, role) });
     if (!(await this.volume(name, id, role))) throw new ResourceError(503, 'Computer volume was not created.');
   }
+  /**
+   * Runs a short shell script in a throwaway helper container (the computer image, no network, root with only
+   * the capabilities file housekeeping needs) with a computer's storage mounted at /keep and /cache, or a base
+   * folder at /base. Storage housekeeping happens here because files there can belong to root or a service
+   * account. Returns stdout; a non-zero exit becomes a ResourceError with the script's last stderr line.
+   */
+  private async helper(mounts: StorageMount[], script: string, timeoutMs = 120_000) {
+    const created = await this.docker.json<{ Id: string }>('POST', '/containers/create', {
+      Image: this.image,
+      User: 'root',
+      Entrypoint: ['/bin/sh', '-c', script],
+      Cmd: [],
+      Labels: this.names.labels(null, 'storage-helper'),
+      HostConfig: {
+        NetworkMode: 'none',
+        CapDrop: ['ALL'],
+        CapAdd: ['CHOWN', 'DAC_OVERRIDE', 'DAC_READ_SEARCH', 'FOWNER'],
+        SecurityOpt: ['no-new-privileges'],
+        Mounts: mounts,
+      },
+    });
+    try {
+      await this.docker.request('POST', `${this.path('containers', created.Id)}/start`);
+      const waited = await this.docker.request(
+        'POST',
+        `${this.path('containers', created.Id)}/wait`,
+        undefined,
+        4096,
+        timeoutMs,
+      );
+      const exit = (JSON.parse(waited.toString()) as { StatusCode?: number }).StatusCode ?? 1;
+      const raw = await this.docker.request(
+        'GET',
+        `${this.path('containers', created.Id)}/logs?stdout=1&stderr=1`,
+        undefined,
+        1024 * 1024,
+      );
+      const streams: Record<number, Buffer[]> = { 1: [], 2: [] };
+      for (let offset = 0; offset + 8 <= raw.length;) {
+        const length = raw.readUInt32BE(offset + 4);
+        streams[raw[offset]]?.push(raw.subarray(offset + 8, offset + 8 + length));
+        offset += 8 + length;
+      }
+      if (exit !== 0) {
+        const message = Buffer.concat(streams[2]).toString().trim().split('\n').pop();
+        throw new ResourceError(exit === 3 ? 409 : 503, message || 'Computer storage housekeeping failed.');
+      }
+      return Buffer.concat(streams[1]).toString();
+    } finally {
+      await this.docker.request('DELETE', `${this.path('containers', created.Id)}?force=true&v=false`).catch(() => {});
+    }
+  }
+  /** A host folder must exist and carry its marker (its disk is really mounted, and the host owner chose it). */
+  private markerScript(kind: StorageClass, folder: string) {
+    return `test -f /base/${MARKER[kind]} || { echo "The ${storageLabel[kind]} folder ${folder} is not ready: its disk may not be mounted, or it needs the file ${MARKER[kind]} (create it on the host). Nothing was changed." >&2; exit 3; }`;
+  }
+  private baseMount(folder: string): StorageMount {
+    return { Type: 'bind', Source: folder, Target: '/base' };
+  }
+  /** Settings check: is this host folder usable as the Keep or Cache folder? */
+  async checkFolder(kind: StorageClass, raw: string) {
+    const folder = validateFolder(raw, kind);
+    if (!folder) return;
+    await this.approvedImage(this.image);
+    try {
+      await this.helper([this.baseMount(folder)], this.markerScript(kind, folder), 30_000);
+    } catch (error) {
+      if (error instanceof DockerApiError)
+        throw new ResourceError(409, `The ${storageLabel[kind]} folder ${folder} does not exist on the host.`);
+      throw error;
+    }
+  }
+  /** Before a computer is created: its own volumes, or its folders under the chosen host folders. */
+  private async prepareStorage(id: string, storage: ComputerStorage) {
+    for (const kind of STORAGE_CLASSES) {
+      const folder = kind === 'keep' ? storage.keepFolder : storage.cacheFolder;
+      if (!folder) {
+        await this.ensureVolume(id, kind);
+        continue;
+      }
+      try {
+        await this.helper(
+          [this.baseMount(folder)],
+          `${this.markerScript(kind, folder)}; mkdir -p /base/computers/${validateId(id)}`,
+          30_000,
+        );
+      } catch (error) {
+        if (error instanceof DockerApiError)
+          throw new ResourceError(409, `The ${storageLabel[kind]} folder ${folder} does not exist on the host.`);
+        throw error;
+      }
+    }
+  }
+  /** Where a computer's storage is, from its container: refuses to go on if a host folder's disk is missing. */
+  private async checkMountedStorage(id: string, computer: Container) {
+    const mounted = mountedStorage(id, computer.Mounts);
+    for (const kind of STORAGE_CLASSES) {
+      const place = mounted[kind];
+      if (place?.kind === 'bind')
+        await this.helper([this.baseMount(place.folder)], this.markerScript(kind, place.folder), 30_000);
+    }
+    return mounted;
+  }
+  private storageMountsOf(id: string, computer: Container): StorageMount[] {
+    const mounted = mountedStorage(id, computer.Mounts);
+    return STORAGE_CLASSES.map(kind => {
+      const place = mounted[kind];
+      if (!place) throw new ResourceError(409, 'This computer predates Keep/Cache storage; delete and recreate it.');
+      return place.kind === 'bind'
+        ? { Type: 'bind' as const, Source: computerFolder(place.folder, id), Target: `/${kind}` }
+        : { Type: 'volume' as const, Source: place.name, Target: `/${kind}` };
+    });
+  }
+
   private async ensureGateway(id: string, name: string, subnet: string, network: Network) {
     const gatewayName = this.names.gateway(id);
     let gateway = await this.container(gatewayName, id, 'egress', name);
@@ -415,7 +542,13 @@ export class ComputerManager {
     if (!relay.State.Running) await this.docker.request('POST', `${this.path('containers', mediaName)}/start`);
   }
 
-  private async createOwned(id: string, name: string, requested: ComputerConfiguration | undefined, limit: number) {
+  private async createOwned(
+    id: string,
+    name: string,
+    requested: ComputerConfiguration | undefined,
+    limit: number,
+    storage: ComputerStorage,
+  ) {
     const settings = requested ?? {
       cpuCores: this.cpuLimit,
       memoryGiB: 4,
@@ -438,9 +571,7 @@ export class ComputerManager {
         throw new ResourceError(409, 'Computer is stopped; automatic restart is not enabled.');
       const gateway = await this.container(this.names.gateway(id), id, 'egress', name);
       const network = await this.network(this.names.privateNetwork(id), id, 'private-network');
-      const home = await this.volume(this.names.volume(id, 'home'), id, 'home');
-      if (!gateway?.State.Running || !network || !home)
-        throw new ResourceError(503, 'Computer resources are incomplete.');
+      if (!gateway?.State.Running || !network) throw new ResourceError(503, 'Computer resources are incomplete.');
       await this.ensureMedia(id, name, existing);
       return;
     }
@@ -455,21 +586,24 @@ export class ComputerManager {
       throw new ResourceError(503, 'Computer subnet is unavailable.');
     if (!egress.Id) throw new ResourceError(503, 'Public egress network is unavailable.');
     const gateway = await this.ensureGateway(id, name, subnet, privateNetwork);
-    await this.ensureVolume(id, 'home');
+    await this.prepareStorage(id, storage);
     await this.docker.request(
       'POST',
       `/containers/create?name=${encodeURIComponent(computerName)}`,
       desktopCreateBody({
         image: this.image,
         labels: this.names.labels(id, 'desktop', name),
-        env: desktopEnvironment(id, gateway, this.renderDevice, settings.timezone),
+        env: [
+          ...desktopEnvironment(id, gateway, this.renderDevice, settings.timezone),
+          keptPathsEnvironment(storage.keptPaths),
+        ],
         hostname: computerHostname(name, id),
         privateNetwork: this.names.privateNetwork(id),
         seccomp: this.seccomp,
         renderDevice: this.renderDevice,
         cpuLimit: settings.cpuCores,
         memoryGiB: settings.memoryGiB,
-        homeVolume: this.names.volume(id, 'home'),
+        mounts: storageMounts(id, storage, kind => this.names.volume(id, kind)),
       }),
     );
     await this.docker.request('POST', `${this.path('containers', computerName)}/start`);
@@ -483,15 +617,22 @@ export class ComputerManager {
    * `maxComputers` is the operator's limit from Settings → Swarm (sent by the backend with each create); the
    * controller never goes past it, nor past its own ceiling of MAX_COMPUTERS.
    */
-  async create(idRaw: string, nameRaw: string, requested?: ComputerConfiguration, maxComputers = MAX_COMPUTERS) {
+  async create(
+    idRaw: string,
+    nameRaw: string,
+    requested?: ComputerConfiguration,
+    maxComputers = MAX_COMPUTERS,
+    storageInput?: unknown,
+  ) {
     const id = validateId(idRaw),
       name = validateName(nameRaw);
     const settings = requested ? validateComputerConfiguration(requested, await this.limits()) : undefined;
+    const storage = validateStorage(storageInput);
     // Never erase a computer or its persistent volumes on a failed/retried
     // create. A partial resource remains visible through its failed DB record;
     // only exact-name confirmed DELETE may remove it.
     const limit = Math.min(Math.max(1, Math.floor(maxComputers)), MAX_COMPUTERS);
-    return this.exclusive(() => this.createOwned(id, name, settings, limit));
+    return this.exclusive(() => this.createOwned(id, name, settings, limit, storage));
   }
 
   /** Docker can change resource caps on a running Sysbox computer without a
@@ -518,33 +659,38 @@ export class ComputerManager {
     });
   }
 
-  /** Replace only a powered-off owned desktop to change immutable TZ env.
-   * Keep the old stopped container until the replacement is created, renamed
-   * and checked; named data volumes/network stay intact throughout. A stale
-   * relay must be removed before the next start binds it to the new private IP. */
-  async replaceStopped(idRaw: string, nameRaw: string, requested: ComputerConfiguration) {
+  /** Replace only a powered-off owned desktop: to change its immutable TZ env or kept paths, or to move it to the
+   * current approved image (`image: 'current'`). Its Keep/Cache mounts are read from the old container and reused,
+   * so its storage never moves. Keep the old stopped container until the replacement is created, renamed and
+   * checked. A stale relay must be removed before the next start binds it to the new private IP. */
+  async replaceStopped(
+    idRaw: string,
+    nameRaw: string,
+    requested: ComputerConfiguration,
+    options: { image?: 'current' | 'same'; keptPaths?: unknown } = {},
+  ) {
     const id = validateId(idRaw),
       name = validateName(nameRaw);
     const settings = validateComputerConfiguration(requested, await this.limits());
+    const requestedPaths = options.keptPaths === undefined ? undefined : validateKeptPaths(options.keptPaths);
     return this.exclusive(async () => {
       const canonical = this.names.desktop(id);
       const old = await this.container(canonical, id, 'desktop', name);
       if (!old) throw new ResourceError(404, 'Computer not found.');
-      if (old.State.Running) throw new ResourceError(409, 'Power off this computer before changing its timezone.');
+      if (old.State.Running) throw new ResourceError(409, 'Power off this computer before changing these settings.');
       if (!old.Image || !this.renderDeviceMatches(old))
         throw new ResourceError(409, 'Computer image or render grant is unavailable for replacement.');
       const gateway = await this.container(this.names.gateway(id), id, 'egress', name);
       const network = await this.network(this.names.privateNetwork(id), id, 'private-network');
-      const home = await this.volume(this.names.volume(id, 'home'), id, 'home');
-      // A computer from before /workspace was retired keeps its old volume mounted across settings changes.
-      const workspace = await this.volume(this.names.volume(id, 'workspace'), id, 'workspace');
-      if (!gateway?.State.Running || !network || !home)
-        throw new ResourceError(503, 'Computer resources are incomplete.');
+      if (!gateway?.State.Running || !network) throw new ResourceError(503, 'Computer resources are incomplete.');
+      const mounts = this.storageMountsOf(id, old);
+      const keptPaths = requestedPaths ?? keptPathsOf(old.Config.Env);
+      const image = options.image === 'current' ? this.image : old.Image;
       const privateAddress = gateway.NetworkSettings.Networks[this.names.privateNetwork(id)]?.IPAddress;
       if (!privateAddress) throw new ResourceError(503, 'Computer egress address is unavailable.');
       const relay = await this.container(this.names.media(id), id, 'media', name);
       if (relay?.State.Running) throw new ResourceError(409, 'Computer media relay must be stopped first.');
-      await this.approvedImage(old.Image);
+      await this.approvedImage(image);
       const nextName = `${canonical}-settings-next`,
         previousName = `${canonical}-settings-previous`;
       if (
@@ -560,17 +706,19 @@ export class ComputerManager {
           'POST',
           `/containers/create?name=${encodeURIComponent(nextName)}`,
           desktopCreateBody({
-            image: old.Image,
+            image,
             labels: this.names.labels(id, 'desktop', name),
-            env: desktopEnvironment(id, privateAddress, this.renderDevice, settings.timezone),
+            env: [
+              ...desktopEnvironment(id, privateAddress, this.renderDevice, settings.timezone),
+              keptPathsEnvironment(keptPaths),
+            ],
             hostname: computerHostname(name, id),
             privateNetwork: this.names.privateNetwork(id),
             seccomp: this.seccomp,
             renderDevice: this.renderDevice,
             cpuLimit: settings.cpuCores,
             memoryGiB: settings.memoryGiB,
-            homeVolume: home.Name,
-            ...(workspace ? { workspaceVolume: workspace.Name } : {}),
+            mounts,
           }),
         );
         createdId = created.Id;
@@ -590,7 +738,8 @@ export class ComputerManager {
           replacement.State.Running ||
           replacement.HostConfig?.NanoCpus !== settings.cpuCores * 1_000_000_000 ||
           replacement.HostConfig?.Memory !== settings.memoryGiB * 1024 ** 3 ||
-          !replacement.Config.Env?.includes(`TZ=${settings.timezone}`)
+          !replacement.Config.Env?.includes(`TZ=${settings.timezone}`) ||
+          !replacement.Config.Env?.includes(keptPathsEnvironment(keptPaths))
         )
           throw new ResourceError(503, 'Replacement computer settings could not be verified.');
         if (relay) await this.docker.request('DELETE', `${this.path('containers', relay.Id)}?v=false`);
@@ -635,27 +784,79 @@ export class ComputerManager {
     });
   }
 
-  private async removeOwned(id: string, name: string) {
+  private async removeOwned(id: string, name: string, storageInput?: unknown) {
     const computer = await this.container(this.names.desktop(id), id, 'desktop', name);
     const gateway = await this.container(this.names.gateway(id), id, 'egress', name);
     const media = await this.container(this.names.media(id), id, 'media', name);
     const network = await this.network(this.names.privateNetwork(id), id, 'private-network');
-    const home = await this.volume(this.names.volume(id, 'home'), id, 'home');
-    const workspace = await this.volume(this.names.volume(id, 'workspace'), id, 'workspace');
+    const volumes = [];
+    for (const role of ['keep', 'cache', 'home', 'workspace'] as const) {
+      const volume = await this.volume(this.names.volume(id, role), id, role);
+      if (volume) volumes.push(volume);
+    }
+    // Host folders: from the container when it exists, else from what the backend saved at create. Their disks
+    // must be mounted (marker present) before anything is deleted, so no files are left behind unseen.
+    const fromContainer = computer ? mountedStorage(id, computer.Mounts) : null;
+    const saved = storageInput === undefined ? null : validateStorage(storageInput);
+    const folders = STORAGE_CLASSES.flatMap(kind => {
+      const place = fromContainer?.[kind];
+      const folder = place?.kind === 'bind' ? place.folder : kind === 'keep' ? saved?.keepFolder : saved?.cacheFolder;
+      return folder ? [{ kind, folder }] : [];
+    });
+    for (const { kind, folder } of folders)
+      await this.helper([this.baseMount(folder)], this.markerScript(kind, folder), 30_000);
     // All present resources have passed ownership/name checks before any deletion.
     if (media) await this.docker.request('DELETE', `${this.path('containers', media.Id)}?force=true&v=false`);
     if (computer) await this.docker.request('DELETE', `${this.path('containers', computer.Id)}?force=true&v=false`);
     if (gateway) await this.docker.request('DELETE', `${this.path('containers', gateway.Id)}?force=true&v=false`);
-    if (home) await this.docker.request('DELETE', this.path('volumes', home.Name));
-    if (workspace) await this.docker.request('DELETE', this.path('volumes', workspace.Name));
+    for (const { folder } of folders)
+      await this.helper([this.baseMount(folder)], `rm -rf /base/computers/${validateId(id)}`, 600_000);
+    for (const volume of volumes) await this.docker.request('DELETE', this.path('volumes', volume.Name));
     if (network) await this.docker.request('DELETE', this.path('networks', network.Id));
     this.previewCache.delete(`${id}:thumb`);
     this.previewCache.delete(`${id}:full`);
   }
-  async remove(idRaw: string, nameRaw: string) {
+  async remove(idRaw: string, nameRaw: string, storage?: unknown) {
     const id = validateId(idRaw),
       name = validateName(nameRaw);
-    return this.exclusive(() => this.removeOwned(id, name));
+    return this.exclusive(() => this.removeOwned(id, name, storage));
+  }
+
+  /** Empties a powered-off computer's Cache folder (everything there can be fetched again). */
+  async clearCache(idRaw: string, nameRaw: string) {
+    const id = validateId(idRaw),
+      name = validateName(nameRaw);
+    return this.exclusive(async () => {
+      const desktop = await this.container(this.names.desktop(id), id, 'desktop', name);
+      if (!desktop) throw new ResourceError(404, 'Computer not found.');
+      if (desktop.State.Running) throw new ResourceError(409, 'Power off this computer before clearing its cache.');
+      await this.checkMountedStorage(id, desktop);
+      const cache = this.storageMountsOf(id, desktop).find(mount => mount.Target === '/cache')!;
+      await this.helper([cache], 'rm -rf /cache/root', 600_000);
+    });
+  }
+
+  /** How much a computer's Keep and Cache folders hold, in bytes. */
+  async storageUsage(idRaw: string, nameRaw: string) {
+    const id = validateId(idRaw),
+      name = validateName(nameRaw);
+    const desktop = await this.container(this.names.desktop(id), id, 'desktop', name);
+    if (!desktop) throw new ResourceError(404, 'Computer not found.');
+    await this.checkMountedStorage(id, desktop);
+    const output = await this.helper(this.storageMountsOf(id, desktop), 'du -sb /keep /cache', 300_000);
+    const sizes = Object.fromEntries(
+      output
+        .trim()
+        .split('\n')
+        .map(line => line.split(/\s+/))
+        .map(([bytes, path]) => [path.slice(1), Number(bytes)]),
+    );
+    const mounted = mountedStorage(id, desktop.Mounts);
+    return STORAGE_CLASSES.map(kind => ({
+      kind,
+      bytes: sizes[kind] ?? 0,
+      folder: mounted[kind]?.kind === 'bind' ? (mounted[kind] as { folder: string }).folder : null,
+    }));
   }
 
   /** Operator power control. Both paths re-check ownership labels first, so a
@@ -687,6 +888,8 @@ export class ComputerManager {
     // firewall rules: bring the filtered gateway up first.
     if (!gateway.State.Running) await this.docker.request('POST', `${this.path('containers', gateway.Id)}/start`);
     if (!desktop.State.Running) {
+      // A host Keep/Cache folder whose disk did not mount would start an empty computer: refuse instead.
+      await this.checkMountedStorage(id, desktop);
       await this.docker.request('POST', `${this.path('containers', desktop.Id)}/start`);
       await this.waitDesktopReady(this.names.desktop(id));
     }
@@ -772,22 +975,27 @@ export class ComputerManager {
   }
   /** Enforced container quotas, cached per Docker container id. Recreation
    * produces a new id, so the cache cannot serve a stale quota. */
-  private quotas = new Map<string, { memory: number | null; cpuCount: number | null; displayServer?: DisplayServer }>();
+  private quotas = new Map<
+    string,
+    { memory: number | null; cpuCount: number | null; displayServer?: DisplayServer; imageId?: string }
+  >();
   private async containerQuota(containerId: string) {
     const cached = this.quotas.get(containerId);
     if (cached) return cached;
-    const quota: { memory: number | null; cpuCount: number | null; displayServer?: DisplayServer } = {
+    const quota: { memory: number | null; cpuCount: number | null; displayServer?: DisplayServer; imageId?: string } = {
       memory: null,
       cpuCount: null,
     };
     try {
       const info = await this.docker.json<{
+        Image?: string;
         HostConfig?: { Memory?: number; NanoCpus?: number };
         Config?: { Image?: string; Labels?: Record<string, string> | null };
       }>('GET', `${this.path('containers', containerId)}/json`);
       // The list call reports an image ID once a tag has moved on; the inspected creation-time name and labels are reliable.
       if (info.Config)
         quota.displayServer = displayServerOf({ Image: info.Config.Image, Labels: info.Config.Labels ?? {} });
+      quota.imageId = info.Image;
       // 0 means "no limit configured"; report null rather than an infinite dial.
       if (typeof info.HostConfig?.Memory === 'number' && info.HostConfig.Memory > 0)
         quota.memory = info.HostConfig.Memory;
@@ -802,6 +1010,10 @@ export class ComputerManager {
 
   async observe() {
     const rows = await this.listIds();
+    // A computer made from an older image than the current one can be updated (Update image).
+    const current = await this.docker
+      .optional<{ Id?: string }>(`${this.path('images', this.image)}/json`)
+      .catch(() => null);
     // Prune quotas for containers that no longer exist, so repeated recreation
     // cannot grow the cache without bound.
     const alive = new Set(rows.map(row => row.Id));
@@ -851,6 +1063,7 @@ export class ComputerManager {
           memoryLimitBytes,
           cpuCount,
           displayServer: inspected.displayServer ?? displayServerOf(row),
+          outdated: Boolean(current?.Id && inspected.imageId && inspected.imageId !== current.Id),
         };
       }),
     );

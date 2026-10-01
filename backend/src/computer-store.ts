@@ -2,6 +2,19 @@ import type { PlatformStore } from './platform-store';
 import type { Computer } from './generated/prisma/client';
 
 export type ComputerSettings = { cpuCores: number; memoryGiB: number; timezone: string };
+/** Where a computer's Keep and Cache folders live (null = its own Docker volumes) and the paths it keeps. */
+export type ComputerStorage = { keepFolder: string | null; cacheFolder: string | null; keptPaths: string[] };
+export const DEFAULT_KEPT_PATHS = ['/home/agent', '/usr/local'];
+export function storageOf(record: Pick<Computer, 'keepFolder' | 'cacheFolder' | 'keptPaths'>): ComputerStorage {
+  let keptPaths = DEFAULT_KEPT_PATHS;
+  try {
+    const parsed: unknown = JSON.parse(record.keptPaths);
+    if (Array.isArray(parsed) && parsed.every(path => typeof path === 'string')) keptPaths = parsed;
+  } catch {
+    /* the default */
+  }
+  return { keepFolder: record.keepFolder, cacheFolder: record.cacheFolder, keptPaths };
+}
 
 export class ComputerStoreError extends Error {
   constructor(
@@ -16,7 +29,12 @@ export class ComputerStoreError extends Error {
 export class ComputerStore {
   constructor(private readonly platform: PlatformStore) {}
 
-  async reserve(rawName: string, requestKey: string, settings?: ComputerSettings) {
+  async reserve(
+    rawName: string,
+    requestKey: string,
+    settings?: ComputerSettings,
+    storage?: Pick<ComputerStorage, 'keepFolder' | 'cacheFolder'>,
+  ) {
     await this.platform.initialize();
     const name = rawName.trim();
     if (!name || name.length > 80 || /[\u0000-\u001f\u007f]/.test(name))
@@ -53,7 +71,7 @@ export class ComputerStore {
         if (taken.some(record => record.name.toLocaleLowerCase('en-US') === name.toLocaleLowerCase('en-US'))) {
           throw new ComputerStoreError('conflict', 'That computer name is already in use. Choose another name.');
         }
-        return tx.computer.create({ data: { name, requestKey, ...(settings ?? {}) } });
+        return tx.computer.create({ data: { name, requestKey, ...(settings ?? {}), ...(storage ?? {}) } });
       });
       return { computer, created: true };
     } catch (error) {
@@ -118,8 +136,10 @@ export class ComputerStore {
 
   /** Called only after the controller has replaced a powered-off desktop with
    * the new immutable TZ environment and preserved the named volumes. */
-  async updateSettings(id: string, settings: ComputerSettings) {
-    return this.updateSavedSettings(id, settings);
+  async updateSettings(id: string, settings: ComputerSettings, keptPaths?: string[]) {
+    const updated = await this.updateSavedSettings(id, settings);
+    if (!keptPaths) return updated;
+    return this.platform.client.computer.update({ where: { id }, data: { keptPaths: JSON.stringify(keptPaths) } });
   }
 
   /** Identities the operator explicitly powered off, for startup reconciliation. */

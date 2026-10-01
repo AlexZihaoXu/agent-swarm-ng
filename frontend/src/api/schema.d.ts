@@ -660,6 +660,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/computer-storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getComputerStorage"];
+        put: operations["setComputerStorage"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/computers/{id}/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getComputerStorageUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/computers/{id}/cache/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["clearComputerCache"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/computers/{id}/terminals": {
         parameters: {
             query?: never;
@@ -4787,6 +4835,10 @@ export interface operations {
                             memoryLimitBytes: number | null;
                             cpuCount: number | null;
                             portalFree: boolean | null;
+                            keepFolder: string | null;
+                            cacheFolder: string | null;
+                            keptPaths: string[];
+                            outdated: boolean | null;
                         }[];
                         controllerConnected: boolean;
                     };
@@ -4877,6 +4929,10 @@ export interface operations {
                         memoryLimitBytes: number | null;
                         cpuCount: number | null;
                         portalFree: boolean | null;
+                        keepFolder: string | null;
+                        cacheFolder: string | null;
+                        keptPaths: string[];
+                        outdated: boolean | null;
                     };
                 };
             };
@@ -4899,6 +4955,10 @@ export interface operations {
                         memoryLimitBytes: number | null;
                         cpuCount: number | null;
                         portalFree: boolean | null;
+                        keepFolder: string | null;
+                        cacheFolder: string | null;
+                        keptPaths: string[];
+                        outdated: boolean | null;
                     };
                 };
             };
@@ -5214,6 +5274,10 @@ export interface operations {
                         memoryLimitBytes: number | null;
                         cpuCount: number | null;
                         portalFree: boolean | null;
+                        keepFolder: string | null;
+                        cacheFolder: string | null;
+                        keptPaths: string[];
+                        outdated: boolean | null;
                     };
                 };
             };
@@ -5280,6 +5344,8 @@ export interface operations {
                     timezone: string;
                     /** @enum {boolean} */
                     confirmReplacement: true;
+                    keptPaths?: string[];
+                    image?: "current" | "same";
                 };
             };
         };
@@ -5303,6 +5369,10 @@ export interface operations {
                         memoryLimitBytes: number | null;
                         cpuCount: number | null;
                         portalFree: boolean | null;
+                        keepFolder: string | null;
+                        cacheFolder: string | null;
+                        keptPaths: string[];
+                        outdated: boolean | null;
                     };
                 };
             };
@@ -5446,6 +5516,251 @@ export interface operations {
                 content: {
                     "application/json": {
                         accepted: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getComputerStorage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        keepFolder: string | null;
+                        cacheFolder: string | null;
+                        markers: {
+                            keep: string;
+                            cache: string;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    setComputerStorage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    keepFolder: string | null;
+                    cacheFolder: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        keepFolder: string | null;
+                        cacheFolder: string | null;
+                        markers: {
+                            keep: string;
+                            cache: string;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getComputerStorageUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        storage: {
+                            kind: "keep" | "cache";
+                            bytes: number;
+                            folder: string | null;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    clearComputerCache: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        cleared: boolean;
                     };
                 };
             };

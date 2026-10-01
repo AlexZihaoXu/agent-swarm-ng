@@ -188,3 +188,42 @@ test('Settings → Swarm edits limits within their bounds, saves only changes, a
   await page.reload();
   await expect(page.getByRole('region', { name: 'Swarm' }).getByLabel('Computers', { exact: true })).toHaveValue('5');
 });
+
+test('Settings → Computer storage chooses host folders only once their marker exists', async ({ page }) => {
+  // In-memory settings: the shared test backend's real settings stay untouched.
+  let saved = { keepFolder: null as string | null, cacheFolder: null as string | null };
+  const markers = { keep: '.agent-swarm-keep-root', cache: '.agent-swarm-cache-root' };
+  const puts: object[] = [];
+  await page.route('**/api/computer-storage', async route => {
+    if (route.request().method() === 'PUT') {
+      const body = route.request().postDataJSON();
+      puts.push(body);
+      if (body.keepFolder === '/mnt/unplugged')
+        return route.fulfill({
+          status: 409,
+          json: { message: 'The Keep folder /mnt/unplugged is not ready: its disk may not be mounted.' },
+        });
+      saved = body;
+    }
+    await route.fulfill({ json: { ...saved, markers } });
+  });
+  await page.goto('/settings');
+  const storage = page.getByRole('region', { name: 'Computer storage' });
+  const keep = storage.getByLabel('Keep folder');
+  await expect(keep).toHaveValue('');
+  await expect(storage.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  await keep.fill('/mnt/unplugged');
+  // Choosing a folder says how to mark it on the host.
+  await expect(storage.getByText('touch /mnt/unplugged/.agent-swarm-keep-root')).toBeVisible();
+  await storage.getByRole('button', { name: 'Save changes' }).click();
+  await expect(storage.getByRole('status')).toContainText('not ready');
+  await keep.fill('/srv/agent-swarm/keep');
+  await storage.getByLabel('Cache folder').fill('/srv/agent-swarm/cache');
+  await storage.getByRole('button', { name: 'Save changes' }).click();
+  await expect(storage.getByRole('status')).toHaveText('Saved. New computers use these folders.');
+  expect(puts.at(-1)).toEqual({ keepFolder: '/srv/agent-swarm/keep', cacheFolder: '/srv/agent-swarm/cache' });
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Computer storage' }).getByLabel('Keep folder')).toHaveValue(
+    '/srv/agent-swarm/keep',
+  );
+});

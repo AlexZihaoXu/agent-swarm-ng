@@ -164,7 +164,7 @@ export const filesPractice = {
 
 Bounded output: bash returns only the last 25000 bytes / 1000 lines of each stream. Filter at the source (grep, head, tail, wc) or write output to a file in /tmp (disposable, wiped at every computer start) and read a window of it.
 
-Where files go: keep real work in the home folder (on ~/Desktop when the human should see it); put logs, intermediate output and throwaway files in /tmp/<task>/ (concepts/computers/files).
+Where files go: keep real work in the home folder (on ~/Desktop when the human should see it); put logs, intermediate output and throwaway files in /tmp/<task>/. Install system packages with apt (they are reinstalled after a rebuild), Python tools with uv or a venv in home, Node tools with npm -g or nvm. A service whose data must last (a database) needs its folders kept: ask the human to add them in the computer's Settings, and start it from a script in /keep/startup/ (concepts/computers/files).
 
 Reading: use grep or a bounded search to find the part you need, then read with offset/limit; do not page through a large file blindly.
 

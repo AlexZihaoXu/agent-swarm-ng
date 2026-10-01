@@ -2,7 +2,8 @@ import { SwarmSettingsStore } from './swarm-settings';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import type { PlatformStore } from './platform-store';
-import { ComputerStore, ComputerStoreError, type ComputerSettings } from './computer-store';
+import { ComputerStore, ComputerStoreError, storageOf, type ComputerSettings } from './computer-store';
+import { computerStorageFolders } from './computer-storage-routes';
 import { ControllerError, type ComputerController, type ComputerObservation } from './computer-controller-client';
 import type { ComputerUseService } from './computer-use/service';
 import { registerComputerFileRoutes } from './computer-file-routes';
@@ -33,6 +34,12 @@ const viewSchema = Type.Object({
   cpuCount: Type.Union([Type.Number(), Type.Null()]),
   // True for GNOME/X11 computers (no screen-share consent step), false for Wayland, null when unknown (controller offline).
   portalFree: Type.Union([Type.Boolean(), Type.Null()]),
+  // Its Keep and Cache folders on the host (null = its own Docker volumes) and the paths it keeps.
+  keepFolder: Type.Union([Type.String(), Type.Null()]),
+  cacheFolder: Type.Union([Type.String(), Type.Null()]),
+  keptPaths: Type.Array(Type.String()),
+  // Made from an older image than the current one (Update image); null when unknown.
+  outdated: Type.Union([Type.Boolean(), Type.Null()]),
 });
 
 function view(
@@ -44,10 +51,15 @@ function view(
     cpuCores: number | null;
     memoryGiB: number | null;
     timezone: string | null;
+    keepFolder: string | null;
+    cacheFolder: string | null;
+    keptPaths: string;
   },
   observed?: ComputerObservation,
 ) {
   return {
+    ...storageOf(record),
+    outdated: observed ? (observed.outdated ?? false) : null,
     id: record.id,
     name: record.name,
     cpuCores: observed?.cpuCount ?? record.cpuCores ?? null,
@@ -182,14 +194,27 @@ export function registerComputerRoutes(
         if (settings.cpuCores > limits.cpuCores.max || settings.memoryGiB > limits.memoryGiB.max) {
           throw new ComputerStoreError('invalid', 'Computer settings exceed this host’s capacity.');
         }
-        const { computer, created } = await store.reserve(request.body.name, request.body.requestKey, settings);
+        // New computers use the Keep/Cache folders chosen in Settings now; they stay there afterwards.
+        const folders = await computerStorageFolders(platform);
+        const { computer, created } = await store.reserve(
+          request.body.name,
+          request.body.requestKey,
+          settings,
+          folders,
+        );
         recordId = computer.id;
         if (computer.state === 'deleting' || computer.state === 'failed')
           return reply
             .code(409)
             .send({ message: 'Delete the incomplete computer before reusing this create request.' });
         if (computer.state === 'creating') {
-          await controller.create(computer.id, computer.name, settings, (await swarmSettings.get()).maxComputers);
+          await controller.create(
+            computer.id,
+            computer.name,
+            settings,
+            (await swarmSettings.get()).maxComputers,
+            storageOf(computer),
+          );
           await store.markRunning(computer.id);
         }
         const observed = await controller.observe();
@@ -225,7 +250,7 @@ export function registerComputerRoutes(
         // between the release below and the removal.
         const record = await store.markDeleting(request.params.id, request.body.confirmation);
         if ((await use?.holders())?.some(holder => holder.computerId === record.id)) await use?.forceRelease(record.id);
-        await controller.remove(record.id, record.name);
+        await controller.remove(record.id, record.name, storageOf(record));
         if (!(await store.finalizeDelete(record.id, record.name)) && (await store.get(record.id)))
           return unavailable(reply);
         // A concurrent, identically confirmed deletion may already have removed
@@ -323,7 +348,10 @@ export function registerComputerRoutes(
       }
     },
   );
-  app.post<{ Params: { id: string }; Body: ComputerSettings & { confirmReplacement: true } }>(
+  app.post<{
+    Params: { id: string };
+    Body: ComputerSettings & { confirmReplacement: true; keptPaths?: string[]; image?: 'current' | 'same' };
+  }>(
     '/api/computers/:id/settings/replacement',
     {
       schema: {
@@ -335,6 +363,10 @@ export function registerComputerRoutes(
             memoryGiB: Type.Integer({ minimum: 1, maximum: 16 }),
             timezone: Type.String({ minLength: 1, maxLength: 64 }),
             confirmReplacement: Type.Literal(true),
+            // Paths to keep beyond the home folder (validated by the controller); omitted = unchanged.
+            keptPaths: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 255 }), { maxItems: 32 })),
+            // 'current' rebuilds it on the current computer image (Update image).
+            image: Type.Optional(Type.Union([Type.Literal('current'), Type.Literal('same')])),
           },
           { additionalProperties: false },
         ),
@@ -348,15 +380,13 @@ export function registerComputerRoutes(
         const record = await store.get(request.params.id);
         if (!record) return reply.code(404).send({ message: 'Computer not found.' });
         if (record.state !== 'running' || record.desiredState !== 'stopped') {
-          return reply
-            .code(409)
-            .send({ message: 'Power off this computer before replacing it for a timezone change.' });
+          return reply.code(409).send({ message: 'Power off this computer before rebuilding it.' });
         }
         const observed = await controller.observe();
         if (observed.get(record.id)?.status !== 'exited') {
           return reply
             .code(409)
-            .send({ message: 'Wait for the computer to finish powering off before changing timezone.' });
+            .send({ message: 'Wait for the computer to finish powering off before rebuilding it.' });
         }
         const limits = await controller.limits();
         if (request.body.cpuCores > limits.cpuCores.max || request.body.memoryGiB > limits.memoryGiB.max) {
@@ -367,8 +397,14 @@ export function registerComputerRoutes(
           memoryGiB: request.body.memoryGiB,
           timezone: request.body.timezone,
         };
-        await controller.replaceStopped(record.id, record.name, settings);
-        const updated = await store.updateSettings(record.id, settings);
+        await controller.replaceStopped(record.id, record.name, settings, {
+          ...(request.body.image ? { image: request.body.image } : {}),
+          ...(request.body.keptPaths ? { keptPaths: request.body.keptPaths } : {}),
+        });
+        // As the controller keeps them: in the given order, the home folder always included.
+        const given = request.body.keptPaths ? [...new Set(request.body.keptPaths)] : undefined;
+        const keptPaths = given && !given.includes('/home/agent') ? ['/home/agent', ...given] : given;
+        const updated = await store.updateSettings(record.id, settings, keptPaths);
         const current = await controller.observe();
         return view(updated, current.get(record.id));
       } catch (error) {

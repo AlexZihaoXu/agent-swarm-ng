@@ -1,6 +1,6 @@
 import { controllerHeaders } from './controller-auth';
 import { fetchComputerFile, type FileOperation, type FileQuery, type FileResult } from './computer-files';
-import type { ComputerSettings } from './computer-store';
+import type { ComputerSettings, ComputerStorage } from './computer-store';
 import { HttpComputerRuntime } from './computer-use/runtime-client';
 import type { ComputerRuntime } from './computer-use/service';
 
@@ -11,7 +11,10 @@ export type ComputerObservation = {
   memoryLimitBytes: number | null;
   cpuCount: number | null;
   displayServer?: 'x11' | 'wayland';
+  /** Made from an older image than the current one (Update image brings it up to date). */
+  outdated?: boolean;
 };
+export type StorageUsage = { kind: 'keep' | 'cache'; bytes: number; folder: string | null };
 export type ComputerLimits = {
   cpuCores: { min: number; max: number; default: number };
   memoryGiB: { min: number; max: number; default: number };
@@ -34,15 +37,29 @@ export interface ComputerController {
     signal?: AbortSignal,
   ): Promise<{ path: string; size: number }>;
   limits(): Promise<ComputerLimits>;
-  create(id: string, name: string, settings: ComputerSettings, maxComputers?: number): Promise<void>;
-  remove(id: string, name: string): Promise<void>;
+  create(
+    id: string,
+    name: string,
+    settings: ComputerSettings,
+    maxComputers?: number,
+    storage?: ComputerStorage,
+  ): Promise<void>;
+  remove(id: string, name: string, storage?: ComputerStorage): Promise<void>;
+  checkStorageFolder?(kind: 'keep' | 'cache', folder: string): Promise<void>;
+  clearCache?(id: string, name: string): Promise<void>;
+  storageUsage?(id: string, name: string): Promise<StorageUsage[]>;
   observe(): Promise<Map<string, ComputerObservation>>;
   preview(id: string, full?: boolean): Promise<Uint8Array | null>;
   pointer(id: string, x: number, y: number): Promise<void>;
   start(id: string, name: string): Promise<void>;
   stop(id: string, name: string): Promise<void>;
   updateResources(id: string, name: string, settings: Pick<ComputerSettings, 'cpuCores' | 'memoryGiB'>): Promise<void>;
-  replaceStopped(id: string, name: string, settings: ComputerSettings): Promise<void>;
+  replaceStopped(
+    id: string,
+    name: string,
+    settings: ComputerSettings,
+    options?: { image?: 'current' | 'same'; keptPaths?: string[] },
+  ): Promise<void>;
 }
 
 /** A fetch request body from any byte source (this Bun has no ReadableStream.from). */
@@ -182,19 +199,51 @@ export class HttpComputerController implements ComputerController {
     };
   }
   /** Creates a computer; the controller refuses one past `maxComputers` (the operator's Settings → Swarm limit). */
-  async create(id: string, name: string, settings: ComputerSettings, maxComputers?: number) {
+  async create(id: string, name: string, settings: ComputerSettings, maxComputers?: number, storage?: ComputerStorage) {
     await this.request(
       '/computers',
-      { method: 'POST', body: JSON.stringify({ id, name, settings, maxComputers }) },
+      { method: 'POST', body: JSON.stringify({ id, name, settings, maxComputers, storage }) },
       120_000,
     );
   }
-  async remove(id: string, name: string) {
+  /** Deletes the computer with its Keep and Cache folders (which can take a while for large folders). */
+  async remove(id: string, name: string, storage?: ComputerStorage) {
     await this.request(
       `/computers/${encodeURIComponent(id)}`,
-      { method: 'DELETE', body: JSON.stringify({ name }) },
-      60_000,
+      { method: 'DELETE', body: JSON.stringify({ name, storage }) },
+      660_000,
     );
+  }
+  /** Whether a host folder can be the Keep or Cache folder (it exists and carries its marker file). */
+  async checkStorageFolder(kind: 'keep' | 'cache', folder: string) {
+    await this.request('/computers/storage/check', { method: 'POST', body: JSON.stringify({ kind, folder }) }, 60_000);
+  }
+  async clearCache(id: string, name: string) {
+    await this.request(
+      `/computers/${encodeURIComponent(id)}/cache/clear`,
+      { method: 'POST', body: JSON.stringify({ name }) },
+      660_000,
+    );
+  }
+  async storageUsage(id: string, name: string): Promise<StorageUsage[]> {
+    const response = await this.request(
+      `/computers/${encodeURIComponent(id)}/storage`,
+      { method: 'POST', body: JSON.stringify({ name }) },
+      330_000,
+    );
+    const data = (await response.json()) as { storage?: unknown };
+    if (
+      !Array.isArray(data.storage) ||
+      !data.storage.every(
+        item =>
+          item &&
+          (item.kind === 'keep' || item.kind === 'cache') &&
+          typeof item.bytes === 'number' &&
+          (item.folder === null || typeof item.folder === 'string'),
+      )
+    )
+      throw new Error('Invalid storage usage.');
+    return data.storage as StorageUsage[];
   }
   async observe() {
     const response = await this.request('/computers');
@@ -219,6 +268,7 @@ export class HttpComputerController implements ComputerController {
         cpuCount: item.cpuCount ?? null,
         displayServer:
           item.displayServer === 'x11' || item.displayServer === 'wayland' ? item.displayServer : undefined,
+        outdated: item.outdated === true,
       });
     }
     return result;
@@ -244,10 +294,16 @@ export class HttpComputerController implements ComputerController {
       30_000,
     );
   }
-  async replaceStopped(id: string, name: string, settings: ComputerSettings) {
+  /** Rebuilds a powered-off computer: new timezone or kept paths, or the current image (`image: 'current'`). */
+  async replaceStopped(
+    id: string,
+    name: string,
+    settings: ComputerSettings,
+    options: { image?: 'current' | 'same'; keptPaths?: string[] } = {},
+  ) {
     await this.request(
       `/computers/${encodeURIComponent(id)}/settings/replacement`,
-      { method: 'POST', body: JSON.stringify({ name, ...settings }) },
+      { method: 'POST', body: JSON.stringify({ name, ...settings, ...options }) },
       60_000,
     );
   }

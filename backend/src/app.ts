@@ -10,6 +10,7 @@ import { PlatformStore } from './platform-store';
 import { CodexProvider } from './codex-provider';
 import { registerCodex } from './codex-routes';
 import { ActivityEntrySchema } from './agent-activity';
+import { registerComputerStorageRoutes } from './computer-storage-routes';
 import { registerComputerRoutes } from './computer-routes';
 import { computerControllerFromEnv, type ComputerController } from './computer-controller-client';
 import { registerKnowledgeRoutes } from './swarm-knowledge/routes';
@@ -96,6 +97,7 @@ export async function buildApp({
     tokens: discordTokens,
   });
   registerComputerRoutes(app, platform, controller, computers, swarmSettings);
+  registerComputerStorageRoutes(app, platform, controller);
   registerComputerUseRoutes(app, computers, screenshots);
   registerTerminalStreams(app, computers, controller);
   registerKnowledgeRoutes(app);

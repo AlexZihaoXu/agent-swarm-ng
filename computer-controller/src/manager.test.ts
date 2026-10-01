@@ -32,7 +32,12 @@ function existingRunning(manager: ComputerManager, resources: Map<string, unknow
   resources.set(`/containers/${manager.names.desktop(id)}/json`, {
     Id: 'desktop',
     State: { Running: true },
-    Config: { Labels: manager.names.labels(id, 'desktop', name) },
+    Config: { Labels: manager.names.labels(id, 'desktop', name), Env: ['COMPUTER_KEPT_PATHS=/home/agent:/usr/local'] },
+    Mounts: (['keep', 'cache'] as const).map(role => ({
+      Type: 'volume',
+      Name: manager.names.volume(id, role),
+      Destination: `/${role}`,
+    })),
     NetworkSettings: { Networks: { [manager.names.privateNetwork(id)]: { IPAddress: '172.25.10.2' } } },
   });
   resources.set(`/containers/${manager.names.gateway(id)}/json`, {
@@ -44,7 +49,7 @@ function existingRunning(manager: ComputerManager, resources: Map<string, unknow
     Id: 'private',
     Labels: manager.names.labels(id, 'private-network'),
   });
-  for (const role of ['home', 'workspace'] as const) {
+  for (const role of ['keep', 'cache'] as const) {
     resources.set(`/volumes/${manager.names.volume(id, role)}`, {
       Name: manager.names.volume(id, role),
       Labels: manager.names.labels(id, role),
@@ -436,20 +441,36 @@ it('replaces a stopped owned desktop with new TZ/env while preserving both named
     MemorySwap: 12 * 1024 ** 3,
   });
   expect(resources.has(`/containers/${previous}/json`)).toBe(false);
-  for (const role of ['home', 'workspace'] as const)
+  for (const role of ['keep', 'cache'] as const)
     expect(resources.has(`/volumes/${manager.names.volume(id, role)}`)).toBe(true);
   expect(request.mock.calls.some(call => String(call[1]).includes('/start'))).toBe(false);
   expect(request.mock.calls.some(call => String(call[1]).startsWith('/volumes/') && call[0] === 'DELETE')).toBe(false);
 });
 
-it('replaces a computer created after /workspace was retired with only its home volume', async () => {
-  const { manager, resources, canonical } = stoppedReplacementFixture();
-  resources.delete(`/volumes/${manager.names.volume(id, 'workspace')}`);
-  await manager.replaceStopped(id, name, { cpuCores: 2, memoryGiB: 6, timezone: 'Etc/UTC' });
-  const replacement = resources.get(`/containers/${canonical}/json`) as {
-    HostConfig: { Mounts: { Target: string }[] };
-  };
-  expect(replacement.HostConfig.Mounts.map(mount => mount.Target)).toEqual(['/home/agent']);
+it('keeps a computer’s Keep/Cache mounts on replacement, and can change its kept paths or move it to the current image', async () => {
+  const { manager, resources, canonical, docker } = stoppedReplacementFixture();
+  resources.set(`/images/${encodeURIComponent('agent-swarm-default:stage2')}/json`, { Config: { Labels: {} } });
+  await manager.replaceStopped(
+    id,
+    name,
+    { cpuCores: 2, memoryGiB: 6, timezone: 'Etc/UTC' },
+    { keptPaths: ['/var/lib/postgresql', '/etc/postgresql'], image: 'current' },
+  );
+  const replacement = resources.get(`/containers/${canonical}/json`) as Record<string, any>;
+  expect(replacement.HostConfig.Mounts).toEqual(
+    (['keep', 'cache'] as const).map(role => ({
+      Type: 'volume',
+      Source: manager.names.volume(id, role),
+      Target: `/${role}`,
+    })),
+  );
+  // The home folder is always kept.
+  expect(replacement.Config.Env).toContain('COMPUTER_KEPT_PATHS=/home/agent:/var/lib/postgresql:/etc/postgresql');
+  const create = vi.mocked(docker.json).mock.calls.find(call => String(call[1]).startsWith('/containers/create?name='));
+  expect((create?.[2] as { Image: string }).Image).toBe('agent-swarm-default:stage2');
+  await expect(
+    manager.replaceStopped(id, name, { cpuCores: 2, memoryGiB: 6, timezone: 'Etc/UTC' }, { keptPaths: ['/etc'] }),
+  ).rejects.toThrow('cannot be kept');
 });
 
 it('restores the old stopped desktop if promotion of the replacement fails', async () => {
@@ -461,7 +482,7 @@ it('restores the old stopped desktop if promotion of the replacement fails', asy
   expect((resources.get(`/containers/${canonical}/json`) as { Id: string }).Id).toBe('old-desktop');
   expect(resources.has(`/containers/${next}/json`)).toBe(false);
   expect(resources.has(`/containers/${previous}/json`)).toBe(false);
-  for (const role of ['home', 'workspace'] as const)
+  for (const role of ['keep', 'cache'] as const)
     expect(resources.has(`/volumes/${manager.names.volume(id, role)}`)).toBe(true);
   expect(request.mock.calls.some(call => call[0] === 'DELETE' && String(call[1]).startsWith('/volumes/'))).toBe(false);
 });
@@ -535,7 +556,10 @@ it('puts the derived hostname and every grant in one desktop create body', () =>
     renderDevice: '/dev/dri/renderD128',
     cpuLimit: 4,
     memoryGiB: 6,
-    homeVolume: 'swarm-ng-test-computer-' + id + '-home',
+    mounts: [
+      { Type: 'volume' as const, Source: 'swarm-ng-test-computer-' + id + '-keep', Target: '/keep' },
+      { Type: 'bind' as const, Source: '/srv/cache/computers/' + id, Target: '/cache' },
+    ],
   };
   const body = desktopCreateBody(input);
   // Must be top-level Config: inside HostConfig Docker ignores it silently.
@@ -558,14 +582,8 @@ it('puts the derived hostname and every grant in one desktop create body', () =>
   expect(body.HostConfig.Devices).toEqual([
     { PathOnHost: '/dev/dri/renderD128', PathInContainer: '/dev/dri/renderD128', CgroupPermissions: 'rwm' },
   ]);
-  // Home is the one persistent place (/tmp is wiped at each start); /workspace is retired.
-  expect(body.HostConfig.Mounts.map((mount: { Target: string }) => mount.Target)).toEqual(['/home/agent']);
-  // A computer from before the retirement keeps its old workspace volume mounted when it is recreated.
-  const older = desktopCreateBody({ ...input, workspaceVolume: 'swarm-ng-test-computer-' + id + '-workspace' });
-  expect(older.HostConfig.Mounts.map((mount: { Target: string }) => mount.Target)).toEqual([
-    '/home/agent',
-    '/workspace',
-  ]);
+  // Only the computer's Keep and Cache mounts; the guest binds kept paths from them at every start.
+  expect(body.HostConfig.Mounts).toEqual(input.mounts);
   expect(body.HostConfig.SecurityOpt).toEqual(['seccomp={"defaultAction":"SCMP_ACT_ERRNO"}']);
   expect(body.Env).toContain('TZ=America/Toronto');
   // A computer without the GPU grant still gets a hostname.

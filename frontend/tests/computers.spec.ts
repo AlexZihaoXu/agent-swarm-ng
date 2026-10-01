@@ -13,6 +13,10 @@ type Computer = {
   cpuCores?: number | null;
   memoryGiB?: number | null;
   timezone?: string | null;
+  keepFolder?: string | null;
+  cacheFolder?: string | null;
+  keptPaths?: string[];
+  outdated?: boolean | null;
 };
 async function expectCentered(page: Page, dialog: ReturnType<Page['getByRole']>) {
   const box = await dialog.boundingBox();
@@ -24,6 +28,7 @@ async function expectCentered(page: Page, dialog: ReturnType<Page['getByRole']>)
 async function mockComputers(page: Page, initial: Computer[] = []) {
   const computers = [...initial];
   const createdSettings: Array<{ cpuCores?: number; memoryGiB?: number; timezone?: string }> = [];
+  const storageCalls: string[] = [];
   let previews = 0;
   await page.route(/\/api\/computers(?:\?.*)?$/, route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: { computers, controllerConnected: true } });
@@ -58,6 +63,19 @@ async function mockComputers(page: Page, initial: Computer[] = []) {
           timezoneDefault: 'America/Toronto',
         },
       });
+    if (path[4] === 'storage')
+      return route.fulfill({
+        json: {
+          storage: [
+            { kind: 'keep', bytes: 3 * 1024 ** 3, folder: '/srv/keep' },
+            { kind: 'cache', bytes: 512 * 1024 ** 2, folder: null },
+          ],
+        },
+      });
+    if (path[4] === 'cache' && route.request().method() === 'POST') {
+      storageCalls.push(`clear:${id}`);
+      return route.fulfill({ json: { cleared: true } });
+    }
     if (path[4] === 'preview') {
       previews++;
       return route.fulfill({ status: 503, json: { message: 'Preview warming up.' } });
@@ -65,8 +83,11 @@ async function mockComputers(page: Page, initial: Computer[] = []) {
     if (path[4] === 'settings' && path[5] === 'replacement' && route.request().method() === 'POST') {
       const row = computers.find(item => item.id === id);
       if (!row) return route.fulfill({ status: 404 });
-      const { cpuCores, memoryGiB, timezone, confirmReplacement } = route.request().postDataJSON();
+      const { cpuCores, memoryGiB, timezone, confirmReplacement, keptPaths, image } = route.request().postDataJSON();
       if (!confirmReplacement || row.state !== 'exited') return route.fulfill({ status: 409 });
+      storageCalls.push(`rebuild:${id}:${JSON.stringify({ keptPaths, image })}`);
+      if (keptPaths) Object.assign(row, { keptPaths: ['/home/agent', ...keptPaths] });
+      if (image === 'current') Object.assign(row, { outdated: false });
       Object.assign(row, {
         cpuCores,
         memoryGiB,
@@ -96,7 +117,7 @@ async function mockComputers(page: Page, initial: Computer[] = []) {
     computers.splice(index, 1);
     return route.fulfill({ json: { deleted: true } });
   });
-  return { computers, previewCount: () => previews, createdSettings };
+  return { computers, previewCount: () => previews, createdSettings, storageCalls };
 }
 
 test('Computers shows a responsive screenshot-first grid with name and CPU/memory below', async ({ page }) => {
@@ -625,14 +646,68 @@ test('a stopped computer can change timezone only after explicit replacement con
   await page.getByRole('menuitem', { name: 'Settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings for Stopped desk' });
   await dialog.getByLabel('Timezone', { exact: true }).fill('Etc/UTC');
-  await expect(dialog.getByRole('alert')).toContainText('home volume stays intact');
-  const replace = dialog.getByRole('button', { name: 'Replace stopped computer' });
+  await expect(dialog.getByRole('alert')).toContainText('Keep and Cache folders stay');
+  const replace = dialog.getByRole('button', { name: 'Rebuild stopped computer' });
   await expect(replace).toBeDisabled();
-  await dialog.getByRole('checkbox', { name: /I understand this will replace/ }).check();
+  await dialog.getByRole('checkbox', { name: /I understand this will rebuild/ }).check();
   await expect(replace).toBeEnabled();
   await replace.click();
   await expect(dialog).toBeHidden();
   expect(computers[0]).toMatchObject({ timezone: 'Etc/UTC', state: 'exited' });
+});
+
+test('a computer’s settings show where its files are, clear its cache, and rebuild it to keep more or update its image', async ({
+  page,
+}) => {
+  const id = '4d2c1b0a-9e8f-4a6b-8c5d-3e2f1a0b9c8d';
+  const { computers, storageCalls } = await mockComputers(page, [
+    {
+      id,
+      name: 'Kept desk',
+      state: 'exited',
+      createdAt: 0,
+      cpuPercent: null,
+      memoryBytes: null,
+      memoryLimitBytes: null,
+      cpuCount: null,
+      cpuCores: 4,
+      memoryGiB: 4,
+      timezone: 'America/Toronto',
+      keepFolder: '/srv/keep',
+      cacheFolder: null,
+      keptPaths: ['/home/agent', '/usr/local'],
+      outdated: true,
+    },
+  ]);
+  await page.goto('/computers');
+  await expect(page.getByText('Update available')).toBeVisible();
+  await page.getByRole('button', { name: 'Actions for Kept desk' }).click();
+  await page.getByRole('menuitem', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings for Kept desk' });
+  const storage = dialog.getByRole('group', { name: 'Storage' });
+  await expect(storage).toContainText('/srv/keep/computers/…');
+  await expect(storage).toContainText('3.0 GB');
+  await expect(storage).toContainText('Docker storage');
+  await storage.getByRole('button', { name: 'Clear cache' }).click();
+  await expect(storage).toContainText('Cache cleared.');
+  expect(storageCalls).toContain(`clear:${id}`);
+  // The home folder is always kept and not offered for removal.
+  await expect(storage.getByRole('button', { name: 'Stop keeping /home/agent' })).toHaveCount(0);
+  await storage.getByLabel('Path to keep').fill('var/lib');
+  await expect(storage.getByRole('alert')).toContainText('absolute path');
+  await storage.getByLabel('Path to keep').fill('/var/lib/postgresql');
+  await storage.getByRole('button', { name: 'Add' }).click();
+  await storage.getByRole('button', { name: 'Stop keeping /usr/local' }).click();
+  await storage.getByRole('checkbox', { name: /Update to the latest computer image/ }).check();
+  await expect(dialog.getByRole('alert').first()).toContainText('Updating the image rebuilds the computer');
+  await dialog.getByRole('checkbox', { name: /I understand this will rebuild/ }).check();
+  await dialog.getByRole('button', { name: 'Rebuild stopped computer' }).click();
+  await expect(dialog).toBeHidden();
+  expect(storageCalls).toContain(
+    `rebuild:${id}:${JSON.stringify({ keptPaths: ['/var/lib/postgresql'], image: 'current' })}`,
+  );
+  expect(computers[0]).toMatchObject({ keptPaths: ['/home/agent', '/var/lib/postgresql'], outdated: false });
+  await expect(page.getByText('Update available')).toHaveCount(0);
 });
 
 test('preview dissolves without the breathing brightness dip', async ({ page }) => {
@@ -896,7 +971,7 @@ test('creates a computer and requires an exact typed name before destructive del
     .click();
   const dialog = page.getByRole('dialog', { name: 'Delete computer' });
   await expectCentered(page, dialog);
-  await expect(dialog).toContainText('persistent home');
+  await expect(dialog).toContainText('Keep and Cache folders');
   const confirm = dialog.getByLabel('Confirm computer name');
   await confirm.fill('test machine');
   await expect(dialog.getByRole('button', { name: 'Delete computer' })).toBeDisabled();
