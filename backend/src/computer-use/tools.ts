@@ -1,4 +1,5 @@
 import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent';
+import { classify, type AgentTool } from '../tool-access';
 import { Type, type TProperties } from '@sinclair/typebox';
 import { ComputerUseService } from './service';
 import { ScreenshotPool, type ScreenshotReference } from './image-pool';
@@ -61,7 +62,7 @@ export function createComputerTools(
   images: ScreenshotPool,
   agentId: string,
   watches?: ComputerWatches,
-): ToolDefinition[] {
+): AgentTool[] {
   const capture = async (request: unknown, signal: AbortSignal | undefined, vision: boolean) => {
     if (!vision)
       throw new Error(
@@ -97,82 +98,84 @@ export function createComputerTools(
   return [
     ...createCoreTools(service, images, agentId),
     ...createTerminalTools(service, agentId, images),
-    defineTool({
-      name: 'list_computers',
-      label: 'List assigned computers',
-      description:
-        'List computers assigned to you and their current agent holder. Assignment is not control. Read practices/computer-use before first computer use.',
-      parameters: object({}),
-      async execute() {
-        return textResult({ computers: await service.list(agentId) });
-      },
-    }),
-    defineTool({
-      name: 'use_computer',
-      label: 'Select or release computer',
-      description:
-        'Acquire an assigned computer by exact name or ID, or release the current computer with computer:null. One agent may hold a computer; humans may still interact. Releasing leaves persistent tmux programs running. A busy destination does not release your old computer. Ask the holder to release or ask the human for Force release; you cannot override them.',
-      parameters: object({ computer: Type.Union([Type.String({ minLength: 1, maxLength: 100 }), Type.Null()]) }),
-      async execute(_call, { computer }, signal) {
-        signal?.throwIfAborted();
-        // Watches belong to the computer they watch: leaving it ends them (quietly: this is your own choice).
-        const { result, ended } = watches
-          ? await watches.releasing(agentId, () => service.use(agentId, computer))
-          : { result: await service.use(agentId, computer), ended: 0 };
-        const watchesEnded = ended ? { watchesEnded: ended } : {};
-        return textResult(
-          computer === null
-            ? { ...result, ...watchesEnded }
-            : {
-                ...result,
-                ...watchesEnded,
-                knowledge:
-                  'Before any other computer tool: if concepts/computers, practices/computer-use and the concept and practice entries for the surfaces you will use (desktop, terminals, files, watches) are not in your retained context, read them now with read_knowledge.',
-              },
-        );
-      },
-    }),
-    defineTool({
-      name: 'glance',
-      label: 'Look at whole desktop',
-      description:
-        'Fresh screenshot of the full claimed desktop. low(default)=33%, medium=50%, high=75%, full=100% native dimensions. Low is for orientation only, not accurate reading. Use high for broad readable context; full for exact text/fine details across the screen, or look_at for one region. If unclear, increase detail/crop rather than guess or repeat low. Returns image and [0,999] bounds; successful look resets 2 action combos for 30 real seconds.',
-      parameters: lookParameters.glance,
-      async execute(_call, params, signal, _update, ctx) {
-        return capture({ kind: 'glance', ...params }, signal, Boolean(ctx.model?.input.includes('image')));
-      },
-    }),
-    defineTool({
-      name: 'look_at',
-      label: 'Look at desktop region',
-      description:
-        'Read exact text or inspect fine details in one region, especially when a scaled glance is unclear. Fresh native-resolution crop around center x,y and radius size, all in [0,999] desktop coordinates. Shift to fit when possible; oversized axes become full screen. Returns adjusted exact image bounds. Resets 2 combos/30 seconds.',
-      parameters: lookParameters.look_at,
-      async execute(_call, params, signal, _update, ctx) {
-        return capture({ kind: 'look_at', ...params }, signal, Boolean(ctx.model?.input.includes('image')));
-      },
-    }),
-    defineTool({
-      name: 'run_actions',
-      label: 'Run desktop combo',
-      description:
-        'Execute 1–16 ordered actions on your claimed computer. Read practices/desktop for examples. Requires a successful glance/look_at in past 30 seconds with fewer than two started combos. Validate ALL before input: balanced keys/buttons, <=5 seconds action time, <=10 seconds with pauses only between. Invalid calls consume no use but time elapses. Move uses [0,999], Bezier, 8000px/s default max24000; typing 800CPM default max3200 counting Unicode codepoints. Recommended/default between-action pause is 0.2s; it is not a readiness guarantee. Verify the application outcome with an adequately detailed screenshot. Input is not atomic: report partial errors and look again, never retry blindly.',
-      parameters: object({
-        actions: Type.Array(action, { minItems: 1, maxItems: 16 }),
-        per_action_pause: Type.Optional(Type.Number({ minimum: 0, maximum: 10, default: 0.2 })),
+    ...classify({ list_computers: 'r', use_computer: 'claim', glance: 'r', look_at: 'r', run_actions: 'rw' }, [
+      defineTool({
+        name: 'list_computers',
+        label: 'List assigned computers',
+        description:
+          'List computers assigned to you and their current agent holder. Assignment is not control. Read practices/computer-use before first computer use.',
+        parameters: object({}),
+        async execute() {
+          return textResult({ computers: await service.list(agentId) });
+        },
       }),
-      async execute(_call, { actions, per_action_pause }, signal) {
-        const receipt = await service.run(
-          agentId,
-          {
-            actions: actions.map(item => ({ ...('params' in item ? item.params : {}), type: item.name })),
-            per_action_pause,
-          },
-          signal,
-        );
-        return { ...textResult(receipt), isError: Boolean(receipt.error) };
-      },
-    }),
+      defineTool({
+        name: 'use_computer',
+        label: 'Select or release computer',
+        description:
+          'Acquire an assigned computer by exact name or ID, or release the current computer with computer:null. One agent may hold a computer; humans may still interact. Releasing leaves persistent tmux programs running. A busy destination does not release your old computer. Ask the holder to release or ask the human for Force release; you cannot override them.',
+        parameters: object({ computer: Type.Union([Type.String({ minLength: 1, maxLength: 100 }), Type.Null()]) }),
+        async execute(_call, { computer }, signal) {
+          signal?.throwIfAborted();
+          // Watches belong to the computer they watch: leaving it ends them (quietly: this is your own choice).
+          const { result, ended } = watches
+            ? await watches.releasing(agentId, () => service.use(agentId, computer))
+            : { result: await service.use(agentId, computer), ended: 0 };
+          const watchesEnded = ended ? { watchesEnded: ended } : {};
+          return textResult(
+            computer === null
+              ? { ...result, ...watchesEnded }
+              : {
+                  ...result,
+                  ...watchesEnded,
+                  knowledge:
+                    'Before any other computer tool: if concepts/computers, practices/computer-use and the concept and practice entries for the surfaces you will use (desktop, terminals, files, watches) are not in your retained context, read them now with read_knowledge.',
+                },
+          );
+        },
+      }),
+      defineTool({
+        name: 'glance',
+        label: 'Look at whole desktop',
+        description:
+          'Fresh screenshot of the full claimed desktop. low(default)=33%, medium=50%, high=75%, full=100% native dimensions. Low is for orientation only, not accurate reading. Use high for broad readable context; full for exact text/fine details across the screen, or look_at for one region. If unclear, increase detail/crop rather than guess or repeat low. Returns image and [0,999] bounds; successful look resets 2 action combos for 30 real seconds.',
+        parameters: lookParameters.glance,
+        async execute(_call, params, signal, _update, ctx) {
+          return capture({ kind: 'glance', ...params }, signal, Boolean(ctx.model?.input.includes('image')));
+        },
+      }),
+      defineTool({
+        name: 'look_at',
+        label: 'Look at desktop region',
+        description:
+          'Read exact text or inspect fine details in one region, especially when a scaled glance is unclear. Fresh native-resolution crop around center x,y and radius size, all in [0,999] desktop coordinates. Shift to fit when possible; oversized axes become full screen. Returns adjusted exact image bounds. Resets 2 combos/30 seconds.',
+        parameters: lookParameters.look_at,
+        async execute(_call, params, signal, _update, ctx) {
+          return capture({ kind: 'look_at', ...params }, signal, Boolean(ctx.model?.input.includes('image')));
+        },
+      }),
+      defineTool({
+        name: 'run_actions',
+        label: 'Run desktop combo',
+        description:
+          'Execute 1–16 ordered actions on your claimed computer. Read practices/desktop for examples. Requires a successful glance/look_at in past 30 seconds with fewer than two started combos. Validate ALL before input: balanced keys/buttons, <=5 seconds action time, <=10 seconds with pauses only between. Invalid calls consume no use but time elapses. Move uses [0,999], Bezier, 8000px/s default max24000; typing 800CPM default max3200 counting Unicode codepoints. Recommended/default between-action pause is 0.2s; it is not a readiness guarantee. Verify the application outcome with an adequately detailed screenshot. Input is not atomic: report partial errors and look again, never retry blindly.',
+        parameters: object({
+          actions: Type.Array(action, { minItems: 1, maxItems: 16 }),
+          per_action_pause: Type.Optional(Type.Number({ minimum: 0, maximum: 10, default: 0.2 })),
+        }),
+        async execute(_call, { actions, per_action_pause }, signal) {
+          const receipt = await service.run(
+            agentId,
+            {
+              actions: actions.map(item => ({ ...('params' in item ? item.params : {}), type: item.name })),
+              per_action_pause,
+            },
+            signal,
+          );
+          return { ...textResult(receipt), isError: Boolean(receipt.error) };
+        },
+      }),
+    ]),
   ];
 }
 

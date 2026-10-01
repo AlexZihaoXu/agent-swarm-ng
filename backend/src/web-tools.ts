@@ -1,4 +1,5 @@
 import { fork } from 'node:child_process';
+import { classify } from './tool-access';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -109,7 +110,10 @@ export async function createWebTools() {
         },
       });
     });
-    return { tools, close };
+    return {
+      tools: classify({ web_search: 'r', source_check: 'r', fetch_content: 'r', get_search_content: 'r' }, tools),
+      close,
+    };
   } catch (error) {
     await close();
     throw error;

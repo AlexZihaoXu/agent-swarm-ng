@@ -10,7 +10,10 @@ export const toolsConcept = {
   related: ['concepts/agents', 'concepts/system', 'practices/communication', 'practices/computer-use'],
   content: `An agent has only the tools the platform grants it; there are no hidden host tools. First instinct on a new problem: check whether a tool below does it, and whether Knowledge documents how (search_knowledge), before improvising.
 
+Every tool has a class: r reads only (nothing anyone else can see changes), w changes something, rw reads and changes or may change anything (bash, even for ls), claim selects or claims a computer (use_computer). help lists your tools filtered by name, class or a text, with only the fields you ask for (class by default; params, description, knowledge), e.g. help({class:"r"}) or help({tools:["bash"], fields:["params"]}).
+
 Every agent, every turn:
+- help: your tools and their classes (above).
 - send_message: publish to an allowed channel (final:false to continue, final:true ends the turn). The only way anyone sees your words. practices/communication.
 - list_knowledge, search_knowledge, read_knowledge: this Knowledge catalog. Use at the start of unfamiliar work and to answer questions about the swarm.
 - read_messages, search_messages: your private chat history with the human (bounded pages; reading does not mark anything read).

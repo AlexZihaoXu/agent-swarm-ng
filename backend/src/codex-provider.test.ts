@@ -102,7 +102,7 @@ describe('ChatGPT subscription connection', () => {
     try {
       expect(session.model?.api).toBe('openai-codex-responses');
       expect(session.model?.provider).toBe('openai-codex');
-      expect(session.agent.state.tools.map(tool => tool.name)).toEqual(['send_message']);
+      expect(session.agent.state.tools.map(tool => tool.name)).toEqual(['send_message', 'help']);
       expect(session.sessionFile).toBeUndefined();
     } finally {
       session.dispose();

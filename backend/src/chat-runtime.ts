@@ -29,6 +29,8 @@ import { isOpenRouter, openRouterCatalog, OPENROUTER_URL } from './openrouter';
 import { CHAT_AUDIENCE_GUIDANCE } from './chat-audience';
 import { SWARM_KNOWLEDGE_GUIDANCE } from './swarm-knowledge/plugin';
 import { COMPUTER_USE_GUIDANCE } from './computer-use/tools';
+import { accessOf, classify, type AgentTool } from './tool-access';
+import { createHelpTool } from './help-tool';
 
 export type Channel = { id: string; kind: 'platform-chat' | 'agent-dm'; agentId: string };
 export type AgentMessageSource = {
@@ -66,6 +68,8 @@ export type ChatConfiguration = {
   baseUrl: string;
   apiKey?: string;
   channel: Channel;
+  /** Whether this turn is a heartbeat (help says what a class means there). */
+  heartbeat?: () => boolean;
   /** The owner's own instructions for this agent (Agents → agent → Instructions), last in its system prompt. */
   instructions?: string;
   publishPeer?: (
@@ -330,10 +334,13 @@ export async function createChatSession(
     replyToMessageId?: string,
     fileIds?: string[],
   ) => void | string | Promise<void | string>,
-  additionalTools: ToolDefinition[] = [],
+  additionalTools: AgentTool[] = [],
   subscriptionRuntime?: ModelRuntime,
   restoredManager?: SessionManager,
 ) {
+  // Fail closed: every granted tool declares what it does (tool-access.ts), which heartbeats and help rely on.
+  const untagged = additionalTools.find(tool => !accessOf(tool));
+  if (untagged) throw new Error(`Tool ${untagged.name} has no access class.`);
   const { model, modelRuntime } = await resolveChatModel(config, subscriptionRuntime);
   const levels = model.reasoning ? getSupportedThinkingLevels(model) : ['off'];
   if (!levels.includes(config.thinkingLevel)) throw new Error('Unsupported thinking level');
@@ -392,6 +399,8 @@ export async function createChatSession(
       };
     },
   });
+  const granted = [...classify({ send_message: 'w' }, [sendMessage]), ...additionalTools];
+  const help = createHelpTool(() => granted, config.heartbeat);
   const manager = restoredManager ?? SessionManager.inMemory();
   const restored = Boolean(restoredManager?.getEntries().length);
   // Bootstrap old agents once from bounded published context; subsequent runs restore Pi entries.
@@ -473,8 +482,8 @@ export async function createChatSession(
     modelRuntime,
     thinkingLevel: config.thinkingLevel,
     noTools: 'all',
-    tools: ['send_message', ...additionalTools.map(tool => tool.name)],
-    customTools: [sendMessage, ...additionalTools],
+    tools: [...granted, help].map(tool => tool.name),
+    customTools: [...granted, help],
     resourceLoader: resources,
     sessionManager: manager,
     settingsManager: SettingsManager.inMemory({
@@ -491,8 +500,8 @@ export async function createChatSession(
     return (context.result as { isError?: boolean }).isError === true ? { ...result, isError: true } : result;
   };
   const active = session.agent.state.tools.map(tool => tool.name);
-  const granted = ['send_message', ...additionalTools.map(tool => tool.name)];
-  if (session.sessionFile || active.length !== granted.length || active.some(name => !granted.includes(name))) {
+  const names = [...granted, help].map(tool => tool.name);
+  if (session.sessionFile || active.length !== names.length || active.some(name => !names.includes(name))) {
     session.dispose();
     throw new Error('Unsafe chat session configuration');
   }

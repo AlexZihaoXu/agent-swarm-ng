@@ -1,4 +1,5 @@
 import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent';
+import { classify, type AgentTool } from '../tool-access';
 import { Type, type Static } from '@sinclair/typebox';
 import type { ComputerUseService, CoreReceipt } from './service';
 import type { ScreenshotPool } from './image-pool';
@@ -265,7 +266,7 @@ export function createTerminalTools(
   service: ComputerUseService,
   agentId: string,
   images?: ScreenshotPool,
-): ToolDefinition[] {
+): AgentTool[] {
   const common =
     'Requires your currently assigned and claimed computer; guest uid1000 only, no platform-host access. Read concepts/computers/terminals. Await each computer operation. Sessions/programs survive tool calls, turn completion, browser disconnect, backend restart and claim release; stopping/replacing the computer ends them. Cancellation stops further API input, not persistent programs. ';
   const reply = (receipt: CoreReceipt) => ({
@@ -278,54 +279,65 @@ export function createTerminalTools(
     details: {},
     isError: Boolean(receipt.error),
   });
-  return [
-    ...(Object.keys(terminalParameters) as (keyof typeof terminalParameters)[]).map(operation =>
+  return classify(
+    {
+      terminal_create: 'w',
+      terminal_list: 'r',
+      terminal_view: 'r',
+      terminal_delete: 'w',
+      terminal_status: 'r',
+      terminal_resize: 'w',
+      terminal_run_actions: 'rw',
+    },
+    [
+      ...(Object.keys(terminalParameters) as (keyof typeof terminalParameters)[]).map(operation =>
+        defineTool({
+          name: `terminal_${operation}`,
+          label: `Terminal ${operation}`,
+          parameters: terminalParameters[operation],
+          description: common + descriptions[operation],
+          async execute(_call, params, signal, _update, ctx) {
+            const request = { ...params, kind: 'terminal', operation };
+            if (operation !== 'view') return reply(await service.core(agentId, request, signal));
+            return viewResult(
+              await viewTerminal(
+                request => service.terminalView(agentId, request as { session: string }, signal),
+                request,
+              ),
+              Boolean(ctx?.model?.input.includes('image')),
+              images && (frame => images.put(agentId, frame)),
+              Boolean((params as { colors?: boolean }).colors),
+            );
+          },
+        }),
+      ),
       defineTool({
-        name: `terminal_${operation}`,
-        label: `Terminal ${operation}`,
-        parameters: terminalParameters[operation],
-        description: common + descriptions[operation],
-        async execute(_call, params, signal, _update, ctx) {
-          const request = { ...params, kind: 'terminal', operation };
-          if (operation !== 'view') return reply(await service.core(agentId, request, signal));
-          return viewResult(
-            await viewTerminal(
-              request => service.terminalView(agentId, request as { session: string }, signal),
-              request,
+        name: 'terminal_run_actions',
+        label: 'Run terminal combo',
+        parameters: terminalActionsParameters,
+        description:
+          common +
+          'Execute 1–16 ordered keyboard actions in one session: keyboard.type (literal text, never key names; no Enter appended; typed newlines execute, pasted text waits for Enter) at cpm characters per minute (default 800, max 3200, counting Unicode code points) or cpm:"instant" to paste at once, and keyboard.press (one enumerated key: Enter, Tab/BTab, Escape, BSpace, Delete/Insert, Space, arrows, Home/End/PageUp/PageDown, F1..F12, C-a..C-z incl. C-c to interrupt, M-a..M-z), optionally repeat 1..50 times with interval 0..2 s between (e.g. BSpace repeat 30 deletes 30 characters). Requires a terminal_view of THIS session within the past 90 real seconds with fewer than five combos since. The whole combo is validated before any input: like desktop combos, typing and repeat intervals ≤5 seconds, ≤10 seconds including pauses. Default pause between actions 0.2s. Input is not atomic: on an error, view before retrying; never retry blindly. Verify the outcome with terminal_view.',
+        async execute(_call, { session, actions, per_action_pause }, signal) {
+          return reply(
+            await service.terminalActions(
+              agentId,
+              {
+                kind: 'terminal',
+                operation: 'actions',
+                session,
+                actions: actions.map(action =>
+                  action.name === 'keyboard.press'
+                    ? { type: 'press', ...action.params }
+                    : { type: 'type', ...action.params },
+                ),
+                ...(per_action_pause === undefined ? {} : { pause: per_action_pause }),
+              },
+              signal,
             ),
-            Boolean(ctx?.model?.input.includes('image')),
-            images && (frame => images.put(agentId, frame)),
-            Boolean((params as { colors?: boolean }).colors),
           );
         },
       }),
-    ),
-    defineTool({
-      name: 'terminal_run_actions',
-      label: 'Run terminal combo',
-      parameters: terminalActionsParameters,
-      description:
-        common +
-        'Execute 1–16 ordered keyboard actions in one session: keyboard.type (literal text, never key names; no Enter appended; typed newlines execute, pasted text waits for Enter) at cpm characters per minute (default 800, max 3200, counting Unicode code points) or cpm:"instant" to paste at once, and keyboard.press (one enumerated key: Enter, Tab/BTab, Escape, BSpace, Delete/Insert, Space, arrows, Home/End/PageUp/PageDown, F1..F12, C-a..C-z incl. C-c to interrupt, M-a..M-z), optionally repeat 1..50 times with interval 0..2 s between (e.g. BSpace repeat 30 deletes 30 characters). Requires a terminal_view of THIS session within the past 90 real seconds with fewer than five combos since. The whole combo is validated before any input: like desktop combos, typing and repeat intervals ≤5 seconds, ≤10 seconds including pauses. Default pause between actions 0.2s. Input is not atomic: on an error, view before retrying; never retry blindly. Verify the outcome with terminal_view.',
-      async execute(_call, { session, actions, per_action_pause }, signal) {
-        return reply(
-          await service.terminalActions(
-            agentId,
-            {
-              kind: 'terminal',
-              operation: 'actions',
-              session,
-              actions: actions.map(action =>
-                action.name === 'keyboard.press'
-                  ? { type: 'press', ...action.params }
-                  : { type: 'type', ...action.params },
-              ),
-              ...(per_action_pause === undefined ? {} : { pause: per_action_pause }),
-            },
-            signal,
-          ),
-        );
-      },
-    }),
-  ];
+    ],
+  );
 }

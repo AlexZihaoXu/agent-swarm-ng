@@ -1,4 +1,5 @@
 import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent';
+import { classify, type AgentTool } from '../tool-access';
 import { Type } from '@sinclair/typebox';
 import {
   WATCH_DEFAULT_TIMEOUT_SECONDS,
@@ -93,7 +94,7 @@ export function createWatchTools(
   watches: ComputerWatches,
   agentId: string,
   humanAuthority: () => boolean,
-): ToolDefinition[] {
+): AgentTool[] {
   const create = async (spec: Omit<WatchSpec, 'human'>) => {
     try {
       return reply(await watches.create(agentId, { ...spec, human: humanAuthority() }));
@@ -158,7 +159,7 @@ export function createWatchTools(
         }),
       ]
     : [];
-  return [
+  return classify({ monitor: 'w', watch_terminal: 'w', watch_desktop: 'w' }, [
     ...monitorTool,
     defineTool({
       name: 'watch_terminal',
@@ -200,5 +201,5 @@ export function createWatchTools(
         return create({ kind: 'desktop', region: params.region, ...options(params) });
       },
     }),
-  ];
+  ]);
 }

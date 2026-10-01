@@ -206,7 +206,8 @@ export class AgentSessionStore {
         });
         const candidate = entries[leafIndex];
         // A restored session's first entry is re-rooted; the archive keeps its original parent.
-        const normalized = leafIndex === 0 && previous.activeStart ? { ...candidate, parentId: last?.parentId } : candidate;
+        const normalized =
+          leafIndex === 0 && previous.activeStart ? { ...candidate, parentId: last?.parentId } : candidate;
         if (!last || last.payload !== JSON.stringify(normalized))
           throw new Error('Cannot checkpoint a divergent private agent session.');
       }

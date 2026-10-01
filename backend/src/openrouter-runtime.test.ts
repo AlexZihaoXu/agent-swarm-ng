@@ -88,7 +88,7 @@ it.each(['chat', 'messages'] as const)(
     );
     try {
       expect(session.model).toMatchObject({ provider: 'openrouter', input: ['text', 'image'], maxTokens: 4096 });
-      expect(session.agent.state.tools.map(tool => tool.name)).toEqual(['send_message']);
+      expect(session.agent.state.tools.map(tool => tool.name)).toEqual(['send_message', 'help']);
       await session.prompt('Hello', { expandPromptTemplates: false });
       expect((session.messages.at(-1) as any)?.errorMessage).toBeUndefined();
       expect(publish).toHaveBeenCalledWith('Delivered', expect.any(String), true, undefined, []);

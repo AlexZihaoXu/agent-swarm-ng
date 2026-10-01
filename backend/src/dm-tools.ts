@@ -1,4 +1,5 @@
 import { defineTool } from '@earendil-works/pi-coding-agent';
+import { classify, type AgentTool } from './tool-access';
 import { Type } from '@earendil-works/pi-ai';
 import { messageText } from './message-text';
 import { DM_TEXT_LIMIT, type SwarmStore } from './swarm-store';
@@ -19,7 +20,7 @@ export function createDmTools(
   files?: FileStore,
 ) {
   const withFiles = async <T extends { id: string }>(items: T[]) => (await files?.annotate('dm', items)) ?? items;
-  return [
+  return classify({ list_dm_contacts: 'r', read_dm_inbox: 'r', send_dm: 'w', read_dm_messages: 'r' }, [
     defineTool({
       name: 'list_dm_contacts',
       label: 'Allowed agent DMs',
@@ -128,5 +129,5 @@ export function createDmTools(
         };
       },
     }),
-  ];
+  ]);
 }

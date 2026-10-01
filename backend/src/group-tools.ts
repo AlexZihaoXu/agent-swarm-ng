@@ -1,4 +1,5 @@
 import { defineTool } from '@earendil-works/pi-coding-agent';
+import { classify, type AgentTool } from './tool-access';
 import { Type } from '@earendil-works/pi-ai';
 import type { GroupStore } from './group-store';
 import { dmConversationId, type SwarmStore } from './swarm-store';
@@ -36,7 +37,7 @@ export function createGroupTools(
 ) {
   const agentId = channel.agentId;
   const withFiles = async <T extends { id: string }>(items: T[]) => (await files?.annotate('group', items)) ?? items;
-  return [
+  return classify({ list_chats: 'r', read_group_messages: 'r', search_group_messages: 'r' }, [
     defineTool({
       name: 'list_chats',
       label: 'Discover accessible chats',
@@ -157,5 +158,5 @@ export function createGroupTools(
         });
       },
     }),
-  ];
+  ]);
 }

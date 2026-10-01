@@ -1,4 +1,5 @@
 import { defineTool } from '@earendil-works/pi-coding-agent';
+import { classify, type AgentTool } from '../tool-access';
 import { Type } from '@earendil-works/pi-ai';
 import type { KnowledgeCatalog } from './catalog';
 
@@ -17,7 +18,7 @@ export function createKnowledgeTools(
     if (!(await canRead(agentId))) throw new Error('Swarm Knowledge is not granted.');
     signal?.throwIfAborted();
   };
-  return [
+  return classify({ list_knowledge: 'r', search_knowledge: 'r', read_knowledge: 'r' }, [
     defineTool({
       name: 'list_knowledge',
       label: 'Explore Swarm Knowledge',
@@ -64,5 +65,5 @@ export function createKnowledgeTools(
         return result(catalog.read(args));
       },
     }),
-  ];
+  ]);
 }

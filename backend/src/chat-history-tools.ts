@@ -1,4 +1,5 @@
 import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent';
+import { classify, type AgentTool } from './tool-access';
 import { Type } from '@earendil-works/pi-ai';
 import type { PlatformStore } from './platform-store';
 import type { Channel } from './chat-runtime';
@@ -32,7 +33,7 @@ export function createChatHistoryTools(
   channel: Channel,
   name: string,
   files?: FileStore,
-): ToolDefinition[] {
+): AgentTool[] {
   const history = new ChannelHistory(store, channel.id);
   /** Adds attached file references, when files are wired. */
   const withFiles = async <T extends { id: string }>(items: T[]) => (await files?.annotate('chat', items)) ?? items;
@@ -61,7 +62,7 @@ export function createChatHistoryTools(
   const cursor = Type.Optional(
     Type.Integer({ minimum: 1, description: 'Exclusive message sequence cursor returned by this tool.' }),
   );
-  return [
+  return classify({ read_messages: 'r', search_messages: 'r' }, [
     defineTool({
       name: 'read_messages',
       label: 'Read chat section',
@@ -176,5 +177,5 @@ export function createChatHistoryTools(
         });
       },
     }),
-  ];
+  ]);
 }

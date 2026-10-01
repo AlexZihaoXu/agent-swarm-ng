@@ -63,6 +63,7 @@ import { ComputerMonitors } from './computer-use/monitors';
 import { ComputerWatches } from './computer-use/watches';
 import { createWatchJudge, type ForkBasis } from './computer-use/watch-judge';
 import { createWatchTools } from './computer-use/watch-tools';
+import type { AgentTool } from './tool-access';
 
 type Job = {
   senderId: string;
@@ -353,7 +354,7 @@ export class DmBroker {
       runtime: ModelRuntime | undefined,
       trace: ActivityTrace,
       /** Read-only Discord tools for looking deeper (each call rechecks the channel allow-list). */
-      tools: ToolDefinition[],
+      tools: AgentTool[],
     ) => Promise<{ action: A; reason?: string }>,
   ): Promise<A> {
     const agent = await this.database.findAgent(agentId);

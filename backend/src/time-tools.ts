@@ -1,4 +1,5 @@
 import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent';
+import { classify, type AgentTool } from './tool-access';
 import { Type } from '@sinclair/typebox';
 import {
   MAX_ACTIVE_TIMERS,
@@ -56,8 +57,8 @@ export function createTimeTools(
   agentId: string,
   humanAuthority: () => boolean,
   watches?: ComputerWatches,
-): ToolDefinition[] {
-  return [
+): AgentTool[] {
+  return classify({ current_time: 'r', set_timer: 'w', set_reminder: 'w', list_timers: 'r', cancel_timer: 'w' }, [
     defineTool({
       name: 'current_time',
       label: 'Current time',
@@ -140,7 +141,7 @@ export function createTimeTools(
         );
       },
     }),
-  ];
+  ]);
 }
 
 export const TIME_GUIDANCE = `## Time, timers and reminders

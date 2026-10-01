@@ -99,7 +99,7 @@ it('keeps the last checkpoint on incomplete compaction and restores the next com
     );
     try {
       expect(resumed.messages).toEqual(restored.buildSessionContext().messages);
-      expect(resumed.agent.state.tools.map(tool => tool.name)).toEqual(['send_message']);
+      expect(resumed.agent.state.tools.map(tool => tool.name)).toEqual(['send_message', 'help']);
     } finally {
       resumed.dispose();
     }

@@ -10,6 +10,7 @@ import { getSupportedThinkingLevels, Type } from '@earendil-works/pi-ai';
 import { chatResources, createChatSession, type ChatConfiguration, type ChannelMessage } from './chat-runtime';
 import { runTriageTurns, TRIAGE_MAX_TOKENS, TRIAGE_TIMEOUT_MS } from './triage-turns';
 import type { ActivityTrace } from './activity-events';
+import { accessOf, type AgentTool } from './tool-access';
 
 export type DecisionFork<A extends string> = {
   /** The one tool the fork may call, e.g. reaction_decision. */
@@ -23,7 +24,7 @@ export type DecisionFork<A extends string> = {
   /** What any failure (timeout, provider error, no valid decision) means. */
   fallback: A;
   /** Read-only tools the branch may use before deciding (looking deeper); never anything with side effects. */
-  tools?: ToolDefinition[];
+  tools?: AgentTool[];
 };
 
 /**
@@ -99,6 +100,7 @@ export async function runDecisionFork<A extends string>(
     }));
     if (
       session.sessionFile ||
+      (fork.tools ?? []).some(item => accessOf(item) !== 'r') ||
       session.agent.state.tools.length !== 1 + (fork.tools?.length ?? 0) ||
       !session.agent.state.tools.some(item => item.name === tool.name)
     )

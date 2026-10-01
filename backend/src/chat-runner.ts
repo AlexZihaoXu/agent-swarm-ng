@@ -5,6 +5,7 @@ import {
   type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
 import { createActivityRecorder } from './agent-activity';
+import type { AgentTool } from './tool-access';
 import { channelInput, createChatSession, type ChatConfiguration, type ChannelMessage } from './chat-runtime';
 import { createWebTools } from './web-tools';
 import type { RunContext } from './agent-runs';
@@ -42,7 +43,7 @@ export async function runChat(
   publish: (text: string, replyToMessageId?: string, fileIds?: string[]) => Promise<object>,
   accessKey: string,
   subscriptionRuntime?: ModelRuntime,
-  historyTools: ToolDefinition[] = [],
+  historyTools: AgentTool[] = [],
   hooks: InboxHooks = {},
 ) {
   const { channel } = config;

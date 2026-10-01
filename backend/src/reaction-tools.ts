@@ -1,4 +1,5 @@
 import { defineTool } from '@earendil-works/pi-coding-agent';
+import { classify, type AgentTool } from './tool-access';
 import { Type } from '@earendil-works/pi-ai';
 import { MAX_REACTION_LENGTH, type ReactionStore } from './reaction-store';
 import { emojiLabel, searchEmoji } from './emoji-catalog';
@@ -18,7 +19,7 @@ export function createReactionTools(
     content: [{ type: 'text' as const, text: JSON.stringify({ reactions }) }],
     details: {},
   });
-  return [
+  return classify({ search_emojis: 'r', read_reactions: 'r', react_to_message: 'w' }, [
     defineTool({
       name: 'search_emojis',
       label: 'Search emojis',
@@ -72,5 +73,5 @@ export function createReactionTools(
         return { content: [{ type: 'text' as const, text: JSON.stringify({ reactions, recent }) }], details: {} };
       },
     }),
-  ];
+  ]);
 }
