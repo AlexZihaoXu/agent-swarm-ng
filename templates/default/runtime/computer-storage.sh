@@ -53,11 +53,18 @@ bind() {
             cp -a "$path" "$source"
             say "seeded $class$path (file)"
         else
+            # Nothing there yet (~/.cache on a fresh computer): owned like its nearest existing parent, so the agent
+            # can write in its home and a new /var/lib/<service> belongs to root.
             mkdir -p "$source"
+            parent=$(dirname "$path")
+            while [ ! -e "$parent" ]; do parent=$(dirname "$parent"); done
+            chown "$(stat -c %u:%g "$parent")" "$source"
         fi
     fi
     if [ -d "$source" ]; then
-        mkdir -p "$path"
+        # The mount point (inside an already kept folder, such as ~/.cache in the kept home) is owned like what is
+        # mounted on it, so a later seed from it never makes the folder root's.
+        [ -d "$path" ] || { mkdir -p "$path" && chown "$(stat -c %u:%g "$source")" "$path"; }
     elif [ ! -e "$path" ]; then
         mkdir -p "$(dirname "$path")"
         : >"$path"

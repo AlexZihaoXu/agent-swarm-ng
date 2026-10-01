@@ -450,6 +450,12 @@ it('replaces a stopped owned desktop with new TZ/env while preserving both named
 it('keeps a computer’s Keep/Cache mounts on replacement, and can change its kept paths or move it to the current image', async () => {
   const { manager, resources, canonical, docker } = stoppedReplacementFixture();
   resources.set(`/images/${encodeURIComponent('agent-swarm-default:stage2')}/json`, { Config: { Labels: {} } });
+  // Carrying newly kept paths over is covered in storage.test.ts.
+  const carried: string[] = [];
+  vi.spyOn(
+    manager as unknown as { carryOver: (id: string, path: string) => Promise<void> },
+    'carryOver',
+  ).mockImplementation(async (_id, path) => void carried.push(path));
   await manager.replaceStopped(
     id,
     name,
@@ -466,6 +472,7 @@ it('keeps a computer’s Keep/Cache mounts on replacement, and can change its ke
   );
   // The home folder is always kept.
   expect(replacement.Config.Env).toContain('COMPUTER_KEPT_PATHS=/home/agent:/var/lib/postgresql:/etc/postgresql');
+  expect(carried).toEqual(['/var/lib/postgresql', '/etc/postgresql']);
   const create = vi.mocked(docker.json).mock.calls.find(call => String(call[1]).startsWith('/containers/create?name='));
   expect((create?.[2] as { Image: string }).Image).toBe('agent-swarm-default:stage2');
   await expect(

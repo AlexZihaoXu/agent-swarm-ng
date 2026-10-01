@@ -131,3 +131,25 @@ it('deletes a computer’s host folders with it, but only once their disks are t
     mounts: [{ Source: '/srv/keep', Target: '/base' }],
   });
 });
+
+it('carries a newly kept path over from the old computer, unless the Keep folder already has it', async () => {
+  const { docker, scripts } = helperDocker(script => ({
+    code: 0,
+    stdout: script.includes('/var/lib/redis') ? 'kept\n' : 'copy\n',
+  }));
+  const copies: string[][] = [];
+  vi.spyOn(docker, 'copyArchive').mockImplementation(async (from, path, to, directory) => {
+    copies.push([from, path, to, directory]);
+    return true;
+  });
+  const manager = new ComputerManager(docker, 'swarm-ng-test', '{}');
+  const keep = { Type: 'volume' as const, Source: 'vol-keep', Target: '/keep' };
+  const carryOver = (
+    manager as unknown as { carryOver: (id: string, path: string, mounts: unknown[]) => Promise<void> }
+  ).carryOver.bind(manager);
+  await carryOver('old-desktop', '/var/lib/postgresql', [keep]);
+  await carryOver('old-desktop', '/var/lib/redis', [keep]);
+  expect(scripts[0]).toMatchObject({ mounts: [keep] });
+  expect(scripts[0].script).toContain("mkdir -p '/keep/root/var/lib'");
+  expect(copies).toEqual([['old-desktop', '/var/lib/postgresql', 'helper-1', '/keep/root/var/lib']]);
+});

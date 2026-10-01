@@ -119,6 +119,50 @@ export class DockerApi {
     return attachExec(this.socketPath, created.Id, signal, onOutput, onEnd);
   }
 
+  /**
+   * Streams one path out of a container (running or stopped) into a directory of another, as Docker's archive API
+   * does for `docker cp`: ownership and modes travel in the tar. Returns false when the source path does not exist.
+   */
+  async copyArchive(from: string, fromPath: string, to: string, toDirectory: string, timeout = 600_000) {
+    const archive = (container: string, path: string) =>
+      `/v1.44/containers/${encodeURIComponent(container)}/archive?path=${encodeURIComponent(path)}`;
+    const source = await new Promise<http.IncomingMessage>((resolve, reject) => {
+      const req = http.request(
+        { socketPath: this.socketPath, path: archive(from, fromPath), method: 'GET', timeout },
+        resolve,
+      );
+      req.on('error', reject);
+      req.on('timeout', () => req.destroy(new Error('Docker operation timed out.')));
+      req.end();
+    });
+    if (source.statusCode !== 200) {
+      source.resume();
+      if (source.statusCode === 404) return false;
+      throw new DockerApiError(source.statusCode ?? 503);
+    }
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = http.request(
+        {
+          socketPath: this.socketPath,
+          path: archive(to, toDirectory),
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/x-tar' },
+          timeout,
+        },
+        res => {
+          res.resume();
+          res.on('end', () => resolve(res.statusCode ?? 503));
+        },
+      );
+      req.on('error', reject);
+      req.on('timeout', () => req.destroy(new Error('Docker operation timed out.')));
+      source.on('error', error => req.destroy(error));
+      source.pipe(req);
+    });
+    if (status !== 200) throw new DockerApiError(status);
+    return true;
+  }
+
   async exec(container: string, command: string[], user = 'root', timeout = 19_000, maxBytes = 768 * 1024) {
     const created = await this.json<{ Id: string }>('POST', `/containers/${encodeURIComponent(container)}/exec`, {
       AttachStdout: true,

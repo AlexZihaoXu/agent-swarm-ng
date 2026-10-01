@@ -294,8 +294,17 @@ export function registerComputerRoutes(
         // reconciliation stops again. The reverse order could silently revive it.
         const desired = request.body.action === 'start' ? 'running' : 'stopped';
         const updated = await store.setDesiredState(record.id, desired);
-        if (request.body.action === 'start') await controller.start(record.id, record.name);
-        else await controller.stop(record.id, record.name);
+        if (request.body.action === 'start') {
+          try {
+            await controller.start(record.id, record.name);
+          } catch (error) {
+            // A refused start (its Keep/Cache disk is missing, say) leaves the computer off: say so, so it can still
+            // be rebuilt or have its cache cleared. An unreachable controller may still start it: keep the intent.
+            if (error instanceof ControllerError && error.status === 409)
+              await store.setDesiredState(record.id, 'stopped').catch(() => {});
+            throw error;
+          }
+        } else await controller.stop(record.id, record.name);
         return reply
           .code(202)
           .send({ accepted: true, action: request.body.action, desiredState: updated.desiredState });

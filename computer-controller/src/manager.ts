@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { posix } from 'node:path';
 import { DockerApi, DockerApiError } from './docker-api';
 import { MAX_TRANSFER, regularFile, tarOneFile, transferPath, untarFirstFile } from './file-transfer';
 import {
@@ -326,7 +327,13 @@ export class ComputerManager {
    * folder at /base. Storage housekeeping happens here because files there can belong to root or a service
    * account. Returns stdout; a non-zero exit becomes a ResourceError with the script's last stderr line.
    */
-  private async helper(mounts: StorageMount[], script: string, timeoutMs = 120_000) {
+  private async helper(
+    mounts: StorageMount[],
+    script: string,
+    timeoutMs = 120_000,
+    /** Runs after a successful script, before the helper is removed (it can still receive files). */
+    afterExit?: (helperId: string, stdout: string) => Promise<void>,
+  ) {
     const created = await this.docker.json<{ Id: string }>('POST', '/containers/create', {
       Image: this.image,
       User: 'root',
@@ -367,14 +374,17 @@ export class ComputerManager {
         const message = Buffer.concat(streams[2]).toString().trim().split('\n').pop();
         throw new ResourceError(exit === 3 ? 409 : 503, message || 'Computer storage housekeeping failed.');
       }
-      return Buffer.concat(streams[1]).toString();
+      const stdout = Buffer.concat(streams[1]).toString();
+      await afterExit?.(created.Id, stdout);
+      return stdout;
     } finally {
       await this.docker.request('DELETE', `${this.path('containers', created.Id)}?force=true&v=false`).catch(() => {});
     }
   }
   /** A host folder must exist and carry its marker (its disk is really mounted, and the host owner chose it). */
   private markerScript(kind: StorageClass, folder: string) {
-    return `test -f /base/${MARKER[kind]} || { echo "The ${storageLabel[kind]} folder ${folder} is not ready: its disk may not be mounted, or it needs the file ${MARKER[kind]} (create it on the host). Nothing was changed." >&2; exit 3; }`;
+    // Short: the backend shows at most 200 characters of a controller message.
+    return `test -f /base/${MARKER[kind]} || { echo "The ${storageLabel[kind]} folder is not ready: its disk may not be mounted, or ${folder} has no ${MARKER[kind]} file." >&2; exit 3; }`;
   }
   private baseMount(folder: string): StorageMount {
     return { Type: 'bind', Source: folder, Target: '/base' };
@@ -422,6 +432,22 @@ export class ComputerManager {
         await this.helper([this.baseMount(place.folder)], this.markerScript(kind, place.folder), 30_000);
     }
     return mounted;
+  }
+  /**
+   * A path kept for the first time on a rebuild may already hold data in the old container (a database whose folder
+   * the operator just added): carry it into the Keep folder, unless the Keep folder already has that path.
+   */
+  private async carryOver(oldId: string, path: string, mounts: StorageMount[]) {
+    const keep = mounts.find(mount => mount.Target === '/keep')!;
+    const parent = posix.dirname(path);
+    await this.helper(
+      [keep],
+      `mkdir -p '/keep/root${parent}' && if [ -e '/keep/root${path}' ] || [ -L '/keep/root${path}' ]; then echo kept; else echo copy; fi`,
+      60_000,
+      async (helperId, stdout) => {
+        if (stdout.trim() === 'copy') await this.docker.copyArchive(oldId, path, helperId, `/keep/root${parent}`);
+      },
+    );
   }
   private storageMountsOf(id: string, computer: Container): StorageMount[] {
     const mounted = mountedStorage(id, computer.Mounts);
@@ -685,6 +711,7 @@ export class ComputerManager {
       if (!gateway?.State.Running || !network) throw new ResourceError(503, 'Computer resources are incomplete.');
       const mounts = this.storageMountsOf(id, old);
       const keptPaths = requestedPaths ?? keptPathsOf(old.Config.Env);
+      const previouslyKept = keptPathsOf(old.Config.Env);
       const image = options.image === 'current' ? this.image : old.Image;
       const privateAddress = gateway.NetworkSettings.Networks[this.names.privateNetwork(id)]?.IPAddress;
       if (!privateAddress) throw new ResourceError(503, 'Computer egress address is unavailable.');
@@ -699,6 +726,9 @@ export class ComputerManager {
       ) {
         throw new ResourceError(409, 'An incomplete computer settings replacement needs operator recovery.');
       }
+      // Newly kept paths take what the old computer had there with them (the old one is untouched).
+      for (const path of keptPaths.filter(path => !previouslyKept.includes(path)))
+        await this.carryOver(old.Id, path, mounts);
       let createdId: string | null = null,
         oldRenamed = false;
       try {

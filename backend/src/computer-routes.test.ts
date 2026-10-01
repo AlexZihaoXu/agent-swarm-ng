@@ -788,6 +788,21 @@ it('keeps computers’ files where Settings → Storage says when they are made,
     ]);
     // Changing Settings later does not move it.
     await app.inject({ method: 'PUT', url: '/api/computer-storage', payload: { keepFolder: null, cacheFolder: null } });
+    // A refused start (its folder's disk is missing) leaves it off, so it can still be rebuilt or cleared.
+    const start = controller.start;
+    controller.start = async () => {
+      throw new ControllerError(409, 'The Keep folder is not ready.');
+    };
+    await app.inject({ method: 'POST', url: `/api/computers/${id}/power`, payload: { action: 'stop' } });
+    expect(
+      (await app.inject({ method: 'POST', url: `/api/computers/${id}/power`, payload: { action: 'start' } }))
+        .statusCode,
+    ).toBe(409);
+    expect(
+      (await database.client.computer.findUnique({ where: { id }, select: { desiredState: true } }))?.desiredState,
+    ).toBe('stopped');
+    controller.start = start;
+    await app.inject({ method: 'POST', url: `/api/computers/${id}/power`, payload: { action: 'start' } });
     // Clearing its cache and rebuilding it need it powered off.
     expect((await app.inject({ method: 'POST', url: `/api/computers/${id}/cache/clear` })).statusCode).toBe(409);
     await app.inject({ method: 'POST', url: `/api/computers/${id}/power`, payload: { action: 'stop' } });
