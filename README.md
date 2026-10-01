@@ -151,7 +151,7 @@ mkdir -p /srv/agent-swarm/keep /srv/agent-swarm/cache
 touch /srv/agent-swarm/keep/.agent-swarm-keep-root /srv/agent-swarm/cache/.agent-swarm-cache-root
 ```
 
-The marker files are how the dashboard proves the folder was chosen by someone with access to the host; a computer also refuses to start while its marker is missing (for example, a removable disk that did not mount). Computers write there as root, so use a filesystem mounted `nosuid` (on ZFS, `zfs set setuid=off`). Back up the Keep folder. Details: [docs/computers.md](docs/computers.md).
+The marker files are how the dashboard proves the folder was chosen by someone with access to the host; a computer also refuses to start while its marker is missing (for example, a removable disk that did not mount). Computers write there as root, so use a filesystem mounted `nosuid` (on ZFS, `zfs set setuid=off`) that other users of the host cannot reach. Back up the Keep folder. Details: [docs/computers.md](docs/computers.md).
 
 ## Project status
 

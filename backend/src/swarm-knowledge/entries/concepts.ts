@@ -209,7 +209,7 @@ What survives (Keep and Cache): a computer can be rebuilt (a timezone or storage
 - Cached: ~/.cache (uv, pip, npm, Playwright, browser caches) and apt's downloads live in the Cache folder: they survive restarts, but the human may clear them at any time, so keep nothing there that cannot be fetched again.
 - Disposable: /tmp is emptied at every start.
 - Everything else outside these (other system folders, sudo pip install into the system Python, programs a vendor installer put in /opt) is reset to the image on a rebuild. Prefer: a venv or uv (in home) for Python, npm -g (goes to /usr/local) or nvm for Node, apt for system packages. A service's data (a database) needs its folder kept: ask the human to add it (agents cannot change kept paths).
-- Startup: executable scripts in /keep/startup/ run as root, in name order, at every start (after the reinstall), each at most 5 minutes. Use them to start services that must be running (for example "service postgresql start"), since nothing else starts them.
+- Startup: executable scripts in /keep/startup/ (write them with sudo; that folder belongs to root) run as root, in name order, at every start (after the reinstall), each at most 5 minutes. Use them to start services that must be running (for example "service postgresql start"), since nothing else starts them.
 
 Where to put files:
 - Work that matters (projects, results, anything the human or you will come back to): in the home folder; on ~/Desktop when the human should see it there.

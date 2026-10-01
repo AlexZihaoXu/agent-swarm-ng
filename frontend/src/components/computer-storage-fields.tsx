@@ -75,14 +75,16 @@ export function ComputerStorageFields({
     const folder = kind === 'keep' ? computer.keepFolder : computer.cacheFolder;
     const bytes = usage.data?.find(item => item.kind === kind)?.bytes;
     return (
-      <div className="flex min-w-0 items-baseline justify-between gap-3 text-sm">
-        <span className="shrink-0 font-medium">{kind === 'keep' ? 'Keep' : 'Cache'}</span>
+      // Name, where (shortened when long), and size, which is never cut off.
+      <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-3 text-sm">
+        <span className="font-medium">{kind === 'keep' ? 'Keep' : 'Cache'}</span>
         <span
           className="min-w-0 truncate text-right font-mono text-xs text-muted-foreground"
           title={folder ?? undefined}
         >
           {folder ? `${folder}/computers/…` : 'Docker storage'}
-          {' · '}
+        </span>
+        <span className="text-right text-xs tabular-nums text-muted-foreground">
           {usage.isPending ? 'measuring…' : bytes !== undefined ? fileSize(bytes) : '—'}
         </span>
       </div>

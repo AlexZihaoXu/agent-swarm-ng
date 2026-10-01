@@ -138,7 +138,7 @@ export function ComputerStorageSettings({ card }: { card: string }) {
               The marker shows that someone with access to this machine chose the folder (this page cannot pick one on
               its own), and that its disk is mounted: a computer will not start while its folder’s marker is missing.
               Computers can write files there as root, so prefer a filesystem mounted <code>nosuid</code> (on ZFS:{' '}
-              <code>setuid=off</code>).
+              <code>setuid=off</code>) that other users of this machine cannot reach.
             </p>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {message && (
