@@ -408,8 +408,8 @@ model SwarmSettings {
   recordingDesktopKbps     Int @default(1000)
   recordingDesktopFps      Int @default(30)
   recordingTerminalFps     Int @default(15)
-  recordingPadBeforeMs     Int @default(2500)
-  recordingPadAfterMs      Int @default(2500)
+  recordingPadBeforeMs     Int @default(500)
+  recordingPadAfterMs      Int @default(500)
   /// Host folders new computers keep their files in (Settings → Computers → Storage); null = Docker volumes.
   computerKeepFolder  String?
   computerCacheFolder String?

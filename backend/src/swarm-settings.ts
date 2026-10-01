@@ -19,8 +19,8 @@ export const swarmSettingBounds = {
   recordingDesktopKbps: { min: 100, max: 50000, default: 1000, label: 'Desktop recording bitrate (max)', unit: 'kbps' },
   recordingDesktopFps: { min: 1, max: 60, default: 30, label: 'Desktop recording frame rate', unit: 'fps' },
   recordingTerminalFps: { min: 1, max: 30, default: 15, label: 'Terminal recording frame rate', unit: 'fps' },
-  recordingPadBeforeMs: { min: 0, max: 30000, default: 2500, label: 'Clip starts before an event', unit: 'ms' },
-  recordingPadAfterMs: { min: 0, max: 30000, default: 2500, label: 'Clip ends after an event', unit: 'ms' },
+  recordingPadBeforeMs: { min: 0, max: 30000, default: 500, label: 'Clip starts before an event', unit: 'ms' },
+  recordingPadAfterMs: { min: 0, max: 30000, default: 500, label: 'Clip ends after an event', unit: 'ms' },
 } as const;
 export type SwarmSettingKey = keyof typeof swarmSettingBounds;
 export type SwarmSettings = Record<SwarmSettingKey, number>;

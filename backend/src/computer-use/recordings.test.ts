@@ -79,7 +79,7 @@ it('records sources the agent can read into one folder, tells the holder, and ke
     expect(starts.map(input => input.label)).toEqual(['desktop', 'terminal-build']);
     expect(new Set(starts.map(input => input.folder)).size).toBe(1);
     expect(starts[0].folder).toMatch(/^Videos\/agent-recordings\/2026-09-21_\d\d-\d\d-\d\d_Ada$/);
-    expect(starts[0]).toMatchObject({ fps: 30, kbps: 1000, defaults: [2.5, 2.5], maxSeconds: 1800 });
+    expect(starts[0]).toMatchObject({ fps: 30, kbps: 1000, defaults: [0.5, 0.5], maxSeconds: 1800 });
     expect(starts[1]).toMatchObject({ session: terminal, fps: 15 });
     // Terminal events never count for a desktop recording, and the reverse.
     expect(starts[0].rules).toEqual({ 'mouse.move_to': { before: 2.5, after: 2.5 }, mark: {} });

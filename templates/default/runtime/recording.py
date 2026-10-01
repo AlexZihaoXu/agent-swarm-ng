@@ -308,7 +308,7 @@ def start(value):
     state = {
         'id': rid, 'folder': str(target), 'source': source, 'session': session, 'label': value['label'],
         'mode': value['mode'], 'fps': value['fps'], 'kbps': value.get('kbps', 1000), 'audio': value.get('audio', True),
-        'rules': value.get('rules', {}), 'defaults': value.get('defaults', [2.5, 2.5]), 'hideTyped': value.get('hideTyped', False),
+        'rules': value.get('rules', {}), 'defaults': value.get('defaults', [0.5, 0.5]), 'hideTyped': value.get('hideTyped', False),
         'maxSeconds': value.get('maxSeconds', 1800), 'started': now(), 'status': 'recording', 'encoder': None,
     }
     save(state)
