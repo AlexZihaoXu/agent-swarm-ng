@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Command } from 'cmdk';
 import { Button } from '@/components/ui/button';
+import { SearchIcon } from '@/components/ui/icons';
 import { dialogMotion, dialogOverlay } from '@/lib/styles';
 
 /**
@@ -47,17 +48,7 @@ export function PickerDialog({
             className="flex min-h-0 flex-1 flex-col"
           >
             <div className="flex items-center gap-2 border-b border-border px-3">
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="size-4 shrink-0 text-muted-foreground"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" />
-              </svg>
+              <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
               <Command.Input
                 autoFocus
                 placeholder={placeholder}

@@ -108,3 +108,9 @@ export const ChevronDownIcon = (props: ComponentProps<'svg'>) => (
     <path d="m6 9 6 6 6-6" />
   </Icon>
 );
+export const SearchIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.5-3.5" />
+  </Icon>
+);

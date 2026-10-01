@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import * as Popover from '@radix-ui/react-popover';
+import { SearchIcon } from './icons';
 import { Command } from 'cmdk';
 
 /** Lists longer than this get a search field. */
@@ -92,7 +93,7 @@ export function Select({
           >
             {searchable && (
               <div className="flex items-center gap-2 border-b border-border px-3">
-                <SearchIcon />
+                <SearchIcon className="text-muted-foreground" />
                 <Command.Input
                   ref={input}
                   placeholder="Search…"
@@ -168,22 +169,6 @@ function Chevron() {
       strokeWidth="1.7"
     >
       <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="size-4 shrink-0 text-muted-foreground"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-    >
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.5-3.5" />
     </svg>
   );
 }

@@ -25,7 +25,15 @@ import {
   type PortalPrefix,
 } from '@/lib/portal-search';
 import { openWindow } from '@/lib/portal-windows';
-import { AgentsIcon, BookIcon, ChatIcon, ComputerIcon, SettingsIcon, TerminalIcon } from '@/components/ui/icons';
+import {
+  AgentsIcon,
+  BookIcon,
+  SearchIcon,
+  ChatIcon,
+  ComputerIcon,
+  SettingsIcon,
+  TerminalIcon,
+} from '@/components/ui/icons';
 import { AgentAvatarArt } from './agent-avatar-art';
 import { defaultAvatar } from '@/lib/agent-avatar';
 import { cn } from '@/lib/utils';
@@ -351,17 +359,7 @@ export function Portal({
             className="flex min-h-0 flex-1 flex-col"
           >
             <div className="flex items-center gap-2 border-b border-white/10 px-4">
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="size-4 shrink-0 text-muted-foreground"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" />
-              </svg>
+              <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
               {prefix && (
                 <button
                   type="button"
@@ -471,17 +469,7 @@ export function PortalButton({ onClick, className }: { onClick: () => void; clas
         className,
       )}
     >
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 24 24"
-        className="size-4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      >
-        <circle cx="11" cy="11" r="7" />
-        <path d="m20 20-3.5-3.5" />
-      </svg>
+      <SearchIcon className="size-4" />
       <span className="max-md:sr-only">Portal</span>
       <kbd className="rounded border border-border px-1 font-sans text-[10px] max-md:hidden">{portalShortcut}</kbd>
     </button>
