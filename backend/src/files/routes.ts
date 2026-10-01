@@ -184,6 +184,50 @@ export function registerFileRoutes(
     },
   );
 
+  // Portal (Ctrl/⌘+K): the human finds a file by name in any chat or any agent's scratchpad. Bounded; names only.
+  app.get<{ Querystring: { q: string } }>(
+    '/api/files/find',
+    {
+      schema: {
+        operationId: 'findFiles',
+        querystring: Type.Object({ q: Type.String({ minLength: 1, maxLength: 100 }) }, { additionalProperties: false }),
+        response: {
+          200: Type.Object({
+            files: Type.Array(
+              Type.Object({
+                id: Type.String(),
+                name: Type.String(),
+                channelKey: Type.String(),
+                kind: Type.String(),
+                size: Type.Integer(),
+              }),
+            ),
+            scratch: Type.Array(Type.Object({ agentId: Type.String(), path: Type.String(), size: Type.Integer() })),
+          }),
+          ...errors,
+        },
+      },
+    },
+    async request => {
+      const q = request.query.q.trim();
+      await database.initialize();
+      const [found, scratch] = await Promise.all([
+        database.client.channelFile.findMany({
+          where: { name: { contains: q }, status: { not: 'deleted' }, messageId: { not: null } },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: { id: true, name: true, channelKey: true, kind: true, size: true },
+        }),
+        database.client.scratchFile.findMany({
+          where: { path: { contains: q } },
+          orderBy: { updatedAt: 'desc' },
+          take: 10,
+          select: { agentId: true, path: true, size: true },
+        }),
+      ]);
+      return { files: found, scratch };
+    },
+  );
   app.get<{ Params: { id: string }; Querystring: { download?: '1' } }>(
     '/api/files/:id/content',
     {

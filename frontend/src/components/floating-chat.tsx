@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { m } from 'motion/react';
 import { keepReachable, raiseWindow, resizeFrom, useWindowLayer, type Box, type Edge } from '@/lib/floating-windows';
@@ -41,12 +48,24 @@ export function FloatingChat({
   state,
   from,
   onMinimize,
+  windowId = 'chat',
+  lights,
+  initial,
+  onBox,
 }: {
   agent: ChatAgent;
   state: ComputerAgentState & { chat: NonNullable<ComputerAgentState['chat']> };
   /** The header control it was opened from (viewport coordinates): it grows from there and shrinks back into it. */
   from?: DOMRect | null;
   onMinimize: () => void;
+  /** Its stacking id among floating windows (one per agent when Portal opens several). */
+  windowId?: string;
+  /** Replaces the single close light (Portal adds a minimize light). */
+  lights?: ReactNode;
+  /** Where it was last left. */
+  initial?: Box | null;
+  /** Told where it was moved or resized to. */
+  onBox?: (box: Box) => void;
 }) {
   const { chat } = state;
   const channel = agent.channelId;
@@ -59,12 +78,16 @@ export function FloatingChat({
   const viewport = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<Box | null>(null);
   const gesture = useRef<{ kind: 'move' | Edge; x: number; y: number; start: Box } | null>(null);
-  const layer = useWindowLayer('chat');
+  const layer = useWindowLayer(windowId);
   // Opens at the viewer's right side (clear of the Terminals handle); later moves are the operator's.
   useLayoutEffect(() => {
     const room = area.current!.getBoundingClientRect();
-    raiseWindow('chat');
-    setBox(place({ width: 380, height: Math.min(560, room.height - 24), x: room.right - 380 - 48, y: room.top + 12 }));
+    raiseWindow(windowId);
+    setBox(
+      place(
+        initial ?? { width: 380, height: Math.min(560, room.height - 24), x: room.right - 380 - 48, y: room.top + 12 },
+      ),
+    );
   }, []);
   useEffect(() => {
     const refit = () => setBox(current => (current ? place(current) : current));
@@ -125,6 +148,7 @@ export function FloatingChat({
     );
   };
   const end = () => {
+    if (gesture.current && box) onBox?.(box);
     gesture.current = null;
   };
   // The grow/shrink point, in the window's own coordinates.
@@ -143,7 +167,7 @@ export function FloatingChat({
             data-floating-window
             data-focused={layer.focused ? '' : undefined}
             className={`fixed flex flex-col overflow-hidden rounded-xl border bg-background transition-[border-color,box-shadow] duration-200 ${layer.focused ? 'border-white/15 shadow-2xl shadow-black/60' : 'border-white/[0.08] shadow-lg shadow-black/40'}`}
-            onPointerDownCapture={() => raiseWindow('chat')}
+            onPointerDownCapture={() => raiseWindow(windowId)}
             style={{
               left: box.x,
               top: box.y,
@@ -160,7 +184,9 @@ export function FloatingChat({
               onPointerDown={start('move')}
               className="flex h-8 shrink-0 cursor-grab touch-none select-none items-center gap-3 border-b border-white/10 bg-[#1d1d1d] px-3 active:cursor-grabbing"
             >
-              <CloseLight label={`Close chat with ${agent.name}`} onClick={onMinimize} dim={!layer.focused} />
+              {lights ?? (
+                <CloseLight label={`Close chat with ${agent.name}`} onClick={onMinimize} dim={!layer.focused} />
+              )}
               <span className="flex min-w-0 flex-1 items-center justify-center gap-1.5 text-xs">
                 <AgentAvatarArt {...(agent.avatar ?? defaultAvatar(agent.id))} size={16} />
                 <span

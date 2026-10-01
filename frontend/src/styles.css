@@ -515,3 +515,57 @@ body {
     scrollbar-color: #555555 transparent;
   }
 }
+
+/* Portal and its floating windows: frosted glass over the page. Solid where blur is unsupported or the system asks
+   for less transparency. Window contents stay opaque. */
+.portal-glass {
+  background: color-mix(in oklab, var(--background) 70%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+}
+.portal-scrim {
+  background: rgb(0 0 0 / 0.35);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .portal-glass {
+    background: var(--background);
+  }
+  .portal-scrim {
+    background: rgb(0 0 0 / 0.55);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .portal-glass {
+    background: var(--background);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .portal-scrim {
+    background: rgb(0 0 0 / 0.55);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@keyframes portal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes portal-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}

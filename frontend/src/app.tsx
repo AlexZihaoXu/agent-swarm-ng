@@ -43,6 +43,9 @@ import { useAgentSearch } from '@/use-agent-search';
 import { listTime } from '@/lib/format-time';
 import { SidebarSearch } from '@/components/sidebar-search';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { Portal, PortalButton, usePortalShortcut } from '@/components/portal';
+import { PortalWindows } from '@/components/portal-windows';
+import type { ComputerAgentState } from '@/components/computer-control';
 import { ConversationRow } from '@/components/conversation-row';
 import {
   agentDmPath,
@@ -159,6 +162,29 @@ export function App() {
   const selectedId = route.agentId ?? agents[0]?.id ?? '';
   const mobileConversation = Boolean(route.agentId || route.groupId);
   const computerViewerOpen = route.kind === 'computer';
+  // What floating chats need (the computer viewer's and Portal's).
+  const agentState: ComputerAgentState & { chat: NonNullable<ComputerAgentState['chat']> } = {
+    agents,
+    busy,
+    peerBusy,
+    typing,
+    connected: eventsConnected,
+    chat: {
+      conversations,
+      drafts,
+      historyReady,
+      historyLoading,
+      setDraft,
+      send: (target, text, fileIds) => send(target, text, undefined, fileIds),
+      stop,
+      historyCursor,
+      historyFailed,
+      loadHistory: (target, older) => void loadHistory(target, older),
+      openConversation: target => navigate(chatAgentPath(target.id)),
+    },
+  };
+  const [portalOpen, setPortalOpen] = useState(false);
+  usePortalShortcut(() => setPortalOpen(value => !value));
   const [isPhone, setIsPhone] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   // Unsaved agent-settings changes: warn before leaving the page by any in-app route, or by closing the tab.
   const [unsaved, setUnsaved] = useState<string[]>([]);
@@ -601,7 +627,7 @@ export function App() {
             <Tabs.List
               aria-label="Main navigation"
               ref={tabList}
-              className="pointer-events-auto relative isolate grid h-[50px] w-[min(23rem,calc(100vw-2rem))] grid-cols-4 items-center rounded-lg border border-border bg-muted p-[3px] shadow-lg md:flex md:h-9 md:w-auto md:gap-0.5 md:border-0 md:p-1 md:shadow-none"
+              className="pointer-events-auto relative isolate grid h-[50px] w-[min(23rem,calc(100vw-2rem-58px))] grid-cols-4 items-center rounded-lg border border-border bg-muted p-[3px] shadow-lg md:flex md:h-9 md:w-auto md:gap-0.5 md:border-0 md:p-1 md:shadow-none"
             >
               <span
                 aria-hidden="true"
@@ -636,6 +662,10 @@ export function App() {
                 </Tabs.Trigger>
               ))}
             </Tabs.List>
+            <PortalButton
+              onClick={() => setPortalOpen(true)}
+              className="pointer-events-auto ml-2 size-[50px] justify-center rounded-lg shadow-lg md:absolute md:right-4 md:ml-0 md:h-9 md:w-auto md:justify-start md:shadow-none"
+            />
           </header>
         )}
 
@@ -1260,26 +1290,7 @@ export function App() {
           {activeTab === 'computers' && (
             <Suspense fallback={loading}>
               <ComputersPanel
-                agentState={{
-                  agents,
-                  busy,
-                  peerBusy,
-                  typing,
-                  connected: eventsConnected,
-                  chat: {
-                    conversations,
-                    drafts,
-                    historyReady,
-                    historyLoading,
-                    setDraft,
-                    send: (target, text, fileIds) => send(target, text, undefined, fileIds),
-                    stop,
-                    historyCursor,
-                    historyFailed,
-                    loadHistory: (target, older) => void loadHistory(target, older),
-                    openConversation: target => navigate(chatAgentPath(target.id)),
-                  },
-                }}
+                agentState={agentState}
                 viewingId={route.kind === 'computer' ? (route.computerId ?? null) : null}
                 viewerView={route.computerView ?? 'desktop'}
                 terminalId={route.terminalId ?? null}
@@ -1323,6 +1334,15 @@ export function App() {
         </Tabs.Content>
       </Tabs.Root>
 
+      <Portal
+        open={portalOpen}
+        onOpenChange={setPortalOpen}
+        agents={agents}
+        busy={busy}
+        onNavigate={path => navigate(path)}
+        onStop={stop}
+      />
+      <PortalWindows agentState={agentState} onNavigate={path => navigate(path)} />
       <ConfirmDialog
         open={pendingLeave !== null}
         onOpenChange={open => {

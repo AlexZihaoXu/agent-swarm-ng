@@ -7,6 +7,7 @@ import {
   useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from 'react';
 import { parseAnsi, type Style } from '@/lib/ansi';
 import { createPortal } from 'react-dom';
@@ -373,13 +374,16 @@ function DrawerCard({
  * page, 64px always on screen) and resized from any edge, comes to the front and takes focus when touched, and its
  * red close light shrinks it back into the viewer's right edge, where the Terminals drawer lives.
  */
-function TerminalWindow({
+export function TerminalWindow({
   computerId,
   session,
   from,
   cascade,
   viewer,
   onClose,
+  lights,
+  initial,
+  onBox,
 }: {
   computerId: string;
   session: Session;
@@ -389,6 +393,12 @@ function TerminalWindow({
   cascade: number;
   viewer: () => Rect & { right: number };
   onClose: () => void;
+  /** Replaces the single close light (Portal adds a minimize light). */
+  lights?: ReactNode;
+  /** Where it was last left. */
+  initial?: Box | null;
+  /** Told where it was moved or resized to. */
+  onBox?: (box: Box) => void;
 }) {
   const id = `terminal:${session.id}`;
   const layer = useWindowLayer(id);
@@ -399,6 +409,7 @@ function TerminalWindow({
   const reduced = useReducedMotion();
   const [shape, setShape] = useState<Shape | null>(null);
   const [box, setBox] = useState<Box>(() => {
+    if (initial) return place(initial, null);
     const room = viewer();
     const width = Math.min(760, room.width * 0.55);
     const step = (cascade % 6) * 28;
@@ -451,6 +462,7 @@ function TerminalWindow({
     );
   };
   const end = () => {
+    if (gesture.current) onBox?.(box);
     gesture.current = null;
     setDragging(false);
   };
@@ -507,7 +519,7 @@ function TerminalWindow({
             )
           }
           onTitlePointerDown={start('move')}
-          titleLeading={<CloseLight label={`Close ${session.name}`} onClick={onClose} dim={!layer.focused} />}
+          titleLeading={lights ?? <CloseLight label={`Close ${session.name}`} onClick={onClose} dim={!layer.focused} />}
         />
       </Suspense>
       <ResizeEdges onStart={start} />

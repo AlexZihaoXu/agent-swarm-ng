@@ -207,3 +207,31 @@ it('shows agents file references, never contents, in message envelopes', () => {
   );
   expect(fileLines([])).toBe('');
 });
+
+it('finds sent chat files and scratch files by name for Portal, never unsent or deleted ones', async () => {
+  const { database, app, agent, upload } = await setup();
+  try {
+    const key = chatKey(agent.channels[0].id);
+    const sent = (await upload(key, 'Quarterly-report.pdf', 'pdf')).json();
+    await upload(key, 'report-draft.txt', 'not sent yet');
+    const gone = (await upload(key, 'old-report.txt', 'x')).json();
+    await database.client.channelFile.update({ where: { id: sent.id }, data: { messageId: 'm1' } });
+    await database.client.channelFile.update({
+      where: { id: gone.id },
+      data: { messageId: 'm2', status: 'deleted' },
+    });
+    await database.client.scratchFile.create({
+      data: { agentId: agent.id, path: 'plans/report.md', content: '# Plan', size: 6 },
+    });
+    const found = await app.inject('/api/files/find?q=report');
+    expect(found.statusCode).toBe(200);
+    expect(found.json()).toEqual({
+      files: [{ id: sent.id, name: 'Quarterly-report.pdf', channelKey: key, kind: sent.kind, size: 3 }],
+      scratch: [{ agentId: agent.id, path: 'plans/report.md', size: 6 }],
+    });
+    expect((await app.inject('/api/files/find?q=')).statusCode).toBe(400);
+  } finally {
+    await app.close();
+    await database.close();
+  }
+});
