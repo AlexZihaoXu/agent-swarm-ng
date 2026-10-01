@@ -259,7 +259,7 @@ Bun.serve<TerminalSocket>({
           await manager.clearCache(id, input.name);
           return json({ cleared: true });
         }
-        return json({ storage: await manager.storageUsage(id, input.name) });
+        return json(await manager.storageUsage(id, input.name));
       }
       if (request.method === 'POST' && match[2] === '/power') {
         // Power control keeps the expected name so a renamed or foreign

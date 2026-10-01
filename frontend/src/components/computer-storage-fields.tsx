@@ -52,7 +52,7 @@ export function ComputerStorageFields({
         signal,
       });
       if (!data) throw new Error(error?.message ?? 'Could not measure its storage.');
-      return data.storage;
+      return data;
     },
   });
   const off = computer.state === 'exited';
@@ -73,7 +73,7 @@ export function ComputerStorageFields({
   };
   const where = (kind: 'keep' | 'cache') => {
     const folder = kind === 'keep' ? computer.keepFolder : computer.cacheFolder;
-    const bytes = usage.data?.find(item => item.kind === kind)?.bytes;
+    const bytes = usage.data?.storage.find(item => item.kind === kind)?.bytes;
     return (
       // Name, where (shortened when long), and size, which is never cut off.
       <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-3 text-sm">
@@ -97,6 +97,7 @@ export function ComputerStorageFields({
       <div className="space-y-1.5">
         {where('keep')}
         {where('cache')}
+        {usage.data?.lastStart && <LastStart status={usage.data.lastStart} />}
         {usage.isError && (
           <p role="status" className="text-xs text-muted-foreground">
             {usage.error.message}
@@ -193,5 +194,25 @@ export function ComputerStorageFields({
         </label>
       )}
     </fieldset>
+  );
+}
+
+/** How its last start went, from /keep/boot-status: "ok", "running" or "failed: …", then a time. */
+function LastStart({ status }: { status: string }) {
+  const [state, ...rest] = status.split(' ');
+  const problems = rest
+    .filter(word => !/^\d{4}-\d{2}-\d{2}T/.test(word))
+    .join(' ')
+    .replace(/^:\s*/, '');
+  if (state === 'ok')
+    return <p className="text-xs text-muted-foreground">Last start: everything kept and reinstalled.</p>;
+  if (state === 'running')
+    return (
+      <p className="text-xs text-muted-foreground">Reinstalling what it installed and running its startup scripts…</p>
+    );
+  return (
+    <p role="status" className="text-xs text-amber-300">
+      Its last start had problems{problems ? `: ${problems}` : ''}. Details are in /keep/boot.log on the computer.
+    </p>
   );
 }

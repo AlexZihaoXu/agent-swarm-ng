@@ -47,7 +47,7 @@ export interface ComputerController {
   remove(id: string, name: string, storage?: ComputerStorage): Promise<void>;
   checkStorageFolder?(kind: 'keep' | 'cache', folder: string): Promise<void>;
   clearCache?(id: string, name: string): Promise<void>;
-  storageUsage?(id: string, name: string): Promise<StorageUsage[]>;
+  storageUsage?(id: string, name: string): Promise<{ lastStart: string | null; storage: StorageUsage[] }>;
   observe(): Promise<Map<string, ComputerObservation>>;
   preview(id: string, full?: boolean): Promise<Uint8Array | null>;
   pointer(id: string, x: number, y: number): Promise<void>;
@@ -225,13 +225,14 @@ export class HttpComputerController implements ComputerController {
       660_000,
     );
   }
-  async storageUsage(id: string, name: string): Promise<StorageUsage[]> {
+  /** Its Keep/Cache sizes and how its last start went (`ok`, `running`, or `failed: …`, with a time; null if never). */
+  async storageUsage(id: string, name: string): Promise<{ lastStart: string | null; storage: StorageUsage[] }> {
     const response = await this.request(
       `/computers/${encodeURIComponent(id)}/storage`,
       { method: 'POST', body: JSON.stringify({ name }) },
       330_000,
     );
-    const data = (await response.json()) as { storage?: unknown };
+    const data = (await response.json()) as { storage?: unknown; lastStart?: unknown };
     if (
       !Array.isArray(data.storage) ||
       !data.storage.every(
@@ -243,7 +244,10 @@ export class HttpComputerController implements ComputerController {
       )
     )
       throw new Error('Invalid storage usage.');
-    return data.storage as StorageUsage[];
+    return {
+      lastStart: typeof data.lastStart === 'string' ? data.lastStart.slice(0, 500) : null,
+      storage: data.storage as StorageUsage[],
+    };
   }
   async observe() {
     const response = await this.request('/computers');

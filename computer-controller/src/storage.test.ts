@@ -103,7 +103,7 @@ function helperDocker(exitFor: (script: string) => { code: number; stderr?: stri
     }
     return [] as never;
   });
-  vi.spyOn(docker, 'request').mockImplementation(async (method, path) => {
+  vi.spyOn(docker, 'request').mockImplementation(async (_method, path) => {
     if (path.endsWith('/wait')) return Buffer.from(JSON.stringify({ StatusCode: last.code }));
     if (path.includes('/logs')) return Buffer.concat([frame(1, last.stdout), frame(2, last.stderr)]);
     return Buffer.alloc(0);

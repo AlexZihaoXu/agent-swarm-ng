@@ -18,7 +18,10 @@ finish() {
 
 mountpoint -q /keep || exit 0
 printf 'running %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$status"
-problems=''
+# Paths the boot could not keep come first (computer-storage.sh).
+problems=$(cat /keep/boot-problems 2>/dev/null || true)
+# Someone may run apt while this runs: wait for its lock rather than fail.
+lock='-o DPkg::Lock::Timeout=600'
 
 # Extra apt sources and keys first (never replacing the image's own files), so their packages can install.
 if [ -d "$system/apt-files" ]; then
@@ -35,13 +38,13 @@ if [ -s "$system/apt-packages.txt" ]; then
     if [ -n "$missing" ]; then
         say "reinstalling: $missing"
         # shellcheck disable=SC2086 # a word list of package names
-        if timeout 1200 apt-get update && DEBIAN_FRONTEND=noninteractive timeout 1200 apt-get install -y $missing; then
+        if timeout 1200 apt-get $lock update && DEBIAN_FRONTEND=noninteractive timeout 1200 apt-get $lock install -y $missing; then
             say "reinstalled"
         else
             # One package that no longer exists (after an image update, say) must not stop the others.
             say "reinstalling together failed; trying one package at a time"
             for package in $missing; do
-                DEBIAN_FRONTEND=noninteractive timeout 600 apt-get install -y "$package" >/dev/null 2>&1 \
+                DEBIAN_FRONTEND=noninteractive timeout 600 apt-get $lock install -y "$package" >/dev/null 2>&1 \
                     || { problems="$problems apt:$package"; say "could not reinstall $package"; }
             done
         fi

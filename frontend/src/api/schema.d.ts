@@ -5688,6 +5688,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        lastStart: string | null;
                         storage: {
                             kind: "keep" | "cache";
                             bytes: number;

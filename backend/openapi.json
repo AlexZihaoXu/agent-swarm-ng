@@ -18568,9 +18568,20 @@
                 "schema": {
                   "type": "object",
                   "required": [
+                    "lastStart",
                     "storage"
                   ],
                   "properties": {
+                    "lastStart": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "storage": {
                       "type": "array",
                       "items": {

@@ -892,24 +892,33 @@ export class ComputerManager {
     if (!desktop) throw new ResourceError(404, 'Computer not found.');
     await this.checkMountedStorage(id, desktop);
     // Files can vanish mid-count on a running computer (its /tmp): du then exits 1 but still reports the totals.
+    // The last start's outcome (/keep/boot-status: ok, running, or failed with what went wrong) comes along.
     const output = await this.helper(
       this.storageMountsOf(id, desktop),
-      'du -sb /keep /cache 2>/dev/null; true',
+      'du -sb /keep /cache 2>/dev/null; printf "status %s\\n" "$(head -c 500 /keep/boot-status 2>/dev/null)"; true',
       300_000,
     );
+    const lines = output.trim().split('\n');
+    const status =
+      lines
+        .find(line => line.startsWith('status '))
+        ?.slice('status '.length)
+        .trim() || null;
     const sizes = Object.fromEntries(
-      output
-        .trim()
-        .split('\n')
+      lines
+        .filter(line => !line.startsWith('status '))
         .map(line => line.split(/\s+/))
-        .map(([bytes, path]) => [path.slice(1), Number(bytes)]),
+        .map(([bytes, path]) => [path?.slice(1), Number(bytes)]),
     );
     const mounted = mountedStorage(id, desktop.Mounts);
-    return STORAGE_CLASSES.map(kind => ({
-      kind,
-      bytes: sizes[kind] ?? 0,
-      folder: mounted[kind]?.kind === 'bind' ? (mounted[kind] as { folder: string }).folder : null,
-    }));
+    return {
+      lastStart: status,
+      storage: STORAGE_CLASSES.map(kind => ({
+        kind,
+        bytes: sizes[kind] ?? 0,
+        folder: mounted[kind]?.kind === 'bind' ? (mounted[kind] as { folder: string }).folder : null,
+      })),
+    };
   }
 
   /** Operator power control. Both paths re-check ownership labels first, so a

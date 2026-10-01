@@ -32,6 +32,8 @@ const errorSchema = Type.Object({ message: Type.String() });
 const errors = { 400: errorSchema, 404: errorSchema, 409: errorSchema, 503: errorSchema };
 const idParams = Type.Object({ id: Type.String({ minLength: 1, maxLength: 80 }) });
 const usageSchema = Type.Object({
+  // How the computer's last start went: "ok", "running" or "failed: …", then a time; null if never started.
+  lastStart: Type.Union([Type.String(), Type.Null()]),
   storage: Type.Array(
     Type.Object({
       kind: Type.Union([Type.Literal('keep'), Type.Literal('cache')]),
@@ -109,7 +111,7 @@ export function registerComputerStorageRoutes(
       if (!record || record.state === 'deleting') return reply.code(404).send({ message: 'Computer not found.' });
       if (!controller?.storageUsage) return failed(reply, null);
       try {
-        return { storage: await controller.storageUsage(record.id, record.name) };
+        return await controller.storageUsage(record.id, record.name);
       } catch (error) {
         return failed(reply, error);
       }

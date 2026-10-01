@@ -66,6 +66,7 @@ async function mockComputers(page: Page, initial: Computer[] = []) {
     if (path[4] === 'storage')
       return route.fulfill({
         json: {
+          lastStart: 'failed: apt:gone 2026-10-01T08:00:00Z',
           storage: [
             { kind: 'keep', bytes: 3 * 1024 ** 3, folder: '/srv/keep' },
             { kind: 'cache', bytes: 512 * 1024 ** 2, folder: null },
@@ -688,6 +689,7 @@ test('a computer’s settings show where its files are, clear its cache, and reb
   await expect(storage).toContainText('/srv/keep/computers/…');
   await expect(storage).toContainText('3.0 GB');
   await expect(storage).toContainText('Docker storage');
+  await expect(storage).toContainText('Its last start had problems: apt:gone.');
   await storage.getByRole('button', { name: 'Clear cache' }).click();
   await expect(storage).toContainText('Cache cleared.');
   expect(storageCalls).toContain(`clear:${id}`);

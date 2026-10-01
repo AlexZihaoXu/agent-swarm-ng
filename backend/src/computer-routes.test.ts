@@ -746,10 +746,13 @@ it('keeps computers’ files where Settings → Storage says when they are made,
     if (folder === '/mnt/unplugged') throw new ControllerError(409, `The ${kind} folder is not ready.`);
   };
   controller.clearCache = async id => void calls.push(`clear:${id}`);
-  controller.storageUsage = async () => [
-    { kind: 'keep', bytes: 2048, folder: '/srv/keep' },
-    { kind: 'cache', bytes: 512, folder: null },
-  ];
+  controller.storageUsage = async () => ({
+    lastStart: 'failed: apt:gone 2026-10-01T08:00:00Z',
+    storage: [
+      { kind: 'keep', bytes: 2048, folder: '/srv/keep' },
+      { kind: 'cache', bytes: 512, folder: null },
+    ],
+  });
   try {
     // Unset by default: computers use their own Docker volumes.
     expect((await app.inject('/api/computer-storage')).json()).toEqual({
@@ -824,7 +827,10 @@ it('keeps computers’ files where Settings → Storage says when they are made,
     });
     expect(rebuilt.json().keptPaths).toEqual(['/home/agent', '/var/lib/postgresql']);
     expect(storageCalls[1]).toEqual(['rebuild', { image: 'current', keptPaths: ['/var/lib/postgresql'] }]);
-    expect((await app.inject(`/api/computers/${id}/storage`)).json().storage).toHaveLength(2);
+    expect((await app.inject(`/api/computers/${id}/storage`)).json()).toMatchObject({
+      lastStart: 'failed: apt:gone 2026-10-01T08:00:00Z',
+      storage: [{ kind: 'keep' }, { kind: 'cache' }],
+    });
     // Deleting it deletes its folders where they are, whatever Settings says now.
     await app.inject({ method: 'DELETE', url: `/api/computers/${id}`, payload: { confirmation: 'Stored' } });
     expect(storageCalls.at(-1)).toEqual([

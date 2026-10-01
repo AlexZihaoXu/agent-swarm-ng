@@ -98,6 +98,8 @@ bind() {
 }
 
 mkdir -p /keep/root /keep/system /keep/startup /cache/root
+# Paths that could not be kept this start: the background replay reports them in /keep/boot-status.
+rm -f /keep/boot-problems
 # Parents before children (/home/agent before /home/agent/.cache), each path once.
 list=$(
     {
@@ -108,9 +110,13 @@ list=$(
 printf '%s\n' "$list" | while read -r class path; do
     [ -n "$path" ] || continue
     if allowed "$path" && no_symlinks "$path" && { [ "$class" = cache ] || keepable "$path"; }; then
-        bind "$class" "$path" || say "could not keep $path (left as it is in the image)"
+        bind "$class" "$path" || {
+            say "could not keep $path (left as it is in the image)"
+            printf ' keep:%s' "$path" >>/keep/boot-problems
+        }
     else
         say "refused to keep $path: not a path that can be kept"
+        printf ' refused:%s' "$path" >>/keep/boot-problems
     fi
 done
 empty_tmp
