@@ -45,6 +45,8 @@ const isReadOnly = (request: unknown) => {
     (input?.kind === 'terminal' && ['list', 'view', 'status', 'screens'].includes(input.operation ?? ''))
   );
 };
+/** Resolved for an agent that reads a computer it does not hold. */
+const isReading = (claim: object) => (claim as { own?: boolean }).own === false;
 type Allowance = { token: string; until: number; remaining: number };
 /** What one terminal_view permits: five terminal_run_actions calls on that session within 90 real seconds. */
 const TERMINAL_ALLOWANCE = { seconds: 90, combos: 5 };
@@ -72,6 +74,11 @@ export class ComputerUseService {
   }
   private active = new Map<string, Active>();
   private uncertain = new Set<string>();
+  /**
+   * The computer each agent reads (use_computer without write): any assigned agent may read a computer at any time,
+   * even while another holds it; only the write claim (a computerClaim row) is exclusive. Not kept over a restart.
+   */
+  private reading = new Map<string, string>();
   constructor(
     readonly database: PlatformStore,
     private runtime: ComputerRuntime | null,
@@ -137,6 +144,7 @@ export class ComputerUseService {
       state: computer.state,
       holder: computer.claim?.agent ?? null,
       current: computer.claim?.agentId === agentId,
+      reading: this.reading.get(agentId) === computer.id,
     }));
   }
   async holders() {
@@ -161,6 +169,8 @@ export class ComputerUseService {
       const claim = await this.database.client.computerClaim.findUnique({ where: { agentId } });
       if (claim && !computerIds.includes(claim.computerId))
         await this.release(claim.computerId, 'Your computer assignment was removed and its control was released.');
+      const read = this.reading.get(agentId);
+      if (read && !computerIds.includes(read)) this.reading.delete(agentId);
       await this.database.client.$transaction(async tx => {
         await tx.computerAssignment.deleteMany({ where: { agentId } });
         if (computerIds.length)
@@ -168,14 +178,20 @@ export class ComputerUseService {
       });
     });
   }
-  async use(agentId: string, target: string | null) {
+  /**
+   * Selects an assigned computer to read (the default), or with write:true also claims it to change it (refused while
+   * another agent holds it). write:false gives up the claim and keeps reading; null releases everything. Switching to
+   * another computer gives up the claim on the old one.
+   */
+  async use(agentId: string, target: string | null, write?: boolean) {
     await this.ready();
     return this.exclusive(async () => {
       if (!(await this.database.hasAgent(agentId))) throw new ComputerUseError('Agent not found.', 404);
       const current = await this.database.client.computerClaim.findUnique({ where: { agentId } });
       if (target === null) {
         if (current) await this.release(current.computerId);
-        return { computerId: null };
+        this.reading.delete(agentId);
+        return { computerId: null, write: false };
       }
       this.driver();
       const rows = await this.database.client.computerAssignment.findMany({
@@ -199,18 +215,56 @@ export class ComputerUseService {
         where: { computerId: computer.id },
         include: { agent: { select: { name: true } } },
       });
-      if (occupied && occupied.agentId !== agentId)
-        throw new ComputerUseError(
-          `Computer is held by ${occupied.agent.name} (${occupied.agentId}). Ask them to release through an allowed chat, or ask the human to Force release.${knowledge}`,
-          409,
-        );
-      if (occupied) return { computerId: computer.id, name: computer.name };
-      // Check destination before releasing the old computer: a failed switch must not lose it.
-      if (current) await this.release(current.computerId);
-      await this.database.client.computerClaim.create({ data: { computerId: computer.id, agentId } });
-      this.allowances.delete(agentId);
-      return { computerId: computer.id, name: computer.name };
+      const holder =
+        occupied && occupied.agentId !== agentId ? { id: occupied.agentId, name: occupied.agent.name } : null;
+      const selected = { computerId: computer.id, name: computer.name };
+      if (write) {
+        if (holder)
+          throw new ComputerUseError(
+            `Computer is held for writing by ${holder.name} (${holder.id}). You can still read it (use_computer without write). Ask them to release through an allowed chat, or ask the human to Force release.${knowledge}`,
+            409,
+          );
+        this.reading.set(agentId, computer.id);
+        if (occupied) return { ...selected, write: true };
+        // Check destination before releasing the old computer: a failed switch must not lose it.
+        if (current) await this.release(current.computerId);
+        await this.database.client.computerClaim.create({ data: { computerId: computer.id, agentId } });
+        this.allowances.delete(agentId);
+        return { ...selected, write: true };
+      }
+      // Reading: leaving a computer it holds (or write:false on it) gives up that claim.
+      if (current && (current.computerId !== computer.id || write === false)) await this.release(current.computerId);
+      this.reading.set(agentId, computer.id);
+      const writing = Boolean(current && current.computerId === computer.id && write !== false);
+      return { ...selected, write: writing, ...(holder ? { heldForWritingBy: holder.name } : {}) };
     });
+  }
+  /**
+   * The computer an agent reads: the one it holds, else the one it selected to read. Needs a current assignment and a
+   * running computer; never anyone's claim. `token` is set only for the agent's own claim (input allowances follow it).
+   */
+  private async reader(agentId: string) {
+    const claim = await this.database.client.computerClaim.findUnique({ where: { agentId } });
+    if (claim) return { ...(await this.claim(agentId)), own: true };
+    const computerId = this.reading.get(agentId);
+    const assigned =
+      computerId &&
+      (await this.database.client.computerAssignment.findUnique({
+        where: { agentId_computerId: { agentId, computerId } },
+        include: { computer: true },
+      }));
+    if (!assigned) {
+      this.reading.delete(agentId);
+      throw new ComputerUseError('First call use_computer for an assigned computer.' + knowledge, 403);
+    }
+    if (this.uncertain.has(assigned.computerId))
+      throw new ComputerUseError(
+        'Previous computer operation settlement is uncertain. Ask the human to Force release, or stop the computer if release cannot settle, before further operations.',
+        409,
+      );
+    if (assigned.computer.state !== 'running' || assigned.computer.desiredState !== 'running')
+      throw new ComputerUseError('Computer is not running.', 409);
+    return { computerId: assigned.computerId, computer: assigned.computer, token: '', own: false };
   }
   private async claim(agentId: string) {
     const claim = await this.database.client.computerClaim.findUnique({
@@ -223,7 +277,12 @@ export class ComputerUseService {
         where: { agentId_computerId: { agentId, computerId: claim.computerId } },
       }))
     )
-      throw new ComputerUseError('First call use_computer for an assigned computer.' + knowledge, 403);
+      throw new ComputerUseError(
+        (this.reading.has(agentId)
+          ? 'You are reading this computer. To change it, claim it with use_computer({computer, write: true}).'
+          : 'First call use_computer({computer, write: true}) for an assigned computer.') + knowledge,
+        403,
+      );
     if (this.uncertain.has(claim.computerId))
       throw new ComputerUseError(
         'Previous computer operation settlement is uncertain. Ask the human to Force release, or stop the computer if release cannot settle, before further operations.',
@@ -241,11 +300,14 @@ export class ComputerUseService {
   ): Promise<ScreenFrame> {
     await this.ready();
     return this.screenshot(
-      () => this.claim(agentId),
+      () => this.reader(agentId),
       request,
       signal,
       retain,
-      claim => this.allowances.set(agentId, { token: claim.token, until: this.now() + 30_000, remaining: 2 }),
+      // Only a look at the computer it holds lets the agent act on it.
+      claim => {
+        if (claim.own) this.allowances.set(agentId, { token: claim.token, until: this.now() + 30_000, remaining: 2 });
+      },
     );
   }
   /**
@@ -254,9 +316,9 @@ export class ComputerUseService {
    */
   async snapshot(agentId: string, request: unknown, signal?: AbortSignal) {
     await this.ready();
-    let claim!: Awaited<ReturnType<ComputerUseService['claim']>>;
+    let claim!: Awaited<ReturnType<ComputerUseService['reader']>>;
     const frame = await this.screenshot(
-      async () => (claim = await this.claim(agentId)),
+      async () => (claim = await this.reader(agentId)),
       request,
       signal,
       undefined,
@@ -330,7 +392,8 @@ export class ComputerUseService {
       const waiting = this.waitForReads(
         claim.computerId,
         'Wait for the active computer operation before taking another screenshot.',
-        patient,
+        // A reader never fails because the holder is busy: it waits its turn.
+        patient || isReading(claim),
       );
       if (waiting) return { waiting };
       const driver = this.driver();
@@ -423,6 +486,12 @@ export class ComputerUseService {
     let computerId = '';
     const receipt = await this.performCore(
       async () => {
+        // Reading (file reads, terminal list/status) needs only the computer the agent reads; anything else its claim.
+        if (isReadOnly(request)) {
+          const read = await this.reader(agentId);
+          computerId = read.computerId;
+          return read.own ? read : { computerId: read.computerId, own: false };
+        }
         const claim = await this.claim(agentId);
         computerId = claim.computerId;
         return claim;
@@ -444,14 +513,15 @@ export class ComputerUseService {
     let token = '';
     const receipt = await this.performCore(
       async () => {
-        const claim = await this.claim(agentId);
-        token = claim.token;
-        return claim;
+        const read = await this.reader(agentId);
+        token = read.token;
+        return read.own ? read : { computerId: read.computerId, own: false };
       },
-      request,
+      { ...request, kind: 'terminal', operation: 'view' },
       signal,
     );
-    if (!receipt.error)
+    // Only a view of the computer it holds lets the agent type there.
+    if (!receipt.error && token)
       this.terminalAllowances.set(agentId, {
         token,
         session: request.session,
@@ -557,7 +627,7 @@ export class ComputerUseService {
       const waiting = this.waitForReads(
         claim.computerId,
         'Another computer operation is executing; wait for its result.',
-        patient,
+        patient || isReading(claim),
       );
       if (waiting) return { waiting };
       const driver = this.driver();
@@ -638,6 +708,7 @@ export class ComputerUseService {
     await this.exclusive(async () => {
       const claim = await this.database.client.computerClaim.findUnique({ where: { agentId } });
       if (claim) await this.release(claim.computerId);
+      this.reading.delete(agentId);
     });
   }
   async notices(agentId: string) {

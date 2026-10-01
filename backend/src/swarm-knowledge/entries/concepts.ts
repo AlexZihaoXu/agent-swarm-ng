@@ -114,13 +114,13 @@ export const computersConcept = {
 
 Assignment: the human lists which computers an agent may use (in its settings). Assignment is eligibility, not control. list_computers shows assigned computers and their current holders.
 
-Claim (holding): use_computer({computer}) claims one assigned computer; use_computer({computer:null}) releases it. At most one agent holds a computer, and an agent holds at most one. Every computer tool rechecks assignment and claim when it runs. Claiming a busy computer fails and keeps your current one; so does claiming one that is powered off (ask the human to power it on). Several agents may be assigned the same computer; only one holds it at a time.
+Reading and writing: anyone may read, one writes. use_computer({computer}) selects an assigned computer to read: glance, look_at, file read and terminal_list/view/status work at any time, even while another agent holds it, and never disturb the holder (a reader waits out the holder's running operation instead of failing). To change anything (desktop or terminal input, write/edit/bash, terminal create/resize/delete, watches, monitor) claim it: use_computer({computer, write:true}). At most one agent holds a computer, and an agent holds at most one. A look while only reading lets you act on nothing: after claiming, look again before input. write:false gives up your claim and keeps reading; use_computer({computer:null}) releases everything; selecting another computer gives up the claim on the old one. Every computer tool rechecks assignment (and, to change, your claim) when it runs. Claiming a held computer fails and keeps your current one; so does selecting one that is powered off (ask the human to power it on).
 
 The human alongside: the human can watch and use the same computer at any time (the dashboard viewer starts with input locked). A claim does not lock the human out, so the screen may change without you.
 
-Force release: the human can take a claim away; outstanding input is settled first. The agent is told on its next turn (and its watches end with an event).
+Force release: the human can take a claim away; outstanding input is settled first. The agent keeps reading the computer, is told on its next turn, and its watches end with an event.
 
-Restarts: a platform restart releases every claim but keeps assignments. A notice on the next turn explains; nothing is replayed. Programs in terminals keep running; watches end.
+Restarts: a platform restart releases every claim and reading selection but keeps assignments. A notice on the next turn explains; nothing is replayed. Programs in terminals keep running; watches end.
 
 Surfaces of a held computer:
 - desktop: screenshots and input combos (concepts/computers/desktop)
@@ -199,7 +199,7 @@ export const filesConcept = {
     'read/edit/write/bash on the held computer: paths, bounds, what survives a rebuild (Keep/Cache), where to put files.',
   source: 'docs/agent-computer-use.md',
   related: ['practices/files', 'concepts/computers/terminals'],
-  content: `read, write, edit and bash act only in the computer you hold; every call rechecks assignment and claim. They run as the guest user with its permissions (including configured sudo): broad access to that computer, never to the platform host or its credentials.
+  content: `read works on the computer you read or hold; write, edit and bash act only in the computer you hold (use_computer with write:true). Every call rechecks assignment and, to change, your claim. They run as the guest user with its permissions (including configured sudo): broad access to that computer, never to the platform host or its credentials.
 
 Paths: guest absolute paths, ~/ (/home/agent), or relative to /home/agent. bash's cwd defaults to /home/agent; cd and environment changes do not carry to the next call.
 
@@ -222,7 +222,7 @@ write({path, content}): creates parents, atomically replaces one UTF-8 file; exi
 
 bash({command, cwd?, timeout?}): synchronous, default 30 s, max 120 s. Returns exit code and stdout/stderr tails (each ≤25000 bytes / 1000 lines) with truncation flags. It runs in a private process namespace: when the command ends, its descendants are killed, even detached ones. There is no background process API; persistent programs belong in terminals (concepts/computers/terminals).
 
-These operations need a claim but no screenshot; write, edit and bash cancel the desktop input allowance. To move a whole file between computers, your scratchpad and chats without holding the computer, use copy_file and upload_file (concepts/chat-files). Cancellation cannot undo writes or requests already made. How to use them well: practices/files.`,
+write, edit and bash need a claim but no screenshot; write, edit and bash cancel the desktop input allowance. To move a whole file between computers, your scratchpad and chats without holding the computer, use copy_file and upload_file (concepts/chat-files). Cancellation cannot undo writes or requests already made. How to use them well: practices/files.`,
 } satisfies KnowledgeEntry;
 
 export const scratchpadConcept = {

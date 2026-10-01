@@ -53,7 +53,7 @@ async function setup(judge: Judge) {
   };
   const service = new ComputerUseService(db, runtime);
   await service.assign(agent.id, [computer.id]);
-  await service.use(agent.id, computer.id);
+  await service.use(agent.id, computer.id, true);
   let clock = 1_000_000;
   const events: string[] = [];
   // Each wake-up's turn stays "running" until the test ends it (repeating watches wait for it).
@@ -268,7 +268,7 @@ it('counts watches being created against the limit, and ties a watch to the clai
     // A force release followed by a new claim does not carry the watch over.
     await t.watches.create(t.agent.id, { ...terminalWatch, checkNow: false });
     await t.service.forceRelease(t.computer.id);
-    await t.service.use(t.agent.id, t.computer.id);
+    await t.service.use(t.agent.id, t.computer.id, true);
     await t.tick(30);
     expect(t.events.at(-1)).toContain('you no longer hold that computer');
     // A stopped computer says so.
@@ -357,7 +357,7 @@ it('a force release during a read says the computer was lost, and an own delete 
     expect(t.events.at(-1)).toContain('you no longer hold that computer');
     t.state.hang = false;
     // An hour-long interval: deleting the terminal yourself removes the watch at once, quietly.
-    await t.service.use(t.agent.id, t.computer.id);
+    await t.service.use(t.agent.id, t.computer.id, true);
     await t.watches.create(t.agent.id, { ...terminalWatch, everySeconds: 3600, checkNow: false });
     const events = t.events.length;
     await t.service.core(t.agent.id, { kind: 'terminal', operation: 'delete', session });

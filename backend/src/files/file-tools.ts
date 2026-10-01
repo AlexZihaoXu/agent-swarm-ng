@@ -500,7 +500,7 @@ export function createFileTools(options: FileToolOptions): AgentTool[] {
               name: 'save_screenshot',
               label: 'Save a screenshot',
               description:
-                'Save a fresh screenshot of the computer you hold (use_computer first) as an image file, without looking at it: to your scratchpad (scratch:<path>) or an assigned computer (computer:<name or ID>:<absolute path>). Name it .jpg (as captured) or .png. The whole desktop at full resolution by default; x, y and size (in [0,999] desktop coordinates, like look_at) save one region. To send it, upload_file from the saved file into a chat or Discord channel, then post with its fileId. Grants no input allowance: glance or look_at before GUI input.',
+                'Save a fresh screenshot of the computer you read or hold (use_computer first) as an image file, without looking at it: to your scratchpad (scratch:<path>) or an assigned computer (computer:<name or ID>:<absolute path>). Name it .jpg (as captured) or .png. The whole desktop at full resolution by default; x, y and size (in [0,999] desktop coordinates, like look_at) save one region. To send it, upload_file from the saved file into a chat or Discord channel, then post with its fileId. Grants no input allowance: glance or look_at before GUI input.',
               parameters: Type.Object(
                 {
                   to: Type.String({ minLength: 3, maxLength: 4200 }),

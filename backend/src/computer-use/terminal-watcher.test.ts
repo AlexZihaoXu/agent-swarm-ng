@@ -33,7 +33,7 @@ it('tells the holder when a terminal exits or is closed by someone else, but not
   try {
     await watcher.tick(); // nobody holds the computer: nothing watched
     await service.assign(agent.id, [computer.id]);
-    await service.use(agent.id, computer.id);
+    await service.use(agent.id, computer.id, true);
     await watcher.tick(); // first look is the baseline
     expect(events).toEqual([]);
     // build finishes, the human closes server, the agent deletes scratch itself

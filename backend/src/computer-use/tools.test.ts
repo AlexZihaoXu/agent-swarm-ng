@@ -42,7 +42,7 @@ it('binds real agent identity, returns model image content and maps name/params 
         .execute('call', args as never, undefined, undefined, {
           model: { input: vision ? ['text', 'image'] : ['text'] },
         } as never);
-    await invoke('use_computer', { computer: 'Desk' });
+    await invoke('use_computer', { computer: 'Desk', write: true });
     await expect(invoke('glance', {}, false)).rejects.toThrow(/image input/);
     await expect(invoke('run_actions', { actions: [{ name: 'mouse.left_click' }] })).rejects.toThrow(/look/i);
     const shot = await invoke('look_at', { x: 0, y: 500, size: 100 });

@@ -67,7 +67,7 @@ export const computerUsePractice = {
   ],
   content: `Before first use (and after your context was compacted), read concepts/computers and this entry, then the concept and practice for each surface the task needs: desktop (concepts/computers/desktop, practices/desktop, practices/browser), terminals (concepts/computers/terminals, practices/terminals), files (concepts/computers/files, practices/files), waiting (concepts/computers/watches, practices/waiting).
 
-Claim: list_computers, then use_computer({computer:"name or ID"}). If another agent holds it, ask that agent to release through a chat you are already allowed to use; if that is impossible or it is stuck, ask the human to Force release. Never try to take control another way.
+Read or claim: list_computers, then use_computer({computer:"name or ID"}) to read it (looking, file reads, terminal views; possible even while another agent holds it), or use_computer({computer:"name or ID", write:true}) to claim it before changing anything. Only read when reading is all you need. If another agent holds it and you must change it, ask that agent to release through a chat you are already allowed to use; if that is impossible or it is stuck, ask the human to Force release. Never try to take control another way.
 
 The loop: look, act, verify.
 1. Look: a screenshot (glance/look_at) before GUI input, terminal_view before terminal input. The human may have changed things since your last look.
@@ -81,7 +81,7 @@ Waiting: never sit in a turn re-checking something slow. Start it, then set a wa
 
 Sharing: the human can see and use the computer at the same time. Do not fight their input; if they are working in it, ask before taking over a window or terminal. Say what you are about to do when it affects their work.
 
-Release: use_computer({computer:null}) when you finish, unless the human asked you to keep it. Releasing leaves terminal programs running (stop them first if they should not continue) and ends your watches.
+Release: use_computer({computer:null}) when you finish, unless the human asked you to keep it; write:false gives up only the claim and keeps reading. Releasing leaves terminal programs running (stop them first if they should not continue) and ends your watches.
 
 Recovering: after a force release, an assignment change or a platform restart, you are told on your next turn. Reclaim, look at the current state, and inspect terminals (terminal_list/terminal_view) before resuming; nothing was replayed. If an operation's outcome is uncertain, the computer stays blocked: ask the human to Force release or restart it.
 

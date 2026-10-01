@@ -56,7 +56,7 @@ it('requires a current claim for every terminal tool; operator access neither ac
       payload: { operation: 'view', session: crypto.randomUUID() },
     });
     expect(snapshot.statusCode).toBe(200);
-    await service.use(agent.id, computer.id);
+    await service.use(agent.id, computer.id, true);
     for (let i = 0; i < tools.length; i++) await invoke(i);
     expect(core.mock.calls).toHaveLength(9);
     // The combo reaches the guest as plain actions, repeat included.
@@ -141,7 +141,7 @@ it('a terminal view allows five combos on that session for 90 real seconds; inva
     });
   try {
     await service.assign(agent.id, [computer.id]);
-    await service.use(agent.id, computer.id);
+    await service.use(agent.id, computer.id, true);
     await expect(combo()).rejects.toThrow(/View this terminal first/);
     await service.terminalView(agent.id, { kind: 'terminal', operation: 'view', session } as any);
     await expect(combo(crypto.randomUUID())).rejects.toThrow(/View this terminal first/);
@@ -186,7 +186,7 @@ it('an agent call waits out a short read (a dashboard preview) instead of failin
   const session = crypto.randomUUID();
   try {
     await service.assign(agent.id, [computer.id]);
-    await service.use(agent.id, computer.id);
+    await service.use(agent.id, computer.id, true);
     const preview = service.operatorTerminal(computer.id, { operation: 'screens' });
     await vi.waitFor(() => expect(gates.has('screens')).toBe(true));
     const status = service.core(agent.id, { kind: 'terminal', operation: 'status', session });

@@ -67,7 +67,7 @@ it('custom core tools override Pi host builtins and require the current claim; i
     for (const [name, args] of calls) await expect(invoke(name, args)).rejects.toThrow(/use_computer/);
     expect(run).not.toHaveBeenCalled();
     expect(await readFile(host, 'utf8')).toBe('HOST SENTINEL');
-    await service.use(agent.id, 'Desk');
+    await service.use(agent.id, 'Desk', true);
     for (const [name, args] of calls) expect(JSON.stringify(await invoke(name, args))).toContain('GUEST RESULT');
     expect(run.mock.calls.every(([id]) => id === computer.id)).toBe(true);
     // Relative paths and bash's default cwd are the persistent home, whatever the computer image defaults to.

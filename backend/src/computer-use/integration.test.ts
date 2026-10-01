@@ -30,7 +30,7 @@ it('runs claimed computer tools in a real Pi turn with image context, Knowledge 
     const plan = [
       ['send_message', { channelId: agent.channels[0].id, text: 'On it', final: false }],
       ['list_computers', {}],
-      ['use_computer', { computer: computer.id }],
+      ['use_computer', { computer: computer.id, write: true }],
       ['glance', { quality: 'low' }],
       ['run_actions', { actions: [{ name: 'mouse.left_click' }] }],
       ['use_computer', { computer: null }],

@@ -33,8 +33,8 @@ Discord (only if your human connected a Discord bot for you; concepts/discord, p
 
 Agent DMs (always listed; send_dm works only with agents the human allowed, which list_dm_contacts shows): list_dm_contacts, send_dm, read_dm_messages, read_dm_inbox (concepts/channels).
 
-Computer tools (always listed; they work only on a computer the human assigned you, after use_computer claims it):
-- list_computers, use_computer: see assigned computers and holders; claim or release one (concepts/computers, practices/computer-use).
+Computer tools (always listed; they work only on a computer the human assigned you: reading after use_computer selects it, changing after use_computer with write:true claims it):
+- list_computers, use_computer: see assigned computers and holders; read, claim or release one (concepts/computers, practices/computer-use).
 - glance, look_at, run_actions: screenshots and mouse/keyboard combos (concepts/computers/desktop, practices/desktop, practices/browser).
 - read, write, edit, bash: files and synchronous commands (concepts/computers/files, practices/files).
 - terminal_create, terminal_list, terminal_view, terminal_status, terminal_run_actions, terminal_resize, terminal_delete: persistent terminals (concepts/computers/terminals, practices/terminals, practices/harnesses).

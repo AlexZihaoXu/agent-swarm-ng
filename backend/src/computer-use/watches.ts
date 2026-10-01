@@ -307,17 +307,19 @@ export class ComputerWatches {
    * Runs the agent's own release or switch: checks interrupted by it end quietly, then its watches on any other
    * computer are removed. Returns the work's result and how many watches ended.
    */
-  async releasing<T extends { computerId: string | null }>(agentId: string, work: () => Promise<T>) {
+  async releasing<T extends { computerId: string | null; write?: boolean }>(agentId: string, work: () => Promise<T>) {
     this.leaving.add(agentId);
     const before = this.forAgent(agentId);
     try {
       const monitorsBefore = this.monitors?.forAgent(agentId) ?? [];
       const result = await work();
-      await this.releasedBy(agentId, result.computerId);
+      // Watches live on the claim: reading a computer without holding it keeps none.
+      const kept = result.write === false ? null : result.computerId;
+      await this.releasedBy(agentId, kept);
       // Counted from before: a check the release interrupted may already have ended its watch.
       return {
         result,
-        ended: [...before, ...monitorsBefore].filter(item => item.computerId !== result.computerId).length,
+        ended: [...before, ...monitorsBefore].filter(item => item.computerId !== kept).length,
       };
     } finally {
       this.leaving.delete(agentId);

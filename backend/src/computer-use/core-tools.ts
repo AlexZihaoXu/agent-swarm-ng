@@ -11,7 +11,7 @@ const path = Type.String({
     'Guest path: absolute, ~/ or relative (both under /home/agent, the persistent home). /tmp is disposable: wiped at every computer start. Never a platform-host path.',
 });
 const scope =
-  'Requires your current assigned, claimed computer; runs as its guest agent account. No host access. Await each computer operation before starting another. Read concepts/computers/files before first use. ';
+  'read needs the assigned computer you selected with use_computer; write/edit/bash need your claim (use_computer with write:true). Runs as its guest agent account. No host access. Await each computer operation before starting another. Read concepts/computers/files before first use. ';
 export function createCoreTools(service: ComputerUseService, images: ScreenshotPool, agentId: string): AgentTool[] {
   const schemas = {
     read: Type.Object(

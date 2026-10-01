@@ -65,7 +65,7 @@ it('requires a current claim for every core tool, never assignment alone, and us
   for (const kind of ['read', 'edit', 'write', 'bash'])
     await expect(f.service.core(f.a.id, { kind })).rejects.toThrow(/use_computer/);
   expect(calls).toEqual([]);
-  await f.service.use(f.a.id, 'Desk');
+  await f.service.use(f.a.id, 'Desk', true);
   for (const kind of ['read', 'edit', 'write', 'bash']) await f.service.core(f.a.id, { kind });
   expect(calls).toEqual(Array(4).fill(f.computer.id));
   await expect(f.service.core(f.b.id, { kind: 'read' })).rejects.toThrow(/use_computer/);
@@ -74,7 +74,7 @@ it('requires a current claim for every core tool, never assignment alone, and us
 });
 it('core tools never grant GUI allowance; mutating core work invalidates it', async () => {
   const f = await fixture();
-  await f.service.use(f.a.id, 'Desk');
+  await f.service.use(f.a.id, 'Desk', true);
   f.runtime.prepareCore = async (_id, request) => request;
   f.runtime.core = async () => ({ started: true, settled: true, result: { type: 'text', text: 'ok' } });
   await f.service.core(f.a.id, { kind: 'read' });
@@ -85,7 +85,7 @@ it('core tools never grant GUI allowance; mutating core work invalidates it', as
 });
 it('joins active core work before transfer, and unknown cancellation retains the claim', async () => {
   const f = await fixture();
-  await f.service.use(f.a.id, 'Desk');
+  await f.service.use(f.a.id, 'Desk', true);
   let enter!: () => void, finish!: () => void;
   const entered = new Promise<void>(resolve => {
     enter = resolve;
@@ -106,7 +106,7 @@ it('joins active core work before transfer, and unknown cancellation retains the
   finish();
   await running;
   await release;
-  await f.service.use(f.b.id, 'Desk');
+  await f.service.use(f.b.id, 'Desk', true);
   f.runtime.cancel = async () => {
     throw new Error('Unsettled');
   };
@@ -116,23 +116,23 @@ it('joins active core work before transfer, and unknown cancellation retains the
 
 it('separates assignments from one active holder, preserves an old claim when a switch is busy', async () => {
   const f = await fixture();
-  await f.service.use(f.a.id, 'Desk');
-  await expect(f.service.use(f.b.id, f.computer.id)).rejects.toThrow(/A.*release/);
+  await f.service.use(f.a.id, 'Desk', true);
+  await expect(f.service.use(f.b.id, f.computer.id, true)).rejects.toThrow(/A.*release/);
   const other = await f.db.client.computer.create({
     data: { name: 'Second', requestKey: crypto.randomUUID(), state: 'running' },
   });
   await f.service.assign(f.b.id, [f.computer.id, other.id]);
-  await f.service.use(f.b.id, other.id);
-  await expect(f.service.use(f.b.id, 'Desk')).rejects.toThrow(/release/);
+  await f.service.use(f.b.id, other.id, true);
+  await expect(f.service.use(f.b.id, 'Desk', true)).rejects.toThrow(/release/);
   expect((await f.service.list(f.b.id)).find(c => c.id === other.id)?.current).toBe(true);
   await f.service.use(f.a.id, null);
-  await f.service.use(f.b.id, 'Desk');
+  await f.service.use(f.b.id, 'Desk', true);
   expect((await f.service.list(f.a.id))[0].holder?.id).toBe(f.b.id);
 });
 it('saves a screenshot of the held computer without granting input allowance', async () => {
   const f = await fixture();
   await expect(f.service.snapshot(f.a.id, { kind: 'glance', quality: 'full' })).rejects.toThrow(/use_computer/);
-  await f.service.use(f.a.id, 'Desk');
+  await f.service.use(f.a.id, 'Desk', true);
   const saved = await f.service.snapshot(f.a.id, { kind: 'glance', quality: 'full' });
   expect(saved.computer.name).toBe('Desk');
   expect(saved.frame.width).toBeGreaterThan(0);
@@ -141,7 +141,7 @@ it('saves a screenshot of the held computer without granting input allowance', a
 });
 it('grants two combos for thirty real seconds, refunds preflight rejection, invalidates release', async () => {
   const f = await fixture();
-  await f.service.use(f.a.id, 'Desk');
+  await f.service.use(f.a.id, 'Desk', true);
   await expect(f.service.run(f.a.id, {}, new AbortController().signal)).rejects.toThrow(/look/i);
   await f.service.capture(f.a.id, { mode: 'glance' });
   f.invalid(true);
@@ -155,24 +155,27 @@ it('grants two combos for thirty real seconds, refunds preflight rejection, inva
   await expect(f.service.run(f.a.id, {})).rejects.toThrow(/look/i);
   await f.service.capture(f.a.id, { mode: 'glance' });
   await f.service.use(f.a.id, null);
-  await f.service.use(f.a.id, 'Desk');
+  await f.service.use(f.a.id, 'Desk', true);
   await expect(f.service.run(f.a.id, {})).rejects.toThrow(/look/i);
   expect(f.counts().executes).toBe(3);
 });
 it('revokes access at execution and force release retains assignment and leaves a notice', async () => {
   const f = await fixture();
-  await f.service.use(f.a.id, 'Desk');
+  await f.service.use(f.a.id, 'Desk', true);
   await f.service.forceRelease(f.computer.id);
   expect(await f.service.list(f.a.id)).toHaveLength(1);
   expect((await f.service.notices(f.a.id))[0].text).toMatch(/released/);
-  await expect(f.service.capture(f.a.id, { mode: 'glance' })).rejects.toThrow(/use_computer/);
-  await f.service.use(f.a.id, 'Desk');
+  // A force release takes only the claim: the agent still reads, but cannot act.
+  await f.service.capture(f.a.id, { mode: 'glance' });
+  await expect(f.service.run(f.a.id, { actions: [] })).rejects.toThrow(/write: true/);
+  await f.service.use(f.a.id, 'Desk', true);
   await f.service.assign(f.a.id, []);
-  await expect(f.service.use(f.a.id, 'Desk')).rejects.toThrow(/assigned/);
+  await expect(f.service.capture(f.a.id, { mode: 'glance' })).rejects.toThrow(/use_computer/);
+  await expect(f.service.use(f.a.id, 'Desk', true)).rejects.toThrow(/assigned/);
 });
 it('restart releases claims, preserves assignments and persists next-turn notices without inference', async () => {
   const f = await fixture();
-  await f.service.use(f.a.id, 'Desk');
+  await f.service.use(f.a.id, 'Desk', true);
   const next = new ComputerUseService(f.db, f.runtime);
   await next.ready();
   expect((await next.list(f.a.id))[0].holder).toBeNull();
@@ -199,7 +202,7 @@ it('force release waits for cancellation settlement before transferring a comput
     });
     return { started: true, completed: 0, error: 'Stopped' };
   };
-  await f.service.use(f.a.id, 'Desk');
+  await f.service.use(f.a.id, 'Desk', true);
   await f.service.capture(f.a.id, { mode: 'glance' });
   const running = f.service.run(f.a.id, {});
   await begun;
@@ -212,7 +215,7 @@ it('force release waits for cancellation settlement before transferring a comput
   finish();
   await running;
   await release;
-  await f.service.use(f.b.id, 'Desk');
+  await f.service.use(f.b.id, 'Desk', true);
 });
 it('does not let a slow screenshot on one computer delay Force release or another computer, and release aborts it', async () => {
   const f = await fixture();
@@ -220,8 +223,8 @@ it('does not let a slow screenshot on one computer delay Force release or anothe
     data: { name: 'Other', requestKey: crypto.randomUUID(), state: 'running' },
   });
   await f.service.assign(f.b.id, [other.id]);
-  await f.service.use(f.a.id, 'Desk');
-  await f.service.use(f.b.id, 'Other');
+  await f.service.use(f.a.id, 'Desk', true);
+  await f.service.use(f.b.id, 'Other', true);
   let started!: () => void;
   const capturing = new Promise<void>(resolve => {
     started = resolve;
@@ -244,3 +247,38 @@ it('does not let a slow screenshot on one computer delay Force release or anothe
   expect(await f.db.client.computerClaim.count({ where: { computerId: f.computer.id } })).toBe(0);
   await expect(f.service.run(f.a.id, {})).rejects.toThrow(/use_computer/);
 }, 15000);
+
+it('lets any assigned agent read a held computer without disturbing the holder; only the holder acts', async () => {
+  const f = await fixture();
+  f.runtime.prepareCore = async (_id, request) => request;
+  f.runtime.core = async () => ({ started: true, settled: true, result: { type: 'text', text: 'guest' } });
+  await f.service.use(f.a.id, 'Desk', true);
+  // B reads by default, even while A holds it.
+  expect(await f.service.use(f.b.id, 'Desk')).toMatchObject({ write: false, heldForWritingBy: 'A' });
+  await f.service.capture(f.b.id, { mode: 'glance' });
+  expect((await f.service.core(f.b.id, { kind: 'read', path: '/home/agent/x' })).result).toBeTruthy();
+  await f.service.core(f.b.id, { kind: 'terminal', operation: 'list' });
+  // Reading gives B nothing to act with, and writing needs the claim A holds.
+  await expect(f.service.run(f.b.id, { actions: [] })).rejects.toThrow(/reading this computer.*write: true/);
+  await expect(f.service.core(f.b.id, { kind: 'bash', command: 'ls' })).rejects.toThrow(/write: true/);
+  await expect(f.service.use(f.b.id, 'Desk', true)).rejects.toThrow(/held for writing by A.*still read/);
+  // A is undisturbed: its look still lets it act.
+  await f.service.capture(f.a.id, { mode: 'glance' });
+  expect((await f.service.run(f.a.id, { actions: [] })).completed).toBe(1);
+  expect((await f.service.list(f.b.id))[0]).toMatchObject({ holder: { name: 'A' }, current: false, reading: true });
+  // Omitting write keeps A's claim; write:false gives it up and keeps reading; B may then claim it.
+  expect(await f.service.use(f.a.id, 'Desk')).toMatchObject({ write: true });
+  expect(await f.service.use(f.a.id, 'Desk', false)).toMatchObject({ write: false });
+  await f.service.capture(f.a.id, { mode: 'glance' });
+  await expect(f.service.run(f.a.id, { actions: [] })).rejects.toThrow(/write: true/);
+  expect(await f.service.use(f.b.id, 'Desk', true)).toMatchObject({ write: true });
+  // Selecting another computer to read gives up the claim on this one.
+  const other = await f.db.client.computer.create({
+    data: { name: 'Other', requestKey: crypto.randomUUID(), state: 'running' },
+  });
+  await f.service.assign(f.b.id, [f.computer.id, other.id]);
+  expect(await f.service.use(f.b.id, 'Other')).toMatchObject({ write: false });
+  expect((await f.service.holders()).length).toBe(0);
+  await f.service.use(f.b.id, null);
+  await expect(f.service.capture(f.b.id, { mode: 'glance' })).rejects.toThrow(/use_computer/);
+});

@@ -6,7 +6,7 @@ import type { ScreenshotPool } from './image-pool';
 import { IMAGE_BYTES, renderTerminal } from './terminal-render';
 const session = Type.String({
   pattern: '^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$',
-  description: 'Exact session ID returned by terminal_create/list, scoped to your currently claimed computer.',
+  description: 'Exact session ID returned by terminal_create/list, scoped to the computer you read or hold.',
 });
 const target = { session };
 const keys = [
@@ -268,7 +268,7 @@ export function createTerminalTools(
   images?: ScreenshotPool,
 ): AgentTool[] {
   const common =
-    'Requires your currently assigned and claimed computer; guest uid1000 only, no platform-host access. Read concepts/computers/terminals. Await each computer operation. Sessions/programs survive tool calls, turn completion, browser disconnect, backend restart and claim release; stopping/replacing the computer ends them. Cancellation stops further API input, not persistent programs. ';
+    'list/view/status need the assigned computer you selected with use_computer; everything else needs your claim (write:true). Guest uid1000 only, no platform-host access. Read concepts/computers/terminals. Await each computer operation. Sessions/programs survive tool calls, turn completion, browser disconnect, backend restart and claim release; stopping/replacing the computer ends them. Cancellation stops further API input, not persistent programs. ';
   const reply = (receipt: CoreReceipt) => ({
     content: [
       {
