@@ -477,6 +477,23 @@ export class DmBroker {
     text: string,
     human: boolean,
   ) {
+    const event = await this.platformInput(agentId, platform, text, human);
+    if (!event) return null;
+    const { input, channelId, id } = event;
+    return (
+      this.runs.offer(agentId, input, { type: 'platform_event', channelId, platform }) ??
+      this.runs.enqueue({ agentId, channelId, clientMessageId: id, inputSource: 'agent' }, context =>
+        this.runInbox(agentId, input, context),
+      )
+    );
+  }
+  /** A platform event for an agent's private channel, or null when the agent is gone or going. */
+  private async platformInput(
+    agentId: string,
+    platform: NonNullable<AgentMessageSource['platform']>,
+    text: string,
+    human: boolean,
+  ) {
     if (this.closing || this.deleting.has(agentId)) return null;
     await this.ready();
     const agent = await this.database.findAgent(agentId);
@@ -490,37 +507,16 @@ export class DmBroker {
       timestamp: Date.now(),
       source: { agentId: 'platform', name: 'Platform', channelId, chainId: '', messageId: id, human, platform },
     };
-    return (
-      this.runs.offer(agentId, input, { type: 'platform_event', channelId, platform }) ??
-      this.runs.enqueue({ agentId, channelId, clientMessageId: id, inputSource: 'agent' }, context =>
-        this.runInbox(agentId, input, context),
-      )
-    );
+    return { input, channelId, id };
   }
-  /** A heartbeat: a platform event run as a branch of the agent's session (heartbeat.ts). */
+  /**
+   * A heartbeat: a platform event run as a branch of the agent's session (heartbeat.ts), never offered to a running
+   * turn. Set up by the owner, so it may answer in the private chat like the owner's own timers.
+   */
   async startHeartbeat(agentId: string, checklist: string) {
-    if (this.closing || this.deleting.has(agentId)) return;
-    await this.ready();
-    const agent = await this.database.findAgent(agentId);
-    if (!agent) return;
-    const channelId = agent.channels[0].id;
-    const id = crypto.randomUUID();
-    const input: ChannelMessage = {
-      role: 'user',
-      id,
-      text: heartbeatPrompt(checklist),
-      timestamp: Date.now(),
-      // Set up by the owner, so it may answer in the private chat like the owner's own timers.
-      source: {
-        agentId: 'platform',
-        name: 'Platform',
-        channelId,
-        chainId: '',
-        messageId: id,
-        human: true,
-        platform: 'heartbeat',
-      },
-    };
+    const event = await this.platformInput(agentId, 'heartbeat', heartbeatPrompt(checklist), true);
+    if (!event) return;
+    const { input, channelId, id } = event;
     this.runs.enqueue({ agentId, channelId, clientMessageId: id, inputSource: 'agent' }, context =>
       this.runInbox(agentId, input, context, { heartbeat: true }),
     );
