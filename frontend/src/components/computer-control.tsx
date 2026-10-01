@@ -6,6 +6,7 @@ import type { ChatAgent } from '@/use-chat';
 import type { ChatMessage } from '@/chat-types';
 import { AgentAvatar } from './chat-identity';
 import { Button } from './ui/button';
+import { ComputerReaders } from './computer-readers';
 import { ConfirmDialog } from './confirm-dialog';
 
 export type ComputerAgentState = {
@@ -44,6 +45,7 @@ export function ComputerControl({
   onOpenChat?: (agent: ChatAgent, from: DOMRect) => void;
 }) {
   const [holder, setHolder] = useState<{ id: string; name: string } | null>(null);
+  const [readers, setReaders] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [known, setKnown] = useState(false);
@@ -58,6 +60,7 @@ export function ComputerControl({
         if (controller.signal.aborted) return;
         if (!result.data) throw new Error('Control status unavailable.');
         setHolder(result.data.holders.find(item => item.computerId === computerId)?.agent ?? null);
+        setReaders((result.data.readers ?? []).filter(item => item.computerId === computerId).map(item => item.agent));
         setError('');
         setKnown(true);
       } catch {
@@ -180,6 +183,13 @@ export function ComputerControl({
         <span role="status" className="text-muted-foreground">
           {known ? 'No agent holds control' : error ? 'Control status unavailable' : 'Checking control…'}
         </span>
+      )}
+      {readers.length > 0 && (
+        <>
+          {/* Readers sit apart from the holder: they look and read, only the holder acts. */}
+          <span aria-hidden="true" className="h-6 w-px bg-border" />
+          <ComputerReaders readers={readers} agents={agentState?.agents} />
+        </>
       )}
       {holder && (
         <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => setConfirming(true)}>

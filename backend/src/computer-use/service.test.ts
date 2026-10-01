@@ -303,3 +303,13 @@ it('puts back what an agent held and read when its heartbeat is dropped', async 
   await f.service.restoreHeld(f.a.id, holding);
   expect((await f.service.holders()).map(claim => claim.agent.name)).toEqual(['A']);
 });
+
+it('lists readers apart from the holder, only while they are still assigned', async () => {
+  const f = await fixture();
+  await f.service.use(f.a.id, 'Desk', true);
+  await f.service.use(f.b.id, 'Desk');
+  expect(await f.service.readers()).toEqual([{ computerId: f.computer.id, agent: { id: f.b.id, name: 'B' } }]);
+  expect((await f.service.holders()).map(claim => claim.agent.name)).toEqual(['A']);
+  await f.service.assign(f.b.id, []);
+  expect(await f.service.readers()).toEqual([]);
+});

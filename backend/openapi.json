@@ -20684,10 +20684,41 @@
                 "schema": {
                   "type": "object",
                   "required": [
-                    "holders"
+                    "holders",
+                    "readers"
                   ],
                   "properties": {
                     "holders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "computerId",
+                          "agent"
+                        ],
+                        "properties": {
+                          "computerId": {
+                            "type": "string"
+                          },
+                          "agent": {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "name"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "readers": {
                       "type": "array",
                       "items": {
                         "type": "object",

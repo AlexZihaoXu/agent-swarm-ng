@@ -154,6 +154,23 @@ export class ComputerUseService {
       take: 100,
     });
   }
+  /** Agents reading a computer they do not hold (still assigned), for the dashboard. */
+  async readers() {
+    await this.ready();
+    const pairs = [...this.reading].map(([agentId, computerId]) => ({ agentId, computerId }));
+    if (!pairs.length) return [];
+    const [assigned, claims] = await Promise.all([
+      this.database.client.computerAssignment.findMany({
+        where: { OR: pairs },
+        select: { computerId: true, agent: { select: { id: true, name: true } } },
+        take: 500,
+      }),
+      this.database.client.computerClaim.findMany({ select: { agentId: true, computerId: true }, take: 500 }),
+    ]);
+    return assigned
+      .filter(row => !claims.some(claim => claim.agentId === row.agent.id && claim.computerId === row.computerId))
+      .map(row => ({ computerId: row.computerId, agent: row.agent }));
+  }
   async assign(agentId: string, computerIds: string[]) {
     await this.ready();
     if (computerIds.length > 100 || new Set(computerIds).size !== computerIds.length)

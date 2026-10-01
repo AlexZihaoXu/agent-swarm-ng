@@ -6356,6 +6356,13 @@ export interface operations {
                                 name: string;
                             };
                         }[];
+                        readers: {
+                            computerId: string;
+                            agent: {
+                                id: string;
+                                name: string;
+                            };
+                        }[];
                     };
                 };
             };

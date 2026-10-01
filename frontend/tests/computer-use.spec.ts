@@ -257,3 +257,36 @@ test('the chat and terminal windows show which one is focused, and the one touch
   await expect(terminal).not.toHaveAttribute('data-focused');
   await expect(chat).not.toHaveAttribute('data-focused');
 });
+
+test('agents reading a computer show as overlapping avatars apart from the holder', async ({ page }) => {
+  const [holder, ...others] = sampleAgents;
+  await page.addInitScript(id => localStorage.setItem(`computer-consent:${id}`, 'yes'), desk.id);
+  await page.route(/\/api\/computers(?:\?.*)?$/, route =>
+    route.fulfill({ json: { computers: [{ ...desk, portalFree: true }], controllerConnected: true } }),
+  );
+  const extra = { id: 'extra-reader', name: 'Sky' };
+  await page.route('**/api/computers/control', route =>
+    route.fulfill({
+      json: {
+        holders: [{ computerId: desk.id, agent: { id: holder.id, name: holder.name } }],
+        readers: [...others.map(agent => ({ id: agent.id, name: agent.name })), extra, { id: 'r6', name: 'Ash' }].map(
+          agent => ({ computerId: desk.id, agent }),
+        ),
+      },
+    }),
+  );
+  await page.route(`**/computers/${desk.id}/desktop/**`, route =>
+    route.fulfill({ contentType: 'text/html', body: '<html><body>Desktop fixture</body></html>' }),
+  );
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/computers/${desk.id}`);
+  await expect(page.getByTestId('computer-agent-presence')).toContainText(holder.name);
+  const readers = page.getByRole('status', { name: /^Reading this computer: / });
+  await expect(readers).toHaveAccessibleName(
+    `Reading this computer: ${[...others.map(a => a.name), 'Sky', 'Ash'].join(', ')}`,
+  );
+  // Four faces overlap; the rest are counted.
+  await expect(readers.getByText('+1')).toBeVisible();
+  await expect(readers).toContainText('reading');
+  await readers.screenshot({ path: '../.scratch/shots/computer-readers.png' });
+});

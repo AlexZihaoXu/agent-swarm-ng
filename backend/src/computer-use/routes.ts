@@ -68,7 +68,11 @@ export function registerComputerUseRoutes(app: FastifyInstance, service: Compute
       schema: {
         operationId: 'getComputerControl',
         response: {
-          200: Type.Object({ holders: Type.Array(Type.Object({ computerId: Type.String(), agent: holder })) }),
+          200: Type.Object({
+            holders: Type.Array(Type.Object({ computerId: Type.String(), agent: holder })),
+            /** Agents reading a computer without holding it (anyone assigned may read at any time). */
+            readers: Type.Array(Type.Object({ computerId: Type.String(), agent: holder })),
+          }),
           ...errors,
         },
       },
@@ -76,7 +80,8 @@ export function registerComputerUseRoutes(app: FastifyInstance, service: Compute
     async (_request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
-        return { holders: await service.holders() };
+        const [holders, readers] = await Promise.all([service.holders(), service.readers()]);
+        return { holders, readers };
       } catch {
         return reply.code(503).send({ message: 'Could not read computer control.' });
       }

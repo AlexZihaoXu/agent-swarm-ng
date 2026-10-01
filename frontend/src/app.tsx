@@ -619,7 +619,7 @@ export function App() {
         {!computerViewerOpen && (
           <header
             className={cn(
-              'pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex justify-center md:pointer-events-auto md:relative md:inset-auto md:order-first md:h-14 md:min-h-14 md:shrink-0 md:items-center md:border-b md:border-border md:bg-sidebar md:px-4',
+              'pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex justify-center md:pointer-events-auto md:relative md:z-auto md:inset-auto md:order-first md:h-14 md:min-h-14 md:shrink-0 md:items-center md:border-b md:border-border md:bg-sidebar md:px-4',
               narrowDetail && 'max-md:hidden',
             )}
           >

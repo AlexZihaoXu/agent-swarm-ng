@@ -77,6 +77,21 @@ test('Ctrl+K opens Portal, prefixes narrow it, Enter floats and Shift+Enter goes
   await expect(portal).toBeHidden();
   const chat = page.getByRole('region', { name: 'Chat with Morgan' });
   await expect(chat).toBeVisible();
+  // It opens below the top bar, and even dragged over it, its title bar stays on top and can be grabbed.
+  const bar = chat.locator('header');
+  expect((await bar.boundingBox())!.y).toBeGreaterThanOrEqual(56);
+  const start = (await bar.boundingBox())!;
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(start.x + start.width / 2, 20, { steps: 5 });
+  await page.mouse.up();
+  const moved = (await bar.boundingBox())!;
+  expect(moved.y).toBeLessThan(40);
+  const onTop = await page.evaluate(
+    ([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('[aria-label="Chat with Morgan"]')),
+    [moved.x + moved.width / 2, moved.y + moved.height / 2],
+  );
+  expect(onTop).toBe(true);
   // A terminal too.
   await page.keyboard.press('Control+k');
   await portal.getByRole('combobox').fill(':build');

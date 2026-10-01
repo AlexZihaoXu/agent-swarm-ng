@@ -95,7 +95,7 @@ Files: ⋯ → File browser: browse, preview text and download (no upload or del
 Desktop viewer (click a running card, or Open; /computers/<id>): the header has
 - "Computers / <name>" breadcrumb (back),
 - a Desktop | Terminal switch,
-- control status "<agent> is on this computer" (Ready, Working, Typing) or "No agent holds control"; clicking the agent opens a floating chat with it; next to it "Force release",
+- control status "<agent> is on this computer" (Ready, Working, Typing) or "No agent holds control"; clicking the agent opens a floating chat with it; agents only reading the computer show apart from it as small overlapping faces followed by "reading" (hover for names; more than four are counted); next to it "Force release",
 - the input lock (starts locked each time; unlock to use mouse and keyboard; on an upright phone the desktop is rotated and input stays locked: turn the phone sideways),
 - sound on/off (HTTPS address only),
 - "Send keys" (while input is live): New tab, Close tab, Address bar, Reload, New window.

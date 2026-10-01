@@ -148,7 +148,15 @@ function PortalWindowView({
           onMinimize={() => closeWindow(item.key)}
           windowId={item.key}
           lights={lights}
-          initial={savedBox(item.key)}
+          // First opened from Portal: on the right, below the top bar.
+          initial={
+            savedBox(item.key) ?? {
+              x: window.innerWidth - 380 - 48,
+              y: 72,
+              width: 380,
+              height: Math.min(560, window.innerHeight - 96),
+            }
+          }
           onBox={remember}
         />
       </div>
