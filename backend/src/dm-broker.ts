@@ -153,7 +153,7 @@ export class DmBroker {
       ? new ComputerWatches(
           database,
           computers,
-          (agentId, text, human) => this.deliverPlatformEvent(agentId, 'computer', text, human),
+          (agentId, text, human) => this.wakeForWatch(agentId, text, human),
           createWatchJudge({
             database,
             endpoints,
@@ -446,10 +446,23 @@ export class DmBroker {
     text: string,
     human: boolean,
   ) {
-    if (this.closing || this.deleting.has(agentId)) return false;
+    return Boolean(await this.platformRun(agentId, platform, text, human));
+  }
+  /** A watch's wake-up; `handled` settles when the turn that received it has ended (repeating watches wait). */
+  private async wakeForWatch(agentId: string, text: string, human: boolean) {
+    const run = await this.platformRun(agentId, 'computer', text, human);
+    return run ? { handled: run.finished } : false;
+  }
+  private async platformRun(
+    agentId: string,
+    platform: 'timer' | 'reminder' | 'computer',
+    text: string,
+    human: boolean,
+  ) {
+    if (this.closing || this.deleting.has(agentId)) return null;
     await this.ready();
     const agent = await this.database.findAgent(agentId);
-    if (!agent) return false;
+    if (!agent) return null;
     const channelId = agent.channels[0].id;
     const id = crypto.randomUUID();
     const input: ChannelMessage = {
@@ -459,11 +472,12 @@ export class DmBroker {
       timestamp: Date.now(),
       source: { agentId: 'platform', name: 'Platform', channelId, chainId: '', messageId: id, human, platform },
     };
-    this.runs.offer(agentId, input, { type: 'platform_event', channelId, platform }) ??
+    return (
+      this.runs.offer(agentId, input, { type: 'platform_event', channelId, platform }) ??
       this.runs.enqueue({ agentId, channelId, clientMessageId: id, inputSource: 'agent' }, context =>
         this.runInbox(agentId, input, context),
-      );
-    return true;
+      )
+    );
   }
   async notifyHumanReaction(channelId: string, messageId: string, emoji: string) {
     await this.ready();

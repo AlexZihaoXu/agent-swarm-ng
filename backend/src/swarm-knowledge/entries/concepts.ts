@@ -313,19 +313,25 @@ export const watchesConcept = {
   parentId: 'concepts/computers',
   title: 'Watches',
   summary:
-    'watch_terminal / watch_desktop: a one-shot check at an interval that wakes you once when a condition is met.',
+    'watch_terminal / watch_desktop: a check at an interval that wakes you when a condition is met, once or (repeat) once per occurrence.',
   source: 'docs/agent-computer-use.md',
   related: ['practices/waiting', 'concepts/time', 'concepts/platform-events', 'practices/harnesses/claude-code'],
-  content: `A watch asks the platform to look at the computer you hold at a fixed interval and wake you ONCE when a condition you describe is met. watch_terminal watches one terminal; watch_desktop watches the screen, or one region of it ({x,y,size} as in look_at).
+  content: `A watch asks the platform to look at the computer you hold at a fixed interval and wake you when a condition you describe is met: once by default, or once per occurrence with repeat. watch_terminal watches one terminal; watch_desktop watches the screen, or one region of it ({x,y,size} as in look_at).
 
 Each check: the platform takes the current view (terminal text with its running/exited state, or a screenshot) and a watcher, a short-lived model check using your own model, decides whether your condition (until, up to 1000 characters) is met. The watcher is given: your condition; what it watches; the check number and time; the current view; the view when the watch started (when it differs); and whether the view changed since the previous check or for how long it has been unchanged ("Unchanged ... 95s, 4 checks in a row"). It never skips a check because nothing changed; the unchanged time is information (for example, "Claude's output has not moved for 60 s"). It may look closer with look-only tools (terminal_view including colors, terminal_status; or glance/look_at). It cannot type or click. It has at most 10 model turns and 120 seconds per check (240 for a fork).
 
 Settings: every_seconds 30..3600 (default 30). timeout_seconds defaults to the larger of 600 and 10 × every_seconds, at most 24 hours. check_now (default true) runs the first check immediately; false waits one interval. context "fresh" (default): the watcher sees only the check. context "fork": the watcher is a copy of your own conversation, so it understands conditions that depend on what you were doing; allowed only when every_seconds is below 150, because longer gaps lose the provider's cache of your context and every check would pay for all of it.
 
-Endings, each removing the watch:
+Repeating watches (repeat: {cooldown_seconds?, max_fires?}): the watch keeps going after it fires.
+- Once per occurrence: after a firing it fires again only after a check no longer sees the condition and a later one sees it again. A condition that stays true ("tests are failing") wakes you once, not every check. For "something new appears" conditions the watcher is told its last report and counts only what is new.
+- Paused while you work: after waking you, it checks nothing until that turn of yours ends, then goes on.
+- Cooldown: at most one wake-up per cooldown_seconds (default the larger of 60 and every_seconds); firings in between are merged into one wake-up ("fired 3 times since you were last woken", with the latest report).
+- Ends at max_fires (default 20, at most 100; the last wake-up says so), at its timeout, after three failed checks in a row (it waits longer after each), or for the same reasons as a one-shot watch. list_timers shows its firings and state; cancel_timer stops it. It costs a model check per interval for as long as it runs.
+
+Endings, each removing the watch (a repeating watch is removed only by these, not by firing):
 - fired: a check found the condition. You get one platform event with the watcher's report.
 - timed out: you are told, with the last check's reason.
-- failed: a check could not decide (model or computer error). You are told, in case the condition happened.
+- failed: a check could not decide (model or computer error); a repeating watch only after three in a row. You are told, in case the condition happened.
 - computer lost: force release (even if you claim it again), assignment removal, the computer powered off, or the computer blocked after an operation whose outcome is uncertain. You are told, with what to do next.
 - terminal gone: the watched terminal was closed by someone else or can no longer be viewed. You are told.
 - model can no longer see images (a desktop watch after the agent's model changed): you are told.
@@ -334,7 +340,7 @@ Endings, each removing the watch:
 
 Limits: at most 3 watches at a time; list_timers shows them with their next check and timeout. Checks never overlap, and they wait for a busy computer instead of failing. A watch grants no input allowance: after waking, look yourself.
 
-What a watch is not: not a repeating monitor (set a new one to keep watching), not a replacement for looking yourself before acting, not a way to act on the computer, and not a clock timer (use set_timer for "in 10 minutes"). When to use which: practices/waiting.`,
+What a watch is not: not a replacement for looking yourself before acting, not a way to act on the computer, and not a clock timer (use set_timer for "in 10 minutes"). When to use which: practices/waiting.`,
 } satisfies KnowledgeEntry;
 
 export const discordAttentionConcept = {

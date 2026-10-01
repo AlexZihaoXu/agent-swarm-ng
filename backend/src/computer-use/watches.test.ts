@@ -56,10 +56,15 @@ async function setup(judge: Judge) {
   await service.use(agent.id, computer.id);
   let clock = 1_000_000;
   const events: string[] = [];
+  // Each wake-up's turn stays "running" until the test ends it (repeating watches wait for it).
+  const turns: (() => void)[] = [];
   const watches = new ComputerWatches(
     db,
     service,
-    async (_agent, text) => events.push(text),
+    async (_agent, text) => {
+      events.push(text);
+      return { handled: new Promise<void>(resolve => turns.push(resolve)) };
+    },
     judge,
     () => clock,
   );
@@ -74,6 +79,11 @@ async function setup(judge: Judge) {
     state,
     watches,
     events,
+    /** Ends the turns that received wake-ups so far (lets a paused repeating watch go on). */
+    endTurns: async () => {
+      for (const end of turns.splice(0)) end();
+      await new Promise(resolve => setTimeout(resolve, 0));
+    },
     tick: async (seconds: number) => {
       clock += seconds * 1000;
       await watches.due();
@@ -230,7 +240,7 @@ it('after a restart, tells each agent its watch ended', async () => {
     const restarted = new ComputerWatches(
       t.db,
       t.service,
-      async (_agent, text) => t.events.push(text),
+      async (_agent, text) => Boolean(t.events.push(text)),
       async () => ({
         notify: false,
         summary: 'no',
@@ -354,6 +364,88 @@ it('a force release during a read says the computer was lost, and an own delete 
     await new Promise(resolve => setTimeout(resolve, 10));
     expect(t.watches.list(t.agent.id)).toEqual([]);
     expect(t.events).toHaveLength(events);
+  } finally {
+    await t.close();
+  }
+});
+
+it('a repeating watch fires once per occurrence, pauses while you handle it, merges fast firings, and remembers', async () => {
+  const seen: string[] = [];
+  let answer: boolean | 'fail' = false;
+  const judge = vi.fn<Judge>(async (_watch, input) => {
+    seen.push(input.text);
+    if (answer === 'fail') throw new Error('model unavailable');
+    return answer ? { notify: true, summary: 'tests failed' } : { notify: false, summary: 'tests pass' };
+  });
+  const t = await setup(judge);
+  const step = async (value: boolean | 'fail', seconds = 30) => {
+    answer = value;
+    await t.tick(seconds);
+  };
+  try {
+    const watch = await t.watches.create(t.agent.id, {
+      ...terminalWatch,
+      until: 'a test run fails',
+      timeoutSeconds: 3600,
+      repeat: { cooldownSeconds: 600, maxFires: 4 },
+    });
+    await step(true, 0); // t=0
+    expect(t.events).toHaveLength(1);
+    expect(t.events[0]).toContain('fired at');
+    expect(t.events[0]).toContain('firing 1 of at most 4');
+    expect(t.events[0]).toContain(`cancel_timer({id: "${watch.id}"})`);
+    expect(t.watches.list(t.agent.id)[0].repeat).toMatchObject({
+      fires: 1,
+      state: 'paused while you handle its last wake-up',
+    });
+    // Nothing is checked while the agent is still handling the wake-up.
+    await t.tick(300); // t=300
+    expect(judge).toHaveBeenCalledTimes(1);
+    await t.endTurns();
+    // Still failing: the same occurrence does not fire again, but the watcher knows what it last reported.
+    await step(true); // t=330
+    expect(t.events).toHaveLength(1);
+    expect(seen.at(-1)).toContain('This watch repeats. It last fired at');
+    expect(seen.at(-1)).toContain('reporting: tests failed');
+    // Cleared and back twice within the cooldown: the firings wait, merged.
+    await step(false); // t=360, re-armed
+    await step(true); // t=390, fires (pending)
+    await step(false); // t=420
+    await step(true); // t=450, fires again (merged)
+    expect(t.events).toHaveLength(1);
+    // A few failed checks in a row are ridden out, with a longer pause each time.
+    await step('fail'); // t=480; next check 2 intervals later
+    await step('fail', 60); // t=540; next 4 intervals later
+    expect(t.watches.list(t.agent.id)).toHaveLength(1);
+    // The cooldown ends: one wake-up with both firings.
+    await step(false, 60); // t=600
+    expect(t.events).toHaveLength(2);
+    expect(t.events[1]).toContain('fired 2 times since you were last woken');
+    expect(t.events[1]).toContain("Watcher's latest report: tests failed");
+    await t.endTurns();
+    await step(true, 60); // still failing since the last firing: not armed
+    await step(false);
+    await step(true); // the 4th firing is the last (max 4): it says so and removes the watch
+    expect(t.events.at(-1)).toContain('fired for the last time');
+    expect(t.watches.list(t.agent.id)).toEqual([]);
+  } finally {
+    await t.close();
+  }
+});
+
+it('a repeating watch ends after three failed checks in a row, and checks cannot pile up', async () => {
+  const judge = vi.fn<Judge>(async () => {
+    throw new Error('model unavailable');
+  });
+  const t = await setup(judge);
+  try {
+    await t.watches.create(t.agent.id, { ...terminalWatch, repeat: {} });
+    await t.tick(0);
+    await t.tick(60); // 1st retry after 2 intervals
+    expect(t.events).toHaveLength(0);
+    await t.tick(120); // 2nd retry after 4 intervals
+    expect(t.events.at(-1)).toContain('3 checks in a row failed (the last: model unavailable)');
+    expect(judge).toHaveBeenCalledTimes(3);
   } finally {
     await t.close();
   }

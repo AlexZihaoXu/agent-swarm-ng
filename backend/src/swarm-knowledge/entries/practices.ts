@@ -242,7 +242,7 @@ Interval and timeout: pick every_seconds from how quickly you need to react and 
 
 fresh or fork: fresh (default) suits conditions the view alone can decide. Use fork only when judging needs your context (for example "Claude's answer covers the three questions I asked it") and checks are frequent (under 150 s); fork checks cost more.
 
-After waking: the watcher's report is a summary, not your observation. Look yourself (terminal_view or a screenshot) before acting or telling the human. A watch fires once: set a new one for the next step (for example after you send Claude Code its next prompt). If a watch timed out or failed, look and decide whether to wait again.
+After waking: the watcher's report is a summary, not your observation. Look yourself (terminal_view or a screenshot) before acting or telling the human. A watch fires once: set a new one for the next step (for example after you send Claude Code its next prompt). For something that recurs on its own (each failing test run of a watcher process, each new error in a server), use repeat instead of setting a new watch every time; give it a sensible max_fires and timeout, since it checks until it ends. If a watch timed out or failed, look and decide whether to wait again.
 
 Housekeeping: list_timers shows your timers, reminders and watches; cancel_timer stops any of them. Releasing the computer ends its watches.`,
 } satisfies KnowledgeEntry;

@@ -8,6 +8,9 @@ import {
   WATCH_MAX_TIMEOUT_SECONDS,
   WATCH_MIN_SECONDS,
   WATCH_UNTIL_MAX,
+  WATCH_REPEAT_DEFAULT_COOLDOWN_SECONDS,
+  WATCH_REPEAT_DEFAULT_MAX_FIRES,
+  WATCH_REPEAT_MAX_FIRES,
   WatchError,
   type ComputerWatches,
   type WatchSpec,
@@ -45,13 +48,38 @@ const common = {
   check_now: Type.Optional(
     Type.Boolean({ description: 'First check immediately (default true); false waits one interval.' }),
   ),
+  repeat: Type.Optional(
+    Type.Object(
+      {
+        cooldown_seconds: Type.Optional(
+          Type.Number({
+            minimum: WATCH_MIN_SECONDS,
+            maximum: WATCH_MAX_SECONDS,
+            description: `Least time between two wake-ups (default the larger of ${WATCH_REPEAT_DEFAULT_COOLDOWN_SECONDS} and every_seconds); firings meanwhile are merged into one.`,
+          }),
+        ),
+        max_fires: Type.Optional(
+          Type.Integer({
+            minimum: 1,
+            maximum: WATCH_REPEAT_MAX_FIRES,
+            description: `End after this many firings (default ${WATCH_REPEAT_DEFAULT_MAX_FIRES}).`,
+          }),
+        ),
+      },
+      {
+        additionalProperties: false,
+        description:
+          'Keep watching after it fires (omit for once only): it fires once per occurrence (again only after the condition clears and comes back), pauses while you handle a wake-up, and merges firings that come faster than the cooldown. Use for recurring events (each failing test run, each new error); it costs a model check per interval for as long as it runs.',
+      },
+    ),
+  ),
   context: Type.Optional(
     Type.Union([Type.Literal('fresh'), Type.Literal('fork')], {
       description: `fresh (default): a new watcher with only your condition. fork: a copy of your own conversation decides, for conditions that need your context; allowed only when every_seconds is below ${WATCH_FORK_BELOW_SECONDS}.`,
     }),
   ),
 };
-const facts = `Once only: the first check that finds the condition wakes you with one platform event (the watcher's report) and removes the watch; set a new watch to keep watching. Each check a watcher (your own model, up to ${WATCH_MAX_TURNS} turns and 120 s, 240 s for a fork, look-only tools) gets your condition, the current view, the view when the watch started, and how long the view has been unchanged (it never skips a check because nothing changed). You are also woken, and the watch removed, when it times out, when a check fails, when the watched terminal is gone, or when you lose the computer; your own release, cancel_timer or deleting the watched terminal ends it quietly. At most ${WATCH_MAX_ACTIVE} watches; list_timers shows them. A watch neither types nor clicks, and grants no input allowance: look yourself after waking. Watches end on a platform restart (you are told). Read Swarm Knowledge practices/waiting before first use.`;
+const facts = `Once only by default: the first check that finds the condition wakes you with one platform event (the watcher's report) and removes the watch; repeat keeps it watching (see repeat). Each check a watcher (your own model, up to ${WATCH_MAX_TURNS} turns and 120 s, 240 s for a fork, look-only tools) gets your condition, the current view, the view when the watch started, and how long the view has been unchanged (it never skips a check because nothing changed). You are also woken, and the watch removed, when it times out, when a check fails (a repeating watch: three in a row), when the watched terminal is gone, or when you lose the computer; your own release, cancel_timer or deleting the watched terminal ends it quietly. At most ${WATCH_MAX_ACTIVE} watches; list_timers shows them. A watch neither types nor clicks, and grants no input allowance: look yourself after waking. Watches end on a platform restart (you are told). Read Swarm Knowledge practices/waiting before first use.`;
 
 export function createWatchTools(
   watches: ComputerWatches,
@@ -73,18 +101,22 @@ export function createWatchTools(
     timeout_seconds?: number;
     check_now?: boolean;
     context?: 'fresh' | 'fork';
+    repeat?: { cooldown_seconds?: number; max_fires?: number };
   }) => ({
     until: params.until,
     everySeconds: params.every_seconds ?? WATCH_MIN_SECONDS,
     timeoutSeconds: params.timeout_seconds,
     checkNow: params.check_now,
     context: params.context,
+    ...(params.repeat
+      ? { repeat: { cooldownSeconds: params.repeat.cooldown_seconds, maxFires: params.repeat.max_fires } }
+      : {}),
   });
   return [
     defineTool({
       name: 'watch_terminal',
       label: 'Watch terminal',
-      description: `Wake me once when something happens in a terminal on the computer I hold, e.g. a long command or a coding agent finishes and waits at its prompt, a test run fails, a server prints "ready". Instead of waiting or re-viewing, set this and end your turn. ${facts}`,
+      description: `Wake me when something happens in a terminal on the computer I hold, e.g. a long command or a coding agent finishes and waits at its prompt, a test run fails, a server prints "ready". Instead of waiting or re-viewing, set this and end your turn. ${facts}`,
       parameters: Type.Object(
         {
           session: Type.String({
@@ -102,7 +134,7 @@ export function createWatchTools(
     defineTool({
       name: 'watch_desktop',
       label: 'Watch desktop',
-      description: `Wake me once when something changes on the desktop of the computer I hold, e.g. a download or install finishes, a dialog appears, a page finishes loading, a value in one part of the screen changes. region {x,y,size} (like look_at, [0,999]) focuses the watcher on one area; the whole screen otherwise. Needs a vision model. ${facts}`,
+      description: `Wake me when something changes on the desktop of the computer I hold, e.g. a download or install finishes, a dialog appears, a page finishes loading, a value in one part of the screen changes. region {x,y,size} (like look_at, [0,999]) focuses the watcher on one area; the whole screen otherwise. Needs a vision model. ${facts}`,
       parameters: Type.Object(
         {
           region: Type.Optional(

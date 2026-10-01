@@ -14,6 +14,13 @@ export const WATCH_DEFAULT_TIMEOUT_SECONDS = 600;
 export const WATCH_MAX_TIMEOUT_SECONDS = 24 * 60 * 60;
 export const WATCH_UNTIL_MAX = 1000;
 export const WATCH_MAX_ACTIVE = 3;
+/** Repeating watches: the least time between two wake-ups by default, and how many firings at most. */
+export const WATCH_REPEAT_DEFAULT_COOLDOWN_SECONDS = 60;
+export const WATCH_REPEAT_DEFAULT_MAX_FIRES = 20;
+export const WATCH_REPEAT_MAX_FIRES = 100;
+/** A repeating watch survives this many failed checks in a row (with growing pauses) before it ends. */
+const REPEAT_FAILURES = 3;
+const REPEAT_BACKOFF_MAX_MS = 10 * 60 * 1000;
 
 export class WatchError extends Error {}
 /** A reason the watch cannot go on (not a failed check): it ends with this message. */
@@ -52,7 +59,28 @@ export type WatchSpec = {
   timeoutSeconds?: number;
   checkNow?: boolean;
   context?: 'fresh' | 'fork';
+  /** Keep watching after a firing (see Repeat). */
+  repeat?: { cooldownSeconds?: number; maxFires?: number };
   human: boolean;
+};
+/**
+ * A repeating watch fires once per occurrence: after a firing it re-arms only when a check no longer sees the
+ * condition (`armed`), wakes the agent at most once per cooldown (firings meanwhile merge into `pending`), and
+ * checks nothing while the agent's turn that received a wake-up is still running (`paused`).
+ */
+type Repeat = {
+  cooldownMs: number;
+  maxFires: number;
+  fires: number;
+  armed: boolean;
+  paused: boolean;
+  /** Failed checks in a row. */
+  failures: number;
+  lastWokenAt?: number;
+  lastFiredAt?: number;
+  lastReport?: string;
+  pending?: { count: number; firstAt: number; lastAt: number; report: string };
+  wakeTimer?: ReturnType<typeof setTimeout>;
 };
 type Observation = { at: number; hash: string; text: string; frame?: ScreenFrame };
 export type Watch = {
@@ -81,6 +109,7 @@ export type Watch = {
   lastReason?: string;
   timer?: ReturnType<typeof setTimeout>;
   running?: AbortController;
+  repeat?: Repeat;
 };
 /** Decides one check. It gets the check's text and images, and the watcher's read tools for a closer look. */
 export type Judge = (
@@ -88,7 +117,8 @@ export type Judge = (
   input: { text: string; images: ImageContent[]; tools: (vision: boolean) => AgentTool[] },
   signal: AbortSignal,
 ) => Promise<Verdict>;
-type Deliver = (agentId: string, text: string, human: boolean) => Promise<unknown>;
+/** Wakes the agent; `handled` settles when the turn that received the wake-up has ended (repeating watches wait). */
+type Deliver = (agentId: string, text: string, human: boolean) => Promise<boolean | { handled: Promise<unknown> }>;
 
 const iso = (ms: number) => new Date(ms).toISOString();
 const seconds = (ms: number) => Math.round(ms / 1000);
@@ -99,9 +129,10 @@ const image = (frame: ScreenFrame): ImageContent => ({
 });
 
 /**
- * One-shot watches on the computer an agent holds: at each interval a watcher looks (terminal text or a screenshot)
- * and a short-lived model check decides whether the agent's condition is met. The first yes wakes the agent once
- * and removes the watch; so do a timeout, a failed check, and losing the computer (the agent is told either way).
+ * Watches on the computer an agent holds: at each interval a watcher looks (terminal text or a screenshot) and a
+ * short-lived model check decides whether the agent's condition is met. A one-shot watch wakes the agent at the first
+ * yes and is removed; a repeating one (Repeat) keeps going. A timeout, failed checks, and losing the computer end
+ * either kind (the agent is told).
  * Checks never overlap and never grant the agent input allowance. Watches live in memory: a restart releases every
  * claim, so a restart ends them, and their rows exist only so the agent hears that it did.
  */
@@ -166,6 +197,15 @@ export class ComputerWatches {
       throw new WatchError(
         `context "fork" needs every_seconds below ${WATCH_FORK_BELOW_SECONDS} (a longer gap loses the provider's cache of your context, so every check would pay for all of it). Use "fresh", or check more often.`,
       );
+    const repeat = spec.repeat;
+    if (repeat) {
+      const cooldown = repeat.cooldownSeconds ?? Math.max(WATCH_REPEAT_DEFAULT_COOLDOWN_SECONDS, every);
+      if (!Number.isFinite(cooldown) || cooldown < WATCH_MIN_SECONDS || cooldown > WATCH_MAX_SECONDS)
+        throw new WatchError(`repeat.cooldown_seconds must be ${WATCH_MIN_SECONDS}..${WATCH_MAX_SECONDS}.`);
+      const fires = repeat.maxFires ?? WATCH_REPEAT_DEFAULT_MAX_FIRES;
+      if (!Number.isInteger(fires) || fires < 1 || fires > WATCH_REPEAT_MAX_FIRES)
+        throw new WatchError(`repeat.max_fires must be 1..${WATCH_REPEAT_MAX_FIRES}.`);
+    }
     const active = this.forAgent(agentId).length + (this.creating.get(agentId) ?? 0);
     if (active >= WATCH_MAX_ACTIVE)
       throw new WatchError(`At most ${WATCH_MAX_ACTIVE} watches at once; cancel one with cancel_timer first.`);
@@ -224,6 +264,19 @@ export class ComputerWatches {
       nextAt: spec.checkNow === false ? now + every * 1000 : now,
       checks: 0,
       unchangedChecks: 0,
+      ...(spec.repeat
+        ? {
+            repeat: {
+              cooldownMs:
+                (spec.repeat.cooldownSeconds ?? Math.max(WATCH_REPEAT_DEFAULT_COOLDOWN_SECONDS, every)) * 1000,
+              maxFires: spec.repeat.maxFires ?? WATCH_REPEAT_DEFAULT_MAX_FIRES,
+              fires: 0,
+              armed: true,
+              paused: false,
+              failures: 0,
+            },
+          }
+        : {}),
     };
     this.watches.set(watch.id, watch);
     this.schedule(watch);
@@ -269,8 +322,12 @@ export class ComputerWatches {
   /** Runs a due check now (the scheduler does this on its own; tests call it to step a controlled clock). */
   async due() {
     const now = this.now();
-    for (const watch of [...this.watches.values()])
-      if (Math.min(watch.nextAt, watch.deadline) <= now && !watch.running) await this.check(watch);
+    for (const watch of [...this.watches.values()]) {
+      const repeat = watch.repeat;
+      if (repeat?.pending && !repeat.paused && now >= (repeat.lastWokenAt ?? -Infinity) + repeat.cooldownMs)
+        await this.wake(watch);
+      if (Math.min(watch.nextAt, watch.deadline) <= now && !watch.running && !repeat?.paused) await this.check(watch);
+    }
   }
 
   private view(watch: Watch) {
@@ -287,16 +344,33 @@ export class ComputerWatches {
       nextCheckAt: iso(Math.min(watch.nextAt, watch.deadline)),
       timesOutAt: iso(watch.deadline),
       createdAt: iso(watch.createdAt),
+      ...(watch.repeat
+        ? {
+            repeat: {
+              fires: watch.repeat.fires,
+              maxFires: watch.repeat.maxFires,
+              cooldownSeconds: watch.repeat.cooldownMs / 1000,
+              state: watch.repeat.paused
+                ? 'paused while you handle its last wake-up'
+                : watch.repeat.armed
+                  ? 'armed'
+                  : 'waiting for the condition to clear before it can fire again',
+              ...(watch.repeat.lastFiredAt ? { lastFiredAt: iso(watch.repeat.lastFiredAt) } : {}),
+            },
+          }
+        : {}),
     };
   }
   private schedule(watch: Watch) {
     clearTimeout(watch.timer);
-    if (this.closed || !this.watches.has(watch.id)) return;
+    // A repeating watch checks nothing while the agent is still handling its last wake-up.
+    if (this.closed || !this.watches.has(watch.id) || watch.repeat?.paused) return;
     const at = Math.min(watch.nextAt, watch.deadline);
     watch.timer = setTimeout(() => void this.check(watch), Math.max(0, at - this.now()));
   }
   private async remove(watch: Watch) {
     clearTimeout(watch.timer);
+    clearTimeout(watch.repeat?.wakeTimer);
     watch.running?.abort();
     this.watches.delete(watch.id);
     if (watch.context === 'fork' && !this.forAgent(watch.agentId).some(other => other.context === 'fork'))
@@ -328,7 +402,9 @@ export class ComputerWatches {
     if (startedAt >= watch.deadline && watch.checks > 0)
       return this.end(
         watch,
-        `${label} timed out at ${iso(startedAt)} without the condition being seen (${after}${watch.lastReason ? `; the last check said: ${watch.lastReason}` : ''}).${this.stillness(watch, startedAt)}\nCondition was: ${watch.until}\nThe watch is removed. Look for yourself before deciding what to do; set a new watch if you still want to wait.`,
+        watch.repeat
+          ? `${label} reached its time limit at ${iso(startedAt)} after firing ${watch.repeat.fires} time(s) (${after}).${this.unsent(watch)}\nCondition was: ${watch.until}\nThe watch is removed; set a new one if you still want to watch.`
+          : `${label} timed out at ${iso(startedAt)} without the condition being seen (${after}${watch.lastReason ? `; the last check said: ${watch.lastReason}` : ''}).${this.stillness(watch, startedAt)}\nCondition was: ${watch.until}\nThe watch is removed. Look for yourself before deciding what to do; set a new watch if you still want to wait.`,
       );
     const controller = new AbortController();
     watch.running = controller;
@@ -351,7 +427,16 @@ export class ComputerWatches {
       watch.previous = observation;
       const verdict = await this.judge(watch, this.checkInput(watch, observation, previous), controller.signal);
       if (!this.watches.has(watch.id)) return;
-      if (verdict.notify)
+      if (watch.repeat) {
+        watch.repeat.failures = 0;
+        watch.lastReason = verdict.summary;
+        // Edge triggered: a "yes" fires only once the condition was not seen since the last firing.
+        if (!verdict.notify) watch.repeat.armed = true;
+        else if (watch.repeat.armed) {
+          await this.fire(watch, verdict.summary, observation);
+          if (!this.watches.has(watch.id) || watch.repeat.paused) return;
+        }
+      } else if (verdict.notify)
         return await this.end(
           watch,
           `${label} fired at ${iso(this.now())} on check ${watch.checks} (${seconds(this.now() - watch.createdAt)}s after it was set).${this.stillness(watch, observation.at)}\nCondition: ${watch.until}\nWatcher's report: ${verdict.summary}\nThe watch is finished and removed; set a new one to keep watching. The report is the watcher's summary, not your own observation: look yourself (${watch.kind === 'terminal' ? 'terminal_view' : 'glance/look_at'}) before acting.`,
@@ -373,6 +458,18 @@ export class ComputerWatches {
           : error instanceof Error
             ? error.message.slice(0, 300)
             : 'unknown error';
+      // A repeating watch rides out a few failed checks (a slow or briefly failing model), waiting longer each time.
+      if (watch.repeat && ++watch.repeat.failures < REPEAT_FAILURES) {
+        watch.lastReason = `a check failed (${reason})`;
+        watch.nextAt = this.now() + Math.min(watch.everyMs * 2 ** watch.repeat.failures, REPEAT_BACKOFF_MAX_MS);
+        this.schedule(watch);
+        return;
+      }
+      if (watch.repeat)
+        return await this.end(
+          watch,
+          `${label} stopped at ${at}: ${REPEAT_FAILURES} checks in a row failed (the last: ${reason}) after it fired ${watch.repeat.fires} time(s) (${after}).${this.unsent(watch)} Look yourself.${condition} Set a new one if you still want to watch.`,
+        );
       return await this.end(
         watch,
         `${label} stopped at ${at}: a check failed (${reason}), so the watcher could not decide (${after}). You are told in case the condition happened: look yourself.${condition} Set a new one if you still want to wait.`,
@@ -380,9 +477,65 @@ export class ComputerWatches {
     } finally {
       if (watch.running === controller) watch.running = undefined;
     }
-    // Checks keep their cadence from each start; one that overran is followed at once, never overlapped.
-    watch.nextAt = Math.max(this.now(), startedAt + watch.everyMs);
+    // One-shot checks keep their cadence from each start (one that overran is followed at once, never overlapped);
+    // a repeating watch, which may run for hours, always leaves a full interval after a check, however long it took.
+    watch.nextAt = watch.repeat ? this.now() + watch.everyMs : Math.max(this.now(), startedAt + watch.everyMs);
     this.schedule(watch);
+  }
+  /** Firings not delivered yet (merged during a cooldown), for a repeating watch's last message. */
+  private unsent(watch: Watch) {
+    const pending = watch.repeat?.pending;
+    return pending
+      ? ` It had fired ${pending.count} more time(s) since you were last woken (latest report: ${pending.report}).`
+      : '';
+  }
+  /** A repeating watch saw a new occurrence: wake the agent now, or after the cooldown (merging), or end at the cap. */
+  private async fire(watch: Watch, report: string, observation: Observation) {
+    const repeat = watch.repeat!;
+    const now = this.now();
+    repeat.armed = false;
+    repeat.fires++;
+    repeat.lastFiredAt = now;
+    repeat.lastReport = report;
+    const label = `Your repeating watch ${watch.id} on ${this.describe(watch)}`;
+    if (repeat.fires >= repeat.maxFires)
+      return this.end(
+        watch,
+        `${label} fired for the last time at ${iso(now)} (${repeat.fires} of at most ${repeat.maxFires}).${this.stillness(watch, observation.at)}${this.unsent(watch)}\nCondition: ${watch.until}\nWatcher's report: ${report}\nThe watch is removed; set a new one to keep watching. Look yourself before acting.`,
+      );
+    const pending = repeat.pending;
+    repeat.pending = { count: (pending?.count ?? 0) + 1, firstAt: pending?.firstAt ?? now, lastAt: now, report };
+    const wakeAt = (repeat.lastWokenAt ?? -Infinity) + repeat.cooldownMs;
+    if (now >= wakeAt) return this.wake(watch);
+    // Too soon after the last wake-up: wake once when the cooldown ends, with every firing since.
+    clearTimeout(repeat.wakeTimer);
+    repeat.wakeTimer = setTimeout(() => void this.wake(watch), wakeAt - now);
+  }
+  /** Delivers the pending firing(s), then checks nothing until the agent's turn that received them has ended. */
+  private async wake(watch: Watch) {
+    const repeat = watch.repeat!;
+    const pending = repeat.pending;
+    if (!pending || !this.watches.has(watch.id)) return;
+    clearTimeout(repeat.wakeTimer);
+    repeat.pending = undefined;
+    repeat.lastWokenAt = this.now();
+    repeat.paused = true;
+    clearTimeout(watch.timer);
+    const what =
+      pending.count === 1
+        ? `fired at ${iso(pending.lastAt)}`
+        : `fired ${pending.count} times since you were last woken (first at ${iso(pending.firstAt)}, latest at ${iso(pending.lastAt)})`;
+    const text = `Your repeating watch ${watch.id} on ${this.describe(watch)} ${what}: firing ${repeat.fires} of at most ${repeat.maxFires}.\nCondition: ${watch.until}\nWatcher's ${pending.count === 1 ? '' : 'latest '}report: ${pending.report}\nIt keeps watching: it pauses until this turn of yours ends, fires again only once the condition has cleared and comes back, and wakes you at most every ${repeat.cooldownMs / 1000}s. Stop it with cancel_timer({id: "${watch.id}"}). The report is the watcher's summary: look yourself (${watch.kind === 'terminal' ? 'terminal_view' : 'glance/look_at'}) before acting.`;
+    const delivered = await this.deliver(watch.agentId, text, watch.human).catch(() => false);
+    const handled = typeof delivered === 'object' ? delivered.handled : Promise.resolve();
+    void handled
+      .catch(() => undefined)
+      .then(() => {
+        if (!this.watches.has(watch.id)) return;
+        repeat.paused = false;
+        watch.nextAt = Math.max(this.now(), watch.nextAt);
+        this.schedule(watch);
+      });
   }
   private stillness(watch: Watch, at: number) {
     if (watch.unchangedSince === undefined || !watch.unchangedChecks) return '';
@@ -460,6 +613,11 @@ export class ComputerWatches {
       `Watch check ${watch.checks} at ${iso(current.at)} (every ${watch.everyMs / 1000}s; set at ${iso(watch.createdAt)}; times out at ${iso(watch.deadline)}).`,
       `Watching ${this.describe(watch)}.`,
       `Condition to watch for: ${watch.until}`,
+      ...(watch.repeat?.lastReport
+        ? [
+            `This watch repeats. It last fired at ${iso(watch.repeat.lastFiredAt!)}, reporting: ${watch.repeat.lastReport}\nIf the condition is about something new happening (a new error, a new message), count only what is new since then.`,
+          ]
+        : []),
       `Since the previous check: ${change}`,
       watch.kind === 'terminal'
         ? `Current terminal view (text):\n${current.text}`
