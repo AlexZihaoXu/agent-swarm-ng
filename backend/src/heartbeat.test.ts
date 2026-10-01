@@ -7,7 +7,7 @@ import { EndpointStore } from './endpoint-store';
 import { CodexProvider } from './codex-provider';
 import { AgentRuns } from './agent-runs';
 import { DmBroker } from './dm-broker';
-import { HeartbeatScheduler, inHours } from './heartbeat';
+import { createNoteTool, HeartbeatScheduler, inHours, type HeartbeatBranch } from './heartbeat';
 
 type Message = { role: string; content: unknown; tool_calls?: { function: { name: string } }[] };
 /**
@@ -215,4 +215,38 @@ it('starts heartbeats when due, inside active hours, only while the agent is idl
   expect(inHours('09:00', '17:00', at(17))).toBe(false);
   expect(inHours('22:00', '06:00', at(23, 30))).toBe(true);
   expect(inHours('22:00', '06:00', at(12))).toBe(false);
+});
+
+it('promotes a heartbeat whose first input already includes a real message', async () => {
+  const f = await fixture({ first: 'help', note: 'should not be kept' });
+  try {
+    await f.broker.startHeartbeat(f.agent.id, 'Check the nightly build.');
+    // Offered while the heartbeat is still starting: it is read together with the heartbeat prompt.
+    f.runs.offer(
+      f.agent.id,
+      { role: 'user', id: crypto.randomUUID(), text: 'Real question', timestamp: Date.now() },
+      { type: 'message', channelId: f.agent.channels[0].id },
+    );
+    await f.idle();
+    const saved = await f.saved();
+    expect(saved).toContain('Real question');
+    expect(saved).not.toContain('should not be kept');
+    expect((await f.labels()).join('\n')).toContain(
+      'Heartbeat promoted: It became a real turn: a new message arrived.',
+    );
+  } finally {
+    await f.close();
+  }
+}, 60_000);
+
+it('takes a note only when a quiet heartbeat asks for one', async () => {
+  const branch: HeartbeatBranch = { claimPromotes: () => false };
+  const note = createNoteTool(branch);
+  const leave = () => note.execute('call', { text: 'x' } as never, undefined, undefined, undefined as never);
+  await expect(leave()).rejects.toThrow('only for the end of a quiet heartbeat');
+  branch.asking = true;
+  await leave();
+  expect(branch.note).toBe('x');
+  branch.promoted = true;
+  await expect(leave()).rejects.toThrow('only for the end of a quiet heartbeat');
 });

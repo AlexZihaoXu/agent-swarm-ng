@@ -16,6 +16,8 @@ export type HeartbeatBranch = {
   promoted?: boolean;
   /** Whether a use_computer call changes a claim held before the heartbeat (giving it up or switching away). */
   claimPromotes: (args: { computer?: string | null; write?: boolean }) => boolean;
+  /** Set while the quiet heartbeat's note question is asked (only then may leave_note be used). */
+  asking?: boolean;
   /** The note the agent left, if any (set by leave_note). */
   note?: string;
 };
@@ -43,6 +45,8 @@ export function createNoteTool(branch: HeartbeatBranch): AgentTool {
         { additionalProperties: false },
       ),
       async execute(_call, { text }) {
+        if (!branch.asking || branch.promoted)
+          throw new Error('leave_note is only for the end of a quiet heartbeat, when you are asked.');
         if (!text.trim()) throw new Error('Write a note, or end without one.');
         branch.note = text.trim();
         return { content: [{ type: 'text' as const, text: 'Note kept.' }], details: {}, terminate: true };

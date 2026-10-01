@@ -80,7 +80,11 @@ export async function runChat(
   let unsubscribe = () => {};
   let checkpoint = Promise.resolve();
   let checkpointFailure: unknown;
-  let dropped = false;
+  // A heartbeat's branch is saved only from its promotion on; everything else is saved as it goes.
+  const heartbeat = hooks.heartbeat;
+  let promoted = !heartbeat,
+    dropped = false,
+    promotionNotice: string | undefined;
   const abort = () => {
     void session?.abort();
   };
@@ -117,11 +121,6 @@ export async function runChat(
     if (hooks.sessionStore && !restored && session.sessionManager.getEntries().length)
       await hooks.sessionStore.save(channel.agentId, session.sessionManager);
     const live = session;
-    // A heartbeat's branch is saved only from its promotion on; everything else is saved as it goes.
-    const heartbeat = hooks.heartbeat;
-    let promoted = !heartbeat,
-      notePhase = false,
-      promotionNotice: string | undefined;
     // Durable checkpoints are captured at a boundary and written in order, off the model's critical path.
     const queueCheckpoint = () => {
       if (!promoted) return;
@@ -156,7 +155,7 @@ export async function runChat(
       const before = live.agent.beforeToolCall;
       live.agent.beforeToolCall = async (context, callSignal) => {
         const name = context.toolCall.name;
-        if (!promoted && notePhase && name !== 'leave_note')
+        if (!promoted && heartbeat.branch.asking && name !== 'leave_note')
           return { block: true, reason: 'Only leave_note is available now, or end without a note.' };
         if (!promoted && promotes(access.get(name), heartbeat.branch, context.args) && promote(`you called ${name}`))
           promotedCalls.add(context.toolCall.id);
@@ -301,6 +300,9 @@ export async function runChat(
       if (activityFailed) throw new Error('Activity persistence failed.');
       if (hooks.prepare) batch.messages = await hooks.prepare(batch.messages);
       if (!batch.messages.length) continue;
+      // A real message (even one that arrived before the heartbeat started) makes it a real turn before it is read.
+      if (heartbeat && batch.messages.some(item => item.source?.platform !== 'heartbeat'))
+        promote('a new message arrived');
       const peerOnly = batch.messages.every(item => item.source);
       published = 0;
       finalPublished = false;
@@ -337,12 +339,12 @@ export async function runChat(
           }
           // A quiet heartbeat asks once for a note before it is dropped.
           if (heartbeat && !promoted && !signal.aborted && !inbox.hasPending() && stopReason() !== 'error') {
-            notePhase = true;
+            heartbeat.branch.asking = true;
             await main.sendCustomMessage(
               { customType: 'heartbeat-note', display: false, content: HEARTBEAT_NOTE_QUESTION },
               { triggerTurn: true },
             );
-            notePhase = false;
+            heartbeat.branch.asking = false;
           }
           // A summary that finished during the last model call joins this checkpoint.
           applySummary();
@@ -419,17 +421,6 @@ export async function runChat(
       );
     }
     inbox.close();
-    if (heartbeat && !promoted) {
-      dropped = true;
-      activity.record(
-        'status',
-        'Heartbeat dropped',
-        heartbeat.branch.note
-          ? `Nothing changed. Note kept in its context: ${heartbeat.branch.note}`
-          : 'Nothing changed; nothing was kept in its context.',
-      );
-      await heartbeat.dropped(heartbeat.branch.note);
-    }
   } catch {
     runFailed = !signal.aborted;
     activity.record(
@@ -465,6 +456,18 @@ export async function runChat(
     unsubscribe();
     signal.removeEventListener('abort', abort);
     await checkpoint;
+    // Dropped (also after a failure or Stop): nothing of it is kept but its note, and what it claimed is given back.
+    if (heartbeat && !promoted) {
+      dropped = true;
+      activity.record(
+        'status',
+        'Heartbeat dropped',
+        heartbeat.branch.note
+          ? `Nothing changed. Note kept in its context: ${heartbeat.branch.note}`
+          : 'Nothing changed; nothing was kept in its context.',
+      );
+      await heartbeat.dropped(heartbeat.branch.note).catch(() => {});
+    }
     if (session) {
       const ended = { ...forkBasis(session), messages: session.messages.slice(), streamingMessage: undefined };
       hooks.session?.(() => ended, true);
