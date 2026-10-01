@@ -104,6 +104,12 @@ export class DockerApi {
     signal: AbortSignal,
     onOutput: (chunk: Buffer) => void,
     onEnd: () => void,
+    options: {
+      env?: string[];
+      workingDir?: string;
+      idleTimeoutMs?: number;
+      onStderr?: (chunk: Buffer) => void;
+    } = {},
   ) {
     signal.throwIfAborted();
     const created = await this.json<{ Id: string }>('POST', `/containers/${encodeURIComponent(container)}/exec`, {
@@ -113,10 +119,14 @@ export class DockerApi {
       Tty: false,
       Cmd: command,
       User: '1000:1000',
-      Env: ['XDG_RUNTIME_DIR=/run/user/1000'],
+      Env: options.env ?? ['XDG_RUNTIME_DIR=/run/user/1000'],
+      ...(options.workingDir ? { WorkingDir: options.workingDir } : {}),
     });
     signal.throwIfAborted();
-    return attachExec(this.socketPath, created.Id, signal, onOutput, onEnd);
+    return attachExec(this.socketPath, created.Id, signal, onOutput, onEnd, {
+      idleTimeoutMs: options.idleTimeoutMs,
+      onStderr: options.onStderr,
+    });
   }
 
   /** Whether a path exists in a container (running or stopped). */

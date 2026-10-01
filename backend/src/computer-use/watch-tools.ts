@@ -17,6 +17,14 @@ import {
 } from './watches';
 import { ComputerUseError } from './service';
 import { WATCH_MAX_TURNS } from './watch-judge';
+import {
+  MONITOR_COMMAND_MAX,
+  MONITOR_DEFAULT_MAX_EVENTS,
+  MONITOR_DEFAULT_TIMEOUT_SECONDS,
+  MONITOR_MAX_ACTIVE,
+  MONITOR_MAX_EVENTS,
+  MONITOR_MAX_TIMEOUT_SECONDS,
+} from './monitors';
 
 const reply = (value: unknown, isError = false) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value) }],
@@ -112,7 +120,46 @@ export function createWatchTools(
       ? { repeat: { cooldownSeconds: params.repeat.cooldown_seconds, maxFires: params.repeat.max_fires } }
       : {}),
   });
+  const monitors = watches.monitors;
+  const monitorTool = monitors
+    ? [
+        defineTool({
+          name: 'monitor',
+          label: 'Monitor a command',
+          description: `Wake me with the output of a command running on the computer I hold, with no model in the loop: each line it prints is an event. Use it for exact signals (a log line, a file appearing, a port opening): tail -F /tmp/build/log | grep --line-buffered -E "ERROR|FAILED|ready". For a program in a terminal, start it there with its output teed to a file in /tmp and monitor that file. Filter for failures as well as success: silence is not success. Lines printed close together come as one wake-up; while I handle a wake-up, output waits and comes in one wake-up after my turn ends. It stops on its own at timeout_seconds (default ${MONITOR_DEFAULT_TIMEOUT_SECONDS / 60} minutes, at most 24 hours), after max_events wake-ups (default ${MONITOR_DEFAULT_MAX_EVENTS}), if it prints more than 300 lines in 10 seconds, when the command exits, or when I lose the computer; I am told why. Releasing the computer, or cancel_timer, stops it quietly. At most ${MONITOR_MAX_ACTIVE} at once; list_timers shows them. It runs as the agent user in my home folder and grants no input allowance. Read Swarm Knowledge practices/waiting before first use.`,
+          parameters: Type.Object(
+            {
+              command: Type.String({
+                minLength: 1,
+                maxLength: MONITOR_COMMAND_MAX,
+                description: 'A shell command whose stdout lines wake me (stderr is not an event).',
+              }),
+              timeout_seconds: Type.Optional(Type.Number({ minimum: 60, maximum: MONITOR_MAX_TIMEOUT_SECONDS })),
+              max_events: Type.Optional(Type.Integer({ minimum: 1, maximum: MONITOR_MAX_EVENTS })),
+            },
+            { additionalProperties: false },
+          ),
+          async execute(_call, params) {
+            try {
+              return reply(
+                await monitors.create(agentId, {
+                  command: params.command,
+                  timeoutSeconds: params.timeout_seconds,
+                  maxEvents: params.max_events,
+                  human: humanAuthority(),
+                }),
+              );
+            } catch (error) {
+              if (error instanceof WatchError || error instanceof ComputerUseError)
+                return reply({ error: error.message }, true);
+              throw error;
+            }
+          },
+        }),
+      ]
+    : [];
   return [
+    ...monitorTool,
     defineTool({
       name: 'watch_terminal',
       label: 'Watch terminal',

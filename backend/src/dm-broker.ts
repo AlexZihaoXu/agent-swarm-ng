@@ -59,6 +59,7 @@ import { SwarmKnowledgePlugin } from './swarm-knowledge/plugin';
 import type { ComputerUseService } from './computer-use/service';
 import type { ScreenshotPool } from './computer-use/image-pool';
 import { createComputerTools } from './computer-use/tools';
+import { ComputerMonitors } from './computer-use/monitors';
 import { ComputerWatches } from './computer-use/watches';
 import { createWatchJudge, type ForkBasis } from './computer-use/watch-judge';
 import { createWatchTools } from './computer-use/watch-tools';
@@ -98,7 +99,7 @@ export class DmBroker {
   /** Settings → Swarm (file and scratchpad limits). */
   readonly settings: SwarmSettingsStore;
   /** Streams files in and out of computers for copy_file and upload_file (set when a controller exists). */
-  transfers?: Pick<ComputerController, 'exportFile' | 'importFile'> | null;
+  transfers?: Pick<ComputerController, 'exportFile' | 'importFile' | 'monitor'> | null;
   private pruning?: ReturnType<typeof setInterval>;
   private watcher?: TerminalWatcher;
   /** One-shot watches on claimed computers (watch_terminal, watch_desktop). */
@@ -166,6 +167,12 @@ export class DmBroker {
     // A finished session's copy is kept only while a fork watch may still need it.
     if (this.watches && computers) {
       const watches = this.watches;
+      watches.monitors = new ComputerMonitors(
+        database,
+        computers,
+        () => this.transfers?.monitor?.bind(this.transfers),
+        (agentId, text, human) => this.wakeForWatch(agentId, text, human),
+      );
       watches.onForkWatchesGone = agentId => {
         if (this.bases.get(agentId)?.ended) this.bases.delete(agentId);
       };

@@ -143,6 +143,59 @@ Bun.serve<TerminalSocket>({
         terminals.release(data);
         return json({ message: 'Terminal upgrade failed.' }, 400);
       }
+      // A monitor: the command's stdout as a stream; a final line "\0exit {code, stderr}" says how it ended. Closing
+      // the stream (the backend stopped the monitor) kills the command's process group in the guest.
+      const monitorMatch = /^\/computers\/([^/]+)\/monitor$/.exec(pathname);
+      if (monitorMatch) {
+        if (request.method !== 'POST') return json({ message: 'Method not allowed.' }, 405);
+        const input = await body(request);
+        if (!input || typeof input !== 'object' || !('command' in input))
+          throw new ResourceError(400, 'Invalid monitor request.');
+        const abort = new AbortController();
+        request.signal?.addEventListener('abort', () => abort.abort(), { once: true });
+        let output!: ReadableStreamDefaultController<Uint8Array>;
+        let stderr = '';
+        let code: number | null = null;
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            output = controller;
+          },
+          cancel() {
+            abort.abort();
+          },
+        });
+        try {
+          await manager.monitorStream(
+            decodeURIComponent(monitorMatch[1]),
+            input.command,
+            abort.signal,
+            chunk => output.enqueue(new Uint8Array(chunk)),
+            chunk => {
+              stderr = (stderr + chunk.toString()).slice(-4000);
+              const exit = /\0monitor-exit (\d+)/.exec(stderr);
+              if (exit) {
+                code = Number(exit[1]);
+                stderr = stderr.slice(0, exit.index);
+              }
+            },
+            () => {
+              try {
+                output.enqueue(encoder.encode(`\n\0exit ${JSON.stringify({ code, stderr: stderr.slice(-2000) })}\n`));
+                output.close();
+              } catch {
+                /* the reader is gone */
+              }
+            },
+          );
+        } catch (error) {
+          abort.abort();
+          throw error;
+        }
+        return new Response(stream, {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+        });
+      }
       // Agent file copies: stream one guest file out, or one file in (bytes never buffered here).
       const transferMatch = /^\/computers\/([^/]+)\/(export|import)$/.exec(pathname);
       if (transferMatch) {

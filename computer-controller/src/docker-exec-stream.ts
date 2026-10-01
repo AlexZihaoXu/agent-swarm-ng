@@ -9,6 +9,8 @@ export function attachExec(
   signal: AbortSignal,
   onOutput: (chunk: Buffer) => void,
   onEnd: () => void,
+  /** Idle limit once attached (0: none, for quiet streams such as monitors); stderr frames, which are dropped otherwise. */
+  options: { idleTimeoutMs?: number; onStderr?: (chunk: Buffer) => void } = {},
 ): Promise<ExecConnection> {
   return new Promise((resolve, reject) => {
     let closed = false,
@@ -37,9 +39,9 @@ export function attachExec(
         const stream = buffer[0],
           payload = buffer.subarray(8, size + 8);
         buffer = buffer.subarray(size + 8);
-        if (stream === 1) {
+        if (stream === 1 || (stream === 2 && options.onStderr)) {
           try {
-            onOutput(payload);
+            (stream === 1 ? onOutput : options.onStderr!)(payload);
           } catch {
             fail('Invalid terminal stream.');
             return;
@@ -71,7 +73,7 @@ export function attachExec(
       if (end > 16384 || !/^HTTP\/1\.[01] 101\b/.test(header.toString('ascii', 0, end)))
         return fail('Docker exec upgrade failed.');
       upgraded = true;
-      socket.setTimeout(25000);
+      socket.setTimeout(options.idleTimeoutMs ?? 25000);
       resolve({
         write(data) {
           if (closed || socket.writableLength > 65536) throw new Error('Terminal input is unavailable.');

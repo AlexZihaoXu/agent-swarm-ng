@@ -5,6 +5,7 @@ import { WatchClaimError, type ComputerUseError, type ComputerUseService, type S
 import { terminalParameters, viewResult, viewTerminal } from './terminal-tools';
 import { lookParameters } from './tools';
 import type { AgentTool, Verdict } from './watch-judge';
+import type { ComputerMonitors } from './monitors';
 
 export const WATCH_MIN_SECONDS = 30;
 export const WATCH_MAX_SECONDS = 3600;
@@ -140,6 +141,8 @@ export class ComputerWatches {
   private watches = new Map<string, Watch>();
   /** Agents releasing or switching computers themselves: their watches' checks end quietly meanwhile. */
   private leaving = new Set<string>();
+  /** Monitors (monitors.ts) share list_timers, cancel_timer, releasing and restart notices with watches. */
+  monitors?: ComputerMonitors;
   /** Told when an agent's last fork watch is gone (its saved context is no longer needed). */
   onForkWatchesGone?: (agentId: string) => void;
   /** Watches being created, counted against the limit before their first await. */
@@ -169,12 +172,15 @@ export class ComputerWatches {
     for (const row of rows)
       await this.deliver(
         row.agentId,
-        `Your watch ${row.id} (${row.kind === 'terminal' ? 'watch_terminal' : 'watch_desktop'}, set at ${row.createdAt.toISOString()}) ended: the platform restarted, which releases every computer claim, so no check will run. Condition was: ${row.until}\nIf you still need it, claim the computer again with use_computer, look at the current state yourself, and set a new watch.`,
+        row.kind === 'monitor'
+          ? `Your monitor ${row.id} (\`${row.until.slice(0, 200)}\`, started at ${row.createdAt.toISOString()}) stopped: the platform restarted, which releases every computer claim and stops its command. If you still need it, claim the computer again with use_computer and start a new monitor.`
+          : `Your watch ${row.id} (${row.kind === 'terminal' ? 'watch_terminal' : 'watch_desktop'}, set at ${row.createdAt.toISOString()}) ended: the platform restarted, which releases every computer claim, so no check will run. Condition was: ${row.until}\nIf you still need it, claim the computer again with use_computer, look at the current state yourself, and set a new watch.`,
         row.human,
       ).catch(() => undefined);
   }
   close() {
     this.closed = true;
+    this.monitors?.close();
     for (const watch of this.watches.values()) {
       clearTimeout(watch.timer);
       watch.running?.abort();
@@ -283,12 +289,15 @@ export class ComputerWatches {
     return this.view(watch);
   }
   list(agentId: string) {
-    return [...this.watches.values()].filter(watch => watch.agentId === agentId).map(watch => this.view(watch));
+    return [
+      ...[...this.watches.values()].filter(watch => watch.agentId === agentId).map(watch => this.view(watch)),
+      ...(this.monitors?.list(agentId) ?? []),
+    ];
   }
   /** The agent's own cancel: removed quietly, no event. */
   async cancel(agentId: string, id: string) {
     const watch = this.watches.get(id);
-    if (!watch || watch.agentId !== agentId) return false;
+    if (!watch || watch.agentId !== agentId) return (await this.monitors?.cancel(agentId, id)) ?? false;
     await this.remove(watch);
     return true;
   }
@@ -314,7 +323,7 @@ export class ComputerWatches {
       watch => watch.agentId === agentId && watch.computerId !== keepComputerId,
     );
     for (const watch of ended) await this.remove(watch);
-    return ended.length;
+    return ended.length + ((await this.monitors?.releasedBy(agentId, keepComputerId)) ?? 0);
   }
   forAgent(agentId: string) {
     return [...this.watches.values()].filter(watch => watch.agentId === agentId);

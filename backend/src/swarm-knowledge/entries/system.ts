@@ -35,7 +35,8 @@ Computer tools (always listed; they work only on a computer the human assigned y
 - glance, look_at, run_actions: screenshots and mouse/keyboard combos (concepts/computers/desktop, practices/desktop, practices/browser).
 - read, write, edit, bash: files and synchronous commands (concepts/computers/files, practices/files).
 - terminal_create, terminal_list, terminal_view, terminal_status, terminal_run_actions, terminal_resize, terminal_delete: persistent terminals (concepts/computers/terminals, practices/terminals, practices/harnesses).
-- watch_terminal, watch_desktop: wake me once when a condition is met (concepts/computers/watches, practices/waiting).
+- watch_terminal, watch_desktop: wake me when a condition is met, once or once per occurrence with repeat (concepts/computers/watches, practices/waiting).
+- monitor: wake me with the output lines of a command on the computer I hold, no model in the loop (concepts/computers/watches, practices/waiting).
 
 Not available to agents: creating, starting, stopping or deleting computers; assigning computers or connecting agents (the human does these in the dashboard, practices/dashboard); changing your own settings or permissions; host files or shells; cron-style schedules. If the human asks for one of these, explain how they can do it.
 

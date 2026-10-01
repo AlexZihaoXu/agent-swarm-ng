@@ -230,7 +230,17 @@ Which wake-up:
 - A known amount of time ("check back in 10 minutes", "at 9:00"): set_timer (concepts/time).
 - Something to do repeatedly on a clock ("every 15 minutes, three times"): set_reminder.
 - A condition on the computer you hold, whose timing you cannot predict ("when the build finishes", "when Claude Code is done and waiting for input", "when the download completes", "when the dialog appears"): watch_terminal or watch_desktop (concepts/computers/watches).
+- A signal a command can detect exactly (a line in a log, a file appearing, a port opening, a process exiting): monitor. It costs no model calls and reacts at once; prefer it over a watch whenever no judgement is needed.
 - A terminal that should simply end (a command terminal): while you hold the computer its exit already wakes you with a terminal event; no watch needed unless you care about something before it exits. After you release the computer, no terminal events arrive.
+
+Monitoring a program in a terminal: start it with its output teed to a file in /tmp, then monitor that file. For example, in the terminal: mkdir -p /tmp/build && npm run build 2>&1 | tee -a /tmp/build/log; then monitor({command: "tail -F /tmp/build/log | grep --line-buffered -E 'error|FAILED|Compiled successfully'"}).
+- Line buffering: many programs hold output back when it goes to a pipe, so the log lags. Use stdbuf -oL cmd, python -u, or script -qfc "cmd" /tmp/build/log (which also keeps colours and progress bars working).
+- Every stage of the monitor's pipeline must flush per line (grep --line-buffered, awk with fflush()); head cannot flush, so do not use it.
+- Exit status: with | tee the shell reports tee's status; use set -o pipefail, or rely on the terminal's exit event.
+- Tee before starting: a program already running cannot be monitored this way; restart it with tee, or use a watch.
+- Full-screen programs (Claude Code, htop, editors) redraw the screen: their log is noise. Use watch_terminal for them.
+- Filter for failures as well as success: a filter that only matches success stays silent through a crash, and silence looks like "still running".
+- Stop it when done (cancel_timer) and keep max_events sensible; a monitor printing more than 300 lines in 10 seconds is stopped (tighten its filter).
 
 Writing the condition (until): the watcher sees only your condition, the view and the facts the platform adds (time, whether and for how long the view has been unchanged, the view at watch start). Say what counts as done and what else should wake you. Be concrete about what it will see:
 - "Claude Code has finished responding: its spinner/'esc to interrupt' line is gone and the input box is waiting for a prompt. Also notify if it asks a question or shows a permission prompt, or if an error appears."

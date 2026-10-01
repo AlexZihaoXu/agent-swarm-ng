@@ -394,7 +394,7 @@ it('a repeating watch fires once per occurrence, pauses while you handle it, mer
     expect(t.events[0]).toContain('fired at');
     expect(t.events[0]).toContain('firing 1 of at most 4');
     expect(t.events[0]).toContain(`cancel_timer({id: "${watch.id}"})`);
-    expect(t.watches.list(t.agent.id)[0].repeat).toMatchObject({
+    expect((t.watches.list(t.agent.id)[0] as { repeat?: object }).repeat).toMatchObject({
       fires: 1,
       state: 'paused while you handle its last wake-up',
     });

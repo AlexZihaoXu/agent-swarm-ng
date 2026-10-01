@@ -340,6 +340,8 @@ Endings, each removing the watch (a repeating watch is removed only by these, no
 
 Limits: at most 3 watches at a time; list_timers shows them with their next check and timeout. Checks never overlap, and they wait for a busy computer instead of failing. A watch grants no input allowance: after waking, look yourself.
 
+Monitors: monitor({command, timeout_seconds?, max_events?}) is the deterministic sibling of watches: the platform runs your command on the computer you hold (as the agent user, in your home folder) and each line it prints to stdout is an event, with no model deciding. Lines printed close together are one wake-up; while you handle a wake-up, output waits and comes in one wake-up after your turn ends. It stops on its own at its timeout (default 1 hour, at most 24 hours), after max_events wake-ups (default 50), when it prints more than 300 lines in 10 seconds, when the command exits (you get its exit code and last error output), or when you lose the computer; releasing the computer or cancel_timer stops it quietly. At most 3 at a time, listed by list_timers. Stopping it kills the command and everything it started. How to use it well: practices/waiting.
+
 What a watch is not: not a replacement for looking yourself before acting, not a way to act on the computer, and not a clock timer (use set_timer for "in 10 minutes"). When to use which: practices/waiting.`,
 } satisfies KnowledgeEntry;
 

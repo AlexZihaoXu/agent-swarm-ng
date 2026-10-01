@@ -48,6 +48,8 @@ export interface ComputerController {
   checkStorageFolder?(kind: 'keep' | 'cache', folder: string): Promise<void>;
   clearCache?(id: string, name: string): Promise<void>;
   storageUsage?(id: string, name: string): Promise<{ lastStart: string | null; storage: StorageUsage[] }>;
+  /** A monitor's output stream (see the controller's /monitor), open until `signal` aborts or `lifetimeMs` passes. */
+  monitor?(id: string, command: string, signal: AbortSignal, lifetimeMs: number): Promise<ReadableStream<Uint8Array>>;
   observe(): Promise<Map<string, ComputerObservation>>;
   preview(id: string, full?: boolean): Promise<Uint8Array | null>;
   pointer(id: string, x: number, y: number): Promise<void>;
@@ -132,6 +134,15 @@ export class HttpComputerController implements ComputerController {
       throw new ControllerError(response.status, message);
     }
     return response;
+  }
+  async monitor(id: string, command: string, signal: AbortSignal, lifetimeMs: number) {
+    const response = await this.request(
+      `/computers/${encodeURIComponent(id)}/monitor`,
+      { method: 'POST', body: JSON.stringify({ command }), signal },
+      lifetimeMs,
+    );
+    if (!response.body) throw new ControllerError(503, 'The monitor stream is unavailable.');
+    return response.body;
   }
   terminalSocket(id: string, session: string) {
     const url = new URL(

@@ -1340,6 +1340,54 @@ export class ComputerManager {
     );
   }
 
+  /**
+   * A monitor: the agent's command runs in the guest as `agent` (home folder, its own process group) and its
+   * stdout streams back line by line. The wrapper kills the whole group when the stream closes (the platform stopped
+   * the monitor), and reports the command's exit code on stderr when it ends by itself.
+   */
+  async monitorStream(
+    idRaw: string,
+    command: unknown,
+    signal: AbortSignal,
+    onOutput: (chunk: Buffer) => void,
+    onStderr: (chunk: Buffer) => void,
+    onEnd: () => void,
+  ) {
+    const id = validateId(idRaw);
+    if (typeof command !== 'string' || !command.trim() || command.length > 4000 || command.includes('\0'))
+      throw new ResourceError(400, 'A monitor command is 1..4000 characters.');
+    const computer = await this.container(this.names.desktop(id), id, 'desktop');
+    if (!computer) throw new ResourceError(404, 'Computer not found.');
+    if (!computer.State.Running) throw new ResourceError(409, 'Computer is not running.');
+    signal.throwIfAborted();
+    const wrapper = [
+      'setsid /bin/sh -c "$1" </dev/null & child=$!',
+      // A background job's stdin is /dev/null in a non-interactive shell: hand it the stream's stdin explicitly.
+      'exec 3<&0',
+      '( cat <&3 >/dev/null; kill -TERM -"$child" 2>/dev/null ) &',
+      'wait "$child"; code=$?',
+      'printf \'\\000monitor-exit %s\\n\' "$code" >&2',
+    ].join('\n');
+    return this.docker.execStream(
+      computer.Id,
+      ['/bin/sh', '-c', wrapper, 'monitor', command],
+      signal,
+      onOutput,
+      onEnd,
+      {
+        env: [
+          'HOME=/home/agent',
+          'XDG_RUNTIME_DIR=/run/user/1000',
+          'LANG=C.UTF-8',
+          'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        ],
+        workingDir: '/home/agent',
+        idleTimeoutMs: 0,
+        onStderr,
+      },
+    );
+  }
+
   /** Fixed root supervisor drops all file/shell work to the guest account; never a host command. */
   async computerCoreExec(idRaw: string, mode: 'prepare' | 'execute' | 'cancel', input: unknown) {
     const id = validateId(idRaw);
