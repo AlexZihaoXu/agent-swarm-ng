@@ -5,7 +5,6 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { computersQuery } from '@/lib/computers-query';
 import { terminalSessionsQuery } from '@/lib/computer-terminals';
-import { useGroups } from '@/use-groups';
 import type { ChatAgent } from '@/use-chat';
 import {
   agentPath,
@@ -134,7 +133,16 @@ export function Portal({
   const terminals = useQueries({
     queries: running.slice(0, 20).map(computer => ({ ...terminalSessionsQuery(computer.id), enabled: open })),
   });
-  const groups = useGroups();
+  // Groups load when Portal opens (not with the page).
+  const groups = useQuery({
+    queryKey: ['portal-groups'],
+    enabled: open,
+    staleTime: 15_000,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/api/groups', { params: { query: {} }, signal });
+      return data?.groups ?? [];
+    },
+  });
   const knowledge = useQuery({
     queryKey: ['portal-knowledge', query],
     enabled: open && (prefix?.prefix === '?' || query.length >= 2),
@@ -196,7 +204,7 @@ export function Portal({
           run: () => onStop(agent.channelId),
         });
     }
-    for (const group of groups.data?.pages.flatMap(page => page.groups) ?? [])
+    for (const group of groups.data ?? [])
       out.push({
         id: `chat:group:${group.id}`,
         kind: 'chat',

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { computersQuery } from '@/lib/computers-query';
 import { terminalSessionsQuery } from '@/lib/computer-terminals';
 import { computerPath } from '@/lib/dashboard-location';
-import { useWindowLayer, type Box } from '@/lib/floating-windows';
+import { dropWindow, useWindowLayer, type Box } from '@/lib/floating-windows';
 import {
   closeWindow,
   minimizeWindow,
@@ -109,6 +109,8 @@ function PortalWindowView({
   onNavigate: (path: string) => void;
 }) {
   const layer = useWindowLayer(item.key);
+  // A closed window leaves the stacking order.
+  useEffect(() => () => dropWindow(item.key), [item.key]);
   const lights = (
     <span className="flex shrink-0 items-center gap-1.5">
       <CloseLight label={`Close ${item.title}`} onClick={() => closeWindow(item.key)} dim={!layer.focused} />
