@@ -104,7 +104,8 @@ export function desktopCreateBody(input: {
   cpuLimit: number;
   memoryGiB: number;
   homeVolume: string;
-  workspaceVolume: string;
+  /** Only computers created before /workspace was retired (2026-10-01) keep their old, separate volume. */
+  workspaceVolume?: string;
 }) {
   return {
     // Hostname is a top-level Config field, NOT part of HostConfig: Docker
@@ -139,9 +140,10 @@ export function desktopCreateBody(input: {
       MemorySwap: input.memoryGiB * 2 * 1024 ** 3,
       PidsLimit: 1024,
       RestartPolicy: { Name: 'no' },
+      // Home is the one persistent place; /tmp is wiped at each start (start-computer.sh).
       Mounts: [
         { Type: 'volume', Source: input.homeVolume, Target: '/home/agent' },
-        { Type: 'volume', Source: input.workspaceVolume, Target: '/workspace' },
+        ...(input.workspaceVolume ? [{ Type: 'volume', Source: input.workspaceVolume, Target: '/workspace' }] : []),
       ],
     },
   };
@@ -437,8 +439,7 @@ export class ComputerManager {
       const gateway = await this.container(this.names.gateway(id), id, 'egress', name);
       const network = await this.network(this.names.privateNetwork(id), id, 'private-network');
       const home = await this.volume(this.names.volume(id, 'home'), id, 'home');
-      const workspace = await this.volume(this.names.volume(id, 'workspace'), id, 'workspace');
-      if (!gateway?.State.Running || !network || !home || !workspace)
+      if (!gateway?.State.Running || !network || !home)
         throw new ResourceError(503, 'Computer resources are incomplete.');
       await this.ensureMedia(id, name, existing);
       return;
@@ -455,7 +456,6 @@ export class ComputerManager {
     if (!egress.Id) throw new ResourceError(503, 'Public egress network is unavailable.');
     const gateway = await this.ensureGateway(id, name, subnet, privateNetwork);
     await this.ensureVolume(id, 'home');
-    await this.ensureVolume(id, 'workspace');
     await this.docker.request(
       'POST',
       `/containers/create?name=${encodeURIComponent(computerName)}`,
@@ -470,7 +470,6 @@ export class ComputerManager {
         cpuLimit: settings.cpuCores,
         memoryGiB: settings.memoryGiB,
         homeVolume: this.names.volume(id, 'home'),
-        workspaceVolume: this.names.volume(id, 'workspace'),
       }),
     );
     await this.docker.request('POST', `${this.path('containers', computerName)}/start`);
@@ -537,8 +536,9 @@ export class ComputerManager {
       const gateway = await this.container(this.names.gateway(id), id, 'egress', name);
       const network = await this.network(this.names.privateNetwork(id), id, 'private-network');
       const home = await this.volume(this.names.volume(id, 'home'), id, 'home');
+      // A computer from before /workspace was retired keeps its old volume mounted across settings changes.
       const workspace = await this.volume(this.names.volume(id, 'workspace'), id, 'workspace');
-      if (!gateway?.State.Running || !network || !home || !workspace)
+      if (!gateway?.State.Running || !network || !home)
         throw new ResourceError(503, 'Computer resources are incomplete.');
       const privateAddress = gateway.NetworkSettings.Networks[this.names.privateNetwork(id)]?.IPAddress;
       if (!privateAddress) throw new ResourceError(503, 'Computer egress address is unavailable.');
@@ -570,7 +570,7 @@ export class ComputerManager {
             cpuLimit: settings.cpuCores,
             memoryGiB: settings.memoryGiB,
             homeVolume: home.Name,
-            workspaceVolume: workspace.Name,
+            ...(workspace ? { workspaceVolume: workspace.Name } : {}),
           }),
         );
         createdId = created.Id;

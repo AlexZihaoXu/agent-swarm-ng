@@ -6,11 +6,11 @@ import subprocess
 import sys
 import time
 sys.path.insert(0, '/opt/swarm')
-from computer_core_files import file_operation, guest_path
+from computer_core_files import HOME, file_operation, guest_path
 
 
 def bash(value):
-    cwd = guest_path(value.get('cwd', '/workspace'))
+    cwd = guest_path(value.get('cwd', HOME))
     process = subprocess.Popen(['/bin/bash', '--noprofile', '--norc', '-c', value['command']], cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
     buffers = {'stdout': bytearray(), 'stderr': bytearray()}
     sizes = {'stdout': 0, 'stderr': 0}

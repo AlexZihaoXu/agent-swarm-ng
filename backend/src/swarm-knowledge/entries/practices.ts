@@ -162,7 +162,9 @@ export const filesPractice = {
   related: ['concepts/computers/files', 'practices/terminals'],
   content: `bash is for bounded, synchronous work that finishes within its timeout (default 30 s, max 120 s): inspecting files, quick scripts, git status, a short build step. Anything longer, interactive or meant to keep running (servers, watchers, installers, coding agents) belongs in a terminal (practices/terminals). Never detach processes (nohup, setsid, &, daemons) to escape bash's lifetime: they are killed when the command ends anyway.
 
-Bounded output: bash returns only the last 25000 bytes / 1000 lines of each stream. Filter at the source (grep, head, tail, wc) or write output to a file and read a window of it.
+Bounded output: bash returns only the last 25000 bytes / 1000 lines of each stream. Filter at the source (grep, head, tail, wc) or write output to a file in /tmp (disposable, wiped at every computer start) and read a window of it.
+
+Where files go: keep real work in the home folder (on ~/Desktop when the human should see it); put logs, intermediate output and throwaway files in /tmp/<task>/ (concepts/computers/files).
 
 Reading: use grep or a bounded search to find the part you need, then read with offset/limit; do not page through a large file blindly.
 

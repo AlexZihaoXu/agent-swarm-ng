@@ -23,6 +23,10 @@ case ${COMPUTER_TIMEZONE:-} in
            printf '%s\n' "$COMPUTER_TIMEZONE" > /etc/timezone
        fi ;;
 esac
+# /tmp is the disposable place: emptied at every start (logs, monitor files, intermediate output). Done before
+# the desktop creates its sockets, so stale X locks from the previous run go too. Persistent work lives in home.
+find /tmp -mindepth 1 -delete
+chmod 1777 /tmp
 mkdir -p /run/dbus /run/user/1000
 chown agent:agent /run/user/1000
 chmod 0700 /run/user/1000

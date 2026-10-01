@@ -19,8 +19,8 @@ import {
 } from '@/lib/computer-files';
 import type { Computer } from './computer-card';
 
-// Agents work in /workspace, so that is where the operator most often wants to look first.
-const home = '/workspace';
+// Agents keep their work in the home folder (the Desktop and its projects), so the browser opens there.
+const home = '/home/agent';
 const inputClass =
   'h-10 min-w-0 rounded-md border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring sm:text-sm';
 function modified(time: number | null) {

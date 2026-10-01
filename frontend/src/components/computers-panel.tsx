@@ -373,7 +373,7 @@ export function ComputersPanel({
                   >
                     <Dialog.Title className="text-lg font-semibold">Create computer</Dialog.Title>
                     <Dialog.Description className="mt-2 text-sm text-muted-foreground">
-                      Create a separate Ubuntu desktop with a persistent home and workspace.
+                      Create a separate Ubuntu desktop with a persistent home folder.
                     </Dialog.Description>
                     <label htmlFor={createId} className="mt-5 block text-sm font-medium">
                       Computer name
@@ -685,7 +685,7 @@ export function ComputersPanel({
                   <p role="alert">
                     Changing timezone requires replacing the container.{' '}
                     {shownSettings.state === 'exited'
-                      ? 'The computer is off: its home/workspace volumes stay intact. Power it on from the menu after saving.'
+                      ? 'The computer is off: its home volume stays intact. Power it on from the menu after saving.'
                       : 'Power off the computer from the menu first, then reopen Settings. No running desktop will be restarted automatically.'}
                   </p>
                   {shownSettings.state === 'exited' && (
@@ -697,7 +697,7 @@ export function ComputersPanel({
                         onChange={event => setReplaceConfirmed(event.target.checked)}
                         className="mt-1"
                       />
-                      I understand this will replace the stopped container, preserving its home and workspace
+                      I understand this will replace the stopped container, preserving its home folder
                     </label>
                   )}
                 </div>
@@ -762,8 +762,8 @@ export function ComputersPanel({
             >
               <Dialog.Title className="text-lg font-semibold">Delete computer</Dialog.Title>
               <Dialog.Description className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                This permanently deletes the computer, its container, and all files in its persistent home and
-                workspace. This cannot be undone.
+                This permanently deletes the computer, its container, and all files in its persistent home folder. This
+                cannot be undone.
               </Dialog.Description>
               <p id={`${confirmId}-help`} className="mt-5 break-words text-sm">
                 Type <strong className="select-text">{shownDelete.name}</strong> exactly to confirm.
@@ -834,7 +834,7 @@ export function ComputersPanel({
         description={
           <>
             Shuts down <strong className="text-foreground">{powerOffTarget?.name}</strong>. Open programs and every
-            terminal session end. Files in its home and workspace stay.
+            terminal session end. Files in its home folder stay; /tmp is emptied.
             {(() => {
               const holder = holders.data?.find(item => item.computerId === powerOffTarget?.id);
               return holder ? (

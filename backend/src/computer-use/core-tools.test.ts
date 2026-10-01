@@ -21,10 +21,10 @@ it('custom core tools override Pi host builtins and require the current claim; i
     started: true,
     settled: true as const,
     result:
-      request.path === 'picture.jpg'
+      request.path === '/home/agent/picture.jpg'
         ? {
             type: 'image',
-            path: '/workspace/picture.jpg',
+            path: '/home/agent/picture.jpg',
             mimeType: 'image/jpeg',
             data: Buffer.from([255, 216, 255, 217]).toString('base64'),
             width: 10,
@@ -70,6 +70,20 @@ it('custom core tools override Pi host builtins and require the current claim; i
     await service.use(agent.id, 'Desk');
     for (const [name, args] of calls) expect(JSON.stringify(await invoke(name, args))).toContain('GUEST RESULT');
     expect(run.mock.calls.every(([id]) => id === computer.id)).toBe(true);
+    // Relative paths and bash's default cwd are the persistent home, whatever the computer image defaults to.
+    run.mockClear();
+    await invoke('read', { path: 'notes/a.md' });
+    await invoke('bash', { command: 'pwd' });
+    await invoke('bash', { command: 'ls', cwd: 'src' });
+    await invoke('read', { path: '~/b.md' });
+    await invoke('read', { path: '/tmp/c.log' });
+    expect(run.mock.calls.map(([, request]) => request)).toMatchObject([
+      { kind: 'read', path: '/home/agent/notes/a.md' },
+      { kind: 'bash', cwd: '/home/agent' },
+      { kind: 'bash', cwd: '/home/agent/src' },
+      { kind: 'read', path: '~/b.md' },
+      { kind: 'read', path: '/tmp/c.log' },
+    ]);
     expect(await readFile(host, 'utf8')).toBe('HOST SENTINEL');
     const failed = {
       content: [{ type: 'text' as const, text: '{"exitCode":7,"stderr":"failure"}' }],

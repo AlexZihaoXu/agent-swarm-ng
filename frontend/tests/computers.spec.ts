@@ -625,7 +625,7 @@ test('a stopped computer can change timezone only after explicit replacement con
   await page.getByRole('menuitem', { name: 'Settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings for Stopped desk' });
   await dialog.getByLabel('Timezone', { exact: true }).fill('Etc/UTC');
-  await expect(dialog.getByRole('alert')).toContainText('home/workspace volumes stay intact');
+  await expect(dialog.getByRole('alert')).toContainText('home volume stays intact');
   const replace = dialog.getByRole('button', { name: 'Replace stopped computer' });
   await expect(replace).toBeDisabled();
   await dialog.getByRole('checkbox', { name: /I understand this will replace/ }).check();
@@ -896,8 +896,7 @@ test('creates a computer and requires an exact typed name before destructive del
     .click();
   const dialog = page.getByRole('dialog', { name: 'Delete computer' });
   await expectCentered(page, dialog);
-  await expect(dialog).toContainText('home');
-  await expect(dialog).toContainText('workspace');
+  await expect(dialog).toContainText('persistent home');
   const confirm = dialog.getByLabel('Confirm computer name');
   await confirm.fill('test machine');
   await expect(dialog.getByRole('button', { name: 'Delete computer' })).toBeDisabled();

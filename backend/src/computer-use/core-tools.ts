@@ -2,10 +2,12 @@ import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent
 import { Type } from '@sinclair/typebox';
 import type { ComputerUseService } from './service';
 import type { ScreenshotPool, ScreenshotReference } from './image-pool';
+const HOME = '/home/agent';
 const path = Type.String({
   minLength: 1,
   maxLength: 4096,
-  description: 'Guest path: absolute, ~/ under /home/agent, or relative to /workspace. Never a platform-host path.',
+  description:
+    'Guest path: absolute, ~/ or relative (both under /home/agent, the persistent home). /tmp is disposable: wiped at every computer start. Never a platform-host path.',
 });
 const scope =
   'Requires your current assigned, claimed computer; runs as its guest agent account. No host access. Await each computer operation before starting another. Read concepts/computers/files before first use. ';
@@ -58,8 +60,19 @@ export function createCoreTools(
     write:
       'Create/overwrite UTF-8 text and create missing parent directories. Atomic replacement per file; new files private, existing mode retained. Request≤64KiB. Invalidates desktop screenshot allowance; inspect effects before retrying a failed operation.',
     edit: 'Apply 1–100 exact replacements to one UTF-8 file≤16MiB. Every oldText must match exactly once in the ORIGINAL file; matches cannot overlap. Validates all before atomic replacement; detects observed concurrent changes but does not lock human editors. Request≤64KiB. Invalidates screenshot allowance.',
-    bash: 'Execute a synchronous Bash command, cwd default /workspace, with a minimal guest environment. Return exitCode and separate stdout/stderr tails (25KB/1000lines each). Default30s,max120s; no background or persistent shell session. Do not use nohup, setsid, daemon/service launch or other detachment to evade the synchronous lifetime. Cancelling cannot undo writes or requests handed to external services. Commands have guest-account permissions, including configured sudo, not a restricted filesystem sandbox. Invalidates screenshot allowance; verify results.',
+    bash: 'Execute a synchronous Bash command, cwd default /home/agent, with a minimal guest environment. Return exitCode and separate stdout/stderr tails (25KB/1000lines each). Default30s,max120s; no background or persistent shell session. Do not use nohup, setsid, daemon/service launch or other detachment to evade the synchronous lifetime. Cancelling cannot undo writes or requests handed to external services. Commands have guest-account permissions, including configured sudo, not a restricted filesystem sandbox. Invalidates screenshot allowance; verify results.',
   };
+  // Relative paths and bash's cwd mean the persistent home. Resolved here, so computers whose image still defaults to
+  // the retired /workspace (created before 2026-10-01) behave the same as new ones.
+  const homed = (value: unknown) =>
+    typeof value === 'string' && value && !value.startsWith('/') && !value.startsWith('~/')
+      ? `${HOME}/${value}`
+      : value;
+  const resolve = (params: Record<string, unknown>) => ({
+    ...params,
+    ...('path' in params ? { path: homed(params.path) } : {}),
+    ...(params.kind === 'bash' ? { cwd: homed(params.cwd ?? HOME) } : {}),
+  });
   return (['read', 'edit', 'write', 'bash'] as const).map(kind =>
     defineTool({
       name: kind,
@@ -68,7 +81,7 @@ export function createCoreTools(
       parameters: schemas[kind],
       async execute(_call, params, signal, _update, ctx) {
         let reference: ScreenshotReference | undefined;
-        const receipt = await service.core(agentId, { ...params, kind }, signal, async receipt => {
+        const receipt = await service.core(agentId, resolve({ ...params, kind }), signal, async receipt => {
           const result = receipt.result;
           if (result?.type !== 'image') return;
           if (!ctx.model?.input.includes('image'))

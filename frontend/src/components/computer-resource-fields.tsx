@@ -114,7 +114,7 @@ export function ComputerResourceFields({
       />
       <p className="text-xs text-muted-foreground">
         This computer may use up to the same amount of additional host swap. Swap is slower than RAM and does not live
-        in its home/workspace volumes. Several computers can reserve more than the host has available.
+        in its home volume. Several computers can reserve more than the host has available.
       </p>
       <div className="space-y-2">
         <label htmlFor={timezoneId} className="block text-sm font-medium">

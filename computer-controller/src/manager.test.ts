@@ -442,6 +442,16 @@ it('replaces a stopped owned desktop with new TZ/env while preserving both named
   expect(request.mock.calls.some(call => String(call[1]).startsWith('/volumes/') && call[0] === 'DELETE')).toBe(false);
 });
 
+it('replaces a computer created after /workspace was retired with only its home volume', async () => {
+  const { manager, resources, canonical } = stoppedReplacementFixture();
+  resources.delete(`/volumes/${manager.names.volume(id, 'workspace')}`);
+  await manager.replaceStopped(id, name, { cpuCores: 2, memoryGiB: 6, timezone: 'Etc/UTC' });
+  const replacement = resources.get(`/containers/${canonical}/json`) as {
+    HostConfig: { Mounts: { Target: string }[] };
+  };
+  expect(replacement.HostConfig.Mounts.map(mount => mount.Target)).toEqual(['/home/agent']);
+});
+
 it('restores the old stopped desktop if promotion of the replacement fails', async () => {
   const { manager, resources, request, canonical, next, previous, failRename } = stoppedReplacementFixture();
   failRename();
@@ -526,7 +536,6 @@ it('puts the derived hostname and every grant in one desktop create body', () =>
     cpuLimit: 4,
     memoryGiB: 6,
     homeVolume: 'swarm-ng-test-computer-' + id + '-home',
-    workspaceVolume: 'swarm-ng-test-computer-' + id + '-workspace',
   };
   const body = desktopCreateBody(input);
   // Must be top-level Config: inside HostConfig Docker ignores it silently.
@@ -549,7 +558,11 @@ it('puts the derived hostname and every grant in one desktop create body', () =>
   expect(body.HostConfig.Devices).toEqual([
     { PathOnHost: '/dev/dri/renderD128', PathInContainer: '/dev/dri/renderD128', CgroupPermissions: 'rwm' },
   ]);
-  expect(body.HostConfig.Mounts.map((mount: { Target: string }) => mount.Target)).toEqual([
+  // Home is the one persistent place (/tmp is wiped at each start); /workspace is retired.
+  expect(body.HostConfig.Mounts.map((mount: { Target: string }) => mount.Target)).toEqual(['/home/agent']);
+  // A computer from before the retirement keeps its old workspace volume mounted when it is recreated.
+  const older = desktopCreateBody({ ...input, workspaceVolume: 'swarm-ng-test-computer-' + id + '-workspace' });
+  expect(older.HostConfig.Mounts.map((mount: { Target: string }) => mount.Target)).toEqual([
     '/home/agent',
     '/workspace',
   ]);

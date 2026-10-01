@@ -15,7 +15,11 @@ MAX_FILE = 16 * 1024 * 1024
 MAX_IMAGE = 2 * 1024 * 1024
 
 
-def guest_path(value, cwd='/workspace'):
+# Relative paths and bash start in the agent's persistent home; /tmp is the disposable place (wiped at each start).
+HOME = '/home/agent'
+
+
+def guest_path(value, cwd=HOME):
     if not isinstance(value, str) or not value or len(value) > 4096 or '\0' in value:
         raise ValueError('Use a nonempty guest path of at most 4096 characters.')
     path = Path(value.replace('~/', '/home/agent/', 1) if value.startswith('~/') else value)
@@ -89,7 +93,7 @@ def snapshot(path):
     with path.open('rb') as file: return file.read(MAX_FILE + 1)
 
 
-def file_operation(value, cwd='/workspace'):
+def file_operation(value, cwd=HOME):
     path = guest_path(value['path'], cwd)
     if value['kind'] == 'read': return read(path, value)
     original = None

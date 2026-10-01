@@ -135,7 +135,7 @@ def execute_terminal(value, token):
         value.pop('kind', None)
         child = subprocess.run(['/usr/bin/setpriv', '--reuid=1000', '--regid=1000', '--init-groups',
                                 '/usr/bin/python3', '-I', '/opt/swarm/computer-terminal.py', json.dumps(value)],
-                               cwd='/workspace', env={**ENVIRONMENT, 'TERM': 'xterm-256color'}, stdin=subprocess.DEVNULL,
+                               cwd='/home/agent', env={**ENVIRONMENT, 'TERM': 'xterm-256color'}, stdin=subprocess.DEVNULL,
                                # A combo may run for up to 10 seconds (validated by the helper before any input).
                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                timeout=20 if value.get('operation') == 'actions' else 8)

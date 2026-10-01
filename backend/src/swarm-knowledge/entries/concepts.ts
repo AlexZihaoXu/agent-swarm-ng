@@ -110,7 +110,7 @@ export const computersConcept = {
     'concepts/computers/files',
     'concepts/computers/watches',
   ],
-  content: `A computer is a shared guest machine (Ubuntu with a GNOME desktop, Chrome, VS Code), separate from agents and channels. Agent tools act only inside the guest, as its user "agent" (home /home/agent, working directory /workspace, sudo as configured), never on the platform host.
+  content: `A computer is a shared guest machine (Ubuntu with a GNOME desktop, Chrome, VS Code), separate from agents and channels. Agent tools act only inside the guest, as its user "agent" (home /home/agent, which is also the working directory; sudo as configured), never on the platform host. Where things live: the home folder (including the Desktop the human sees) is the one persistent place; /tmp is disposable and wiped every time the computer starts.
 
 Assignment: the human lists which computers an agent may use (in its settings). Assignment is eligibility, not control. list_computers shows assigned computers and their current holders.
 
@@ -142,7 +142,7 @@ export const desktopConcept = {
   related: ['practices/desktop', 'practices/browser', 'concepts/computers'],
   content: `Screenshots. glance({quality?}) captures the whole screen: low (default) 33% of width/height, medium 50%, high 75%, full 100% (native). look_at({x,y,size}) returns a native-resolution crop centred on x,y with radius size. A vision-capable model is required. A successful look allows two run_actions combos within the next 30 real seconds; another look resets it.
 
-Saving a screenshot to share: save_screenshot({to, x?, y?, size?}) takes a fresh screenshot of the computer you hold without showing it to you and saves it as an image: to:"scratch:shots/login.png" or "computer:<name>:/home/guest/login.jpg". The whole desktop at full resolution by default, or the look_at region x, y, size. Name it .jpg (as captured, smaller) or .png. Then upload_file({from:"scratch:shots/login.png", channelId}) and send its fileId (send_message, or discord_send_message with channelId "discord:<id>"). It grants no input allowance; look first if you need to see it, and mind what is on screen before sharing it.
+Saving a screenshot to share: save_screenshot({to, x?, y?, size?}) takes a fresh screenshot of the computer you hold without showing it to you and saves it as an image: to:"scratch:shots/login.png" or "computer:<name>:/tmp/shots/login.jpg" (into an existing folder). The whole desktop at full resolution by default, or the look_at region x, y, size. Name it .jpg (as captured, smaller) or .png. Then upload_file({from:"scratch:shots/login.png", channelId}) and send its fileId (send_message, or discord_send_message with channelId "discord:<id>"). It grants no input allowance; look first if you need to see it, and mind what is on screen before sharing it.
 
 Coordinates. Everything uses the full desktop's normalized [0,999] space, not image pixels. look_at({x:200,y:200,size:50}) crops [150,150,250,250]; a crop that would leave the screen shifts to fit (a span of [-200,100] becomes [0,300]) and one larger than the screen becomes [0,999]. The result's bounds are the actual crop: use them, not your request. A pixel (u,v) in a returned image of width W and height H is at x=left+(u+0.5)/W*(right-left), y=top+(v+0.5)/H*(bottom-top). A normalized square is not square in pixels on a wide screen.
 
@@ -178,7 +178,7 @@ Lifetime: programs keep running through the end of a tool call or turn, Stop, br
 Size: sessions start at 120 columns × 36 rows; terminal_resize changes it (40..240 × 10..80), programs see a resize and every viewer follows. The human may also resize or rename a session.
 
 Tools:
-- terminal_create({name, command?, cwd?}): cwd defaults to ~/Desktop; a relative cwd resolves under /home/agent (unlike read/write/bash, which resolve relative paths under /workspace). It returns at once; it does not wait for the command.
+- terminal_create({name, command?, cwd?}): cwd defaults to ~/Desktop; a relative cwd resolves under /home/agent, like read/write/bash. It returns at once; it does not wait for the command.
 - terminal_list, terminal_status({session}): alive/exited, exit code when known, cwd, foreground command, size. A running shell says nothing about whether its last command finished or succeeded.
 - terminal_view({session, rows?, up?, colors?}): what a person would see: by default the current screen at the live bottom. up scrolls (rows above the bottom, 0..10000), rows sets the window (1..200). The result gives the row range, total and the up value for the next page. Text only (≤50000 bytes) unless colors:true, which also attaches an image of the same rows rendered with their colours and styles (needs a vision model). tmux keeps 10000 rows of history in memory; older output is gone unless written to a file.
 - terminal_run_actions({session, actions, per_action_pause?}): 1–16 keyboard actions. keyboard.type {text, cpm?} types literal text (default 800 cpm, max 3200, or "instant" to paste; no Enter added; typed newlines run commands, while a pasted text waits in the input line for Enter). keyboard.press {key, repeat?, interval?} sends one key: Enter, Tab/BTab, Escape, BSpace, Delete, Insert, Space, arrows, Home/End/PageUp/PageDown, F1..F12, C-a..C-z (C-c interrupts), M-a..M-z; repeat 1..50 times, interval 0..2 s apart. Whole combo checked first: typing and repeat intervals at most 5 s, 10 s including pauses (default pause 0.2 s).
@@ -200,7 +200,13 @@ export const filesConcept = {
   related: ['practices/files', 'concepts/computers/terminals'],
   content: `read, write, edit and bash act only in the computer you hold; every call rechecks assignment and claim. They run as the guest user with its permissions (including configured sudo): broad access to that computer, never to the platform host or its credentials.
 
-Paths: guest absolute paths, ~/ (/home/agent), or relative to /workspace. bash's cwd defaults to /workspace; cd and environment changes do not carry to the next call.
+Paths: guest absolute paths, ~/ (/home/agent), or relative to /home/agent. bash's cwd defaults to /home/agent; cd and environment changes do not carry to the next call.
+
+Where to put files:
+- Work that matters (projects, results, anything the human or you will come back to): in the home folder; on ~/Desktop when the human should see it there. Home is persistent: it survives restarts and power-off.
+- Disposable files (logs you will grep or monitor, intermediate build output, screenshots or downloads you will upload and no longer need, scratch experiments): in /tmp. /tmp is wiped every time the computer starts, so never keep anything there that must last. Use a subfolder per task (/tmp/<task>/…) so you can find and remove your own files.
+- Drafts you are shaping for the human (text and images) belong in your scratchpad, not on a computer (concepts/scratchpad).
+Computers created before 2026-10-01 may still have an old /workspace folder; do not use it for new work.
 
 read({path, offset?, limit?}): one page of UTF-8 text, 200 lines by default (up to 2000 lines / 50000 bytes), 1-based offsets, nextOffset and prevOffset to scroll. Invalid bytes are replaced for viewing. PNG/JPEG/GIF/WebP/BMP files come back as images (first frame, ≤4096 px per side, 16 million pixels, 2 MiB); they share the image pool and are not desktop screenshots.
 
