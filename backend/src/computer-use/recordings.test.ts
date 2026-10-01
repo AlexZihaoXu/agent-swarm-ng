@@ -150,8 +150,16 @@ it('marks and stops on request, stops when the assignment goes, and saves after 
     await f.service.use(f.ada.id, 'Desk');
     await f.recordings.start(f.ada.id, { sources: ['desktop'], mode: 'events', human: true });
     expect(f.calls.find(call => call.op === 'start')!.input.rules).toEqual({ '*': {} });
+    expect(f.calls.find(call => call.op === 'start')!.input).toMatchObject({ keepStart: false, keepEnd: false });
     await f.recordings.mark(f.ada.id, 'build failed');
     expect(f.calls.at(-1)).toMatchObject({ op: 'mark', input: { label: 'build failed' } });
+    // A mark's own padding, and the untrimmed start or end, go to the recorder.
+    await f.recordings.mark(f.ada.id, 'look here', { before: 10, after: 5 });
+    expect(f.calls.at(-1)!.input).toMatchObject({ label: 'look here', before: 10, after: 5 });
+    await f.recordings.renew(f.ada.id, undefined, { keepEnd: true });
+    expect(f.calls.at(-1)).toMatchObject({ op: 'update', input: { keepEnd: true } });
+    expect(f.calls.at(-1)!.input.rules).toBeUndefined();
+    expect(f.recordings.list(f.ada.id)[0]).toMatchObject({ endKept: true });
     const [saved] = await f.recordings.stop(f.ada.id);
     expect(saved).toMatchObject({ label: 'desktop', computer: 'Desk', files: [{ name: 'clip-01-desktop.mp4' }] });
     await expect(f.recordings.stop(f.ada.id)).rejects.toThrow('You are not recording anything.');

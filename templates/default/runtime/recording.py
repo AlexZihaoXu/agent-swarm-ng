@@ -57,8 +57,11 @@ def journal(kind, event):
 
 # ---------------------------------------------------------------- pure planning (unit-tested)
 
-def padding(rules, kind, defaults):
+def padding(rules, kind, defaults, event=None):
     rule = rules[kind] if kind in rules else rules.get('*')
+    # A mark may carry its own padding (mark_clip before/after): it counts even without a mark rule.
+    if event is not None and kind == 'mark' and ('before' in event or 'after' in event):
+        rule = dict(rule or {}, **{key: event[key] for key in ('before', 'after') if key in event})
     if rule is None:
         return None
     before = rule.get('before', defaults[0])
@@ -66,12 +69,14 @@ def padding(rules, kind, defaults):
     return min(max(before, 0), MAX_PAD), min(max(after, 0), MAX_PAD)
 
 
-def plan_clips(events, rules, defaults, start, stop, gap=1.0):
+def plan_clips(events, rules, defaults, start, stop, gap=1.0, keep_start=False, keep_end=False):
     """Merged [from, to) intervals in seconds since `start`, each with its events. Events are dicts with t0/t1 (wall
-    seconds) and type; types without a rule are ignored; marks use the 'mark' rule."""
+    seconds) and type; types without a rule are ignored; marks use the 'mark' rule or their own padding.
+    keep_start: the first clip reaches back to the start of the recording; keep_end: the last clip runs on to its end
+    (both, with no events: the whole recording)."""
     spans = []
     for event in sorted(events, key=lambda e: e['t0']):
-        pad = padding(rules, event['type'], defaults)
+        pad = padding(rules, event['type'], defaults, event)
         if pad is None:
             continue
         a = max(0.0, event['t0'] - start - pad[0])
@@ -84,6 +89,13 @@ def plan_clips(events, rules, defaults, start, stop, gap=1.0):
             spans[-1]['events'].append(event)
         else:
             spans.append({'from': a, 'to': b, 'events': [event]})
+    end = round(stop - start, 3)
+    if not spans and keep_start and keep_end and end > 0:
+        return [{'from': 0.0, 'to': end, 'events': []}]
+    if spans and keep_start:
+        spans[0]['from'] = 0.0
+    if spans and keep_end:
+        spans[-1]['to'] = max(spans[-1]['to'], end)
     return spans
 
 
@@ -119,6 +131,9 @@ def describe(event, hide_typed):
         detail = '%s ×%s' % (event.get('direction'), event.get('amount'))
     elif kind == 'mark':
         detail = json.dumps(event.get('label', ''), ensure_ascii=False)
+        if 'before' in event or 'after' in event:
+            detail += ' (own padding: %s before, %s after)' % (
+                '%gs' % event['before'] if 'before' in event else 'rule', '%gs' % event['after'] if 'after' in event else 'rule')
     else:
         detail = ''
     length = event.get('t1', event['t0']) - event['t0']
@@ -309,6 +324,7 @@ def start(value):
         'id': rid, 'folder': str(target), 'source': source, 'session': session, 'label': value['label'],
         'mode': value['mode'], 'fps': value['fps'], 'kbps': value.get('kbps', 1000), 'audio': value.get('audio', True),
         'rules': value.get('rules', {}), 'defaults': value.get('defaults', [0.5, 0.5]), 'hideTyped': value.get('hideTyped', False),
+        'keepStart': value.get('keepStart', False), 'keepEnd': value.get('keepEnd', False),
         'maxSeconds': value.get('maxSeconds', 1800), 'started': now(), 'status': 'recording', 'encoder': None,
     }
     save(state)
@@ -430,8 +446,16 @@ def prune(state, work):
         return
     longest = max([state['defaults'][0]] + [r.get('before', state['defaults'][0]) for r in state['rules'].values()])
     horizon = now() - state['started'] - min(longest, MAX_PAD) - 2 * SEGMENT
-    clips = plan_clips(events_of(state), state['rules'], state['defaults'], state['started'], now() + MAX_PAD)
+    clips = plan_clips(events_of(state), state['rules'], state['defaults'], state['started'], now() + MAX_PAD,
+                       keep_start=state.get('keepStart', False))
+    # keep_start: nothing goes before the first event has made the first clip (it reaches back to the start).
+    if state.get('keepStart') and not clips:
+        return
+    # keep_end: everything after the latest clip may still become its untrimmed end.
+    latest = clips[-1]['from'] if state.get('keepEnd') and clips else None
     for segment in segments[:-2]:
+        if latest is not None and segment['to'] > latest:
+            continue
         if segment['to'] < horizon and not any(
                 segment['to'] > clip['from'] and segment['from'] < clip['to'] for clip in clips):
             (work / segment['file']).unlink(missing_ok=True)
@@ -444,13 +468,19 @@ def mark(value):
         if state['status'] != 'recording':
             continue
         with open(WORK / rid / 'marks.jsonl', 'a') as file:
-            file.write(json.dumps({'t0': at, 't1': at, 'type': 'mark', 'label': str(value.get('label', ''))[:200]}) + '\n')
+            mark = {'t0': at, 't1': at, 'type': 'mark', 'label': str(value.get('label', ''))[:200]}
+            mark.update({key: min(max(float(value[key]), 0), MAX_PAD) for key in ('before', 'after') if key in value})
+            file.write(json.dumps(mark) + '\n')
     return {'marked': at}
 
 
 def update(value):
     state = load(value['id'])
-    state['rules'] = value['rules']
+    if 'rules' in value:
+        state['rules'] = value['rules']
+    for key in ('keepStart', 'keepEnd'):
+        if key in value:
+            state[key] = bool(value[key])
     save(state)
     return {'updated': True}
 
@@ -546,7 +576,8 @@ def stop(value):
             segments = [s for s in segments if (work / s['file']).exists()]
             spans = ([{'from': 0.0, 'to': segments[-1]['to'] if segments else 0.0, 'events': events}]
                      if state['mode'] == 'session' else
-                     plan_clips(events, state['rules'], state['defaults'], state['started'], end))
+                     plan_clips(events, state['rules'], state['defaults'], state['started'], end,
+                                keep_start=state.get('keepStart', False), keep_end=state.get('keepEnd', False)))
             for span in spans:
                 parts = covering(segments, span['from'], span['to'])
                 if not parts:
@@ -568,7 +599,8 @@ def stop(value):
             frames = read_jsonl(work / 'frames.jsonl')
             if frames:
                 spans = ([{'from': 0.0, 'to': end - state['started'], 'events': events}] if state['mode'] == 'session'
-                         else plan_clips(events, state['rules'], state['defaults'], state['started'], end))
+                         else plan_clips(events, state['rules'], state['defaults'], state['started'], end,
+                                         keep_start=state.get('keepStart', False), keep_end=state.get('keepEnd', False)))
                 rendered = {}
                 for span in spans:
                     a, b = state['started'] + span['from'], state['started'] + span['to']
@@ -604,9 +636,11 @@ def stop(value):
         return {'error': state['error']}
     # events.log: one shared, time-sorted log per folder.
     start_at = state['started']
-    lines.append((start_at, log_line(start_at, start_at, label, '—', 'recording started · %s · %s · %d fps%s' % (
+    lines.append((start_at, log_line(start_at, start_at, label, '—', 'recording started · %s · %s · %d fps%s%s%s' % (
         'desktop' if state['source'] == 'desktop' else 'terminal', state['mode'], state['fps'],
-        ' · audio' if state.get('audio') and state['source'] == 'desktop' else ''))))
+        ' · audio' if state.get('audio') and state['source'] == 'desktop' else '',
+        ' · start kept' if state['mode'] == 'events' and state.get('keepStart') else '',
+        ' · end kept' if state['mode'] == 'events' and state.get('keepEnd') else ''))))
     placed = []
     for file in files:
         for event in file.get('events', []):

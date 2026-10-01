@@ -71,6 +71,8 @@ export function validateRecording(op: string, input: unknown): Record<string, un
         'rules',
         'defaults',
         'hideTyped',
+        'keepStart',
+        'keepEnd',
         'maxSeconds',
       ]);
       if (typeof value.id !== 'string' || !UUID.test(value.id)) fail('Invalid recording id.');
@@ -84,7 +86,8 @@ export function validateRecording(op: string, input: unknown): Record<string, un
       between(value.fps, 'fps', 1, value.source === 'desktop' ? 60 : 30, true);
       if (value.kbps !== undefined) between(value.kbps, 'kbps', 100, 50_000, true);
       if (value.audio !== undefined && typeof value.audio !== 'boolean') fail('audio is true or false.');
-      if (value.hideTyped !== undefined && typeof value.hideTyped !== 'boolean') fail('hideTyped is true or false.');
+      for (const key of ['hideTyped', 'keepStart', 'keepEnd'])
+        if (value[key] !== undefined && typeof value[key] !== 'boolean') fail(`${key} is true or false.`);
       if (value.rules !== undefined) rules(value.rules);
       if (value.defaults !== undefined) {
         if (!Array.isArray(value.defaults) || value.defaults.length !== 2) fail('defaults is [before, after].');
@@ -94,7 +97,9 @@ export function validateRecording(op: string, input: unknown): Record<string, un
       return value;
     }
     case 'mark':
-      only(value, ['ids', 'label']);
+      only(value, ['ids', 'label', 'before', 'after']);
+      if (value.before !== undefined) between(value.before, 'before', 0, 30);
+      if (value.after !== undefined) between(value.after, 'after', 0, 30);
       if (
         !Array.isArray(value.ids) ||
         !value.ids.length ||
@@ -106,9 +111,11 @@ export function validateRecording(op: string, input: unknown): Record<string, un
         fail('Invalid label.');
       return value;
     case 'update':
-      only(value, ['id', 'rules']);
+      only(value, ['id', 'rules', 'keepStart', 'keepEnd']);
       if (typeof value.id !== 'string' || !UUID.test(value.id)) fail('Invalid recording id.');
-      rules(value.rules);
+      if (value.rules !== undefined) rules(value.rules);
+      for (const key of ['keepStart', 'keepEnd'])
+        if (value[key] !== undefined && typeof value[key] !== 'boolean') fail(`${key} is true or false.`);
       return value;
     case 'stop':
       only(value, ['id', 'reason', 'notes']);

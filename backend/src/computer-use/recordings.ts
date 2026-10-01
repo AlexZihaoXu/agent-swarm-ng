@@ -43,6 +43,8 @@ type Recording = {
   mode: RecordingMode;
   /** The event types this source clips around (events mode). */
   events: string[];
+  keepStart: boolean;
+  keepEnd: boolean;
   startedAt: number;
   renewedAt: number;
   reminded: boolean;
@@ -137,7 +139,11 @@ export class AgentRecordings {
       source: item.source === 'desktop' ? 'desktop' : `terminal ${item.label.slice('terminal-'.length)}`,
       mode: item.mode,
       ...(item.mode === 'events'
-        ? { clipsAround: item.events.includes('*') ? 'all of its events and marks' : item.events.join(', ') }
+        ? {
+            clipsAround: item.events.includes('*') ? 'all of its events and marks' : item.events.join(', '),
+            ...(item.keepStart ? { startKept: true } : {}),
+            ...(item.keepEnd ? { endKept: true } : {}),
+          }
         : {}),
       folder: item.folder,
       startedAt: new Date(item.startedAt).toISOString(),
@@ -157,6 +163,10 @@ export class AgentRecordings {
       events?: Record<string, EventRule>;
       hideTyped?: boolean;
       audio?: boolean;
+      /** Events mode: the first clip reaches back to the start of the recording. */
+      keepStart?: boolean;
+      /** Events mode: the last clip runs on to the end of the recording. */
+      keepEnd?: boolean;
       human: boolean;
     },
   ) {
@@ -239,6 +249,8 @@ export class AgentRecordings {
           rules,
           defaults: [settings.recordingPadBeforeMs / 1000, settings.recordingPadAfterMs / 1000],
           hideTyped: input.hideTyped ?? false,
+          keepStart: input.keepStart ?? false,
+          keepEnd: input.keepEnd ?? false,
           maxSeconds: max,
         });
       } catch (error) {
@@ -257,6 +269,8 @@ export class AgentRecordings {
         folder,
         mode: input.mode,
         events: Object.keys(rules),
+        keepStart: input.keepStart ?? false,
+        keepEnd: input.keepEnd ?? false,
         startedAt: at,
         renewedAt: at,
         reminded: false,
@@ -287,7 +301,11 @@ export class AgentRecordings {
   }
 
   /** Renews all of the agent's recordings (and may change their event rules). */
-  async renew(agentId: string, events?: Record<string, EventRule>) {
+  async renew(
+    agentId: string,
+    events?: Record<string, EventRule>,
+    keep: { keepStart?: boolean; keepEnd?: boolean } = {},
+  ) {
     const mine = this.forAgent(agentId);
     if (!mine.length) throw new RecordingError('You are not recording anything.');
     const { lease } = await this.lease();
@@ -299,18 +317,30 @@ export class AgentRecordings {
         at: at / 1000,
         text: `renewed (lease until ${new Date(at + lease * 1000).toISOString().slice(11, 19)} UTC)`,
       });
-      if (events && item.mode === 'events') await this.call(item.computerId, 'update', { id: item.id, rules: events });
+      if (item.mode !== 'events') continue;
+      // New rules apply per source, as at the start: each keeps its own kinds of events (and marks).
+      const own = (type: string) =>
+        type === '*' ||
+        type === 'mark' ||
+        (item.source === 'desktop' ? DESKTOP_EVENTS : TERMINAL_EVENTS).some(name => name === type);
+      const rules = events && Object.fromEntries(Object.entries(events).filter(([type]) => own(type)));
+      if (keep.keepStart !== undefined) item.keepStart = keep.keepStart;
+      if (keep.keepEnd !== undefined) item.keepEnd = keep.keepEnd;
+      if (rules) item.events = Object.keys(rules);
+      if (rules || keep.keepStart !== undefined || keep.keepEnd !== undefined)
+        await this.call(item.computerId, 'update', { id: item.id, ...(rules ? { rules } : {}), ...keep });
     }
     return { renewed: mine.map(item => item.label), until: new Date(at + lease * 1000).toISOString() };
   }
 
-  async mark(agentId: string, label?: string) {
+  /** before/after: this mark's own padding (otherwise the "mark" rule, or the default padding). */
+  async mark(agentId: string, label?: string, padding: { before?: number; after?: number } = {}) {
     const mine = this.forAgent(agentId);
     if (!mine.length) throw new RecordingError('You are not recording anything.');
     const byComputer = new Map<string, string[]>();
     for (const item of mine) byComputer.set(item.computerId, [...(byComputer.get(item.computerId) ?? []), item.id]);
     for (const [computerId, ids] of byComputer)
-      await this.call(computerId, 'mark', { ids, ...(label ? { label } : {}) });
+      await this.call(computerId, 'mark', { ids, ...(label ? { label } : {}), ...padding });
     return { marked: mine.length };
   }
 

@@ -55,7 +55,7 @@ export function createRecordingTools(
         name: 'start_recording',
         label: 'Start recording',
         description:
-          'Record a computer you can read (the one you read or hold, or computer: an assigned one): sources is a list of "desktop" (screen, cursor and sound) and/or {terminal: <session ID>} (that terminal only), up to 3. mode "session" keeps everything as one video per source; mode "events" keeps only clips around events: for a desktop source its desktop actions (run_actions), for a terminal source the actions typed into that terminal (terminal_run_actions), plus mark_clip; nothing else counts. events picks types with their padding, e.g. [{on:"mouse.move_to", before:2.5, after:2.5}, {on:"keyboard.type", before:1.5, after:3}, "mark"] (recording_events lists them; omitted = all of the sources\' events at the default padding). Saved in ~/Videos/agent-recordings/<time>_<you>/ on that computer as clip-NN-<source>.mp4 (+ .cast for terminals) with events.log. It stops and saves by itself unless you renew_recording within the lease (you are reminded halfway). hide_typed:true logs typed text only as a length (use it when typing secrets). Read Swarm Knowledge concepts/computers/recording first.',
+          'Record a computer you can read (the one you read or hold, or computer: an assigned one): sources is a list of "desktop" (screen, cursor and sound) and/or {terminal: <session ID>} (that terminal only), up to 3. mode "session" keeps everything as one video per source; mode "events" keeps only clips around events: for a desktop source its desktop actions (run_actions), for a terminal source the actions typed into that terminal (terminal_run_actions), plus mark_clip; nothing else counts. events picks types with their padding, e.g. [{on:"mouse.move_to", before:2.5, after:2.5}, {on:"keyboard.type", before:1.5, after:3}, "mark"] (recording_events lists them; omitted = all of the sources\' events at the default padding). keep_start/keep_end keep the untrimmed start or end (see their descriptions). Saved in ~/Videos/agent-recordings/<time>_<you>/ on that computer as clip-NN-<source>.mp4 (+ .cast for terminals) with events.log. It stops and saves by itself unless you renew_recording within the lease (you are reminded halfway). hide_typed:true logs typed text only as a length (use it when typing secrets). Read Swarm Knowledge concepts/computers/recording first.',
         parameters: Type.Object(
           {
             sources: Type.Array(
@@ -87,6 +87,18 @@ export function createRecordingTools(
             events: Type.Optional(Type.Array(rule, { minItems: 1, maxItems: 20 })),
             hide_typed: Type.Optional(Type.Boolean()),
             audio: Type.Optional(Type.Boolean({ description: 'Desktop sound (default true).' })),
+            keep_start: Type.Optional(
+              Type.Boolean({
+                description:
+                  'Events mode: the first clip reaches back to the moment recording started (nothing before the first event is cut).',
+              }),
+            ),
+            keep_end: Type.Optional(
+              Type.Boolean({
+                description:
+                  'Events mode: the last clip runs on until the recording stops (nothing after the last event is cut). With keep_start and no events at all: the whole recording.',
+              }),
+            ),
           },
           { additionalProperties: false },
         ),
@@ -101,6 +113,8 @@ export function createRecordingTools(
               events: rulesOf(params.events),
               hideTyped: params.hide_typed,
               audio: params.audio,
+              keepStart: params.keep_start,
+              keepEnd: params.keep_end,
               human: humanAuthority(),
             }),
           );
@@ -110,26 +124,58 @@ export function createRecordingTools(
         name: 'renew_recording',
         label: 'Renew recording',
         description:
-          'Keep all your recordings going for another lease (one call renews them all). events (optional) replaces the event rules of your events-mode recordings from now on.',
+          'Keep all your recordings going for another lease (one call renews them all). Optionally change your events-mode recordings from now on: events replaces their event rules (each source keeps its own kinds), keep_start/keep_end turn the untrimmed start or end on or off.',
         parameters: Type.Object(
-          { events: Type.Optional(Type.Array(rule, { minItems: 1, maxItems: 20 })) },
+          {
+            events: Type.Optional(Type.Array(rule, { minItems: 1, maxItems: 20 })),
+            keep_start: Type.Optional(
+              Type.Boolean({
+                description:
+                  'Events mode: the first clip reaches back to the moment recording started (nothing before the first event is cut).',
+              }),
+            ),
+            keep_end: Type.Optional(
+              Type.Boolean({
+                description:
+                  'Events mode: the last clip runs on until the recording stops (nothing after the last event is cut). With keep_start and no events at all: the whole recording.',
+              }),
+            ),
+          },
           { additionalProperties: false },
         ),
         async execute(_call, params) {
-          return failing(() => recordings.renew(agentId, rulesOf(params.events)));
+          return failing(() =>
+            recordings.renew(agentId, rulesOf(params.events), {
+              keepStart: params.keep_start,
+              keepEnd: params.keep_end,
+            }),
+          );
         },
       }),
       defineTool({
         name: 'mark_clip',
         label: 'Mark a clip',
         description:
-          'Mark this moment in your events-mode recordings: a clip is kept around it (the "mark" padding). label is written in events.log.',
+          'Mark this moment in your events-mode recordings: a clip is kept around it. Its padding is before/after if you give them (seconds, 0–30, this mark only), else the "mark" rule of start_recording\'s events, else the default padding; a mark with its own padding counts even if you chose no "mark" rule. label is written in events.log.',
         parameters: Type.Object(
-          { label: Type.Optional(Type.String({ maxLength: 200 })) },
+          {
+            label: Type.Optional(Type.String({ maxLength: 200 })),
+            before: Type.Optional(
+              Type.Number({ minimum: 0, maximum: 30, description: 'Seconds kept before this mark.' }),
+            ),
+            after: Type.Optional(
+              Type.Number({ minimum: 0, maximum: 30, description: 'Seconds kept after this mark.' }),
+            ),
+          },
           { additionalProperties: false },
         ),
         async execute(_call, params) {
-          return failing(() => recordings.mark(agentId, params.label));
+          return failing(() =>
+            recordings.mark(agentId, params.label, {
+              ...(params.before !== undefined ? { before: params.before } : {}),
+              ...(params.after !== undefined ? { after: params.after } : {}),
+            }),
+          );
         },
       }),
       defineTool({

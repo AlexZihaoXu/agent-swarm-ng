@@ -34,6 +34,28 @@ class ClipPlanning(unittest.TestCase):
                                      START, START + 200)
         self.assertEqual((clips[0]['from'], clips[0]['to']), (70.0, 101.0))
 
+    def test_keep_start_and_keep_end_extend_the_first_and_last_clips(self):
+        events = [event(20, 'mouse.move_to'), event(40, 'mouse.move_to')]
+        spans = lambda **keep: [(c['from'], c['to']) for c in recording.plan_clips(
+            events, self.rules, (0.5, 0.5), START, START + 60, **keep)]
+        self.assertEqual(spans(), [(17.5, 22.5), (37.5, 42.5)])
+        self.assertEqual(spans(keep_start=True), [(0.0, 22.5), (37.5, 42.5)])
+        self.assertEqual(spans(keep_end=True), [(17.5, 22.5), (37.5, 60.0)])
+        self.assertEqual(spans(keep_start=True, keep_end=True), [(0.0, 22.5), (37.5, 60.0)])
+        # No events: both kept is the whole recording; one alone keeps nothing.
+        self.assertEqual([(c['from'], c['to']) for c in recording.plan_clips([], {}, (0.5, 0.5), START, START + 60,
+                                                                              keep_start=True, keep_end=True)], [(0.0, 60.0)])
+        self.assertEqual(recording.plan_clips([], {}, (0.5, 0.5), START, START + 60, keep_start=True), [])
+
+    def test_a_mark_with_its_own_padding_overrides_the_mark_rule(self):
+        marks = [event(30, 'mark', label='a'), event(50, 'mark', label='b', before=10, after=2)]
+        clips = recording.plan_clips(marks, {'mark': {'before': 1, 'after': 1}}, (0.5, 0.5), START, START + 60)
+        self.assertEqual([(c['from'], c['to']) for c in clips], [(29.0, 31.0), (40.0, 52.0)])
+        # Its own padding counts even when no mark rule was chosen.
+        clips = recording.plan_clips(marks, {'mouse.move_to': {}}, (0.5, 0.5), START, START + 60)
+        self.assertEqual([(c['from'], c['to']) for c in clips], [(40.0, 52.0)])
+        self.assertIn('own padding: 10s before, 2s after', recording.describe(marks[1], False))
+
     def test_segments_and_covering(self):
         segments = recording.parse_segments('seg-000000.ts,0.000000,2.000000\nseg-000001.ts,2.000000,4.000000\n'
                                             'seg-000002.ts,4.000000,6.000000\nother\n')

@@ -30,6 +30,11 @@ it('accepts bounded recording requests and refuses anything else before the gues
     { ...desktop, extra: 1 },
   ])
     expect(() => validateRecording('start', bad)).toThrow();
+  expect(validateRecording('start', { ...desktop, keepStart: true, keepEnd: false })).toBeTruthy();
+  expect(() => validateRecording('start', { ...desktop, keepEnd: 'yes' })).toThrow('keepEnd is true or false.');
+  expect(validateRecording('mark', { ids: [id], label: 'build failed', before: 10, after: 5 })).toBeTruthy();
+  expect(() => validateRecording('mark', { ids: [id], before: 31 })).toThrow('before must be within 0..30');
+  expect(validateRecording('update', { id, keepEnd: true })).toBeTruthy();
   expect(validateRecording('mark', { ids: [id], label: 'build failed' })).toBeTruthy();
   expect(() => validateRecording('mark', { ids: ['x'] })).toThrow();
   expect(validateRecording('stop', { id, reason: 'lease ended', notes: [{ at: 1, text: 'renewed' }] })).toBeTruthy();
