@@ -70,6 +70,13 @@ export function createRecordingTools(
             ),
             mode: Type.Union([Type.Literal('session'), Type.Literal('events')]),
             computer: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
+            to: Type.Optional(
+              Type.String({
+                minLength: 1,
+                maxLength: 200,
+                description: 'A folder in the computer home instead of ~/Videos/agent-recordings/<time>_<you>.',
+              }),
+            ),
             fps: Type.Optional(
               Type.Integer({
                 minimum: 1,
@@ -87,6 +94,7 @@ export function createRecordingTools(
           return failing(() =>
             recordings.start(agentId, {
               computer: params.computer,
+              to: params.to,
               sources: params.sources,
               mode: params.mode,
               fps: params.fps,

@@ -336,7 +336,8 @@ def ffmpeg_desktop(state, work, encoder):
     if state['audio']:
         args += ['-thread_queue_size', '512', '-f', 'pulse', '-i', 'swarm-output.monitor']
     if encoder == 'vaapi':
-        args += ['-vaapi_device', RENDER, '-vf', 'format=nv12,hwupload', '-c:v', 'h264_vaapi', '-rc_mode', 'VBR',
+        # The screen's colour conversion happens on the GPU too (measured at 60 fps: ~13% of a core, not ~107%).
+        args += ['-vaapi_device', RENDER, '-vf', 'hwupload,scale_vaapi=format=nv12', '-c:v', 'h264_vaapi', '-rc_mode', 'VBR',
                  '-b:v', '%dk' % int(kbps * 0.7), '-maxrate', '%dk' % kbps, '-g', str(int(fps * SEGMENT)), '-bf', '0']
     else:
         args += ['-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-crf', '26', '-maxrate', '%dk' % kbps,

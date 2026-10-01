@@ -73,6 +73,8 @@ it('records sources the agent can read into one folder, tells the holder, and ke
       human: true,
     });
     expect(started.recordings.map(item => item.source)).toEqual(['desktop', 'terminal build']);
+    // Each source says what it clips around, so a rule meant for the other source is noticed.
+    expect(started.recordings.map(item => item.clipsAround)).toEqual(['mouse.move_to, mark', 'mark']);
     const starts = f.calls.filter(call => call.op === 'start').map(call => call.input);
     expect(starts.map(input => input.label)).toEqual(['desktop', 'terminal-build']);
     expect(new Set(starts.map(input => input.folder)).size).toBe(1);
@@ -103,6 +105,9 @@ it('records sources the agent can read into one folder, tells the holder, and ke
     await expect(
       f.recordings.start(f.bo.id, { sources: [{ terminal: crypto.randomUUID() }], mode: 'session', human: true }),
     ).rejects.toThrow('No terminal');
+    await expect(
+      f.recordings.start(f.bo.id, { sources: ['desktop'], to: '../etc', mode: 'session', human: true }),
+    ).rejects.toThrow('to is a folder in the computer home');
   } finally {
     await f.close();
   }

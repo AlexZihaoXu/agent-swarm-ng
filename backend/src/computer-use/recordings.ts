@@ -41,6 +41,8 @@ type Recording = {
   label: string;
   folder: string;
   mode: RecordingMode;
+  /** The event types this source clips around (events mode). */
+  events: string[];
   startedAt: number;
   renewedAt: number;
   reminded: boolean;
@@ -134,6 +136,9 @@ export class AgentRecordings {
       computer: item.computerName,
       source: item.source === 'desktop' ? 'desktop' : `terminal ${item.label.slice('terminal-'.length)}`,
       mode: item.mode,
+      ...(item.mode === 'events'
+        ? { clipsAround: item.events.includes('*') ? 'all of its events and marks' : item.events.join(', ') }
+        : {}),
       folder: item.folder,
       startedAt: new Date(item.startedAt).toISOString(),
       renewedAt: new Date(item.renewedAt).toISOString(),
@@ -144,6 +149,8 @@ export class AgentRecordings {
     agentId: string,
     input: {
       computer?: string;
+      /** A folder in the computer's home instead of ~/Videos/agent-recordings/<time>_<agent>. */
+      to?: string;
       sources: RecordingSource[];
       mode: RecordingMode;
       fps?: number;
@@ -166,7 +173,15 @@ export class AgentRecordings {
     const { lease, max, settings } = await this.lease();
     const at = this.now();
     // Recordings started together (or while the agent already records this computer) share one folder.
+    const to = input.to
+      ?.trim()
+      .replace(/^~\//, '')
+      .replace(/^\/home\/agent\//, '')
+      .replace(/\/+$/, '');
+    if (to !== undefined && (!to || to.startsWith('/') || to.split('/').includes('..')))
+      throw new RecordingError('to is a folder in the computer home, e.g. "Videos/demo" or "~/work/recordings".');
     const folder =
+      to ??
       this.forAgent(agentId).find(item => item.computerId === target.computerId)?.folder ??
       `Videos/agent-recordings/${stamp(at)}_${safe(agent.name)}`;
     const kinds = new Set(input.sources.map(source => (source === 'desktop' ? 'desktop' : 'terminal')));
@@ -241,6 +256,7 @@ export class AgentRecordings {
         label,
         folder,
         mode: input.mode,
+        events: Object.keys(rules),
         startedAt: at,
         renewedAt: at,
         reminded: false,
