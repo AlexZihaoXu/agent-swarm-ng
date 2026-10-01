@@ -450,3 +450,35 @@ it('a repeating watch ends after three failed checks in a row, and checks cannot
     await t.close();
   }
 });
+
+it('a paused repeating watch still ends at its time limit, and a second occurrence on a changed view fires', async () => {
+  let report = 'error A';
+  const judge = vi.fn<Judge>(async () => ({ notify: true, summary: report }));
+  const t = await setup(judge);
+  try {
+    await t.watches.create(t.agent.id, { ...terminalWatch, timeoutSeconds: 300, repeat: { cooldownSeconds: 30 } });
+    await t.tick(0);
+    expect(t.events).toHaveLength(1);
+    await t.endTurns();
+    // Error B appears before error A ever cleared: the view and the report differ, so it is a new occurrence.
+    t.state.screen = 'error A\nerror B';
+    report = 'error B';
+    await t.tick(30);
+    expect(t.events).toHaveLength(2);
+    expect(t.events[1]).toContain('error B');
+    // Same view, same report: not again.
+    await t.endTurns();
+    await t.tick(30);
+    expect(t.events).toHaveLength(2);
+    // A wake-up whose turn never ends does not keep the watch past its time limit.
+    t.state.screen = 'error C';
+    report = 'error C';
+    await t.tick(30);
+    expect(t.events).toHaveLength(3);
+    await t.tick(300);
+    expect(t.events.at(-1)).toContain('reached its time limit');
+    expect(t.watches.list(t.agent.id)).toEqual([]);
+  } finally {
+    await t.close();
+  }
+});

@@ -138,7 +138,8 @@ export class HttpComputerController implements ComputerController {
   async monitor(id: string, command: string, signal: AbortSignal, lifetimeMs: number) {
     const response = await this.request(
       `/computers/${encodeURIComponent(id)}/monitor`,
-      { method: 'POST', body: JSON.stringify({ command }), signal },
+      // Bun's fetch otherwise gives up on a body silent for 5 minutes; the controller also sends a heartbeat.
+      { method: 'POST', body: JSON.stringify({ command }), signal, timeout: false } as RequestInit,
       lifetimeMs,
     );
     if (!response.body) throw new ControllerError(503, 'The monitor stream is unavailable.');

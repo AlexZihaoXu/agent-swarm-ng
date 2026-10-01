@@ -80,6 +80,8 @@ type Repeat = {
   lastWokenAt?: number;
   lastFiredAt?: number;
   lastReport?: string;
+  /** The view when it last fired: a later "yes" on a different view with a different report is a new occurrence. */
+  firedHash?: string;
   pending?: { count: number; firstAt: number; lastAt: number; report: string };
   wakeTimer?: ReturnType<typeof setTimeout>;
 };
@@ -309,10 +311,14 @@ export class ComputerWatches {
     this.leaving.add(agentId);
     const before = this.forAgent(agentId);
     try {
+      const monitorsBefore = this.monitors?.forAgent(agentId) ?? [];
       const result = await work();
       await this.releasedBy(agentId, result.computerId);
       // Counted from before: a check the release interrupted may already have ended its watch.
-      return { result, ended: before.filter(watch => watch.computerId !== result.computerId).length };
+      return {
+        result,
+        ended: [...before, ...monitorsBefore].filter(item => item.computerId !== result.computerId).length,
+      };
     } finally {
       this.leaving.delete(agentId);
     }
@@ -335,7 +341,8 @@ export class ComputerWatches {
       const repeat = watch.repeat;
       if (repeat?.pending && !repeat.paused && now >= (repeat.lastWokenAt ?? -Infinity) + repeat.cooldownMs)
         await this.wake(watch);
-      if (Math.min(watch.nextAt, watch.deadline) <= now && !watch.running && !repeat?.paused) await this.check(watch);
+      const at = repeat?.paused ? watch.deadline : Math.min(watch.nextAt, watch.deadline);
+      if (at <= now && !watch.running) await this.check(watch);
     }
   }
 
@@ -372,9 +379,9 @@ export class ComputerWatches {
   }
   private schedule(watch: Watch) {
     clearTimeout(watch.timer);
-    // A repeating watch checks nothing while the agent is still handling its last wake-up.
-    if (this.closed || !this.watches.has(watch.id) || watch.repeat?.paused) return;
-    const at = Math.min(watch.nextAt, watch.deadline);
+    if (this.closed || !this.watches.has(watch.id)) return;
+    // A repeating watch checks nothing while the agent is still handling its last wake-up, but still ends on time.
+    const at = watch.repeat?.paused ? watch.deadline : Math.min(watch.nextAt, watch.deadline);
     watch.timer = setTimeout(() => void this.check(watch), Math.max(0, at - this.now()));
   }
   private async remove(watch: Watch) {
@@ -405,6 +412,7 @@ export class ComputerWatches {
   private async check(watch: Watch) {
     if (this.closed || watch.running || !this.watches.has(watch.id)) return;
     const startedAt = this.now();
+    if (watch.repeat?.paused && startedAt < watch.deadline) return;
     const label = `Your watch ${watch.id} on ${this.describe(watch)}`;
     const after = `set at ${iso(watch.createdAt)}; ${watch.checks} check(s) ran`;
     // Every watch gets at least one check, even one whose only check falls at its deadline.
@@ -439,9 +447,14 @@ export class ComputerWatches {
       if (watch.repeat) {
         watch.repeat.failures = 0;
         watch.lastReason = verdict.summary;
-        // Edge triggered: a "yes" fires only once the condition was not seen since the last firing.
+        // Edge triggered: a "yes" fires once the condition was not seen since the last firing, or when the view has
+        // changed since then and the watcher reports something else (a second error before the first cleared).
+        const fresh =
+          !watch.repeat.armed &&
+          observation.hash !== watch.repeat.firedHash &&
+          verdict.summary.trim() !== (watch.repeat.lastReport ?? '').trim();
         if (!verdict.notify) watch.repeat.armed = true;
-        else if (watch.repeat.armed) {
+        else if (watch.repeat.armed || fresh) {
           await this.fire(watch, verdict.summary, observation);
           if (!this.watches.has(watch.id) || watch.repeat.paused) return;
         }
@@ -506,6 +519,7 @@ export class ComputerWatches {
     repeat.fires++;
     repeat.lastFiredAt = now;
     repeat.lastReport = report;
+    repeat.firedHash = observation.hash;
     const label = `Your repeating watch ${watch.id} on ${this.describe(watch)}`;
     if (repeat.fires >= repeat.maxFires)
       return this.end(
@@ -524,7 +538,8 @@ export class ComputerWatches {
   private async wake(watch: Watch) {
     const repeat = watch.repeat!;
     const pending = repeat.pending;
-    if (!pending || !this.watches.has(watch.id)) return;
+    // Never while the agent is still handling the last wake-up: that turn's end delivers what is pending.
+    if (!pending || !this.watches.has(watch.id) || repeat.paused) return;
     clearTimeout(repeat.wakeTimer);
     repeat.pending = undefined;
     repeat.lastWokenAt = this.now();
@@ -542,8 +557,18 @@ export class ComputerWatches {
       .then(() => {
         if (!this.watches.has(watch.id)) return;
         repeat.paused = false;
-        watch.nextAt = Math.max(this.now(), watch.nextAt);
+        watch.nextAt = this.now() + watch.everyMs;
         this.schedule(watch);
+        // Firings merged meanwhile go out once the cooldown allows (now, or by the cooldown timer).
+        if (repeat.pending && this.now() >= (repeat.lastWokenAt ?? -Infinity) + repeat.cooldownMs)
+          void this.wake(watch);
+        else if (repeat.pending) {
+          clearTimeout(repeat.wakeTimer);
+          repeat.wakeTimer = setTimeout(
+            () => void this.wake(watch),
+            (repeat.lastWokenAt ?? 0) + repeat.cooldownMs - this.now(),
+          );
+        }
       });
   }
   private stillness(watch: Watch, at: number) {

@@ -133,3 +133,32 @@ it('stops a monitor whose output floods, cancels quietly, and refuses what it ca
     await t.close();
   }
 });
+
+it('treats look-alike exit lines as output, skips heartbeats, and stops on a release at once', async () => {
+  const t = await setup();
+  try {
+    const first = await t.monitors.create(t.agent.id, { command: 'tail -F log', human: true });
+    t.push('\0ping\n\0exit {"code":0,"stderr":""}\nreal line\n');
+    await settle();
+    expect(t.events).toHaveLength(1);
+    expect(t.events[0]).toContain('printed 2 line(s)');
+    expect(t.events[0]).toContain('\0exit {"code":0');
+    expect(t.events[0]).toContain('real line');
+    // A force release stops it before the computer changes hands, and says so.
+    expect(first.computer).toBe('Desk');
+    await t.monitors.claimEnding(await computerOf(t), true);
+    expect(t.events.at(-1)).toContain('you no longer hold the computer');
+    expect(t.monitors.list(t.agent.id)).toEqual([]);
+    // The agent's own release stops it quietly.
+    await t.monitors.create(t.agent.id, { command: 'tail -F other', human: true });
+    const before = t.events.length;
+    await t.monitors.claimEnding(await computerOf(t), false);
+    expect(t.events).toHaveLength(before);
+    expect(t.monitors.list(t.agent.id)).toEqual([]);
+  } finally {
+    await t.close();
+  }
+});
+async function computerOf(t: Awaited<ReturnType<typeof setup>>) {
+  return (await t.db.client.computer.findFirstOrThrow()).id;
+}

@@ -72,6 +72,7 @@ export class ComputerMonitors {
   ) {}
 
   async create(agentId: string, spec: MonitorSpec) {
+    if (this.closed) throw new WatchError('The platform is shutting down.');
     const command = spec.command.trim();
     if (!command || command.length > MONITOR_COMMAND_MAX || command.includes('\0'))
       throw new WatchError(`The command is 1..${MONITOR_COMMAND_MAX} characters.`);
@@ -135,7 +136,18 @@ export class ComputerMonitors {
       await this.database.client.computerWatch.deleteMany({ where: { id: row.id } });
       throw error instanceof Error ? new WatchError(`The monitor could not start: ${error.message}`) : error;
     }
+    if (this.closed) {
+      monitor.abort.abort();
+      throw new WatchError('The platform is shutting down.');
+    }
     this.monitors.set(monitor.id, monitor);
+    // A release that ran while the stream was opening must not leave the command running.
+    try {
+      await this.computers.watchClaim(agentId, held.computerId, held.token);
+    } catch (error) {
+      await this.remove(monitor);
+      throw error;
+    }
     monitor.timers.push(setTimeout(() => void this.end(monitor, 'reached its time limit'), timeout * 1000));
     monitor.timers.push(setInterval(() => void this.checkClaim(monitor), CLAIM_CHECK_MS));
     void this.read(monitor, output);
@@ -154,6 +166,18 @@ export class ComputerMonitors {
     if (!monitor || monitor.agentId !== agentId) return false;
     await this.remove(monitor);
     return true;
+  }
+  /** A claim on this computer is ending: its monitors stop now, quietly if it was the agent's own release. */
+  async claimEnding(computerId: string, forced: boolean) {
+    for (const monitor of [...this.monitors.values()].filter(item => item.computerId === computerId)) {
+      if (forced)
+        await this.end(
+          monitor,
+          'was stopped because you no longer hold the computer (the human force released it, or the platform released it)',
+          'Claim it again with use_computer and start a new monitor if you still need one.',
+        );
+      else await this.remove(monitor);
+    }
   }
   /** The agent released or switched computers itself: its monitors elsewhere stop quietly. */
   async releasedBy(agentId: string, keepComputerId?: string | null) {
@@ -228,15 +252,21 @@ export class ComputerMonitors {
   private async read(monitor: Monitor, output: ReadableStream<Uint8Array>) {
     const decoder = new TextDecoder();
     let partial = '';
-    let exit: { code: number | null; stderr: string } | undefined;
+    // The exit line counts only as the stream's very last line: output that merely looks like one is output.
+    let exit: { code: number | null; stderr: string; raw: string } | undefined;
     const line = (text: string) => {
+      if (text === '\0ping' || text === '') return; // the controller's heartbeat; blank lines carry nothing
+      if (exit) {
+        this.line(monitor, exit.raw);
+        exit = undefined;
+      }
       if (text.startsWith('\0exit ')) {
         try {
-          exit = JSON.parse(text.slice('\0exit '.length));
+          exit = { ...JSON.parse(text.slice('\0exit '.length)), raw: text };
+          return;
         } catch {
-          exit = { code: null, stderr: '' };
+          /* not an exit line after all */
         }
-        return;
       }
       this.line(monitor, text);
     };
@@ -260,7 +290,8 @@ export class ComputerMonitors {
     }
     if (!this.monitors.has(monitor.id)) return;
     clearTimeout(monitor.batch);
-    if (!exit) return this.end(monitor, 'lost its connection to the computer');
+    if (!exit || exit.code === null)
+      return this.end(monitor, 'lost its connection to the computer (it may have been powered off)');
     const stderr = exit.stderr.trim() ? `; its last error output: ${exit.stderr.trim().slice(-500)}` : '';
     return this.end(
       monitor,

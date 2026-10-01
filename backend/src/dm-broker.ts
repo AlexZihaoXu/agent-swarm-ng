@@ -167,6 +167,8 @@ export class DmBroker {
     // A finished session's copy is kept only while a fork watch may still need it.
     if (this.watches && computers) {
       const watches = this.watches;
+      computers.onClaimEnding = (computerId, forced) =>
+        watches.monitors?.claimEnding(computerId, forced) ?? Promise.resolve();
       watches.monitors = new ComputerMonitors(
         database,
         computers,

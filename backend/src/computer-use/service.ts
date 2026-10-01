@@ -62,6 +62,8 @@ export class ComputerUseService {
   onTerminalInput?: (event: { agentId: string; computerId: string; session: string; active: boolean }) => void;
   /** Told when an agent deletes a terminal itself (its watches on it end quietly). */
   onAgentTerminalDelete?: (event: { agentId: string; computerId: string; session: string }) => void;
+  /** A claim is about to end: its monitors stop first (they can act on the computer). `forced`: not the agent's own. */
+  onClaimEnding?: (computerId: string, forced: boolean) => Promise<void>;
   /** Terminals an agent deleted itself (computer:session → when), so the watcher does not report them back. */
   private agentDeletes = new Map<string, number>();
   deletedByAgent(computerId: string, session: string) {
@@ -613,6 +615,7 @@ export class ComputerUseService {
     });
   }
   private async release(computerId: string, notice?: string) {
+    await this.onClaimEnding?.(computerId, Boolean(notice)).catch(() => {});
     const active = this.active.get(computerId);
     active?.abort.abort();
     // Controller's cancellation generation fences delayed input even after a backend crash.

@@ -157,6 +157,16 @@ Bun.serve<TerminalSocket>({
         let stderr = '';
         let code: number | null = null;
         const encoder = new TextEncoder();
+        // A quiet command (waiting for an error that has not happened) must not look like a dead connection to this
+        // server's or the backend's idle limits: a heartbeat line every 30 s, which the backend skips.
+        const heartbeat = setInterval(() => {
+          try {
+            output.enqueue(encoder.encode('\0ping\n'));
+          } catch {
+            clearInterval(heartbeat);
+          }
+        }, 30_000);
+        abort.signal.addEventListener('abort', () => clearInterval(heartbeat), { once: true });
         const stream = new ReadableStream<Uint8Array>({
           start(controller) {
             output = controller;
@@ -173,15 +183,18 @@ Bun.serve<TerminalSocket>({
             chunk => output.enqueue(new Uint8Array(chunk)),
             chunk => {
               stderr = (stderr + chunk.toString()).slice(-4000);
-              const exit = /\0monitor-exit (\d+)/.exec(stderr);
+              const exit = /\0monitor-exit (\d+)\n/.exec(stderr);
               if (exit) {
                 code = Number(exit[1]);
                 stderr = stderr.slice(0, exit.index);
               }
             },
             () => {
+              clearInterval(heartbeat);
               try {
-                output.enqueue(encoder.encode(`\n\0exit ${JSON.stringify({ code, stderr: stderr.slice(-2000) })}\n`));
+                // Only a command that really exited says so; a stopped computer or broken exec just ends the stream.
+                if (code !== null)
+                  output.enqueue(encoder.encode(`\n\0exit ${JSON.stringify({ code, stderr: stderr.slice(-2000) })}\n`));
                 output.close();
               } catch {
                 /* the reader is gone */
@@ -192,6 +205,7 @@ Bun.serve<TerminalSocket>({
           abort.abort();
           throw error;
         }
+        server.timeout(request, 0);
         return new Response(stream, {
           headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
         });

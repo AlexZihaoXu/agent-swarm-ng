@@ -119,7 +119,7 @@ export function createTimeTools(
       name: 'list_timers',
       label: 'List timers',
       description:
-        'Your pending timers and reminders, soonest first, with their ids, notes and next firing time, and your computer watches (watch_terminal/watch_desktop) with their next check and timeout.',
+        'Your pending timers and reminders, soonest first, with their ids, notes and next firing time, and your computer watches (watch_terminal/watch_desktop) and monitors (monitor), under watches, with their next check or output and timeout.',
       parameters: Type.Object({}, { additionalProperties: false }),
       async execute() {
         const watching = watches?.list(agentId) ?? [];
@@ -130,12 +130,12 @@ export function createTimeTools(
       name: 'cancel_timer',
       label: 'Cancel timer',
       description:
-        'Cancel one of your timers, reminders or computer watches by id (from set_timer, set_reminder, watch_terminal, watch_desktop or list_timers).',
+        'Cancel one of your timers, reminders, computer watches or monitors by id (from set_timer, set_reminder, watch_terminal, watch_desktop, monitor or list_timers).',
       parameters: Type.Object({ id: Type.String({ minLength: 1, maxLength: 64 }) }, { additionalProperties: false }),
       async execute(_call, { id }) {
         const cancelled = (await watches?.cancel(agentId, id)) || (await timers.cancel(agentId, id));
         return reply(
-          cancelled ? { cancelled: true, id } : { error: 'No such timer, reminder or watch of yours.' },
+          cancelled ? { cancelled: true, id } : { error: 'No such timer, reminder, watch or monitor of yours.' },
           !cancelled,
         );
       },
