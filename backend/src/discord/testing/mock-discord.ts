@@ -19,7 +19,9 @@ async function readBody(request: IncomingMessage) {
 
 export class MockDiscord {
   readonly requests: MockRequest[] = [];
-  readonly identifies: { token: string; intents: number }[] = [];
+  readonly identifies: { token: string; intents: number; presence?: unknown }[] = [];
+  /** Presence updates bots sent (Gateway op 3). */
+  readonly presences: { status: string; activities: { type: number; state?: string }[] }[] = [];
   resumes = 0;
   private server!: Server;
   private gateway!: WebSocketServer;
@@ -92,12 +94,13 @@ export class MockDiscord {
       socket.on('message', raw => {
         const payload = JSON.parse(String(raw));
         if (payload.op === 1) return socket.send(JSON.stringify({ op: 11 }));
+        if (payload.op === 3) return void this.presences.push(payload.d);
         if (payload.op === 6) {
           this.resumes++;
           return this.send(socket, 'RESUMED', {});
         }
         if (payload.op !== 2) return;
-        this.identifies.push({ token: payload.d.token, intents: payload.d.intents });
+        this.identifies.push({ token: payload.d.token, intents: payload.d.intents, presence: payload.d.presence });
         const user = this.tokens.get(payload.d.token);
         if (!user) return socket.close(4004, 'Authentication failed.');
         if (this.closeAfterIdentify) return socket.close(this.closeAfterIdentify, 'Closed by mock.');

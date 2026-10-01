@@ -175,6 +175,8 @@ export function AgentDiscordSettings({
   const change = (next: Partial<Draft>) => setDraft(current => (current ? { ...current, ...next } : current));
   const dms = saved?.channels.filter(channel => channel.kind === 'dm') ?? [];
   const state = saved?.status.state ?? 'off';
+  // What Discord shows while connected: the status the agent chose (auto turns idle when it is quiet).
+  const showing = state === 'online' ? (saved?.presence?.showing ?? 'online') : null;
 
   return (
     <div className="space-y-4">
@@ -204,17 +206,27 @@ export function AgentDiscordSettings({
             <span
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium',
-                state === 'online'
-                  ? 'bg-emerald-500/15 text-emerald-400'
-                  : state === 'error'
+                showing === 'idle'
+                  ? 'bg-amber-500/15 text-amber-400'
+                  : showing === 'dnd'
                     ? 'bg-red-500/15 text-red-400'
-                    : 'bg-foreground/10 text-muted-foreground',
+                    : state === 'online'
+                      ? 'bg-emerald-500/15 text-emerald-400'
+                      : state === 'error'
+                        ? 'bg-red-500/15 text-red-400'
+                        : 'bg-foreground/10 text-muted-foreground',
               )}
             >
               <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
-              {statusText[state]}
+              {showing === 'idle' ? 'Idle' : showing === 'dnd' ? 'Do not disturb' : statusText[state]}
               {saved.bot ? ` as ${saved.bot.name}` : ''}
             </span>
+            {state === 'online' && saved.presence && (
+              <span className="min-w-0 text-xs text-muted-foreground" title="Set by the agent with discord_set_status">
+                {saved.presence.mode === 'auto' ? 'Auto status' : 'Status set by the agent'}
+                {saved.presence.text ? ` · “${saved.presence.text}”` : ''}
+              </span>
+            )}
             {saved.inviteUrl && (
               <a
                 href={saved.inviteUrl}

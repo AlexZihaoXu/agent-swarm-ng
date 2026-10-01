@@ -22320,7 +22320,8 @@
                     "admission",
                     "catchUp",
                     "channels",
-                    "dmAllowed"
+                    "dmAllowed",
+                    "presence"
                   ],
                   "properties": {
                     "configured": {
@@ -22534,6 +22535,32 @@
                           "name": {
                             "type": "string"
                           }
+                        }
+                      }
+                    },
+                    "presence": {
+                      "type": "object",
+                      "required": [
+                        "mode",
+                        "showing",
+                        "text"
+                      ],
+                      "properties": {
+                        "mode": {
+                          "type": "string"
+                        },
+                        "showing": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
                         }
                       }
                     }
@@ -22702,7 +22729,8 @@
                     "admission",
                     "catchUp",
                     "channels",
-                    "dmAllowed"
+                    "dmAllowed",
+                    "presence"
                   ],
                   "properties": {
                     "configured": {
@@ -22916,6 +22944,32 @@
                           "name": {
                             "type": "string"
                           }
+                        }
+                      }
+                    },
+                    "presence": {
+                      "type": "object",
+                      "required": [
+                        "mode",
+                        "showing",
+                        "text"
+                      ],
+                      "properties": {
+                        "mode": {
+                          "type": "string"
+                        },
+                        "showing": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
                         }
                       }
                     }
@@ -23014,7 +23068,8 @@
                     "admission",
                     "catchUp",
                     "channels",
-                    "dmAllowed"
+                    "dmAllowed",
+                    "presence"
                   ],
                   "properties": {
                     "configured": {
@@ -23228,6 +23283,32 @@
                           "name": {
                             "type": "string"
                           }
+                        }
+                      }
+                    },
+                    "presence": {
+                      "type": "object",
+                      "required": [
+                        "mode",
+                        "showing",
+                        "text"
+                      ],
+                      "properties": {
+                        "mode": {
+                          "type": "string"
+                        },
+                        "showing": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
                         }
                       }
                     }
@@ -23303,7 +23384,8 @@
                     "admission",
                     "catchUp",
                     "channels",
-                    "dmAllowed"
+                    "dmAllowed",
+                    "presence"
                   ],
                   "properties": {
                     "configured": {
@@ -23517,6 +23599,32 @@
                           "name": {
                             "type": "string"
                           }
+                        }
+                      }
+                    },
+                    "presence": {
+                      "type": "object",
+                      "required": [
+                        "mode",
+                        "showing",
+                        "text"
+                      ],
+                      "properties": {
+                        "mode": {
+                          "type": "string"
+                        },
+                        "showing": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
                         }
                       }
                     }

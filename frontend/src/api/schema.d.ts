@@ -7053,6 +7053,11 @@ export interface operations {
                             id: string;
                             name: string;
                         }[];
+                        presence: {
+                            mode: string;
+                            showing: string | null;
+                            text: string;
+                        };
                     };
                 };
             };
@@ -7131,6 +7136,11 @@ export interface operations {
                             id: string;
                             name: string;
                         }[];
+                        presence: {
+                            mode: string;
+                            showing: string | null;
+                            text: string;
+                        };
                     };
                 };
             };
@@ -7210,6 +7220,11 @@ export interface operations {
                             id: string;
                             name: string;
                         }[];
+                        presence: {
+                            mode: string;
+                            showing: string | null;
+                            text: string;
+                        };
                     };
                 };
             };
@@ -7283,6 +7298,11 @@ export interface operations {
                             id: string;
                             name: string;
                         }[];
+                        presence: {
+                            mode: string;
+                            showing: string | null;
+                            text: string;
+                        };
                     };
                 };
             };

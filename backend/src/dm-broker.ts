@@ -10,6 +10,7 @@ import { createFileTools } from './files/file-tools';
 import { authorRole, type DiscordStore } from './discord/store';
 import type { DiscordConnections } from './discord/connections';
 import type { DiscordIntake } from './discord/intake';
+import type { DiscordPresence } from './discord/presence';
 import { createDiscordReadTools } from './discord/tools-read';
 /** What a Discord relevance check may look at before deciding: reading only, never acting. */
 const DISCORD_CHECK_TOOLS = [
@@ -248,7 +249,7 @@ export class DmBroker {
    * whether the event may be answered in the human's private channel.
    */
   /** Discord (set when the backend has the connector): policies, live bots and message intake. */
-  discord?: { store: DiscordStore; connections: DiscordConnections; intake: DiscordIntake };
+  discord?: { store: DiscordStore; connections: DiscordConnections; intake: DiscordIntake; presence?: DiscordPresence };
   /**
    * Hands an admitted Discord trigger to the agent like any other input: offered to its running turn (where
    * interruption triage applies) or queued as a new turn. Only the owner's messages carry human authority.
@@ -1025,6 +1026,7 @@ ${preview.text}`
                   await this.store.chargeChain(chainId);
                   return chainId;
                 },
+                presence: this.discord.presence,
                 answersTurn: discordChannelId =>
                   !humanBatch && sources.some(source => source.channelId === `discord:${discordChannelId}`),
               }),
@@ -1047,6 +1049,7 @@ ${preview.text}`
       ],
       {
         sessionStore: this.sessions,
+        wrote: () => this.discord?.presence?.wrote(agentId),
         ...(branch
           ? {
               heartbeat: {

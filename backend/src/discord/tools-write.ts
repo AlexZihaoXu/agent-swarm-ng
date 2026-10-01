@@ -5,6 +5,7 @@ import { ChannelType, Routes, type APIChannel, type APIMessage, type APIThreadCh
 import type { FileStore } from '../files/store';
 import { allowedChannel, bot, call, channelArg, type DiscordToolContext } from './access';
 import { splitDiscord } from './split';
+import { PRESENCE_MODES, STATUS_TEXT_MAX, type DiscordPresence } from './presence';
 
 /** Discord's default upload limit per file (boosted servers allow more; we keep to what always works). */
 export const DISCORD_FILE_LIMIT = 20 * 1024 * 1024;
@@ -23,6 +24,8 @@ export type DiscordWriteContext = DiscordToolContext & {
    * chat does not end on a Discord post: its result still goes back to them there. Every final post ends it if absent.
    */
   answersTurn?: (channelId: string) => boolean;
+  /** The bot's status and custom status text (discord_set_status). */
+  presence?: DiscordPresence;
 };
 
 const Channel = Type.String({
@@ -78,6 +81,7 @@ export function createDiscordWriteTools(context: DiscordWriteContext): AgentTool
       discord_start_thread: 'w',
       discord_pin_message: 'w',
       discord_open_attachment: 'r',
+      discord_set_status: 'w',
     },
     [
       defineTool({
@@ -273,6 +277,31 @@ export function createDiscordWriteTools(context: DiscordWriteContext): AgentTool
           return result({ poll: sent.id, channelId: `discord:${channel.channelId}` });
         },
       }),
+      ...(context.presence
+        ? [
+            defineTool({
+              name: 'discord_set_status',
+              label: 'Set Discord status',
+              description: `Your bot's status and custom status text, shown to everyone on Discord. status: "auto" (online while you work, idle after 10 minutes without you changing anything; the default), "idle" or "dnd" (do not disturb), kept until you change it. Bots cannot be invisible. text: your custom status (at most ${STATUS_TEXT_MAX} characters), or "" to clear it. Either may be left out to keep it.`,
+              parameters: Type.Object(
+                {
+                  status: Type.Optional(Type.Union(PRESENCE_MODES.map(mode => Type.Literal(mode)))),
+                  text: Type.Optional(Type.String({ maxLength: STATUS_TEXT_MAX })),
+                },
+                { additionalProperties: false },
+              ),
+              async execute(_call, args) {
+                bot(context);
+                const shown = await context.presence!.set(context.agentId, { mode: args.status, text: args.text });
+                return result({
+                  status: shown.mode,
+                  showing: shown.shown,
+                  text: shown.text || null,
+                });
+              },
+            }),
+          ]
+        : []),
       defineTool({
         name: 'discord_react',
         label: 'React on Discord',

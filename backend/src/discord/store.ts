@@ -45,6 +45,8 @@ export class DiscordStore {
         botName: null,
         admission: 'check',
         catchUp: true,
+        presenceMode: 'auto',
+        statusText: '',
         createdAt: new Date(0),
         updatedAt: new Date(0),
       }
@@ -217,6 +219,15 @@ export class DiscordStore {
     await this.database.client.discordChannel.deleteMany({ where: { agentId, guildId } });
   }
   /** The bot's own Discord identity, learned at login; it is one of our agents from then on. */
+  /** The status the agent chose for its bot and its custom status text. */
+  async setPresence(agentId: string, change: { presenceMode?: string; statusText?: string }) {
+    await this.database.initialize();
+    return this.database.client.discordBot.upsert({
+      where: { agentId },
+      create: { agentId, ...change },
+      update: change,
+    });
+  }
   async identify(agentId: string, botUserId: string, botName: string) {
     await this.database.initialize();
     await this.database.client.$transaction([

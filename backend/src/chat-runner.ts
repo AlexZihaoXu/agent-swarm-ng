@@ -33,6 +33,8 @@ export type InboxHooks = {
    * message arriving). Unpromoted at the end, it asks once for a note and is dropped (`dropped` gets the note).
    */
   heartbeat?: { branch: HeartbeatBranch; dropped: (note?: string) => Promise<void> };
+  /** The agent is changing something (a w or rw tool call is about to run): its Discord status counts it. */
+  wrote?: () => void;
   /** Background compaction: start a summary at atPercent of the context; report usage when the run ends. */
   compaction?: {
     compactor: BackgroundCompactor;
@@ -145,12 +147,21 @@ export async function runChat(
       queueCheckpoint();
       return true;
     };
+    // What each tool does (tool-access.ts), for write activity and heartbeats.
+    const access = new Map<string, ReturnType<typeof accessOf>>([
+      ['send_message', 'w'],
+      ['help', 'r'],
+      ...[...historyTools, ...web.tools].map(tool => [tool.name, accessOf(tool)] as const),
+    ]);
+    if (hooks.wrote) {
+      const before = live.agent.beforeToolCall;
+      live.agent.beforeToolCall = async (context, callSignal) => {
+        const kind = access.get(context.toolCall.name);
+        if (kind !== 'r' && kind !== 'claim') hooks.wrote!();
+        return before?.(context, callSignal);
+      };
+    }
     if (heartbeat) {
-      const access = new Map<string, ReturnType<typeof accessOf>>([
-        ['send_message', 'w'],
-        ['help', 'r'],
-        ...[...historyTools, ...web.tools].map(tool => [tool.name, accessOf(tool)] as const),
-      ]);
       const promotedCalls = new Set<string>();
       const before = live.agent.beforeToolCall;
       live.agent.beforeToolCall = async (context, callSignal) => {

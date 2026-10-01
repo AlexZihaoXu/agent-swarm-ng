@@ -158,6 +158,16 @@ test('an agent’s Discord bot: paste a token, choose channels and when they wak
   await expect(section.getByRole('list', { name: 'People allowed to DM' })).toContainText('Sam');
 });
 
+test('the agent’s bot shows the status the agent chose, with its custom status text', async ({ page }) => {
+  await page.route(/\/api\/agents\/avery\/discord$/, route =>
+    route.fulfill({ json: config({ presence: { mode: 'auto', showing: 'idle', text: 'Reviewing pull requests' } }) }),
+  );
+  await page.goto('/agents/avery');
+  const section = page.getByRole('region', { name: 'Settings for Avery' });
+  await expect(section.getByText('Idle as aether-bot')).toBeVisible();
+  await expect(section.getByText('Auto status · “Reviewing pull requests”')).toBeVisible();
+});
+
 test('your Discord accounts in Settings: only long numeric IDs, saved together', async ({ page }) => {
   let saved: unknown;
   await page.route('**/api/discord/owner', route => {

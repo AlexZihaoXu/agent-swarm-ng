@@ -28,6 +28,8 @@ export interface DiscordConnectionControl {
   status(agentId: string): ConnectionStatus;
   restart(agentId: string): Promise<void>;
   stop(agentId: string): Promise<void>;
+  /** What Discord shows for the bot now (its status), if set. */
+  presence?(agentId: string): { status: string } | null;
 }
 
 const Admission = Type.Union(ADMISSIONS.map(value => Type.Literal(value)));
@@ -60,6 +62,12 @@ const Config = Type.Object({
   channels: Type.Array(Channel),
   /** Who besides the owner and our agents may DM this bot (a whitelist). */
   dmAllowed: Type.Array(Type.Object({ id: Type.String(), name: Type.String() })),
+  /** The status the agent chose (discord_set_status), what Discord shows now, and its custom status text. */
+  presence: Type.Object({
+    mode: Type.String(),
+    showing: Type.Union([Type.String(), Type.Null()]),
+    text: Type.String(),
+  }),
 });
 const Person = Type.Object({ id: Snowflake, name: Type.String({ maxLength: 80 }) }, { additionalProperties: false });
 const Transcript = Type.Object({
@@ -125,6 +133,11 @@ export function registerDiscordRoutes(
         : null,
       admission: bot.admission as (typeof ADMISSIONS)[number],
       catchUp: bot.catchUp,
+      presence: {
+        mode: bot.presenceMode,
+        showing: connections.presence?.(agentId)?.status ?? null,
+        text: bot.statusText,
+      },
       dmAllowed: dmAllowed.map(person => ({ id: person.discordUserId, name: person.name })),
       channels: channels.map(channel => ({
         id: channel.channelId,

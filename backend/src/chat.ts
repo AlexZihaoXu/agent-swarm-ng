@@ -14,6 +14,7 @@ import { createRunStreams } from './run-streams';
 import { AvatarSchema, type AgentAvatar } from './agent-avatar';
 import { resolveChatConnection, ConnectionError } from './chat-connection';
 import { DmBroker } from './dm-broker';
+import { DiscordPresence } from './discord/presence';
 import { DiscordIntake } from './discord/intake';
 import type { DiscordStore } from './discord/store';
 import type { DiscordConnections } from './discord/connections';
@@ -181,7 +182,11 @@ export function registerChat(
       reaction: (agentId, channelId, notice) => broker.evaluateDiscordReaction(agentId, channelId, notice),
       rest: agentId => discord.connections.api(agentId).rest,
     });
-    broker.discord = { ...discord, intake };
+    // Each bot's status: auto turns idle after ten quiet minutes (the agent's write activity counts).
+    const presence = new DiscordPresence(discord.store, discord.connections);
+    presence.begin();
+    broker.discord = { ...discord, intake, presence };
+    app.addHook('onClose', async () => presence.close());
     discord.connections.onEvent = event => void intake.handle(event).catch(() => {});
     app.addHook('onClose', async () => intake.close());
   }

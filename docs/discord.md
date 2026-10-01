@@ -78,13 +78,20 @@ token; the owner's channel choices stay.
 
 ## What agents can do
 
-Twenty-two tools, all prefixed `discord_`, mirroring what a member sees and does: list servers and channels, the
+Twenty-three tools, all prefixed `discord_`, mirroring what a member sees and does: list servers and channels, the
 inbox (unread and mentions since the last notification), read and search messages (Discord's server search; DMs are
 searched from what the bot has seen, within the history kept), pins, threads and forum posts, reactions, polls, profiles and emoji; post
 (split at 2,000 characters, code blocks intact, replies, files up to 20 MiB, only named people pinged), edit or
 delete their own messages, forward, open DMs (your policy applies), start polls and threads, react, pin, and open
 attachments into their chat files. Never @everyone, roles, moderation, webhooks or slash commands. Every call rechecks
 your channel allow-list.
+
+**Status.** `discord_set_status({status?, text?})` sets the bot's status and custom status text (Gateway presence,
+op 3, sent again when a session identifies; `backend/src/discord/presence.ts`). `auto` (the default) shows online while
+the agent works and idle after 10 minutes without write activity (any `w` or `rw` tool call, counted where tool calls
+are checked in the run); `idle` and `dnd` are forced until the agent changes them. There is no invisible: bots may not
+hide their presence. The text is at most 128 characters. The choice is kept in `DiscordBot` (`presenceMode`,
+`statusText`) and shown in Agents → agent → Channels → Discord beside the connection state.
 
 ## Operation
 

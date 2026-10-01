@@ -2,7 +2,11 @@ import { REST, DiscordAPIError } from '@discordjs/rest';
 import { WebSocketManager, WebSocketShardEvents } from '@discordjs/ws';
 import { API } from '@discordjs/core/http-only';
 import {
+  ActivityType,
   ChannelType,
+  GatewayOpcodes,
+  PresenceUpdateStatus,
+  type GatewayPresenceUpdateData,
   GatewayCloseCodes,
   GatewayDispatchEvents,
   GatewayIntentBits,
@@ -40,7 +44,11 @@ type Connection = {
   generation: number;
   /** Set by a failure retrying cannot fix (a refused token, a missing intent). */
   fatal?: boolean;
+  /** What Discord shows for the bot (sent again on every new Gateway session). */
+  presence?: GatewayPresenceUpdateData;
 };
+/** A bot shows online, idle or dnd: bots may not hide their presence, so there is no invisible. */
+export type BotStatus = 'online' | 'idle' | 'dnd';
 
 export function channelKind(type: ChannelType) {
   switch (type) {
@@ -73,6 +81,8 @@ export function channelKind(type: ChannelType) {
 export class DiscordConnections implements DiscordConnectionControl {
   private live = new Map<string, Connection>();
   private closing = false;
+  /** Told when a bot's Gateway session is ready (its status is set then). */
+  onReady?: (agentId: string) => void;
   /** Receives every dispatch from every bot (the intake decides what reaches an agent). */
   onEvent?: (event: DiscordEvent) => void;
 
@@ -91,6 +101,39 @@ export class DiscordConnections implements DiscordConnectionControl {
     if (!connection?.api) throw new Error('This agent’s Discord bot is not connected.');
     return { api: connection.api, rest: connection.rest!, botUserId: connection.botUserId! };
   }
+  /** Shows the bot's status and custom status text now and on every reconnect. */
+  async setPresence(agentId: string, status: BotStatus, text: string) {
+    const connection = this.live.get(agentId);
+    if (!connection) return false;
+    const presence: GatewayPresenceUpdateData = {
+      since: null,
+      afk: false,
+      status: {
+        online: PresenceUpdateStatus.Online,
+        idle: PresenceUpdateStatus.Idle,
+        dnd: PresenceUpdateStatus.DoNotDisturb,
+      }[status],
+      activities: text ? [{ name: 'Custom Status', type: ActivityType.Custom, state: text }] : [],
+    };
+    if (JSON.stringify(presence) === JSON.stringify(connection.presence)) return true;
+    connection.presence = presence;
+    if (connection.gateway) {
+      connection.gateway.options.initialPresence = presence;
+      if (connection.status.state === 'online')
+        await Promise.resolve(connection.gateway.send(0, { op: GatewayOpcodes.PresenceUpdate, d: presence })).catch(
+          () => {},
+        );
+    }
+    return true;
+  }
+  /** Agents with a bot (connected or connecting). */
+  agents() {
+    return [...this.live.keys()];
+  }
+  /** What the bot shows now (null until set). */
+  presence(agentId: string) {
+    return this.live.get(agentId)?.presence ?? null;
+  }
   botUserId(agentId: string) {
     return this.live.get(agentId)?.botUserId;
   }
@@ -100,9 +143,11 @@ export class DiscordConnections implements DiscordConnectionControl {
     for (const agentId of Object.keys(await this.tokens.read())) void this.restart(agentId);
   }
   async restart(agentId: string) {
+    // The chosen status carries over to the new session (sent when it identifies).
+    const presence = this.live.get(agentId)?.presence;
     await this.stop(agentId);
     if (this.closing) return;
-    const connection: Connection = { status: { state: 'connecting' }, attempts: 0, generation: 0 };
+    const connection: Connection = { status: { state: 'connecting' }, attempts: 0, generation: 0, presence };
     this.live.set(agentId, connection);
     this.run(agentId, connection);
   }
@@ -180,7 +225,12 @@ export class DiscordConnections implements DiscordConnectionControl {
     connection.rest = rest;
     connection.botUserId = me.id;
     await this.store.identify(agentId, me.id, me.global_name ?? me.username);
-    const gateway = new WebSocketManager({ token, intents: INTENTS, rest });
+    const gateway = new WebSocketManager({
+      token,
+      intents: INTENTS,
+      rest,
+      initialPresence: connection.presence ?? null,
+    });
     connection.gateway = gateway;
     gateway.on(WebSocketShardEvents.Dispatch, payload => {
       if (!current()) return;
@@ -189,6 +239,7 @@ export class DiscordConnections implements DiscordConnectionControl {
         connection.status = { state: 'online' };
         connection.api = api;
         connection.attempts = 0;
+        this.onReady?.(agentId);
       }
       if (payload.t === GatewayDispatchEvents.GuildCreate)
         void this.store

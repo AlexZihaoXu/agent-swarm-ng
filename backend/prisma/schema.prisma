@@ -486,6 +486,10 @@ model DiscordBot {
   admission   String    @default("check")
   /// After an outage, deliver missed DMs and mentions as one labelled batch.
   catchUp     Boolean  @default(true)
+  /// The status the agent chose: "auto" (online, idle after 10 min without write activity), "idle" or "dnd".
+  presenceMode String  @default("auto")
+  /// The bot's custom status text ("" for none).
+  statusText  String   @default("")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

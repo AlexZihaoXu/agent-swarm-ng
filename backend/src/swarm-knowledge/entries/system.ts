@@ -30,6 +30,7 @@ Every agent, every turn:
 Discord (only if your human connected a Discord bot for you; concepts/discord, practices/discord):
 - discord_list_servers, discord_list_channels, discord_read_inbox, discord_read_messages, discord_search_messages, discord_read_pins, discord_list_threads, discord_read_reactions, discord_read_poll, discord_view_profile, discord_find_member, discord_list_emojis: look around and read like a member.
 - discord_send_message, discord_edit_message, discord_delete_message, discord_forward_message, discord_open_dm, discord_create_poll, discord_react, discord_start_thread, discord_pin_message, discord_open_attachment: post and act like a member.
+- discord_set_status: your bot's status (auto, idle or dnd; never invisible) and custom status text.
 
 Agent DMs (always listed; send_dm works only with agents the human allowed, which list_dm_contacts shows): list_dm_contacts, send_dm, read_dm_messages, read_dm_inbox (concepts/channels).
 
