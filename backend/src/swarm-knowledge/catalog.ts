@@ -8,6 +8,11 @@ export type KnowledgeEntry = Readonly<{
   content: string;
   /** Entries to read alongside this one (a concept's practices, a practice's concepts). */
   related?: readonly string[];
+  /**
+   * Phrases that bring this entry to mind (cue-driven recall: an agent's input or tool call containing one gets a
+   * one-line pointer to it). Lower case; literal, matched on word edges when they start/end with a letter or digit.
+   */
+  cues?: readonly string[];
 }>;
 /** Where an entry used to be: old IDs keep resolving after a reorganisation. */
 export type KnowledgeAliases = Readonly<Record<string, string>>;
@@ -47,6 +52,11 @@ export class KnowledgeCatalog {
       )
         throw new Error(`Invalid knowledge entry: ${entry.id}`);
       if (this.#entries.has(entry.id)) throw new Error(`Duplicate knowledge ID: ${entry.id}`);
+      if (
+        (entry.cues?.length ?? 0) > 16 ||
+        entry.cues?.some(cue => cue.length < 3 || cue.length > 60 || cue !== cue.toLowerCase() || cue.trim() !== cue)
+      )
+        throw new Error(`Invalid knowledge cues: ${entry.id}`);
       this.#entries.set(entry.id, Object.freeze({ ...entry }));
     }
     for (const entry of this.#entries.values()) {
@@ -109,6 +119,26 @@ export class KnowledgeCatalog {
     return this.#entries.has(id) ? id : this.#aliases[id];
   }
 
+  /** An entry's id, title and summary (a pointer to it), if it exists. */
+  pointer(id: string) {
+    const entry = this.#entries.get(this.#aliases[id] ?? id);
+    return entry ? { id: entry.id, title: entry.title, summary: entry.summary } : undefined;
+  }
+  /** Entries whose cue phrases appear in a text, most cues matched first. */
+  cued(text: string) {
+    const lower = text.toLowerCase();
+    const hits: { id: string; title: string; summary: string; count: number }[] = [];
+    for (const entry of this.#entries.values()) {
+      let count = 0;
+      for (const cue of entry.cues ?? []) {
+        const edge = (char: string) => (/[a-z0-9]/.test(char) ? '\\b' : '');
+        const pattern = new RegExp(`${edge(cue[0])}${cue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${edge(cue.at(-1)!)}`);
+        if (pattern.test(lower)) count++;
+      }
+      if (count) hits.push({ id: entry.id, title: entry.title, summary: entry.summary, count });
+    }
+    return hits.sort((a, b) => b.count - a.count);
+  }
   list({ parentId: requested = null, offset, limit }: Page & { parentId?: string | null } = {}) {
     const parentId = requested === null ? null : (this.resolve(requested) ?? requested);
     if (parentId !== null && !this.#entries.has(parentId)) throw new Error('Knowledge entry not found.');

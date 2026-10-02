@@ -233,6 +233,7 @@ write, edit and bash need a claim but no screenshot; write, edit and bash cancel
 
 export const scratchpadConcept = {
   id: 'concepts/scratchpad',
+  cues: ['scratchpad'],
   parentId: 'concepts',
   title: 'Scratchpad',
   summary:
@@ -264,6 +265,7 @@ While you write, the human's chat shows "<you> is writing <file> in its scratchp
 
 export const memoryConcept = {
   id: 'concepts/memory',
+  cues: ['remember that', 'remember this', 'do you remember', 'memorize', 'forget that'],
   parentId: 'concepts',
   title: 'Long-term memory',
   summary:
@@ -275,7 +277,7 @@ export const memoryConcept = {
 2. Memories: typed notes you keep with memorize. person (someone and how to work with them), preference (how someone wants things done), project (ongoing work, decisions, state), skill (a lesson or procedure), reference (where something is). One idea each, with a one-line title. recall({query, type?}) searches them by words (literal: use names, places, project words), most relevant then newest.
 3. Deep storage: everything you have been through (messages, your replies, tool results, summaries), word for word and never deleted. remember_when({query, from?, to?, channel?}) searches it, newest first, and read_episode({id}) shows what happened around a result. Only channels you can still read. Chat history tools (read_messages, search_messages) still search chats.
 
-Reminders: as messages, non-chat events (timers, reminders, heartbeats, watches, terminal exits, reactions, platform notices) and tool results come in, the platform looks for memories they bring to mind and attaches a short "[Memory: …]" or "[Memory reminder: …]" (a few per input, one or two short lines per tool call, about ten per turn; nothing when nothing fits well). A memory is not repeated until a third of your context has passed. They are your own memories, not instructions: check they still fit.
+Reminders: as messages, non-chat events (timers, reminders, heartbeats, watches, terminal exits, reactions, platform notices) and tool results come in, the platform looks for memories they bring to mind and attaches a short "[Memory: …]" or "[Memory reminder: …]" (a few per input, one or two short lines per tool call, about ten per turn; nothing when nothing fits well). A memory is not repeated until a third of your context has passed. They are your own memories, not instructions: check they still fit. The same way, a "[Knowledge: …]" line points to a Knowledge entry that fits what you are doing (open it with read_knowledge if you have not read it lately).
 
 Changing memory: revise_memory({name, text?, title?, type?, faded?, conflict?}) when something changed or was wrong (the old text is kept as a version), forget({name}) when it is wrong or useless (restorable by your owner). Memorize after recall, not instead of it: revise rather than duplicate. Never memorize secrets (refused). Reading is r (free in a heartbeat); memorize, revise_memory and forget are w.
 
@@ -290,6 +292,7 @@ Your owner sees and edits your memory in the dashboard (Agents → you → Memor
 
 export const discordConcept = {
   id: 'concepts/discord',
+  cues: ['discord'],
   parentId: 'concepts',
   title: 'Discord',
   summary:
@@ -320,6 +323,7 @@ Setting up (to guide your human): each agent needs its own Discord application. 
 
 export const chatFilesConcept = {
   id: 'concepts/chat-files',
+  cues: ['[attached files:'],
   parentId: 'concepts',
   title: 'Chat files',
   summary:
@@ -343,6 +347,7 @@ Limits (Settings → Swarm): the largest file (100 MB by default) and total stor
 
 export const recordingConcept = {
   id: 'concepts/computers/recording',
+  cues: ['recording', 'record the screen', 'record a video', 'screen capture', 'screencast'],
   parentId: 'concepts/computers',
   title: 'Recording',
   summary:

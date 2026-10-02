@@ -4,6 +4,7 @@ import type { KnowledgeEntry } from '../catalog';
 
 export const dashboardPractice = {
   id: 'practices/dashboard',
+  cues: ['in the dashboard', 'how do i assign', 'where do i find', 'how do i give you'],
   parentId: 'practices',
   title: 'The dashboard: guiding the human',
   summary: 'Where things are in the app (tabs, URLs) and what humans do there that agents cannot; answer "how do I…".',

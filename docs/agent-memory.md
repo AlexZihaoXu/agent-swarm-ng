@@ -52,6 +52,10 @@ Every input is a cue: chat messages, DMs, group posts, Discord batches, and **no
 
 Memory tools themselves and image-only results are never cues. A memory shown (or recalled, read, memorized or revised by the agent) is not attached again until a third of the model's context window has passed; a compaction, or a dropped heartbeat, clears that, since the earlier mention left the context. Reminders count as recalls (the index favours memories in use).
 
+### Knowledge pointers
+
+The same cues bring Swarm Knowledge to mind. An entry with curated `cues` phrases (lower case, literal, on word edges) is pointed to when an input or a tool call contains one; the first use of a tool family (terminals, watches and monitors, Claude Code listeners, recording, scratchpad, chat files, computers, timers) points to its entry from the help map. Cue phrases win over the family pointer. At most one pointer per input or tool call, within the turn's ceiling, as one line: `[Knowledge: <id> (<title>): <summary> read_knowledge({id}) for details…]`. The same entry is not pointed to again within a third of the context, and reading it with `read_knowledge` counts as shown. Knowledge tools and help are never cues. This exists because agents with an established routine rarely reread an entry on their own (a live test: an agent kept watching Claude Code's screen though its entry described listeners).
+
 ## Save before forgetting
 
 When background compaction starts during a turn, the agent gets one hidden note (delivered after its current tool calls) to memorize what matters before the details leave its view. Idle compaction has no turn to ask in; the next sleep reads that day from the archive anyway.

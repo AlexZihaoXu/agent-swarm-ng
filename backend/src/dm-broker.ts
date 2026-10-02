@@ -58,6 +58,7 @@ import { createActivityRecorder, type ActivityEntry } from './agent-activity';
 import type { ActivityTrace } from './activity-events';
 import { SwarmKnowledgePlugin } from './swarm-knowledge/plugin';
 import { MemoryStore } from './memory/store';
+import { swarmKnowledge } from './swarm-knowledge/entries';
 import { Organizations } from './organizations';
 import { DeepStorage } from './memory/deep';
 import { CueRecall } from './memory/cues';
@@ -267,7 +268,7 @@ export class DmBroker {
       computers ? (agentId, ids) => computers.assign(agentId, ids) : undefined,
     );
     this.deep = new DeepStorage(database, (agentId, channelId) => this.canReadChannel(agentId, channelId));
-    this.cues = new CueRecall(this.memory);
+    this.cues = new CueRecall(this.memory, swarmKnowledge);
     this.sleeper = new SleepScheduler(database, agentId => this.sleep(agentId));
     this.heartbeats = new HeartbeatScheduler(
       database,

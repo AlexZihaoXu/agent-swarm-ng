@@ -2,6 +2,7 @@ import type { KnowledgeEntry } from '../catalog';
 
 export const harnessesPractice = {
   id: 'practices/harnesses',
+  cues: ['coding agent', 'codex cli', 'gemini cli', 'aider', 'opencode'],
   parentId: 'practices',
   title: 'Third-party coding harnesses',
   summary:
@@ -37,6 +38,15 @@ Finishing: verify the outcome yourself (read the changed files, run the tests), 
 
 export const claudeCodePractice = {
   id: 'practices/harnesses/claude-code',
+  cues: [
+    'claude code',
+    'claude -p',
+    'claude auth',
+    'claude plugin',
+    '"currentcommand":"claude"',
+    'swarm assist',
+    'notify_supervisor',
+  ],
   parentId: 'practices/harnesses',
   title: 'Claude Code',
   summary:

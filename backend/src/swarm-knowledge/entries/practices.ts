@@ -116,6 +116,7 @@ Browsers, accounts and CAPTCHAs: practices/browser.`,
 
 export const browserPractice = {
   id: 'practices/browser',
+  cues: ['in the browser', 'open chrome', 'google chrome', 'log in to', 'sign in to'],
   parentId: 'practices',
   title: 'Browser accounts and CAPTCHA',
   summary: 'Report a blocking CAPTCHA before one default attempt; get informed approval for signed-in Google use.',
@@ -197,6 +198,7 @@ Files: open an attachment with discord_open_attachment, then read_file. To share
 
 export const sharingFilesPractice = {
   id: 'practices/sharing-files',
+  cues: ['send me the file', 'share the file', 'send it as a file', 'upload it'],
   parentId: 'practices',
   title: 'Sharing and moving files',
   summary: 'Paste, present live or upload; opening received files; copying between scratchpad, computers and chats.',
@@ -219,6 +221,7 @@ Clean up: delete uploads that were sent by mistake. Storage is shared by the who
 
 export const waitingPractice = {
   id: 'practices/waiting',
+  cues: ['let me know when', 'tell me when', 'notify me when', 'wait until', 'once it finishes'],
   parentId: 'practices',
   title: 'Waiting and waking',
   summary: 'Never wait inside a turn: pick a timer, reminder, watch or terminal event; write good watch conditions.',
@@ -259,6 +262,7 @@ Housekeeping: list_timers shows your timers, reminders and watches; cancel_timer
 
 export const schedulingPractice = {
   id: 'practices/scheduling',
+  cues: ['remind me', 'every morning', 'every day at', 'every week', 'tomorrow at', 'schedule'],
   parentId: 'practices',
   title: 'Scheduling with timers',
   summary: 'Clock times, recurring schedules and outages without cron: compute delays and chain timers.',

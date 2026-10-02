@@ -136,7 +136,8 @@ beforeAll(async () => {
     } else if (behavior === 'files') {
       // Upload a scratch file, then send it with the fileId the tool returned.
       const tools = body.messages.filter(message => message.role === 'tool');
-      const uploaded = tools.length ? JSON.parse(String(tools[0].content)) : null;
+      // The tool's JSON is its first line; a Knowledge pointer may follow it.
+      const uploaded = tools.length ? JSON.parse(String(tools[0].content).split('\n')[0]) : null;
       const [name, args] = uploaded
         ? ['send_message', { channelId, text: '', fileIds: [uploaded.fileId] }]
         : ['upload_file', { from: 'scratch:report.md' }];

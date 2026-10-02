@@ -19,7 +19,10 @@ import type { BackgroundCompactor } from './background-compaction';
 import { AgentSessionStore } from './agent-session-store';
 import type { ActivityStore } from './activity-store';
 import { forkBasis, type ForkBasis } from './computer-use/watch-judge';
-import { CUE_LIMITS, inputReminder, toolReminder, type CueRecall } from './memory/cues';
+import { CUE_LIMITS, inputReminder, knowledgeReminder, toolReminder, type CueRecall } from './memory/cues';
+
+/** Knowledge tools and help are never cues (their results are Knowledge already). */
+const KNOWLEDGE_TOOLS = new Set(['list_knowledge', 'search_knowledge', 'read_knowledge', 'help']);
 import { MEMORY_TOOL_NAMES } from './memory/tools';
 import { lastNightNote, SAVE_BEFORE_FORGETTING } from './memory/guidance';
 
@@ -215,17 +218,29 @@ export async function runChat(
       const after = live.agent.afterToolCall;
       live.agent.afterToolCall = async (context, callSignal) => {
         const result = await after?.(context, callSignal);
-        if (MEMORY_TOOL_NAMES.has(context.toolCall.name) || cued >= CUE_LIMITS.turn) return result;
+        const name = context.toolCall.name;
+        // Reading a Knowledge entry puts it in view: no pointer to it for a while.
+        if (name === 'read_knowledge')
+          memory.cues.readKnowledge(channel.agentId, String((context.args as { id?: unknown })?.id ?? ''));
+        if (MEMORY_TOOL_NAMES.has(name) || KNOWLEDGE_TOOLS.has(name) || cued >= CUE_LIMITS.turn) return result;
         const content = result?.content ?? context.result.content;
         const said = content.flatMap(part => (part.type === 'text' ? [part.text] : []));
         // Image-only results are not cues; only the start of a long result is read.
         if (!said.length) return result;
-        const hits = await cue(
-          `${JSON.stringify(context.args ?? {}).slice(0, 1024)}\n${said.join('\n').slice(0, CUE_LIMITS.scanChars)}`,
-          CUE_LIMITS.tool,
-        );
-        if (!hits.length) return result;
-        return { ...result, content: [...content, { type: 'text' as const, text: toolReminder(hits) }] };
+        const text = `${JSON.stringify(context.args ?? {}).slice(0, 1024)}\n${said.join('\n').slice(0, CUE_LIMITS.scanChars)}`;
+        const hits = await cue(text, CUE_LIMITS.tool);
+        const pointer =
+          cued < CUE_LIMITS.turn ? memory.cues.knowledgeCue(channel.agentId, text, windowTokens, name) : null;
+        if (pointer) cued++;
+        if (!hits.length && !pointer) return result;
+        return {
+          ...result,
+          content: [
+            ...content,
+            ...(hits.length ? [{ type: 'text' as const, text: toolReminder(hits) }] : []),
+            ...(pointer ? [{ type: 'text' as const, text: knowledgeReminder(pointer) }] : []),
+          ],
+        };
       };
     }
     // Background compaction: a summary written while the agent works, applied between model calls.
@@ -381,7 +396,12 @@ export async function runChat(
       const inputs: string[] = [];
       for (const item of batch.messages) {
         const hits = await cue(item.text, CUE_LIMITS.input);
-        inputs.push(`${channelInput(channel.id, item.text, item)}${hits.length ? `\n${inputReminder(hits)}` : ''}`);
+        const pointer =
+          memory && cued < CUE_LIMITS.turn ? memory.cues.knowledgeCue(channel.agentId, item.text, windowTokens) : null;
+        if (pointer) cued++;
+        inputs.push(
+          `${channelInput(channel.id, item.text, item)}${hits.length ? `\n${inputReminder(hits)}` : ''}${pointer ? `\n${knowledgeReminder(pointer)}` : ''}`,
+        );
       }
       if (batch.note)
         await main.sendCustomMessage(

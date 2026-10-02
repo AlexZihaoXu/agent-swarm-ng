@@ -26,7 +26,7 @@ const KNOWLEDGE: [RegExp, string[]][] = [
   [/^(react_to_message|read_reactions|search_emojis)$/, ['practices/communication']],
   [/_knowledge$|^help$/, ['concepts/tools']],
 ];
-const knowledgeOf = (name: string) => KNOWLEDGE.find(([pattern]) => pattern.test(name))?.[1] ?? [];
+export const knowledgeOf = (name: string) => KNOWLEDGE.find(([pattern]) => pattern.test(name))?.[1] ?? [];
 const FIELDS = ['class', 'params', 'description', 'knowledge'] as const;
 /** The second label: whose recordings this tool's actions are events of. */
 const recordingEvents = (tool: AgentTool) => {

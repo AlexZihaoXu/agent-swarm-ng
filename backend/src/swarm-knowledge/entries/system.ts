@@ -52,6 +52,7 @@ Every call is checked when it runs (current assignment, claim, contact, group me
 
 export const systemConcept = {
   id: 'concepts/system',
+  cues: ['what happens if', 'power loss', 'after a restart'],
   parentId: 'concepts',
   title: 'The swarm system',
   summary: 'Parts of the platform, what is saved, and what happens on a restart, shutdown or power loss.',
