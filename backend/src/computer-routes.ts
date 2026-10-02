@@ -1,3 +1,4 @@
+import { Organizations } from './organizations';
 import { SwarmSettingsStore } from './swarm-settings';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { Type } from '@sinclair/typebox';
@@ -21,6 +22,8 @@ const limitsSchema = Type.Object({
 const viewSchema = Type.Object({
   id: Type.String(),
   name: Type.String(),
+  /** The organization it belongs to (organizations.ts): only that organization's agents can be assigned it. */
+  organizationId: Type.String(),
   state: Type.String(),
   createdAt: Type.Number(),
   cpuCores: Type.Union([Type.Integer(), Type.Null()]),
@@ -46,6 +49,7 @@ function view(
   record: {
     id: string;
     name: string;
+    organizationId: string;
     state: string;
     createdAt: Date;
     cpuCores: number | null;
@@ -62,6 +66,7 @@ function view(
     outdated: observed ? (observed.outdated ?? false) : null,
     id: record.id,
     name: record.name,
+    organizationId: record.organizationId,
     cpuCores: observed?.cpuCount ?? record.cpuCores ?? null,
     memoryGiB:
       observed?.memoryLimitBytes && Number.isInteger(observed.memoryLimitBytes / 1024 ** 3)
@@ -162,7 +167,16 @@ export function registerComputerRoutes(
       }
     },
   );
-  app.post<{ Body: { name: string; requestKey: string; cpuCores?: number; memoryGiB?: number; timezone?: string } }>(
+  app.post<{
+    Body: {
+      name: string;
+      requestKey: string;
+      cpuCores?: number;
+      memoryGiB?: number;
+      timezone?: string;
+      organizationId?: string;
+    };
+  }>(
     '/api/computers',
     {
       schema: {
@@ -174,6 +188,8 @@ export function registerComputerRoutes(
             cpuCores: Type.Optional(Type.Integer({ minimum: 1, maximum: 8 })),
             memoryGiB: Type.Optional(Type.Integer({ minimum: 1, maximum: 16 })),
             timezone: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+            /** Where it goes (default: the first organization). */
+            organizationId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
           },
           { additionalProperties: false },
         ),
@@ -196,11 +212,15 @@ export function registerComputerRoutes(
         }
         // New computers use the Keep/Cache folders chosen in Settings now; they stay there afterwards.
         const folders = await computerStorageFolders(platform);
+        const organizationId = await new Organizations(platform).resolve(request.body.organizationId).catch(() => {
+          throw new ComputerStoreError('missing', 'Organization not found.');
+        });
         const { computer, created } = await store.reserve(
           request.body.name,
           request.body.requestKey,
           settings,
           folders,
+          organizationId,
         );
         recordId = computer.id;
         if (computer.state === 'deleting' || computer.state === 'failed')

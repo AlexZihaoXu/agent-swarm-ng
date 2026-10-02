@@ -75,6 +75,8 @@ export type ChatConfiguration = {
   instructions?: string;
   /** The agent's memory index (rebuilt when it sleeps), shown with the memory guidance when memory tools are granted. */
   memoryIndex?: string;
+  /** Its organization's name: everything it can reach is in it. */
+  organization?: string;
   publishPeer?: (
     channelId: string,
     text: string,
@@ -474,6 +476,11 @@ export async function createChatSession(
   if (additionalTools.some(tool => tool.name === 'recall')) {
     const current = resources.getSystemPrompt() ?? '';
     resources.getSystemPrompt = () => `${current}\n\n${memoryGuidance(config.memoryIndex ?? '')}`;
+  }
+  if (config.organization) {
+    const current = resources.getSystemPrompt() ?? '';
+    resources.getSystemPrompt = () =>
+      `${current}\n\n## Your organization\nYou are in the organization ${JSON.stringify(config.organization)}. The computers, agents and group chats you can reach are all in it; other organizations are kept apart from you, so someone the human mentions may simply be out of your reach. Only the human moves agents and computers between organizations.`;
   }
   const instructions = config.instructions?.trim();
   if (instructions) {

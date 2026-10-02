@@ -25,6 +25,18 @@ enum MessageRole {
 
 // A computer is a platform resource, not an agent or a chat channel.
 // Docker labels/volumes carry the same ID for recovery and ownership checks.
+/// An organization: a folder of agents, computers and group chats that are kept apart from other organizations'
+/// (assignments, DM permissions and group membership never cross it). Moving something drops its cross-org links.
+model Organization {
+  sequence  Int         @id @default(autoincrement())
+  id        String      @unique @default(uuid())
+  name      String
+  createdAt DateTime    @default(now())
+  agents    Agent[]
+  computers Computer[]
+  groups    GroupChat[]
+}
+
 model Computer {
   sequence   Int      @id @default(autoincrement())
   id         String   @unique @default(uuid())
@@ -42,6 +54,8 @@ model Computer {
   keepFolder  String?
   cacheFolder String?
   keptPaths   String   @default("[\"/home/agent\",\"/usr/local\"]")
+  organizationId String @default("personal")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   assignments ComputerAssignment[]
@@ -99,6 +113,8 @@ model Agent {
   heartbeatTo        String          @default("")
   /// What the owner wants checked on each heartbeat (plain text).
   heartbeatChecklist String          @default("")
+  organizationId     String          @default("personal")
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   /// Long-term memory: the index (one line per memory) shown in its system prompt, rebuilt when it sleeps.
   memoryIndex        String          @default("")
   /// Sleep (memory reorganising) runs outside its active hours, or in this window when it is active all day.
@@ -304,6 +320,8 @@ model GroupChat {
   sequence  Int            @id @default(autoincrement())
   id        String         @unique @default(uuid())
   name      String
+  organizationId String @default("personal")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   createdAt DateTime       @default(now())
   members   GroupMember[]
   messages  GroupMessage[]

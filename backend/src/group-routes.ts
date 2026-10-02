@@ -22,6 +22,14 @@ const Edit = Type.Object(
   },
   { additionalProperties: false },
 );
+const Create = Type.Object(
+  {
+    ...Edit.properties,
+    /** Where it goes (default: the first organization); its members must all be in it. */
+    organizationId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  },
+  { additionalProperties: false },
+);
 export const GroupMessageSchema = Type.Object({
   id: Type.String(),
   sequence: Type.Integer(),
@@ -47,6 +55,7 @@ export const GroupMessageSchema = Type.Object({
 const Group = Type.Object({
   id: Type.String(),
   name: Type.String(),
+  organizationId: Type.String(),
   createdAt: Type.Number(),
   members: Type.Array(
     Type.Object({
@@ -66,6 +75,7 @@ function groupView(
   return {
     id: group.id,
     name: group.name,
+    organizationId: group.organizationId,
     createdAt: group.createdAt.getTime(),
     members: group.members.map(({ agent }) => ({
       id: agent.id,
@@ -138,15 +148,18 @@ export function registerGroupRoutes(
         };
       }),
   );
-  app.post<{ Body: Static<typeof Edit> }>(
+  app.post<{ Body: Static<typeof Create> }>(
     '/api/groups',
     {
-      schema: { operationId: 'createGroup', body: Edit, response: { 200: Group, ...errors } },
+      schema: { operationId: 'createGroup', body: Create, response: { 200: Group, ...errors } },
     },
     (request, reply) =>
       safely(reply, async () => {
         writable();
-        const group = await broker.groups.create(request.body.name, request.body.agentIds);
+        const organizationId = await broker.organizations.resolve(request.body.organizationId).catch(() => {
+          throw new SwarmError('missing', 'Organization not found.');
+        });
+        const group = await broker.groups.create(request.body.name, request.body.agentIds, organizationId);
         announce(group.id);
         return groupView(group);
       }),

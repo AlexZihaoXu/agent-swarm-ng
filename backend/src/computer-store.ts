@@ -34,6 +34,7 @@ export class ComputerStore {
     requestKey: string,
     settings?: ComputerSettings,
     storage?: Pick<ComputerStorage, 'keepFolder' | 'cacheFolder'>,
+    organizationId?: string,
   ) {
     await this.platform.initialize();
     const name = rawName.trim();
@@ -71,7 +72,15 @@ export class ComputerStore {
         if (taken.some(record => record.name.toLocaleLowerCase('en-US') === name.toLocaleLowerCase('en-US'))) {
           throw new ComputerStoreError('conflict', 'That computer name is already in use. Choose another name.');
         }
-        return tx.computer.create({ data: { name, requestKey, ...(settings ?? {}), ...(storage ?? {}) } });
+        return tx.computer.create({
+          data: {
+            name,
+            requestKey,
+            ...(settings ?? {}),
+            ...(storage ?? {}),
+            ...(organizationId ? { organizationId } : {}),
+          },
+        });
       });
       return { computer, created: true };
     } catch (error) {

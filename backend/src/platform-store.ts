@@ -11,6 +11,8 @@ const agentSelection = { channels: { where: { kind: 'platform-chat' }, take: 1 }
 type StoredAgent = Prisma.AgentGetPayload<{ include: typeof agentSelection }>;
 type AgentInput = Pick<Prisma.AgentCreateInput, 'name' | 'endpointId' | 'model' | 'thinkingLevel'> & {
   avatar?: AgentAvatar;
+  /** Its organization (default: the "personal" one every installation starts with). */
+  organizationId?: string;
 };
 
 export class PlatformStore {
@@ -35,13 +37,14 @@ export class PlatformStore {
     await this.client.$disconnect();
   }
 
-  async createAgent(input: AgentInput) {
+  async createAgent({ organizationId, avatar, ...fields }: AgentInput) {
     await this.initialize();
     return this.withLatestMessage(
       await this.client.agent.create({
         data: {
-          ...input,
-          avatar: input.avatar ? encodeAvatar(input.avatar) : undefined,
+          ...fields,
+          ...(organizationId ? { organization: { connect: { id: organizationId } } } : {}),
+          avatar: avatar ? encodeAvatar(avatar) : undefined,
           channels: { create: { kind: 'platform-chat' } },
         },
         include: agentSelection,

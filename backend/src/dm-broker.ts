@@ -58,6 +58,7 @@ import { createActivityRecorder, type ActivityEntry } from './agent-activity';
 import type { ActivityTrace } from './activity-events';
 import { SwarmKnowledgePlugin } from './swarm-knowledge/plugin';
 import { MemoryStore } from './memory/store';
+import { Organizations } from './organizations';
 import { DeepStorage } from './memory/deep';
 import { CueRecall } from './memory/cues';
 import { createMemoryTools, provenanceOf } from './memory/tools';
@@ -97,6 +98,8 @@ export class DmBroker {
   readonly knowledge: SwarmKnowledgePlugin;
   /** Every agent's long-term memory, its deep storage (the session archive) and cue-driven recall. */
   readonly memory: MemoryStore;
+  /** Organizations: folders of agents, computers and groups kept apart (organizations.ts). */
+  readonly organizations: Organizations;
   readonly deep: DeepStorage;
   readonly cues: CueRecall;
   /** Each agent's sleep: memory reorganised in its off hours, beside its work (never pausing it). */
@@ -242,6 +245,10 @@ export class DmBroker {
     });
     this.knowledge = new SwarmKnowledgePlugin(database);
     this.memory = new MemoryStore(database, this.settings);
+    this.organizations = new Organizations(
+      database,
+      computers ? (agentId, ids) => computers.assign(agentId, ids) : undefined,
+    );
     this.deep = new DeepStorage(database, (agentId, channelId) => this.canReadChannel(agentId, channelId));
     this.cues = new CueRecall(this.memory);
     this.sleeper = new SleepScheduler(database, agentId => this.sleep(agentId));
@@ -948,6 +955,7 @@ ${preview.text}`
         channel,
         instructions: agent.instructions,
         memoryIndex: agent.memoryIndex,
+        organization: await this.organizations.name(agent.organizationId),
         ...(branch ? { heartbeat: () => !branch.promoted } : {}),
         publishPeer: async (channelId, text, callId, replyToId, fileIds) => {
           if (channelId.startsWith('discord:'))

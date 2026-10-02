@@ -340,6 +340,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listOrganizations"];
+        put?: never;
+        post: operations["createOrganization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organizations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteOrganization"];
+        options?: never;
+        head?: never;
+        patch: operations["renameOrganization"];
+        trace?: never;
+    };
+    "/api/organizations/{id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["moveToOrganization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agents/{id}/settings": {
         parameters: {
             query?: never;
@@ -3110,6 +3158,237 @@ export interface operations {
             };
         };
     };
+    listOrganizations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        organizations: {
+                            id: string;
+                            name: string;
+                            createdAt: string;
+                            agents: number;
+                            computers: number;
+                            groups: number;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    createOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        organizations: {
+                            id: string;
+                            name: string;
+                            createdAt: string;
+                            agents: number;
+                            computers: number;
+                            groups: number;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    deleteOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        organizations: {
+                            id: string;
+                            name: string;
+                            createdAt: string;
+                            agents: number;
+                            computers: number;
+                            groups: number;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    renameOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        organizations: {
+                            id: string;
+                            name: string;
+                            createdAt: string;
+                            agents: number;
+                            computers: number;
+                            groups: number;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    moveToOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    kind: "agent" | "computer" | "group";
+                    id: string;
+                    apply: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        dropped: string[];
+                        moved: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
     getAgentSettings: {
         parameters: {
             query?: never;
@@ -3526,6 +3805,7 @@ export interface operations {
                         groups: {
                             id: string;
                             name: string;
+                            organizationId: string;
                             createdAt: number;
                             members: {
                                 id: string;
@@ -3671,6 +3951,7 @@ export interface operations {
                 "application/json": {
                     name: string;
                     agentIds: string[];
+                    organizationId?: string;
                 };
             };
         };
@@ -3684,6 +3965,7 @@ export interface operations {
                     "application/json": {
                         id: string;
                         name: string;
+                        organizationId: string;
                         createdAt: number;
                         members: {
                             id: string;
@@ -3835,6 +4117,7 @@ export interface operations {
                     "application/json": {
                         id: string;
                         name: string;
+                        organizationId: string;
                         createdAt: number;
                         members: {
                             id: string;
@@ -4067,6 +4350,7 @@ export interface operations {
                     "application/json": {
                         id: string;
                         name: string;
+                        organizationId: string;
                         createdAt: number;
                         members: {
                             id: string;
@@ -4793,6 +5077,7 @@ export interface operations {
                                 timeZone: string;
                             };
                             instructions: string;
+                            organizationId: string;
                         }[];
                         nextCursor: number | null;
                     };
@@ -4829,6 +5114,7 @@ export interface operations {
                         accent?: string;
                         accessory?: "none" | "antenna" | "sprout" | "bow" | "halo" | "glasses";
                     };
+                    organizationId?: string;
                 };
             };
         };
@@ -4920,6 +5206,7 @@ export interface operations {
                             timeZone: string;
                         };
                         instructions: string;
+                        organizationId: string;
                     };
                 };
             };
@@ -5222,6 +5509,7 @@ export interface operations {
                             timeZone: string;
                         };
                         instructions: string;
+                        organizationId: string;
                     };
                 };
             };
@@ -5785,6 +6073,7 @@ export interface operations {
                         computers: {
                             id: string;
                             name: string;
+                            organizationId: string;
                             state: string;
                             createdAt: number;
                             cpuCores: number | null;
@@ -5866,6 +6155,7 @@ export interface operations {
                     cpuCores?: number;
                     memoryGiB?: number;
                     timezone?: string;
+                    organizationId?: string;
                 };
             };
         };
@@ -5879,6 +6169,7 @@ export interface operations {
                     "application/json": {
                         id: string;
                         name: string;
+                        organizationId: string;
                         state: string;
                         createdAt: number;
                         cpuCores: number | null;
@@ -5905,6 +6196,7 @@ export interface operations {
                     "application/json": {
                         id: string;
                         name: string;
+                        organizationId: string;
                         state: string;
                         createdAt: number;
                         cpuCores: number | null;
@@ -6224,6 +6516,7 @@ export interface operations {
                     "application/json": {
                         id: string;
                         name: string;
+                        organizationId: string;
                         state: string;
                         createdAt: number;
                         cpuCores: number | null;
@@ -6319,6 +6612,7 @@ export interface operations {
                     "application/json": {
                         id: string;
                         name: string;
+                        organizationId: string;
                         state: string;
                         createdAt: number;
                         cpuCores: number | null;

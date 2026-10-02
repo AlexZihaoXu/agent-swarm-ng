@@ -186,13 +186,24 @@ export class ComputerUseService {
     if (computerIds.length > 100 || new Set(computerIds).size !== computerIds.length)
       throw new ComputerUseError('Choose at most 100 distinct computers.');
     await this.exclusive(async () => {
-      if (!(await this.database.hasAgent(agentId))) throw new ComputerUseError('Agent not found.', 404);
+      const agent = await this.database.client.agent.findUnique({
+        where: { id: agentId },
+        select: { organizationId: true },
+      });
+      if (!agent) throw new ComputerUseError('Agent not found.', 404);
       if (
         (await this.database.client.computer.count({
           where: { id: { in: computerIds }, state: { not: 'deleting' } },
         })) !== computerIds.length
       )
         throw new ComputerUseError('Computer not found.', 404);
+      // Organizations keep agents and computers apart: only computers of the agent's own organization.
+      if (
+        (await this.database.client.computer.count({
+          where: { id: { in: computerIds }, organizationId: agent.organizationId },
+        })) !== computerIds.length
+      )
+        throw new ComputerUseError('Only computers in the agent’s own organization can be assigned to it.', 403);
       const claim = await this.database.client.computerClaim.findUnique({ where: { agentId } });
       if (claim && !computerIds.includes(claim.computerId))
         await this.release(claim.computerId, 'Your computer assignment was removed and its control was released.');

@@ -1,6 +1,7 @@
 import type { Prisma } from './generated/prisma/client';
 import type { PlatformStore } from './platform-store';
 import { SwarmError } from './swarm-store';
+import { DEFAULT_ORGANIZATION } from './organizations';
 import { liveChainWhere } from './communication-policy';
 
 export const GROUP_MEMBER_LIMIT = 16;
@@ -49,17 +50,20 @@ export class GroupStore {
     } else if (!(await tx.groupChat.findUnique({ where: { id: groupId }, select: { id: true } })))
       throw new SwarmError('missing', 'Group not found.');
   }
-  private async validateMembers(tx: Prisma.TransactionClient, ids: string[]) {
+  private async validateMembers(tx: Prisma.TransactionClient, ids: string[], organizationId: string) {
     if ((await tx.agent.count({ where: { id: { in: ids } } })) !== ids.length)
       throw new SwarmError('invalid', 'One or more selected agents no longer exist.');
+    // A group's members are all in its organization.
+    if ((await tx.agent.count({ where: { id: { in: ids }, organizationId } })) !== ids.length)
+      throw new SwarmError('denied', 'A group’s members must all be in its organization.');
   }
-  async create(name: string, agentIds: string[]) {
+  async create(name: string, agentIds: string[], organizationId: string = DEFAULT_ORGANIZATION) {
     validate(name, agentIds);
     await this.store.initialize();
     return this.store.client.$transaction(async tx => {
-      await this.validateMembers(tx, agentIds);
+      await this.validateMembers(tx, agentIds, organizationId);
       return tx.groupChat.create({
-        data: { name: name.trim(), members: { create: agentIds.map(agentId => ({ agentId })) } },
+        data: { name: name.trim(), organizationId, members: { create: agentIds.map(agentId => ({ agentId })) } },
         include: { members: memberView },
       });
     });
@@ -69,7 +73,8 @@ export class GroupStore {
     await this.store.initialize();
     return this.store.client.$transaction(async tx => {
       await this.authorize(tx, groupId);
-      await this.validateMembers(tx, agentIds);
+      const group = await tx.groupChat.findUniqueOrThrow({ where: { id: groupId }, select: { organizationId: true } });
+      await this.validateMembers(tx, agentIds, group.organizationId);
       const existing = await tx.groupMember.findMany({ where: { groupId }, select: { agentId: true } });
       await tx.groupMember.deleteMany({ where: { groupId, agentId: { notIn: agentIds } } });
       const added = agentIds.filter(id => !existing.some(member => member.agentId === id));

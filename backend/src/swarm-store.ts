@@ -43,10 +43,16 @@ export class SwarmStore {
       throw new SwarmError('invalid', 'Choose up to 100 different agents, excluding this agent.');
     await this.store.initialize();
     await this.store.client.$transaction(async tx => {
-      if (!(await tx.agent.findUnique({ where: { id: agentId }, select: { id: true } })))
-        throw new SwarmError('missing', 'Agent not found.');
+      const agent = await tx.agent.findUnique({ where: { id: agentId }, select: { organizationId: true } });
+      if (!agent) throw new SwarmError('missing', 'Agent not found.');
       if (ids && (await tx.agent.count({ where: { id: { in: ids } } })) !== ids.length)
         throw new SwarmError('invalid', 'One or more selected agents no longer exist.');
+      // DMs stay within an organization.
+      if (
+        ids &&
+        (await tx.agent.count({ where: { id: { in: ids }, organizationId: agent.organizationId } })) !== ids.length
+      )
+        throw new SwarmError('denied', 'Agents can only be allowed to DM agents in their own organization.');
       if (input.avatar) await tx.agent.update({ where: { id: agentId }, data: { avatar: encodeAvatar(input.avatar) } });
       if (ids !== undefined) {
         // Treat both directed rows as one connection. Remove only this agent's pairs.

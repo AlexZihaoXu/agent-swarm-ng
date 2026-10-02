@@ -6055,6 +6055,492 @@
         }
       }
     },
+    "/api/organizations": {
+      "get": {
+        "operationId": "listOrganizations",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "organizations"
+                  ],
+                  "properties": {
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "createdAt",
+                          "agents",
+                          "computers",
+                          "groups"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "agents": {
+                            "type": "integer"
+                          },
+                          "computers": {
+                            "type": "integer"
+                          },
+                          "groups": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createOrganization",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "minLength": 1,
+                    "maxLength": 60,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "organizations"
+                  ],
+                  "properties": {
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "createdAt",
+                          "agents",
+                          "computers",
+                          "groups"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "agents": {
+                            "type": "integer"
+                          },
+                          "computers": {
+                            "type": "integer"
+                          },
+                          "groups": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organizations/{id}": {
+      "patch": {
+        "operationId": "renameOrganization",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "minLength": 1,
+                    "maxLength": 60,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "organizations"
+                  ],
+                  "properties": {
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "createdAt",
+                          "agents",
+                          "computers",
+                          "groups"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "agents": {
+                            "type": "integer"
+                          },
+                          "computers": {
+                            "type": "integer"
+                          },
+                          "groups": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteOrganization",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "organizations"
+                  ],
+                  "properties": {
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "createdAt",
+                          "agents",
+                          "computers",
+                          "groups"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "agents": {
+                            "type": "integer"
+                          },
+                          "computers": {
+                            "type": "integer"
+                          },
+                          "groups": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organizations/{id}/move": {
+      "post": {
+        "operationId": "moveToOrganization",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "kind",
+                  "id",
+                  "apply"
+                ],
+                "properties": {
+                  "kind": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "agent"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "computer"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "group"
+                        ]
+                      }
+                    ]
+                  },
+                  "id": {
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  "apply": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "dropped",
+                    "moved"
+                  ],
+                  "properties": {
+                    "dropped": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "moved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agents/{id}/settings": {
       "get": {
         "operationId": "getAgentSettings",
@@ -8202,6 +8688,7 @@
                         "required": [
                           "id",
                           "name",
+                          "organizationId",
                           "createdAt",
                           "members",
                           "lastMessage"
@@ -8211,6 +8698,9 @@
                             "type": "string"
                           },
                           "name": {
+                            "type": "string"
+                          },
+                          "organizationId": {
                             "type": "string"
                           },
                           "createdAt": {
@@ -9208,6 +9698,11 @@
                       "maxLength": 100,
                       "type": "string"
                     }
+                  },
+                  "organizationId": {
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "type": "string"
                   }
                 }
               }
@@ -9224,6 +9719,7 @@
                   "required": [
                     "id",
                     "name",
+                    "organizationId",
                     "createdAt",
                     "members",
                     "lastMessage"
@@ -9233,6 +9729,9 @@
                       "type": "string"
                     },
                     "name": {
+                      "type": "string"
+                    },
+                    "organizationId": {
                       "type": "string"
                     },
                     "createdAt": {
@@ -10214,6 +10713,7 @@
                   "required": [
                     "id",
                     "name",
+                    "organizationId",
                     "createdAt",
                     "members",
                     "lastMessage"
@@ -10223,6 +10723,9 @@
                       "type": "string"
                     },
                     "name": {
+                      "type": "string"
+                    },
+                    "organizationId": {
                       "type": "string"
                     },
                     "createdAt": {
@@ -11235,6 +11738,7 @@
                   "required": [
                     "id",
                     "name",
+                    "organizationId",
                     "createdAt",
                     "members",
                     "lastMessage"
@@ -11244,6 +11748,9 @@
                       "type": "string"
                     },
                     "name": {
+                      "type": "string"
+                    },
+                    "organizationId": {
                       "type": "string"
                     },
                     "createdAt": {
@@ -14359,7 +14866,8 @@
                           "lastMessage",
                           "compaction",
                           "heartbeat",
-                          "instructions"
+                          "instructions",
+                          "organizationId"
                         ],
                         "properties": {
                           "name": {
@@ -15111,6 +15619,9 @@
                           },
                           "instructions": {
                             "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
                           }
                         }
                       }
@@ -15437,6 +15948,11 @@
                         ]
                       }
                     }
+                  },
+                  "organizationId": {
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "type": "string"
                   }
                 }
               }
@@ -15462,7 +15978,8 @@
                     "lastMessage",
                     "compaction",
                     "heartbeat",
-                    "instructions"
+                    "instructions",
+                    "organizationId"
                   ],
                   "properties": {
                     "name": {
@@ -16213,6 +16730,9 @@
                       ]
                     },
                     "instructions": {
+                      "type": "string"
+                    },
+                    "organizationId": {
                       "type": "string"
                     }
                   }
@@ -16863,7 +17383,8 @@
                     "lastMessage",
                     "compaction",
                     "heartbeat",
-                    "instructions"
+                    "instructions",
+                    "organizationId"
                   ],
                   "properties": {
                     "name": {
@@ -17614,6 +18135,9 @@
                       ]
                     },
                     "instructions": {
+                      "type": "string"
+                    },
+                    "organizationId": {
                       "type": "string"
                     }
                   }
@@ -19084,6 +19608,7 @@
                         "required": [
                           "id",
                           "name",
+                          "organizationId",
                           "state",
                           "createdAt",
                           "cpuCores",
@@ -19104,6 +19629,9 @@
                             "type": "string"
                           },
                           "name": {
+                            "type": "string"
+                          },
+                          "organizationId": {
                             "type": "string"
                           },
                           "state": {
@@ -19350,6 +19878,11 @@
                     "minLength": 1,
                     "maxLength": 64,
                     "type": "string"
+                  },
+                  "organizationId": {
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "type": "string"
                   }
                 }
               }
@@ -19366,6 +19899,7 @@
                   "required": [
                     "id",
                     "name",
+                    "organizationId",
                     "state",
                     "createdAt",
                     "cpuCores",
@@ -19386,6 +19920,9 @@
                       "type": "string"
                     },
                     "name": {
+                      "type": "string"
+                    },
+                    "organizationId": {
                       "type": "string"
                     },
                     "state": {
@@ -19524,6 +20061,7 @@
                   "required": [
                     "id",
                     "name",
+                    "organizationId",
                     "state",
                     "createdAt",
                     "cpuCores",
@@ -19544,6 +20082,9 @@
                       "type": "string"
                     },
                     "name": {
+                      "type": "string"
+                    },
+                    "organizationId": {
                       "type": "string"
                     },
                     "state": {
@@ -20216,6 +20757,7 @@
                   "required": [
                     "id",
                     "name",
+                    "organizationId",
                     "state",
                     "createdAt",
                     "cpuCores",
@@ -20236,6 +20778,9 @@
                       "type": "string"
                     },
                     "name": {
+                      "type": "string"
+                    },
+                    "organizationId": {
                       "type": "string"
                     },
                     "state": {
@@ -20530,6 +21075,7 @@
                   "required": [
                     "id",
                     "name",
+                    "organizationId",
                     "state",
                     "createdAt",
                     "cpuCores",
@@ -20550,6 +21096,9 @@
                       "type": "string"
                     },
                     "name": {
+                      "type": "string"
+                    },
+                    "organizationId": {
                       "type": "string"
                     },
                     "state": {

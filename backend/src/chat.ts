@@ -2,6 +2,7 @@ import { FileSchema } from './files/routes';
 import { FileError, FileStore, type FileView } from './files/store';
 import { chatKey } from './files/access';
 import { registerMemoryRoutes } from './memory/routes';
+import { registerOrganizationRoutes } from './organization-routes';
 import { registerScratchRoutes } from './scratch-routes';
 import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
@@ -90,6 +91,8 @@ const Agent = Type.Object(
     heartbeat: Type.Intersect([Heartbeat, Type.Object({ timeZone: Type.String() })]),
     /** The owner's own instructions for this agent (Markdown), last in its system prompt. */
     instructions: Type.String(),
+    /** Its organization (organizations.ts): it reaches only computers, agents and groups of the same one. */
+    organizationId: Type.String(),
   },
   { additionalProperties: false },
 );
@@ -141,6 +144,7 @@ function agentView(
     model: agent.model,
     thinkingLevel: agent.thinkingLevel,
     instructions: agent.instructions,
+    organizationId: agent.organizationId,
     heartbeat: {
       enabled: agent.heartbeatEnabled,
       minutes: agent.heartbeatMinutes,
@@ -202,6 +206,7 @@ export function registerChat(
   registerActivityRoutes(app, database, broker.activity);
   registerScratchRoutes(app, database, broker.scratch);
   registerMemoryRoutes(app, database, broker.memory, broker.sleeper, broker.settings);
+  registerOrganizationRoutes(app, broker.organizations);
   app.addHook('onListen', async () => {
     await broker.ready();
   });
@@ -388,12 +393,16 @@ export function registerChat(
     } else if (!endpoint) return { status: 404, message: 'Save the endpoint in Settings first.' };
     return null;
   }
-  app.post<{ Body: Static<typeof Selection> }>(
+  const CreateAgent = Type.Object(
+    { ...Selection.properties, organizationId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })) },
+    { additionalProperties: false },
+  );
+  app.post<{ Body: Static<typeof CreateAgent> }>(
     '/api/agents',
     {
       schema: {
         operationId: 'createChatAgent',
-        body: Selection,
+        body: CreateAgent,
         response: { 200: Agent, 400: ErrorResponse, 404: ErrorResponse },
       },
     },
@@ -403,7 +412,9 @@ export function registerChat(
       if (!input.name.trim()) return reply.code(400).send({ message: 'Choose a name and a supported thinking level.' });
       const problem = await checkSelection(input);
       if (problem) return reply.code(problem.status).send({ message: problem.message });
-      return agentView(await database.createAgent({ ...input, name: input.name.trim() }));
+      const organizationId = await broker.organizations.resolve(input.organizationId).catch(() => null);
+      if (!organizationId) return reply.code(404).send({ message: 'Organization not found.' });
+      return agentView(await database.createAgent({ ...input, name: input.name.trim(), organizationId }));
     },
   );
 
