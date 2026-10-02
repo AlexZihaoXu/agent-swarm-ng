@@ -57,6 +57,12 @@ import { BackgroundCompactor } from './background-compaction';
 import { createActivityRecorder, type ActivityEntry } from './agent-activity';
 import type { ActivityTrace } from './activity-events';
 import { SwarmKnowledgePlugin } from './swarm-knowledge/plugin';
+import { MemoryStore } from './memory/store';
+import { DeepStorage } from './memory/deep';
+import { CueRecall } from './memory/cues';
+import { createMemoryTools, provenanceOf } from './memory/tools';
+import { SleepScheduler, sleepOnce } from './memory/sleep';
+import { dmConversationId } from './swarm-store';
 import type { ComputerUseService } from './computer-use/service';
 import type { ScreenshotPool } from './computer-use/image-pool';
 import { createComputerTools } from './computer-use/tools';
@@ -89,6 +95,12 @@ export class DmBroker {
   private idle = new Map<string, { at: number; percent: number }>();
   private idleTimer?: ReturnType<typeof setInterval>;
   readonly knowledge: SwarmKnowledgePlugin;
+  /** Every agent's long-term memory, its deep storage (the session archive) and cue-driven recall. */
+  readonly memory: MemoryStore;
+  readonly deep: DeepStorage;
+  readonly cues: CueRecall;
+  /** Each agent's sleep: memory reorganised in its off hours, beside its work (never pausing it). */
+  readonly sleeper: SleepScheduler;
   /** Each agent's heartbeat (Agents → agent → Heartbeat), started when due and the agent is idle. */
   readonly heartbeats: HeartbeatScheduler;
   private reactionCoordinator: ReactionCoordinator;
@@ -229,6 +241,10 @@ export class DmBroker {
       if (entry) emit({ type: 'activity', agentId: run.agentId, append: false, entry });
     });
     this.knowledge = new SwarmKnowledgePlugin(database);
+    this.memory = new MemoryStore(database, this.settings);
+    this.deep = new DeepStorage(database, (agentId, channelId) => this.canReadChannel(agentId, channelId));
+    this.cues = new CueRecall(this.memory);
+    this.sleeper = new SleepScheduler(database, agentId => this.sleep(agentId));
     this.heartbeats = new HeartbeatScheduler(
       database,
       agentId => !this.runs.has(agentId) && !this.compactor.running(agentId) && !this.deleting.has(agentId),
@@ -550,6 +566,7 @@ export class DmBroker {
       // Pending timers are rows: after a restart or power loss they resume here.
       this.timers.start();
       this.heartbeats.begin();
+      this.sleeper.begin();
       this.watcher?.start();
       // Watches end with claims on a restart; their agents hear so once.
       void this.watches?.start().catch(() => {});
@@ -928,6 +945,7 @@ ${preview.text}`
         apiKey: connection.apiKey,
         channel,
         instructions: agent.instructions,
+        memoryIndex: agent.memoryIndex,
         ...(branch ? { heartbeat: () => !branch.promoted } : {}),
         publishPeer: async (channelId, text, callId, replyToId, fileIds) => {
           if (channelId.startsWith('discord:'))
@@ -1002,6 +1020,13 @@ ${preview.text}`
           (channelId, messageId) => this.runs.reactionsChanged(channelId, messageId),
         ),
         ...this.knowledge.toolsFor(agentId),
+        ...createMemoryTools({
+          memory: this.memory,
+          deep: this.deep,
+          agentId,
+          provenance: () => provenanceOf(sources, channel.id),
+          shown: ids => this.cues.shown(agentId, ids),
+        }),
         // Every agent's sense of time: current time, timers and reminders (no computer needed).
         ...createTimeTools(this.timers, agentId, () => humanAuthority, this.watches, this.recordings),
         ...createScratchTools(this.scratch, agentId, this.screenshots),
@@ -1050,6 +1075,17 @@ ${preview.text}`
       {
         sessionStore: this.sessions,
         wrote: () => this.discord?.presence?.wrote(agentId),
+        // A heartbeat leaves last night's note for the next real turn (a dropped branch would lose it).
+        memory: {
+          cues: this.cues,
+          lastNight: options.heartbeat ? undefined : agent.sleepNote || undefined,
+          lastNightTold: async () => {
+            await this.database.client.agent.updateMany({
+              where: { id: agentId, sleepNote: agent.sleepNote },
+              data: { sleepNote: '' },
+            });
+          },
+        },
         ...(branch
           ? {
               heartbeat: {
@@ -1125,6 +1161,28 @@ ${preview.text}`
         },
       },
     );
+  }
+  /**
+   * Whether an agent may still read a channel (deep storage shows only those): its private chat, a DM it is part of
+   * with an agent that still exists, a group it is a member of, a Discord channel its owner still allows.
+   */
+  async canReadChannel(agentId: string, channelId: string) {
+    const agent = await this.database.findAgent(agentId);
+    if (!agent) return false;
+    if (agent.channels.some(channel => channel.id === channelId)) return true;
+    if (channelId.startsWith('dm:')) {
+      const peer = channelId
+        .slice(3)
+        .split(':')
+        .find(id => id !== agentId);
+      return Boolean(peer && dmConversationId(agentId, peer) === channelId && (await this.database.findAgent(peer)));
+    }
+    if (channelId.startsWith('group:'))
+      return Boolean(
+        await this.database.client.groupMember.findFirst({ where: { groupId: channelId.slice(6), agentId } }),
+      );
+    if (channelId.startsWith('discord:')) return Boolean(await this.discord?.store.usable(agentId, channelId.slice(8)));
+    return false;
   }
   /** A dropped heartbeat's note joins the agent's saved context (never chat). */
   private async keepHeartbeatNote(agentId: string, note: string) {
@@ -1233,7 +1291,61 @@ ${preview.text}`
       }
     }
   }
+  /**
+   * One night's sleep for an agent (memory/sleep.ts), in Activity as its own run "Sleep". Its model and credentials
+   * are the agent's; it uses memory tools only, so it can neither publish nor touch computers.
+   */
+  private async sleep(agentId: string) {
+    if (this.closing || this.deleting.has(agentId)) return;
+    await this.ready();
+    const agent = await this.database.findAgent(agentId);
+    if (!agent) return;
+    const controller = new AbortController();
+    this.sleepers.set(agentId, controller);
+    const connection = await resolveChatConnection(agent.endpointId, this.endpoints, this.codex, controller.signal);
+    const activity = createActivityRecorder(
+      agentId,
+      agent.channels[0].id,
+      '',
+      event => this.runs.activity(agentId, (event as { entry: ActivityEntry }).entry),
+      `sleep-${crypto.randomUUID()}`,
+      this.activity,
+    );
+    activity.protect(connection.apiKey ?? '');
+    await activity.start('Sleep');
+    let failed = false;
+    try {
+      await sleepOnce({
+        database: this.database,
+        memory: this.memory,
+        deep: this.deep,
+        config: {
+          name: agent.name,
+          model: agent.model,
+          thinkingLevel: agent.thinkingLevel,
+          baseUrl: connection.baseUrl,
+          apiKey: connection.apiKey,
+          channel: { id: agent.channels[0].id, kind: 'platform-chat', agentId },
+        },
+        subscriptionRuntime: connection.subscriptionRuntime,
+        activity,
+        signal: controller.signal,
+      });
+    } catch {
+      failed = true;
+      activity.record(
+        'error',
+        'Sleep failed',
+        'Changes saved before the failure are kept; it sleeps again next night.',
+      );
+    } finally {
+      this.sleepers.delete(agentId);
+      await activity.finish(controller.signal.aborted, failed, 'Sleep').catch(() => {});
+    }
+  }
+  private sleepers = new Map<string, AbortController>();
   async beforeDelete(agentId: string) {
+    this.sleepers.get(agentId)?.abort();
     this.deleting.add(agentId);
     this.forgetCompaction(agentId);
     await this.watches?.releasedBy(agentId);
@@ -1248,6 +1360,7 @@ ${preview.text}`
     // Again once its runs have settled: a turn still running may have set a watch or kept its context.
     await this.watches?.releasedBy(agentId);
     this.bases.delete(agentId);
+    this.cues.forget(agentId);
   }
   afterDelete(agentId: string) {
     this.deleting.delete(agentId);
@@ -1259,6 +1372,8 @@ ${preview.text}`
     this.closing = true;
     this.timers.close();
     this.heartbeats.close();
+    this.sleeper.close();
+    for (const controller of this.sleepers.values()) controller.abort();
     this.watcher?.close();
     this.watches?.close();
     this.recordings?.close();

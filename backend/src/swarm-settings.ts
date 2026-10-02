@@ -1,7 +1,7 @@
 import type { PlatformStore } from './platform-store';
 
 /**
- * Operator-wide settings: how many computers may exist, the file-storage limits and how long Discord history is kept. They live in the platform
+ * Operator-wide settings: how many computers may exist, the file-storage limits, how long Discord history is kept, recordings and memory caps. They live in the platform
  * database (one row) and are edited in Settings → Swarm; there are no environment variables for them.
  */
 export const swarmSettingBounds = {
@@ -21,6 +21,11 @@ export const swarmSettingBounds = {
   recordingTerminalFps: { min: 1, max: 30, default: 15, label: 'Terminal recording frame rate', unit: 'fps' },
   recordingPadBeforeMs: { min: 0, max: 30000, default: 500, label: 'Clip starts before an event', unit: 'ms' },
   recordingPadAfterMs: { min: 0, max: 30000, default: 500, label: 'Clip ends after an event', unit: 'ms' },
+  // Long-term memory (memorize): the index in every agent's system prompt, and each memory's size and count.
+  memoryIndexMaxLines: { min: 5, max: 500, default: 60, label: 'Memory index lines', unit: '' },
+  memoryIndexMaxChars: { min: 500, max: 40000, default: 4000, label: 'Memory index size', unit: 'chars' },
+  memoryMaxChars: { min: 200, max: 20000, default: 2000, label: 'Largest memory', unit: 'chars' },
+  memoryMaxCount: { min: 10, max: 10000, default: 1000, label: 'Memories per agent', unit: '' },
 } as const;
 export type SwarmSettingKey = keyof typeof swarmSettingBounds;
 export type SwarmSettings = Record<SwarmSettingKey, number>;

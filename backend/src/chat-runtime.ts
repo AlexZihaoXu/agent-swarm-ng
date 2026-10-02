@@ -31,6 +31,7 @@ import { SWARM_KNOWLEDGE_GUIDANCE } from './swarm-knowledge/plugin';
 import { COMPUTER_USE_GUIDANCE } from './computer-use/tools';
 import { accessOf, classify, type AgentTool } from './tool-access';
 import { createHelpTool } from './help-tool';
+import { memoryGuidance } from './memory/guidance';
 
 export type Channel = { id: string; kind: 'platform-chat' | 'agent-dm'; agentId: string };
 export type AgentMessageSource = {
@@ -72,6 +73,8 @@ export type ChatConfiguration = {
   heartbeat?: () => boolean;
   /** The owner's own instructions for this agent (Agents → agent → Instructions), last in its system prompt. */
   instructions?: string;
+  /** The agent's memory index (rebuilt when it sleeps), shown with the memory guidance when memory tools are granted. */
+  memoryIndex?: string;
   publishPeer?: (
     channelId: string,
     text: string,
@@ -467,6 +470,10 @@ export async function createChatSession(
   if (additionalTools.some(tool => tool.name === 'use_computer')) {
     const current = resources.getSystemPrompt() ?? '';
     resources.getSystemPrompt = () => `${current}\n\n${COMPUTER_USE_GUIDANCE}`;
+  }
+  if (additionalTools.some(tool => tool.name === 'recall')) {
+    const current = resources.getSystemPrompt() ?? '';
+    resources.getSystemPrompt = () => `${current}\n\n${memoryGuidance(config.memoryIndex ?? '')}`;
   }
   const instructions = config.instructions?.trim();
   if (instructions) {

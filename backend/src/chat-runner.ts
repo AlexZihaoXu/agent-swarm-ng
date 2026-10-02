@@ -1,4 +1,5 @@
 import {
+  estimateTokens,
   SessionManager,
   type AgentSession,
   type ModelRuntime,
@@ -18,6 +19,9 @@ import type { BackgroundCompactor } from './background-compaction';
 import { AgentSessionStore } from './agent-session-store';
 import type { ActivityStore } from './activity-store';
 import { forkBasis, type ForkBasis } from './computer-use/watch-judge';
+import { CUE_LIMITS, inputReminder, toolReminder, type CueRecall } from './memory/cues';
+import { MEMORY_TOOL_NAMES } from './memory/tools';
+import { lastNightNote, SAVE_BEFORE_FORGETTING } from './memory/guidance';
 
 export type InboxHooks = {
   prepare?: (messages: ChannelMessage[]) => Promise<ChannelMessage[]>;
@@ -35,6 +39,11 @@ export type InboxHooks = {
   heartbeat?: { branch: HeartbeatBranch; dropped: (note?: string) => Promise<void> };
   /** The agent is changing something (a w or rw tool call is about to run): its Discord status counts it. */
   wrote?: () => void;
+  /**
+   * Long-term memory: cue-driven recall on every input and tool call, a note to memorize before compaction drops
+   * details, and what the last sleep changed (told once; `lastNightTold` clears it).
+   */
+  memory?: { cues: CueRecall; lastNight?: string; lastNightTold?: () => Promise<void> };
   /** Background compaction: start a summary at atPercent of the context; report usage when the run ends. */
   compaction?: {
     compactor: BackgroundCompactor;
@@ -190,12 +199,42 @@ export async function runChat(
         if (promote('a new message arrived')) promotionNotice = heartbeatPromotion('a new message arrived');
       };
     }
+    // Cue-driven recall: a tool's arguments and result may bring memories to mind (one short line each, a few per turn).
+    const memory = hooks.memory;
+    const windowTokens = live.model?.contextWindow ?? 32768;
+    let cued = 0;
+    const cue = async (text: string, limit: number) => {
+      if (!memory) return [];
+      const hits = await memory.cues
+        .cue(channel.agentId, text, Math.min(limit, CUE_LIMITS.turn - cued), windowTokens)
+        .catch(() => []);
+      cued += hits.length;
+      return hits;
+    };
+    if (memory) {
+      const after = live.agent.afterToolCall;
+      live.agent.afterToolCall = async (context, callSignal) => {
+        const result = await after?.(context, callSignal);
+        if (MEMORY_TOOL_NAMES.has(context.toolCall.name) || cued >= CUE_LIMITS.turn) return result;
+        const content = result?.content ?? context.result.content;
+        const said = content.flatMap(part => (part.type === 'text' ? [part.text] : []));
+        // Image-only results are not cues; only the start of a long result is read.
+        if (!said.length) return result;
+        const hits = await cue(
+          `${JSON.stringify(context.args ?? {}).slice(0, 1024)}\n${said.join('\n').slice(0, CUE_LIMITS.scanChars)}`,
+          CUE_LIMITS.tool,
+        );
+        if (!hits.length) return result;
+        return { ...result, content: [...content, { type: 'text' as const, text: toolReminder(hits) }] };
+      };
+    }
     // Background compaction: a summary written while the agent works, applied between model calls.
     const background = hooks.sessionStore ? hooks.compaction : undefined;
     const agentId = channel.agentId;
     const applySummary = () => {
       const outcome = background?.compactor.splice(agentId, live);
       if (outcome === 'spliced') {
+        hooks.memory?.cues.reset(agentId);
         activity.record(
           'status',
           'Background compaction applied',
@@ -248,6 +287,7 @@ export async function runChat(
     reportContext();
     const detachSession = session.subscribe(event => {
       if (event.type === 'message_end') {
+        memory?.cues.advance(channel.agentId, estimateTokens(event.message));
         // Recovery can remove truncated/error responses from working context.
         // Preserve the observed outcome instead of inferring it from that context.
         if (event.message.role === 'assistant') lastStopReason = event.message.stopReason;
@@ -277,6 +317,14 @@ export async function runChat(
         const percent = live.getContextUsage()?.percent;
         if (percent != null && percent >= background.atPercent && background.compactor.start(agentId, live)) {
           summarizing = live;
+          // Save before forgetting: Pi holds this note until the current tool calls finish.
+          if (memory)
+            void live
+              .sendCustomMessage(
+                { customType: 'memory-save', display: false, content: SAVE_BEFORE_FORGETTING },
+                { triggerTurn: false },
+              )
+              .catch(() => {});
           activity.record(
             'status',
             'Background compaction started',
@@ -291,12 +339,22 @@ export async function runChat(
       detachActivity();
     };
     const main = session;
+    if (memory?.lastNight) {
+      await main.sendCustomMessage(
+        { customType: 'sleep-note', display: false, content: lastNightNote(memory.lastNight) },
+        { triggerTurn: false },
+      );
+      await hooks.sessionStore?.save(channel.agentId, main.sessionManager, { advancePublications: false });
+      await memory.lastNightTold?.();
+    }
     if (hooks.notices?.length) {
+      // Notices are non-chat events too: they may bring memories to mind.
+      const hits = await cue(hooks.notices.join('\n'), CUE_LIMITS.input);
       await main.sendCustomMessage(
         {
           customType: 'computer-release',
           display: false,
-          content: `Computer control notices (platform state, not a new human request):\n${hooks.notices.join('\n')}`,
+          content: `Computer control notices (platform state, not a new human request):\n${hooks.notices.join('\n')}${hits.length ? `\n${inputReminder(hits)}` : ''}`,
         },
         { triggerTurn: false },
       );
@@ -318,6 +376,13 @@ export async function runChat(
       published = 0;
       finalPublished = false;
       lastStopReason = undefined;
+      // Every input of the batch (messages and non-chat events alike) is a cue; a turn has a ceiling of reminders.
+      cued = 0;
+      const inputs: string[] = [];
+      for (const item of batch.messages) {
+        const hits = await cue(item.text, CUE_LIMITS.input);
+        inputs.push(`${channelInput(channel.id, item.text, item)}${hits.length ? `\n${inputReminder(hits)}` : ''}`);
+      }
       if (batch.note)
         await main.sendCustomMessage(
           { customType: 'interruption-decision', display: false, content: batch.note },
@@ -332,7 +397,7 @@ export async function runChat(
       }
       const interrupted = await inbox.during(
         async () => {
-          await main.prompt(batch.messages.map(item => channelInput(channel.id, item.text, item)).join('\n\n'), {
+          await main.prompt(inputs.join('\n\n'), {
             expandPromptTemplates: false,
           });
           if (!peerOnly && !finalPublished && !signal.aborted && !main.isStreaming && stopReason() === 'stop') {
@@ -478,6 +543,8 @@ export async function runChat(
           : 'Nothing changed; nothing was kept in its context.',
       );
       await heartbeat.dropped(heartbeat.branch.note).catch(() => {});
+      // Reminders shown in the dropped branch left with it.
+      hooks.memory?.cues.reset(channel.agentId);
     }
     if (session) {
       const ended = { ...forkBasis(session), messages: session.messages.slice(), streamingMessage: undefined };

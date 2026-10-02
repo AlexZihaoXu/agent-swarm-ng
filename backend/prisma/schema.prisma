@@ -99,6 +99,16 @@ model Agent {
   heartbeatTo        String          @default("")
   /// What the owner wants checked on each heartbeat (plain text).
   heartbeatChecklist String          @default("")
+  /// Long-term memory: the index (one line per memory) shown in its system prompt, rebuilt when it sleeps.
+  memoryIndex        String          @default("")
+  /// Sleep (memory reorganising) runs outside its active hours, or in this window when it is active all day.
+  sleepFrom          String          @default("03:00")
+  sleepTo            String          @default("05:00")
+  sleptAt            DateTime?
+  /// The saved-session archive position its last sleep covered (the next sleep starts there).
+  sleptPosition      Int             @default(0)
+  /// What the last sleep changed, told to the agent once at its next turn ("last night").
+  sleepNote          String          @default("")
   createdAt        DateTime          @default(now())
   channels         Channel[]
   dmAllowed        DmGrant[]         @relation("DmSenderGrant")
@@ -122,6 +132,49 @@ model Agent {
   discordMessages  DiscordMessage[]
   activity         Activity[]
   discordDmAllows  DiscordDmAllow[]
+  memories         AgentMemory[]
+}
+
+/// One long-term memory of an agent (memorize). Forgetting sets deletedAt (restorable); every earlier text is a
+/// version. Provenance: who caused it (by), how far that source is trusted, and where.
+model AgentMemory {
+  id             String    @id @default(uuid())
+  agentId        String
+  name           String
+  type           String
+  title          String
+  text           String
+  by             String
+  trust          String
+  channelId      String?
+  recalls        Int       @default(0)
+  lastRecalledAt DateTime?
+  /// Faded by sleep: out of the index, still recallable.
+  faded          Boolean   @default(false)
+  /// Sleep found it contradicts another memory it could not settle: ask when relevant.
+  conflict       Boolean   @default(false)
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  agent          Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  versions       AgentMemoryVersion[]
+
+  @@unique([agentId, name])
+  @@index([agentId, updatedAt])
+}
+
+/// A superseded version of a memory (its text before a change), and who changed it.
+model AgentMemoryVersion {
+  id        String      @id @default(uuid())
+  memoryId  String
+  title     String
+  text      String
+  type      String
+  changedBy String
+  createdAt DateTime    @default(now())
+  memory    AgentMemory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+
+  @@index([memoryId, createdAt])
 }
 
 // A one-shot watch on a claimed computer. Checks run in memory; the row only lets a restart (which releases claims
@@ -410,6 +463,10 @@ model SwarmSettings {
   recordingTerminalFps     Int @default(15)
   recordingPadBeforeMs     Int @default(500)
   recordingPadAfterMs      Int @default(500)
+  memoryIndexMaxLines      Int @default(60)
+  memoryIndexMaxChars      Int @default(4000)
+  memoryMaxChars           Int @default(2000)
+  memoryMaxCount           Int @default(1000)
   /// Host folders new computers keep their files in (Settings → Computers → Storage); null = Docker volumes.
   computerKeepFolder  String?
   computerCacheFolder String?
