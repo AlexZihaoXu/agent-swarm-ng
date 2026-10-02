@@ -164,7 +164,7 @@ export function createWatchTools(
     defineTool({
       name: 'watch_terminal',
       label: 'Watch terminal',
-      description: `Wake me when something happens in a terminal on the computer I hold, e.g. a long command or a coding agent finishes and waits at its prompt, a test run fails, a server prints "ready". Instead of waiting or re-viewing, set this and end your turn. ${facts}`,
+      description: `Wake me when something happens in a terminal on the computer I hold, e.g. a long command or a coding agent finishes and waits at its prompt, a test run fails, a server prints "ready". Instead of waiting or re-viewing, set this and end your turn. For Claude Code, use claude_code_listener_add instead (its own events, at once, no model checks; needs the Swarm assist plugin: practices/harnesses/claude-code). ${facts}`,
       parameters: Type.Object(
         {
           session: Type.String({
