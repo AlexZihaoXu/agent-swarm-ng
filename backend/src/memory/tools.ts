@@ -186,6 +186,8 @@ export function createMemoryTools({ memory, deep, agentId, provenance, shown, sl
         const trust = (source && source in SLEEP_SOURCE ? source : 'other') as Provenance['trust'];
         const from = sleep ? { by: SLEEP_SOURCE[trust], trust } : provenance!();
         const saved = await memory.memorize(agentId, { type: type as MemoryType, title, text }, from);
+        // It is in view now: no reminder of it until a third of the context has passed.
+        shown?.([saved.id]);
         sleep?.changed(`memorized ${saved.name}: ${saved.title}`);
         return result({
           saved: saved.name,
@@ -215,7 +217,8 @@ export function createMemoryTools({ memory, deep, agentId, provenance, shown, sl
       ),
       async execute(_id, { name, ...changes }) {
         if (!Object.values(changes).some(value => value !== undefined)) throw new Error('Say what to change.');
-        await memory.revise(agentId, name, changes, by, expected(name));
+        const revised = await memory.revise(agentId, name, changes, by, expected(name));
+        shown?.([revised.id]);
         sleep?.changed(
           `revised ${name}${changes.faded ? ' (faded from the index)' : ''}${changes.conflict ? ' (marked conflict)' : ''}`,
         );

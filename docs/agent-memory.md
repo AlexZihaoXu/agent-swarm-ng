@@ -50,7 +50,7 @@ Every input is a cue: chat messages, DMs, group posts, Discord batches, and **no
 - to a tool result: at most **2**, one short line each (`[Memory reminder: …]`, about 100 tokens);
 - at most **10** per turn (one batch of inputs and all its tool calls).
 
-Memory tools themselves and image-only results are never cues. A memory shown (or recalled by the agent) is not attached again until a third of the model's context window has passed; a compaction, or a dropped heartbeat, clears that, since the earlier mention left the context. Reminders count as recalls (the index favours memories in use).
+Memory tools themselves and image-only results are never cues. A memory shown (or recalled, read, memorized or revised by the agent) is not attached again until a third of the model's context window has passed; a compaction, or a dropped heartbeat, clears that, since the earlier mention left the context. Reminders count as recalls (the index favours memories in use).
 
 ## Save before forgetting
 

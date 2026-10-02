@@ -139,7 +139,10 @@ it('memorizes with the turn’s provenance and recalls it, marking it shown', as
         name: 'memorize',
         args: { type: 'preference', title: 'Owner wants tables', text: 'Compare options in a table.' },
       };
-    if (role === 'tool' && text.includes('saved')) return { name: 'recall', args: { query: 'tables' } };
+    // Right after memorizing, a tool call about the same thing brings no reminder of it (it is in view).
+    if (role === 'tool' && text.includes('saved'))
+      return { name: 'scratch_write', args: { path: 'cmp.md', content: 'owner wants tables' } };
+    if (role === 'tool' && text.includes('cmp.md')) return { name: 'recall', args: { query: 'tables' } };
     return undefined;
   });
   try {

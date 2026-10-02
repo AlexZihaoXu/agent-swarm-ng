@@ -50,8 +50,9 @@ const slug = (title: string) =>
     .normalize('NFKD')
     .replace(/[^\p{L}\p{N}]+/gu, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 48)
-    .replace(/-+$/, '') || 'memory';
+    // At most 48 characters, cut between words.
+    .replace(/^(.{1,48})(-.*)?$/, '$1')
+    .slice(0, 48) || 'memory';
 
 type Indexed = { memory: AgentMemory; title: Set<string>; text: Set<string> };
 

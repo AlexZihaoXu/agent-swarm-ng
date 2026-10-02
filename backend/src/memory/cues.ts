@@ -7,7 +7,7 @@ export const CUE_LIMITS = { input: 3, tool: 2, turn: 10, scanChars: 4096 };
 /**
  * Cue-driven recall (docs/agent-memory.md): every input (a message, a non-chat event) and every tool call (its
  * arguments and result) is a cue; the memories it brings to mind are attached as a small reminder, like a human being
- * reminded of something. Literal matching, no model call. A memory shown (or recalled by the agent) is not attached
+ * reminded of something. Literal matching, no model call. A memory shown (or recalled, memorized or revised by the agent) is not attached
  * again until a third of the context window has passed since; a compaction clears that, as the mention left view.
  */
 export class CueRecall {

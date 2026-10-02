@@ -37,6 +37,12 @@ it('memorizes typed memories with provenance, unique names, and refuses secrets 
       owner,
     );
     expect(second.name).toBe('sam-prefers-short-replies-2');
+    const long = await memory.memorize(
+      agent.id,
+      { type: 'person', title: 'Owner Alex Bot tests capabilities and asks how tools were used', text: 'x' },
+      owner,
+    );
+    expect(long.name).toBe('owner-alex-bot-tests-capabilities-and-asks-how');
     // Another agent's memories are separate.
     expect(
       (await memory.memorize(other.id, { type: 'project', title: 'Sam prefers short replies', text: 'z' }, owner)).name,
@@ -55,7 +61,7 @@ it('memorizes typed memories with provenance, unique names, and refuses secrets 
     await expect(
       memory.memorize(agent.id, { type: 'project', title: 'Long', text: 'a'.repeat(201) }, owner),
     ).rejects.toThrow('at most 200 characters');
-    for (let i = 0; i < 8; i++)
+    for (let i = 0; i < 7; i++)
       await memory.memorize(agent.id, { type: 'project', title: `Item ${i}`, text: 'x' }, owner);
     await expect(
       memory.memorize(agent.id, { type: 'project', title: 'One too many', text: 'x' }, owner),
