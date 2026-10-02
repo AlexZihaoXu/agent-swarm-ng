@@ -14836,6 +14836,16 @@
             "in": "query",
             "name": "limit",
             "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "organizationId",
+            "required": false
           }
         ],
         "responses": {

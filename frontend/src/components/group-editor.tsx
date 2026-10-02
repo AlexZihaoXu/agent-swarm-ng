@@ -1,3 +1,4 @@
+import { MoveToOrganization, OrganizationField, useCreateOrganization } from '@/components/organization-fields';
 import { useRef, useState, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
@@ -34,13 +35,16 @@ export function GroupEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const client = useQueryClient();
+  // Its organization: a group's members are all in it (docs/organizations.md).
+  const creating = useCreateOrganization();
+  const organizationId = group?.organizationId ?? creating.value;
   const options = useInfiniteQuery({
-    queryKey: ['group-member-options', search],
-    enabled: open,
+    queryKey: ['group-member-options', search, organizationId],
+    enabled: open && Boolean(organizationId),
     initialPageParam: undefined as number | undefined,
     queryFn: async ({ pageParam, signal }) => {
       const { data, error } = await api.GET('/api/agents', {
-        params: { query: { after: pageParam, search: search || undefined, limit: 50 } },
+        params: { query: { after: pageParam, search: search || undefined, limit: 50, organizationId } },
         signal,
       });
       if (error || !data) throw new Error('Could not load agents.');
@@ -70,14 +74,14 @@ export function GroupEditor({
     });
   const [picking, setPicking] = useState(false);
   const save = async () => {
-    if (saving || !name.trim() || !selected.size) return;
+    if (saving || !name.trim() || !selected.size || !organizationId) return;
     setSaving(true);
     setError('');
     try {
       const body = { name: name.trim(), agentIds: [...selected] };
       const result = group
         ? await api.PATCH('/api/groups/{id}', { params: { path: { id: group.id } }, body })
-        : await api.POST('/api/groups', { body });
+        : await api.POST('/api/groups', { body: { ...body, organizationId } });
       if (result.error || !result.data) throw new Error(result.error?.message ?? 'Could not save the group.');
       void client.invalidateQueries({ queryKey: ['groups'] });
       client.setQueryData(['group', result.data.id], result.data);
@@ -135,6 +139,17 @@ export function GroupEditor({
                 className="h-11 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9"
               />
             </label>
+            {!group && (
+              <OrganizationField
+                value={creating.value}
+                onChange={id => {
+                  // Members belong to the group's organization: a new choice starts the list again.
+                  creating.setValue(id);
+                  setSelected(new Set());
+                }}
+                disabled={saving}
+              />
+            )}
             {/* Chosen agents in a short list (Kibo scroll-area-layout-1); the rest behind Add agents. */}
             <div role="group" aria-labelledby="group-agents-title" className="space-y-2">
               <div className="flex min-w-0 items-center justify-between gap-2">
@@ -221,6 +236,19 @@ export function GroupEditor({
                 {error}
               </p>
             )}
+            {group && (
+              <MoveToOrganization
+                kind="group"
+                id={group.id}
+                name={group.name}
+                organizationId={group.organizationId}
+                onMoved={() => {
+                  void client.invalidateQueries({ queryKey: ['groups'] });
+                  void client.invalidateQueries({ queryKey: ['group', group.id] });
+                  setOpen(false);
+                }}
+              />
+            )}
             {group && onDelete && (
               <Button
                 type="button"
@@ -241,7 +269,11 @@ export function GroupEditor({
                   Cancel
                 </Button>
               </Dialog.Close>
-              <Button type="submit" className="min-h-11 sm:min-h-0" disabled={saving || !name.trim() || !selected.size}>
+              <Button
+                type="submit"
+                className="min-h-11 sm:min-h-0"
+                disabled={saving || !name.trim() || !selected.size || !organizationId}
+              >
                 {saving ? 'Saving…' : group ? 'Save changes' : 'Create group'}
               </Button>
             </div>

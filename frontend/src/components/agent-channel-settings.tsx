@@ -13,8 +13,11 @@ export function AgentChannelSettings({
   known,
   onChange,
   disabled,
+  organizationId,
 }: {
   agentId: string;
+  /** Only agents of this organization can be allowed (DMs never cross organizations). */
+  organizationId?: string;
   screen: 'channels' | 'swarm' | 'dm';
   peerId?: string;
   onNavigate: (next: 'channels' | 'swarm' | Peer) => void;
@@ -46,7 +49,7 @@ export function AgentChannelSettings({
     setError('');
     try {
       const { data, error } = await api.GET('/api/agents', {
-        params: { query: { search: query, after, limit: 50 } },
+        params: { query: { search: query, after, limit: 50, ...(organizationId ? { organizationId } : {}) } },
         signal: controller.signal,
       });
       if (controller.signal.aborted) return;
@@ -76,7 +79,7 @@ export function AgentChannelSettings({
       clearTimeout(timer);
       request.current?.abort();
     };
-  }, [query, agentId, known]);
+  }, [query, agentId, known, organizationId]);
   const page = typeof screen === 'string' ? screen : screen.id;
   return (
     <div className="space-y-4 overflow-hidden">

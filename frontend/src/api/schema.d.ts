@@ -4982,6 +4982,7 @@ export interface operations {
                 search?: string;
                 after?: number;
                 limit?: number;
+                organizationId?: string;
             };
             header?: never;
             path?: never;

@@ -316,7 +316,7 @@ export function registerChat(
     },
   );
 
-  app.get<{ Querystring: { after?: number; limit?: number; search?: string } }>(
+  app.get<{ Querystring: { after?: number; limit?: number; search?: string; organizationId?: string } }>(
     '/api/agents',
     {
       schema: {
@@ -325,13 +325,20 @@ export function registerChat(
           search: Type.Optional(Type.String({ maxLength: 80 })),
           after: Type.Optional(Type.Integer({ minimum: 1 })),
           limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
+          /** Only this organization's agents (e.g. those an agent may be allowed to DM). */
+          organizationId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
         }),
         response: { 200: Type.Object({ agents: Type.Array(Agent), nextCursor: Cursor }) },
       },
     },
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
-      const page = await database.listAgents(request.query.after, request.query.limit, request.query.search);
+      const page = await database.listAgents(
+        request.query.after,
+        request.query.limit,
+        request.query.search,
+        request.query.organizationId,
+      );
       const files = await channelFiles.forMessages(
         'chat',
         page.agents.flatMap(agent => (agent.channels[0].messages[0] ? [agent.channels[0].messages[0].id] : [])),

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { computersQuery } from '@/lib/computers-query';
 import * as Tabs from '@radix-ui/react-tabs';
@@ -44,6 +44,8 @@ import { listTime } from '@/lib/format-time';
 import { SidebarSearch } from '@/components/sidebar-search';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Portal, PortalButton, usePortalShortcut } from '@/components/portal';
+import { OrganizationSwitcher } from '@/components/organization-switcher';
+import { useOrganizations } from '@/lib/organizations';
 import { PortalWindows } from '@/components/portal-windows';
 import type { ComputerAgentState } from '@/components/computer-control';
 import { ConversationRow } from '@/components/conversation-row';
@@ -121,7 +123,7 @@ const emptyAgent: ChatAgent = { id: '', name: '', initials: '', time: '', channe
 
 export function App() {
   const {
-    agents,
+    agents: allAgents,
     conversations,
     drafts,
     busy,
@@ -154,6 +156,30 @@ export function App() {
     activityHistory,
     compactions,
   } = useChat();
+  // Organizations: the dashboard shows the chosen one's agents (docs/organizations.md).
+  const { inScope, setCurrent, current: organization } = useOrganizations();
+  // Switching organization swaps the lists below the header: a short fade marks it (nothing remounts, so drafts and
+  // scroll positions stay). Skipped on the first render and with reduced motion.
+  const tabsRoot = useRef<HTMLDivElement>(null);
+  const shownOrganization = useRef(organization);
+  useEffect(() => {
+    if (shownOrganization.current === organization) return;
+    shownOrganization.current = organization;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    tabsRoot.current?.querySelectorAll<HTMLElement>(':scope > [role="tabpanel"]').forEach(panel =>
+      panel.animate(
+        [
+          { opacity: 0.35, transform: 'translateY(4px)' },
+          { opacity: 1, transform: 'none' },
+        ],
+        {
+          duration: 180,
+          easing: 'ease-out',
+        },
+      ),
+    );
+  }, [organization]);
+  const agents = useMemo(() => allAgents.filter(item => inScope(item.real?.organizationId)), [allAgents, inScope]);
   const location = useLocation();
   const navigate = useNavigate();
   const route = parseDashboardPath(location.pathname);
@@ -259,14 +285,28 @@ export function App() {
   useEffect(() => {
     if (
       !route.agentId ||
-      agents.some(item => item.id === route.agentId) ||
+      allAgents.some(item => item.id === route.agentId) ||
       agentsLoading ||
       agentsFailed ||
       agentsCursor === null
     )
       return;
     void loadAgents(agentsCursor);
-  }, [route.agentId, agents, agentsLoading, agentsFailed, agentsCursor]);
+  }, [route.agentId, allAgents, agentsLoading, agentsFailed, agentsCursor]);
+  // A link to an agent of another organization (a bookmark, a floating chat) switches to its organization, once per
+  // route; switching organization leaves an agent of another one (back to the list).
+  const followed = useRef('');
+  useEffect(() => {
+    const target = route.agentId ? allAgents.find(item => item.id === route.agentId) : undefined;
+    if (!target?.real || followed.current === target.id) return;
+    followed.current = target.id;
+    if (!inScope(target.real.organizationId)) setCurrent(target.real.organizationId);
+  }, [route.agentId, allAgents]);
+  useEffect(() => {
+    if (!route.agentId || agents.some(item => item.id === route.agentId)) return;
+    if (allAgents.some(item => item.id === route.agentId))
+      navigate(route.tab === 'chat' ? '/chat' : '/agents', { replace: true });
+  }, [organization]);
   // Old Agents peer bookmarks now open their conversation in Chat.
   useEffect(() => {
     if (route.kind === 'agent-dm' && route.agentId && route.peerId)
@@ -294,7 +334,8 @@ export function App() {
   const [replyTargets, setReplyTargets] = useState<Record<string, ChatMessage>>({});
   const pendingReplyAcks = useRef(new Map<string, { channelId: string; targetId: string }>());
   // Server-side, like the Chat sidebar: a client-side filter would miss agents beyond the loaded page.
-  const { agents: visibleAgents, query: agentSearch, term: searchTerm } = useAgentSearch(search, agents);
+  const { agents: searched, query: agentSearch, term: searchTerm } = useAgentSearch(search, agents);
+  const visibleAgents = searched.filter(item => inScope(item.real?.organizationId));
   const agent = route.agentId
     ? (agents.find(item => item.id === route.agentId) ?? emptyAgent)
     : (agents[0] ?? emptyAgent);
@@ -611,6 +652,7 @@ export function App() {
     <main className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background">
       <h1 className="sr-only">Agent Swarm NG</h1>
       <Tabs.Root
+        ref={tabsRoot}
         value={activeTab}
         onValueChange={changeTab}
         className="flex min-h-0 flex-1 flex-col"
@@ -623,11 +665,14 @@ export function App() {
               narrowDetail && 'max-md:hidden',
             )}
           >
+            {/* The organization shown: at the header's left; on a phone a badge beside the floating tabs. */}
+            <OrganizationSwitcher compact className="pointer-events-auto mr-2 md:hidden" />
+            <OrganizationSwitcher className="pointer-events-auto hidden md:absolute md:left-4 md:flex" />
             {/* Basic Tabs composition: Kibo tabs/standard/tabs-standard-1, floating without a footer on phones. */}
             <Tabs.List
               aria-label="Main navigation"
               ref={tabList}
-              className="pointer-events-auto relative isolate grid h-[50px] w-[min(23rem,calc(100vw-2rem-58px))] grid-cols-4 items-center rounded-lg border border-border bg-muted p-[3px] shadow-lg md:flex md:h-9 md:w-auto md:gap-0.5 md:border-0 md:p-1 md:shadow-none"
+              className="pointer-events-auto relative isolate grid h-[50px] w-[min(23rem,calc(100vw-2rem-116px))] grid-cols-4 items-center rounded-lg border border-border bg-muted p-[3px] shadow-lg md:flex md:h-9 md:w-auto md:gap-0.5 md:border-0 md:p-1 md:shadow-none"
             >
               <span
                 aria-hidden="true"

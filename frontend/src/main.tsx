@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes } from 'react-router';
 import { LazyMotion, MotionConfig } from 'motion/react';
 import { App } from './app';
+import { OrganizationsProvider } from './lib/organizations';
 import './styles.css';
 
 export const queryClient = new QueryClient();
@@ -24,11 +25,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       {/* Motion follows the operator's reduced-motion setting everywhere; features load after first paint. */}
       <MotionConfig reducedMotion="user">
         <LazyMotion strict features={() => import('./lib/motion-features').then(module => module.default)}>
-          <BrowserRouter>
-            <Routes>
-              <Route path="*" element={<App />} />
-            </Routes>
-          </BrowserRouter>
+          <OrganizationsProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="*" element={<App />} />
+              </Routes>
+            </BrowserRouter>
+          </OrganizationsProvider>
         </LazyMotion>
       </MotionConfig>
     </QueryClientProvider>

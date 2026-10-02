@@ -3,7 +3,16 @@ import { api } from '@/api/client';
 import type { RegisterSection } from '@/lib/settings-sections';
 
 // Kibo checkbox-standard-8: vertical list with native labels, matching Channels.
-export function AgentComputerSettings({ agentId, register }: { agentId: string; register: RegisterSection }) {
+export function AgentComputerSettings({
+  agentId,
+  organizationId,
+  register,
+}: {
+  agentId: string;
+  /** Only computers of the agent's organization can be assigned to it. */
+  organizationId?: string;
+  register: RegisterSection;
+}) {
   const [computers, setComputers] = useState<{ id: string; name: string; state: string }[]>([]);
   // One preview timestamp for all cards, refreshed slowly: enough to recognise a desktop at a glance.
   const [frame, setFrame] = useState(() => Date.now());
@@ -32,7 +41,9 @@ export function AgentComputerSettings({ agentId, register }: { agentId: string; 
         if (controller.signal.aborted) return;
         if (!all.data || !assigned.data) throw new Error('Could not load computer assignments.');
         const ids = assigned.data.computers.map(computer => computer.id);
-        setComputers(all.data.computers);
+        setComputers(
+          all.data.computers.filter(computer => !organizationId || computer.organizationId === organizationId),
+        );
         setSelected(ids);
         setSaved(ids);
         setLoaded(true);
@@ -84,8 +95,8 @@ export function AgentComputerSettings({ agentId, register }: { agentId: string; 
       <div>
         <h3 className="text-lg font-semibold">Computers</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Choose the computers this agent may use for desktop, file, and shell tools. Several agents can be assigned;
-          only one agent holds control at a time.
+          Choose the computers this agent may use for desktop, file, and shell tools (computers of its organization).
+          Several agents can be assigned; only one agent holds control at a time.
         </p>
       </div>
       <div className="space-y-4 rounded-lg border border-border bg-sidebar/30 p-4">

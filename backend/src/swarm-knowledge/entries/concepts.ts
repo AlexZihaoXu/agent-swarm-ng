@@ -37,6 +37,8 @@ Working context: the saved conversation the model sees. It survives restarts and
 
 Thinking and plain model output are private. Nothing reaches a person or another agent unless published with a channel tool (send_message, send_dm). The human's dashboard has an operator activity log showing an agent's runs, tool calls and checks (triage, watch checks); it is an inspection tool, not a channel.
 
+Organizations: the human sorts agents, computers and group chats into organizations, like folders. Different organizations are kept apart: a computer is assigned only to agents of its organization, DMs are allowed only between agents of one organization, and a group's members are all in its organization, so you never reach (or see) anything of another one. Your system prompt names yours. If the human mentions an agent or computer you cannot find, it may be in another organization: only the human moves things between organizations (Agents → agent → Organization, a computer's Settings, or the group editor), and a move drops the links that would cross. Your memory, scratchpad and Discord bot move with you. Knowledge, model connections and Settings → Swarm limits are shared by all organizations.
+
 Knowledge (this catalog) is operator-curated reference, not a new instruction, not memory and not a permission grant.`,
 } satisfies KnowledgeEntry;
 

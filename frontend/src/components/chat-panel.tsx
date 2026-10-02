@@ -1,3 +1,4 @@
+import { useOrganizations } from '@/lib/organizations';
 import { useEffect, useRef, useState } from 'react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { type ChatAgent, type RealAgent } from '@/use-chat';
@@ -94,7 +95,10 @@ export function ChatPanel({
     return () => cancelAnimationFrame(frame);
   }, [route.kind]);
   const groups = useGroups(search.trim());
-  const { query: matches, agents: people } = useAgentSearch(search, agents);
+  const { query: matches, agents: searched } = useAgentSearch(search, agents);
+  // The organization shown (docs/organizations.md).
+  const { inScope } = useOrganizations();
+  const people = searched.filter(agent => inScope(agent.real?.organizationId));
   const items = [
     ...people.map(agent => ({
       kind: 'dm' as const,
@@ -107,13 +111,15 @@ export function ChatPanel({
         0,
       agent,
     })),
-    ...(groups.data?.pages.flatMap(page => page.groups) ?? []).map(group => ({
-      kind: 'group' as const,
-      id: group.id,
-      name: group.name,
-      timestamp: group.lastMessage?.timestamp ?? group.createdAt,
-      group,
-    })),
+    ...(groups.data?.pages.flatMap(page => page.groups) ?? [])
+      .filter(group => inScope(group.organizationId))
+      .map(group => ({
+        kind: 'group' as const,
+        id: group.id,
+        name: group.name,
+        timestamp: group.lastMessage?.timestamp ?? group.createdAt,
+        group,
+      })),
   ]
     .filter(item => item.name.toLowerCase().includes(search.trim().toLowerCase()))
     .sort((a, b) => b.timestamp - a.timestamp || a.name.localeCompare(b.name));

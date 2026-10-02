@@ -1,5 +1,6 @@
 import { AgentScratchpad } from '@/components/agent-scratchpad';
 import { AgentMemory } from '@/components/agent-memory';
+import { MoveToOrganization } from '@/components/organization-fields';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import { surface } from '@/lib/motion';
@@ -83,7 +84,7 @@ export function EditAgentForm({
       }
     })();
     return () => controller.abort();
-  }, [agent.id, attempt]);
+  }, [agent.id, attempt, agent.real?.organizationId]);
   const dirty =
     !sameAvatar(avatar, savedAvatar) ||
     allowed.length !== savedAllowed.length ||
@@ -213,6 +214,7 @@ export function EditAgentForm({
                   }
                   selected={allowed}
                   known={known}
+                  organizationId={agent.real?.organizationId}
                   onChange={ids => {
                     setAllowed(ids);
                     setSaved(false);
@@ -256,7 +258,12 @@ export function EditAgentForm({
                 register={register}
               />
             )}
-            <AgentComputerSettings key={agent.id} agentId={agent.id} register={register} />
+            <AgentComputerSettings
+              key={`${agent.id}:${agent.real?.organizationId}`}
+              agentId={agent.id}
+              organizationId={agent.real?.organizationId}
+              register={register}
+            />
             {agent.real && <AgentScratchpad agentId={agent.id} agentName={agent.name} />}
             {agent.real && (
               <AgentMemory key={`memory:${agent.id}`} agentId={agent.id} agentName={agent.name} register={register} />
@@ -280,6 +287,25 @@ export function EditAgentForm({
                 collapsible={false}
               />
             </section>
+            {agent.real && (
+              <section aria-label="Organization" className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold">Organization</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Agents, computers and group chats in different organizations are kept apart.
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-sidebar/30 p-4">
+                  <MoveToOrganization
+                    kind="agent"
+                    id={agent.id}
+                    name={agent.name}
+                    organizationId={agent.real.organizationId}
+                    onMoved={organizationId => onModelSaved({ ...agent.real!, organizationId })}
+                  />
+                </div>
+              </section>
+            )}
             <section aria-label="Danger zone" className="space-y-4">
               <div>
                 <h3 className="text-lg font-semibold">Delete agent</h3>

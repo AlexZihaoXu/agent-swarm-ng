@@ -124,6 +124,22 @@ export const test = base.extend({
       route.fulfill({ json: { entries: [], nextCursor: null, contextUsage: null } }),
     );
     await page.route('**/api/agents/*/computers', route => route.fulfill({ json: { computers: [] } }));
+    await page.route(/\/api\/organizations$/, route =>
+      route.fulfill({
+        json: {
+          organizations: [
+            {
+              id: 'personal',
+              name: 'Personal',
+              createdAt: '2030-01-01T00:00:00.000Z',
+              agents: 4,
+              computers: 0,
+              groups: 0,
+            },
+          ],
+        },
+      }),
+    );
     await page.route(/\/api\/agents\/[^/]+\/memory$/, route =>
       route.fulfill({
         json: {

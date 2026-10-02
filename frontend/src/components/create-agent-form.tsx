@@ -7,6 +7,7 @@ import { AgentAvatarPreview } from '@/components/agent-avatar-preview';
 import { randomizeAvatar } from '@/lib/agent-avatar';
 import type { RealAgent } from '@/use-chat';
 import { useModelSelection } from '@/use-model-selection';
+import { OrganizationField, useCreateOrganization } from '@/components/organization-fields';
 
 const fieldClass =
   'h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:h-10';
@@ -21,6 +22,8 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
   const [createError, setCreateError] = useState('');
   const error = createError || choice.error;
   const creation = useRef<AbortController | null>(null);
+  // Into the organization shown, or the one chosen while showing all (docs/organizations.md).
+  const organization = useCreateOrganization();
   useEffect(() => () => creation.current?.abort(), []);
 
   async function create() {
@@ -30,7 +33,14 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
     creation.current = controller;
     try {
       const { data, error } = await api.POST('/api/agents', {
-        body: { name: name.trim(), endpointId, model, thinkingLevel: thinking, avatar },
+        body: {
+          name: name.trim(),
+          endpointId,
+          model,
+          thinkingLevel: thinking,
+          avatar,
+          ...(organization.value ? { organizationId: organization.value } : {}),
+        },
         signal: controller.signal,
       });
       if (controller.signal.aborted) return;
@@ -131,6 +141,7 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
               : 'Pi model capabilities; reasoning support depends on the selected provider.'}
           </p>
         </div>
+        <OrganizationField value={organization.value} onChange={organization.setValue} disabled={creating} />
       </fieldset>
       {error && (
         <p role="alert" className="mt-4 text-sm">
@@ -159,7 +170,7 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
           type="submit"
           size="sm"
           className="min-h-11 sm:min-h-0"
-          disabled={creating || !name.trim() || !model || !levels.includes(thinking)}
+          disabled={creating || !name.trim() || !model || !levels.includes(thinking) || !organization.ready}
         >
           {creating ? 'Creating…' : 'Create agent'}
         </Button>

@@ -1,3 +1,4 @@
+import { useOrganizations } from '@/lib/organizations';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Command } from 'cmdk';
@@ -136,7 +137,17 @@ export function Portal({
   }, [open]);
   const query = useSettled(text.trim());
 
-  const computers = useQuery({ ...computersQuery, enabled: open });
+  const computersData = useQuery({ ...computersQuery, enabled: open });
+  // Portal searches the organization shown (docs/organizations.md); its agents prop is already scoped.
+  const { inScope } = useOrganizations();
+  const computers = useMemo(
+    () => ({
+      data: computersData.data && {
+        computers: computersData.data.computers.filter(computer => inScope(computer.organizationId)),
+      },
+    }),
+    [computersData.data, inScope],
+  );
   const running = (computers.data?.computers ?? []).filter(computer => computer.state === 'running');
   const terminals = useQueries({
     queries: running.slice(0, 20).map(computer => ({ ...terminalSessionsQuery(computer.id), enabled: open })),
@@ -150,6 +161,7 @@ export function Portal({
       const { data } = await api.GET('/api/groups', { params: { query: {} }, signal });
       return data?.groups ?? [];
     },
+    select: list => list.filter(group => inScope(group.organizationId)),
   });
   const knowledge = useQuery({
     queryKey: ['portal-knowledge', query],
@@ -252,9 +264,13 @@ export function Portal({
         path: knowledgePath(entry.id),
         found: entry.found,
       });
+    const scopedGroups = new Set((groups.data ?? []).map(group => group.id));
     for (const file of files.data?.files ?? []) {
       const [kind, a, b] = file.channelKey.split(':');
       const owner = kind === 'chat' ? byChannel.get(a) : undefined;
+      // Only files of chats in the organization shown.
+      if (kind === 'chat' ? !owner : kind === 'group' ? !scopedGroups.has(a) : !agents.some(agent => agent.id === a))
+        continue;
       const path =
         kind === 'chat' && owner
           ? chatAgentPath(owner.id)
@@ -272,7 +288,7 @@ export function Portal({
         found: true,
       });
     }
-    for (const file of files.data?.scratch ?? [])
+    for (const file of (files.data?.scratch ?? []).filter(item => agents.some(agent => agent.id === item.agentId)))
       out.push({
         id: `file:scratch:${file.agentId}:${file.path}`,
         kind: 'file',

@@ -81,11 +81,12 @@ export class PlatformStore {
     // Foreign keys cascade to the agent's channels and messages in the same statement.
     return (await this.client.agent.deleteMany({ where: { id, name } })).count > 0;
   }
-  async listAgents(after?: number, limit = 100, search?: string) {
+  async listAgents(after?: number, limit = 100, search?: string, organizationId?: string) {
     await this.initialize();
     const rows = await this.client.agent.findMany({
       where: {
         ...(after ? { sequence: { gt: after } } : {}),
+        ...(organizationId ? { organizationId } : {}),
         ...(search?.trim() ? { name: { contains: search.trim() } } : {}),
       },
       orderBy: { sequence: 'asc' },

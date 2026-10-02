@@ -22,6 +22,8 @@ Main tabs, in order: Agents, Chat, Computers, Settings (a bar at the top on a co
 
 Portal (Ctrl+K, ⌘K on a Mac, or the "Portal" search button at the top right; on a phone the round search button beside the tab pill): one search over agents, chats, computers and their terminals, pages, files (chat files and agents' scratchpads, by name), Knowledge and commands. A prefix narrows it: @ agents, # chats, : computers and terminals, / pages, > commands (new agent, new group, new computer, stop a working agent), ? Knowledge; the empty Portal shows them as chips to click. Enter pulls an agent chat, a terminal or a computer's desktop out as a floating window over any page (on a phone it opens the page); Shift+Enter goes to its page instead; Esc closes. Floating windows: drag by the title bar, resize from any edge, red light closes, yellow light minimizes into the dock at the bottom (click to bring back); they stay open when changing pages and remember where they were (not after a reload). A floating desktop starts with input locked: its lock button lets the human use it. While a computer's desktop or terminal has the keyboard, Ctrl+K goes to the computer instead; click outside it or use the button.
 
+Organizations: the switcher at the top left (on a phone, the square badge left of the tab pill) shows the current organization with its counts of agents and computers; click it to switch to another one or "All organizations", or "New organization". It scopes Agents, Chat, Computers and Portal to that organization, and new agents, computers and groups go into it (while showing all, their create dialogs ask "Organization"). The choice is per browser. Opening an agent of another organization switches to it.
+
 Addresses: /agents (agents and their settings), /chat (conversations), /computers (computers and their viewers), /settings (model connections and the Knowledge browser, /settings/knowledge).
 
 Only the human can (agents have no tools for these): create, edit and delete agents; allow agent-to-agent DMs; assign computers to agents; create, power on/off, configure and delete computers; force release a computer; create and edit groups; connect model providers. Agents can explain how.
@@ -30,7 +32,7 @@ Topics:
 - practices/dashboard/agents: create an agent, its settings (DMs, model, computers, avatar), delete, the activity log.
 - practices/dashboard/computers: create, power, settings, delete; the desktop viewer, input lock, terminals, floating windows, force release, file browser.
 - practices/dashboard/chat: private chat, stopping an agent, viewing agent DMs and Discord channels, groups, reactions and replies.
-- practices/dashboard/settings: ChatGPT/Codex subscription, OpenRouter and other endpoints, the Knowledge browser.
+- practices/dashboard/settings: organizations, ChatGPT/Codex subscription, OpenRouter and other endpoints, the Knowledge browser.
 
 Not in the app: any view of agents' timers, reminders or watches (agents list them with list_timers; reminder records can appear in a run's collapsed "Details" in the activity log); per-tool switches or system-prompt editing; theme, notification or user-account settings; uploading or deleting files through the file browser; editing Knowledge.`,
 } satisfies KnowledgeEntry;
@@ -55,6 +57,7 @@ Agent settings (/agents/<id>), sections in order, with jump links in the header:
    Heartbeat: "Wake up periodically" on/off, "Every (minutes)" (5–1440, default 30, counted from the agent's last turn), "Active from"/"Until" (server time; both empty for all day) and "What to check" (a checklist). A heartbeat that changes nothing is dropped and only shows in the agent's Activity; its first action makes it a normal turn.
 3. Computers: cards of all computers (previews refresh about every 10 s); click a card to tick or untick it. This is where computers are assigned (not on the Computers tab). A stopped computer can be ticked (it shows "Desktop offline") but cannot be used until powered on. With no computers it says "No computers yet. Create one in Computers first."
 4. Scratchpad: a read-only browser of the agent's scratch files (folders, sizes, a text or image preview, usage against the limits); it refreshes as the agent writes. Ask the agent to change them.
+   Organization: "In <organization>", and "Move to…" with Move: the confirmation lists what the move drops (computers no longer assigned, DMs no longer allowed, groups it leaves). The dashboard follows it to its new organization.
    Memory: what the agent remembers long term (concepts/memory). When it last slept and "Sleep now"; when it sleeps (outside its Heartbeat active hours while the heartbeat is on, or "Sleeps from"/"Until" when it is active all day, default 03:00–05:00, saved with Save changes); "Last night" (what its last sleep changed); type chips with counts (All, Person, Preference, Project, Skill, Reference, Forgotten); a list of memories (title, a line of text, type, who caused it, date; conflict or faded marks). Click one for its full text, where it came from and how often it was recalled, Edit (title, type, text; "Save memory"), Forget (it moves to Forgotten, where Restore brings it back), "Back in the index" for a faded one, and "Earlier versions" with "Restore this version". "Index <agent> sees" shows its index; "Erase all memory" deletes everything it remembers after a confirmation.
 5. Avatar: preview (idle/working/typing), variations, randomize, undo, shape, colour, eyes, mouth, markings, accessory, accent colour, fine-tune sliders.
 6. Delete agent.
@@ -87,7 +90,7 @@ Create a computer: "Create computer" (or right-click empty space → New compute
 
 Power: ⋯ → Power on (starts at once) / Power off (asks to confirm, and warns if an agent is using it). Powering off ends its terminals and running programs; files on its disk remain. After the host machine restarts, computers that were on start again by themselves; ones powered off stay off.
 
-Settings: ⋯ → Settings. CPU and memory apply live. Storage shows where the computer's Keep and Cache folders are and how much they hold, with Clear cache (while it is off), "Also keep" (extra folders or files to keep beyond the home folder, such as /var/lib/postgresql) and, when the card says "Update available", "Update to the latest computer image". Changing the timezone, what it keeps, or its image rebuilds the computer: power it off, tick the confirmation and press "Rebuild stopped computer" (its kept files stay; apt packages are reinstalled at its next start).
+Settings: ⋯ → Settings. Organization: "In <organization>" and "Move to…" with Move (the confirmation lists the agents that lose their assignment; it releases one holding it). CPU and memory apply live. Storage shows where the computer's Keep and Cache folders are and how much they hold, with Clear cache (while it is off), "Also keep" (extra folders or files to keep beyond the home folder, such as /var/lib/postgresql) and, when the card says "Update available", "Update to the latest computer image". Changing the timezone, what it keeps, or its image rebuilds the computer: power it off, tick the confirmation and press "Rebuild stopped computer" (its kept files stay; apt packages are reinstalled at its next start).
 
 Delete: ⋯ → Remove → type the name into "Confirm computer name" → "Delete computer".
 
@@ -124,7 +127,7 @@ Agent-to-agent DMs: read-only. Pick the other agent in the header's "Chat with" 
 
 Discord: read-only too. The same "Chat with" menu lists the agent's Discord places ("Discord #channel", "Discord › thread", "Discord DM name"; /chat/agents/<id>/discord/<channelId>) and shows what its bot saw there: the human's own Discord accounts as "You", the agent as itself, others with "· bot" or "· agent", and "edited", "deleted" or "attached <file>" under a message. Files agents opened from it are in the folder icon. The human posts on Discord itself; the agent posts through its bot. Saved messages are kept for Settings → Swarm → "Discord history kept" days.
 
-Groups: + (or right-click → Create group chat) → Group name, then "Add agents" (a search; choose up to 16, then Done; the chosen ones are listed with × to remove) → "Create group". The group header lists members and has Edit group (rename, change members, "Delete group chat"). Stop in a group stops every member's run started from that group. Group membership does not allow members to DM each other.
+Groups: + (or right-click → Create group chat) → Group name, then "Add agents" (a search; choose up to 16, then Done; the chosen ones are listed with × to remove) → "Create group". The group header lists members and has Edit group (rename, change members, "Delete group chat"). Stop in a group stops every member's run started from that group. Group membership does not allow members to DM each other. A group belongs to an organization and its members are agents of that organization (while the dashboard shows all, Create group chat asks "Organization" first); Edit group has "Move to…" to move it, which removes members that stay behind.
 
 Reactions and replies (private, group and floating chats): right-click a message (long-press on touch) for recent emojis, "Add reaction ›" (emoji search) and Reply. Existing reactions under a message toggle yours. An agent may respond to a reaction, which uses its model.
 
@@ -143,9 +146,11 @@ export const dashboardSettings = {
     'Connect the ChatGPT/Codex subscription, OpenRouter or another endpoint; browse Swarm Knowledge; Swarm limits.',
   source: 'frontend/src/components/settings.tsx',
   related: ['practices/dashboard', 'concepts/system'],
-  content: `Settings tab (/settings), five sections in this order.
+  content: `Settings tab (/settings), its sections in this order.
 
 OpenAI Codex: use a ChatGPT Plus or Pro subscription without an API key. "Connect ChatGPT" shows a one-time sign-in code and an "Open OpenAI sign-in" link; enter the code there (device code sign-in may need enabling in ChatGPT → Settings → Security). Status reads Not connected, Waiting for sign-in… or Connected to ChatGPT; "Disconnect" removes it.
+
+Organizations (/settings#organizations): each organization's name (edit it, then Rename) with its counts of agents, computers and groups; Delete only when it is empty (never the last one); "New organization name" and "Create organization" (the dashboard then shows the new one). Things move between organizations from their own settings.
 
 Swarm Knowledge: "Browse Swarm Knowledge" (/settings/knowledge) opens this catalog read-only: topics with search on the left, the entry with its breadcrumb and related links on the right. It cannot be edited in the app.
 

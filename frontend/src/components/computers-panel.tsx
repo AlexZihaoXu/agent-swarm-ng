@@ -1,3 +1,5 @@
+import { MoveToOrganization, OrganizationField, useCreateOrganization } from '@/components/organization-fields';
+import { useOrganizations } from '@/lib/organizations';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useRetained } from '@/lib/use-retained';
 import * as ContextMenu from '@radix-ui/react-context-menu';
@@ -85,6 +87,10 @@ export function ComputersPanel({
     refetchIntervalInBackground: false,
   });
   const computers = query.data?.computers ?? [];
+  // The organization shown (docs/organizations.md); names and the limit stay swarm-wide.
+  const { inScope } = useOrganizations();
+  const shownComputers = computers.filter(computer => inScope(computer.organizationId));
+  const organization = useCreateOrganization();
   const limitsQuery = useQuery({
     queryKey: ['computer-settings-limits'],
     queryFn: async ({ signal }) => {
@@ -209,12 +215,19 @@ export function ComputersPanel({
     // !createOpen blocks a stray submit that lands on the dialog's exiting
     // (still-mounted, aria-modal) button during the close animation, which is
     // the only accessible "Create computer" match for a moment after Cancel.
-    if (createBusy || !requested || !createOpen || !parsedSettings) return;
+    if (createBusy || !requested || !createOpen || !parsedSettings || !organization.ready) return;
     const usedSuggestion = requested === suggestion.current;
     setCreateBusy(true);
     setCreateError('');
     try {
-      const result = await api.POST('/api/computers', { body: { name: requested, requestKey, ...parsedSettings } });
+      const result = await api.POST('/api/computers', {
+        body: {
+          name: requested,
+          requestKey,
+          ...parsedSettings,
+          ...(organization.value ? { organizationId: organization.value } : {}),
+        },
+      });
       if (!result.data || result.error) throw new Error(result.error?.message ?? 'Could not create the computer.');
       client.setQueryData<ComputerList>(['computers'], previous => ({
         computers: [...(previous?.computers ?? []).filter(item => item.id !== result.data!.id), result.data!],
@@ -435,6 +448,13 @@ export function ComputersPanel({
                         disabled={createBusy}
                       />
                     )}
+                    <div className="mt-4">
+                      <OrganizationField
+                        value={organization.value}
+                        onChange={organization.setValue}
+                        disabled={createBusy}
+                      />
+                    </div>
                     {createError && (
                       <p role="alert" className="mt-4 text-sm text-red-400">
                         {createError}
@@ -456,7 +476,7 @@ export function ComputersPanel({
                         type="submit"
                         size="sm"
                         className="min-h-11 sm:min-h-0"
-                        disabled={createBusy || !name.trim() || !parsedSettings}
+                        disabled={createBusy || !name.trim() || !parsedSettings || !organization.ready}
                       >
                         {createBusy ? 'Creating…' : 'Create computer'}
                       </Button>
@@ -513,13 +533,15 @@ export function ComputersPanel({
                     unavailable.
                   </p>
                 )}
-                {query.isSuccess && query.data.controllerConnected && computers.length === 0 && (
+                {query.isSuccess && query.data.controllerConnected && shownComputers.length === 0 && (
                   <Empty role="status">
                     <EmptyHeader>
                       <EmptyMedia>
                         <ComputerIcon />
                       </EmptyMedia>
-                      <EmptyTitle>No computers yet</EmptyTitle>
+                      <EmptyTitle>
+                        {computers.length ? 'No computers in this organization' : 'No computers yet'}
+                      </EmptyTitle>
                       {/* The page header already carries Create computer; a second copy here would compete with it. */}
                       <EmptyDescription>Use Create computer above to get started.</EmptyDescription>
                     </EmptyHeader>
@@ -530,9 +552,9 @@ export function ComputersPanel({
                     {powerError}
                   </p>
                 )}
-                {computers.length > 0 && (
+                {shownComputers.length > 0 && (
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-4 md:gap-5">
-                    {computers.map((computer, index) => (
+                    {shownComputers.map((computer, index) => (
                       <ComputerCard
                         key={computer.id}
                         index={index}
@@ -710,6 +732,15 @@ export function ComputersPanel({
                   disabled={settingsBusy}
                 />
               )}
+              <div className="mt-4">
+                <MoveToOrganization
+                  kind="computer"
+                  id={shownSettings.id}
+                  name={shownSettings.name}
+                  organizationId={shownSettings.organizationId}
+                  onMoved={() => refresh()}
+                />
+              </div>
               <ComputerStorageFields
                 computer={shownSettings}
                 kept={keptDraft ?? keptOf(shownSettings)}
