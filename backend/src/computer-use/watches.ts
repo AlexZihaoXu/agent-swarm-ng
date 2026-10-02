@@ -290,7 +290,23 @@ export class ComputerWatches {
     };
     this.watches.set(watch.id, watch);
     this.schedule(watch);
-    return this.view(watch);
+    return { ...this.view(watch), ...(await this.claudeHint(watch)) };
+  }
+  /**
+   * A watch on a terminal running Claude Code: point out its own events (claude_code_listener_add), which wake the
+   * agent at once with no model checks. Advice only; the watch is set either way.
+   */
+  private async claudeHint(watch: Watch) {
+    if (watch.kind !== 'terminal') return {};
+    const receipt = await this.computers
+      .watchTerminal(watch.agentId, watch.computerId, watch.claimToken, { operation: 'status', session: watch.session })
+      .catch(() => null);
+    const session = (receipt?.result as { session?: { currentCommand?: string } } | undefined)?.session;
+    return session?.currentCommand === 'claude'
+      ? {
+          hint: 'This terminal runs Claude Code. claude_code_listener_add({terminal}) would wake you the moment it finishes, asks permission or a question, fails or messages you, with no model checks in between, and lasts across prompts (this watch costs a model check every interval). It needs the Swarm assist plugin: see practices/harnesses/claude-code (check claude plugin list; ask the human before installing). If you switch, cancel this watch with cancel_timer.',
+        }
+      : {};
   }
   list(agentId: string) {
     return [

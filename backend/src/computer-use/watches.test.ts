@@ -11,7 +11,15 @@ async function setup(judge: Judge) {
   const computer = await db.client.computer.create({
     data: { name: 'Desk', requestKey: crypto.randomUUID(), state: 'running' },
   });
-  const state = { screen: 'working...', alive: true, pixels: 1, gone: false, prepareFails: false, hang: false };
+  const state = {
+    screen: 'working...',
+    alive: true,
+    pixels: 1,
+    gone: false,
+    prepareFails: false,
+    hang: false,
+    command: '',
+  };
   const runtime: ComputerRuntime = {
     capture: async (_id, _request, signal) => {
       if (state.hang)
@@ -45,6 +53,7 @@ async function setup(judge: Judge) {
                 alive: state.alive,
                 exitCode: state.alive ? null : 1,
                 columns: 120,
+                ...(state.command ? { currentCommand: state.command } : {}),
               },
               text: state.screen,
             },
@@ -108,6 +117,7 @@ it('checks at its interval, tells the watcher how long the view is unchanged, an
   try {
     const watch = await t.watches.create(t.agent.id, { ...terminalWatch, checkNow: false });
     expect(watch).toMatchObject({ kind: 'watch_terminal', sessionName: 'claude', everySeconds: 30, context: 'fresh' });
+    expect(watch).not.toHaveProperty('hint');
     // Default timeout: the larger of 10 minutes and 10 intervals.
     expect(Date.parse(watch.timesOutAt) - Date.parse(watch.createdAt)).toBe(600_000);
     await t.tick(10);
@@ -478,6 +488,18 @@ it('a paused repeating watch still ends at its time limit, and a second occurren
     await t.tick(300);
     expect(t.events.at(-1)).toContain('reached its time limit');
     expect(t.watches.list(t.agent.id)).toEqual([]);
+  } finally {
+    await t.close();
+  }
+});
+
+it('points a watch on a terminal running Claude Code to its listener', async () => {
+  const t = await setup(vi.fn<Judge>(async () => ({ notify: false, summary: 'working' })));
+  try {
+    t.state.command = 'claude';
+    const watch = await t.watches.create(t.agent.id, { ...terminalWatch, checkNow: false });
+    expect(watch).toMatchObject({ kind: 'watch_terminal' });
+    expect((watch as { hint?: string }).hint).toContain('claude_code_listener_add({terminal})');
   } finally {
     await t.close();
   }
