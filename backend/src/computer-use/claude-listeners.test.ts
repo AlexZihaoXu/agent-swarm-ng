@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { prepareDatabase } from '../test-database';
 import { ComputerUseService } from './service';
-import { ClaudeCodeListeners, describe as describeLine } from './claude-listeners';
+import { ClaudeCodeListeners, describe as describeLine, terminalsOf } from './claude-listeners';
 
 type Opened = { command: string; push: (text: string) => void; end: () => void; signal: AbortSignal };
 
@@ -133,4 +133,12 @@ it('words every event for the agent', () => {
   expect(describeLine({ t: 0, event: 'question', terminal })).toBe(
     'Claude Code in terminal "cc" is waiting for an answer.',
   );
+});
+
+it('reads terminals from the operator list receipt, where the controller puts them', () => {
+  // The live bug: the sessions sit under result, not on the receipt itself.
+  expect(terminalsOf({ result: { type: 'terminal', sessions: [{ id: 't1', name: 'cc-api', alive: true }] } })).toEqual([
+    { id: 't1', name: 'cc-api' },
+  ]);
+  expect(() => terminalsOf({ error: 'Computer is not running.' })).toThrow('Could not list');
 });

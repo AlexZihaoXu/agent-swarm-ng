@@ -72,7 +72,7 @@ import { ComputerMonitors } from './computer-use/monitors';
 import { ComputerWatches } from './computer-use/watches';
 import { createWatchJudge, type ForkBasis } from './computer-use/watch-judge';
 import { createWatchTools } from './computer-use/watch-tools';
-import { ClaudeCodeListeners } from './computer-use/claude-listeners';
+import { ClaudeCodeListeners, terminalsOf } from './computer-use/claude-listeners';
 import { createClaudeListenerTools } from './computer-use/claude-listener-tools';
 import { AgentRecordings } from './computer-use/recordings';
 import { createRecordingTools } from './computer-use/recording-tools';
@@ -215,12 +215,7 @@ export class DmBroker {
         database,
         computers,
         () => this.transfers?.monitor?.bind(this.transfers),
-        async computerId =>
-          (
-            (await computers.operatorTerminal(computerId, { operation: 'list' })) as {
-              sessions?: { id: string; name: string }[];
-            }
-          ).sessions ?? [],
+        async computerId => terminalsOf(await computers.operatorTerminal(computerId, { operation: 'list' })),
         (agentId, text, human) => this.wakeForWatch(agentId, text, human),
       );
     if (computers) {

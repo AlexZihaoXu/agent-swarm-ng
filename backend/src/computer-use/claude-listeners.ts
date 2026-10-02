@@ -81,6 +81,14 @@ type Terminals = (computerId: string) => Promise<{ id: string; name: string }[]>
 const iso = (ms: number) => new Date(ms).toISOString();
 const quote = (text = '') => JSON.stringify(text);
 
+/** The terminals in an operator terminal-list receipt ({result: {sessions}}); an error receipt throws. */
+export function terminalsOf(receipt: { error?: string | null; result?: unknown }) {
+  if (receipt.error) throw new WatchError(`Could not list the computer's terminals: ${receipt.error}`);
+  return ((receipt.result as { sessions?: { id: string; name: string }[] } | undefined)?.sessions ?? []).map(
+    ({ id, name }) => ({ id, name }),
+  );
+}
+
 /** What one event says to the agent. */
 export function describe(line: Line) {
   const where = `Claude Code in terminal ${quote(line.terminal.name)}`;
