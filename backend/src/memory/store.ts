@@ -225,7 +225,10 @@ export class MemoryStore {
     await this.database.initialize();
     await this.database.client.$transaction([
       this.database.client.agentMemory.deleteMany({ where: { agentId } }),
-      this.database.client.agent.update({ where: { id: agentId }, data: { memoryIndex: '', sleepNote: '' } }),
+      this.database.client.agent.update({
+        where: { id: agentId },
+        data: { memoryIndex: '', sleepNote: '', sleepNoteTold: true },
+      }),
     ]);
     this.cache.delete(agentId);
   }

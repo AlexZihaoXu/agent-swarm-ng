@@ -240,7 +240,7 @@ export async function sleepOnce({ database, memory, deep, config, subscriptionRu
     : '';
   await database.client.agent.update({
     where: { id: agentId },
-    data: { sleptAt: new Date(), sleptPosition: day.position, ...(note ? { sleepNote: note } : {}) },
+    data: { sleptAt: new Date(), sleptPosition: day.position, sleepNote: note, sleepNoteTold: !note },
   });
   activity.record(
     'status',

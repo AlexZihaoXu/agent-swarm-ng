@@ -244,6 +244,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{id}/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAgentMemory"];
+        put?: never;
+        post?: never;
+        delete: operations["eraseAgentMemory"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/memory/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["forgetAgentMemory"];
+        options?: never;
+        head?: never;
+        patch: operations["updateAgentMemory"];
+        trace?: never;
+    };
+    "/api/agents/{id}/memory/{name}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restoreAgentMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/memory/{name}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["agentMemoryVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/memory/sleep-window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setAgentSleepWindow"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/memory/sleep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["sleepAgentNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agents/{id}/settings": {
         parameters: {
             query?: never;
@@ -1875,6 +1971,10 @@ export interface operations {
                             recordingTerminalFps: number;
                             recordingPadBeforeMs: number;
                             recordingPadAfterMs: number;
+                            memoryIndexMaxLines: number;
+                            memoryIndexMaxChars: number;
+                            memoryMaxChars: number;
+                            memoryMaxCount: number;
                         };
                         bounds: {
                             maxComputers: {
@@ -1976,6 +2076,34 @@ export interface operations {
                                 unit: string;
                             };
                             recordingPadAfterMs: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            memoryIndexMaxLines: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            memoryIndexMaxChars: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            memoryMaxChars: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            memoryMaxCount: {
                                 min: number;
                                 max: number;
                                 default: number;
@@ -2013,6 +2141,10 @@ export interface operations {
                     recordingTerminalFps?: number;
                     recordingPadBeforeMs?: number;
                     recordingPadAfterMs?: number;
+                    memoryIndexMaxLines?: number;
+                    memoryIndexMaxChars?: number;
+                    memoryMaxChars?: number;
+                    memoryMaxCount?: number;
                 };
             };
         };
@@ -2040,6 +2172,10 @@ export interface operations {
                             recordingTerminalFps: number;
                             recordingPadBeforeMs: number;
                             recordingPadAfterMs: number;
+                            memoryIndexMaxLines: number;
+                            memoryIndexMaxChars: number;
+                            memoryMaxChars: number;
+                            memoryMaxCount: number;
                         };
                         bounds: {
                             maxComputers: {
@@ -2141,6 +2277,34 @@ export interface operations {
                                 unit: string;
                             };
                             recordingPadAfterMs: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            memoryIndexMaxLines: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            memoryIndexMaxChars: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            memoryMaxChars: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            memoryMaxCount: {
                                 min: number;
                                 max: number;
                                 default: number;
@@ -2453,6 +2617,488 @@ export interface operations {
             };
             /** @description Default Response */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getAgentMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        index: string;
+                        memories: {
+                            name: string;
+                            type: string;
+                            title: string;
+                            text: string;
+                            by: string;
+                            trust: string;
+                            channelId: string | null;
+                            recalls: number;
+                            lastRecalledAt: string | null;
+                            faded: boolean;
+                            conflict: boolean;
+                            forgottenAt: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                        forgotten: {
+                            name: string;
+                            type: string;
+                            title: string;
+                            text: string;
+                            by: string;
+                            trust: string;
+                            channelId: string | null;
+                            recalls: number;
+                            lastRecalledAt: string | null;
+                            faded: boolean;
+                            conflict: boolean;
+                            forgottenAt: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                        maxCount: number;
+                        sleep: {
+                            from: string;
+                            to: string;
+                            activeFrom: string;
+                            activeTo: string;
+                            sleeping: boolean;
+                            sleptAt: string | null;
+                            lastNight: string;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    eraseAgentMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    forgetAgentMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    updateAgentMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title?: string;
+                    text?: string;
+                    type?: "person" | "preference" | "project" | "skill" | "reference";
+                    faded?: boolean;
+                    conflict?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        name: string;
+                        type: string;
+                        title: string;
+                        text: string;
+                        by: string;
+                        trust: string;
+                        channelId: string | null;
+                        recalls: number;
+                        lastRecalledAt: string | null;
+                        faded: boolean;
+                        conflict: boolean;
+                        forgottenAt: string | null;
+                        createdAt: string;
+                        updatedAt: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    restoreAgentMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        name: string;
+                        type: string;
+                        title: string;
+                        text: string;
+                        by: string;
+                        trust: string;
+                        channelId: string | null;
+                        recalls: number;
+                        lastRecalledAt: string | null;
+                        faded: boolean;
+                        conflict: boolean;
+                        forgottenAt: string | null;
+                        createdAt: string;
+                        updatedAt: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    agentMemoryVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        title: string;
+                        text: string;
+                        type: string;
+                        changedBy: string;
+                        createdAt: string;
+                    }[];
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    setAgentSleepWindow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    from: string;
+                    to: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        index: string;
+                        memories: {
+                            name: string;
+                            type: string;
+                            title: string;
+                            text: string;
+                            by: string;
+                            trust: string;
+                            channelId: string | null;
+                            recalls: number;
+                            lastRecalledAt: string | null;
+                            faded: boolean;
+                            conflict: boolean;
+                            forgottenAt: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                        forgotten: {
+                            name: string;
+                            type: string;
+                            title: string;
+                            text: string;
+                            by: string;
+                            trust: string;
+                            channelId: string | null;
+                            recalls: number;
+                            lastRecalledAt: string | null;
+                            faded: boolean;
+                            conflict: boolean;
+                            forgottenAt: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                        maxCount: number;
+                        sleep: {
+                            from: string;
+                            to: string;
+                            activeFrom: string;
+                            activeTo: string;
+                            sleeping: boolean;
+                            sleptAt: string | null;
+                            lastNight: string;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    sleepAgentNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        index: string;
+                        memories: {
+                            name: string;
+                            type: string;
+                            title: string;
+                            text: string;
+                            by: string;
+                            trust: string;
+                            channelId: string | null;
+                            recalls: number;
+                            lastRecalledAt: string | null;
+                            faded: boolean;
+                            conflict: boolean;
+                            forgottenAt: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                        forgotten: {
+                            name: string;
+                            type: string;
+                            title: string;
+                            text: string;
+                            by: string;
+                            trust: string;
+                            channelId: string | null;
+                            recalls: number;
+                            lastRecalledAt: string | null;
+                            faded: boolean;
+                            conflict: boolean;
+                            forgottenAt: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                        maxCount: number;
+                        sleep: {
+                            from: string;
+                            to: string;
+                            activeFrom: string;
+                            activeTo: string;
+                            sleeping: boolean;
+                            sleptAt: string | null;
+                            lastNight: string;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

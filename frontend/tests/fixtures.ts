@@ -124,6 +124,25 @@ export const test = base.extend({
       route.fulfill({ json: { entries: [], nextCursor: null, contextUsage: null } }),
     );
     await page.route('**/api/agents/*/computers', route => route.fulfill({ json: { computers: [] } }));
+    await page.route(/\/api\/agents\/[^/]+\/memory$/, route =>
+      route.fulfill({
+        json: {
+          index: '',
+          memories: [],
+          forgotten: [],
+          maxCount: 1000,
+          sleep: {
+            from: '03:00',
+            to: '05:00',
+            activeFrom: '',
+            activeTo: '',
+            sleeping: false,
+            sleptAt: null,
+            lastNight: '',
+          },
+        },
+      }),
+    );
     // No Discord bot by default; tests that need one route these themselves.
     await page.route(/\/api\/agents\/[^/]+\/discord(\/token)?$/, route =>
       route.fulfill({

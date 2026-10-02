@@ -1,6 +1,7 @@
 import { FileSchema } from './files/routes';
 import { FileError, FileStore, type FileView } from './files/store';
 import { chatKey } from './files/access';
+import { registerMemoryRoutes } from './memory/routes';
 import { registerScratchRoutes } from './scratch-routes';
 import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
@@ -200,6 +201,7 @@ export function registerChat(
   };
   registerActivityRoutes(app, database, broker.activity);
   registerScratchRoutes(app, database, broker.scratch);
+  registerMemoryRoutes(app, database, broker.memory, broker.sleeper, broker.settings);
   app.addHook('onListen', async () => {
     await broker.ready();
   });

@@ -109,6 +109,7 @@ model Agent {
   sleptPosition      Int             @default(0)
   /// What the last sleep changed, told to the agent once at its next turn ("last night").
   sleepNote          String          @default("")
+  sleepNoteTold      Boolean         @default(false)
   createdAt        DateTime          @default(now())
   channels         Channel[]
   dmAllowed        DmGrant[]         @relation("DmSenderGrant")

@@ -125,7 +125,7 @@ it('reminds on non-chat events and tool calls, once within a third of the contex
     // The tool call is a cue too (one short line); the same memory is not repeated on the next call.
     expect(JSON.stringify(second.messages.at(-1))).toContain('[Memory reminder: postgres-upgrade: Postgres upgrade');
     expect(JSON.stringify(third.messages.at(-1))).not.toContain('Memory reminder');
-    expect((await f.database.findAgent(f.agent.id))?.sleepNote).toBe('');
+    expect((await f.database.findAgent(f.agent.id))?.sleepNoteTold).toBe(true);
     expect((await f.broker.memory.get(f.agent.id, 'staging-server'))?.recalls).toBe(1);
   } finally {
     await f.close();

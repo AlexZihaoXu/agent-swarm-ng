@@ -1078,11 +1078,11 @@ ${preview.text}`
         // A heartbeat leaves last night's note for the next real turn (a dropped branch would lose it).
         memory: {
           cues: this.cues,
-          lastNight: options.heartbeat ? undefined : agent.sleepNote || undefined,
+          lastNight: options.heartbeat || agent.sleepNoteTold ? undefined : agent.sleepNote || undefined,
           lastNightTold: async () => {
             await this.database.client.agent.updateMany({
               where: { id: agentId, sleepNote: agent.sleepNote },
-              data: { sleepNote: '' },
+              data: { sleepNoteTold: true },
             });
           },
         },

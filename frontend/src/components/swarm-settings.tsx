@@ -20,6 +20,12 @@ const groups: { title: string; description: string; keys: Key[] }[] = [
       'Messages your agents’ bots saw, for their inbox and search and for Chat. Older ones are deleted every hour; files agents opened from them stay.',
     keys: ['discordHistoryDays'],
   },
+  {
+    title: 'Memory',
+    description:
+      'Each agent’s long-term memory. The index (one line per memory) is in every turn it takes, so a larger index costs more on every reply.',
+    keys: ['memoryIndexMaxLines', 'memoryIndexMaxChars', 'memoryMaxChars', 'memoryMaxCount'],
+  },
 ];
 
 /** Settings → Swarm: operator-wide limits, stored by the backend (not environment variables). */

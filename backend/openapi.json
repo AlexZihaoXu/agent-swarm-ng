@@ -2303,7 +2303,11 @@
                         "recordingDesktopFps",
                         "recordingTerminalFps",
                         "recordingPadBeforeMs",
-                        "recordingPadAfterMs"
+                        "recordingPadAfterMs",
+                        "memoryIndexMaxLines",
+                        "memoryIndexMaxChars",
+                        "memoryMaxChars",
+                        "memoryMaxCount"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -2349,6 +2353,18 @@
                           "type": "integer"
                         },
                         "recordingPadAfterMs": {
+                          "type": "integer"
+                        },
+                        "memoryIndexMaxLines": {
+                          "type": "integer"
+                        },
+                        "memoryIndexMaxChars": {
+                          "type": "integer"
+                        },
+                        "memoryMaxChars": {
+                          "type": "integer"
+                        },
+                        "memoryMaxCount": {
                           "type": "integer"
                         }
                       }
@@ -2370,7 +2386,11 @@
                         "recordingDesktopFps",
                         "recordingTerminalFps",
                         "recordingPadBeforeMs",
-                        "recordingPadAfterMs"
+                        "recordingPadAfterMs",
+                        "memoryIndexMaxLines",
+                        "memoryIndexMaxChars",
+                        "memoryMaxChars",
+                        "memoryMaxCount"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -2752,6 +2772,114 @@
                           }
                         },
                         "recordingPadAfterMs": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "memoryIndexMaxLines": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "memoryIndexMaxChars": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "memoryMaxChars": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "memoryMaxCount": {
                           "type": "object",
                           "required": [
                             "min",
@@ -2840,6 +2968,18 @@
                   },
                   "recordingPadAfterMs": {
                     "type": "integer"
+                  },
+                  "memoryIndexMaxLines": {
+                    "type": "integer"
+                  },
+                  "memoryIndexMaxChars": {
+                    "type": "integer"
+                  },
+                  "memoryMaxChars": {
+                    "type": "integer"
+                  },
+                  "memoryMaxCount": {
+                    "type": "integer"
                   }
                 },
                 "additionalProperties": false,
@@ -2877,7 +3017,11 @@
                         "recordingDesktopFps",
                         "recordingTerminalFps",
                         "recordingPadBeforeMs",
-                        "recordingPadAfterMs"
+                        "recordingPadAfterMs",
+                        "memoryIndexMaxLines",
+                        "memoryIndexMaxChars",
+                        "memoryMaxChars",
+                        "memoryMaxCount"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -2923,6 +3067,18 @@
                           "type": "integer"
                         },
                         "recordingPadAfterMs": {
+                          "type": "integer"
+                        },
+                        "memoryIndexMaxLines": {
+                          "type": "integer"
+                        },
+                        "memoryIndexMaxChars": {
+                          "type": "integer"
+                        },
+                        "memoryMaxChars": {
+                          "type": "integer"
+                        },
+                        "memoryMaxCount": {
                           "type": "integer"
                         }
                       }
@@ -2944,7 +3100,11 @@
                         "recordingDesktopFps",
                         "recordingTerminalFps",
                         "recordingPadBeforeMs",
-                        "recordingPadAfterMs"
+                        "recordingPadAfterMs",
+                        "memoryIndexMaxLines",
+                        "memoryIndexMaxChars",
+                        "memoryMaxChars",
+                        "memoryMaxCount"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -3326,6 +3486,114 @@
                           }
                         },
                         "recordingPadAfterMs": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "memoryIndexMaxLines": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "memoryIndexMaxChars": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "memoryMaxChars": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "memoryMaxCount": {
                           "type": "object",
                           "required": [
                             "min",
@@ -4345,6 +4613,1428 @@
             }
           },
           "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/memory": {
+      "get": {
+        "operationId": "getAgentMemory",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "index",
+                    "memories",
+                    "forgotten",
+                    "maxCount",
+                    "sleep"
+                  ],
+                  "properties": {
+                    "index": {
+                      "type": "string"
+                    },
+                    "memories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "name",
+                          "type",
+                          "title",
+                          "text",
+                          "by",
+                          "trust",
+                          "channelId",
+                          "recalls",
+                          "lastRecalledAt",
+                          "faded",
+                          "conflict",
+                          "forgottenAt",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "by": {
+                            "type": "string"
+                          },
+                          "trust": {
+                            "type": "string"
+                          },
+                          "channelId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "recalls": {
+                            "type": "integer"
+                          },
+                          "lastRecalledAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "faded": {
+                            "type": "boolean"
+                          },
+                          "conflict": {
+                            "type": "boolean"
+                          },
+                          "forgottenAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "forgotten": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "name",
+                          "type",
+                          "title",
+                          "text",
+                          "by",
+                          "trust",
+                          "channelId",
+                          "recalls",
+                          "lastRecalledAt",
+                          "faded",
+                          "conflict",
+                          "forgottenAt",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "by": {
+                            "type": "string"
+                          },
+                          "trust": {
+                            "type": "string"
+                          },
+                          "channelId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "recalls": {
+                            "type": "integer"
+                          },
+                          "lastRecalledAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "faded": {
+                            "type": "boolean"
+                          },
+                          "conflict": {
+                            "type": "boolean"
+                          },
+                          "forgottenAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "maxCount": {
+                      "type": "integer"
+                    },
+                    "sleep": {
+                      "type": "object",
+                      "required": [
+                        "from",
+                        "to",
+                        "activeFrom",
+                        "activeTo",
+                        "sleeping",
+                        "sleptAt",
+                        "lastNight"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "activeFrom": {
+                          "type": "string"
+                        },
+                        "activeTo": {
+                          "type": "string"
+                        },
+                        "sleeping": {
+                          "type": "boolean"
+                        },
+                        "sleptAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "lastNight": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "eraseAgentMemory",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/memory/{name}": {
+      "patch": {
+        "operationId": "updateAgentMemory",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "type": "string"
+                  },
+                  "text": {
+                    "minLength": 1,
+                    "maxLength": 20000,
+                    "type": "string"
+                  },
+                  "type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "person"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "preference"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "project"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "skill"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "reference"
+                        ]
+                      }
+                    ]
+                  },
+                  "faded": {
+                    "type": "boolean"
+                  },
+                  "conflict": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 80,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "name",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "type",
+                    "title",
+                    "text",
+                    "by",
+                    "trust",
+                    "channelId",
+                    "recalls",
+                    "lastRecalledAt",
+                    "faded",
+                    "conflict",
+                    "forgottenAt",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "by": {
+                      "type": "string"
+                    },
+                    "trust": {
+                      "type": "string"
+                    },
+                    "channelId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "recalls": {
+                      "type": "integer"
+                    },
+                    "lastRecalledAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "faded": {
+                      "type": "boolean"
+                    },
+                    "conflict": {
+                      "type": "boolean"
+                    },
+                    "forgottenAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "forgetAgentMemory",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 80,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "name",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/memory/{name}/restore": {
+      "post": {
+        "operationId": "restoreAgentMemory",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 80,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "name",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "type",
+                    "title",
+                    "text",
+                    "by",
+                    "trust",
+                    "channelId",
+                    "recalls",
+                    "lastRecalledAt",
+                    "faded",
+                    "conflict",
+                    "forgottenAt",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "by": {
+                      "type": "string"
+                    },
+                    "trust": {
+                      "type": "string"
+                    },
+                    "channelId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "recalls": {
+                      "type": "integer"
+                    },
+                    "lastRecalledAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "faded": {
+                      "type": "boolean"
+                    },
+                    "conflict": {
+                      "type": "boolean"
+                    },
+                    "forgottenAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/memory/{name}/versions": {
+      "get": {
+        "operationId": "agentMemoryVersions",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 80,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "name",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "title",
+                      "text",
+                      "type",
+                      "changedBy",
+                      "createdAt"
+                    ],
+                    "properties": {
+                      "title": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "changedBy": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/memory/sleep-window": {
+      "put": {
+        "operationId": "setAgentSleepWindow",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "from",
+                  "to"
+                ],
+                "properties": {
+                  "from": {
+                    "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                    "type": "string"
+                  },
+                  "to": {
+                    "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "index",
+                    "memories",
+                    "forgotten",
+                    "maxCount",
+                    "sleep"
+                  ],
+                  "properties": {
+                    "index": {
+                      "type": "string"
+                    },
+                    "memories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "name",
+                          "type",
+                          "title",
+                          "text",
+                          "by",
+                          "trust",
+                          "channelId",
+                          "recalls",
+                          "lastRecalledAt",
+                          "faded",
+                          "conflict",
+                          "forgottenAt",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "by": {
+                            "type": "string"
+                          },
+                          "trust": {
+                            "type": "string"
+                          },
+                          "channelId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "recalls": {
+                            "type": "integer"
+                          },
+                          "lastRecalledAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "faded": {
+                            "type": "boolean"
+                          },
+                          "conflict": {
+                            "type": "boolean"
+                          },
+                          "forgottenAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "forgotten": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "name",
+                          "type",
+                          "title",
+                          "text",
+                          "by",
+                          "trust",
+                          "channelId",
+                          "recalls",
+                          "lastRecalledAt",
+                          "faded",
+                          "conflict",
+                          "forgottenAt",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "by": {
+                            "type": "string"
+                          },
+                          "trust": {
+                            "type": "string"
+                          },
+                          "channelId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "recalls": {
+                            "type": "integer"
+                          },
+                          "lastRecalledAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "faded": {
+                            "type": "boolean"
+                          },
+                          "conflict": {
+                            "type": "boolean"
+                          },
+                          "forgottenAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "maxCount": {
+                      "type": "integer"
+                    },
+                    "sleep": {
+                      "type": "object",
+                      "required": [
+                        "from",
+                        "to",
+                        "activeFrom",
+                        "activeTo",
+                        "sleeping",
+                        "sleptAt",
+                        "lastNight"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "activeFrom": {
+                          "type": "string"
+                        },
+                        "activeTo": {
+                          "type": "string"
+                        },
+                        "sleeping": {
+                          "type": "boolean"
+                        },
+                        "sleptAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "lastNight": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/memory/sleep": {
+      "post": {
+        "operationId": "sleepAgentNow",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "index",
+                    "memories",
+                    "forgotten",
+                    "maxCount",
+                    "sleep"
+                  ],
+                  "properties": {
+                    "index": {
+                      "type": "string"
+                    },
+                    "memories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "name",
+                          "type",
+                          "title",
+                          "text",
+                          "by",
+                          "trust",
+                          "channelId",
+                          "recalls",
+                          "lastRecalledAt",
+                          "faded",
+                          "conflict",
+                          "forgottenAt",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "by": {
+                            "type": "string"
+                          },
+                          "trust": {
+                            "type": "string"
+                          },
+                          "channelId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "recalls": {
+                            "type": "integer"
+                          },
+                          "lastRecalledAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "faded": {
+                            "type": "boolean"
+                          },
+                          "conflict": {
+                            "type": "boolean"
+                          },
+                          "forgottenAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "forgotten": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "name",
+                          "type",
+                          "title",
+                          "text",
+                          "by",
+                          "trust",
+                          "channelId",
+                          "recalls",
+                          "lastRecalledAt",
+                          "faded",
+                          "conflict",
+                          "forgottenAt",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "by": {
+                            "type": "string"
+                          },
+                          "trust": {
+                            "type": "string"
+                          },
+                          "channelId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "recalls": {
+                            "type": "integer"
+                          },
+                          "lastRecalledAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "faded": {
+                            "type": "boolean"
+                          },
+                          "conflict": {
+                            "type": "boolean"
+                          },
+                          "forgottenAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "maxCount": {
+                      "type": "integer"
+                    },
+                    "sleep": {
+                      "type": "object",
+                      "required": [
+                        "from",
+                        "to",
+                        "activeFrom",
+                        "activeTo",
+                        "sleeping",
+                        "sleptAt",
+                        "lastNight"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "activeFrom": {
+                          "type": "string"
+                        },
+                        "activeTo": {
+                          "type": "string"
+                        },
+                        "sleeping": {
+                          "type": "boolean"
+                        },
+                        "sleptAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "lastNight": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
             "description": "Default Response",
             "content": {
               "application/json": {
