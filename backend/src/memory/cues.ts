@@ -1,4 +1,4 @@
-import type { MemoryHit, MemoryStore } from './store';
+import { UNTRUSTED, type MemoryHit, type MemoryStore } from './store';
 import { sourceOf } from './tools';
 
 /** Cue-driven recall limits: per input, per tool call, and per turn (one batch of inputs and all its tool calls). */
@@ -66,5 +66,5 @@ export function inputReminder(hits: MemoryHit[]) {
 }
 /** The reminder appended to a tool result: one short line per memory. */
 export function toolReminder(hits: MemoryHit[]) {
-  return `[Memory reminder: ${hits.map(hit => `${hit.name}: ${hit.title} — ${hit.excerpt.slice(0, 100)}`).join(' | ')}]`;
+  return `[Memory reminder: ${hits.map(hit => `${hit.name}${UNTRUSTED[hit.trust] ?? ''}: ${hit.title} — ${hit.excerpt.slice(0, 100)}`).join(' | ')}]`;
 }

@@ -38,7 +38,7 @@ Every normal turn (and a heartbeat) gets them; reading is `r` (free in a heartbe
 | `revise_memory({name, title?, text?, type?, faded?, conflict?})` | w | Change one (versions kept) |
 | `forget({name})` | w | Forget one (restorable by the owner) |
 
-Provenance of a turn is the **least trusted** of its inputs: a batch mixing the owner and a Discord stranger counts as the stranger. Platform events (timers, reminders, heartbeats, computer events) are the agent's own work.
+Index lines and tool reminders mark a memory from another agent `from an agent` and one from anyone else `untrusted`; input reminders show the full source. Provenance of a turn is the **least trusted** of its inputs (a Discord batch counts as the owner's only if every author line in it is labelled `[your owner]` and nothing is left unseen): a batch mixing the owner and a Discord stranger counts as the stranger. Platform events (timers, reminders, heartbeats, computer events) are the agent's own work.
 
 Deep storage reads `AgentSessionEntry` rows (thinking is left out; tool calls show as `→ name(args)`). An entry's channel is the `[channel: …]` of the input that started its stretch of context, and only channels the agent can still read are shown: its private chat, DMs with agents that still exist, groups it belongs to, and Discord channels its owner still allows (checked on every call). Archive text is untrusted prior data.
 

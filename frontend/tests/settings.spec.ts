@@ -156,6 +156,10 @@ test('Settings → Swarm edits limits within their bounds, saves only changes, a
     scratchTotalMb: { min: 1, max: 10240, default: 50, label: 'Scratch space per agent', unit: 'MB' },
     storageBudgetGb: { min: 1, max: 10000, default: 10, label: 'Total file storage', unit: 'GB' },
     discordHistoryDays: { min: 1, max: 365, default: 30, label: 'Discord history kept', unit: 'days' },
+    memoryIndexMaxLines: { min: 5, max: 500, default: 60, label: 'Memory index lines', unit: '' },
+    memoryIndexMaxChars: { min: 500, max: 40000, default: 4000, label: 'Memory index size', unit: 'chars' },
+    memoryMaxChars: { min: 200, max: 20000, default: 2000, label: 'Largest memory', unit: 'chars' },
+    memoryMaxCount: { min: 10, max: 10000, default: 1000, label: 'Memories per agent', unit: '' },
   };
   // In-memory settings: the shared test backend's real settings stay untouched.
   let settings = Object.fromEntries(Object.entries(bounds).map(([key, bound]) => [key, bound.default]));
@@ -169,6 +173,7 @@ test('Settings → Swarm edits limits within their bounds, saves only changes, a
   });
   await page.goto('/settings');
   const swarm = page.getByRole('region', { name: 'Swarm' });
+  await expect(swarm.getByLabel('Memories per agent', { exact: true })).toHaveValue('1000');
   const computers = swarm.getByLabel('Computers', { exact: true });
   await expect(computers).toHaveValue('4');
   const save = swarm.getByRole('button', { name: 'Save changes' });

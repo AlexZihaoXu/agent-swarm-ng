@@ -12,6 +12,7 @@ const KNOWLEDGE: [RegExp, string[]][] = [
   [/^(watch_|monitor$)/, ['concepts/computers/watches', 'practices/waiting']],
   [/(_recording|^mark_clip|^recording_events)$/, ['concepts/computers/recording']],
   [/^(scratch_|present_scratch$)/, ['concepts/scratchpad']],
+  [/^(recall|read_memory|remember_when|read_episode|memorize|revise_memory|forget)$/, ['concepts/memory']],
   [
     /^(list_files|read_file|upload_file|delete_file|copy_file|save_screenshot)$/,
     ['concepts/chat-files', 'practices/sharing-files'],

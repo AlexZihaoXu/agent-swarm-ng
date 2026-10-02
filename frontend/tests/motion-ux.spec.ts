@@ -108,6 +108,7 @@ test('agent settings offer jump links that follow the reader and land each headi
     'Heartbeat',
     'Computers',
     'Scratchpad',
+    'Memory',
     'Avatar',
     'Delete agent',
   ]);

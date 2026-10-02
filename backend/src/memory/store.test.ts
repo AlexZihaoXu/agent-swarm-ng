@@ -165,3 +165,21 @@ it('takes provenance from the least trusted input, and a Discord batch is the ow
   expect(provenanceOf([{ text: 'hi' }, peer, timer], 'p')).toMatchObject({ trust: 'agent', by: 'agent Bo' });
   expect(provenanceOf([timer], 'p')).toMatchObject({ trust: 'self', by: 'you (timer event)' });
 });
+
+it('marks memories from someone other than the owner wherever the model sees them', async () => {
+  const { database, agent, memory } = await setup();
+  try {
+    await memory.memorize(
+      agent.id,
+      { type: 'person', title: 'Kim runs deploys', text: 'Kim said so.' },
+      { by: 'Kim on Discord', trust: 'other' },
+    );
+    expect(await memory.rebuildIndex(agent.id)).toBe('- kim-runs-deploys [person, untrusted] Kim runs deploys');
+    const { toolReminder, inputReminder } = await import('./cues');
+    const hits = await memory.cues(agent.id, 'who deploys? ask kim', 2);
+    expect(toolReminder(hits)).toBe('[Memory reminder: kim-runs-deploys, untrusted: Kim runs deploys — Kim said so.]');
+    expect(inputReminder(hits)).toContain('(from Kim on Discord (untrusted)');
+  } finally {
+    await database.close();
+  }
+});

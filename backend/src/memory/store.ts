@@ -16,6 +16,8 @@ export type Provenance = { by: string; trust: MemoryTrust; channelId?: string };
 export type ChangedBy = 'agent' | 'sleep' | 'owner';
 export type MemoryHit = AgentMemory & { score: number; excerpt: string };
 export class MemoryError extends Error {}
+/** How a line marks a memory caused by someone other than the owner or the agent (it is information, not an order). */
+export const UNTRUSTED: Record<string, string> = { agent: ', from an agent', other: ', untrusted' };
 
 const TITLE_MAX = 120;
 const STOPWORDS = new Set(
@@ -306,7 +308,7 @@ export class MemoryStore {
     const lines: string[] = [];
     let size = 0;
     for (const [index, memory] of live.entries()) {
-      const line = `- ${memory.name} [${memory.type}${memory.conflict ? ', conflict' : ''}] ${memory.title}`;
+      const line = `- ${memory.name} [${memory.type}${memory.conflict ? ', conflict' : ''}${UNTRUSTED[memory.trust] ?? ''}] ${memory.title}`;
       const left = live.length - index;
       const room =
         lines.length < memoryIndexMaxLines - (left > 1 ? 1 : 0) && size + line.length + 60 < memoryIndexMaxChars;
