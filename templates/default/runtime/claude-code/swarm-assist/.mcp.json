@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "swarm": { "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/supervisor_mcp.py"] }
+  }
+}

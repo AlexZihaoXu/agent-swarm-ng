@@ -10,6 +10,7 @@ const KNOWLEDGE: [RegExp, string[]][] = [
   [/^(glance|look_at|run_actions)$/, ['concepts/computers/desktop', 'practices/desktop']],
   [/^(use_computer|list_computers)$/, ['concepts/computers', 'practices/computer-use']],
   [/^(watch_|monitor$)/, ['concepts/computers/watches', 'practices/waiting']],
+  [/^claude_code_listener_/, ['practices/harnesses/claude-code', 'practices/waiting']],
   [/(_recording|^mark_clip|^recording_events)$/, ['concepts/computers/recording']],
   [/^(scratch_|present_scratch$)/, ['concepts/scratchpad']],
   [/^(recall|read_memory|remember_when|read_episode|memorize|revise_memory|forget)$/, ['concepts/memory']],

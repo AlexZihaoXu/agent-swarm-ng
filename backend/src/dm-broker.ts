@@ -71,6 +71,8 @@ import { ComputerMonitors } from './computer-use/monitors';
 import { ComputerWatches } from './computer-use/watches';
 import { createWatchJudge, type ForkBasis } from './computer-use/watch-judge';
 import { createWatchTools } from './computer-use/watch-tools';
+import { ClaudeCodeListeners } from './computer-use/claude-listeners';
+import { createClaudeListenerTools } from './computer-use/claude-listener-tools';
 import { AgentRecordings } from './computer-use/recordings';
 import { createRecordingTools } from './computer-use/recording-tools';
 import type { AgentTool } from './tool-access';
@@ -128,6 +130,8 @@ export class DmBroker {
   private watcher?: TerminalWatcher;
   /** One-shot watches on claimed computers (watch_terminal, watch_desktop). */
   readonly watches?: ComputerWatches;
+  /** Claude Code listeners: events from the Claude Code session in a terminal (claude-listeners.ts). */
+  readonly claudeListeners?: ClaudeCodeListeners;
   /** Each agent's session as a fork would copy it (live while it runs, then as it ended while fork watches need it). */
   private bases = new Map<string, { basis: () => ForkBasis; ended: boolean }>();
   constructor(
@@ -205,6 +209,19 @@ export class DmBroker {
       computers.onAgentTerminalDelete = ({ agentId, computerId, session }) =>
         void watches.terminalDeleted(agentId, computerId, session).catch(() => {});
     }
+    if (computers)
+      this.claudeListeners = new ClaudeCodeListeners(
+        database,
+        computers,
+        () => this.transfers?.monitor?.bind(this.transfers),
+        async computerId =>
+          (
+            (await computers.operatorTerminal(computerId, { operation: 'list' })) as {
+              sessions?: { id: string; name: string }[];
+            }
+          ).sessions ?? [],
+        (agentId, text, human) => this.wakeForWatch(agentId, text, human),
+      );
     if (computers) {
       this.recordings = new AgentRecordings(
         database,
@@ -926,6 +943,9 @@ ${preview.text}`
         ? [
             ...createComputerTools(this.computers, this.screenshots, agentId, this.watches),
             ...(this.watches ? createWatchTools(this.watches, agentId, () => humanAuthority) : []),
+            ...(this.claudeListeners
+              ? createClaudeListenerTools(this.claudeListeners, agentId, () => humanAuthority)
+              : []),
             ...(this.recordings
               ? createRecordingTools(this.recordings, agentId, () => humanAuthority, this.screenshots, this.settings)
               : []),
@@ -1361,6 +1381,7 @@ ${preview.text}`
     this.forgetCompaction(agentId);
     await this.watches?.releasedBy(agentId);
     await this.recordings?.releasedBy(agentId).catch(() => {});
+    await this.claudeListeners?.releasedBy(agentId).catch(() => {});
     await this.reactionCoordinator.cancelAgent(agentId);
     await this.runs.settled(agentId);
     const related = [...this.jobs.values()].filter(
@@ -1387,6 +1408,7 @@ ${preview.text}`
     for (const controller of this.sleepers.values()) controller.abort();
     this.watcher?.close();
     this.watches?.close();
+    this.claudeListeners?.close();
     this.recordings?.close();
     this.reactionCoordinator.close();
   }

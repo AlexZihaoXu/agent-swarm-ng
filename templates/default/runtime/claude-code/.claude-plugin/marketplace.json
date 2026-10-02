@@ -1,0 +1,12 @@
+{
+  "name": "swarm",
+  "owner": { "name": "Agent Swarm" },
+  "description": "Plugins that connect Claude Code to the agent swarm running this computer.",
+  "plugins": [
+    {
+      "name": "swarm-assist",
+      "source": "./swarm-assist",
+      "description": "Tells the swarm agent supervising this terminal when Claude Code finishes, needs permission or a question answered, fails or ends, and lets Claude Code message that agent."
+    }
+  ]
+}

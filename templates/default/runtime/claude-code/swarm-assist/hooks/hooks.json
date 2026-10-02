@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "Stop": [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}\"/scripts/swarm_event.py", "async": true }] }],
+    "StopFailure": [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}\"/scripts/swarm_event.py", "async": true }] }],
+    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}\"/scripts/swarm_event.py", "async": true }] }],
+    "Notification": [{ "matcher": "idle_prompt|elicitation_dialog|elicitation_url_dialog|agent_needs_input", "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}\"/scripts/swarm_event.py", "async": true }] }],
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}\"/scripts/swarm_event.py", "async": true }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}\"/scripts/swarm_event.py", "async": true }] }]
+  }
+}

@@ -174,9 +174,11 @@ export class ComputerWatches {
     for (const row of rows)
       await this.deliver(
         row.agentId,
-        row.kind === 'monitor'
-          ? `Your monitor ${row.id} (\`${row.until.slice(0, 200)}\`, started at ${row.createdAt.toISOString()}) stopped: the platform restarted, which releases every computer claim and stops its command. If you still need it, claim the computer again with use_computer and start a new monitor.`
-          : `Your watch ${row.id} (${row.kind === 'terminal' ? 'watch_terminal' : 'watch_desktop'}, set at ${row.createdAt.toISOString()}) ended: the platform restarted, which releases every computer claim, so no check will run. Condition was: ${row.until}\nIf you still need it, claim the computer again with use_computer, look at the current state yourself, and set a new watch.`,
+        row.kind === 'claude-listener'
+          ? `Your Claude Code listener ${row.id} on terminal "${row.until}" (since ${row.createdAt.toISOString()}) stopped: the platform restarted. Claude Code itself keeps running. If you still want its events, add the listener again with claude_code_listener_add (and terminal_view it once: something may have happened meanwhile).`
+          : row.kind === 'monitor'
+            ? `Your monitor ${row.id} (\`${row.until.slice(0, 200)}\`, started at ${row.createdAt.toISOString()}) stopped: the platform restarted, which releases every computer claim and stops its command. If you still need it, claim the computer again with use_computer and start a new monitor.`
+            : `Your watch ${row.id} (${row.kind === 'terminal' ? 'watch_terminal' : 'watch_desktop'}, set at ${row.createdAt.toISOString()}) ended: the platform restarted, which releases every computer claim, so no check will run. Condition was: ${row.until}\nIf you still need it, claim the computer again with use_computer, look at the current state yourself, and set a new watch.`,
         row.human,
       ).catch(() => undefined);
   }
