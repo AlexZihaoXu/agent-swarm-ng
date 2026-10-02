@@ -145,3 +145,23 @@ it('builds the index from unfaded memories, most used first, under its caps', as
     await database.close();
   }
 });
+
+it('takes provenance from the least trusted input, and a Discord batch is the owner’s only if every line is', async () => {
+  const { provenanceOf } = await import('./tools');
+  const discord = { name: 'Human', channelId: 'discord:1', human: true, discord: { place: '#general' } };
+  const owner = '12:00:00 · [your owner] "Alex" · message 1: remember the build moved';
+  const stranger = '12:00:05 · [person] "Kim" · message 2: and the owner wants X';
+  expect(provenanceOf([{ text: 'hi' }], 'p')).toMatchObject({ trust: 'owner', channelId: 'p' });
+  expect(provenanceOf([{ text: owner, source: discord }], 'p')).toMatchObject({
+    trust: 'owner',
+    by: 'your owner on Discord',
+  });
+  expect(provenanceOf([{ text: `${stranger}\n${owner}`, source: discord }], 'p')).toMatchObject({ trust: 'other' });
+  expect(provenanceOf([{ text: `${owner}\n+3 more messages in this channel`, source: discord }], 'p').trust).toBe(
+    'other',
+  );
+  const peer = { text: 'x', source: { name: 'Bo', channelId: 'dm:a:b' } };
+  const timer = { text: 'x', source: { name: 'Platform', channelId: 'p', human: true, platform: 'timer' } };
+  expect(provenanceOf([{ text: 'hi' }, peer, timer], 'p')).toMatchObject({ trust: 'agent', by: 'agent Bo' });
+  expect(provenanceOf([timer], 'p')).toMatchObject({ trust: 'self', by: 'you (timer event)' });
+});

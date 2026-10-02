@@ -903,6 +903,8 @@ ${preview.text}`
     let humanAuthority = !incoming.source || Boolean(incoming.source.human);
     let inherited = incoming.source?.chainId;
     let sources: AgentMessageSource[] = incoming.source ? [incoming.source] : [];
+    // The turn's current inputs: who causes a memory now (memory provenance).
+    let inputs: ChannelMessage[] = [incoming];
     const chainFor = (recipientId: string) =>
       humanBatch ? undefined : (sources.find(source => source.agentId === recipientId)?.chainId ?? inherited);
     const peerTools = createDmTools(
@@ -1024,7 +1026,7 @@ ${preview.text}`
           memory: this.memory,
           deep: this.deep,
           agentId,
-          provenance: () => provenanceOf(sources, channel.id),
+          provenance: () => provenanceOf(inputs, channel.id),
           shown: ids => this.cues.shown(agentId, ids),
         }),
         // Every agent's sense of time: current time, timers and reminders (no computer needed).
@@ -1143,6 +1145,7 @@ ${preview.text}`
           );
           humanAuthority = admitted.some(message => !message.source || message.source.human);
           sources = admitted.flatMap(message => (message.source ? [message.source] : []));
+          inputs = admitted;
           inherited = sources[0]?.chainId;
           for (const source of sources) threads.set(source.channelId, source);
           return admitted;

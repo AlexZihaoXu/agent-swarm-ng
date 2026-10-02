@@ -40,12 +40,27 @@ const view = (memory: AgentMemory) => ({
   ...(memory.faded ? { faded: 'out of your index (rarely used), still yours' } : {}),
 });
 
+/** Who caused a memory sleep consolidated, as it judged from the day's platform labels (unsure: other). */
+const SLEEP_SOURCE: Record<string, string> = {
+  owner: 'your owner (consolidated in sleep)',
+  agent: 'another agent (consolidated in sleep)',
+  other: 'someone else (consolidated in sleep)',
+  self: 'you (consolidated in sleep)',
+};
+const sourceField = Type.Union(
+  [Type.Literal('owner'), Type.Literal('agent'), Type.Literal('other'), Type.Literal('self')],
+  {
+    description:
+      'Who caused it, as the platform labels in the day show: owner, agent (another agent), other (anyone else, or unsure), self (your own work).',
+  },
+);
+
 export type MemoryToolOptions = {
   memory: MemoryStore;
   deep: DeepStorage;
   agentId: string;
   /** Who is causing a memory now (the turn's source), recorded with it. */
-  provenance: () => Provenance;
+  provenance?: () => Provenance;
   /** Memories the agent just saw (recall, read_memory): cue-driven recall will not repeat them soon. */
   shown?: (ids: string[]) => void;
   /** Asleep: changes are checked against the snapshot sleep started from (the agent's own edits win). */
@@ -161,11 +176,16 @@ export function createMemoryTools({ memory, deep, agentId, provenance, shown, sl
           type: typeField,
           title: Type.String({ minLength: 1, maxLength: 120, description: 'One line: what this memory is about.' }),
           text: Type.String({ minLength: 1, maxLength: 20000 }),
+          // Asleep there is no turn to take it from: sleep says who caused it, as the day's platform labels show.
+          ...(sleep ? { source: sourceField } : {}),
         },
         { additionalProperties: false },
       ),
-      async execute(_id, { type, title, text }) {
-        const saved = await memory.memorize(agentId, { type: type as MemoryType, title, text }, provenance());
+      async execute(_id, { type, title, text, ...rest }) {
+        const source = (rest as { source?: string }).source;
+        const trust = (source && source in SLEEP_SOURCE ? source : 'other') as Provenance['trust'];
+        const from = sleep ? { by: SLEEP_SOURCE[trust], trust } : provenance!();
+        const saved = await memory.memorize(agentId, { type: type as MemoryType, title, text }, from);
         sleep?.changed(`memorized ${saved.name}: ${saved.title}`);
         return result({
           saved: saved.name,
@@ -240,27 +260,37 @@ export const MEMORY_TOOL_NAMES = new Set([
   'forget',
 ]);
 
-type Source = {
-  name: string;
-  channelId: string;
-  human?: boolean;
-  platform?: string;
-  discord?: unknown;
-  groupId?: string;
+type Input = {
+  text: string;
+  source?: { name: string; channelId: string; human?: boolean; platform?: string; discord?: unknown };
 };
 const RANK = { other: 0, agent: 1, self: 2, owner: 3 } as const;
+/** A Discord batch is the owner's only if every author line in it is labelled [your owner] (and nothing is unseen). */
+const ownerOnly = (text: string) => {
+  const authors = text.split('\n').filter(line => /^\d\d:\d\d:\d\d · \[/.test(line));
+  return (
+    authors.length > 0 &&
+    authors.every(line => /^\d\d:\d\d:\d\d · \[your owner\] /.test(line)) &&
+    !/^\+\d+ more message/m.test(text)
+  );
+};
 /**
  * Who causes a memory in this turn: the least trusted of its inputs (a batch mixing the owner and a stranger counts as
  * the stranger). No source is the owner's private chat; platform events (timers, heartbeats, computers) are the
  * agent's own work.
  */
-export function provenanceOf(sources: Source[], privateChannelId: string): Provenance {
-  if (!sources.length) return { by: 'your owner', trust: 'owner', channelId: privateChannelId };
-  const each = sources.map((source): Provenance => {
+export function provenanceOf(inputs: Input[], privateChannelId: string): Provenance {
+  const each = inputs.map(({ source, text }): Provenance => {
+    if (!source) return { by: 'your owner', trust: 'owner', channelId: privateChannelId };
     if (source.platform) return { by: `you (${source.platform} event)`, trust: 'self', channelId: source.channelId };
+    if (source.discord)
+      return source.human && ownerOnly(text)
+        ? { by: 'your owner on Discord', trust: 'owner', channelId: source.channelId }
+        : { by: `${source.human ? 'people' : source.name} on Discord`, trust: 'other', channelId: source.channelId };
     if (source.human) return { by: 'your owner', trust: 'owner', channelId: source.channelId };
-    if (source.discord) return { by: `${source.name} on Discord`, trust: 'other', channelId: source.channelId };
     return { by: `agent ${source.name}`, trust: 'agent', channelId: source.channelId };
   });
-  return each.reduce((least, next) => (RANK[next.trust] < RANK[least.trust] ? next : least));
+  return each.length
+    ? each.reduce((least, next) => (RANK[next.trust] < RANK[least.trust] ? next : least))
+    : { by: 'your owner', trust: 'owner', channelId: privateChannelId };
 }

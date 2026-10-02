@@ -14,10 +14,18 @@ const at = (clock: string) => new Date(`2026-10-02T${clock}:00`);
 
 it('sleeps outside active hours, or in its own window when active all day', () => {
   const window = { sleepFrom: '03:00', sleepTo: '05:00' };
-  expect(offHours({ heartbeatFrom: '09:00', heartbeatTo: '18:00', ...window }, at('20:00'))).toBe(true);
-  expect(offHours({ heartbeatFrom: '09:00', heartbeatTo: '18:00', ...window }, at('10:00'))).toBe(false);
-  expect(offHours({ heartbeatFrom: '', heartbeatTo: '', ...window }, at('04:00'))).toBe(true);
-  expect(offHours({ heartbeatFrom: '', heartbeatTo: '', ...window }, at('06:00'))).toBe(false);
+  expect(
+    offHours({ heartbeatEnabled: true, heartbeatFrom: '09:00', heartbeatTo: '18:00', ...window }, at('20:00')),
+  ).toBe(true);
+  expect(
+    offHours({ heartbeatEnabled: true, heartbeatFrom: '09:00', heartbeatTo: '18:00', ...window }, at('10:00')),
+  ).toBe(false);
+  expect(offHours({ heartbeatEnabled: true, heartbeatFrom: '', heartbeatTo: '', ...window }, at('04:00'))).toBe(true);
+  expect(offHours({ heartbeatEnabled: true, heartbeatFrom: '', heartbeatTo: '', ...window }, at('06:00'))).toBe(false);
+  // Active hours count only while the heartbeat is on.
+  expect(
+    offHours({ heartbeatEnabled: false, heartbeatFrom: '09:00', heartbeatTo: '18:00', ...window }, at('20:00')),
+  ).toBe(false);
 });
 
 it('starts a sleep once per night, only with something new since the last one', async () => {
@@ -44,6 +52,9 @@ it('starts a sleep once per night, only with something new since the last one', 
     expect(slept).toEqual([busy.id]);
     wake();
     await vi.waitFor(() => expect(scheduler.sleeping.size).toBe(0));
+    // It did not finish (no sleptAt): it is tried again only after an hour, not on every tick.
+    await scheduler.tick();
+    expect(slept).toEqual([busy.id]);
     await database.client.agent.update({ where: { id: busy.id }, data: { sleptAt: new Date(now), sleptPosition: 5 } });
     now += 3_600_000;
     await scheduler.tick();
@@ -73,7 +84,7 @@ it('reorganises memories asleep: the agent’s own newer edit wins, the index is
     } else if (last.role === 'tool' && text.includes('changed since'))
       call = {
         name: 'memorize',
-        args: { type: 'skill', title: 'Check builds after 03:00', text: 'The build runs at 03:00.' },
+        args: { type: 'skill', title: 'Check builds after 03:00', text: 'The build runs at 03:00.', source: 'owner' },
       };
     else if (last.role === 'tool' && text.includes('saved'))
       call = { name: 'revise_memory', args: { name: 'old-note', faded: true } };
@@ -140,7 +151,8 @@ it('reorganises memories asleep: the agent’s own newer edit wins, the index is
     expect((await broker.memory.get(agent.id, 'nightly-build'))?.text).toBe('Runs at 03:00 (agent).');
     expect(await broker.memory.get(agent.id, 'check-builds-after-03-00')).toMatchObject({
       type: 'skill',
-      trust: 'self',
+      trust: 'owner',
+      by: 'your owner (consolidated in sleep)',
     });
     const saved = await database.findAgent(agent.id);
     expect(saved?.memoryIndex).toContain('- check-builds-after-03-00 [skill] Check builds after 03:00');

@@ -120,8 +120,9 @@ export function registerMemoryRoutes(
       sleep: {
         from: agent.sleepFrom,
         to: agent.sleepTo,
-        activeFrom: agent.heartbeatFrom,
-        activeTo: agent.heartbeatTo,
+        // Active hours count only while the heartbeat is on.
+        activeFrom: agent.heartbeatEnabled ? agent.heartbeatFrom : '',
+        activeTo: agent.heartbeatEnabled ? agent.heartbeatTo : '',
         sleeping: sleeper.sleeping.has(agentId),
         sleptAt: agent.sleptAt?.toISOString() ?? null,
         lastNight: agent.sleepNote,

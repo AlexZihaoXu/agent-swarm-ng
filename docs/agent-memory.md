@@ -58,7 +58,7 @@ When background compaction starts during a turn, the agent gets one hidden note 
 
 ## Sleep
 
-- **When:** once per off period, at most once in 20 hours, and only when the agent has been through something since it last slept. Off hours are outside its active hours (Agents → agent → Heartbeat) when it has them, otherwise its sleep window (Agents → agent → Memory, 03:00–05:00 server time by default). The owner can also press **Sleep now**.
+- **When:** once per off period, at most once in 20 hours, and only when the agent has been through something since it last slept. Off hours are outside its active hours (Agents → agent → Heartbeat) when its heartbeat is on with active hours, otherwise its sleep window (Agents → agent → Memory, 03:00–05:00 server time by default). The owner can also press **Sleep now**.
 - **How:** a separate session with the agent's own model and credentials and **memory tools only** (it can neither publish nor touch computers). It reads its memories and a digest of the archive since its last sleep (newest 60,000 characters; `remember_when` reaches the rest), with at most 60 tool calls and 15 minutes. It never pauses or blocks the agent's turns.
 - **Jobs:** consolidate the day into memories; resolve conflicts (newer beats older, the owner beats others; otherwise keep both marked `conflict`); generalise repeated lessons into skills; condense messy memories; fade rarely useful ones out of the index (still recallable).
 - **Safety:** it works from a snapshot. If the agent changed a memory meanwhile, sleep's change to it is refused (the agent's edit wins, sleep leaves it for next night). Changes are saved one by one, so an interrupted sleep keeps what it did.

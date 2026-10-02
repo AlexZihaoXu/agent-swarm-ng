@@ -149,7 +149,7 @@ export function AgentMemory({
                   : 'Has not slept yet.'}{' '}
               <span className="text-muted-foreground">
                 {activeHours
-                  ? `Sleeps outside its active hours (${sleep!.activeTo}–${sleep!.activeFrom}, set in Heartbeat).`
+                  ? `Sleeps between ${sleep!.activeTo} and ${sleep!.activeFrom}, outside its heartbeat's active hours.`
                   : 'Active all day, so it sleeps in this window:'}
               </span>
             </p>
