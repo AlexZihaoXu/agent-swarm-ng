@@ -139,6 +139,8 @@ export class Organizations {
           },
         }),
         db.groupMember.deleteMany({ where: { agentId: id, group: outside } }),
+        // Again here, with the move: an assignment made meanwhile cannot survive it (tools recheck assignment).
+        db.computerAssignment.deleteMany({ where: { agentId: id, computer: outside } }),
         db.agent.update({ where: { id }, data: { organizationId: to } }),
       ]);
     } else if (kind === 'computer') {
@@ -161,7 +163,10 @@ export class Organizations {
             where: { agentId_computerId: { agentId: row.agentId, computerId: id } },
           });
       }
-      await db.computer.update({ where: { id }, data: { organizationId: to } });
+      await db.$transaction([
+        db.computerAssignment.deleteMany({ where: { computerId: id, agent: outside } }),
+        db.computer.update({ where: { id }, data: { organizationId: to } }),
+      ]);
     } else {
       const group = await db.groupChat.findUnique({ where: { id }, select: { organizationId: true } });
       if (!group) throw new OrganizationError('Group not found.', 404);

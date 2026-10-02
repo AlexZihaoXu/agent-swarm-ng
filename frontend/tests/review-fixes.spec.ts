@@ -190,6 +190,7 @@ test('one Save covers every section, and leaving with unsaved changes asks first
           {
             id: 'c1',
             name: 'Desk',
+            organizationId: 'personal',
             state: 'running',
             createdAt: 0,
             cpuPercent: 0,

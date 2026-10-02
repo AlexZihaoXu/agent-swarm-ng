@@ -6,7 +6,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useOrganizations, type Organization } from '@/lib/organizations';
 
 const fieldClass =
-  'h-11 min-w-0 flex-1 rounded-lg border border-border bg-sidebar px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-9';
+  'h-11 min-w-0 flex-1 rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-9 sm:text-sm';
 const describe = (org: Organization) =>
   `${org.agents} agent${org.agents === 1 ? '' : 's'} · ${org.computers} computer${org.computers === 1 ? '' : 's'} · ${org.groups} group${org.groups === 1 ? '' : 's'}`;
 const failure = (error: unknown, fallback: string) =>
@@ -89,7 +89,7 @@ export function OrganizationSettings({ card }: { card: string }) {
             return (
               <li key={org.id} className="flex flex-wrap items-center gap-2 py-3 first:pt-0 last:pb-0">
                 <input
-                  aria-label={`Name of ${org.name}`}
+                  aria-label={`Rename ${org.name}`}
                   value={draft}
                   maxLength={60}
                   disabled={busy}

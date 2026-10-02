@@ -43,8 +43,8 @@ for (const width of [320, 390])
     expect((await size(page.getByRole('button', { name: 'Connect ChatGPT' }))).height).toBeGreaterThanOrEqual(44);
     expect((await size(page.getByRole('button', { name: 'Add endpoint' }))).height).toBeGreaterThanOrEqual(44);
     await page.getByRole('button', { name: 'Add endpoint' }).click();
-    await expect(page.getByRole('textbox', { name: 'Name' })).toHaveCSS('font-size', '16px');
-    expect((await size(page.getByRole('textbox', { name: 'Name' }))).height).toBeGreaterThanOrEqual(44);
+    await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveCSS('font-size', '16px');
+    expect((await size(page.getByRole('textbox', { name: 'Name', exact: true }))).height).toBeGreaterThanOrEqual(44);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
   });
 

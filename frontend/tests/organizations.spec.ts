@@ -99,24 +99,24 @@ test('Settings creates, renames and deletes organizations', async ({ page }) => 
   await expect(section.getByLabel('New organization name')).toBeFocused();
   await section.getByLabel('New organization name').fill('Ops');
   await section.getByRole('button', { name: 'Create organization' }).click();
-  await expect(section.getByLabel('Name of Ops')).toBeVisible();
+  await expect(section.getByLabel('Rename Ops')).toBeVisible();
   // A non-empty organization cannot be deleted.
   await expect(
     section
       .getByRole('listitem')
-      .filter({ has: page.getByLabel('Name of Personal') })
+      .filter({ has: page.getByLabel('Rename Personal') })
       .getByRole('button', { name: 'Delete' }),
   ).toBeDisabled();
-  await section.getByLabel('Name of Lab').fill('Research');
+  await section.getByLabel('Rename Lab').fill('Research');
   await section.getByRole('button', { name: 'Rename' }).click();
-  await expect(section.getByLabel('Name of Research')).toBeVisible();
+  await expect(section.getByLabel('Rename Research')).toBeVisible();
   await section
     .getByRole('listitem')
-    .filter({ has: page.getByLabel('Name of Ops') })
+    .filter({ has: page.getByLabel('Rename Ops') })
     .getByRole('button', { name: 'Delete' })
     .click();
   await page.getByRole('dialog', { name: 'Delete Ops?' }).getByRole('button', { name: 'Delete' }).click();
-  await expect(section.getByLabel('Name of Ops')).toHaveCount(0);
+  await expect(section.getByLabel('Rename Ops')).toHaveCount(0);
   expect(calls).toEqual(
     expect.arrayContaining([
       'POST /api/organizations',

@@ -48,7 +48,8 @@ export function OrganizationSwitcher({ className, compact }: { className?: strin
         aria-label={`Organization: ${label}`}
         className={cn(
           'flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background text-left outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring',
-          compact ? 'size-[50px] justify-center shadow-lg' : 'h-10 w-56 justify-between px-2',
+          // Beside the centred tabs only the badge fits until wide screens.
+          compact ? 'size-[50px] justify-center shadow-lg' : 'h-10 justify-between px-2 lg:w-56',
           className,
         )}
       >
@@ -58,13 +59,13 @@ export function OrganizationSwitcher({ className, compact }: { className?: strin
             className={compact ? 'size-8 text-xs' : ''}
           />
           {!compact && (
-            <span className="flex min-w-0 flex-col">
+            <span className="hidden min-w-0 flex-col lg:flex">
               <span className="truncate text-sm font-medium leading-tight">{label}</span>
               <span className="truncate text-[11px] leading-tight text-muted-foreground">{counts(summary)}</span>
             </span>
           )}
         </span>
-        {!compact && <ChevronsUpDownIcon className="size-4 opacity-50" />}
+        {!compact && <ChevronsUpDownIcon className="hidden size-4 opacity-50 lg:block" />}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content

@@ -3,6 +3,7 @@ import { sampleAgents } from './sample-agents';
 const desk = {
   id: 'c20ed85c-52d4-4f92-a8bb-e2bbb7975470',
   name: 'Shared desktop',
+  organizationId: 'personal',
   state: 'running',
   createdAt: 0,
   cpuPercent: 0,

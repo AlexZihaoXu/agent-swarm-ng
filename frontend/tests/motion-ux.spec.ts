@@ -110,6 +110,7 @@ test('agent settings offer jump links that follow the reader and land each headi
     'Scratchpad',
     'Memory',
     'Avatar',
+    'Organization',
     'Delete agent',
   ]);
   // On wide screens the links share the header row with the title (no separate strip or subtitle).
