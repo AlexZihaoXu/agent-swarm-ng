@@ -81,10 +81,14 @@ type Follower = {
   /** The newest line delivered: a restarted follower replays what came after it. */
   since: number;
   pending: Line[];
+  /** Lines already taken (time, terminal, event): a replay after a restart never delivers one twice. */
+  seen: Set<string>;
   batch?: ReturnType<typeof setTimeout>;
   paused: boolean;
 };
-type Terminals = (computerId: string) => Promise<{ id: string; name: string }[]>;
+type Terminals = (computerId: string) => Promise<{ id: string; name: string; createdAt?: number }[]>;
+/** A listener added soon after its terminal was created also gets the events since then (the harness may be quick). */
+const REPLAY_NEW_TERMINAL_MS = 120_000;
 
 const iso = (ms: number) => new Date(ms).toISOString();
 const quote = (text = '') => JSON.stringify(text);
@@ -92,9 +96,9 @@ const quote = (text = '') => JSON.stringify(text);
 /** The terminals in an operator terminal-list receipt ({result: {sessions}}); an error receipt throws. */
 export function terminalsOf(receipt: { error?: string | null; result?: unknown }) {
   if (receipt.error) throw new WatchError(`Could not list the computer's terminals: ${receipt.error}`);
-  return ((receipt.result as { sessions?: { id: string; name: string }[] } | undefined)?.sessions ?? []).map(
-    ({ id, name }) => ({ id, name }),
-  );
+  return (
+    (receipt.result as { sessions?: { id: string; name: string; createdAt?: number }[] } | undefined)?.sessions ?? []
+  ).map(({ id, name, createdAt }) => ({ id, name, ...(typeof createdAt === 'number' ? { createdAt } : {}) }));
 }
 
 /** What one event says to the agent. */
@@ -181,7 +185,10 @@ export class HarnessListeners {
     this.timer ??= setInterval(() => void this.checkAssignments(), ASSIGNMENT_CHECK_MS);
     this.timer.unref?.();
     try {
-      await this.restart(agentId, computer.computerId);
+      // A terminal created moments ago: replay its events since then (the harness may already have started or finished).
+      const created = terminal.createdAt ? terminal.createdAt * 1000 : 0;
+      const replay = !existing && created && this.now() - created < REPLAY_NEW_TERMINAL_MS ? created - 1000 : undefined;
+      await this.restart(agentId, computer.computerId, replay);
     } catch (error) {
       if (!existing) await this.drop(listener);
       throw error instanceof Error ? new WatchError(`Could not start listening: ${error.message}`) : error;
@@ -254,7 +261,7 @@ export class HarnessListeners {
   }
 
   /** (Re)starts the agent's follower on a computer with what its listeners there want (none: it stops). */
-  private async restart(agentId: string, computerId: string) {
+  private async restart(agentId: string, computerId: string, replayFrom?: number) {
     const key = `${agentId}:${computerId}`;
     const previous = this.followers.get(key);
     const mine = this.forAgent(agentId).filter(listener => listener.computerId === computerId);
@@ -264,7 +271,7 @@ export class HarnessListeners {
     if (!stream) throw new Error('the computer controller is unavailable');
     const terminals = [...new Set(mine.map(listener => listener.terminalId))];
     const events = [...new Set(mine.flatMap(listener => listener.events))];
-    const since = previous?.since ?? this.now();
+    const since = Math.min(previous?.since ?? this.now(), replayFrom ?? Infinity);
     const follower: Follower = {
       key,
       agentId,
@@ -272,6 +279,7 @@ export class HarnessListeners {
       abort: new AbortController(),
       since,
       pending: previous?.pending ?? [],
+      seen: previous?.seen ?? new Set(),
       paused: previous?.paused ?? false,
     };
     this.followers.set(key, follower);
@@ -324,6 +332,10 @@ export class HarnessListeners {
       return;
     }
     if (!line?.terminal?.id || !LISTENER_EVENTS.includes(line.event)) return;
+    const key = `${line.t}:${line.terminal.id}:${line.event}`;
+    if (follower.seen.has(key)) return;
+    follower.seen.add(key);
+    if (follower.seen.size > 500) follower.seen.delete(follower.seen.values().next().value!);
     follower.since = Math.max(follower.since, Number(line.t) || 0);
     follower.pending.push({ ...line, text: String(line.text ?? '').slice(0, 1000) });
     if (follower.pending.length > 50) follower.pending.shift();

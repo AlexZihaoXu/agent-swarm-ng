@@ -6,7 +6,7 @@ import { HarnessListeners, describe as describeLine, terminalsOf } from './harne
 
 type Opened = { command: string; push: (text: string) => void; end: () => void; signal: AbortSignal };
 
-async function fixture() {
+async function fixture(created?: number) {
   const db = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
   const ada = await db.createAgent({ name: 'Ada', endpointId: 'm', model: 'm', thinkingLevel: 'off' });
   const computer = await db.client.computer.create({
@@ -38,7 +38,7 @@ async function fixture() {
     db,
     service,
     () => stream,
-    async () => [{ id: 't1', name: 'cc-api' }],
+    async () => [{ id: 't1', name: 'cc-api', ...(created ? { createdAt: created } : {}) }],
     async (_agent, text) => {
       woken.push(text);
       return { handled: new Promise(resolve => (release = () => resolve(undefined))) };
@@ -144,4 +144,27 @@ it('reads terminals from the operator list receipt, where the controller puts th
     { id: 't1', name: 'cc-api' },
   ]);
   expect(() => terminalsOf({ error: 'Computer is not running.' })).toThrow('Could not list');
+});
+
+it('replays the events of a terminal created moments ago, and never delivers a line twice', async () => {
+  // The terminal was created 30 s before the listener (in seconds, as tmux reports it).
+  const f = await fixture((1_790_000_000_000 - 30_000) / 1000);
+  try {
+    await f.listeners.add(f.ada.id, { terminal: 'cc-api', human: true });
+    expect(f.opened[0].command).toContain(`--since ${1_790_000_000_000 - 31_000}`);
+    const early = `${JSON.stringify({ v: 1, t: 1_789_999_990_000, harness: 'opencode', event: 'finished', terminal: { id: 't1', name: 'cc-api' }, text: 'done' })}\n`;
+    f.opened[0].push(early + early);
+    await vi.waitFor(() => expect(f.woken).toHaveLength(1));
+    expect(f.woken[0]).toContain('OpenCode in terminal "cc-api" finished its turn: "done"');
+    expect(f.woken[0]).toContain('Coding harness events (1)');
+    f.release();
+    // A restart replays from the newest line: the same line again is not delivered.
+    await f.listeners.add(f.ada.id, { terminal: 'cc-api', events: ['finished'], human: true });
+    f.opened[1].push(early);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(f.woken).toHaveLength(1);
+  } finally {
+    f.listeners.close();
+    await f.db.close();
+  }
 });
