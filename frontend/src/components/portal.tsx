@@ -70,6 +70,7 @@ const PAGES: { title: string; path: string; keywords?: string[] }[] = [
   { title: 'New group', path: '/chat/groups/new', keywords: ['create'] },
   { title: 'Computers', path: '/computers', keywords: ['desktops'] },
   { title: 'New computer', path: '/computers/new', keywords: ['create'] },
+  { title: 'Dashboard', path: '/dashboard', keywords: ['usage', 'cpu', 'memory', 'disk', 'tokens', 'spend', 'cost'] },
   { title: 'Settings', path: '/settings', keywords: ['models', 'endpoints', 'swarm', 'storage', 'discord'] },
   { title: 'Knowledge', path: '/settings/knowledge', keywords: ['docs', 'guide'] },
   { title: 'Audit log', path: '/settings/audit', keywords: ['log', 'sign-in', 'login', 'history', 'security'] },

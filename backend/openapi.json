@@ -25100,6 +25100,443 @@
         }
       }
     },
+    "/api/dashboard": {
+      "get": {
+        "operationId": "getDashboard",
+        "parameters": [
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "12h"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "24h"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "48h"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "72h"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "7d"
+                  ]
+                }
+              ]
+            },
+            "in": "query",
+            "name": "range",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "organization",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "range",
+                    "from",
+                    "to",
+                    "bucketMs",
+                    "buckets",
+                    "system",
+                    "disks",
+                    "computers",
+                    "agents",
+                    "providers"
+                  ],
+                  "properties": {
+                    "range": {
+                      "type": "string"
+                    },
+                    "from": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "to": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "bucketMs": {
+                      "type": "integer"
+                    },
+                    "buckets": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    "system": {
+                      "type": "object",
+                      "required": [
+                        "cpuPercent",
+                        "memUsed",
+                        "memTotal"
+                      ],
+                      "properties": {
+                        "cpuPercent": {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "memUsed": {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "memTotal": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "disks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "disk",
+                          "label",
+                          "uses",
+                          "used",
+                          "total"
+                        ],
+                        "properties": {
+                          "disk": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "uses": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "used": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "total": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "computers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "cpuPercent",
+                          "memUsed",
+                          "memLimit"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "cpuPercent": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "memUsed": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "memLimit": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "activeMs",
+                          "active",
+                          "tokens",
+                          "tokenTotals",
+                          "cost"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "activeMs": {
+                            "type": "number"
+                          },
+                          "active": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "tokens": {
+                            "type": "object",
+                            "required": [
+                              "input",
+                              "output",
+                              "cacheRead",
+                              "cacheWrite",
+                              "reasoning"
+                            ],
+                            "properties": {
+                              "input": {
+                                "type": "array",
+                                "items": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "output": {
+                                "type": "array",
+                                "items": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "cacheRead": {
+                                "type": "array",
+                                "items": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "cacheWrite": {
+                                "type": "array",
+                                "items": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "reasoning": {
+                                "type": "array",
+                                "items": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "tokenTotals": {
+                            "type": "object",
+                            "required": [
+                              "input",
+                              "output",
+                              "cacheRead",
+                              "cacheWrite",
+                              "reasoning"
+                            ],
+                            "properties": {
+                              "input": {
+                                "type": "number"
+                              },
+                              "output": {
+                                "type": "number"
+                              },
+                              "cacheRead": {
+                                "type": "number"
+                              },
+                              "cacheWrite": {
+                                "type": "number"
+                              },
+                              "reasoning": {
+                                "type": "number"
+                              }
+                            }
+                          },
+                          "cost": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    },
+                    "providers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "provider",
+                          "subscription",
+                          "cost",
+                          "total"
+                        ],
+                        "properties": {
+                          "provider": {
+                            "type": "string"
+                          },
+                          "subscription": {
+                            "type": "boolean"
+                          },
+                          "cost": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "total": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agents/{id}/discord": {
       "get": {
         "operationId": "getAgentDiscord",

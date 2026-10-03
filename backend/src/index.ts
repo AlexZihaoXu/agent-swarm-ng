@@ -6,16 +6,25 @@ import { reconcileStoppedComputers, watchStoppedComputers } from './computer-pow
 import { ActivityStore, DEFAULT_ACTIVITY_RETENTION_DAYS } from './activity-store';
 import { backupDatabase, DEFAULT_DATABASE_BACKUPS } from './database-backup';
 import { join } from 'node:path';
+import { backfillUsageHistory, startUsageRecording } from './usage/backfill';
+import { usageRecorder } from './usage/recorder';
+import { MetricsSampler } from './metrics/sampler';
 
 process.umask(0o077);
 let stopPowerWatch = () => {};
+let stopSampler = () => {};
 const database = new PlatformStore();
 await database.initialize();
 const app = await buildApp({ database });
+// Dashboard: model usage and agent run spans are recorded from here on; earlier ones are backfilled after listen.
+startUsageRecording(database, app.log);
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, async () => {
     await app.audit.record({ kind: 'system.stop', outcome: 'ok', actor: 'system', detail: { signal } });
     stopPowerWatch();
+    stopSampler();
+    // Usage rows still queued (up to a second's worth) go in before the database closes.
+    await usageRecorder.flush().catch(error => app.log.error(error, 'Usage flush failed'));
     void app.close().catch(error => {
       app.log.error(error);
       process.exitCode = 1;
@@ -27,6 +36,7 @@ await app.listen({
   host: process.env.HOST ?? '127.0.0.1',
   port: Number(process.env.PORT ?? 3000),
 });
+void backfillUsageHistory(database, app.log);
 await app.audit.record({
   kind: 'system.start',
   outcome: 'ok',
@@ -68,3 +78,5 @@ if (backups > 0) {
   void backup();
   setInterval(() => void backup(), 6 * 3_600_000).unref();
 }
+// The dashboard's resource history: host CPU/memory and running computers each minute, disks every 5 minutes, 14 days kept.
+stopSampler = new MetricsSampler(database, computerControllerFromEnv(), { log: app.log }).start();

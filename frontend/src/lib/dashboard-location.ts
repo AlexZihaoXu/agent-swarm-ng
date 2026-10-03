@@ -1,8 +1,9 @@
-export type DashboardTab = 'agents' | 'chat' | 'computers' | 'settings';
+export type DashboardTab = 'dashboard' | 'agents' | 'chat' | 'computers' | 'settings';
 export type DashboardRoute = {
   tab: DashboardTab;
   kind:
     | 'root'
+    | 'dashboard'
     | 'not-found'
     | 'agents-list'
     | 'agent'
@@ -76,6 +77,7 @@ export function parseDashboardPath(pathname: string): DashboardRoute {
   )
     return missing;
   const [section, id, third, fourth, fifth, sixth, seventh] = parts;
+  if (section === 'dashboard' && parts.length === 1) return { tab: 'dashboard', kind: 'dashboard' };
   if (section === 'agents') {
     if (parts.length === 1) return { tab: 'agents', kind: 'agents-list' };
     if (id === 'new' && parts.length === 2) return { tab: 'agents', kind: 'agent-new' };

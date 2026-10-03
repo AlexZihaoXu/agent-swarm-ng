@@ -365,6 +365,7 @@ export class DmBroker {
           {
             tool: 'admission_decision',
             label: 'Discord relevance check',
+            purpose: 'discord',
             description: 'Decide whether these Discord messages deserve a turn. No side effects are permitted here.',
             actions: ['ignore', 'admit'],
             system: name =>
@@ -568,8 +569,11 @@ export class DmBroker {
     const event = await this.platformInput(agentId, 'heartbeat', heartbeatPrompt(checklist), true);
     if (!event) return;
     const { input, channelId, id } = event;
-    this.runs.enqueue({ agentId, channelId, clientMessageId: id, inputSource: 'agent' }, context =>
-      this.runInbox(agentId, input, context, { heartbeat: true }),
+    // Provisional: active time only once it promotes into real work.
+    this.runs.enqueue(
+      { agentId, channelId, clientMessageId: id, inputSource: 'agent' },
+      context => this.runInbox(agentId, input, context, { heartbeat: true }),
+      { provisional: true },
     );
   }
   async notifyHumanReaction(channelId: string, messageId: string, emoji: string) {

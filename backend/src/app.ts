@@ -33,6 +33,7 @@ import { Accounts } from './auth/sessions';
 import { registerAuth } from './auth/routes';
 import { AuditLog } from './audit/store';
 import { registerAudit } from './audit/routes';
+import { registerDashboardRoutes } from './dashboard/routes';
 
 export async function buildApp({
   fetcher,
@@ -115,6 +116,7 @@ export async function buildApp({
   registerComputerUseRoutes(app, computers, screenshots);
   registerTerminalStreams(app, computers, controller);
   registerKnowledgeRoutes(app);
+  registerDashboardRoutes(app, platform);
   registerDiscordRoutes(app, platform, discordStore, discordTokens, discord, files);
   // Saved Discord messages are kept for Settings → Swarm's period: pruned at start and hourly.
   const pruneDiscord = () =>

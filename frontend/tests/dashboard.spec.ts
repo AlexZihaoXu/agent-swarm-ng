@@ -5,6 +5,7 @@ test('saved agents keep the sidebar and open inline settings; Chat owns messages
   await page.goto('/');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(36, 36, 36)');
   await expect(page.getByRole('tablist', { name: 'Main navigation' }).getByRole('tab')).toHaveText([
+    'Dashboard',
     'Agents',
     'Chat',
     'Computers',

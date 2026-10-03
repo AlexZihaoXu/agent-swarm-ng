@@ -2,7 +2,10 @@
   "name": "agent-swarm-ng",
   "private": true,
   "packageManager": "bun@1.3.6",
-  "workspaces": ["frontend", "backend"],
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
     "dev:frontend": "bun run --cwd frontend dev",
     "dev:backend": "bun run --cwd backend dev",
@@ -20,5 +23,8 @@
     "prettier": "3.9.9",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "react-is": "^19.2.0"
   }
 }

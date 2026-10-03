@@ -14,6 +14,11 @@ export type ComputerObservation = {
   /** Made from an older image than the current one (Update image brings it up to date). */
   outdated?: boolean;
 };
+/** One host path the controller measured for the dashboard (computer-controller/src/disks.ts). */
+export type ControllerDisk = { path: string; use: 'docker' | 'listed' | 'requested' } & (
+  { source: string; fstype: string; size: number; used: number; avail: number } | { error: 'unavailable' }
+);
+export type ControllerDisks = { disks: ControllerDisk[]; zfs: { dataset: string; used: number; avail: number }[] };
 export type StorageUsage = { kind: 'keep' | 'cache'; bytes: number; folder: string | null };
 export type ComputerLimits = {
   cpuCores: { min: number; max: number; default: number };
@@ -54,6 +59,8 @@ export interface ComputerController {
   checkStorageFolder?(kind: 'keep' | 'cache', folder: string): Promise<void>;
   clearCache?(id: string, name: string): Promise<void>;
   storageUsage?(id: string, name: string): Promise<{ lastStart: string | null; storage: StorageUsage[] }>;
+  /** Disk usage of Docker's data root, the operator's DASHBOARD_EXTRA_DISKS and these host folders. */
+  diskUsage?(paths: string[]): Promise<ControllerDisks>;
   /** A monitor's output stream (see the controller's /monitor), open until `signal` aborts or `lifetimeMs` passes. */
   monitor?(id: string, command: string, signal: AbortSignal, lifetimeMs: number): Promise<ReadableStream<Uint8Array>>;
   observe(): Promise<Map<string, ComputerObservation>>;
@@ -275,6 +282,32 @@ export class HttpComputerController implements ComputerController {
       lastStart: typeof data.lastStart === 'string' ? data.lastStart.slice(0, 500) : null,
       storage: data.storage as StorageUsage[],
     };
+  }
+  async diskUsage(paths: string[]): Promise<ControllerDisks> {
+    const response = await this.request('/metrics/disks', { method: 'POST', body: JSON.stringify({ paths }) }, 90_000);
+    const data = (await response.json()) as Partial<ControllerDisks> | null;
+    const bytes = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+    if (
+      !data ||
+      !Array.isArray(data.disks) ||
+      !Array.isArray(data.zfs) ||
+      !data.disks.every(
+        disk =>
+          disk &&
+          typeof disk.path === 'string' &&
+          ['docker', 'listed', 'requested'].includes(disk.use) &&
+          ('error' in disk
+            ? disk.error === 'unavailable'
+            : typeof disk.source === 'string' &&
+              typeof disk.fstype === 'string' &&
+              bytes(disk.size) &&
+              bytes(disk.used) &&
+              bytes(disk.avail)),
+      ) ||
+      !data.zfs.every(item => item && typeof item.dataset === 'string' && bytes(item.used) && bytes(item.avail))
+    )
+      throw new Error('Invalid disk usage.');
+    return data as ControllerDisks;
   }
   async observe() {
     const response = await this.request('/computers');

@@ -11,6 +11,7 @@ import {
   type FileOperation,
   type FileQuery,
 } from './operator-files';
+import { diskScript, parseDiskOutput, validateRequestedPaths, validDiskPath, type DiskPath } from './disks';
 import { ComputerNames, ResourceError, validateId, validateName, type ResourceRole } from './resources';
 import {
   MARKER,
@@ -330,11 +331,13 @@ export class ComputerManager {
    * account. Returns stdout; a non-zero exit becomes a ResourceError with the script's last stderr line.
    */
   private async helper(
-    mounts: StorageMount[],
+    mounts: (StorageMount & { ReadOnly?: boolean; BindOptions?: { NonRecursive?: boolean } })[],
     script: string,
     timeoutMs = 120_000,
     /** Runs after a successful script, before the helper is removed (it can still receive files). */
     afterExit?: (helperId: string, stdout: string) => Promise<void>,
+    /** Capabilities instead of the file-housekeeping ones (disk usage needs only to look). */
+    capAdd = ['CHOWN', 'DAC_OVERRIDE', 'DAC_READ_SEARCH', 'FOWNER'],
   ) {
     const created = await this.docker.json<{ Id: string }>('POST', '/containers/create', {
       Image: this.image,
@@ -345,7 +348,7 @@ export class ComputerManager {
       HostConfig: {
         NetworkMode: 'none',
         CapDrop: ['ALL'],
-        CapAdd: ['CHOWN', 'DAC_OVERRIDE', 'DAC_READ_SEARCH', 'FOWNER'],
+        CapAdd: capAdd,
         SecurityOpt: ['no-new-privileges'],
         Mounts: mounts,
       },
@@ -384,6 +387,55 @@ export class ComputerManager {
     }
   }
   private dockerRoot?: string;
+  private async dockerRootDir() {
+    return (this.dockerRoot ??=
+      (await this.docker.json<{ DockerRootDir?: string }>('GET', '/info', undefined, 256 * 1024)).DockerRootDir ??
+      '/var/lib/docker');
+  }
+  /**
+   * Dashboard disk usage (disks.ts) of Docker's data root, the operator's listed paths and the backend's requested
+   * Keep/Cache folders: one read-only helper without capabilities beyond looking runs `df`. Docker's root and "/" are
+   * mounted without their submounts (every container's filesystem); other paths keep them, so ZFS datasets beneath
+   * a pool's folder are counted. A path that does not exist on the host is reported unavailable, not an error.
+   */
+  async diskUsage(requested: string[], listed: string[]) {
+    const docker = await this.dockerRootDir();
+    const paths: DiskPath[] = [{ path: docker, use: 'docker' }];
+    for (const path of listed) if (validDiskPath(path)) paths.push({ path, use: 'listed' });
+    for (const path of validateRequestedPaths(requested)) paths.push({ path, use: 'requested' });
+    await this.approvedImage(this.image);
+    const measure = async (entries: DiskPath[]) =>
+      parseDiskOutput(
+        await this.helper(
+          entries.map(({ path }, index) => ({
+            Type: 'bind' as const,
+            Source: path,
+            Target: `/m/${index}`,
+            ReadOnly: true,
+            ...(path === docker || path === '/' ? { BindOptions: { NonRecursive: true } } : {}),
+          })),
+          diskScript(entries.length),
+          60_000,
+          undefined,
+          ['DAC_READ_SEARCH'],
+        ),
+        entries,
+      );
+    try {
+      return await measure(paths);
+    } catch (error) {
+      // Docker refuses the whole helper when one path is missing: measure each alone so the rest still count.
+      if (!(error instanceof DockerApiError)) throw error;
+      // One after another: a few short helpers, never a burst of containers.
+      const results: Awaited<ReturnType<typeof measure>>[] = [];
+      for (const entry of paths)
+        results.push(
+          await measure([entry]).catch(() => ({ disks: [{ ...entry, error: 'unavailable' as const }], zfs: [] })),
+        );
+      const zfs = new Map(results.flatMap(result => result.zfs).map(item => [item.dataset, item]));
+      return { disks: results.flatMap(result => result.disks), zfs: [...zfs.values()] };
+    }
+  }
   /**
    * A host Keep/Cache folder is used only when: it is outside Docker's own storage, it exists, it carries its marker
    * (the host owner chose it, and its disk is really mounted) and, for a computer, its `computers` and
@@ -391,9 +443,7 @@ export class ComputerManager {
    * computer's folder. Messages stay short: the backend shows at most 200 characters.
    */
   private async checkBase(kind: StorageClass, folder: string, id?: string, create = false) {
-    this.dockerRoot ??=
-      (await this.docker.json<{ DockerRootDir?: string }>('GET', '/info', undefined, 256 * 1024)).DockerRootDir ??
-      '/var/lib/docker';
+    await this.dockerRootDir();
     const label = storageLabel[kind];
     if (folder === this.dockerRoot || folder.startsWith(`${this.dockerRoot}/`))
       throw new ResourceError(409, `The ${label} folder cannot be inside Docker's own storage.`);

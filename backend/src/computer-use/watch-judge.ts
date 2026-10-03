@@ -17,6 +17,7 @@ import { WatchEnd, type Judge } from './watches';
 import { forkContext } from '../interruption-triage';
 import { TRIAGE_MAX_TOKENS } from '../triage-turns';
 import type { ActivityTrace } from '../activity-events';
+import { meterSession } from '../usage/meter';
 
 type AgentMessage = AgentSession['messages'][number];
 export type AgentTool = AgentSession['agent']['state']['tools'][number];
@@ -64,6 +65,8 @@ export type JudgeInput = {
   images: ImageContent[];
   signal: AbortSignal;
   trace?: ActivityTrace;
+  /** The agent whose model usage the check counts toward (purpose watch). */
+  agentId?: string;
 };
 
 export const WATCHER_PROMPT = `You are a watcher: a short-lived helper checking a computer on behalf of an agent that asked to be woken once when a condition is met. You cannot type, click or change anything; your read tools only look. Each check gives you the agent's condition, the current view, the view at watch start, and how long the view has been unchanged. Decide only whether the condition is now met.
@@ -133,6 +136,7 @@ export async function judgeWatch(input: JudgeInput): Promise<Verdict> {
       }),
     }));
     if (session.sessionFile) throw new Error('Unsafe watch session');
+    if (input.agentId) meterSession(session, { agentId: input.agentId, purpose: 'watch' });
     const own = new Map(input.tools.map(tool => [tool.name, tool]));
     const agent = session.agent;
     // The loop is driven on the agent itself: AgentSession.prompt would rebuild the system prompt.
@@ -273,6 +277,7 @@ export function createWatchJudge(deps: {
         images: input.images,
         signal,
         trace: activity?.branch('Watch check'),
+        agentId: agent.id,
       });
       activity?.record(
         'status',

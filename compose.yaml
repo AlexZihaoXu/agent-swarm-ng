@@ -76,6 +76,8 @@ services:
       # America/Toronto). Empty inherits the image default (UTC). Existing
       # computers keep the zone they were created with until they are recreated.
       COMPUTER_TIMEZONE: ${COMPUTER_TIMEZONE:-}
+      # Extra host paths for the dashboard's disk chart (comma-separated, absolute), measured read-only.
+      DASHBOARD_EXTRA_DISKS: ${DASHBOARD_EXTRA_DISKS:-}
     init: true
     # Only this narrow internal service has the root-equivalent Docker socket.
     # It has no app database, provider credentials, or published ports.

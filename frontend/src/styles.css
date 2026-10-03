@@ -11,6 +11,15 @@
   --muted-foreground: #a3a3a3;
   --border: #363636;
   --ring: #a3a3a3;
+  /* Chart series (Dashboard): distinct on the dark background, in this order. */
+  --chart-1: #38bdf8;
+  --chart-2: #a78bfa;
+  --chart-3: #34d399;
+  --chart-4: #fbbf24;
+  --chart-5: #fb7185;
+  --chart-6: #22d3ee;
+  --chart-7: #a3e635;
+  --chart-8: #fb923c;
 }
 
 @theme inline {

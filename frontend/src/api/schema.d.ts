@@ -1108,6 +1108,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agents/{id}/discord": {
         parameters: {
             query?: never;
@@ -8301,6 +8317,83 @@ export interface operations {
                 content: {
                     "application/json": {
                         message: string;
+                    };
+                };
+            };
+        };
+    };
+    getDashboard: {
+        parameters: {
+            query?: {
+                range?: "12h" | "24h" | "48h" | "72h" | "7d";
+                organization?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        range: string;
+                        /** Format: date-time */
+                        from: string;
+                        /** Format: date-time */
+                        to: string;
+                        bucketMs: number;
+                        buckets: number[];
+                        system: {
+                            cpuPercent: (number | null)[];
+                            memUsed: (number | null)[];
+                            memTotal: number | null;
+                        };
+                        disks: {
+                            disk: string;
+                            label: string;
+                            uses: string[];
+                            used: (number | null)[];
+                            total: number | null;
+                        }[];
+                        computers: {
+                            id: string;
+                            name: string;
+                            cpuPercent: (number | null)[];
+                            memUsed: (number | null)[];
+                            memLimit: number | null;
+                        }[];
+                        agents: {
+                            id: string;
+                            name: string;
+                            activeMs: number;
+                            active: (number | null)[];
+                            tokens: {
+                                input: (number | null)[];
+                                output: (number | null)[];
+                                cacheRead: (number | null)[];
+                                cacheWrite: (number | null)[];
+                                reasoning: (number | null)[];
+                            };
+                            tokenTotals: {
+                                input: number;
+                                output: number;
+                                cacheRead: number;
+                                cacheWrite: number;
+                                reasoning: number;
+                            };
+                            cost: number;
+                        }[];
+                        providers: {
+                            provider: string;
+                            subscription: boolean;
+                            cost: (number | null)[];
+                            total: number;
+                        }[];
                     };
                 };
             };

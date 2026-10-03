@@ -11,6 +11,8 @@ import { chatResources, createChatSession, type ChatConfiguration, type ChannelM
 import { runTriageTurns, TRIAGE_MAX_TOKENS, TRIAGE_TIMEOUT_MS } from './triage-turns';
 import type { ActivityTrace } from './activity-events';
 import { accessOf, type AgentTool } from './tool-access';
+import { meterSession } from './usage/meter';
+import type { UsagePurpose } from './usage/recorder';
 
 export type DecisionFork<A extends string> = {
   /** The one tool the fork may call, e.g. reaction_decision. */
@@ -25,6 +27,8 @@ export type DecisionFork<A extends string> = {
   fallback: A;
   /** Read-only tools the branch may use before deciding (looking deeper); never anything with side effects. */
   tools?: AgentTool[];
+  /** What its model usage counts as (default triage). */
+  purpose?: UsagePurpose;
 };
 
 /**
@@ -106,6 +110,7 @@ export async function runDecisionFork<A extends string>(
     )
       throw new Error(`Unsafe ${fork.label} grant`);
     session.agent.state.messages = structuredClone(base.messages);
+    meterSession(session, { agentId: config.channel.agentId, purpose: fork.purpose ?? 'triage' });
     detach = trace?.attach(session) ?? detach;
     combined.addEventListener('abort', abort, { once: true });
     combined.throwIfAborted();

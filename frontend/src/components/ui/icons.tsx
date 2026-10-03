@@ -20,6 +20,12 @@ function Icon({ className, children, ...props }: ComponentProps<'svg'>) {
   );
 }
 
+export const DashboardIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+    <path d="M18 17V9M13 17V5M8 17v-3" />
+  </Icon>
+);
 export const AgentsIcon = (props: ComponentProps<'svg'>) => (
   <Icon {...props}>
     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />

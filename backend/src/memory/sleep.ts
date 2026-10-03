@@ -11,6 +11,7 @@ import type { createActivityRecorder } from '../agent-activity';
 import type { MemoryStore } from './store';
 import { entryText, type DeepStorage } from './deep';
 import { createMemoryTools } from './tools';
+import { meterSession } from '../usage/meter';
 
 /** How much of the day sleep reads (newest kept), how many tool calls it may make, and how long it may take. */
 export const SLEEP_LIMITS = {
@@ -217,6 +218,7 @@ export async function sleepOnce({ database, memory, deep, config, subscriptionRu
     return before?.(context, callSignal);
   };
   const detach = activity.attach(session);
+  meterSession(session, { agentId, purpose: 'sleep' });
   const abort = () => void session.abort();
   signal.addEventListener('abort', abort, { once: true });
   const timeout = setTimeout(abort, SLEEP_LIMITS.timeoutMs);

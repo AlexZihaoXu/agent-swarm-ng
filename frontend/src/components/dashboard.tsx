@@ -1,0 +1,551 @@
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
+import { api } from '@/api/client';
+import type { operations } from '@/api/schema';
+import { ChoiceChips } from '@/components/ui/choice-chips';
+import { PageHeader } from '@/components/page-header';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  type ChartConfig,
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart';
+import { useOrganizations } from '@/lib/organizations';
+import { settingsCard } from '@/lib/styles';
+import { cn } from '@/lib/utils';
+
+type Data = operations['getDashboard']['responses'][200]['content']['application/json'];
+type Range = '12h' | '24h' | '48h' | '72h' | '7d';
+type Series = (number | null)[];
+
+const RANGES: { value: Range; label: string }[] = [
+  { value: '12h', label: '12 h' },
+  { value: '24h', label: '24 h' },
+  { value: '48h', label: '48 h' },
+  { value: '72h', label: '72 h' },
+  { value: '7d', label: 'Week' },
+];
+const RANGE_KEY = 'agent-swarm.dashboard-range';
+const COLORS = Array.from({ length: 8 }, (_, i) => `var(--chart-${i + 1})`);
+const TOKEN_TYPES = [
+  ['input', 'Input'],
+  ['output', 'Output'],
+  ['cacheRead', 'Cache read'],
+  ['cacheWrite', 'Cache write'],
+  ['reasoning', 'Reasoning'],
+] as const;
+
+const GiB = 1024 ** 3;
+const bytes = (value: number) =>
+  value >= 1024 * GiB
+    ? `${(value / 1024 / GiB).toFixed(2)} TiB`
+    : `${(value / GiB).toFixed(value >= 100 * GiB ? 0 : 1)} GiB`;
+const percent = (value: number) => `${value.toFixed(value < 10 ? 1 : 0)}%`;
+const dollars = (value: number) => `$${value < 1 ? value.toFixed(3) : value.toFixed(2)}`;
+const tokens = (value: number) =>
+  value >= 1e9
+    ? `${(value / 1e9).toFixed(2)}B`
+    : value >= 1e6
+      ? `${(value / 1e6).toFixed(1)}M`
+      : value >= 1e3
+        ? `${(value / 1e3).toFixed(1)}k`
+        : String(Math.round(value));
+const hours = (ms: number) => (ms >= 3_600_000 ? `${(ms / 3_600_000).toFixed(1)} h` : `${Math.round(ms / 60_000)} min`);
+
+function readRange(): Range {
+  try {
+    const saved = localStorage.getItem(RANGE_KEY);
+    return RANGES.some(range => range.value === saved) ? (saved as Range) : '48h';
+  } catch {
+    return '48h';
+  }
+}
+
+const last = (series: Series) => [...series].reverse().find(value => value !== null) ?? null;
+const cumulative = (series: Series) => {
+  let total = 0;
+  return series.map(value => (total += value ?? 0));
+};
+
+/** One time chart (Kibo chart/area/chart-area-interactive, or its line form): a row per bucket, a key per series. */
+function TimeChart({
+  buckets,
+  series,
+  format,
+  line = false,
+  stacked = false,
+  max,
+  className,
+}: {
+  buckets: number[];
+  series: { key: string; label: string; values: Series; color?: string }[];
+  format: (value: number) => string;
+  line?: boolean;
+  stacked?: boolean;
+  max?: number;
+  className?: string;
+}) {
+  const id = useId().replace(/:/g, '');
+  const keys = series.map((item, i) => ({ ...item, safe: `s${i}`, color: item.color ?? COLORS[i % COLORS.length]! }));
+  const config = Object.fromEntries(
+    keys.map(item => [item.safe, { label: item.label, color: item.color }]),
+  ) satisfies ChartConfig;
+  const data = useMemo(
+    () =>
+      buckets.map((t, i) => Object.fromEntries([['t', t], ...keys.map(item => [item.safe, item.values[i] ?? null])])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [buckets, series],
+  );
+  const span = buckets.length > 1 ? buckets.at(-1)! - buckets[0]! : 0;
+  const tick = (value: number) =>
+    new Date(value).toLocaleString(
+      undefined,
+      span > 72 * 3_600_000
+        ? { weekday: 'short', day: 'numeric' }
+        : { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
+    );
+  const label = (_: unknown, payload: { payload?: { t?: number } }[]) =>
+    payload[0]?.payload?.t
+      ? new Date(payload[0].payload.t).toLocaleString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hourCycle: 'h23',
+        })
+      : '';
+  const axes = (
+    <>
+      <CartesianGrid vertical={false} />
+      <XAxis
+        dataKey="t"
+        type="number"
+        domain={['dataMin', 'dataMax']}
+        scale="time"
+        tickFormatter={tick}
+        axisLine={false}
+        tickLine={false}
+        tickMargin={8}
+        minTickGap={40}
+      />
+      <YAxis tickFormatter={format} axisLine={false} tickLine={false} width={64} domain={[0, max ?? 'auto']} />
+      <ChartTooltip
+        cursor={false}
+        content={
+          <ChartTooltipContent
+            indicator="dot"
+            labelFormatter={label}
+            formatter={(value, name) => (
+              <span className="flex w-full justify-between gap-3">
+                <span className="text-muted-foreground">{config[name as string]?.label ?? name}</span>
+                <span className="font-mono tabular-nums">{typeof value === 'number' ? format(value) : '—'}</span>
+              </span>
+            )}
+          />
+        }
+      />
+      {keys.length > 1 && <ChartLegend content={<ChartLegendContent />} />}
+    </>
+  );
+  return (
+    <ChartContainer config={config} className={cn('aspect-auto h-56 w-full', className)}>
+      {line ? (
+        <LineChart data={data} margin={{ left: 0, right: 8, top: 8 }}>
+          {axes}
+          {keys.map(item => (
+            <Line
+              key={item.safe}
+              dataKey={item.safe}
+              stroke={`var(--color-${item.safe})`}
+              dot={false}
+              strokeWidth={2}
+              isAnimationActive={false}
+              connectNulls
+            />
+          ))}
+        </LineChart>
+      ) : (
+        <AreaChart data={data} margin={{ left: 0, right: 8, top: 8 }}>
+          <defs>
+            {keys.map(item => (
+              <linearGradient key={item.safe} id={`${id}-${item.safe}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="5%" stopColor={`var(--color-${item.safe})`} stopOpacity={0.6} />
+                <stop offset="95%" stopColor={`var(--color-${item.safe})`} stopOpacity={0.05} />
+              </linearGradient>
+            ))}
+          </defs>
+          {axes}
+          {keys.map(item => (
+            <Area
+              key={item.safe}
+              dataKey={item.safe}
+              type="monotone"
+              fill={`url(#${id}-${item.safe})`}
+              stroke={`var(--color-${item.safe})`}
+              stackId={stacked ? 'a' : undefined}
+              isAnimationActive={false}
+              connectNulls
+            />
+          ))}
+        </AreaChart>
+      )}
+    </ChartContainer>
+  );
+}
+
+function Panel({
+  title,
+  subtitle,
+  scope,
+  children,
+  className,
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  scope: 'system' | 'organization';
+  children: ReactNode;
+  className?: string;
+}) {
+  const id = useId();
+  return (
+    <section aria-labelledby={id} className={cn(settingsCard, 'min-w-0 space-y-3', className)}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h3 id={id} className="text-sm font-semibold">
+          {title}
+        </h3>
+        <span className="text-xs text-muted-foreground">
+          {scope === 'system' ? 'System-wide' : 'This organization'}
+        </span>
+      </div>
+      {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+      {children}
+    </section>
+  );
+}
+
+const Empty = ({ children }: { children: ReactNode }) => (
+  <p className="flex h-24 items-center justify-center text-sm text-muted-foreground">{children}</p>
+);
+
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className={cn(settingsCard, 'min-w-0')}>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 truncate font-mono text-lg tabular-nums">{value}</p>
+      {hint && <p className="truncate text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * Dashboard (docs/dashboard.md): the host's disks, CPU and memory (system-wide), and the current organization's
+ * computers, agents' active hours, spending and tokens, over a chosen period (default 48 hours).
+ */
+export function Dashboard() {
+  const [range, setRange] = useState<Range>(readRange);
+  const { current, nameOf, organizations } = useOrganizations();
+  const organization = current === 'all' ? undefined : current;
+  useEffect(() => {
+    try {
+      localStorage.setItem(RANGE_KEY, range);
+    } catch {
+      // A preference only.
+    }
+  }, [range]);
+  const query = useQuery({
+    queryKey: ['dashboard', range, organization ?? 'all'],
+    queryFn: async ({ signal }) => {
+      const { data, error } = await api.GET('/api/dashboard', {
+        params: { query: { range, ...(organization ? { organization } : {}) } },
+        signal,
+      });
+      if (!data || error) throw new Error('Could not load the dashboard.');
+      return data as Data;
+    },
+    refetchInterval: 60_000,
+    placeholderData: previous => previous,
+  });
+  const data = query.data;
+  // The same name the organization switcher shows (with one organization, "all" is that one).
+  const scopeName = organization
+    ? nameOf(organization)
+    : organizations.length === 1
+      ? organizations[0]!.name
+      : 'All organizations';
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <PageHeader
+        title="Dashboard"
+        description={`${scopeName} · disks, CPU and memory are system-wide`}
+        width="max-w-6xl"
+        action={
+          <ChoiceChips label="Period" value={range} options={RANGES} onChange={setRange} className="max-md:hidden" />
+        }
+      />
+      <ScrollArea label="Dashboard" className="min-h-0 flex-1">
+        <div className="mx-auto w-full max-w-6xl space-y-4 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4 motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)] md:px-6 md:pb-8">
+          {/* Phones: the period gets its own row instead of squeezing the title. */}
+          <ChoiceChips label="Period" value={range} options={RANGES} onChange={setRange} className="md:hidden" />
+          {query.isError && !data && (
+            <p role="alert" className="text-sm text-red-400">
+              Could not load the dashboard.
+            </p>
+          )}
+          {!data ? (
+            !query.isError && (
+              <p role="status" className="text-sm text-muted-foreground">
+                Loading…
+              </p>
+            )
+          ) : (
+            <DashboardBody data={data} />
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+function DashboardBody({ data }: { data: Data }) {
+  const cpuNow = last(data.system.cpuPercent);
+  const memNow = last(data.system.memUsed);
+  const spend = data.providers.reduce((sum, provider) => sum + provider.total, 0);
+  const paid = data.providers
+    .filter(provider => !provider.subscription)
+    .reduce((sum, provider) => sum + provider.total, 0);
+  const tokenTotal = data.agents.reduce(
+    (sum, agent) => sum + Object.values(agent.tokenTotals).reduce((a, b) => a + b, 0),
+    0,
+  );
+  const active = data.agents.reduce((sum, agent) => sum + agent.activeMs, 0);
+  const memPercent = (values: Series, limit: number | null) =>
+    limit ? values.map(value => (value === null ? null : (value / limit) * 100)) : values.map(() => null);
+  const busyAgents = data.agents.filter(agent => agent.activeMs > 0).sort((a, b) => b.activeMs - a.activeMs);
+  const tokenAgents = data.agents
+    .filter(agent => Object.values(agent.tokenTotals).some(Boolean))
+    .sort((a, b) => b.cost - a.cost);
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <Stat label="Host CPU now" value={cpuNow === null ? '—' : percent(cpuNow)} />
+        <Stat
+          label="Host memory now"
+          value={memNow === null ? '—' : bytes(memNow)}
+          hint={data.system.memTotal ? `of ${bytes(data.system.memTotal)}` : undefined}
+        />
+        <Stat
+          label="Spend in period"
+          value={dollars(spend)}
+          hint={paid !== spend ? `${dollars(paid)} billed per token` : undefined}
+        />
+        <Stat label="Tokens in period" value={tokens(tokenTotal)} />
+        <Stat
+          label="Agents active"
+          value={hours(active)}
+          hint={`${busyAgents.length} agent${busyAgents.length === 1 ? '' : 's'}`}
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title="Host CPU" scope="system">
+          {data.system.cpuPercent.some(value => value !== null) ? (
+            <TimeChart
+              buckets={data.buckets}
+              series={[{ key: 'cpu', label: 'CPU', values: data.system.cpuPercent }]}
+              format={percent}
+              max={100}
+            />
+          ) : (
+            <Empty>No samples yet.</Empty>
+          )}
+        </Panel>
+        <Panel
+          title="Host memory"
+          scope="system"
+          subtitle={data.system.memTotal ? `Total ${bytes(data.system.memTotal)}` : undefined}
+        >
+          {data.system.memUsed.some(value => value !== null) ? (
+            <TimeChart
+              buckets={data.buckets}
+              series={[{ key: 'mem', label: 'Used', values: data.system.memUsed, color: 'var(--chart-2)' }]}
+              format={bytes}
+              max={data.system.memTotal ?? undefined}
+            />
+          ) : (
+            <Empty>No samples yet.</Empty>
+          )}
+        </Panel>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {data.disks.length ? (
+          data.disks.map((disk, i) => (
+            <Panel
+              key={disk.disk}
+              title={`Disk · ${disk.label}`}
+              scope="system"
+              subtitle={`${disk.uses.join(', ') || 'in use'}${disk.total ? ` · ${bytes(last(disk.used) ?? 0)} of ${bytes(disk.total)} used` : ''}`}
+            >
+              <TimeChart
+                buckets={data.buckets}
+                series={[{ key: 'used', label: 'Used', values: disk.used, color: COLORS[(i + 2) % COLORS.length] }]}
+                format={bytes}
+                max={disk.total ?? undefined}
+              />
+            </Panel>
+          ))
+        ) : (
+          <Panel title="Disks" scope="system">
+            <Empty>No disk readings yet (every few minutes).</Empty>
+          </Panel>
+        )}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title="Computer CPU" scope="organization">
+          {data.computers.length ? (
+            <TimeChart
+              line
+              buckets={data.buckets}
+              series={data.computers.map(computer => ({
+                key: computer.id,
+                label: computer.name,
+                values: computer.cpuPercent,
+              }))}
+              format={percent}
+            />
+          ) : (
+            <Empty>No computers here.</Empty>
+          )}
+        </Panel>
+        <Panel title="Computer memory" scope="organization" subtitle="Share of each computer's memory limit">
+          {data.computers.length ? (
+            <TimeChart
+              line
+              buckets={data.buckets}
+              series={data.computers.map(computer => ({
+                key: computer.id,
+                label: computer.name,
+                values: memPercent(computer.memUsed, computer.memLimit),
+              }))}
+              format={percent}
+              max={100}
+            />
+          ) : (
+            <Empty>No computers here.</Empty>
+          )}
+        </Panel>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel
+          title="Agent active hours"
+          scope="organization"
+          subtitle="Time each agent spent working (its runs), per period"
+        >
+          {busyAgents.length ? (
+            <ChartContainer
+              config={{ hours: { label: 'Hours', color: 'var(--chart-3)' } }}
+              className="aspect-auto w-full"
+              style={{ height: Math.max(96, busyAgents.length * 36 + 24) }}
+            >
+              <BarChart
+                data={busyAgents.map(agent => ({ name: agent.name, hours: agent.activeMs / 3_600_000 }))}
+                layout="vertical"
+                margin={{ left: 8, right: 16 }}
+              >
+                <CartesianGrid horizontal={false} />
+                <XAxis
+                  type="number"
+                  tickFormatter={value => `${Number(value).toFixed(1)} h`}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis type="category" dataKey="name" width={96} axisLine={false} tickLine={false} />
+                <ChartTooltip
+                  cursor={false}
+                  content={<ChartTooltipContent formatter={value => hours(Number(value) * 3_600_000)} />}
+                />
+                <Bar dataKey="hours" fill="var(--color-hours)" radius={4} isAnimationActive={false} />
+              </BarChart>
+            </ChartContainer>
+          ) : (
+            <Empty>No agent worked in this period.</Empty>
+          )}
+        </Panel>
+        <Panel
+          title="Spend per provider"
+          scope="organization"
+          subtitle={
+            data.providers.some(provider => provider.subscription)
+              ? 'Running total. Subscription providers (ChatGPT) show the API-equivalent price, not money billed.'
+              : 'Running total over the period.'
+          }
+        >
+          {data.providers.length ? (
+            <>
+              <TimeChart
+                line
+                buckets={data.buckets}
+                series={data.providers.map(provider => ({
+                  key: provider.provider,
+                  label: `${provider.provider}${provider.subscription ? ' (subscription)' : ''}`,
+                  values: cumulative(provider.cost),
+                }))}
+                format={dollars}
+              />
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                {data.providers.map(provider => (
+                  <li key={provider.provider}>
+                    {provider.provider}: <span className="font-mono text-foreground">{dollars(provider.total)}</span>
+                    {provider.subscription && ' (API-equivalent)'}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <Empty>No model calls in this period.</Empty>
+          )}
+        </Panel>
+      </div>
+
+      <section aria-labelledby="dashboard-tokens" className="space-y-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 id="dashboard-tokens" className="text-sm font-semibold">
+            Tokens per agent
+          </h3>
+          <span className="text-xs text-muted-foreground">This organization · by type, stacked</span>
+        </div>
+        {tokenAgents.length ? (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {tokenAgents.map(agent => (
+              <Panel
+                key={agent.id}
+                title={agent.name}
+                scope="organization"
+                subtitle={`${TOKEN_TYPES.map(([key, label]) => `${label} ${tokens(agent.tokenTotals[key])}`).join(' · ')} · ${dollars(agent.cost)}`}
+              >
+                <TimeChart
+                  stacked
+                  buckets={data.buckets}
+                  series={TOKEN_TYPES.map(([key, label]) => ({ key, label, values: agent.tokens[key] }))}
+                  format={tokens}
+                />
+              </Panel>
+            ))}
+          </div>
+        ) : (
+          <div className={settingsCard}>
+            <Empty>No tokens used in this period.</Empty>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}

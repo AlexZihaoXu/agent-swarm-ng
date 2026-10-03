@@ -690,3 +690,80 @@ model AuditEvent {
   @@index([at])
   @@index([kind, sequence])
 }
+
+/// Dashboard samples (docs/dashboard.md): the host's CPU and memory, about once a minute. Kept 14 days.
+model SystemSample {
+  sequence   Int      @id @default(autoincrement())
+  at         DateTime @default(now())
+  cpuPercent Float
+  memUsed    BigInt
+  memTotal   BigInt
+
+  @@index([at])
+}
+
+/// One physical storage device the platform uses (or an operator-listed one), sampled every few minutes. `disk` is a
+/// stable key (the filesystem source, e.g. /dev/nvme0n1p2 or a ZFS pool); `uses` says what lives there.
+model DiskSample {
+  sequence Int      @id @default(autoincrement())
+  at       DateTime @default(now())
+  disk     String
+  label    String
+  /// JSON array: "docker", "platform data", "computer keep", "computer cache", "listed"
+  uses     String
+  used     BigInt
+  total    BigInt
+
+  @@index([at])
+  @@index([disk, at])
+}
+
+/// A running computer's CPU and memory, about once a minute.
+model ComputerSample {
+  sequence   Int      @id @default(autoincrement())
+  at         DateTime @default(now())
+  computerId String
+  cpuPercent Float
+  memUsed    BigInt
+  memLimit   BigInt?
+
+  @@index([at])
+  @@index([computerId, at])
+}
+
+/// One model call's tokens and cost, whatever made it (a turn, triage, a watcher, sleep, compaction).
+model UsageEvent {
+  sequence   Int      @id @default(autoincrement())
+  at         DateTime @default(now())
+  agentId    String
+  /// The provider as Pi names it (openai-codex, openrouter, …) and the endpoint it went through, if any.
+  provider   String
+  endpointId String?
+  model      String
+  /// turn, triage, watch, sleep, compaction, other
+  purpose    String
+  input      Int
+  output     Int
+  cacheRead  Int
+  cacheWrite Int
+  reasoning  Int
+  /// US dollars as Pi prices it (a subscription's API-equivalent price).
+  cost       Float
+  /// Backfilled rows point at their session entry, so a backfill never counts one twice.
+  sourceKey  String?  @unique
+
+  @@index([at])
+  @@index([agentId, at])
+}
+
+/// A stretch of time an agent was working (one run), for active hours.
+model AgentRunSpan {
+  sequence  Int       @id @default(autoincrement())
+  agentId   String
+  runId     String    @unique
+  startedAt DateTime
+  endedAt   DateTime?
+
+  @@index([agentId, startedAt])
+  @@index([startedAt])
+}

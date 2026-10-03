@@ -9,6 +9,7 @@ import {
   type SessionEntry,
   type SessionManager,
 } from '@earendil-works/pi-coding-agent';
+import { meterStream } from './usage/meter';
 
 /** When an agent compacts its context in the background (per agent; see Agents → agent → Model). */
 export type CompactionPolicy = {
@@ -152,7 +153,8 @@ export class BackgroundCompactor {
       }
     )._getSummarizationRequestAuth(model);
     const thinkingLevel = session.thinkingLevel;
-    const streamFn = session.agent.streamFunction;
+    // Its model calls are outside the session's events: metered here, each attempt once.
+    const streamFn = meterStream(session.agent.streamFunction, { agentId, purpose: 'compaction' });
     const retry = session.settingsManager.getRetrySettings();
     job.settled = auth
       .then(request =>

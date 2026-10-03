@@ -22,6 +22,7 @@
 - Organizations are folders of agents, computers and group chats kept apart: assignments, DM permissions and group membership never cross one, checked where each link is made; moving something previews and then drops the crossing links. The dashboard's organization choice is a view, never a permission.
 - The dashboard needs a signed-in person (docs/login.md): deny by default on every backend request and WebSocket upgrade, and through Caddy `forward_auth` on desktop routes, which bypass the backend. One `Admin` account whose first sign-in sets the password; store only password hashes and hashed session tokens, never in logs or responses.
 - The audit log (docs/audit-log.md) records sign-in attempts (name given, client address, millisecond time, outcome), organizations, computers and agents created/edited/deleted, and platform starts/stops: field names, never values or secrets; append-only, bounded retention; a failed write never blocks the action.
+- The Dashboard (docs/dashboard.md) charts system-wide host and disk use and the current organization's computers, active hours, spend and tokens; disks are detected from what the platform uses plus host-listed paths, never chosen in the dashboard; every model call is metered once (subscription costs are API-equivalent and labelled so).
 - Keep access and coordination policies configurable. The person setting up the system chooses the risks; reliably enforce the chosen permissions/control rules rather than silently imposing exclusive access or permitting actions outside them.
 
 ## Implementation and testing

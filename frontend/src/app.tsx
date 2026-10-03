@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatSkeleton, EdgeSkeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { AgentsIcon, ChatIcon, ComputerIcon, PlusIcon, SettingsIcon } from '@/components/ui/icons';
+import { AgentsIcon, ChatIcon, ComputerIcon, DashboardIcon, PlusIcon, SettingsIcon } from '@/components/ui/icons';
 import { JumpToLatest } from '@/components/jump-to-latest';
 import { useMessageWindow } from '@/lib/use-message-window';
 import { AgentPanel } from '@/components/agent-panel';
@@ -67,6 +67,7 @@ const loadKnowledge = () => import('@/components/knowledge-browser');
 const loadComputers = () => import('@/components/computers-panel');
 const Settings = lazy(() => loadSettings().then(module => ({ default: module.Settings })));
 const KnowledgeBrowser = lazy(() => loadKnowledge().then(module => ({ default: module.KnowledgeBrowser })));
+const Dashboard = lazy(() => import('@/components/dashboard').then(module => ({ default: module.Dashboard })));
 const AuditLog = lazy(() => import('@/components/audit-log').then(module => ({ default: module.AuditLog })));
 const ComputersPanel = lazy(() => loadComputers().then(module => ({ default: module.ComputersPanel })));
 const whenIdle = (task: () => void) => {
@@ -233,7 +234,7 @@ export function App() {
     if (activeTab === 'settings') setSettingsSeen(true);
   }, [activeTab]);
   // Tab content enters from the side its tab sits on (see .tab-enter).
-  const tabOrder = ['agents', 'chat', 'computers', 'settings'];
+  const tabOrder = ['dashboard', 'agents', 'chat', 'computers', 'settings'];
   const previousTab = useRef(activeTab);
   const tabShift = useRef(0);
   if (previousTab.current !== activeTab) {
@@ -265,7 +266,9 @@ export function App() {
             : '/chat'
           : value === 'computers'
             ? '/computers'
-            : '/settings';
+            : value === 'dashboard'
+              ? '/dashboard'
+              : '/settings';
     // Compare with the address itself: navigation renders as a transition, so during a quick second click the
     // rendered tab can still be the old one and would swallow the click.
     const current = parseDashboardPath(window.location.pathname).tab;
@@ -656,31 +659,38 @@ export function App() {
         className="flex min-h-0 flex-1 flex-col"
         style={{ '--tab-shift': `${tabShift.current}px` } as React.CSSProperties}
       >
+        {/* Phones: a slim top bar (organization, Portal) and a full-width bottom bar with every tab; detail views and
+            the desktop viewer hide both. Wider screens: one header row (organization, tabs, Portal). */}
+        {!computerViewerOpen && !narrowDetail && (
+          <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border bg-sidebar px-3 md:hidden">
+            <OrganizationSwitcher bar />
+            <PortalButton onClick={() => setPortalOpen(true)} className="h-9 w-9 justify-center px-0" />
+          </div>
+        )}
         {!computerViewerOpen && (
           <header
             className={cn(
-              'pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex justify-center md:pointer-events-auto md:relative md:z-auto md:inset-auto md:order-first md:h-14 md:min-h-14 md:shrink-0 md:items-center md:border-b md:border-border md:bg-sidebar md:px-4',
+              'fixed inset-x-0 bottom-0 z-40 border-t border-border bg-sidebar pb-[env(safe-area-inset-bottom)] md:relative md:z-auto md:order-first md:flex md:h-14 md:min-h-14 md:shrink-0 md:items-center md:justify-center md:border-b md:border-t-0 md:px-4 md:pb-0',
               narrowDetail && 'max-md:hidden',
             )}
           >
-            {/* The organization shown: at the header's left; on a phone a badge beside the floating tabs. */}
-            <OrganizationSwitcher compact className="pointer-events-auto mr-2 md:hidden" />
-            <OrganizationSwitcher className="pointer-events-auto hidden md:absolute md:left-4 md:flex" />
-            {/* Basic Tabs composition: Kibo tabs/standard/tabs-standard-1, floating without a footer on phones. */}
+            <OrganizationSwitcher className="hidden md:absolute md:left-4 md:flex" />
+            {/* Basic Tabs composition: Kibo tabs/standard/tabs-standard-1 (on phones a bottom navigation bar). */}
             <Tabs.List
               aria-label="Main navigation"
               ref={tabList}
-              className="pointer-events-auto relative isolate grid h-[50px] w-[min(23rem,calc(100vw-2rem-116px))] grid-cols-4 items-center rounded-lg border border-border bg-muted p-[3px] shadow-lg md:flex md:h-9 md:w-auto md:gap-0.5 md:border-0 md:p-1 md:shadow-none"
+              className="relative isolate grid h-14 w-full grid-cols-5 items-center px-1 md:flex md:h-9 md:w-auto md:gap-0.5 md:rounded-lg md:bg-muted md:p-1"
             >
               <span
                 aria-hidden="true"
                 data-testid="tab-indicator"
-                className="pointer-events-none absolute inset-y-[3px] left-0 rounded-md bg-background shadow-sm transition-[transform,width] duration-200 ease-out motion-reduce:transition-none md:inset-y-1"
+                className="pointer-events-none absolute inset-y-1.5 left-0 rounded-md bg-muted shadow-sm transition-[transform,width] duration-200 ease-out motion-reduce:transition-none md:inset-y-1 md:bg-background"
                 // Measured from the active tab, so tabs can be as wide as their labels (even gaps between them).
                 style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width }}
               />
               {(
                 [
+                  ['Dashboard', DashboardIcon],
                   ['Agents', AgentsIcon],
                   ['Chat', ChatIcon],
                   ['Computers', ComputerIcon],
@@ -695,19 +705,19 @@ export function App() {
                   onMouseDown={event => {
                     if (event.button === 0 && !event.ctrlKey) changeTab(label.toLowerCase());
                   }}
-                  className="relative z-10 min-h-11 min-w-0 rounded-md px-1 py-1 text-[11px] font-medium md:min-h-0 md:px-3.5 md:text-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:text-foreground"
+                  className="relative z-10 min-h-11 min-w-0 rounded-md px-0.5 py-1 text-[11px] font-medium md:min-h-0 md:px-3.5 md:text-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:text-foreground"
                 >
                   {/* Kibo tabs-standard-2 (Tabs with Icons): stacked on the phone bar, inline on desktop. */}
                   <span className="flex flex-col items-center gap-0.5 md:flex-row md:gap-1.5">
-                    <TabIcon className="size-[18px] md:size-4" />
-                    {label}
+                    <TabIcon className="size-5 md:size-4" />
+                    <span className="max-w-full truncate">{label}</span>
                   </span>
                 </Tabs.Trigger>
               ))}
             </Tabs.List>
             <PortalButton
               onClick={() => setPortalOpen(true)}
-              className="pointer-events-auto ml-2 size-[50px] justify-center rounded-lg shadow-lg md:absolute md:right-4 md:ml-0 md:h-9 md:w-auto md:justify-start md:shadow-none"
+              className="hidden md:absolute md:right-4 md:flex md:h-9"
             />
           </header>
         )}
@@ -1326,6 +1336,14 @@ export function App() {
                 </EmptyHeader>
               </Empty>
             </section>
+          )}
+        </Tabs.Content>
+
+        <Tabs.Content value="dashboard" className="tab-enter min-h-0 flex-1 outline-none data-[state=active]:flex">
+          {activeTab === 'dashboard' && (
+            <Suspense fallback={loading}>
+              <Dashboard />
+            </Suspense>
           )}
         </Tabs.Content>
 

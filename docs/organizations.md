@@ -32,7 +32,7 @@ Settings → Organizations lists them with their counts; rename one, create one,
 
 ## Dashboard
 
-The switcher at the top left of the header (adapted from Kibo dropdown-menu-profile-4, Multi-Account Switcher; on a phone a square badge beside the floating tab bar) chooses which organization the dashboard shows, or **All organizations**. It scopes Agents, Chat, Computers and Portal; the choice is kept per browser and never changes what agents can reach. New things go into the organization shown (while showing all, their create dialogs ask). Opening an agent of another organization switches to it; switching away from the agent being viewed returns to the list. Switching fades the page briefly (not with reduced motion).
+The switcher at the top left of the header (adapted from Kibo dropdown-menu-profile-4, Multi-Account Switcher; on a phone, with its name, in the slim top bar beside Portal) chooses which organization the dashboard shows, or **All organizations**. It scopes Agents, Chat, Computers, Portal and the organization charts of the [Dashboard](dashboard.md); the choice is kept per browser and never changes what agents can reach. New things go into the organization shown (while showing all, their create dialogs ask). Opening an agent of another organization switches to it; switching away from the agent being viewed returns to the list. Switching fades the page briefly (not with reduced motion).
 
 ## Not now
 

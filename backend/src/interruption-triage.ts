@@ -11,6 +11,7 @@ import { channelInput, chatResources, type ChannelMessage } from './chat-runtime
 import type { TriageDecision } from './message-inbox';
 import { runTriageTurns, TRIAGE_MAX_TOKENS, TRIAGE_TIMEOUT_MS } from './triage-turns';
 import type { ActivityTrace } from './activity-events';
+import { meterSession } from './usage/meter';
 
 export function createDecisionTool(decide: (decision: TriageDecision) => void) {
   return defineTool({
@@ -89,6 +90,8 @@ export async function evaluateInterruption(
   incoming: ChannelMessage[],
   signal: AbortSignal,
   trace?: ActivityTrace,
+  /** The agent whose model usage the fork's calls count toward. */
+  agentId?: string,
 ): Promise<TriageDecision> {
   const messages = forkContext(main);
   const controller = new AbortController();
@@ -129,6 +132,7 @@ export async function evaluateInterruption(
     if (fork.sessionFile || fork.agent.state.tools.length !== 1 || fork.agent.state.tools[0].name !== tool.name)
       throw new Error('Unsafe triage grant');
     fork.agent.state.messages = messages;
+    if (agentId) meterSession(fork, { agentId, purpose: 'triage' });
     detach = trace?.attach(fork) ?? detach;
     combined.addEventListener('abort', abort, { once: true });
     combined.throwIfAborted();

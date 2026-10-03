@@ -20,6 +20,7 @@ import { AgentSessionStore } from './agent-session-store';
 import type { ActivityStore } from './activity-store';
 import { forkBasis, type ForkBasis } from './computer-use/watch-judge';
 import { CUE_LIMITS, inputReminder, knowledgeReminder, toolReminder, type CueRecall } from './memory/cues';
+import { meterSession } from './usage/meter';
 
 /** Knowledge tools and help are never cues (their results are Knowledge already). */
 const KNOWLEDGE_TOOLS = new Set(['list_knowledge', 'search_knowledge', 'read_knowledge', 'help']);
@@ -56,7 +57,7 @@ export type InboxHooks = {
 };
 
 export async function runChat(
-  { runId, signal, emit, inbox }: RunContext,
+  { runId, signal, emit, inbox, active }: RunContext,
   config: ChatConfiguration,
   history: ChannelMessage[],
   message: ChannelMessage,
@@ -132,6 +133,12 @@ export async function runChat(
       subscriptionRuntime,
       manager,
     );
+    // Model usage of every response (the dashboard): an unpromoted heartbeat's calls are its own purpose.
+    meterSession(session, {
+      agentId: channel.agentId,
+      purpose: () => (promoted ? 'turn' : 'heartbeat'),
+      saved: Boolean(hooks.sessionStore),
+    });
     if (hooks.sessionStore && !restored && session.sessionManager.getEntries().length)
       await hooks.sessionStore.save(channel.agentId, session.sessionManager);
     const live = session;
@@ -155,6 +162,8 @@ export async function runChat(
       if (promoted) return false;
       promoted = true;
       if (heartbeat) heartbeat.branch.promoted = true;
+      // Now it is real work: the run counts as active time from its start.
+      active?.();
       activity.record('status', 'Heartbeat promoted', `It became a real turn: ${reason}.`);
       queueCheckpoint();
       return true;
@@ -453,7 +462,14 @@ export async function runChat(
           activity.record('status', 'Interruption triage', 'Evaluating new messages in a temporary full-context fork.');
           // One triage at a time per agent (interruption, reaction, Discord admission).
           const decision = await triageGate(channel.agentId, () =>
-            evaluateInterruption(main, channel.id, messages, triageSignal, activity.branch('Interruption triage')),
+            evaluateInterruption(
+              main,
+              channel.id,
+              messages,
+              triageSignal,
+              activity.branch('Interruption triage'),
+              channel.agentId,
+            ),
           );
           activity.record(
             'status',

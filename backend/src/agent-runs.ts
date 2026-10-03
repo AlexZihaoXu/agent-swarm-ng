@@ -2,6 +2,7 @@ import { MessageInbox } from './message-inbox';
 import { AgentWorkQueue, type WorkTicket } from './agent-work-queue';
 import type { ChannelMessage } from './chat-runtime';
 import type { ActivityEntry } from './agent-activity';
+import { runSpans } from './usage/run-spans';
 export type RunIdentity = { agentId: string; channelId: string; clientMessageId: string; inputSource?: 'agent' };
 export type RunState = RunIdentity & { runId: string; typing: boolean; typingTargets?: string[]; queued?: boolean };
 export type RunEvent = Record<string, unknown> & {
@@ -11,7 +12,14 @@ export type RunEvent = Record<string, unknown> & {
   agentId: string;
   channelId: string;
 };
-export type RunContext = { runId: string; signal: AbortSignal; emit: (event: object) => void; inbox: MessageInbox };
+export type RunContext = {
+  runId: string;
+  signal: AbortSignal;
+  emit: (event: object) => void;
+  inbox: MessageInbox;
+  /** A provisional run (a heartbeat) became real work: its active span is recorded from the run's start. */
+  active?: () => void;
+};
 type Run = RunState & {
   humanOwned: boolean;
   controller: AbortController;
@@ -198,7 +206,15 @@ export class AgentRuns {
   enqueue(
     identity: RunIdentity,
     work: (context: RunContext) => Promise<void>,
-    options: { queueTimeoutMs?: number; executionTimeoutMs?: number } = {},
+    {
+      provisional,
+      ...options
+    }: {
+      queueTimeoutMs?: number;
+      executionTimeoutMs?: number;
+      /** A heartbeat: active time (AgentRunSpan) only once it calls `context.active()`, not when it starts. */
+      provisional?: boolean;
+    } = {},
   ) {
     if (this.closing) throw new Error('Agent is unavailable');
     const run: Run = {
@@ -241,7 +257,15 @@ export class AgentRuns {
           signal.throwIfAborted();
           run.queued = false;
           run.emit({ type: 'run_started', clientMessageId: run.clientMessageId });
-          await work({ runId: run.runId, signal, emit: run.emit, inbox: run.inbox });
+          const startedAt = new Date();
+          let active = false;
+          const activate = () => {
+            if (active) return;
+            active = true;
+            runSpans.start(run.agentId, run.runId, startedAt);
+          };
+          if (!provisional) activate();
+          await work({ runId: run.runId, signal, emit: run.emit, inbox: run.inbox, active: activate });
         },
         { ...options, executionTimeoutMs: options.executionTimeoutMs ?? this.timeoutMs },
       );
@@ -268,6 +292,7 @@ export class AgentRuns {
           run.emit({ type: 'error', message: 'The agent lifecycle could not be saved. Check backend storage.' });
         })
         .finally(() => {
+          runSpans.end(run.runId);
           detach();
           run.inbox.close();
           this.runs.delete(run.runId);

@@ -9,6 +9,7 @@ import type { RecordingOp } from './recording';
 import { fileAttachment, type FileOperation } from './operator-files';
 import { terminalSockets, type TerminalSocket } from './terminal-stream';
 import { authorized } from './auth';
+import { parseExtraDisks, validateRequestedPaths } from './disks';
 
 process.umask(0o077);
 const docker = new DockerApi();
@@ -27,6 +28,10 @@ const manager = new ComputerManager(
 // their filtered egress sidecars. No model inference or agent work is replayed.
 await manager.resume();
 const terminals = terminalSockets(manager);
+// Extra host paths the operator wants on the dashboard's disk chart (.env), measured read-only.
+const extraDisks = parseExtraDisks(process.env.DASHBOARD_EXTRA_DISKS);
+if (extraDisks.invalid.length)
+  console.error('computer-controller: DASHBOARD_EXTRA_DISKS skips paths that are not plain absolute paths.');
 const computerCore = new ComputerCoreService((id, mode, input) => manager.computerCoreExec(id, mode, input));
 const computerUse = new ComputerUseService((id, mode, input) => manager.computerUseExec(id, mode, input));
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -119,6 +124,13 @@ Bun.serve<TerminalSocket>({
           'storage' in input ? input.storage : undefined,
         );
         return json({ created: true }, 201);
+      }
+      // Dashboard disk usage: Docker's root and the operator's list are added here, never chosen by the caller.
+      if (pathname === '/metrics/disks' && request.method === 'POST') {
+        const input = await body(request);
+        if (!input || typeof input !== 'object' || !('paths' in input))
+          throw new ResourceError(400, 'Invalid disk paths.');
+        return json(await manager.diskUsage(validateRequestedPaths(input.paths), extraDisks.paths));
       }
       if (pathname === '/computers/storage/check' && request.method === 'POST') {
         const input = await body(request);
