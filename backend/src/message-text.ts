@@ -39,9 +39,9 @@ export function messageText(text: string, offset = 0, limit = 1000) {
  */
 export function neutralizeLabels(text: string) {
   return text.replace(
-    // Any invisible or format character (bidi controls, zero-width, tags…) may precede it, and look-alike dots and plus
-    // signs count too.
-    /^([\s\p{Cf}\p{Default_Ignorable_Code_Point}]*)(?=[[［〔【⟦]|\d{1,2}:\d\d:\d\d\s*[·⋅•∙‧・]|[+＋﹢]\s*\d+\s+more\s+message)/gimu,
-    '$1\\',
+    // Indentation and any invisible or format character (bidi controls, zero-width, tags…) may precede it, and
+    // look-alike dots and plus signs count too. The lead never spans a line break, so the scan stays linear.
+    /^(?:[^\S\r\n\u2028\u2029]|[\p{Cf}\p{Default_Ignorable_Code_Point}])*(?=[[［〔【⟦]|\d{1,2}:\d\d:\d\d\s*[·⋅•∙‧・]|[+＋﹢]\s*\d+\s+more\s+message)/gimu,
+    '$&\\',
   );
 }

@@ -12,7 +12,8 @@ import {
 } from './sessions';
 
 /** Reachable without signing in. Everything else (any path, WebSocket upgrades included) needs a session. */
-const PUBLIC = new Set(['/api/health', '/api/auth/session', '/api/auth/login', '/api/auth/setup']);
+// Sign-out too: it must clear every cookie even when the one that answers first has expired.
+const PUBLIC = new Set(['/api/health', '/api/auth/session', '/api/auth/login', '/api/auth/setup', '/api/auth/logout']);
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const WINDOW = 15 * 60 * 1000;
 /** Wrong passwords per account from one address, per address, and per account from everywhere (a slow, distributed

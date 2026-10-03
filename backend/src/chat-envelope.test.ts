@@ -1,3 +1,4 @@
+import { neutralizeLabels } from './message-text';
 import { expect, it } from 'vitest';
 import { channelInput } from './chat-runtime';
 
@@ -97,4 +98,11 @@ it('leaves the owner\u2019s own words as typed', () => {
     human: true,
   };
   expect(channelInput('private', text, { role: 'user', text: '', source: group })).toContain(text);
+});
+
+it('neutralizes long input in linear time', () => {
+  const started = performance.now();
+  neutralizeLabels(`${'\n'.repeat(80_000)}${'\u200b'.repeat(40_000)}[x]`);
+  expect(performance.now() - started).toBeLessThan(500);
+  expect(neutralizeLabels('\n\n\n[x]')).toBe('\n\n\n\\[x]');
 });
