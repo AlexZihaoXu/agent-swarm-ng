@@ -222,6 +222,18 @@ Ports bind to loopback by default. `.env.example` documents the settings; authen
 
 The backend exposes typed computer-management routes but **does not** mount the Docker socket. An internal-only `computer-controller` service has the socket and no app `.local` or provider credential mount; it accepts only fixed-template, label-checked lifecycle requests. Platform Compose does not automatically build the managed computer/egress/media images: build the `computer-image`, `computer-egress-image` and `computer-media-image` profile services before the production frontend and before creating computers. The standalone workspace Compose file below still idles without desktop startup. The managed runtime boots GNOME/PipeWire, passwordless sudo and, in the stage-2 image, Selkies H.264/WebCodecs or opt-in JPEG HTTP behind the isolated media relay; see [Computers](computers.md) for its isolation and E2E checks.
 
+## Production
+
+The Compose services always run their production builds: the backend's `start` (migrations, then `bun src/index.ts` with `NODE_ENV=production`), the controller, and Caddy serving the built frontend. `bun run dev` is for development only and listens on 127.0.0.1. Before and after deploying:
+
+1. **Secrets:** `.env` from `.env.example` with `COMPUTER_CONTROLLER_TOKEN` set (Compose refuses to start without it). Provider keys, tokens and the database stay in `.local/` (mode 0700/0600), never in the repository.
+2. **Network:** publish only loopback and a private interface (Tailscale or a trusted LAN). Never expose the dashboard publicly; set `ALLOWED_HOSTS` if you browse by name.
+3. **Sign-in:** open the dashboard right after the first start and set the Admin password ([login](login.md)); until then anyone who reaches it can.
+4. **Deploy:** `docker compose … build backend frontend computer-controller`, then `docker compose … up -d`. Accepted agent runs do not survive a backend restart (they stop with an incomplete status).
+5. **Logs:** each service keeps at most 5 × 10 MB of Docker logs (`x-logging` in `compose.yaml`).
+6. **Backups:** the backend saves one consistent copy of the database a day in `.local/backups/database/` (the newest `DATABASE_BACKUPS`, default 7). Copy `.local/` (database backups, `files/`, secrets) and each computer's Keep folder off the machine; restore by stopping the backend and putting a copy back as `.local/platform.db`.
+7. **Health:** `GET /api/health` (backend), the controller's `/health` and Caddy's admin API back the Compose health checks; `docker compose ps` shows them.
+
 ## Default environment image
 
 The image uses Ubuntu 24.04 and explicitly installs the Ubuntu GNOME session, Ubuntu Dock, app indicators, Yaru themes, Ubuntu fonts, terminal, file manager, settings, and D-Bus support. Ubuntu visual defaults, Noble wallpapers, SVG icon rendering, and dock menu support are included to preserve the standard desktop appearance; “lean” means omitting extra applications, not stripping desktop assets. The image sets `LANG=C.UTF-8`, since GNOME Terminal cannot start under the plain C/ASCII locale. `--no-install-recommends` avoids pulling in the full desktop application bundle. Required transitive dependencies still install; do not remove GNOME dependencies merely because their names resemble optional apps.

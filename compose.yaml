@@ -1,4 +1,10 @@
 name: agent-swarm-ng
+# Bounded container logs (Docker keeps them forever otherwise): at most 5 × 10 MB per service.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
 services:
   backend:
     build:
@@ -10,17 +16,20 @@ services:
       PORT: "3000"
       DATABASE_URL: ${DATABASE_URL:-file:/app/.local/platform.db}
       AGENT_RUN_TIMEOUT_MS: ${AGENT_RUN_TIMEOUT_MS:-0}
-      # Host names (besides IP addresses and localhost) allowed to reach the unauthenticated API; blocks DNS rebinding.
+      # Host names (besides IP addresses and localhost) allowed to reach the API; blocks DNS rebinding.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       # Days of operator activity to keep (0 keeps everything).
       ACTIVITY_RETENTION_DAYS: ${ACTIVITY_RETENTION_DAYS:-30}
-      # Shared secret for the internal computer controller; empty disables the check.
+      # Daily database copies kept in .local/backups/database (0 turns them off).
+      DATABASE_BACKUPS: ${DATABASE_BACKUPS:-7}
+      # Required shared secret for the internal computer controller.
       COMPUTER_CONTROLLER_TOKEN: ${COMPUTER_CONTROLLER_TOKEN:?Set COMPUTER_CONTROLLER_TOKEN in .env (openssl rand -hex 32)}
       COMPUTER_CONTROLLER_URL: http://computer-controller:3101
     init: true
     volumes:
       - platform_data:/app/.local
     restart: unless-stopped
+    logging: *logging
     networks:
       - default
       - computer_management
@@ -58,7 +67,7 @@ services:
       dockerfile: computer-controller/Dockerfile
     environment:
       COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-agent-swarm-ng}
-      # Most computers that can exist at once.
+      # Required: without it the controller answers only its health check.
       COMPUTER_CONTROLLER_TOKEN: ${COMPUTER_CONTROLLER_TOKEN:?Set COMPUTER_CONTROLLER_TOKEN in .env (openssl rand -hex 32)}
       # Opt-in: shares ONLY this DRM render node with each sudo computer.
       COMPUTER_RENDER_DEVICE: ${COMPUTER_RENDER_DEVICE:-}
@@ -75,6 +84,7 @@ services:
     networks:
       - computer_management
     restart: unless-stopped
+    logging: *logging
     healthcheck:
       test: ["CMD", "bun", "-e", "const r = await fetch('http://127.0.0.1:3101/health'); process.exit(r.ok ? 0 : 1)"]
       interval: 15s
@@ -102,6 +112,13 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    logging: *logging
+    # Caddy's admin API answers on loopback inside the container while Caddy runs.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 networks:
   computer_management:
     internal: true

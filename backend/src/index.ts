@@ -4,6 +4,8 @@ import { computerControllerFromEnv } from './computer-controller-client';
 import { ComputerStore } from './computer-store';
 import { reconcileStoppedComputers, watchStoppedComputers } from './computer-power';
 import { ActivityStore, DEFAULT_ACTIVITY_RETENTION_DAYS } from './activity-store';
+import { backupDatabase, DEFAULT_DATABASE_BACKUPS } from './database-backup';
+import { join } from 'node:path';
 
 process.umask(0o077);
 let stopPowerWatch = () => {};
@@ -43,3 +45,15 @@ const prune = () =>
     .catch(error => app.log.error(error, 'Activity pruning failed'));
 void prune();
 setInterval(() => void prune(), 6 * 3_600_000).unref();
+// One copy of the database a day in .local/backups/database, the newest DATABASE_BACKUPS kept (0 turns it off).
+const backups = Number(process.env.DATABASE_BACKUPS ?? DEFAULT_DATABASE_BACKUPS);
+const backup = () =>
+  backupDatabase(database, join(database.dataDirectory, 'backups', 'database'), backups)
+    .then(made => {
+      if (made) app.log.info({ file: made }, 'Saved the daily database backup');
+    })
+    .catch(error => app.log.error(error, 'Database backup failed'));
+if (backups > 0) {
+  void backup();
+  setInterval(() => void backup(), 6 * 3_600_000).unref();
+}
