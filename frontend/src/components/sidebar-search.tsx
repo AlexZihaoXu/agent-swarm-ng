@@ -17,7 +17,7 @@ export function SidebarSearch({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-3">
+    <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-3">
       <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-foreground/15 bg-[#262626] px-2.5 focus-within:ring-1 focus-within:ring-ring sm:h-8">
         <svg
           aria-hidden="true"

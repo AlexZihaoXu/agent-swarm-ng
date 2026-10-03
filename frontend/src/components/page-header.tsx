@@ -26,12 +26,7 @@ export function PageHeader({
 }) {
   return (
     <header className={cn('shrink-0 border-b border-border', sticky && 'sticky top-0 z-10 bg-background')}>
-      <div
-        className={cn(
-          'mx-auto flex min-h-14 w-full items-center gap-3 px-4 pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] md:px-6 md:py-3',
-          width,
-        )}
-      >
+      <div className={cn('mx-auto flex min-h-14 w-full items-center gap-3 px-4 pb-2.5 pt-2.5 md:px-6 md:py-3', width)}>
         {leading}
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-lg font-semibold">{title}</h2>

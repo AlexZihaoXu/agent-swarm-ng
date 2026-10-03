@@ -459,17 +459,33 @@ export class ComputerManager {
         entries,
       );
     let results: DiskUsage[];
+    // Paths that failed for a passing reason (Docker trouble, the deadline): reported unavailable, but tried again next
+    // time rather than skipped for an hour. Only a missing folder (or a missing marker, from the script) is remembered.
+    const transient = new Set<string>();
     try {
       results = [await measure(measured)];
     } catch (error) {
       // Docker refuses the whole helper when one path is missing: measure each alone so the rest still count.
       if (!(error instanceof DockerApiError)) throw error;
-      // One after another: a few short helpers, never a burst of containers.
+      // One after another, within one deadline below the backend's 90 s request limit: never a burst of containers.
+      const deadline = Date.now() + 75_000;
       results = [];
-      for (const entry of measured)
+      for (const entry of measured) {
+        const unavailable = { disks: [{ ...entry, error: 'unavailable' as const }], zfs: [] };
+        if (Date.now() > deadline) {
+          transient.add(entry.path);
+          results.push(unavailable);
+          continue;
+        }
         results.push(
-          await measure([entry]).catch(() => ({ disks: [{ ...entry, error: 'unavailable' as const }], zfs: [] })),
+          await measure([entry]).catch(failure => {
+            // Docker answers 400 for a bind source that does not exist; anything else may pass.
+            const missing = failure instanceof DockerApiError && failure.status === 400;
+            if (!missing) transient.add(entry.path);
+            return unavailable;
+          }),
         );
+      }
     }
     const found = new Map(results.flatMap(result => result.disks).map(disk => [`${disk.use}\n${disk.path}`, disk]));
     const disks = paths.map(
@@ -478,7 +494,8 @@ export class ComputerManager {
     for (const disk of disks) {
       if (disk.use === 'docker') continue;
       if (!('error' in disk)) this.unavailableDisks.delete(disk.path);
-      else if (!this.unavailableDisks.has(disk.path)) this.unavailableDisks.set(disk.path, now + DISK_RETRY_MS);
+      else if (!transient.has(disk.path) && !this.unavailableDisks.has(disk.path))
+        this.unavailableDisks.set(disk.path, now + DISK_RETRY_MS);
     }
     const zfs = new Map(results.flatMap(result => result.zfs).map(item => [item.dataset, item]));
     return { disks, zfs: [...zfs.values()] };

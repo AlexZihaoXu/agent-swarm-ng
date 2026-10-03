@@ -325,6 +325,7 @@ function DashboardBody({ data }: { data: Data }) {
   const cpuNow = last(data.system.cpuPercent);
   const memNow = last(data.system.memUsed);
   const priced = data.providers.filter(provider => provider.priced);
+  const unpriced = data.providers.length - priced.length;
   const spend = priced.reduce((sum, provider) => sum + provider.total, 0);
   const paid = priced.filter(provider => !provider.subscription).reduce((sum, provider) => sum + provider.total, 0);
   // Reasoning tokens are part of output: counted once.
@@ -354,8 +355,12 @@ function DashboardBody({ data }: { data: Data }) {
         />
         <Stat
           label="Spend in period"
-          value={dollars(spend)}
-          hint={paid !== spend ? `${dollars(paid)} billed per token` : undefined}
+          value={priced.length ? dollars(spend) : '—'}
+          hint={
+            [paid !== spend ? `${dollars(paid)} billed per token` : '', unpriced ? `+${unpriced} not priced` : '']
+              .filter(Boolean)
+              .join(' · ') || undefined
+          }
         />
         <Stat label="Tokens in period" value={tokens(tokenTotal)} />
         <Stat
@@ -480,6 +485,7 @@ function DashboardBody({ data }: { data: Data }) {
                 style={{ height: Math.max(96, busyAgents.length * 36 + 24) }}
               >
                 <BarChart
+                  accessibilityLayer
                   data={busyAgents.map(agent => ({ name: agent.name, hours: agent.activeMs / 3_600_000 }))}
                   layout="vertical"
                   margin={{ left: 8, right: 16 }}
@@ -515,18 +521,21 @@ function DashboardBody({ data }: { data: Data }) {
         >
           {data.providers.length ? (
             <>
-              <TimeChart
-                line
-                buckets={data.buckets}
-                series={data.providers
-                  .filter(provider => provider.priced)
-                  .map(provider => ({
-                    key: provider.provider,
-                    label: `${provider.label}${provider.subscription ? ' (subscription)' : ''}`,
-                    values: cumulative(provider.cost),
-                  }))}
-                format={dollars}
-              />
+              {!priced.length && <Empty>No priced provider in this period.</Empty>}
+              {priced.length > 0 && (
+                <TimeChart
+                  line
+                  buckets={data.buckets}
+                  series={data.providers
+                    .filter(provider => provider.priced)
+                    .map(provider => ({
+                      key: provider.provider,
+                      label: `${provider.label}${provider.subscription ? ' (subscription)' : ''}`,
+                      values: cumulative(provider.cost),
+                    }))}
+                  format={dollars}
+                />
+              )}
               <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 {data.providers.map(provider => (
                   <li key={provider.provider}>
@@ -573,7 +582,7 @@ function DashboardBody({ data }: { data: Data }) {
                     values:
                       key === 'output'
                         ? agent.tokens.output.map((value, i) =>
-                            value === null ? null : value - (agent.tokens.reasoning[i] ?? 0),
+                            value === null ? null : Math.max(0, value - (agent.tokens.reasoning[i] ?? 0)),
                           )
                         : agent.tokens[key],
                   }))}

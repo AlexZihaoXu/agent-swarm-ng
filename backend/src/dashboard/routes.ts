@@ -120,12 +120,16 @@ export async function dashboardData(
 
   // Host and computer samples are grouped into buckets in SQL: a week of minute samples never loads row by row.
   const bucketOf = `CAST((unixepoch("at") * 1000 - ?) / ? AS INTEGER)`;
+  // The plain text comparison lets SQLite use the "at" index (Prisma stores ISO text); a day's margin covers any
+  // stored format, and unixepoch() then filters exactly.
+  const indexFrom = new Date(from - 86_400_000).toISOString().slice(0, 10);
   const [system, disks, computers, agents] = await Promise.all([
     client.$queryRawUnsafe<{ b: number; cpu: number; mem: number; total: number }[]>(
       `SELECT ${bucketOf} AS b, AVG("cpuPercent") AS cpu, AVG("memUsed") AS mem, MAX("memTotal") AS total
-       FROM "SystemSample" WHERE unixepoch("at") >= ? GROUP BY b ORDER BY b`,
+       FROM "SystemSample" WHERE "at" >= ? AND unixepoch("at") >= ? GROUP BY b ORDER BY b`,
       from,
       bucket,
+      indexFrom,
       from / 1000,
     ),
     client.diskSample.findMany({ where: { at: since }, orderBy: { at: 'asc' } }),
@@ -149,10 +153,11 @@ export async function dashboardData(
         >(
           `SELECT "computerId", ${bucketOf} AS b, AVG("cpuPercent") AS cpu, AVG("memUsed") AS mem,
              AVG("memPercent") AS percent, MAX("memLimit") AS "limit"
-           FROM "ComputerSample" WHERE unixepoch("at") >= ? AND "computerId" IN (${computerIds.map(() => '?').join(',')})
+           FROM "ComputerSample" WHERE "at" >= ? AND unixepoch("at") >= ? AND "computerId" IN (${computerIds.map(() => '?').join(',')})
            GROUP BY "computerId", b ORDER BY b`,
           from,
           bucket,
+          indexFrom,
           from / 1000,
           ...computerIds,
         )

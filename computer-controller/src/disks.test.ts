@@ -86,7 +86,7 @@ it('measures a requested folder only when it carries its Keep or Cache marker', 
   );
 });
 
-function diskDocker(missing: string[] = []) {
+function diskDocker(missing: string[] = [], status = 400) {
   const docker = new DockerApi('/nonexistent.sock');
   const attempts: string[][] = [];
   const helpers: {
@@ -113,7 +113,7 @@ function diskDocker(missing: string[] = []) {
       };
       expect(config.HostConfig.NetworkMode).toBe('none');
       attempts.push(config.HostConfig.Mounts.map(mount => mount.Source));
-      if (config.HostConfig.Mounts.some(mount => missing.includes(mount.Source))) throw new DockerApiError(400); // Docker: bind source path does not exist
+      if (config.HostConfig.Mounts.some(mount => missing.includes(mount.Source))) throw new DockerApiError(status); // 400: Docker's bind source path does not exist
       helpers.push({ script: config.Entrypoint[2], mounts: config.HostConfig.Mounts, caps: config.HostConfig.CapAdd });
       return { Id: `helper-${helpers.length}` } as never;
     }
@@ -211,4 +211,21 @@ it('never runs two disk measurements at once: a request during one shares its re
   expect(attempts).toEqual([['/var/lib/docker', '/srv/cache']]);
   await manager.diskUsage(['/srv/other'], []);
   expect(attempts).toHaveLength(2);
+});
+
+it('tries a path again next time when Docker failed for another reason', async () => {
+  const { docker, attempts } = diskDocker(['/mnt/flaky'], 500);
+  const manager = new ComputerManager(docker, 'swarm-ng-test', '{}');
+  let now = 1_000_000;
+  vi.spyOn(Date, 'now').mockImplementation(() => now);
+  try {
+    const first = await manager.diskUsage([], ['/mnt/flaky']);
+    expect(first.disks).toContainEqual({ path: '/mnt/flaky', use: 'listed', error: 'unavailable' });
+    attempts.length = 0;
+    now += 60_000;
+    await manager.diskUsage([], ['/mnt/flaky']);
+    expect(attempts[0]).toEqual(['/var/lib/docker', '/mnt/flaky']);
+  } finally {
+    vi.restoreAllMocks();
+  }
 });
