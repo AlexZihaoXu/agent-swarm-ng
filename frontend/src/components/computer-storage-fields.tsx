@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { noAutofill } from '@/lib/no-autofill';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
@@ -163,7 +164,7 @@ export function ComputerStorageFields({
             }}
             placeholder="/var/lib/postgresql"
             spellCheck={false}
-            autoComplete="off"
+            {...noAutofill}
             className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <Button type="button" variant="outline" size="sm" disabled={!typed || invalid} onClick={add}>

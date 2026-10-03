@@ -20,7 +20,9 @@ test('unsaved endpoint form tests models and clears on refresh', async ({ page }
   });
   await openEndpoint(page);
   const key = page.getByLabel('API key', { exact: true });
-  await expect(key).toHaveAttribute('type', 'password');
+  await expect(key).toHaveAttribute('type', 'text');
+  await expect(key).toHaveAttribute('data-masked', 'true');
+  await expect(key).toHaveAttribute('data-lpignore', 'true');
   await key.fill('test-only-key');
   await page.getByRole('button', { name: 'Test connection' }).click();
   await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toContainText('Connected');

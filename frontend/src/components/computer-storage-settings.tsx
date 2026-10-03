@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { noAutofill } from '@/lib/no-autofill';
 import type { operations } from '@/api/schema';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
@@ -117,7 +118,7 @@ export function ComputerStorageSettings({ card }: { card: string }) {
                       setDraft(current => ({ ...current, [field.key]: event.target.value }));
                     }}
                     placeholder={`Docker storage (e.g. ${field.example})`}
-                    autoComplete="off"
+                    {...noAutofill}
                     spellCheck={false}
                     disabled={status === 'saving'}
                     className={`${settingsInput} font-mono`}

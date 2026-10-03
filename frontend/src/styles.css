@@ -569,3 +569,9 @@ body {
     transform: translateY(-6px) scale(0.98);
   }
 }
+
+/* Secrets that are not logins (lib/no-autofill.ts secretField): masked like a password field while hidden. */
+input[data-masked='true'] {
+  -webkit-text-security: disc;
+  text-security: disc;
+}

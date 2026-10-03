@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { secretField } from '@/lib/no-autofill';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import type { paths } from '@/api/schema';
@@ -253,9 +254,7 @@ export function AgentDiscordSettings({
               <div className="relative min-w-60 flex-1">
                 <input
                   id={`${id}-token`}
-                  type={showToken ? 'text' : 'password'}
-                  autoComplete="off"
-                  spellCheck={false}
+                  {...secretField(!showToken)}
                   value={draft.token}
                   disabled={draft.remove}
                   placeholder={saved.configured ? 'Saved and hidden · paste to replace' : 'Paste the bot token'}

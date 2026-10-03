@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { noAutofill } from '@/lib/no-autofill';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
@@ -163,7 +164,7 @@ export function AgentModelSettings({
                 setStatus('');
               }}
               className={fieldClass}
-              autoComplete="off"
+              {...noAutofill}
             />
           </div>
           <div className="space-y-2">

@@ -100,10 +100,13 @@ test('an agent’s Discord bot: paste a token, choose channels and when they wak
   );
   await expect(section.getByText('Message Content Intent').first()).toBeVisible();
   const token = section.getByLabel('Bot token');
-  await expect(token).toHaveAttribute('type', 'password');
+  // Masked, but not a password field: password managers must not fill a saved login into it.
+  await expect(token).toHaveAttribute('type', 'text');
+  await expect(token).toHaveAttribute('data-masked', 'true');
+  await expect(token).toHaveAttribute('data-1p-ignore', 'true');
   await token.fill('MTAwMDAwMDAwMDAwMDAwMDAx.GxYzAb.abcdefghijklmnopqrstuvwxyz0123');
   await section.getByRole('button', { name: 'Show token' }).click();
-  await expect(token).toHaveAttribute('type', 'text');
+  await expect(token).not.toHaveAttribute('data-masked', 'true');
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(section.getByText('Online as aether-bot')).toBeVisible();
   expect(calls[0].method).toBe('PUT /api/agents/avery/discord/token');

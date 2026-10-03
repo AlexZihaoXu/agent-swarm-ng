@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { noAutofill } from '@/lib/no-autofill';
 import * as Dialog from '@radix-ui/react-dialog';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
@@ -77,7 +78,7 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
             value={name}
             onChange={event => setName(event.target.value)}
             className={fieldClass}
-            autoComplete="off"
+            {...noAutofill}
             placeholder="Name your agent"
           />
         </div>

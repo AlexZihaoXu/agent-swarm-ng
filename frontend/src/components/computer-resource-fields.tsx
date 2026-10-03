@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { noAutofill } from '@/lib/no-autofill';
 import { Button } from '@/components/ui/button';
 import type { ComputerLimits, ComputerSettingsDraft } from '@/lib/computer-settings';
 
@@ -125,7 +126,7 @@ export function ComputerResourceFields({
           list={listId}
           type="text"
           maxLength={64}
-          autoComplete="off"
+          {...noAutofill}
           spellCheck={false}
           value={value.timezone}
           disabled={disabled}

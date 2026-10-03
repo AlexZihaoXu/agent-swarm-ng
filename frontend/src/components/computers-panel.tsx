@@ -1,4 +1,5 @@
 import { MoveToOrganization, OrganizationField, useCreateOrganization } from '@/components/organization-fields';
+import { noAutofill } from '@/lib/no-autofill';
 import { useOrganizations } from '@/lib/organizations';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useRetained } from '@/lib/use-retained';
@@ -844,7 +845,7 @@ export function ComputersPanel({
               <input
                 id={confirmId}
                 aria-describedby={`${confirmId}-help`}
-                autoComplete="off"
+                {...noAutofill}
                 spellCheck={false}
                 value={confirmation}
                 disabled={deleteBusy}

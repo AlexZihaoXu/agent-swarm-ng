@@ -1,4 +1,5 @@
 import { DiscordOwnerSettings } from '@/components/discord-owner-settings';
+import { noAutofill, secretField } from '@/lib/no-autofill';
 import { AccountSettings } from '@/components/account-settings';
 import { SwarmSettings } from '@/components/swarm-settings';
 import { OrganizationSettings } from '@/components/organization-settings';
@@ -218,7 +219,7 @@ function EndpointCard({
                       value={name}
                       onChange={event => setName(event.target.value)}
                       placeholder="e.g. Local server"
-                      autoComplete="off"
+                      {...noAutofill}
                       className={inputClass}
                     />
                   </div>
@@ -236,7 +237,7 @@ function EndpointCard({
                         setResult({ state: 'idle' });
                       }}
                       placeholder="https://api.openai.com/v1"
-                      autoComplete="off"
+                      {...noAutofill}
                       spellCheck={false}
                       aria-describedby={`${id}-url-help`}
                       className={inputClass}
@@ -251,7 +252,7 @@ function EndpointCard({
                     </label>
                     <input
                       id={`${id}-key`}
-                      type="password"
+                      {...secretField(true)}
                       value={apiKey}
                       onChange={event => {
                         setApiKey(event.target.value);
@@ -265,8 +266,6 @@ function EndpointCard({
                             ? 'OpenRouter API key'
                             : 'Optional for local servers'
                       }
-                      autoComplete="new-password"
-                      spellCheck={false}
                       className={inputClass}
                     />
                   </div>

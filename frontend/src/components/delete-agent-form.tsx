@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { noAutofill } from '@/lib/no-autofill';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Button } from '@/components/ui/button';
 import type { ChatAgent } from '@/use-chat';
@@ -58,7 +59,7 @@ export function DeleteAgentForm({
         value={confirmation}
         onChange={event => setConfirmation(event.target.value)}
         disabled={busy}
-        autoComplete="off"
+        {...noAutofill}
         spellCheck={false}
         className="mt-2 h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10"
       />

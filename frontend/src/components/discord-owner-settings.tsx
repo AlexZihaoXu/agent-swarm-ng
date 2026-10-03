@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { noAutofill } from '@/lib/no-autofill';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 
@@ -79,7 +80,7 @@ export function DiscordOwnerSettings({ card }: { card: string }) {
                     <input
                       value={account.id}
                       inputMode="numeric"
-                      autoComplete="off"
+                      {...noAutofill}
                       placeholder="e.g. 400000000000000001"
                       onChange={event =>
                         setDraft(current =>

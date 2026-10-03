@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { noAutofill } from '@/lib/no-autofill';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { AgentDmTranscript } from '@/components/agent-dm-transcript';
@@ -132,7 +133,7 @@ export function AgentChannelSettings({
                 value={query}
                 maxLength={80}
                 placeholder="Search by name"
-                autoComplete="off"
+                {...noAutofill}
                 onChange={event => setQuery(event.target.value)}
                 className="h-11 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9"
               />
