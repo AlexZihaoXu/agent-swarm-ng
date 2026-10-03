@@ -123,6 +123,13 @@ export type Judge = (
 /** Wakes the agent; `handled` settles when the turn that received the wake-up has ended (repeating watches wait). */
 type Deliver = (agentId: string, text: string, human: boolean) => Promise<boolean | { handled: Promise<unknown> }>;
 
+/** Terminal programs (tmux's current command) that are coding harnesses with Harness assist adapters. */
+const HARNESS_COMMANDS: Record<string, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+  pi: 'Pi',
+};
 const iso = (ms: number) => new Date(ms).toISOString();
 const seconds = (ms: number) => Math.round(ms / 1000);
 const image = (frame: ScreenFrame): ImageContent => ({
@@ -174,8 +181,8 @@ export class ComputerWatches {
     for (const row of rows)
       await this.deliver(
         row.agentId,
-        row.kind === 'claude-listener'
-          ? `Your Claude Code listener ${row.id} on terminal "${row.until}" (since ${row.createdAt.toISOString()}) stopped: the platform restarted. Claude Code itself keeps running. If you still want its events, add the listener again with claude_code_listener_add (and terminal_view it once: something may have happened meanwhile).`
+        row.kind === 'harness-listener' || row.kind === 'claude-listener'
+          ? `Your harness listener ${row.id} on terminal "${row.until}" (since ${row.createdAt.toISOString()}) stopped: the platform restarted. The harness itself keeps running. If you still want its events, add the listener again with harness_listener_add (and terminal_view it once: something may have happened meanwhile).`
           : row.kind === 'monitor'
             ? `Your monitor ${row.id} (\`${row.until.slice(0, 200)}\`, started at ${row.createdAt.toISOString()}) stopped: the platform restarted, which releases every computer claim and stops its command. If you still need it, claim the computer again with use_computer and start a new monitor.`
             : `Your watch ${row.id} (${row.kind === 'terminal' ? 'watch_terminal' : 'watch_desktop'}, set at ${row.createdAt.toISOString()}) ended: the platform restarted, which releases every computer claim, so no check will run. Condition was: ${row.until}\nIf you still need it, claim the computer again with use_computer, look at the current state yourself, and set a new watch.`,
@@ -290,21 +297,22 @@ export class ComputerWatches {
     };
     this.watches.set(watch.id, watch);
     this.schedule(watch);
-    return { ...this.view(watch), ...(await this.claudeHint(watch)) };
+    return { ...this.view(watch), ...(await this.harnessHint(watch)) };
   }
   /**
-   * A watch on a terminal running Claude Code: point out its own events (claude_code_listener_add), which wake the
-   * agent at once with no model checks. Advice only; the watch is set either way.
+   * A watch on a terminal running a coding harness (Claude Code, Codex, OpenCode, Pi): point out its own events
+   * (harness_listener_add), which wake the agent at once with no model checks. Advice only; the watch is set either way.
    */
-  private async claudeHint(watch: Watch) {
+  private async harnessHint(watch: Watch) {
     if (watch.kind !== 'terminal') return {};
     const receipt = await this.computers
       .watchTerminal(watch.agentId, watch.computerId, watch.claimToken, { operation: 'status', session: watch.session })
       .catch(() => null);
-    const session = (receipt?.result as { session?: { currentCommand?: string } } | undefined)?.session;
-    return session?.currentCommand === 'claude'
+    const command = (receipt?.result as { session?: { currentCommand?: string } } | undefined)?.session?.currentCommand;
+    const harness = command ? HARNESS_COMMANDS[command] : undefined;
+    return harness
       ? {
-          hint: 'This terminal runs Claude Code. claude_code_listener_add({terminal}) would wake you the moment it finishes, asks permission or a question, fails or messages you, with no model checks in between, and lasts across prompts (this watch costs a model check every interval). It needs the Swarm assist plugin: see practices/harnesses/claude-code (check claude plugin list; ask the human before installing). If you switch, cancel this watch with cancel_timer.',
+          hint: `This terminal runs ${harness}. harness_listener_add({terminal}) would wake you the moment it finishes, asks permission or a question, fails or messages you, with no model checks in between, and lasts across prompts (this watch costs a model check every interval). It needs Harness assist for ${harness}, which is highly recommended: /opt/swarm/harness-assist/install --status shows whether it is installed; if not, read practices/harnesses and ask the human before installing. If you switch, cancel this watch with cancel_timer.`,
         }
       : {};
   }

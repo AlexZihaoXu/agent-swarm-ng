@@ -9,7 +9,7 @@ export type KnowledgePointer = { id: string; title: string; summary: string };
  * they are used in nearly every turn and their guidance is in the system prompt.
  */
 const POINTED_FAMILY =
-  /^(terminal_|watch_|monitor$|claude_code_listener_|start_recording|scratch_|upload_file|present_scratch|copy_file|save_screenshot|use_computer$|run_actions$|set_timer|set_reminder|discord_)/;
+  /^(terminal_|watch_|monitor$|harness_listener_|start_recording|scratch_|upload_file|present_scratch|copy_file|save_screenshot|use_computer$|run_actions$|set_timer|set_reminder|discord_)/;
 
 /** Cue-driven recall limits: per input, per tool call, and per turn (one batch of inputs and all its tool calls). */
 export const CUE_LIMITS = { input: 3, tool: 2, turn: 10, scanChars: 4096 };

@@ -241,7 +241,7 @@ Monitoring a program in a terminal: start it with its output teed to a file in /
 - Every stage of the monitor's pipeline must flush per line (grep --line-buffered, awk with fflush()); head cannot flush, so do not use it.
 - Exit status: with | tee the shell reports tee's status; use set -o pipefail, or rely on the terminal's exit event.
 - Tee before starting: a program already running cannot be monitored this way; restart it with tee, or use a watch.
-- Full-screen programs (Claude Code, htop, editors) redraw the screen: their log is noise. For Claude Code use claude_code_listener_add (its own events, practices/harnesses/claude-code); for the others use watch_terminal.
+- Full-screen programs (Claude Code, htop, editors) redraw the screen: their log is noise. For coding harnesses (Claude Code, Codex, OpenCode, Pi) use harness_listener_add (their own events, practices/harnesses); for the others use watch_terminal.
 - Filter for failures as well as success: a filter that only matches success stays silent through a crash, and silence looks like "still running".
 - Stop it when done (cancel_timer) and keep max_events sensible; a monitor printing more than 300 lines in 10 seconds is stopped (tighten its filter).
 

@@ -14,10 +14,11 @@ COPY templates/default/runtime/xorg-dummy-120.conf /opt/swarm/xorg-dummy.conf
 # part of the image.
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-pil && rm -rf /var/lib/apt/lists/*
 COPY templates/default/runtime/recording.py templates/default/runtime/computer-use.py templates/default/runtime/computer-terminal.py /opt/swarm/
-# Swarm assist: the Claude Code plugin (a local marketplace) agents install with the human's consent, and the follower
-# their Claude Code listeners run (docs/agent-computer-use.md#claude-code-listeners). Read-only for the agent user.
-COPY templates/default/runtime/claude-code /opt/swarm/claude-code
+# Harness assist: adapters for Claude Code, Codex, OpenCode and Pi that agents install with the human's consent, and the
+# follower their harness listeners run (docs/agent-computer-use.md#harness-listeners). Read-only for the agent user.
+COPY templates/default/runtime/harness-assist /opt/swarm/harness-assist
 RUN chmod 0755 /opt/swarm/desktop-session.sh && chmod 0644 /opt/swarm/xorg-dummy.conf /opt/swarm/*.py \
-    && chmod -R u=rwX,go=rX /opt/swarm/claude-code && rm -rf /opt/swarm/claude-code/swarm-assist/scripts/__pycache__ \
+    && chmod -R u=rwX,go=rX /opt/swarm/harness-assist && chmod 0755 /opt/swarm/harness-assist/install \
+    && rm -rf /opt/swarm/harness-assist/__pycache__ \
     && /opt/swarm/computer-storage-baseline.sh
 USER agent

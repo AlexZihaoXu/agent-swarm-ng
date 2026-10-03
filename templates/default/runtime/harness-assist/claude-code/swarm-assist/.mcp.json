@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "swarm": {
+      "command": "python3",
+      "args": [
+        "/opt/swarm/harness-assist/supervisor_mcp.py",
+        "claude-code"
+      ]
+    }
+  }
+}

@@ -499,7 +499,9 @@ it('points a watch on a terminal running Claude Code to its listener', async () 
     t.state.command = 'claude';
     const watch = await t.watches.create(t.agent.id, { ...terminalWatch, checkNow: false });
     expect(watch).toMatchObject({ kind: 'watch_terminal' });
-    expect((watch as { hint?: string }).hint).toContain('claude_code_listener_add({terminal})');
+    expect((watch as { hint?: string }).hint).toContain(
+      'This terminal runs Claude Code. harness_listener_add({terminal})',
+    );
   } finally {
     await t.close();
   }

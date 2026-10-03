@@ -1,8 +1,10 @@
 {
   "name": "swarm-assist",
   "displayName": "Swarm assist",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Connects this Claude Code session to the swarm agent supervising its terminal: lifecycle events go to the agent's listener, and notify_supervisor sends it a message.",
-  "author": { "name": "Agent Swarm" },
+  "author": {
+    "name": "Agent Swarm"
+  },
   "license": "MIT"
 }

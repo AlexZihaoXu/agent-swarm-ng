@@ -1,0 +1,35 @@
+# >>> Harness assist (agent swarm): Codex events for the supervising swarm agent, and notify_supervisor.
+# Managed by /opt/swarm/harness-assist/install codex (system layer, so the hooks need no per-user trust review).
+[mcp_servers.swarm-assist]
+command = "python3"
+args = ["/opt/swarm/harness-assist/supervisor_mcp.py", "codex"]
+# Codex clears an MCP server's environment: these tell it which swarm terminal it runs in.
+env_vars = ["TMUX", "TMUX_PANE"]
+
+[mcp_servers.swarm-assist.tools.notify_supervisor]
+approval_mode = "approve"
+
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = "python3 /opt/swarm/harness-assist/harness_event.py codex"
+timeout = 5
+
+[[hooks.PermissionRequest]]
+[[hooks.PermissionRequest.hooks]]
+type = "command"
+command = "python3 /opt/swarm/harness-assist/harness_event.py codex"
+timeout = 5
+
+[[hooks.SessionStart]]
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "python3 /opt/swarm/harness-assist/harness_event.py codex"
+timeout = 5
+
+[[hooks.SessionEnd]]
+[[hooks.SessionEnd.hooks]]
+type = "command"
+command = "python3 /opt/swarm/harness-assist/harness_event.py codex"
+timeout = 1
+# <<< Harness assist

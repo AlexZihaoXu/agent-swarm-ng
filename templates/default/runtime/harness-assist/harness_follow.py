@@ -1,10 +1,10 @@
 """The swarm agent's listener inside the computer (run by the platform's monitor stream, not by Claude Code).
 
-Follows the Swarm assist events file from now on and prints the lines for the terminals and events it was asked
+Follows the Harness assist events file from now on and prints the lines for the terminals and events it was asked
 for, one per line (the platform renders them for the agent). While it runs, it records what it covers, so
 notify_supervisor knows a listener exists.
 
-    claude_follow.py --terminals ID[,ID…] --events finished,permission,… [--since MS]
+    harness_follow.py --terminals ID[,ID…] --events finished,permission,… [--since MS]
 
 --since replays lines newer than that time (epoch ms) first, so a restarted follower misses nothing.
 """
@@ -15,7 +15,7 @@ import signal
 import sys
 import time
 
-from swarm_claude import base, events_file
+from swarm_harness import base, events_file
 
 POLL_S = 0.2
 

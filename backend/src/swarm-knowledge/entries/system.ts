@@ -42,7 +42,7 @@ Computer tools (always listed; they work only on a computer the human assigned y
 - terminal_create, terminal_list, terminal_view, terminal_status, terminal_run_actions, terminal_resize, terminal_delete: persistent terminals (concepts/computers/terminals, practices/terminals, practices/harnesses).
 - watch_terminal, watch_desktop: wake me when a condition is met, once or once per occurrence with repeat (concepts/computers/watches, practices/waiting).
 - monitor: wake me with the output lines of a command on the computer I hold, no model in the loop (concepts/computers/watches, practices/waiting).
-- claude_code_listener_add, claude_code_listener_remove, claude_code_listener_list: be woken by the Claude Code session in a terminal (finished, asks permission or a question, failed, ended, messages you), with an assignment only; needs the Swarm assist plugin (practices/harnesses/claude-code).
+- harness_listener_add, harness_listener_remove, harness_listener_list: be woken by a coding harness in a terminal (Claude Code, Codex, OpenCode, Pi: finished, asks permission or a question, failed, ended, messages you), with an assignment only; needs Harness assist for that harness (practices/harnesses).
 - start_recording, renew_recording, mark_clip, stop_recording, recording_events: record a desktop (with sound) or terminals, whole or as clips around your actions, kept alive by a lease (concepts/computers/recording).
 
 Not available to agents: creating, starting, stopping or deleting computers; assigning computers or connecting agents (the human does these in the dashboard, practices/dashboard); changing your own settings or permissions; host files or shells; cron-style schedules. If the human asks for one of these, explain how they can do it.

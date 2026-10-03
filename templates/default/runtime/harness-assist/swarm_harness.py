@@ -1,9 +1,11 @@
-"""Swarm assist: shared pieces of the Claude Code plugin (hook, notify_supervisor) and the swarm's follower.
+"""Harness assist: shared pieces of the coding-harness adapters (Claude Code, Codex, OpenCode, Pi) and the swarm's
+follower.
 
-Claude Code events become one compact JSON line each in an events file inside the computer. The swarm agent's
-listener follows that file (claude_follow.py, run by the platform); followers record which terminals they cover, so
-notify_supervisor can tell Claude Code when nobody is listening. Everything stays inside the computer: it cannot reach
-the platform over the network.
+A harness's events become one compact JSON line each in an events file inside the computer:
+  {"v": 1, "t": ms, "harness": "codex", "event": "finished", "terminal": {"id", "name"}, "session", "cwd", "text"}
+The swarm agent's listener follows that file (harness_follow.py, run by the platform); followers record which
+terminals they cover, so notify_supervisor can tell the harness when nobody is listening. Everything stays inside the
+computer: it cannot reach the platform over the network.
 """
 import fcntl
 import json
@@ -12,15 +14,18 @@ import subprocess
 import time
 from pathlib import Path
 
+HARNESSES = ('claude-code', 'codex', 'opencode', 'pi')
+EVENTS = ('finished', 'permission', 'question', 'idle', 'failure', 'session_start', 'session_end', 'message')
 SUMMARY_MAX = 300
 ROTATE_BYTES = 2 * 1024 * 1024
 
 
 def base() -> Path:
     runtime = Path(f'/run/user/{os.getuid()}')
-    # SWARM_CLAUDE_DIR is for tests only.
-    root = Path(os.environ['SWARM_CLAUDE_DIR']) if os.environ.get('SWARM_CLAUDE_DIR') else (
-        runtime / 'swarm-claude' if runtime.is_dir() and os.access(runtime, os.W_OK) else Path(f'/tmp/swarm-claude-{os.getuid()}'))
+    # SWARM_HARNESS_DIR is for tests only.
+    root = Path(os.environ['SWARM_HARNESS_DIR']) if os.environ.get('SWARM_HARNESS_DIR') else (
+        runtime / 'swarm-harness' if runtime.is_dir() and os.access(runtime, os.W_OK)
+        else Path(f'/tmp/swarm-harness-{os.getuid()}'))
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     (root / 'followers').mkdir(mode=0o700, exist_ok=True)
     return root
@@ -51,10 +56,13 @@ def clip(text, size=SUMMARY_MAX) -> str:
     return flat if len(flat) <= size else flat[:size - 1] + '…'
 
 
-def append(event: str, text: str = '', session: str = '', cwd: str = '', where=None) -> dict:
+def append(harness: str, event: str, text: str = '', session: str = '', cwd: str = '', where=None) -> dict:
     """Appends one event line (locked, so concurrent hooks never interleave); rotates a large file."""
-    line = {'v': 1, 't': int(time.time() * 1000), 'event': event, 'terminal': where if where is not None else terminal(),
-            'session': (session or '')[:36], 'cwd': (cwd or '')[:200], 'text': clip(text)}
+    if harness not in HARNESSES or event not in EVENTS:
+        raise ValueError(f'unknown harness or event: {harness} {event}')
+    line = {'v': 1, 't': int(time.time() * 1000), 'harness': harness, 'event': event,
+            'terminal': where if where is not None else terminal(), 'session': str(session or '')[:64],
+            'cwd': str(cwd or '')[:200], 'text': clip(text) if event != 'message' else str(text)[:1000]}
     path = events_file()
     with open(path, 'a', encoding='utf-8') as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)

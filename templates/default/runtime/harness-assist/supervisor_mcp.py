@@ -1,14 +1,19 @@
-"""Swarm assist MCP server (stdio): the notify_supervisor tool, so Claude Code can message the swarm agent that
-supervises its terminal (a question, a blocker, progress, done) without ending its turn.
+"""Harness assist notify_supervisor: lets a coding harness message the swarm agent that supervises its terminal (a
+question, a blocker, progress, done) without ending its turn.
+
+    supervisor_mcp.py <harness>            a stdio MCP server with the tool (Claude Code, Codex)
+    supervisor_mcp.py <harness> --notify   one message on stdin; prints the result, exit 1 if not delivered
+                                           (the OpenCode plugin and the Pi extension call this)
 
 The message goes to that agent's listener through the events file. With no listener for this terminal it is dropped
-and Claude Code is told so. A small rate limit keeps it from flooding the agent.
+and the harness is told so. A small rate limit (kept in a file per terminal) keeps it from flooding the agent.
 """
+import fcntl
 import json
 import sys
 import time
 
-from swarm_claude import append, listening, terminal
+from swarm_harness import HARNESSES, append, base, listening, terminal
 
 MESSAGE_MAX = 1000
 MIN_GAP_S = 10
@@ -27,8 +32,10 @@ TOOL = {
         'required': ['message'],
         'additionalProperties': False,
     },
+    # Harmless and local: lets Codex run it without an approval prompt (its "auto" mode reads these hints).
+    'annotations': {'readOnlyHint': False, 'destructiveHint': False, 'openWorldHint': False, 'idempotentHint': False},
 }
-sent: list[float] = []
+HARNESS = 'claude-code'
 
 
 def text(result: str, error=False):
@@ -45,14 +52,25 @@ def notify(arguments: dict):
     if not listening(where['id'], 'message'):
         return text('No swarm agent is listening to this terminal right now, so the message was not delivered. '
                     'Carry on with the task, and try again later if it still matters.', True)
-    now = time.time()
-    sent[:] = [at for at in sent if now - at < 3600]
-    if sent and now - sent[-1] < MIN_GAP_S:
-        return text(f'Wait {int(MIN_GAP_S - (now - sent[-1])) + 1} s before sending another message.', True)
-    if len(sent) >= PER_HOUR:
-        return text(f'At most {PER_HOUR} messages an hour; carry on and report in your final answer.', True)
-    append('message', message[:MESSAGE_MAX], where=where)
-    sent.append(now)
+    # The rate limit lives in a file per terminal: --notify runs once per message.
+    with open(base() / f"sent-{where['id']}.json", 'a+', encoding='utf-8') as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        handle.seek(0)
+        try:
+            sent = [float(at) for at in json.loads(handle.read() or '[]')]
+        except ValueError:
+            sent = []
+        now = time.time()
+        sent = [at for at in sent if now - at < 3600]
+        if sent and now - sent[-1] < MIN_GAP_S:
+            return text(f'Wait {int(MIN_GAP_S - (now - sent[-1])) + 1} s before sending another message.', True)
+        if len(sent) >= PER_HOUR:
+            return text(f'At most {PER_HOUR} messages an hour; carry on and report in your final answer.', True)
+        append(HARNESS, 'message', message[:MESSAGE_MAX], where=where)
+        sent.append(now)
+        handle.seek(0)
+        handle.truncate()
+        handle.write(json.dumps(sent))
     return text('Delivered to the supervising agent.')
 
 
@@ -61,7 +79,7 @@ def handle(request: dict):
     if method == 'initialize':
         version = (request.get('params') or {}).get('protocolVersion', '2025-06-18')
         return {'protocolVersion': version, 'capabilities': {'tools': {}},
-                'serverInfo': {'name': 'swarm-assist', 'version': '1.0.0'}}
+                'serverInfo': {'name': 'swarm-assist', 'version': '1.1.0'}}
     if method == 'tools/list':
         return {'tools': [TOOL]}
     if method == 'tools/call':
@@ -75,6 +93,13 @@ def handle(request: dict):
 
 
 def main():
+    global HARNESS
+    if len(sys.argv) > 1 and sys.argv[1] in HARNESSES:
+        HARNESS = sys.argv[1]
+    if '--notify' in sys.argv:
+        result = notify({'message': sys.stdin.read()})
+        print(result['content'][0]['text'])
+        sys.exit(1 if result['isError'] else 0)
     for raw in sys.stdin:
         raw = raw.strip()
         if not raw:

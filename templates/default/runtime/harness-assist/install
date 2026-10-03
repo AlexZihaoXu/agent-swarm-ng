@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Harness assist installer (agent swarm). Run it only after the human agreed.
+
+    /opt/swarm/harness-assist/install --status          which harnesses have it
+    /opt/swarm/harness-assist/install <harness>         claude-code | codex | opencode | pi
+    /opt/swarm/harness-assist/install <harness> --remove
+
+claude-code: a local plugin marketplace + plugin (user scope). codex: a block in /etc/codex/config.toml (the system
+layer, so its hooks need no per-user trust review; uses sudo). opencode: a plugin in ~/.config/opencode/plugins/.
+pi: an extension in ~/.pi/agent/extensions/. Sessions started afterwards load it.
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+HOME = Path.home()
+CODEX_SYSTEM = Path('/etc/codex/config.toml')
+BEGIN, END = '# >>> Harness assist', '# <<< Harness assist'
+OPENCODE = HOME / '.config/opencode'
+PI = HOME / '.pi/agent/extensions/swarm-assist.ts'
+
+
+def claude(*args):
+    exe = shutil.which('claude') or str(HOME / '.local/bin/claude')
+    return subprocess.run([exe, *args], capture_output=True, text=True, timeout=120)
+
+
+def status():
+    claude_list = claude('plugin', 'list') if (shutil.which('claude') or (HOME / '.local/bin/claude').exists()) else None
+    codex = CODEX_SYSTEM.exists() and BEGIN in CODEX_SYSTEM.read_text(errors='replace')
+    return {
+        'claude-code': bool(claude_list and 'swarm-assist@swarm' in claude_list.stdout),
+        'codex': codex,
+        'opencode': (OPENCODE / 'plugins/swarm-assist.ts').exists(),
+        'pi': PI.exists(),
+    }
+
+
+def install_claude(remove=False):
+    if remove:
+        return claude('plugin', 'uninstall', 'swarm-assist@swarm').returncode == 0
+    # A marketplace added from an older location is replaced.
+    claude('plugin', 'marketplace', 'remove', 'swarm')
+    added = claude('plugin', 'marketplace', 'add', str(ROOT / 'claude-code'))
+    if added.returncode:
+        sys.exit(f'Could not add the plugin marketplace: {added.stderr.strip() or added.stdout.strip()}')
+    done = claude('plugin', 'install', 'swarm-assist@swarm', '--scope', 'user')
+    if done.returncode and 'already' not in (done.stdout + done.stderr):
+        sys.exit(f'Could not install the plugin: {done.stderr.strip() or done.stdout.strip()}')
+    return True
+
+
+def install_codex(remove=False):
+    if os.geteuid() != 0:
+        # The system layer belongs to root: run this same step with sudo.
+        result = subprocess.run(['sudo', '-n', sys.executable, __file__, 'codex', *(['--remove'] if remove else [])])
+        sys.exit(result.returncode)
+    current = CODEX_SYSTEM.read_text() if CODEX_SYSTEM.exists() else ''
+    if BEGIN in current:
+        start = current.index(BEGIN)
+        end = current.find(END, start)
+        current = current[:start] + (current[end + len(END):] if end >= 0 else '')
+    block = '' if remove else (ROOT / 'codex/config.toml').read_text()
+    CODEX_SYSTEM.parent.mkdir(parents=True, exist_ok=True)
+    CODEX_SYSTEM.write_text((current.rstrip() + '\n\n' if current.strip() else '') + block)
+    CODEX_SYSTEM.chmod(0o644)
+    return True
+
+
+def install_opencode(remove=False):
+    target = OPENCODE / 'plugins/swarm-assist.ts'
+    if remove:
+        target.unlink(missing_ok=True)
+        return True
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(ROOT / 'opencode/swarm-assist.ts', target)
+    # The plugin imports @opencode-ai/plugin: OpenCode installs the config folder's dependencies at startup.
+    package = OPENCODE / 'package.json'
+    data = json.loads(package.read_text()) if package.exists() else {}
+    data.setdefault('dependencies', {}).setdefault('@opencode-ai/plugin', 'latest')
+    package.write_text(json.dumps(data, indent=2) + '\n')
+    return True
+
+
+def install_pi(remove=False):
+    if remove:
+        PI.unlink(missing_ok=True)
+        return True
+    PI.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(ROOT / 'pi/swarm-assist.ts', PI)
+    return True
+
+
+def main(argv):
+    if not argv or argv[0] in ('-h', '--help'):
+        print(__doc__)
+        return
+    if argv[0] == '--status':
+        print(json.dumps(status()))
+        return
+    harness, remove = argv[0], '--remove' in argv
+    steps = {'claude-code': install_claude, 'codex': install_codex, 'opencode': install_opencode, 'pi': install_pi}
+    if harness not in steps:
+        sys.exit(f'Unknown harness {harness!r}: use claude-code, codex, opencode or pi.')
+    steps[harness](remove)
+    print(f"Harness assist {'removed from' if remove else 'installed for'} {harness}. "
+          f"{'' if remove else 'Sessions started from now on use it; restart one that is already running.'}")
+
+
+if __name__ == '__main__':
+    main(sys.argv[1:])

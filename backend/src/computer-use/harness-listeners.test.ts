@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { prepareDatabase } from '../test-database';
 import { ComputerUseService } from './service';
-import { ClaudeCodeListeners, describe as describeLine, terminalsOf } from './claude-listeners';
+import { HarnessListeners, describe as describeLine, terminalsOf } from './harness-listeners';
 
 type Opened = { command: string; push: (text: string) => void; end: () => void; signal: AbortSignal };
 
@@ -34,7 +34,7 @@ async function fixture() {
   };
   const woken: string[] = [];
   let release = () => {};
-  const listeners = new ClaudeCodeListeners(
+  const listeners = new HarnessListeners(
     db,
     service,
     () => stream,
@@ -60,7 +60,7 @@ it('listens to a terminal with no claim, and wakes the agent once per handled tu
       events: ['finished', 'permission', 'question', 'failure', 'session_end', 'message'],
     });
     expect(f.opened[0].command).toBe(
-      'exec python3 /opt/swarm/claude-code/swarm-assist/scripts/claude_follow.py --terminals t1 --events finished,permission,question,failure,session_end,message --since 1790000000000',
+      'exec python3 /opt/swarm/harness-assist/harness_follow.py --terminals t1 --events finished,permission,question,failure,session_end,message --since 1790000000000',
     );
     f.opened[0].push(f.line('permission', 'Bash: npm publish'));
     await vi.waitFor(() => expect(f.woken).toHaveLength(1));
@@ -109,7 +109,7 @@ it('ends with the session, with an old computer image, or when the assignment go
     last.push('\0exit {"code":2,"stderr":"python3: can\'t open file: [Errno 2] No such file or directory"}\n');
     last.end();
     await vi.waitFor(() => expect(f.woken).toHaveLength(2));
-    expect(f.woken[1]).toContain('does not have the Swarm assist files yet');
+    expect(f.woken[1]).toContain('does not have the Harness assist files yet');
 
     await f.listeners.add(f.ada.id, { terminal: 'cc-api', human: true });
     await f.service.assign(f.ada.id, []);
@@ -123,6 +123,9 @@ it('ends with the session, with an old computer image, or when the assignment go
 });
 
 it('words every event for the agent', () => {
+  expect(
+    describeLine({ t: 0, harness: 'codex', event: 'finished', terminal: { id: 't', name: 'cx' }, text: 'Done.' }),
+  ).toBe('Codex in terminal "cx" finished its turn: "Done."');
   const terminal = { id: 't', name: 'cc' };
   expect(describeLine({ t: 0, event: 'idle', terminal })).toBe(
     'Claude Code in terminal "cc" has been waiting for input for about a minute.',

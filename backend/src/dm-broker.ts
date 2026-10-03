@@ -72,8 +72,8 @@ import { ComputerMonitors } from './computer-use/monitors';
 import { ComputerWatches } from './computer-use/watches';
 import { createWatchJudge, type ForkBasis } from './computer-use/watch-judge';
 import { createWatchTools } from './computer-use/watch-tools';
-import { ClaudeCodeListeners, terminalsOf } from './computer-use/claude-listeners';
-import { createClaudeListenerTools } from './computer-use/claude-listener-tools';
+import { HarnessListeners, terminalsOf } from './computer-use/harness-listeners';
+import { createHarnessListenerTools } from './computer-use/harness-listener-tools';
 import { AgentRecordings } from './computer-use/recordings';
 import { createRecordingTools } from './computer-use/recording-tools';
 import type { AgentTool } from './tool-access';
@@ -131,8 +131,8 @@ export class DmBroker {
   private watcher?: TerminalWatcher;
   /** One-shot watches on claimed computers (watch_terminal, watch_desktop). */
   readonly watches?: ComputerWatches;
-  /** Claude Code listeners: events from the Claude Code session in a terminal (claude-listeners.ts). */
-  readonly claudeListeners?: ClaudeCodeListeners;
+  /** Claude Code listeners: events from the Claude Code session in a terminal (harness-listeners.ts). */
+  readonly harnessListeners?: HarnessListeners;
   /** Each agent's session as a fork would copy it (live while it runs, then as it ended while fork watches need it). */
   private bases = new Map<string, { basis: () => ForkBasis; ended: boolean }>();
   constructor(
@@ -211,7 +211,7 @@ export class DmBroker {
         void watches.terminalDeleted(agentId, computerId, session).catch(() => {});
     }
     if (computers)
-      this.claudeListeners = new ClaudeCodeListeners(
+      this.harnessListeners = new HarnessListeners(
         database,
         computers,
         () => this.transfers?.monitor?.bind(this.transfers),
@@ -939,8 +939,8 @@ ${preview.text}`
         ? [
             ...createComputerTools(this.computers, this.screenshots, agentId, this.watches),
             ...(this.watches ? createWatchTools(this.watches, agentId, () => humanAuthority) : []),
-            ...(this.claudeListeners
-              ? createClaudeListenerTools(this.claudeListeners, agentId, () => humanAuthority)
+            ...(this.harnessListeners
+              ? createHarnessListenerTools(this.harnessListeners, agentId, () => humanAuthority)
               : []),
             ...(this.recordings
               ? createRecordingTools(this.recordings, agentId, () => humanAuthority, this.screenshots, this.settings)
@@ -1377,7 +1377,7 @@ ${preview.text}`
     this.forgetCompaction(agentId);
     await this.watches?.releasedBy(agentId);
     await this.recordings?.releasedBy(agentId).catch(() => {});
-    await this.claudeListeners?.releasedBy(agentId).catch(() => {});
+    await this.harnessListeners?.releasedBy(agentId).catch(() => {});
     await this.reactionCoordinator.cancelAgent(agentId);
     await this.runs.settled(agentId);
     const related = [...this.jobs.values()].filter(
@@ -1404,7 +1404,7 @@ ${preview.text}`
     for (const controller of this.sleepers.values()) controller.abort();
     this.watcher?.close();
     this.watches?.close();
-    this.claudeListeners?.close();
+    this.harnessListeners?.close();
     this.recordings?.close();
     this.reactionCoordinator.close();
   }
