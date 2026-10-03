@@ -35,8 +35,11 @@ const FOLLOW = '/opt/swarm/harness-assist/harness_follow.py';
 const BATCH_MS = 200;
 const SHOWN = 10;
 const ASSIGNMENT_CHECK_MS = 30_000;
-/** A session that ends this way is over (a /clear or resume starts the next one in the same terminal). */
-const FINAL_END = new Set(['prompt_input_exit', 'logout', 'other', '']);
+/**
+ * A session that ends this way is over: Claude Code prompt_input_exit or logout, Codex other, Pi quit. A /clear, resume,
+ * new or fork starts the next session in the same terminal, so the listener stays.
+ */
+const FINAL_END = new Set(['prompt_input_exit', 'logout', 'other', 'quit', '']);
 
 type Stream = (
   computerId: string,

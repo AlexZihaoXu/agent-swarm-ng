@@ -168,3 +168,23 @@ it('replays the events of a terminal created moments ago, and never delivers a l
     await f.db.close();
   }
 });
+
+it('ends a listener when Pi quits, and keeps it when a session is cleared or a new one starts', async () => {
+  const f = await fixture();
+  try {
+    await f.listeners.add(f.ada.id, { terminal: 'cc-api', human: true });
+    const end = (reason: string, t: number) =>
+      `${JSON.stringify({ v: 1, t, harness: 'pi', event: 'session_end', terminal: { id: 't1', name: 'cc-api' }, text: reason })}\n`;
+    f.opened[0].push(end('new', 1_790_000_000_600));
+    await vi.waitFor(() => expect(f.woken).toHaveLength(1));
+    expect(f.listeners.list(f.ada.id)).toHaveLength(1);
+    f.release();
+    f.opened[0].push(end('quit', 1_790_000_000_700));
+    await vi.waitFor(() => expect(f.woken).toHaveLength(2));
+    expect(f.woken[1]).toContain('is removed now that its session ended');
+    expect(f.listeners.list(f.ada.id)).toEqual([]);
+  } finally {
+    f.listeners.close();
+    await f.db.close();
+  }
+});
