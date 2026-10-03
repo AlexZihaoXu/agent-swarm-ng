@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { computersQuery } from '@/lib/computers-query';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useLocation, useNavigate } from 'react-router';
-import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useAppUpdate } from '@/lib/pwa';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatSkeleton, EdgeSkeleton } from '@/components/ui/skeleton';
@@ -67,6 +67,7 @@ const loadKnowledge = () => import('@/components/knowledge-browser');
 const loadComputers = () => import('@/components/computers-panel');
 const Settings = lazy(() => loadSettings().then(module => ({ default: module.Settings })));
 const KnowledgeBrowser = lazy(() => loadKnowledge().then(module => ({ default: module.KnowledgeBrowser })));
+const AuditLog = lazy(() => import('@/components/audit-log').then(module => ({ default: module.AuditLog })));
 const ComputersPanel = lazy(() => loadComputers().then(module => ({ default: module.ComputersPanel })));
 const whenIdle = (task: () => void) => {
   if ('requestIdleCallback' in window) {
@@ -419,10 +420,7 @@ export function App() {
     conversationPeer === 'you' ? agent.channelId : `dm:${[agent.id, conversationPeer].sort().join(':')}`;
   const selfTyping = typingIn(agent.channelId, visibleChannel);
   const peerTyping = typingIn(peerChannel, visibleChannel);
-  const {
-    needRefresh: [needRefresh, setNeedRefresh],
-    updateServiceWorker,
-  } = useRegisterSW();
+  const appUpdate = useAppUpdate();
   const draft = drafts[agent.channelId] ?? '';
   const attachments = useAttachments(agent.real ? chatFilesKey(agent.channelId) : undefined);
   // Sent files leave the composer once the server confirms their message; a failed send keeps them to retry.
@@ -1362,7 +1360,7 @@ export function App() {
           forceMount
           className={cn(
             'tab-enter min-h-0 flex-1 outline-none data-[state=inactive]:hidden',
-            route.kind === 'knowledge'
+            route.kind === 'knowledge' || route.kind === 'audit'
               ? 'overflow-hidden data-[state=active]:flex data-[state=active]:flex-col'
               : 'overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0',
           )}
@@ -1370,11 +1368,12 @@ export function App() {
           {/* Settings stays mounted after its first visit so endpoint edits survive switching tabs. */}
           <Suspense fallback={loading}>
             {(settingsSeen || activeTab === 'settings') && (
-              <div className={route.kind === 'knowledge' ? 'hidden' : ''}>
+              <div className={route.kind === 'knowledge' || route.kind === 'audit' ? 'hidden' : ''}>
                 <Settings route={route} onNavigate={navigate} />
               </div>
             )}
             {route.kind === 'knowledge' && <KnowledgeBrowser id={route.knowledgeId} onNavigate={navigate} />}
+            {route.kind === 'audit' && <AuditLog onNavigate={navigate} />}
           </Suspense>
         </Tabs.Content>
       </Tabs.Root>
@@ -1409,16 +1408,16 @@ export function App() {
           </>
         }
       />
-      {needRefresh && (
+      {appUpdate.needRefresh && (
         <aside
           aria-label="Application update"
           className="flex shrink-0 flex-wrap items-center gap-3 border-t border-border px-5 py-3 text-sm max-md:pb-[calc(5rem+env(safe-area-inset-bottom))]"
         >
           <p className="mr-auto">An update is ready.</p>
-          <Button size="sm" onClick={() => void updateServiceWorker(true)}>
+          <Button size="sm" onClick={() => void appUpdate.update()}>
             Reload
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setNeedRefresh(false)}>
+          <Button variant="outline" size="sm" onClick={appUpdate.dismiss}>
             Later
           </Button>
         </aside>

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#202020"/>
+      <stop offset="1" stop-color="#131313"/>
+    </linearGradient>
+    <radialGradient id="core" cx="0.38" cy="0.34" r="0.75">
+      <stop offset="0" stop-color="#bae6fd"/>
+      <stop offset="0.55" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#0284c7"/>
+    </radialGradient>
+  </defs>
+  <!-- Full-bleed background; the artwork is scaled to stay inside the central 80% safe zone (radius 204.8). -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g transform="translate(256 256) scale(0.9) translate(-256 -256)">
+    <g stroke="#38bdf8" stroke-linecap="round">
+      <g stroke-width="16" stroke-opacity="0.55">
+        <path d="M256 256 256 112M256 256 392 210M256 256 358 372M256 256 160 388M256 256 120 206"/>
+      </g>
+      <g stroke-width="10" stroke-opacity="0.3" fill="none">
+        <path d="M256 112 392 210 358 372M160 388 120 206 256 112"/>
+      </g>
+    </g>
+    <g fill="#7dd3fc">
+      <circle cx="256" cy="112" r="36"/>
+      <circle cx="392" cy="210" r="30"/>
+      <circle cx="358" cy="372" r="38"/>
+      <circle cx="160" cy="388" r="28"/>
+      <circle cx="120" cy="206" r="32"/>
+    </g>
+    <circle cx="256" cy="256" r="74" fill="#151515"/>
+    <circle cx="256" cy="256" r="60" fill="url(#core)"/>
+  </g>
+</svg>

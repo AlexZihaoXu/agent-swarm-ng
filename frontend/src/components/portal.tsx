@@ -72,6 +72,7 @@ const PAGES: { title: string; path: string; keywords?: string[] }[] = [
   { title: 'New computer', path: '/computers/new', keywords: ['create'] },
   { title: 'Settings', path: '/settings', keywords: ['models', 'endpoints', 'swarm', 'storage', 'discord'] },
   { title: 'Knowledge', path: '/settings/knowledge', keywords: ['docs', 'guide'] },
+  { title: 'Audit log', path: '/settings/audit', keywords: ['log', 'sign-in', 'login', 'history', 'security'] },
 ];
 const icons: Record<PortalKind, ReactNode> = {
   agent: <AgentsIcon className="size-4" />,

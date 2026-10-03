@@ -13,7 +13,8 @@ const database = new PlatformStore();
 await database.initialize();
 const app = await buildApp({ database });
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.once(signal, () => {
+  process.once(signal, async () => {
+    await app.audit.record({ kind: 'system.stop', outcome: 'ok', actor: 'system', detail: { signal } });
     stopPowerWatch();
     void app.close().catch(error => {
       app.log.error(error);
@@ -26,6 +27,16 @@ await app.listen({
   host: process.env.HOST ?? '127.0.0.1',
   port: Number(process.env.PORT ?? 3000),
 });
+await app.audit.record({
+  kind: 'system.start',
+  outcome: 'ok',
+  actor: 'system',
+  detail: { runtime: `Bun ${Bun.version}`, startupMs: Math.round(performance.now()) },
+});
+// The audit log keeps a year (at most 200,000 events): pruned at start and daily.
+const pruneAudit = () => void app.audit.prune().catch(error => app.log.error(error, 'Audit log pruning failed'));
+pruneAudit();
+setInterval(pruneAudit, 24 * 3_600_000).unref();
 // Re-apply explicit power-offs the controller's own boot reconciliation may
 // have revived. Non-fatal: a controller outage must not block the dashboard.
 const power = await reconcileStoppedComputers(new ComputerStore(database), computerControllerFromEnv());

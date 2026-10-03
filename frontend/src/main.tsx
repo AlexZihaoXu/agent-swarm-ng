@@ -7,6 +7,8 @@ import { App } from './app';
 import { OrganizationsProvider } from './lib/organizations';
 import { AuthGate } from './lib/auth';
 import './styles.css';
+// Registers the service worker for every visitor, signed in or not (installable before sign-in).
+import './lib/pwa';
 
 export const queryClient = new QueryClient();
 

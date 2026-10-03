@@ -12,16 +12,26 @@ export default defineConfig(({ mode }) => ({
     tailwindcss(),
     VitePWA({
       registerType: 'prompt',
+      // Registered by src/lib/pwa.ts (an import, not an inline script: the CSP allows only 'self' scripts).
+      injectRegister: false,
+      // globPatterns below already precache every icon.
+      includeManifestIcons: false,
       manifest: {
+        id: '/',
         name: 'Agent Swarm NG',
-        short_name: 'Agent Swarm NG',
+        short_name: 'Agent Swarm',
+        description: 'Persistent AI agents that chat with you and each other and share computers.',
         start_url: '/',
+        scope: '/',
         display: 'standalone',
         theme_color: '#151515',
         background_color: '#242424',
         icons: [
-          { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: '/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {

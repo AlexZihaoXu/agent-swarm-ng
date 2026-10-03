@@ -420,7 +420,7 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
     <div>
       <PageHeader
         title="Settings"
-        description="Your account, organizations, model connections, Knowledge and swarm limits."
+        description="Your account, organizations, model connections, Knowledge, the audit log and swarm limits."
         width="max-w-3xl"
         sticky
       />
@@ -447,6 +447,28 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
               onClick={() => onNavigate('/settings/knowledge')}
             >
               Browse Swarm Knowledge
+            </Button>
+          </div>
+        </section>
+        <section aria-labelledby="audit-title" className="space-y-4">
+          <div>
+            <h3 id="audit-title" className="text-lg font-semibold">
+              Audit log
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Sign-in attempts (name, address, time to the millisecond), agents, computers and organizations created,
+              edited or deleted, and the platform starting and stopping.
+            </p>
+          </div>
+          <div className={settingsCard}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-11 sm:min-h-0"
+              onClick={() => onNavigate('/settings/audit')}
+            >
+              Open the audit log
             </Button>
           </div>
         </section>

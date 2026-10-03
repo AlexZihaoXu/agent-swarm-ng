@@ -31,6 +31,8 @@ import { DiscordConnections } from './discord/connections';
 import { registerDiscordRoutes } from './discord/routes';
 import { Accounts } from './auth/sessions';
 import { registerAuth } from './auth/routes';
+import { AuditLog } from './audit/store';
+import { registerAudit } from './audit/routes';
 
 export async function buildApp({
   fetcher,
@@ -68,7 +70,11 @@ export async function buildApp({
   });
 
   // Before every route, so nothing is reachable without a session (sign-in endpoints and health aside).
-  app.decorate('watchSession', registerAuth(app, new Accounts(platform), { requireLogin }));
+  // Every audit event also goes to the server log (docs/audit-log.md).
+  const audit = new AuditLog(platform, event => app.log.info({ audit: event }, `audit ${event.kind} ${event.outcome}`));
+  app.decorate('audit', audit);
+  app.decorate('watchSession', registerAuth(app, new Accounts(platform), { requireLogin, audit }));
+  registerAudit(app, platform, audit);
 
   app.get(
     '/api/health',

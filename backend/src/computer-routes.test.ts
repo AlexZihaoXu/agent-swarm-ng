@@ -843,3 +843,29 @@ it('keeps computers’ files where Settings → Storage says when they are made,
     await database.close();
   }
 });
+
+it('logs computers being created and deleted in the audit log', async () => {
+  const { app, database } = await fixture();
+  try {
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/computers',
+      payload: { name: 'Audit box', requestKey: crypto.randomUUID() },
+    });
+    expect(create.statusCode).toBe(201);
+    const { id } = create.json();
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: `/api/computers/${id}`,
+      payload: { confirmation: 'Audit box' },
+    });
+    expect(removed.statusCode).toBeLessThan(300);
+    const rows = await database.client.auditEvent.findMany({ orderBy: { sequence: 'asc' } });
+    expect(rows.map(row => [row.kind, row.outcome, row.targetId, row.targetName])).toEqual([
+      ['computer.create', 'ok', id, 'Audit box'],
+      ['computer.delete', 'ok', id, 'Audit box'],
+    ]);
+  } finally {
+    await app.close();
+  }
+});

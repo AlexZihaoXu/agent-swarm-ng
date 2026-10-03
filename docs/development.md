@@ -1,5 +1,82 @@
 # Development
 
+## Architecture
+
+### Stack
+
+- **Frontend:** TypeScript, React + Vite, shadcn/ui + Tailwind CSS, React Router, and TanStack Query. Kibo UI is configured as an on-demand component registry.
+- **Backend:** TypeScript, Bun + Fastify.
+- **API contract:** TypeBox + `@fastify/swagger`; generated client types with `openapi-typescript` and requests through `openapi-fetch`.
+- **PWA:** `vite-plugin-pwa`.
+- **Docker integration:** a separate, narrow Bun controller uses the Docker Engine Unix-socket API; the chat/backend process never mounts the Docker socket.
+- **Testing:** Vitest for unit/integration tests; Playwright for essential browser workflows. On the Windows development host, follow the [browser launch safety rules](development.md#windows-browser-launch-safety) to avoid account lockout.
+- **Deployment:** Docker Compose with development overrides; Caddy for production HTTPS and reverse proxying.
+- **Interactive desktop streaming:** pinned Selkies H.264/WebCodecs requires HTTPS outside localhost; an operator-built JPEG/createImageBitmap mode also passed isolated real video/input tests over non-localhost HTTP, suitable for a deliberately trusted private LAN or the existing encrypted Tailnet transport. Both use the dashboard's single TCP port, not WebRTC/UDP or per-computer host ports. The Radeon 680M VA-API encoder remains opt-in because x264 was lower-latency in the H.264 trial. Tailnet portal-free X11 HTTP/JPEG is live; see [Computers](computers.md) for verification and residual risks.
+
+Prisma + SQLite stores agents, channels, and published chat history. This single-backend setup uses WAL, indexed cursor pagination, and bounded model context; durable chat is not long-term agent memory.
+
+### Project structure
+
+Core layout of this `agent-swarm-ng` repository (the older v2 project is separate):
+
+```text
+agent-swarm-ng/
+├── AGENTS.md
+├── README.md
+├── compose.yaml
+├── compose.dev.yaml
+├── frontend/
+│   ├── Dockerfile
+│   └── src/
+├── backend/
+│   ├── Dockerfile
+│   └── src/
+├── computer-controller/
+│   ├── Dockerfile
+│   └── src/
+├── templates/
+│   └── default/
+│       ├── template.yaml
+│       ├── compose.yaml
+│       └── Dockerfile
+└── docs/
+```
+
+- **`frontend/`** — saved agent creation/chat with paginated history, Settings with API endpoints and ChatGPT subscription sign-in, and PWA setup. The dashboard reconnects to backend-owned runs after refresh; drafts clear, while new operator activity is durably archived with paged history. Only explicitly published agent messages enter chat. Select an agent in **Agents** to configure [agent connections](agent-communication.md) and its [animated avatar](agent-avatars.md) in one centered, width-bounded scrolling pane, without section tabs. The visible **Channels → Swarm App** controls manage mutual connections; scroll down to adjust silhouette, color, eye shape and motion variation. Agents has a visible **+** to create an agent; each agent's settings hold its name, endpoint, model and thinking level (**Model**), computers, avatar and a Delete action. **Chat** holds human DMs and the **Chat with** selector for read-only agent-to-agent history, plus searchable chats, member-selected groups, Discord-style author grouping and persisted reactions; see [Chat and groups](chat-and-groups.md).
+- **`backend/`** — Pi SDK chat with channel-bound publication/history tools, read-only [Swarm Knowledge](swarm-knowledge.md) exploration, and Pi Web Access search/fetch tools, Prisma/SQLite migrations and history, endpoint preferences, and an OpenAPI contract. No implicit host file/shell access. Assigned-computer tools act only on a claimed guest desktop. Private working-session entries and operator activity persist separately from chat; interrupted runs do not replay. Includes 1.5-second message debounce and temporary-fork interruption triage for follow-ups. See [chat and storage](development.md#pi-agents-and-channels) and [interruption assumptions](message-interruption.md).
+- **`computer-controller/`** — internal Docker-socket service for constrained computer lifecycle, owned volumes, filtered egress, bounded consent previews/input and an opt-in render-node grant. The API/backend has no socket mount.
+- **`templates/default/`** — Ubuntu GNOME image and standalone Compose configuration. The managed runtime boots GNOME/PipeWire, renders passive JPEG previews and serves interactive H.264 behind an isolated media relay.
+- **`docs/`** — [swarm vision](vision.md), development instructions, and reference material. The [local Kibo reference entry guide](references/kibo/README.md) provides pinned source, searchable indexes, and adaptation notes.
+
+Root Compose files run the platform; the backend requests fixed-template computer creation through an internal controller. Computer use requires an explicit per-agent assignment plus an active claim. `templates/default/compose.yaml` provides a standalone workspace with persistent home and workspace volumes. Keep tests beside their code where supported. Add no shared packages or separate services without a concrete need.
+
+The default image uses **Ubuntu 24.04 LTS with Ubuntu GNOME**, retaining Ubuntu’s appearance—not substituting XFCE. Preserve the standard Ubuntu appearance: visual defaults, wallpapers, Yaru themes/icons, fonts, and icon-rendering support are essentials—not bloat. Include desktop/session essentials, terminal, file manager, and settings; exclude office apps, games, email clients, media apps, and other bundled extras. Avoid the full `ubuntu-desktop` installation. The image and GNOME compositor were smoke-tested; the managed runtime boots a headless session and serves on-demand preview frames.
+
+The workspace includes Chrome, VS Code, Git/curl, gcc/g++, ffmpeg, Node.js/npm with nvm available, Bun, Python/uv, tmux, and a signed-out Pi CLI. Installing Pi in the guest does not grant product agents computer tools or copy host Pi credentials. Separate named volumes retain `/home/agent` and `/workspace` across container replacement; deletion of their data is explicit. tmux preserves sessions across client disconnections, not container restarts. See [workspace setup and checks](development.md#workspace-tools-and-persistence).
+
+Desktop resolution is fixed at **1920×1080**; do not resize it automatically to match the browser viewport. Passive grid previews are 480×270 JPEGs requested at 2 fps (every 500 ms) per visible card, only while the card is on screen and the tab is visible. The interactive video/input path shares the dashboard's one external TCP port. Local input-to-decoded-video trials and the AMD hardware/software trade-off are documented in [Computers](computers.md); 120 fps and optical glass-to-glass latency are not promises.
+
+### Progressive web app
+
+Make the frontend installable with a web app manifest and icons. PWA capabilities require a secure context: production uses HTTPS; localhost is supported for development.
+
+- Cache static application assets only; do not cache API responses or queue management actions offline.
+- Show a clear disconnected state. Container operations and desktop streaming require connectivity.
+- Prompt before applying updates to avoid interrupting active sessions.
+- The service worker registers on page load (`frontend/src/lib/pwa.ts`), so the app installs from the sign-in screen; the update prompt shows once signed in. Icons are authored as SVG in `frontend/public/` (`icon.svg`, `icon-maskable.svg` with its art inside the central 80% safe zone, and the simpler `favicon.svg`); the PNGs beside them (192/512 any and maskable, 180 px opaque `apple-touch-icon.png`, `favicon-32.png`) are rendered from those (and `frontend/icons/apple-touch-icon.svg`) with headless Chromium: `node scripts/render-icons.mjs` in `frontend/` (Playwright installed). Re-render them after editing an SVG. `frontend/tests/pwa.spec.ts` builds the app, serves it with `vite preview` and checks the manifest, icons, signed-out service worker and Chromium installability.
+- Push notifications are a future requirement, not part of the initial implementation. Notification triggers, permissions, and delivery infrastructure remain to be designed.
+
+### API contract
+
+Use a code-first OpenAPI contract, with backend schemas as the single source of truth:
+
+- **TypeBox** defines request and response schemas for Fastify validation and response serialization.
+- **`@fastify/swagger`** generates the OpenAPI specification.
+- **`openapi-typescript`** generates frontend types; **`openapi-fetch`** provides the typed client.
+- Regenerate types when the contract changes; CI checks for stale generated types. Do not hand-edit generated files or duplicate API interfaces.
+
+Generated TypeScript types do not provide client-side runtime validation; add that only where needed.
+
 ## Local setup
 
 Requires Bun 1.3.6 and Node.js 22.12+ (Vite/test tooling).
@@ -51,7 +128,7 @@ export PLAYWRIGHT_BROWSERS_PATH="$PWD/.scratch/ms-playwright"
 bun run test:e2e
 ```
 
-Disposable development experiments, inspected external checkouts, and test outputs belong under ignored `.scratch/`; persistent app data and credentials stay in `.local/`. Playwright starts its own backend and frontend; stop existing instances on ports 3000 and 5173 first. Browser tests cover rendering, transitions, saved-history restoration/pagination, and Settings with mocked API/provider and ChatGPT device-login results. PWA installation, offline caching, and updates still need production-browser validation.
+Disposable development experiments, inspected external checkouts, and test outputs belong under ignored `.scratch/`; persistent app data and credentials stay in `.local/`. Playwright starts its own backend and frontend; stop existing instances on ports 3000 and 5173 first. Browser tests cover rendering, transitions, saved-history restoration/pagination, and Settings with mocked API/provider and ChatGPT device-login results. `tests/pwa.spec.ts` checks the production build's manifest, icons, signed-out service-worker registration, offline shell and Chromium installability (it builds into `.scratch/pwa-dist` and serves it on port 4317); real-device install (Android, iOS) and the update prompt still need production-browser validation.
 
 ### Windows browser launch safety
 

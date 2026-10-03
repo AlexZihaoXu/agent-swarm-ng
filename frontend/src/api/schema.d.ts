@@ -84,6 +84,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -1451,6 +1467,46 @@ export interface operations {
                 content: {
                     "application/json": {
                         message: string;
+                    };
+                };
+            };
+        };
+    };
+    listAuditEvents: {
+        parameters: {
+            query?: {
+                category?: "signin" | "agents" | "computers" | "organizations" | "system";
+                before?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        events: {
+                            sequence: number;
+                            /** Format: date-time */
+                            at: string;
+                            kind: string;
+                            outcome: string;
+                            actor: string | null;
+                            ip: string | null;
+                            targetId: string | null;
+                            targetName: string | null;
+                            detail: {
+                                [key: string]: unknown;
+                            } | null;
+                        }[];
+                        next: number | null;
                     };
                 };
             };

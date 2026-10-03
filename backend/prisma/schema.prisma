@@ -668,3 +668,25 @@ model UserSession {
   @@index([userId])
   @@index([expiresAt])
 }
+
+/// The audit log (docs/audit-log.md): who did what to organizations, computers and agents, sign-in attempts, and the
+/// platform starting and stopping. Kept a year (at most 200,000 events); never edited.
+model AuditEvent {
+  sequence   Int      @id @default(autoincrement())
+  /// Millisecond precision.
+  at         DateTime @default(now())
+  /// e.g. auth.login, agent.create, agent.update, computer.delete, organization.create, system.start
+  kind       String
+  /// ok, failed or denied
+  outcome    String
+  /// The signed-in person, the name tried at sign-in, or "system".
+  actor      String?
+  ip         String?
+  targetId   String?
+  targetName String?
+  /// JSON: changed field names, a reason, … never values of secrets.
+  detail     String?
+
+  @@index([at])
+  @@index([kind, at])
+}

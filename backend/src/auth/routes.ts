@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import { hostname } from '../host-policy';
+import type { AuditLog } from '../audit/store';
 import {
   Accounts,
   PASSWORD_MAX,
@@ -28,6 +29,8 @@ const MAX_TRACKED = 10_000;
 declare module 'fastify' {
   interface FastifyRequest {
     signedIn?: SignedIn;
+    /** Sign-in events for the audit log: the kind, the name given, and why it was refused. */
+    authEvent?: { kind: string; actor: string; reason?: string };
   }
   interface FastifyInstance {
     /** Closes a long-lived stream when its session ends; returns the unwatch. */
@@ -153,7 +156,7 @@ function cookieValue(header: string | undefined, name: string) {
 
 /** The browser's address: Caddy, the only way in, sets X-Real-IP (resolved through trusted proxies such as a public
  * reverse proxy) and otherwise puts it last in X-Forwarded-For. */
-function clientAddress(request: FastifyRequest) {
+export function clientAddress(request: FastifyRequest) {
   const real = request.headers['x-real-ip'];
   if (typeof real === 'string' && real.trim()) return real.trim();
   const forwarded = request.headers['x-forwarded-for'];
@@ -215,7 +218,11 @@ function crossOrigin(request: FastifyRequest) {
  * GET /api/auth/check is what Caddy asks before letting a browser reach a computer's desktop stream. Returns the
  * stream watch: long-lived streams call it so they close when their session ends.
  */
-export function registerAuth(app: FastifyInstance, accounts: Accounts, { requireLogin }: { requireLogin: boolean }) {
+export function registerAuth(
+  app: FastifyInstance,
+  accounts: Accounts,
+  { requireLogin, audit }: { requireLogin: boolean; audit?: AuditLog },
+) {
   const failures = new Failures();
   const streams = new SessionStreams(accounts);
   app.addHook('onClose', async () => streams.stop());
@@ -229,6 +236,22 @@ export function registerAuth(app: FastifyInstance, accounts: Accounts, { require
     } finally {
       hashing--;
     }
+  };
+  // Every sign-in, setup, sign-out and password change goes to the audit log: who (the name given), from where, when
+  // (to the millisecond), and whether it worked (ok), was refused (failed) or held back by the limits (denied).
+  app.addHook('onResponse', async (request, reply) => {
+    const event = request.authEvent;
+    if (!event || !audit) return;
+    await audit.record({
+      kind: event.kind,
+      outcome: reply.statusCode < 300 ? 'ok' : reply.statusCode === 429 ? 'denied' : 'failed',
+      actor: event.actor.slice(0, 64),
+      ip: clientAddress(request),
+      detail: event.reason ? { reason: event.reason } : undefined,
+    });
+  });
+  const note = (request: FastifyRequest, reason: string) => {
+    if (request.authEvent) request.authEvent.reason = reason;
   };
   const busy = (reply: FastifyReply) =>
     reply.header('retry-after', '2').code(429).send({ message: 'The dashboard is busy. Try again in a moment.' });
@@ -276,13 +299,25 @@ export function registerAuth(app: FastifyInstance, accounts: Accounts, { require
     },
     async (request, reply) => {
       const { name, password } = request.body as Static<typeof Credentials>;
+      request.authEvent = { kind: 'auth.setup', actor: name.trim() };
       const waiting = await accounts.awaitingSetup();
-      if (!waiting) return reply.code(409).send({ message: 'The password is already set. Sign in instead.' });
-      if (name.trim() !== waiting.name)
+      if (!waiting) {
+        note(request, 'password already set');
+        return reply.code(409).send({ message: 'The password is already set. Sign in instead.' });
+      }
+      if (name.trim() !== waiting.name) {
+        note(request, 'not the account awaiting setup');
         return reply.code(400).send({ message: `Set the password of ${waiting.name}.` });
+      }
       const set = await hash(() => accounts.setFirstPassword(waiting.id, password));
-      if (set === null) return busy(reply);
-      if (!set) return reply.code(409).send({ message: 'The password is already set. Sign in instead.' });
+      if (set === null) {
+        note(request, 'busy');
+        return busy(reply);
+      }
+      if (!set) {
+        note(request, 'password already set');
+        return reply.code(409).send({ message: 'The password is already set. Sign in instead.' });
+      }
       return signIn(request, reply, waiting.id, waiting.name);
     },
   );
@@ -298,6 +333,7 @@ export function registerAuth(app: FastifyInstance, accounts: Accounts, { require
     },
     async (request, reply) => {
       const { name, password } = request.body as Static<typeof SignInCredentials>;
+      request.authEvent = { kind: 'auth.login', actor: name.trim() };
       const account = `account:${name.trim().toLowerCase()}`;
       const address = `address:${clientAddress(request)}`;
       const pair = `${account}|${address}`;
@@ -307,13 +343,20 @@ export function registerAuth(app: FastifyInstance, accounts: Accounts, { require
         [account, MAX_PER_ACCOUNT],
       ]);
       if (wait) {
+        note(request, 'too many wrong passwords');
         reply.header('retry-after', String(wait));
         return reply.code(429).send({ message: `Too many wrong passwords. Try again in ${Math.ceil(wait / 60)} min.` });
       }
-      if (hashing >= MAX_HASHING) return busy(reply);
+      if (hashing >= MAX_HASHING) {
+        note(request, 'busy');
+        return busy(reply);
+      }
       const at = failures.record([pair, address, account]);
       const user = await hash(() => accounts.verify(name.trim(), password));
-      if (user === null) return reply.code(401).send({ message: 'Wrong name or password.' });
+      if (user === null) {
+        note(request, 'wrong name or password');
+        return reply.code(401).send({ message: 'Wrong name or password.' });
+      }
       failures.forgive([address, account], at, pair);
       return signIn(request, reply, user.id, user.name);
     },
@@ -323,6 +366,7 @@ export function registerAuth(app: FastifyInstance, accounts: Accounts, { require
     '/api/auth/logout',
     { schema: { operationId: 'signOut', response: { 200: Type.Object({ signedIn: Type.Literal(false) }) } } },
     async (request, reply) => {
+      if (request.signedIn) request.authEvent = { kind: 'auth.logout', actor: request.signedIn.name };
       // Signing out ends every session this browser holds here, not only the one that answered.
       const ended = await accounts.endTokens(sessionTokens(request));
       streams.end(ended);
@@ -344,16 +388,24 @@ export function registerAuth(app: FastifyInstance, accounts: Accounts, { require
       const signedIn = request.signedIn;
       if (!signedIn) return reply.code(401).send({ message: 'Sign in first.' });
       const { current, password } = request.body as Static<typeof PasswordChange>;
+      request.authEvent = { kind: 'auth.password', actor: signedIn.name };
       const key = `password:${signedIn.tokenHash}`;
       const wait = failures.wait([[key, MAX_PER_PAIR]]);
       if (wait) {
+        note(request, 'too many wrong passwords');
         reply.header('retry-after', String(wait));
         return reply.code(429).send({ message: `Too many wrong passwords. Try again in ${Math.ceil(wait / 60)} min.` });
       }
-      if (hashing >= MAX_HASHING) return busy(reply);
+      if (hashing >= MAX_HASHING) {
+        note(request, 'busy');
+        return busy(reply);
+      }
       const at = failures.record([key]);
       const correct = await hash(() => accounts.verifyUser(signedIn.userId, current));
-      if (!correct) return reply.code(403).send({ message: 'The current password is wrong.' });
+      if (!correct) {
+        note(request, 'current password wrong');
+        return reply.code(403).send({ message: 'The current password is wrong.' });
+      }
       failures.forgive([], at, key);
       const ended = await hash(() => accounts.changePassword(signedIn.userId, password, signedIn.tokenHash));
       if (ended === null) return busy(reply);
