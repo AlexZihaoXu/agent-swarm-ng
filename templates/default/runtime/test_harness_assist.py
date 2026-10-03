@@ -126,10 +126,26 @@ class Install(unittest.TestCase):
                 installer.install_codex()
                 text = config.read_text()
                 self.assertEqual(text.count(installer.BEGIN), 1)
-                self.assertTrue(text.startswith('model = "gpt-6"'))
+                # A computer from an older image gets the no-sandbox setting first, before any table.
+                self.assertTrue(text.startswith((HERE / 'codex/system.toml').read_text()))
+                self.assertIn('model = "gpt-6"', text)
+                self.assertEqual(text.count('sandbox_mode'), 1)
                 self.assertIn('[[hooks.Stop.hooks]]', text)
                 installer.install_codex(remove=True)
-                self.assertEqual(config.read_text().strip(), 'model = "gpt-6"')
+                self.assertNotIn(installer.BEGIN, config.read_text())
+                self.assertIn('sandbox_mode = "danger-full-access"', config.read_text())
+
+    def test_codex_keeps_a_sandbox_mode_someone_chose(self):
+        from importlib.machinery import SourceFileLoader
+        installer = SourceFileLoader('harness_install', str(HERE / 'install')).load_module()
+        with tempfile.TemporaryDirectory() as root:
+            config = Path(root) / 'config.toml'
+            config.write_text('sandbox_mode = "workspace-write"\n')
+            with mock.patch.object(installer, 'CODEX_SYSTEM', config), mock.patch('os.geteuid', lambda: 0):
+                installer.install_codex()
+            text = config.read_text()
+            self.assertTrue(text.startswith('sandbox_mode = "workspace-write"'))
+            self.assertEqual(text.count('sandbox_mode'), 1)
 
     def test_opencode_and_pi_files_go_to_their_user_folders(self):
         from importlib.machinery import SourceFileLoader

@@ -1,0 +1,3 @@
+# Codex system settings (agent swarm). The computer is the sandbox: Codex's own sandbox (bubblewrap) cannot start
+# inside it, so Codex runs its commands directly. Harness assist (install codex) adds its block below this line.
+sandbox_mode = "danger-full-access"

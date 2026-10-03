@@ -17,7 +17,9 @@ COPY templates/default/runtime/recording.py templates/default/runtime/computer-u
 # Harness assist: adapters for Claude Code, Codex, OpenCode and Pi that agents install with the human's consent, and the
 # follower their harness listeners run (docs/agent-computer-use.md#harness-listeners). Read-only for the agent user.
 COPY templates/default/runtime/harness-assist /opt/swarm/harness-assist
-RUN chmod 0755 /opt/swarm/desktop-session.sh && chmod 0644 /opt/swarm/xorg-dummy.conf /opt/swarm/*.py \
+# Codex runs without its own sandbox (it cannot start in a computer, which is the sandbox).
+COPY templates/default/runtime/harness-assist/codex/system.toml /etc/codex/config.toml
+RUN chmod 0755 /opt/swarm/desktop-session.sh && chmod 0644 /opt/swarm/xorg-dummy.conf /opt/swarm/*.py /etc/codex/config.toml \
     && chmod -R u=rwX,go=rX /opt/swarm/harness-assist && chmod 0755 /opt/swarm/harness-assist/install \
     && rm -rf /opt/swarm/harness-assist/__pycache__ \
     && /opt/swarm/computer-storage-baseline.sh

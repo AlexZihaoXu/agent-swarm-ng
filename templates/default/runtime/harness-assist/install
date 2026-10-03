@@ -7,10 +7,12 @@
 
 claude-code: a local plugin marketplace + plugin (user scope). codex: a block in /etc/codex/config.toml (the system
 layer, so its hooks need no per-user trust review; uses sudo). opencode: a plugin in ~/.config/opencode/plugins/.
-pi: an extension in ~/.pi/agent/extensions/. Sessions started afterwards load it.
+pi: an extension in ~/.pi/agent/extensions/. Sessions started afterwards load it. Codex also runs without its own
+sandbox (codex/system.toml): it cannot start in a computer, which is the sandbox.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -64,6 +66,10 @@ def install_codex(remove=False):
         start = current.index(BEGIN)
         end = current.find(END, start)
         current = current[:start] + (current[end + len(END):] if end >= 0 else '')
+    # Codex's own sandbox cannot start in a computer (the computer is the sandbox): a computer from an older image
+    # gets the image's no-sandbox setting, first so it stays a top-level key. A sandbox_mode someone chose is kept.
+    if not re.search(r'^\s*sandbox_mode\s*=', current, re.M):
+        current = (ROOT / 'codex/system.toml').read_text() + ('\n' + current if current.strip() else '')
     block = '' if remove else (ROOT / 'codex/config.toml').read_text()
     CODEX_SYSTEM.parent.mkdir(parents=True, exist_ok=True)
     CODEX_SYSTEM.write_text((current.rstrip() + '\n\n' if current.strip() else '') + block)
