@@ -105,5 +105,8 @@ handle @computerUnknown {
 }
 
 handle /api/* {
-	reverse_proxy backend:3000
+	reverse_proxy backend:3000 {
+		# The visitor's address as Caddy resolved it (through trusted proxies), for sign-in limits.
+		header_up X-Real-IP {client_ip}
+	}
 }

@@ -9,6 +9,17 @@
 #
 # No extra backend, no per-computer host port, no UDP, and no public bind:
 # Compose publishes both listeners on loopback and the one Tailnet IPv4 only.
+{
+	servers {
+		# Requests may arrive through a reverse proxy on the LAN or tailnet (for example Nginx Proxy Manager behind
+		# Cloudflare): trust its forwarded client address so sign-in limits apply per visitor (docs/login.md). A device
+		# in these ranges could claim another address; that only changes which sign-in limit it counts against.
+		trusted_proxies static private_ranges 100.64.0.0/10
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+		trusted_proxies_strict
+	}
+}
+
 (app) {
 	encode zstd gzip
 

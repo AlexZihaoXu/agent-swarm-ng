@@ -118,6 +118,14 @@ describe('dashboard sign-in', { timeout: 60_000 }, () => {
       expect(burst.some(response => response.statusCode === 429)).toBe(true);
       for (let i = 0; i < 12; i++) await from('100.64.0.9', `more wrong ${i} x`);
       expect((await from('100.64.0.9', 'correct horse battery')).statusCode).toBe(429);
+      // Behind a public proxy every request comes from the same proxy; Caddy's X-Real-IP tells visitors apart.
+      const behindProxy = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: { host: '127.0.0.1:19090', 'x-forwarded-for': '100.64.0.9', 'x-real-ip': '203.0.113.5' },
+        payload: { name: 'Admin', password: 'correct horse battery' },
+      });
+      expect(behindProxy.statusCode).toBe(200);
       // The owner elsewhere is not locked out by someone else's guesses.
       expect((await from('100.64.0.7', 'correct horse battery')).statusCode).toBe(200);
     } finally {

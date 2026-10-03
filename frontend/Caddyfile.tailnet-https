@@ -1,6 +1,17 @@
 # Optional stage-2 Tailnet HTTPS deployment on the SAME dashboard TCP port.
 # The cert/key are provisioned by the operator under .local/ and mounted
 # read-only by compose.tailscale-https.yaml, never served to the browser.
+{
+	servers {
+		# Requests may arrive through a reverse proxy on the LAN or tailnet (for example Nginx Proxy Manager behind
+		# Cloudflare): trust its forwarded client address so sign-in limits apply per visitor (docs/login.md). A device
+		# in these ranges could claim another address; that only changes which sign-in limit it counts against.
+		trusted_proxies static private_ranges 100.64.0.0/10
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+		trusted_proxies_strict
+	}
+}
+
 {$SITE_ADDRESS} {
 	tls /etc/caddy/tailnet.crt /etc/caddy/tailnet.key
 	encode zstd gzip

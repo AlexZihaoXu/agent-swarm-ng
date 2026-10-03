@@ -151,8 +151,11 @@ function cookieValue(header: string | undefined, name: string) {
   return undefined;
 }
 
-/** The browser's address: Caddy, the only way in, puts it last in X-Forwarded-For. */
+/** The browser's address: Caddy, the only way in, sets X-Real-IP (resolved through trusted proxies such as a public
+ * reverse proxy) and otherwise puts it last in X-Forwarded-For. */
 function clientAddress(request: FastifyRequest) {
+  const real = request.headers['x-real-ip'];
+  if (typeof real === 'string' && real.trim()) return real.trim();
   const forwarded = request.headers['x-forwarded-for'];
   const last = (Array.isArray(forwarded) ? forwarded.join(',') : (forwarded ?? '')).split(',').pop()?.trim();
   return last || request.ip;
