@@ -130,6 +130,12 @@ const HARNESS_COMMANDS: Record<string, string> = {
   opencode: 'OpenCode',
   pi: 'Pi',
 };
+const HARNESS_WORDS: Record<string, RegExp> = {
+  'Claude Code': /\bclaude code\b/i,
+  Codex: /\bcodex\b/i,
+  OpenCode: /\bopencode\b/i,
+  Pi: /\bpi (coding )?agent\b/i,
+};
 const iso = (ms: number) => new Date(ms).toISOString();
 const seconds = (ms: number) => Math.round(ms / 1000);
 const image = (frame: ScreenFrame): ImageContent => ({
@@ -309,7 +315,10 @@ export class ComputerWatches {
       .watchTerminal(watch.agentId, watch.computerId, watch.claimToken, { operation: 'status', session: watch.session })
       .catch(() => null);
     const command = (receipt?.result as { session?: { currentCommand?: string } } | undefined)?.session?.currentCommand;
-    const harness = command ? HARNESS_COMMANDS[command] : undefined;
+    // npm-installed Codex runs as "node": the condition the agent wrote usually names the harness.
+    const harness =
+      (command ? HARNESS_COMMANDS[command] : undefined) ??
+      Object.entries(HARNESS_WORDS).find(([, pattern]) => pattern.test(watch.until))?.[0];
     return harness
       ? {
           hint: `This terminal runs ${harness}. harness_listener_add({terminal}) would wake you the moment it finishes, asks permission or a question, fails or messages you, with no model checks in between, and lasts across prompts (this watch costs a model check every interval). It needs Harness assist for ${harness}, which is highly recommended: /opt/swarm/harness-assist/install --status shows whether it is installed; if not, read practices/harnesses and ask the human before installing. If you switch, cancel this watch with cancel_timer.`,

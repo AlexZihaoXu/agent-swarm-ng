@@ -506,3 +506,18 @@ it('points a watch on a terminal running Claude Code to its listener', async () 
     await t.close();
   }
 });
+
+it('points a watch to the listener when its condition names a harness that runs as node', async () => {
+  const t = await setup(vi.fn<Judge>(async () => ({ notify: false, summary: 'working' })));
+  try {
+    t.state.command = 'node';
+    const watch = await t.watches.create(t.agent.id, {
+      ...terminalWatch,
+      until: 'Codex has finished and waits for input',
+      checkNow: false,
+    });
+    expect((watch as { hint?: string }).hint).toContain('This terminal runs Codex.');
+  } finally {
+    await t.close();
+  }
+});
