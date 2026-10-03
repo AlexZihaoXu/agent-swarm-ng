@@ -7,7 +7,7 @@ The dashboard needs a signed-in person. There is one account, **Admin**, created
 - **Every backend request** (`backend/src/auth/routes.ts`, an `onRequest` hook registered before all routes): any path, WebSocket upgrades included, answers `401 {"message":"Sign in first."}` without a valid session. Public: `GET /api/health`, `GET /api/auth/session`, `POST /api/auth/login`, `POST /api/auth/setup`, `POST /api/auth/logout` (it only ends the sessions behind the cookies it is sent).
 - **Computer desktops** reach their computers through Caddy, not the backend, so Caddy asks first: `forward_auth` on `/computers/<id>/desktop…` calls `GET /api/auth/check` (204 signed in, 401 not, 403 when the page's `Origin` is another site), without the WebSocket upgrade headers (`frontend/Caddyfile.computers`, shared by production and the dev proxy). The computer is untrusted: Caddy strips `Cookie`, `Authorization`, `X-Forwarded-For` and `X-Forwarded-Host` before anything reaches it, and drops `Set-Cookie`, `Clear-Site-Data`, `NEL`, `Report-To`, `Reporting-Endpoints`, `Strict-Transport-Security` and `Alt-Svc` from its answers. Other `/computers/…` paths are app pages and stay public like the app shell.
 - **The app shell** (HTML, scripts, styles) stays public: it holds no data and draws the sign-in card.
-- **Other sites:** besides `SameSite=Strict` cookies, a request that changes something (any method but GET/HEAD/OPTIONS) or opens a WebSocket is refused (403) when its `Origin` is not this dashboard. The `Host` allowlist (`ALLOWED_HOSTS`, development.md) still applies before anything else.
+- **Other sites:** besides `SameSite=Strict` cookies, a request that changes something (any method but GET/HEAD/OPTIONS) or opens a WebSocket is refused (403) when its `Origin` is not this dashboard. The `Host` allowlist (`ALLOWED_HOSTS`, [development](development.md#platform-storage)) still applies before anything else.
 
 Agents, the controller, Discord and computers never call the dashboard API, so nothing else needs a session.
 
@@ -22,10 +22,10 @@ Agents, the controller, Discord and computers never call the dashboard API, so n
 
 ## Forgotten password
 
-On the host, in the project folder:
+On the host, in the project folder, with the stack you run (for example `tailnet-dual`):
 
 ```sh
-docker compose exec backend bun scripts/reset-password.ts   # [name], default Admin
+scripts/compose.sh tailnet-dual exec backend bun scripts/reset-password.ts   # [name], default Admin
 ```
 
 It clears the password and signs out every browser; the next visit sets a new one, as on the first day.

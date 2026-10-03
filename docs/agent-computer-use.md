@@ -1,6 +1,6 @@
 # Agent computer use
 
-Status: deployed to the trusted dashboard from `6cfb464` on 2026-09-27. This capability is separate from human desktop viewing, agent identity and channels. The dashboard itself needs a sign-in ([login](login.md)). Computer assignments start empty and are set explicitly by the human.
+Status: deployed from `6cfb464` on 2026-09-27. This capability is separate from human desktop viewing, agent identity and channels. The dashboard itself needs a sign-in ([login](login.md)). Computer assignments start empty and are set explicitly by the human.
 
 ## Assignment and control
 
@@ -12,7 +12,7 @@ A blocked agent asks the current holder to release via an already-permitted conv
 
 A Swarm backend restart cancels/settles persisted claims, releases them, clears screenshot allowances and leaves an agent-facing notice for each affected agent's **next normal turn**. It does not automatically wake inference or replay interrupted work. Browser refresh merely reattaches observation and does not release claims. Revoking an assignment releases active control; deleting an agent cascades its assignments/claim and archive.
 
-The human viewer starts **Input locked** (the header's lock icon) each time it opens/reconnects; on an upright phone, where the desktop is shown turned, it stays locked. The actual guest cursor is composed into the shared video stream, so locked observers can see agent/remote pointer motion. All trusted viewers use that same cursor mode, with the duplicate local CSS/canvas cursor suppressed; unlocking or detaching one viewer does not turn off another viewer's cursor. The toggle only enables/disables human pointer/keyboard/touch/shortcut input; it does not stop video, release an agent or revoke assignments. This adapts the v2 idea, not its overlay-only implementation: the trusted iframe also gates input events and shortcut messages after focus.
+The human viewer starts **Input locked** (the header's lock icon) each time it opens/reconnects; on an upright phone, where the desktop is shown turned, it stays locked. The actual guest cursor is composed into the shared video stream, so locked observers can see agent/remote pointer motion. All trusted viewers use that same cursor mode, with the duplicate local CSS/canvas cursor suppressed; unlocking or detaching one viewer does not turn off another viewer's cursor. The toggle only enables/disables human pointer/keyboard/touch/shortcut input; it does not stop video, release an agent or revoke assignments. This adapts the v2 idea, not its overlay-only implementation: the trusted iframe also gates input events and shortcut messages after focus, and touches the human's clipboard only right after their own paste/copy key in that unlocked, focused viewer, so a guest cannot read or write it on its own (see [computers](computers.md)).
 
 ## Observe, act, verify
 

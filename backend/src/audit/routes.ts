@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import type { PlatformStore } from '../platform-store';
 import { clientAddress } from '../auth/routes';
@@ -15,6 +15,7 @@ const RULES: Record<string, Rule> = {
   'POST /api/organizations/:id/move': { kind: 'organization.move', target: 'organization' },
   'POST /api/computers': { kind: 'computer.create', target: 'computer' },
   'PATCH /api/computers/:id/settings': { kind: 'computer.update', target: 'computer', section: 'settings' },
+  'POST /api/computers/:id/settings/replacement': { kind: 'computer.update', target: 'computer', section: 'rebuilt' },
   'DELETE /api/computers/:id': { kind: 'computer.delete', target: 'computer' },
   'POST /api/agents': { kind: 'agent.create', target: 'agent' },
   'PATCH /api/agents/:id': { kind: 'agent.update', target: 'agent', section: 'agent' },
@@ -33,7 +34,7 @@ const RULES: Record<string, Rule> = {
 
 declare module 'fastify' {
   interface FastifyRequest {
-    audit?: { rule: Rule; targetName?: string; response?: unknown };
+    audit?: { rule: Rule; targetName?: string; movedName?: string; response?: unknown };
   }
   interface FastifyInstance {
     audit: AuditLog;
@@ -80,6 +81,14 @@ export function registerAudit(app: FastifyInstance, platform: PlatformStore, aud
     if (!rule) return;
     const id = (request.params as { id?: string } | undefined)?.id;
     request.audit = { rule, targetName: id ? await nameOf(rule.target, id).catch(() => undefined) : undefined };
+    // A move names what moved (an agent or a computer; groups have no name lookup here).
+    const moved = request.body as { kind?: unknown; id?: unknown } | undefined;
+    if (
+      rule.kind === 'organization.move' &&
+      typeof moved?.id === 'string' &&
+      (moved.kind === 'agent' || moved.kind === 'computer')
+    )
+      request.audit.movedName = await nameOf(moved.kind, moved.id).catch(() => undefined);
   });
   // Created things get their id and name from the answer.
   app.addHook('onSend', async (request, reply, payload) => {
@@ -98,25 +107,31 @@ export function registerAudit(app: FastifyInstance, platform: PlatformStore, aud
     const { rule } = entry;
     const params = request.params as { id?: string; name?: string } | undefined;
     const body = request.body as Record<string, unknown> | undefined;
-    // A move preview changes nothing.
+    // A move preview changes nothing, and a retried create (the same request key answered again) made nothing new.
     if (rule.kind === 'organization.move' && body?.apply !== true) return;
+    if (rule.kind === 'computer.create' && reply.statusCode === 200) return;
     const created = rule.kind.endsWith('.create') ? createdTarget(rule, body, entry.response) : undefined;
-    await audit.record({
-      kind: rule.kind,
-      outcome: reply.statusCode < 400 ? 'ok' : 'failed',
-      actor: request.signedIn?.name ?? null,
-      ip: clientAddress(request),
-      targetId: created?.id ?? params?.id ?? null,
-      targetName: created?.name ?? entry.targetName ?? null,
-      detail: {
-        ...(rule.section ? { section: rule.section } : {}),
-        ...(rule.kind.endsWith('.update') || rule.kind === 'organization.move' ? { fields: bodyFields(body) } : {}),
-        ...(rule.kind === 'organization.move' ? { moved: `${String(body?.kind)} ${String(body?.id)}` } : {}),
-        ...(params?.name ? { memory: params.name } : {}),
-        ...(rule.kind === 'agent.update' && typeof body?.name === 'string' ? { newName: body.name } : {}),
-        ...(reply.statusCode >= 400 ? { status: reply.statusCode } : {}),
+    await audit.record(
+      {
+        kind: rule.kind,
+        outcome: reply.statusCode < 400 ? 'ok' : 'failed',
+        actor: request.signedIn?.name ?? null,
+        ip: clientAddress(request),
+        targetId: created?.id ?? params?.id ?? null,
+        targetName: created?.name ?? entry.targetName ?? null,
+        detail: {
+          ...(rule.section ? { section: rule.section } : {}),
+          ...(rule.kind.endsWith('.update') || rule.kind === 'organization.move' ? { fields: bodyFields(body) } : {}),
+          ...(rule.kind === 'organization.move'
+            ? { moved: `${String(body?.kind)} ${entry.movedName ? `“${entry.movedName}”` : String(body?.id)}` }
+            : {}),
+          ...(params?.name ? { memory: params.name } : {}),
+          ...(rule.kind === 'agent.update' && typeof body?.name === 'string' ? { newName: body.name } : {}),
+          ...(reply.statusCode >= 400 ? { status: reply.statusCode } : {}),
+        },
       },
-    });
+      arrived(reply),
+    );
   });
 
   app.get(
@@ -149,5 +164,5 @@ function createdTarget(rule: Rule, body: Record<string, unknown> | undefined, re
   };
 }
 
-/** For the sign-in routes: the signed-in person (if any) and the client address. */
-export const who = (request: FastifyRequest) => ({ actor: request.signedIn?.name ?? null, ip: clientAddress(request) });
+/** When the request arrived (not when the answer went out): the moment the event happened. */
+export const arrived = (reply: FastifyReply) => new Date(Date.now() - reply.elapsedTime);

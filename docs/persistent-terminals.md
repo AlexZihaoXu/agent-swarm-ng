@@ -4,7 +4,7 @@ Terminals belong to a **computer**, not an agent or conversation. They are share
 
 ## Agent operations
 
-Every `terminal_*` operation—including reads—requires the agent's **current assignment and active computer claim** at execution. The backend selects the computer from that claim; callers cannot supply a host/computer target. Work runs as guest uid/gid1000 with its configured permissions, including guest sudo. No developer credentials, Docker socket, provider configuration or new host mounts enter the guest.
+Every `terminal_*` operation is checked at execution: reads (`terminal_list/view/status`, class `r`) need the agent's **current assignment** to the computer it selected with `use_computer`, even while another agent holds it; everything else (`terminal_create/delete/resize`, `terminal_run_actions`) needs its **active computer claim** (`write: true`). The backend selects the computer from that selection or claim; callers cannot supply a host/computer target. Work runs as guest uid/gid1000 with its configured permissions, including guest sudo. No developer credentials, Docker socket, provider configuration or new host mounts enter the guest.
 
 | Tool | Parameters | Meaning |
 | --- | --- | --- |
@@ -56,7 +56,7 @@ Output is streamed, not periodic text snapshots. Session-list metadata still ref
 
 `GET /api/computers/:id/terminals/:session/stream` upgrades only a **same-origin WebSocket** after a saved-running check. The backend connects to the fixed internal controller origin; the controller rechecks owned labels/running state and starts only the fixed uid1000 viewer helper in the inspected immutable container. A bounded Docker exec stream carries JSON/base64 to that helper, whose fixed-size PTY attaches only the exact managed session. No new host port, guest listener or host shell is introduced. Each input frame rechecks saved computer state and invalidates the current holder's screenshot allowance. Like human desktop input, this human keyboard lane is independent of agent claims and can operate concurrently; it is **not an agent capability** and does not weaken the agent core cancellation fence.
 
-Limits: two connected viewers per computer/eight globally; startup admission remains held while cancelled Docker startup joins. Keyboard frames ≤4KiB, pending input≤64KiB/256frames, input rate≤64KiB/s and256frames/s; output chunks≤8KiB and slow observers are disconnected at bounded queues. No resize operation is accepted. Browser heartbeats maintain a20-second guest lease; EOF, expiry, slow output or explicit close cleans up only the attachment process. Backend restart disconnects observers, never restores or repeats keystrokes. Development Vite and production Caddy proxy the WebSocket on the existing dashboard origin.
+Limits: two connected viewers per computer/eight globally; startup admission remains held while cancelled Docker startup joins. Keyboard frames ≤4KiB, pending input≤64KiB/256frames, input rate≤64KiB/s and256frames/s; output chunks≤8KiB and slow observers are disconnected at bounded queues. No resize operation is accepted. Browser heartbeats maintain a20-second guest lease; EOF, expiry, slow output or explicit close cleans up only the attachment process. An open stream also closes when its dashboard session signs out or its password changes ([sign-in](login.md#passwords-and-sessions)). Backend restart disconnects observers, never restores or repeats keystrokes. Development Vite and production Caddy proxy the WebSocket on the existing dashboard origin.
 
 ## Verification and rollout
 

@@ -63,6 +63,47 @@ describe('audit log', { timeout: 60_000 }, () => {
     }
   });
 
+  it('records sign-in attempts refused before the password is checked', async () => {
+    const { app, events } = await fixture();
+    try {
+      const bad = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: { host: '127.0.0.1:19090', 'x-real-ip': '198.51.100.20' },
+        payload: { name: 'Eve', password: '' },
+      });
+      expect(bad.statusCode).toBe(400);
+      const foreign = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: { host: '127.0.0.1:19090', origin: 'https://evil.example', 'x-real-ip': '198.51.100.21' },
+        payload: { name: 'Eve', password: 'whatever pw' },
+      });
+      expect(foreign.statusCode).toBe(403);
+      const logged = (await events('signin')).filter(event => event.ip?.startsWith('198.51.100.2'));
+      expect(logged.map(event => [event.outcome, event.actor, event.ip, event.detail?.reason])).toEqual([
+        ['failed', expect.any(String), '198.51.100.21', 'refused: another site or host name'],
+        ['failed', 'Eve', '198.51.100.20', 'refused: invalid request (400)'],
+      ]);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('prunes events older than a year in batches, keeping the rest', async () => {
+    const { app, database } = await fixture();
+    try {
+      const old = new Date(Date.now() - 400 * 86_400_000);
+      for (let i = 0; i < 3; i++) await app.audit.record({ kind: 'system.start', outcome: 'ok', actor: 'system' }, old);
+      await app.audit.record({ kind: 'system.start', outcome: 'ok', actor: 'system' });
+      const before = await database.client.auditEvent.count();
+      expect(await app.audit.prune()).toBe(3);
+      expect(await database.client.auditEvent.count()).toBe(before - 3);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('records organizations and agents being created, edited and deleted, with names and changed fields only', async () => {
     const { app, call, events } = await fixture();
     try {
@@ -98,7 +139,13 @@ describe('audit log', { timeout: 60_000 }, () => {
           'Ada',
           { section: 'agent', fields: ['name', 'instructions'], newName: 'Ada Lovelace' },
         ],
-        ['organization.move', 'ok', 'Admin', 'Lab 2', { fields: ['kind', 'id', 'apply'], moved: `agent ${agent.id}` }],
+        [
+          'organization.move',
+          'ok',
+          'Admin',
+          'Lab 2',
+          { fields: ['kind', 'id', 'apply'], moved: 'agent “Ada Lovelace”' },
+        ],
         ['agent.delete', 'ok', 'Admin', 'Ada Lovelace', {}],
         ['organization.delete', 'ok', 'Admin', 'Lab 2', {}],
       ]);

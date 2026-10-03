@@ -26,15 +26,38 @@ export type AuditEventView = {
   detail: Record<string, unknown> | null;
 };
 
-/** Categories the dashboard filters by: event kinds start with these prefixes. */
+/** Categories the dashboard filters by, as the exact kinds in each (an indexed `kind IN (…)`). */
 export const AUDIT_CATEGORIES = {
-  signin: 'auth.',
-  agents: 'agent.',
-  computers: 'computer.',
-  organizations: 'organization.',
-  system: 'system.',
+  signin: ['auth.login', 'auth.setup', 'auth.logout', 'auth.password'],
+  agents: ['agent.create', 'agent.update', 'agent.delete'],
+  computers: ['computer.create', 'computer.update', 'computer.delete'],
+  organizations: ['organization.create', 'organization.update', 'organization.delete', 'organization.move'],
+  system: ['system.start', 'system.stop'],
 } as const;
 export type AuditCategory = keyof typeof AUDIT_CATEGORIES;
+const PRUNE_BATCH = 5_000;
+
+/** Detail values stay short, so the stored JSON is always whole. */
+function compact(detail: Record<string, unknown>) {
+  const short = (value: unknown): unknown =>
+    typeof value === 'string' ? value.slice(0, 200) : Array.isArray(value) ? value.slice(0, 30).map(short) : value;
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(detail)
+        .slice(0, 20)
+        .map(([key, value]) => [key, short(value)]),
+    ),
+  );
+}
+
+function parseDetail(text: string | null) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
 
 const clip = (value: string | null | undefined, size: number) => (value == null ? null : String(value).slice(0, size));
 
@@ -61,7 +84,7 @@ export class AuditLog {
           ip: clip(input.ip, 64),
           targetId: clip(input.targetId, 120),
           targetName: clip(input.targetName, 200),
-          detail: input.detail ? JSON.stringify(input.detail).slice(0, 2000) : null,
+          detail: input.detail ? compact(input.detail) : null,
         },
       });
     } catch {
@@ -75,7 +98,7 @@ export class AuditLog {
     const take = Math.min(Math.max(limit, 1), 200);
     const rows = await this.platform.client.auditEvent.findMany({
       where: {
-        ...(category ? { kind: { startsWith: AUDIT_CATEGORIES[category] } } : {}),
+        ...(category ? { kind: { in: [...AUDIT_CATEGORIES[category]] } } : {}),
         ...(before ? { sequence: { lt: before } } : {}),
       },
       orderBy: { sequence: 'desc' },
@@ -90,24 +113,31 @@ export class AuditLog {
       ip: row.ip,
       targetId: row.targetId,
       targetName: row.targetName,
-      detail: row.detail ? (JSON.parse(row.detail) as Record<string, unknown>) : null,
+      detail: parseDetail(row.detail),
     }));
     return { events, next: rows.length > take ? events.at(-1)!.sequence : null };
   }
 
-  /** Drops events older than a year, then the oldest beyond the cap. Returns how many went. */
+  /** Drops events older than a year, then the oldest beyond the cap, in short batches (no long write lock). */
   async prune(now = Date.now()) {
     await this.platform.initialize();
     const client = this.platform.client;
-    const old = await client.auditEvent.deleteMany({ where: { at: { lt: new Date(now - AUDIT_KEEP_DAYS * DAY) } } });
-    const cutoff = await client.auditEvent.findFirst({
-      orderBy: { sequence: 'desc' },
-      skip: AUDIT_MAX_EVENTS,
-      select: { sequence: true },
-    });
-    const extra = cutoff
-      ? await client.auditEvent.deleteMany({ where: { sequence: { lte: cutoff.sequence } } })
-      : { count: 0 };
-    return old.count + extra.count;
+    const newest = await client.auditEvent.findFirst({ orderBy: { sequence: 'desc' }, select: { sequence: true } });
+    if (!newest) return 0;
+    const batches = async (where: object) => {
+      let removed = 0;
+      for (;;) {
+        const batch = await client.auditEvent.findMany({ where, take: PRUNE_BATCH, select: { sequence: true } });
+        if (!batch.length) return removed;
+        const done = await client.auditEvent.deleteMany({
+          where: { sequence: { in: batch.map(row => row.sequence) } },
+        });
+        removed += done.count;
+      }
+    };
+    return (
+      (await batches({ at: { lt: new Date(now - AUDIT_KEEP_DAYS * DAY) } })) +
+      (await batches({ sequence: { lte: newest.sequence - AUDIT_MAX_EVENTS } }))
+    );
   }
 }

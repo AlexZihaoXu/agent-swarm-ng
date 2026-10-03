@@ -688,5 +688,5 @@ model AuditEvent {
   detail     String?
 
   @@index([at])
-  @@index([kind, at])
+  @@index([kind, sequence])
 }

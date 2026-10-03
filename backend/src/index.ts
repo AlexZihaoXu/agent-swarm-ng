@@ -33,10 +33,10 @@ await app.audit.record({
   actor: 'system',
   detail: { runtime: `Bun ${Bun.version}`, startupMs: Math.round(performance.now()) },
 });
-// The audit log keeps a year (at most 200,000 events): pruned at start and daily.
+// The audit log keeps a year (at most 200,000 events): pruned at start and hourly.
 const pruneAudit = () => void app.audit.prune().catch(error => app.log.error(error, 'Audit log pruning failed'));
 pruneAudit();
-setInterval(pruneAudit, 24 * 3_600_000).unref();
+setInterval(pruneAudit, 3_600_000).unref();
 // Re-apply explicit power-offs the controller's own boot reconciliation may
 // have revived. Non-fatal: a controller outage must not block the dashboard.
 const power = await reconcileStoppedComputers(new ComputerStore(database), computerControllerFromEnv());

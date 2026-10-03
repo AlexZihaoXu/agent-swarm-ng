@@ -2,6 +2,8 @@
 
 Review baseline: `a846572` (Chat/groups/reactions and Codex model refresh merged into main). Fix branch: `fix/feature-consistency`. This is a scoped implementation/configuration/test review, not a claim that every deployment condition is verified.
 
+Note (2026-10-03): this records the review at that baseline. Since then the dashboard sign-in ([login](login.md)), long-term memory, Discord, computer assignment/control and the Tailnet desktop deployment were implemented, so the loopback-only and "unimplemented" boundaries below are historical.
+
 ## Rules applied
 
 Reread `AGENTS.md`, `docs/vision.md`, the Kibo entry guide, development/security guidance, and the relevant feature notes. Preserve explicit capability grants, runtime authorization, internal-output separation, project-local credentials, backend-owned work, and the agent/channel/computer separation. No speculative implementation of the vision's open questions; no upstream reference scripts executed. Conventional commits and fast-forward merges; no push.

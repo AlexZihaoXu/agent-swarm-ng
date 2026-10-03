@@ -14,4 +14,4 @@ CREATE TABLE "AuditEvent" (
 
 -- CreateIndex
 CREATE INDEX "AuditEvent_at_idx" ON "AuditEvent"("at");
-CREATE INDEX "AuditEvent_kind_at_idx" ON "AuditEvent"("kind", "at");
+CREATE INDEX "AuditEvent_kind_sequence_idx" ON "AuditEvent"("kind", "sequence");

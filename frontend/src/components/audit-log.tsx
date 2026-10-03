@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { ChoiceChips } from '@/components/ui/choice-chips';
@@ -60,7 +60,8 @@ const timeFormat = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit',
   second: '2-digit',
   fractionalSecondDigits: 3,
-  hour12: false,
+  hourCycle: 'h23',
+  timeZoneName: 'short',
 });
 
 /** What else is worth showing: the reason, the section and changed fields, a new name, a status. Never values. */
@@ -91,6 +92,9 @@ export function AuditLog({ onNavigate }: { onNavigate: (path: string) => void })
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  // Older pages belong to the category they were asked for: a filter change meanwhile drops them.
+  const shown = useRef(category);
+  shown.current = category;
 
   const load = async (before?: number, signal?: AbortSignal) => {
     const { data, error: failure } = await api.GET('/api/audit', {
@@ -122,9 +126,11 @@ export function AuditLog({ onNavigate }: { onNavigate: (path: string) => void })
 
   const older = async () => {
     if (next === null) return;
+    const asked = category;
     setLoading(true);
     try {
       const data = await load(next);
+      if (shown.current !== asked) return;
       setEvents(current => [...current, ...data.events]);
       setNext(data.next);
     } catch (caught) {
@@ -135,7 +141,10 @@ export function AuditLog({ onNavigate }: { onNavigate: (path: string) => void })
   };
 
   return (
-    <section aria-label="Audit log" className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col md:px-6">
+    <section
+      aria-label="Audit log"
+      className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)] md:px-6"
+    >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 md:px-0">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold">Audit log</h2>
@@ -215,7 +224,7 @@ export function AuditLog({ onNavigate }: { onNavigate: (path: string) => void })
                     </tr>
                   );
                 })}
-                {!events.length && !loading && (
+                {!events.length && !loading && !error && (
                   <tr>
                     <td colSpan={6} className="px-3 py-6 text-center text-sm text-muted-foreground">
                       Nothing logged here yet.
@@ -227,7 +236,14 @@ export function AuditLog({ onNavigate }: { onNavigate: (path: string) => void })
           </div>
           <div className="mt-3 flex items-center gap-3">
             {next !== null && (
-              <Button type="button" size="sm" variant="outline" disabled={loading} onClick={() => void older()}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="min-h-11 sm:min-h-0"
+                disabled={loading}
+                onClick={() => void older()}
+              >
                 Load older events
               </Button>
             )}

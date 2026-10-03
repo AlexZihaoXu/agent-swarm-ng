@@ -64,7 +64,7 @@ The steps below set up the `tailnet-dual` stack: the dashboard on your Tailscale
 
 5. **Connect a model and create things.** In **Settings**, sign in with a ChatGPT subscription or add OpenRouter or an OpenAI-compatible endpoint. Then create a computer (**Computers → +**) and an agent (**Agents → +**), and assign the computer in the agent's settings.
 
-To install it as an app, use the browser's install button (Chrome, Edge) or **Add to Home Screen** (iOS Safari); this needs HTTPS.
+To install it as an app, use the browser's install button (Chrome, Edge) or **Add to Home Screen** (iOS Safari); this needs HTTPS the device trusts (trust the self-signed certificate on the device first, or use a public domain as below).
 
 ### Reaching it from a public domain
 

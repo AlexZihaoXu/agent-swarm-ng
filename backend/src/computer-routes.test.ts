@@ -847,12 +847,20 @@ it('keeps computers’ files where Settings → Storage says when they are made,
 it('logs computers being created and deleted in the audit log', async () => {
   const { app, database } = await fixture();
   try {
+    const requestKey = crypto.randomUUID();
     const create = await app.inject({
       method: 'POST',
       url: '/api/computers',
-      payload: { name: 'Audit box', requestKey: crypto.randomUUID() },
+      payload: { name: 'Audit box', requestKey },
     });
     expect(create.statusCode).toBe(201);
+    // A retried create answers the same computer again: nothing new to log.
+    const retry = await app.inject({
+      method: 'POST',
+      url: '/api/computers',
+      payload: { name: 'Audit box', requestKey },
+    });
+    expect(retry.statusCode).toBe(200);
     const { id } = create.json();
     const removed = await app.inject({
       method: 'DELETE',

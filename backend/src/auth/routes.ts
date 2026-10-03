@@ -239,16 +239,34 @@ export function registerAuth(
   };
   // Every sign-in, setup, sign-out and password change goes to the audit log: who (the name given), from where, when
   // (to the millisecond), and whether it worked (ok), was refused (failed) or held back by the limits (denied).
+  // Attempts refused before their handler ran (malformed body, another site, an unknown host name) count too.
+  const ATTEMPTS: Record<string, string> = { '/api/auth/login': 'auth.login', '/api/auth/setup': 'auth.setup' };
   app.addHook('onResponse', async (request, reply) => {
-    const event = request.authEvent;
+    const early = ATTEMPTS[request.routeOptions.url ?? ''];
+    const given = (request.body as { name?: unknown } | undefined)?.name;
+    const event =
+      request.authEvent ??
+      (early && request.method === 'POST'
+        ? {
+            kind: early,
+            actor: typeof given === 'string' ? given.trim() : '(not given)',
+            reason:
+              reply.statusCode === 403
+                ? 'refused: another site or host name'
+                : `refused: invalid request (${reply.statusCode})`,
+          }
+        : undefined);
     if (!event || !audit) return;
-    await audit.record({
-      kind: event.kind,
-      outcome: reply.statusCode < 300 ? 'ok' : reply.statusCode === 429 ? 'denied' : 'failed',
-      actor: event.actor.slice(0, 64),
-      ip: clientAddress(request),
-      detail: event.reason ? { reason: event.reason } : undefined,
-    });
+    await audit.record(
+      {
+        kind: event.kind,
+        outcome: reply.statusCode < 300 ? 'ok' : reply.statusCode === 429 ? 'denied' : 'failed',
+        actor: event.actor.slice(0, 64),
+        ip: clientAddress(request),
+        detail: event.reason ? { reason: event.reason } : undefined,
+      },
+      new Date(Date.now() - reply.elapsedTime),
+    );
   });
   const note = (request: FastifyRequest, reason: string) => {
     if (request.authEvent) request.authEvent.reason = reason;

@@ -4,7 +4,7 @@ Agent conversations and source-labelled agent threads are implemented. Member-au
 
 ## App UI
 
-- **Chat with**, beside Agent activity, is in the **Chat** tab's selected-agent conversation. It defaults to **You**: the human’s conversation with the selected agent, with its normal composer and preserved draft. A peer selection keeps its own `/chat/agents/:agentId/dm/:peerId` URL. Group chats retain their separate header with no peer selector. **Agents** keeps the sidebar but shows Channels permissions and Avatar together in one centered, width-bounded scrolling main pane; it does not show a conversation.
+- **Chat with**, beside Agent activity, is in the **Chat** tab's selected-agent conversation. It defaults to **You**: the human’s conversation with the selected agent, with its normal composer and preserved draft. A peer selection keeps its own `/chat/agents/:agentId/dm/:peerId` URL. Group chats retain their separate header with no peer selector. **Agents** keeps the sidebar but shows the agent's settings (Channels permissions, Avatar and the rest) in one centered, width-bounded scrolling main pane; it does not show a conversation.
 - The selector lists only counterparts with actual DM history, in either direction—not every saved agent or an enabled connection with no messages. It refreshes when messages arrive and supports paging older conversation entries; revoking a connection does not hide its existing history. On phones, the Chat header is one row: tap the selected agent's avatar/name to return to Chats, then a small exchange marker separates it from the selected **You** or peer button. The selector stays visible even if You is its only choice, grows responsively from about 95px at 280px to 128px on wider phones, and opens a menu at least 208px wide. Desktop keeps its original compact header selector.
 - Choosing another agent replaces the main chat area with that pair’s persisted DM history. It does not open a separate chat application or allow the operator to impersonate either agent.
 - The selected/self agent always stays **left**. The counterpart—human or another agent—is **right**.
@@ -19,7 +19,7 @@ The shared selector is the app-wide combobox adapted from Kibo `combobox-standar
 
 ## Mutual connections
 
-Select an agent in **Agents**, then use the visible **Channels → Swarm App → Allowed DMs** controls. All sections (Channels, Model, Computers, Avatar, Delete agent) stay on one scrolling page; a sticky **Jump to section** strip scrolls to each, and there is no permission-tile drilldown. Right-click remains for Create/Delete, not editing. Save changes and Discard appear in an action bar only while some section differs from its saved values; one Save covers every changed section, and Discard restores them.
+Select an agent in **Agents**, then use the visible **Channels → Swarm App → Allowed DMs** controls. All sections (Channels, Model, Instructions, Heartbeat, Computers, Scratchpad, Memory, Avatar, Organization, Delete agent) stay on one scrolling page; a sticky **Jump to section** strip scrolls to each, and there is no permission-tile drilldown. Right-click remains for Create/Delete, not editing. Save changes and Discard appear in an action bar only while some section differs from its saved values; one Save covers every changed section, and Discard restores them.
 
 Enabling A↔B allows both agents to initiate and reply. Disabling the connection from either side blocks subsequent sends in both directions. Both directed grant rows change in one transaction; unrelated connections remain intact. Self/unknown recipients are rejected, and new connections respect the 100-peer limit.
 
@@ -56,7 +56,7 @@ Stop targets the current run’s original request. Chain cancellation blocks fur
 
 Dashboard disconnects do not own or stop work. Completed private Pi context survives a backend restart, but **there is no automatic interrupted-work replay**: worker startup marks interrupted deliveries cancelled and closes old chains without re-inference. App construction/OpenAPI generation never performs those writes.
 
-The operator API remains a trusted local-admin surface, not multi-user authorization. Credentials and subscription tokens never become peer context. Peer inputs use the recipient’s granted capabilities, with runtime channel, sender and connection checks; source labels in message text cannot forge the trusted envelope.
+The operator API needs the dashboard [sign-in](login.md) (one Admin account); it is not multi-user authorization. Credentials and subscription tokens never become peer context. Peer inputs use the recipient’s granted capabilities, with runtime channel, sender and connection checks; source labels in message text cannot forge the trusted envelope.
 
 ## Verification
 
