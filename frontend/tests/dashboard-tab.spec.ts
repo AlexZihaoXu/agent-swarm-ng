@@ -23,15 +23,29 @@ const sample = {
     { disk: 'bulk', label: 'bulk (ZFS)', uses: ['listed'], used: wave(300e9, 1e9), total: 900e9 },
   ],
   computers: [
-    { id: 'c1', name: 'Claude Code Lab', cpuPercent: wave(20, 10), memUsed: wave(2e9, 5e8), memLimit: 4 * 2 ** 30 },
-    { id: 'c2', name: 'Desk', cpuPercent: wave(8, 4), memUsed: wave(1e9, 2e8), memLimit: 4 * 2 ** 30 },
+    {
+      id: 'c1',
+      name: 'Claude Code Lab',
+      cpuPercent: wave(20, 10),
+      memUsed: wave(2e9, 5e8),
+      memPercent: wave(47, 12),
+      memLimit: 4 * 2 ** 30,
+    },
+    {
+      id: 'c2',
+      name: 'Desk',
+      cpuPercent: wave(8, 4),
+      memUsed: wave(1e9, 2e8),
+      memPercent: wave(23, 5),
+      memLimit: 4 * 2 ** 30,
+    },
   ],
   agents: [
     {
       id: 'avery',
       name: 'Avery',
       activeMs: 5.5 * HOUR,
-      active: buckets.map(() => 0),
+      active: buckets.map((_, i) => (i % 5 === 0 ? 20 * 60_000 : 0)),
       tokens: {
         input: wave(4000, 3000),
         output: wave(800, 600),
@@ -53,8 +67,23 @@ const sample = {
     },
   ],
   providers: [
-    { provider: 'openai-codex', subscription: true, cost: wave(0.1, 0.08), total: 9.6 },
-    { provider: 'openrouter', subscription: false, cost: wave(0.03, 0.02), total: 2.9 },
+    {
+      provider: 'openai-codex',
+      label: 'openai-codex',
+      subscription: true,
+      priced: true,
+      cost: wave(0.1, 0.08),
+      total: 9.6,
+    },
+    {
+      provider: 'openrouter',
+      label: 'openrouter',
+      subscription: false,
+      priced: true,
+      cost: wave(0.03, 0.02),
+      total: 2.9,
+    },
+    { provider: 'endpoint:e1', label: 'Home LLM', subscription: false, priced: false, cost: wave(0, 0), total: 0 },
   ],
 };
 
@@ -88,6 +117,7 @@ test('the Dashboard tab charts system, computers, agents, spend and tokens, and 
   ])
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await expect(page.getByText('API-equivalent').first()).toBeVisible();
+  await expect(page.getByText('not priced (custom endpoint)')).toBeVisible();
   // Charts drew (Recharts paths).
   await expect(page.locator('.recharts-area-area').first()).toBeVisible();
   await expect(page.locator('.recharts-line-curve').first()).toBeVisible();

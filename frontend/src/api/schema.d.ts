@@ -8365,6 +8365,7 @@ export interface operations {
                             name: string;
                             cpuPercent: (number | null)[];
                             memUsed: (number | null)[];
+                            memPercent: (number | null)[];
                             memLimit: number | null;
                         }[];
                         agents: {
@@ -8390,7 +8391,9 @@ export interface operations {
                         }[];
                         providers: {
                             provider: string;
+                            label: string;
                             subscription: boolean;
+                            priced: boolean;
                             cost: (number | null)[];
                             total: number;
                         }[];

@@ -125,7 +125,8 @@ Bun.serve<TerminalSocket>({
         );
         return json({ created: true }, 201);
       }
-      // Dashboard disk usage: Docker's root and the operator's list are added here, never chosen by the caller.
+      // Dashboard disk usage: Docker's root and the operator's list are added here, never chosen by the caller; the
+      // caller's paths are measured only as marked Keep/Cache folders (manager.diskUsage).
       if (pathname === '/metrics/disks' && request.method === 'POST') {
         const input = await body(request);
         if (!input || typeof input !== 'object' || !('paths' in input))

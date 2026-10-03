@@ -59,7 +59,7 @@ export interface ComputerController {
   checkStorageFolder?(kind: 'keep' | 'cache', folder: string): Promise<void>;
   clearCache?(id: string, name: string): Promise<void>;
   storageUsage?(id: string, name: string): Promise<{ lastStart: string | null; storage: StorageUsage[] }>;
-  /** Disk usage of Docker's data root, the operator's DASHBOARD_EXTRA_DISKS and these host folders. */
+  /** Disk usage of Docker's data root, the operator's DASHBOARD_EXTRA_DISKS and these marked Keep/Cache folders (≤ 16). */
   diskUsage?(paths: string[]): Promise<ControllerDisks>;
   /** A monitor's output stream (see the controller's /monitor), open until `signal` aborts or `lifetimeMs` passes. */
   monitor?(id: string, command: string, signal: AbortSignal, lifetimeMs: number): Promise<ReadableStream<Uint8Array>>;

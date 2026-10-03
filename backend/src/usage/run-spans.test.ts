@@ -1,10 +1,11 @@
 import { afterEach, expect, it } from 'vitest';
-import { mkdtemp } from 'node:fs/promises';
+import { access, mkdtemp } from 'node:fs/promises';
 import { join } from 'node:path';
 import { prepareDatabase } from '../test-database';
 import { AgentRuns } from '../agent-runs';
 import { ActivityStore } from '../activity-store';
 import { backfillRunSpans, closeInterruptedSpans, runSpans } from './run-spans';
+import { BACKFILL_MARKER, backfillUsageHistory } from './backfill';
 
 afterEach(() => runSpans.configure(undefined));
 
@@ -169,6 +170,36 @@ it('backfills spans once from the activity archive: agent runs only, promoted he
       [promoted]: [1_500, 2_500],
       [live]: [900, 5_000],
     });
+  } finally {
+    await db.close();
+  }
+});
+
+it('backfills history once per platform data folder, yet closes interrupted spans on every start', async () => {
+  const { db, agent } = await setup();
+  try {
+    const log = { info: () => {}, error: (error: unknown) => console.error(error) };
+    const run = crypto.randomUUID();
+    await new ActivityStore(db).save(agent.id, {
+      id: `${run}:x`,
+      runId: run,
+      channelId: agent.channels[0].id,
+      kind: 'status',
+      label: 'Thinking',
+      text: '',
+      timestamp: 1_000,
+      revision: 0,
+    });
+    await backfillUsageHistory(db, log);
+    expect(await db.client.agentRunSpan.count({ where: { runId: run } })).toBe(1);
+    await access(join(db.dataDirectory, BACKFILL_MARKER));
+    // Pruned or removed later, a backfilled span is not brought back by the next start; an open one is closed.
+    await db.client.agentRunSpan.deleteMany();
+    await db.client.agentRunSpan.create({ data: { agentId: agent.id, runId: 'open', startedAt: new Date(2_000) } });
+    await backfillUsageHistory(db, log);
+    expect(await db.client.agentRunSpan.findMany({ select: { runId: true, endedAt: true } })).toEqual([
+      { runId: 'open', endedAt: new Date(2_000) },
+    ]);
   } finally {
     await db.close();
   }

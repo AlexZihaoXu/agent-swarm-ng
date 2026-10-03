@@ -28,15 +28,13 @@ const itemClass =
  * Which organization the dashboard shows (docs/organizations.md). Composition: Kibo dropdown-menu-profile-4
  * (Multi-Account Switcher): the current organization with its counts, a list to switch, then New organization
  * (Settings → Organizations, where they are also renamed and deleted). On a
- * phone it is a square badge beside the floating tab bar (mirroring Portal).
+ * phone it sits, with its name, in the slim top bar beside Portal (`bar`).
  */
 export function OrganizationSwitcher({
   className,
-  compact,
   bar,
 }: {
   className?: string;
-  compact?: boolean;
   /** The phone's top bar: badge and name, the menu opening below. */
   bar?: boolean;
 }) {
@@ -58,21 +56,17 @@ export function OrganizationSwitcher({
         className={cn(
           'flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background text-left outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring',
           // Beside the centred tabs only the badge fits until wide screens.
-          compact
-            ? 'size-[50px] justify-center shadow-lg'
-            : bar
-              ? 'h-9 min-w-0 max-w-[60vw] px-1.5 pr-2.5'
-              : 'h-10 justify-between px-2 lg:w-56',
+          bar ? 'h-9 min-w-0 max-w-[60vw] px-1.5 pr-2.5' : 'h-10 justify-between px-2 lg:w-56',
           className,
         )}
       >
         <span className="flex min-w-0 items-center gap-2">
           <Badge
             text={shown || organizations.length === 1 ? initialsOf(label) : '∗'}
-            className={compact || bar ? 'size-7 text-xs' : ''}
+            className={bar ? 'size-7 text-xs' : ''}
           />
           {bar && <span className="truncate text-sm font-medium">{label}</span>}
-          {!compact && !bar && (
+          {!bar && (
             <span className="hidden min-w-0 flex-col lg:flex">
               <span className="truncate text-sm font-medium leading-tight">{label}</span>
               <span className="truncate text-[11px] leading-tight text-muted-foreground">{counts(summary)}</span>
@@ -80,12 +74,12 @@ export function OrganizationSwitcher({
           )}
         </span>
         {bar && <ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" />}
-        {!compact && !bar && <ChevronsUpDownIcon className="hidden size-4 opacity-50 lg:block" />}
+        {!bar && <ChevronsUpDownIcon className="hidden size-4 opacity-50 lg:block" />}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           align="start"
-          side={compact ? 'top' : 'bottom'}
+          side="bottom"
           sideOffset={6}
           collisionPadding={12}
           className="z-50 w-64 rounded-lg border border-border bg-background p-1 text-sm shadow-lg motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]"

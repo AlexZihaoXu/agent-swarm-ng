@@ -1,6 +1,6 @@
 # Portal
 
-Portal is the dashboard's search-and-open palette: **Ctrl+K** (**⌘K** on macOS) or the **Portal** button in the header (the round search button beside the tab pill on a phone). It is a Kibo `command-dialog-2` composition (cmdk) in frosted glass.
+Portal is the dashboard's search-and-open palette: **Ctrl+K** (**⌘K** on macOS) or the **Portal** button in the header (on a phone, the search button at the right of the slim top bar). It is a Kibo `command-dialog-2` composition (cmdk) in frosted glass.
 
 ## What it finds
 

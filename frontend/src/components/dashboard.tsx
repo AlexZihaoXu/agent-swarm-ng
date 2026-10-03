@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { api } from '@/api/client';
@@ -33,7 +33,7 @@ const RANGE_KEY = 'agent-swarm.dashboard-range';
 const COLORS = Array.from({ length: 8 }, (_, i) => `var(--chart-${i + 1})`);
 const TOKEN_TYPES = [
   ['input', 'Input'],
-  ['output', 'Output'],
+  ['output', 'Output (other than reasoning)'],
   ['cacheRead', 'Cache read'],
   ['cacheWrite', 'Cache write'],
   ['reasoning', 'Reasoning'],
@@ -154,7 +154,7 @@ function TimeChart({
   return (
     <ChartContainer config={config} className={cn('aspect-auto h-56 w-full', className)}>
       {line ? (
-        <LineChart data={data} margin={{ left: 0, right: 8, top: 8 }}>
+        <LineChart accessibilityLayer data={data} margin={{ left: 0, right: 8, top: 8 }}>
           {axes}
           {keys.map(item => (
             <Line
@@ -169,7 +169,7 @@ function TimeChart({
           ))}
         </LineChart>
       ) : (
-        <AreaChart data={data} margin={{ left: 0, right: 8, top: 8 }}>
+        <AreaChart accessibilityLayer data={data} margin={{ left: 0, right: 8, top: 8 }}>
           <defs>
             {keys.map(item => (
               <linearGradient key={item.safe} id={`${id}-${item.safe}`} x1="0" x2="0" y1="0" y2="1">
@@ -197,6 +197,9 @@ function TimeChart({
   );
 }
 
+/** The organization shown, for the scope note on organization charts. */
+const ScopeName = createContext('');
+
 function Panel({
   title,
   subtitle,
@@ -211,15 +214,14 @@ function Panel({
   className?: string;
 }) {
   const id = useId();
+  const scopeName = useContext(ScopeName);
   return (
     <section aria-labelledby={id} className={cn(settingsCard, 'min-w-0 space-y-3', className)}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h3 id={id} className="text-sm font-semibold">
           {title}
         </h3>
-        <span className="text-xs text-muted-foreground">
-          {scope === 'system' ? 'System-wide' : 'This organization'}
-        </span>
+        <span className="text-xs text-muted-foreground">{scope === 'system' ? 'System-wide' : scopeName}</span>
       </div>
       {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
       {children}
@@ -291,9 +293,9 @@ export function Dashboard() {
         <div className="mx-auto w-full max-w-6xl space-y-4 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4 motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)] md:px-6 md:pb-8">
           {/* Phones: the period gets its own row instead of squeezing the title. */}
           <ChoiceChips label="Period" value={range} options={RANGES} onChange={setRange} className="md:hidden" />
-          {query.isError && !data && (
+          {query.isError && (
             <p role="alert" className="text-sm text-red-400">
-              Could not load the dashboard.
+              {data ? 'Could not refresh: showing the last numbers loaded.' : 'Could not load the dashboard.'}
             </p>
           )}
           {!data ? (
@@ -303,7 +305,15 @@ export function Dashboard() {
               </p>
             )
           ) : (
-            <DashboardBody data={data} />
+            // While another period or organization loads, the previous numbers stay, dimmed.
+            <div
+              aria-busy={query.isPlaceholderData}
+              className={cn('space-y-4 transition-opacity', query.isPlaceholderData && 'opacity-50')}
+            >
+              <ScopeName.Provider value={scopeName}>
+                <DashboardBody data={data} />
+              </ScopeName.Provider>
+            </div>
           )}
         </div>
       </ScrollArea>
@@ -314,17 +324,20 @@ export function Dashboard() {
 function DashboardBody({ data }: { data: Data }) {
   const cpuNow = last(data.system.cpuPercent);
   const memNow = last(data.system.memUsed);
-  const spend = data.providers.reduce((sum, provider) => sum + provider.total, 0);
-  const paid = data.providers
-    .filter(provider => !provider.subscription)
-    .reduce((sum, provider) => sum + provider.total, 0);
+  const priced = data.providers.filter(provider => provider.priced);
+  const spend = priced.reduce((sum, provider) => sum + provider.total, 0);
+  const paid = priced.filter(provider => !provider.subscription).reduce((sum, provider) => sum + provider.total, 0);
+  // Reasoning tokens are part of output: counted once.
   const tokenTotal = data.agents.reduce(
-    (sum, agent) => sum + Object.values(agent.tokenTotals).reduce((a, b) => a + b, 0),
+    (sum, agent) =>
+      sum +
+      agent.tokenTotals.input +
+      agent.tokenTotals.output +
+      agent.tokenTotals.cacheRead +
+      agent.tokenTotals.cacheWrite,
     0,
   );
   const active = data.agents.reduce((sum, agent) => sum + agent.activeMs, 0);
-  const memPercent = (values: Series, limit: number | null) =>
-    limit ? values.map(value => (value === null ? null : (value / limit) * 100)) : values.map(() => null);
   const busyAgents = data.agents.filter(agent => agent.activeMs > 0).sort((a, b) => b.activeMs - a.activeMs);
   const tokenAgents = data.agents
     .filter(agent => Object.values(agent.tokenTotals).some(Boolean))
@@ -432,7 +445,7 @@ function DashboardBody({ data }: { data: Data }) {
               series={data.computers.map(computer => ({
                 key: computer.id,
                 label: computer.name,
-                values: memPercent(computer.memUsed, computer.memLimit),
+                values: computer.memPercent,
               }))}
               format={percent}
               max={100}
@@ -447,34 +460,46 @@ function DashboardBody({ data }: { data: Data }) {
         <Panel
           title="Agent active hours"
           scope="organization"
-          subtitle="Time each agent spent working (its runs), per period"
+          subtitle="Time each agent spent working (its runs): over time, and in total for the period"
         >
           {busyAgents.length ? (
-            <ChartContainer
-              config={{ hours: { label: 'Hours', color: 'var(--chart-3)' } }}
-              className="aspect-auto w-full"
-              style={{ height: Math.max(96, busyAgents.length * 36 + 24) }}
-            >
-              <BarChart
-                data={busyAgents.map(agent => ({ name: agent.name, hours: agent.activeMs / 3_600_000 }))}
-                layout="vertical"
-                margin={{ left: 8, right: 16 }}
+            <>
+              <TimeChart
+                stacked
+                buckets={data.buckets}
+                series={busyAgents.map(agent => ({
+                  key: agent.id,
+                  label: agent.name,
+                  values: agent.active.map(ms => (ms === null ? null : ms / 3_600_000)),
+                }))}
+                format={value => `${value.toFixed(value < 1 ? 2 : 1)} h`}
+              />
+              <ChartContainer
+                config={{ hours: { label: 'Hours', color: 'var(--chart-3)' } }}
+                className="aspect-auto w-full"
+                style={{ height: Math.max(96, busyAgents.length * 36 + 24) }}
               >
-                <CartesianGrid horizontal={false} />
-                <XAxis
-                  type="number"
-                  tickFormatter={value => `${Number(value).toFixed(1)} h`}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis type="category" dataKey="name" width={96} axisLine={false} tickLine={false} />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent formatter={value => hours(Number(value) * 3_600_000)} />}
-                />
-                <Bar dataKey="hours" fill="var(--color-hours)" radius={4} isAnimationActive={false} />
-              </BarChart>
-            </ChartContainer>
+                <BarChart
+                  data={busyAgents.map(agent => ({ name: agent.name, hours: agent.activeMs / 3_600_000 }))}
+                  layout="vertical"
+                  margin={{ left: 8, right: 16 }}
+                >
+                  <CartesianGrid horizontal={false} />
+                  <XAxis
+                    type="number"
+                    tickFormatter={value => `${Number(value).toFixed(1)} h`}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis type="category" dataKey="name" width={96} axisLine={false} tickLine={false} />
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent formatter={value => hours(Number(value) * 3_600_000)} />}
+                  />
+                  <Bar dataKey="hours" fill="var(--color-hours)" radius={4} isAnimationActive={false} />
+                </BarChart>
+              </ChartContainer>
+            </>
           ) : (
             <Empty>No agent worked in this period.</Empty>
           )}
@@ -493,17 +518,24 @@ function DashboardBody({ data }: { data: Data }) {
               <TimeChart
                 line
                 buckets={data.buckets}
-                series={data.providers.map(provider => ({
-                  key: provider.provider,
-                  label: `${provider.provider}${provider.subscription ? ' (subscription)' : ''}`,
-                  values: cumulative(provider.cost),
-                }))}
+                series={data.providers
+                  .filter(provider => provider.priced)
+                  .map(provider => ({
+                    key: provider.provider,
+                    label: `${provider.label}${provider.subscription ? ' (subscription)' : ''}`,
+                    values: cumulative(provider.cost),
+                  }))}
                 format={dollars}
               />
               <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 {data.providers.map(provider => (
                   <li key={provider.provider}>
-                    {provider.provider}: <span className="font-mono text-foreground">{dollars(provider.total)}</span>
+                    {provider.label}:{' '}
+                    {provider.priced ? (
+                      <span className="font-mono text-foreground">{dollars(provider.total)}</span>
+                    ) : (
+                      <span className="text-foreground">not priced (custom endpoint)</span>
+                    )}
                     {provider.subscription && ' (API-equivalent)'}
                   </li>
                 ))}
@@ -520,7 +552,7 @@ function DashboardBody({ data }: { data: Data }) {
           <h3 id="dashboard-tokens" className="text-sm font-semibold">
             Tokens per agent
           </h3>
-          <span className="text-xs text-muted-foreground">This organization · by type, stacked</span>
+          <span className="text-xs text-muted-foreground">By type, stacked (reasoning is part of output)</span>
         </div>
         {tokenAgents.length ? (
           <div className="grid gap-4 lg:grid-cols-2">
@@ -529,12 +561,22 @@ function DashboardBody({ data }: { data: Data }) {
                 key={agent.id}
                 title={agent.name}
                 scope="organization"
-                subtitle={`${TOKEN_TYPES.map(([key, label]) => `${label} ${tokens(agent.tokenTotals[key])}`).join(' · ')} · ${dollars(agent.cost)}`}
+                subtitle={`Input ${tokens(agent.tokenTotals.input)} · Output ${tokens(agent.tokenTotals.output)} (reasoning ${tokens(agent.tokenTotals.reasoning)}) · Cache read ${tokens(agent.tokenTotals.cacheRead)} · Cache write ${tokens(agent.tokenTotals.cacheWrite)} · ${dollars(agent.cost)}`}
               >
                 <TimeChart
                   stacked
                   buckets={data.buckets}
-                  series={TOKEN_TYPES.map(([key, label]) => ({ key, label, values: agent.tokens[key] }))}
+                  series={TOKEN_TYPES.map(([key, label]) => ({
+                    key,
+                    label,
+                    // Output includes reasoning: stack the rest of output and reasoning separately.
+                    values:
+                      key === 'output'
+                        ? agent.tokens.output.map((value, i) =>
+                            value === null ? null : value - (agent.tokens.reasoning[i] ?? 0),
+                          )
+                        : agent.tokens[key],
+                  }))}
                   format={tokens}
                 />
               </Panel>

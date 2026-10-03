@@ -662,7 +662,7 @@ export function App() {
         {/* Phones: a slim top bar (organization, Portal) and a full-width bottom bar with every tab; detail views and
             the desktop viewer hide both. Wider screens: one header row (organization, tabs, Portal). */}
         {!computerViewerOpen && !narrowDetail && (
-          <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border bg-sidebar px-3 md:hidden">
+          <div className="flex h-[calc(3rem+env(safe-area-inset-top))] shrink-0 items-center justify-between gap-2 border-b border-border bg-sidebar px-3 pt-[env(safe-area-inset-top)] md:hidden">
             <OrganizationSwitcher bar />
             <PortalButton onClick={() => setPortalOpen(true)} className="h-9 w-9 justify-center px-0" />
           </div>

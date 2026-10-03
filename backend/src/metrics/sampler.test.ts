@@ -51,12 +51,24 @@ it('samples running computers as a share of their own CPU quota', async () => {
         ['running-one', observation('running', 250)],
         ['stopped-one', observation('exited', null)],
         ['no-stats-yet', observation('running', null)],
+        ['no-limit', { ...observation('running', 100), memoryLimitBytes: null }],
       ]),
   } as unknown as ComputerController;
   const sampler = new MetricsSampler(store, controller, { readers: readers([]), now: () => NOW, log: quiet });
-  expect(await sampler.sampleComputers()).toBe(1);
-  expect(await store.client.computerSample.findMany({ omit: { sequence: true } })).toEqual([
-    { at: NOW, computerId: 'running-one', cpuPercent: 62.5, memUsed: BigInt(2 * GiB), memLimit: BigInt(4 * GiB) },
+  expect(await sampler.sampleComputers()).toBe(2);
+  // Memory is kept as a share of the limit at that moment, so a later limit change never rewrites history.
+  expect(
+    await store.client.computerSample.findMany({ omit: { sequence: true }, orderBy: { sequence: 'asc' } }),
+  ).toEqual([
+    {
+      at: NOW,
+      computerId: 'running-one',
+      cpuPercent: 62.5,
+      memUsed: BigInt(2 * GiB),
+      memLimit: BigInt(4 * GiB),
+      memPercent: 50,
+    },
+    { at: NOW, computerId: 'no-limit', cpuPercent: 25, memUsed: BigInt(2 * GiB), memLimit: null, memPercent: null },
   ]);
 });
 
@@ -146,7 +158,32 @@ it('samples each disk once with what lives there, asking the controller only for
   expect(quiet.error).toHaveBeenCalled();
 });
 
-it('deletes samples older than two weeks in batches, keeping newer ones', async () => {
+it('asks the controller for at most 16 distinct Keep/Cache folders, the Settings ones first', async () => {
+  const store = await database();
+  await store.client.swarmSettings.upsert({
+    where: { id: 1 },
+    create: { id: 1, computerKeepFolder: '/keep/main', computerCacheFolder: '/cache/main' },
+    update: { computerKeepFolder: '/keep/main', computerCacheFolder: '/cache/main' },
+  });
+  await store.client.computer.createMany({
+    data: Array.from({ length: 20 }, (_, index) => ({
+      name: `c${index}`,
+      requestKey: `r${index}`,
+      keepFolder: `/keep/${index}`,
+      cacheFolder: '/cache/main',
+    })),
+  });
+  const asked: string[][] = [];
+  const controller = {
+    diskUsage: async (paths: string[]) => (asked.push(paths), { disks: [], zfs: [] }),
+  } as unknown as ComputerController;
+  await new MetricsSampler(store, controller, { readers: readers([]), now: () => NOW, log: quiet }).sampleDisks();
+  expect(asked[0]).toHaveLength(16);
+  expect(asked[0].slice(0, 3)).toEqual(['/keep/main', '/cache/main', '/keep/0']);
+  expect(new Set(asked[0]).size).toBe(16);
+});
+
+it('deletes samples older than two weeks and usage/run spans older than 400 days in batches', async () => {
   const store = await database();
   const day = 86_400_000;
   const old = new Date(NOW.getTime() - 15 * day),
@@ -158,11 +195,34 @@ it('deletes samples older than two weeks in batches, keeping newer ones', async 
   await store.client.diskSample.create({ data: { at: old, disk: 'd', label: 'd', uses: '[]', used: 1n, total: 2n } });
   await store.client.computerSample.create({ data: { at: old, computerId: 'c', cpuPercent: 1, memUsed: 1n } });
   await store.client.computerSample.create({ data: { at: recent, computerId: 'c', cpuPercent: 1, memUsed: 1n } });
+  const ago = (days: number) => new Date(NOW.getTime() - days * day);
+  const usage = (at: Date) => ({
+    at,
+    agentId: 'a',
+    provider: 'p',
+    model: 'm',
+    purpose: 'turn',
+    input: 1,
+    output: 1,
+    cacheRead: 0,
+    cacheWrite: 0,
+    reasoning: 0,
+    cost: 0,
+  });
+  await store.client.usageEvent.createMany({ data: [usage(ago(401)), usage(ago(15)), usage(ago(399))] });
+  await store.client.agentRunSpan.createMany({
+    data: [
+      { agentId: 'a', runId: 'old', startedAt: ago(401), endedAt: ago(401) },
+      { agentId: 'a', runId: 'kept', startedAt: ago(399), endedAt: ago(399) },
+    ],
+  });
   const sampler = new MetricsSampler(store, null, { readers: readers([]), now: () => NOW, log: quiet });
-  expect(await sampler.prune()).toBe(1203);
+  expect(await sampler.prune()).toBe(1205);
   expect(await store.client.systemSample.findMany({ select: { cpuPercent: true } })).toEqual([{ cpuPercent: 2 }]);
   expect(await store.client.diskSample.count()).toBe(0);
   expect(await store.client.computerSample.count()).toBe(1);
+  expect(await store.client.usageEvent.count()).toBe(2);
+  expect(await store.client.agentRunSpan.findMany({ select: { runId: true } })).toEqual([{ runId: 'kept' }]);
 });
 
 it('starts nothing until asked, and a failing sample never throws', async () => {

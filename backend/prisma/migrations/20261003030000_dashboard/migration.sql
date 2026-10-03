@@ -26,7 +26,8 @@ CREATE TABLE "ComputerSample" (
     "computerId" TEXT NOT NULL,
     "cpuPercent" REAL NOT NULL,
     "memUsed" BIGINT NOT NULL,
-    "memLimit" BIGINT
+    "memLimit" BIGINT,
+    "memPercent" REAL
 );
 
 -- CreateTable

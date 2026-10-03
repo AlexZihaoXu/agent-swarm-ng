@@ -11,7 +11,19 @@ import {
   type FileOperation,
   type FileQuery,
 } from './operator-files';
-import { diskScript, parseDiskOutput, validateRequestedPaths, validDiskPath, type DiskPath } from './disks';
+import {
+  diskScript,
+  parseDiskOutput,
+  validateRequestedPaths,
+  validDiskPath,
+  type DiskPath,
+  type MeasuredDisk,
+  type ZfsDataset,
+} from './disks';
+
+type DiskUsage = { disks: MeasuredDisk[]; zfs: ZfsDataset[] };
+/** How long a host path found unavailable is skipped before the dashboard's disk sampling tries it again. */
+const DISK_RETRY_MS = 3_600_000;
 import { ComputerNames, ResourceError, validateId, validateName, type ResourceRole } from './resources';
 import {
   MARKER,
@@ -392,17 +404,41 @@ export class ComputerManager {
       (await this.docker.json<{ DockerRootDir?: string }>('GET', '/info', undefined, 256 * 1024)).DockerRootDir ??
       '/var/lib/docker');
   }
+  private diskRun?: Promise<DiskUsage>;
+  /** Host paths found unavailable, with when to try them again: a missing path is not mounted every five minutes. */
+  private readonly unavailableDisks = new Map<string, number>();
   /**
    * Dashboard disk usage (disks.ts) of Docker's data root, the operator's listed paths and the backend's requested
-   * Keep/Cache folders: one read-only helper without capabilities beyond looking runs `df`. Docker's root and "/" are
-   * mounted without their submounts (every container's filesystem); other paths keep them, so ZFS datasets beneath
-   * a pool's folder are counted. A path that does not exist on the host is reported unavailable, not an error.
+   * Keep/Cache folders: one read-only helper without capabilities runs `df`. Docker's root and "/" are mounted
+   * without their submounts (every container's filesystem); other paths keep them, so ZFS datasets beneath a pool's
+   * folder are counted. A requested folder must pass the Keep/Cache folder rules (validateFolder, outside Docker's
+   * storage) and carry its marker; otherwise it is reported unavailable. A path that does not exist on the host is
+   * reported unavailable, not an error, and skipped for an hour. One measurement at a time: a request during one
+   * gets its result.
    */
   async diskUsage(requested: string[], listed: string[]) {
+    const paths = validateRequestedPaths(requested);
+    return (this.diskRun ??= this.measureDisks(paths, listed).finally(() => (this.diskRun = undefined)));
+  }
+  private async measureDisks(requested: string[], listed: string[]): Promise<DiskUsage> {
     const docker = await this.dockerRootDir();
+    const insideDocker = (path: string) => path === docker || path.startsWith(`${docker}/`);
+    const keepOrCacheFolder = (path: string) => {
+      try {
+        return validateFolder(path, 'keep') === path && !insideDocker(path);
+      } catch {
+        return false;
+      }
+    };
     const paths: DiskPath[] = [{ path: docker, use: 'docker' }];
     for (const path of listed) if (validDiskPath(path)) paths.push({ path, use: 'listed' });
-    for (const path of validateRequestedPaths(requested)) paths.push({ path, use: 'requested' });
+    for (const path of requested) paths.push({ path, use: 'requested' });
+    const now = Date.now();
+    for (const [path, until] of this.unavailableDisks) if (until <= now) this.unavailableDisks.delete(path);
+    const skipped = (entry: DiskPath) =>
+      (entry.use === 'requested' && !keepOrCacheFolder(entry.path)) ||
+      (entry.use !== 'docker' && this.unavailableDisks.has(entry.path));
+    const measured = paths.filter(entry => !skipped(entry));
     await this.approvedImage(this.image);
     const measure = async (entries: DiskPath[]) =>
       parseDiskOutput(
@@ -414,27 +450,38 @@ export class ComputerManager {
             ReadOnly: true,
             ...(path === docker || path === '/' ? { BindOptions: { NonRecursive: true } } : {}),
           })),
-          diskScript(entries.length),
-          60_000,
+          diskScript(entries),
+          // A hung df is stopped (the helper is removed) well before the backend's next sample.
+          30_000,
           undefined,
-          ['DAC_READ_SEARCH'],
+          [],
         ),
         entries,
       );
+    let results: DiskUsage[];
     try {
-      return await measure(paths);
+      results = [await measure(measured)];
     } catch (error) {
       // Docker refuses the whole helper when one path is missing: measure each alone so the rest still count.
       if (!(error instanceof DockerApiError)) throw error;
       // One after another: a few short helpers, never a burst of containers.
-      const results: Awaited<ReturnType<typeof measure>>[] = [];
-      for (const entry of paths)
+      results = [];
+      for (const entry of measured)
         results.push(
           await measure([entry]).catch(() => ({ disks: [{ ...entry, error: 'unavailable' as const }], zfs: [] })),
         );
-      const zfs = new Map(results.flatMap(result => result.zfs).map(item => [item.dataset, item]));
-      return { disks: results.flatMap(result => result.disks), zfs: [...zfs.values()] };
     }
+    const found = new Map(results.flatMap(result => result.disks).map(disk => [`${disk.use}\n${disk.path}`, disk]));
+    const disks = paths.map(
+      entry => found.get(`${entry.use}\n${entry.path}`) ?? { ...entry, error: 'unavailable' as const },
+    );
+    for (const disk of disks) {
+      if (disk.use === 'docker') continue;
+      if (!('error' in disk)) this.unavailableDisks.delete(disk.path);
+      else if (!this.unavailableDisks.has(disk.path)) this.unavailableDisks.set(disk.path, now + DISK_RETRY_MS);
+    }
+    const zfs = new Map(results.flatMap(result => result.zfs).map(item => [item.dataset, item]));
+    return { disks, zfs: [...zfs.values()] };
   }
   /**
    * A host Keep/Cache folder is used only when: it is outside Docker's own storage, it exists, it carries its marker

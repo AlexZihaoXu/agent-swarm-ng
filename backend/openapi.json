@@ -25299,6 +25299,7 @@
                           "name",
                           "cpuPercent",
                           "memUsed",
+                          "memPercent",
                           "memLimit"
                         ],
                         "properties": {
@@ -25322,6 +25323,19 @@
                             }
                           },
                           "memUsed": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "memPercent": {
                             "type": "array",
                             "items": {
                               "anyOf": [
@@ -25499,7 +25513,9 @@
                         "type": "object",
                         "required": [
                           "provider",
+                          "label",
                           "subscription",
+                          "priced",
                           "cost",
                           "total"
                         ],
@@ -25507,7 +25523,13 @@
                           "provider": {
                             "type": "string"
                           },
+                          "label": {
+                            "type": "string"
+                          },
                           "subscription": {
+                            "type": "boolean"
+                          },
+                          "priced": {
                             "type": "boolean"
                           },
                           "cost": {

@@ -47,7 +47,7 @@ it('buckets samples, active time, tokens and spend over the period, scoped to an
     ],
   });
   await client.computerSample.create({
-    data: { at: at(1), computerId: 'desk', cpuPercent: 12, memUsed: 2n, memLimit: 4n },
+    data: { at: at(1), computerId: 'desk', cpuPercent: 12, memUsed: 2n, memLimit: 4n, memPercent: 50 },
   });
   await client.agentRunSpan.createMany({
     data: [
@@ -56,6 +56,7 @@ it('buckets samples, active time, tokens and spend over the period, scoped to an
       { agentId: 'bo', runId: 'r2', startedAt: at(2), endedAt: at(1) },
     ],
   });
+  const extra = { at: at(1), model: 'm', purpose: 'turn', output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 };
   await client.usageEvent.createMany({
     data: [
       {
@@ -84,10 +85,12 @@ it('buckets samples, active time, tokens and spend over the period, scoped to an
         reasoning: 0,
         cost: 0.25,
       },
+      { ...extra, agentId: 'gone', provider: 'openrouter', input: 7, cost: 1 },
+      { ...extra, agentId: 'ada', provider: 'swarm-chat', endpointId: 'e1', input: 3, cost: 0 },
     ],
   });
 
-  const all = await dashboardData(database, '48h', undefined, now);
+  const all = await dashboardData(database, '48h', undefined, now, new Map([['e1', 'Home LLM']]));
   expect(all.buckets).toHaveLength(96);
   expect(all.bucketMs).toBe(30 * 60_000);
   // One bucket averages two samples; the old sample is outside the period.
@@ -98,12 +101,16 @@ it('buckets samples, active time, tokens and spend over the period, scoped to an
     ['bulk', ['listed'], 800, [200]],
   ]);
   expect(all.computers[0]).toMatchObject({ id: 'desk', memLimit: 4 });
+  expect(all.computers[0]!.memPercent.filter(value => value !== null)).toEqual([50]);
+  // Showing all organizations, a deleted agent's usage still counts.
+  expect(all.agents.find(agent => agent.id === 'deleted')).toMatchObject({ name: 'Deleted agents', cost: 1 });
   const ada = all.agents.find(agent => agent.id === 'ada')!;
   expect(ada.activeMs).toBe(15 * 60_000);
-  expect(ada.tokenTotals).toEqual({ input: 10, output: 5, cacheRead: 100, cacheWrite: 0, reasoning: 2 });
-  expect(all.providers.map(p => [p.provider, p.subscription, p.total])).toEqual([
-    ['openai-codex', true, 0.5],
-    ['openrouter', false, 0.25],
+  expect(ada.tokenTotals).toEqual({ input: 13, output: 5, cacheRead: 100, cacheWrite: 0, reasoning: 2 });
+  expect(all.providers.map(p => [p.provider, p.label, p.subscription, p.priced, p.total])).toEqual([
+    ['openrouter', 'openrouter', false, true, 1.25],
+    ['openai-codex', 'openai-codex', true, true, 0.5],
+    ['endpoint:e1', 'Home LLM', false, false, 0],
   ]);
 
   // An organization shows its own agents' work and computers; system-wide charts stay.

@@ -116,7 +116,7 @@ export async function buildApp({
   registerComputerUseRoutes(app, computers, screenshots);
   registerTerminalStreams(app, computers, controller);
   registerKnowledgeRoutes(app);
-  registerDashboardRoutes(app, platform);
+  registerDashboardRoutes(app, platform, endpointStore);
   registerDiscordRoutes(app, platform, discordStore, discordTokens, discord, files);
   // Saved Discord messages are kept for Settings → Swarm's period: pruned at start and hourly.
   const pruneDiscord = () =>

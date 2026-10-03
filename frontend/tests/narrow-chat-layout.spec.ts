@@ -67,15 +67,18 @@ for (const width of [700, 320, 280])
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
   });
 
-test('floating phone tabs and one-row conversation headers navigate without a footer', async ({ page }) => {
+test('the phone bottom navigation and one-row conversation headers navigate cleanly', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   const tabs = page.getByRole('tablist', { name: 'Main navigation' });
   expect((await bounds(tabs)).y).toBeGreaterThan(760);
   expect(await tabs.locator('xpath=..').evaluate(element => getComputedStyle(element).position)).toBe('fixed');
-  expect(await tabs.locator('xpath=..').evaluate(element => getComputedStyle(element).borderTopWidth)).toBe('0px');
+  // A full-width bottom bar under a top border; the organization and Portal sit in the slim top bar.
+  expect(await tabs.locator('xpath=..').evaluate(element => getComputedStyle(element).borderTopWidth)).toBe('1px');
+  expect((await bounds(tabs)).width).toBeGreaterThanOrEqual(388);
+  expect((await bounds(page.getByRole('button', { name: 'Open Portal' }))).y).toBeLessThan(60);
   const lastRow = page.getByRole('button', { name: /^Open settings for / }).last();
-  expect((await bounds(lastRow)).y + (await bounds(lastRow)).height).toBeLessThan((await bounds(tabs)).y); // the list clears the floating tabs
+  expect((await bounds(lastRow)).y + (await bounds(lastRow)).height).toBeLessThan((await bounds(tabs)).y); // the list clears the bottom bar
   await page.screenshot({ path: test.info().outputPath('phone-agent-list.png'), animations: 'disabled' });
   await page.getByRole('tab', { name: 'Chat' }).click();
   await expect(page.getByRole('complementary', { name: 'Chats' })).toBeVisible();

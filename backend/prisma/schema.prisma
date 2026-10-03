@@ -726,6 +726,8 @@ model ComputerSample {
   cpuPercent Float
   memUsed    BigInt
   memLimit   BigInt?
+  /// memUsed as a share of the limit at that moment (null without a limit), so a later limit change keeps history.
+  memPercent Float?
 
   @@index([at])
   @@index([computerId, at])
@@ -740,7 +742,7 @@ model UsageEvent {
   provider   String
   endpointId String?
   model      String
-  /// turn, triage, watch, sleep, compaction, other
+  /// turn, heartbeat, triage, watch, sleep, compaction, discord, other
   purpose    String
   input      Int
   output     Int

@@ -14,13 +14,17 @@ import {
 
 /**
  * The dashboard's resource history: host CPU/memory and each running computer once a minute, the disks the platform
- * uses every five minutes, samples kept two weeks. Sampling never throws or blocks the backend: a failed sample is
- * logged and skipped. Nothing runs until `start()` (index.ts), so tests sample only when they ask.
+ * uses every five minutes, samples kept two weeks (model usage and run spans 400 days). Sampling never throws or
+ * blocks the backend: a failed sample is logged and skipped. Nothing runs until `start()` (index.ts), so tests sample only when they ask.
  */
 export const SAMPLE_INTERVAL_MS = 60_000;
 export const DISK_INTERVAL_MS = 5 * 60_000;
 export const PRUNE_INTERVAL_MS = 3_600_000;
 export const SAMPLE_RETENTION_DAYS = 14;
+/** Model usage and agent run spans: long enough for a year-on-year look back. */
+export const USAGE_RETENTION_DAYS = 400;
+/** The controller measures at most this many requested folders (computer-controller/src/disks.ts). */
+export const MAX_REQUESTED_DISKS = 16;
 const PRUNE_BATCH = 500;
 
 type Log = { error(object: unknown, message: string): void };
@@ -75,6 +79,7 @@ export class MetricsSampler {
         cpuPercent: Math.round((item.cpuPercent! / Math.max(1, item.cpuCount ?? 1)) * 10) / 10,
         memUsed: BigInt(Math.round(item.memoryBytes!)),
         memLimit: item.memoryLimitBytes === null ? null : BigInt(Math.round(item.memoryLimitBytes)),
+        memPercent: item.memoryLimitBytes ? Math.round((item.memoryBytes! / item.memoryLimitBytes) * 1000) / 10 : null,
       }));
     if (!data.length) return 0;
     await this.database.initialize();
@@ -111,7 +116,8 @@ export class MetricsSampler {
     if (this.controller?.diskUsage)
       try {
         const folders = await this.storageFolders();
-        const result = await this.controller.diskUsage([...folders.keys()]);
+        // Settings' folders first; beyond the controller's limit the rest are left out rather than failing them all.
+        const result = await this.controller.diskUsage([...folders.keys()].slice(0, MAX_REQUESTED_DISKS));
         for (const disk of result.disks) {
           if ('error' in disk) continue;
           const uses: DiskUse[] =
@@ -144,20 +150,32 @@ export class MetricsSampler {
     return rows.length;
   }
 
-  /** Deletes samples older than the retention, a small batch per short transaction. */
-  async prune(retentionDays = SAMPLE_RETENTION_DAYS) {
+  /**
+   * Deletes samples older than their retention (14 days) and usage rows and run spans older than theirs (400 days),
+   * a small batch per short transaction.
+   */
+  async prune(retentionDays = SAMPLE_RETENTION_DAYS, usageRetentionDays = USAGE_RETENTION_DAYS) {
     await this.database.initialize();
-    const before = new Date(this.now().getTime() - retentionDays * 86_400_000);
+    const ago = (days: number) => new Date(this.now().getTime() - days * 86_400_000);
+    const samples = ago(retentionDays),
+      usage = ago(usageRetentionDays);
     const client = this.database.client;
-    const tables = [client.systemSample, client.diskSample, client.computerSample] as unknown as {
+    type Table = {
       findMany(args: object): Promise<{ sequence: number }[]>;
       deleteMany(args: object): Promise<{ count: number }>;
-    }[];
+    };
+    const tables: [Table, object][] = [
+      [client.systemSample as unknown as Table, { at: { lt: samples } }],
+      [client.diskSample as unknown as Table, { at: { lt: samples } }],
+      [client.computerSample as unknown as Table, { at: { lt: samples } }],
+      [client.usageEvent as unknown as Table, { at: { lt: usage } }],
+      [client.agentRunSpan as unknown as Table, { startedAt: { lt: usage } }],
+    ];
     let removed = 0;
-    for (const table of tables)
+    for (const [table, where] of tables)
       while (true) {
         const batch = await table.findMany({
-          where: { at: { lt: before } },
+          where,
           select: { sequence: true },
           orderBy: { sequence: 'asc' },
           take: PRUNE_BATCH,

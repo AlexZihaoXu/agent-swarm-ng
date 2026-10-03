@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import type { PlatformStore } from '../platform-store';
+import { EndpointStore } from '../endpoint-store';
 
 const HOUR = 3_600_000;
 /** Each period and its bucket: about 60–100 points per chart. */
@@ -14,6 +15,9 @@ export const RANGES = {
 export type DashboardRange = keyof typeof RANGES;
 /** Providers paid by subscription: their cost is the API-equivalent price, not money spent. */
 const SUBSCRIPTION_PROVIDERS = new Set(['openai-codex']);
+/** Pi's provider name for a saved custom endpoint: no prices are known, so its spend is not shown as $0. */
+const CUSTOM_PROVIDER = 'swarm-chat';
+const DELETED = { id: 'deleted', name: 'Deleted agents' };
 
 const Point = Type.Union([Type.Number(), Type.Null()]);
 const Series = Type.Array(Point);
@@ -54,6 +58,8 @@ export const Dashboard = Type.Object({
       name: Type.String(),
       cpuPercent: Series,
       memUsed: Series,
+      /** Each reading against the limit it had then. */
+      memPercent: Series,
       memLimit: Type.Union([Type.Number(), Type.Null()]),
     }),
   ),
@@ -71,9 +77,13 @@ export const Dashboard = Type.Object({
   ),
   providers: Type.Array(
     Type.Object({
+      /** A stable key: the provider, or `endpoint:<id>` for a saved custom endpoint. */
       provider: Type.String(),
+      label: Type.String(),
       /** True when billed by subscription: the cost is the API-equivalent price. */
       subscription: Type.Boolean(),
+      /** False when no prices are known (a custom endpoint): its cost is not shown. */
+      priced: Type.Boolean(),
       cost: Series,
       total: Type.Number(),
     }),
@@ -87,21 +97,6 @@ const Query = Type.Object({
   organization: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
 });
 
-const num = (value: bigint | number | null | undefined) => (value == null ? null : Number(value));
-
-/** Averages per bucket (null where a bucket has no sample). */
-function averaged(count: number) {
-  const sums = new Array<number>(count).fill(0);
-  const counts = new Array<number>(count).fill(0);
-  return {
-    add(index: number, value: number) {
-      sums[index]! += value;
-      counts[index]! += 1;
-    },
-    series: () => sums.map((sum, i) => (counts[i] ? sum / counts[i]! : null)),
-  };
-}
-
 const summed = (count: number) => new Array<number>(count).fill(0);
 
 /** The Dashboard's numbers for one period (docs/dashboard.md). */
@@ -110,6 +105,7 @@ export async function dashboardData(
   range: DashboardRange,
   organization?: string,
   now = Date.now(),
+  endpointNames: Map<string, string> = new Map(),
 ): Promise<DashboardView> {
   await platform.initialize();
   const client = platform.client;
@@ -122,8 +118,16 @@ export async function dashboardData(
   const index = (at: Date) => Math.min(count - 1, Math.max(0, Math.floor((at.getTime() - from) / bucket)));
   const since = { gte: new Date(from) };
 
+  // Host and computer samples are grouped into buckets in SQL: a week of minute samples never loads row by row.
+  const bucketOf = `CAST((unixepoch("at") * 1000 - ?) / ? AS INTEGER)`;
   const [system, disks, computers, agents] = await Promise.all([
-    client.systemSample.findMany({ where: { at: since }, orderBy: { at: 'asc' } }),
+    client.$queryRawUnsafe<{ b: number; cpu: number; mem: number; total: number }[]>(
+      `SELECT ${bucketOf} AS b, AVG("cpuPercent") AS cpu, AVG("memUsed") AS mem, MAX("memTotal") AS total
+       FROM "SystemSample" WHERE unixepoch("at") >= ? GROUP BY b ORDER BY b`,
+      from,
+      bucket,
+      from / 1000,
+    ),
     client.diskSample.findMany({ where: { at: since }, orderBy: { at: 'asc' } }),
     client.computer.findMany({
       where: organization ? { organizationId: organization } : {},
@@ -137,12 +141,24 @@ export async function dashboardData(
     }),
   ]);
   const agentIds = agents.map(agent => agent.id);
+  const computerIds = computers.map(computer => computer.id);
   const [computerSamples, usage, spans] = await Promise.all([
-    client.computerSample.findMany({
-      where: { at: since, computerId: { in: computers.map(computer => computer.id) } },
-      orderBy: { at: 'asc' },
-    }),
-    client.usageEvent.findMany({ where: { at: since, agentId: { in: agentIds } } }),
+    computerIds.length
+      ? client.$queryRawUnsafe<
+          { computerId: string; b: number; cpu: number; mem: number; percent: number | null; limit: number | null }[]
+        >(
+          `SELECT "computerId", ${bucketOf} AS b, AVG("cpuPercent") AS cpu, AVG("memUsed") AS mem,
+             AVG("memPercent") AS percent, MAX("memLimit") AS "limit"
+           FROM "ComputerSample" WHERE unixepoch("at") >= ? AND "computerId" IN (${computerIds.map(() => '?').join(',')})
+           GROUP BY "computerId", b ORDER BY b`,
+          from,
+          bucket,
+          from / 1000,
+          ...computerIds,
+        )
+      : Promise.resolve([]),
+    // Showing every organization, usage of agents deleted since still counts (as "Deleted agents").
+    client.usageEvent.findMany({ where: { at: since, ...(organization ? { agentId: { in: agentIds } } : {}) } }),
     client.agentRunSpan.findMany({
       where: {
         agentId: { in: agentIds },
@@ -151,12 +167,17 @@ export async function dashboardData(
       },
     }),
   ]);
+  const inRange = (b: number) => b >= 0 && b < count;
 
-  const cpu = averaged(count);
-  const mem = averaged(count);
-  for (const sample of system) {
-    cpu.add(index(sample.at), sample.cpuPercent);
-    mem.add(index(sample.at), Number(sample.memUsed));
+  const cpuSeries: (number | null)[] = new Array(count).fill(null);
+  const memSeries: (number | null)[] = new Array(count).fill(null);
+  let memTotal: number | null = null;
+  for (const row of system) {
+    const b = Number(row.b);
+    if (!inRange(b)) continue;
+    cpuSeries[b] = Number(row.cpu);
+    memSeries[b] = Number(row.mem);
+    memTotal = Number(row.total);
   }
 
   // Each disk: its latest reading per bucket, and its latest size and uses.
@@ -179,17 +200,20 @@ export async function dashboardData(
 
   const computerViews = computers.map(computer => ({
     ...computer,
-    cpu: averaged(count),
-    mem: averaged(count),
-    limit: null as number | null,
+    cpuPercent: new Array<number | null>(count).fill(null),
+    memUsed: new Array<number | null>(count).fill(null),
+    memPercent: new Array<number | null>(count).fill(null),
+    memLimit: null as number | null,
   }));
   const byComputer = new Map(computerViews.map(view => [view.id, view]));
-  for (const sample of computerSamples) {
-    const view = byComputer.get(sample.computerId);
-    if (!view) continue;
-    view.cpu.add(index(sample.at), sample.cpuPercent);
-    view.mem.add(index(sample.at), Number(sample.memUsed));
-    view.limit = num(sample.memLimit) ?? view.limit;
+  for (const row of computerSamples) {
+    const view = byComputer.get(row.computerId);
+    const b = Number(row.b);
+    if (!view || !inRange(b)) continue;
+    view.cpuPercent[b] = Number(row.cpu);
+    view.memUsed[b] = Number(row.mem);
+    view.memPercent[b] = row.percent == null ? null : Number(row.percent);
+    view.memLimit = row.limit == null ? view.memLimit : Number(row.limit);
   }
 
   const agentViews = agents.map(agent => ({
@@ -206,6 +230,27 @@ export async function dashboardData(
     cost: 0,
   }));
   const byAgent = new Map(agentViews.map(view => [view.id, view]));
+  const deletedView = () => {
+    let view = byAgent.get(DELETED.id);
+    if (!view) {
+      view = {
+        ...DELETED,
+        activeMs: 0,
+        active: summed(count),
+        tokens: {
+          input: summed(count),
+          output: summed(count),
+          cacheRead: summed(count),
+          cacheWrite: summed(count),
+          reasoning: summed(count),
+        },
+        cost: 0,
+      };
+      byAgent.set(DELETED.id, view);
+      agentViews.push(view);
+    }
+    return view;
+  };
   // Active time: each run's overlap with each bucket.
   for (const span of spans) {
     const view = byAgent.get(span.agentId);
@@ -220,10 +265,12 @@ export async function dashboardData(
       at = next;
     }
   }
-  const providers = new Map<string, { cost: number[]; total: number }>();
+  const providers = new Map<
+    string,
+    { label: string; subscription: boolean; priced: boolean; cost: number[]; total: number }
+  >();
   for (const event of usage) {
-    const view = byAgent.get(event.agentId);
-    if (!view) continue;
+    const view = byAgent.get(event.agentId) ?? deletedView();
     const i = index(event.at);
     view.tokens.input[i]! += event.input;
     view.tokens.output[i]! += event.output;
@@ -231,8 +278,20 @@ export async function dashboardData(
     view.tokens.cacheWrite[i]! += event.cacheWrite;
     view.tokens.reasoning[i]! += event.reasoning;
     view.cost += event.cost;
-    let provider = providers.get(event.provider);
-    if (!provider) providers.set(event.provider, (provider = { cost: summed(count), total: 0 }));
+    const custom = event.provider === CUSTOM_PROVIDER;
+    const key = custom ? `endpoint:${event.endpointId ?? 'unknown'}` : event.provider;
+    let provider = providers.get(key);
+    if (!provider)
+      providers.set(
+        key,
+        (provider = {
+          label: custom ? (endpointNames.get(event.endpointId ?? '') ?? 'Custom endpoint') : event.provider,
+          subscription: SUBSCRIPTION_PROVIDERS.has(event.provider),
+          priced: !custom,
+          cost: summed(count),
+          total: 0,
+        }),
+      );
     provider.cost[i]! += event.cost;
     provider.total += event.cost;
   }
@@ -244,19 +303,9 @@ export async function dashboardData(
     to: new Date(to).toISOString(),
     bucketMs: bucket,
     buckets,
-    system: {
-      cpuPercent: cpu.series(),
-      memUsed: mem.series(),
-      memTotal: num(system.at(-1)?.memTotal),
-    },
+    system: { cpuPercent: cpuSeries, memUsed: memSeries, memTotal },
     disks: [...diskViews.values()],
-    computers: computerViews.map(view => ({
-      id: view.id,
-      name: view.name,
-      cpuPercent: view.cpu.series(),
-      memUsed: view.mem.series(),
-      memLimit: view.limit,
-    })),
+    computers: computerViews,
     agents: agentViews.map(view => ({
       id: view.id,
       name: view.name,
@@ -273,24 +322,24 @@ export async function dashboardData(
       cost: view.cost,
     })),
     providers: [...providers.entries()]
-      .map(([provider, value]) => ({
-        provider,
-        subscription: SUBSCRIPTION_PROVIDERS.has(provider),
-        cost: value.cost,
-        total: value.total,
-      }))
+      .map(([provider, value]) => ({ provider, ...value }))
       .sort((a, b) => b.total - a.total),
   };
 }
 
-export function registerDashboardRoutes(app: FastifyInstance, platform: PlatformStore) {
+export function registerDashboardRoutes(
+  app: FastifyInstance,
+  platform: PlatformStore,
+  endpoints: EndpointStore = new EndpointStore(),
+) {
   app.get(
     '/api/dashboard',
     { schema: { operationId: 'getDashboard', querystring: Query, response: { 200: Dashboard } } },
     async (request, reply) => {
       const { range = '48h', organization } = request.query as Static<typeof Query>;
       reply.header('cache-control', 'no-store');
-      return dashboardData(platform, range as DashboardRange, organization);
+      const names = new Map((await endpoints.read().catch(() => [])).map(endpoint => [endpoint.id, endpoint.name]));
+      return dashboardData(platform, range as DashboardRange, organization, Date.now(), names);
     },
   );
 }

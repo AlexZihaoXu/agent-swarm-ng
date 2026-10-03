@@ -59,11 +59,36 @@ it('reads df output back onto the requested paths, with every ZFS dataset seen',
     'bulk/uwlearn/backups',
   ]);
   expect(zfs[2]).toEqual({ dataset: 'bulk/drive-2026', used: 216976896 * 1024, avail: 595061760 * 1024 });
-  expect(diskScript(2)).toBe('df -P -k -T /m/0 /m/1 2>/dev/null; echo ---; df -P -k -T -t zfs 2>/dev/null; true');
+  // A ZFS dataset is reported only beneath a path that was measured.
+  expect(parseDiskOutput(helperOutput, paths.slice(0, 2)).zfs.map(item => item.dataset)).toEqual([
+    'tank/agent-swarm-ng',
+  ]);
+});
+
+it('measures a requested folder only when it carries its Keep or Cache marker', () => {
+  expect(
+    diskScript([
+      { path: '/var/lib/docker', use: 'docker' },
+      { path: '/mnt/bulk', use: 'listed' },
+    ]),
+  ).toBe(
+    't=\'/m/0 /m/1\'; if [ -n "$t" ]; then df -P -k -T $t 2>/dev/null; fi; echo ---; df -P -k -T -t zfs 2>/dev/null; true',
+  );
+  expect(
+    diskScript([
+      { path: '/var/lib/docker', use: 'docker' },
+      { path: '/srv/keep', use: 'requested' },
+      { path: '/srv/cache', use: 'requested' },
+    ]),
+  ).toBe(
+    't=\'/m/0\'; for i in 1 2; do if [ -f /m/$i/.agent-swarm-keep-root ] || [ -f /m/$i/.agent-swarm-cache-root ]; then t="$t /m/$i"; fi; done; ' +
+      'if [ -n "$t" ]; then df -P -k -T $t 2>/dev/null; fi; echo ---; df -P -k -T -t zfs 2>/dev/null; true',
+  );
 });
 
 function diskDocker(missing: string[] = []) {
   const docker = new DockerApi('/nonexistent.sock');
+  const attempts: string[][] = [];
   const helpers: {
     script: string;
     mounts: { Source: string; ReadOnly?: boolean; BindOptions?: unknown }[];
@@ -87,6 +112,7 @@ function diskDocker(missing: string[] = []) {
         HostConfig: { Mounts: (typeof helpers)[number]['mounts']; CapAdd: unknown; NetworkMode: string };
       };
       expect(config.HostConfig.NetworkMode).toBe('none');
+      attempts.push(config.HostConfig.Mounts.map(mount => mount.Source));
       if (config.HostConfig.Mounts.some(mount => missing.includes(mount.Source))) throw new DockerApiError(400); // Docker: bind source path does not exist
       helpers.push({ script: config.Entrypoint[2], mounts: config.HostConfig.Mounts, caps: config.HostConfig.CapAdd });
       return { Id: `helper-${helpers.length}` } as never;
@@ -103,48 +129,86 @@ function diskDocker(missing: string[] = []) {
           ? `/dev/nvme0n1p2 ext4 100 60 40 60% /m/${index}`
           : `bulk zfs 200 10 190 5% /m/${index}`;
       return frame(
-        `${DF_HEADER}\n${mounts.map((mount, index) => line(mount.Source, index)).join('\n')}\n---\n${DF_HEADER}\nbulk/x zfs 300 110 190 37% /m/9/x\n`,
+        `${DF_HEADER}\n${mounts.map((mount, index) => line(mount.Source, index)).join('\n')}\n---\n${DF_HEADER}\n${mounts.map((mount, index) => (mount.Source === '/var/lib/docker' ? '' : `bulk/x zfs 300 110 190 37% /m/${index}/x\n`)).join('')}`,
       );
     }
     return Buffer.alloc(0);
   });
-  return { docker, helpers };
+  return { docker, helpers, attempts };
 }
 
 it('measures Docker’s root, the listed and the requested paths read-only in one helper', async () => {
   const { docker, helpers } = diskDocker();
   const manager = new ComputerManager(docker, 'swarm-ng-test', '{}');
-  const result = await manager.diskUsage(['/srv/cache'], ['/mnt/bulk', '/']);
+  const result = await manager.diskUsage(
+    ['/srv/cache', '/var/lib/docker/volumes', '/', '/srv/computers/0b6f6a3e-5a3c-4a8e-9a43-1d2f3e4a5b6c'],
+    ['/mnt/bulk', '/'],
+  );
   expect(helpers).toHaveLength(1);
-  expect(helpers[0].caps).toEqual(['DAC_READ_SEARCH']);
+  // df reads its mount points' statistics without any capability; the helper gets none.
+  expect(helpers[0].caps).toEqual([]);
   expect(helpers[0].mounts).toEqual([
     { Type: 'bind', Source: '/var/lib/docker', Target: '/m/0', ReadOnly: true, BindOptions: { NonRecursive: true } },
     { Type: 'bind', Source: '/mnt/bulk', Target: '/m/1', ReadOnly: true },
     { Type: 'bind', Source: '/', Target: '/m/2', ReadOnly: true, BindOptions: { NonRecursive: true } },
     { Type: 'bind', Source: '/srv/cache', Target: '/m/3', ReadOnly: true },
   ]);
-  expect(result.disks.map(disk => [disk.path, disk.use])).toEqual([
-    ['/var/lib/docker', 'docker'],
-    ['/mnt/bulk', 'listed'],
-    ['/', 'listed'],
-    ['/srv/cache', 'requested'],
+  // Requested folders are only Keep/Cache folders: never Docker's storage, "/" or inside a computer's storage.
+  expect(result.disks.map(disk => [disk.path, disk.use, 'error' in disk])).toEqual([
+    ['/var/lib/docker', 'docker', false],
+    ['/mnt/bulk', 'listed', false],
+    ['/', 'listed', false],
+    ['/srv/cache', 'requested', false],
+    ['/var/lib/docker/volumes', 'requested', true],
+    ['/', 'requested', true],
+    ['/srv/computers/0b6f6a3e-5a3c-4a8e-9a43-1d2f3e4a5b6c', 'requested', true],
   ]);
   expect(result.disks[0]).toMatchObject({ source: '/dev/nvme0n1p2', size: 100 * 1024, used: 60 * 1024 });
   expect(result.zfs).toEqual([{ dataset: 'bulk/x', used: 110 * 1024, avail: 190 * 1024 }]);
   await expect(manager.diskUsage(['../etc'], [])).rejects.toMatchObject({ code: 400 });
 });
 
-it('reports a missing host path as unavailable and still measures the rest', async () => {
-  const { docker, helpers } = diskDocker(['/mnt/unplugged']);
+it('reports a missing host path as unavailable, measures the rest, and skips it for an hour', async () => {
+  const { docker, attempts } = diskDocker(['/mnt/unplugged']);
   const manager = new ComputerManager(docker, 'swarm-ng-test', '{}');
-  const result = await manager.diskUsage(['/srv/cache'], ['/mnt/unplugged']);
-  expect(helpers.map(helper => helper.mounts.map(mount => mount.Source))).toEqual([
-    ['/var/lib/docker'],
-    ['/srv/cache'],
+  let now = 1_000_000;
+  vi.spyOn(Date, 'now').mockImplementation(() => now);
+  try {
+    const result = await manager.diskUsage(['/srv/cache'], ['/mnt/unplugged']);
+    expect(attempts).toEqual([
+      ['/var/lib/docker', '/mnt/unplugged', '/srv/cache'],
+      ['/var/lib/docker'],
+      ['/mnt/unplugged'],
+      ['/srv/cache'],
+    ]);
+    expect(result.disks).toEqual([
+      expect.objectContaining({ path: '/var/lib/docker', source: '/dev/nvme0n1p2' }),
+      { path: '/mnt/unplugged', use: 'listed', error: 'unavailable' },
+      expect.objectContaining({ path: '/srv/cache', source: 'bulk' }),
+    ]);
+    // Within the hour the missing path is not mounted again: the others share one helper.
+    attempts.length = 0;
+    now += 59 * 60_000;
+    expect((await manager.diskUsage(['/srv/cache'], ['/mnt/unplugged'])).disks).toEqual(result.disks);
+    expect(attempts).toEqual([['/var/lib/docker', '/srv/cache']]);
+    attempts.length = 0;
+    now += 2 * 60_000;
+    await manager.diskUsage(['/srv/cache'], ['/mnt/unplugged']);
+    expect(attempts[0]).toEqual(['/var/lib/docker', '/mnt/unplugged', '/srv/cache']);
+  } finally {
+    vi.restoreAllMocks();
+  }
+});
+
+it('never runs two disk measurements at once: a request during one shares its result', async () => {
+  const { docker, attempts } = diskDocker();
+  const manager = new ComputerManager(docker, 'swarm-ng-test', '{}');
+  const [first, second] = await Promise.all([
+    manager.diskUsage(['/srv/cache'], []),
+    manager.diskUsage(['/srv/other'], []),
   ]);
-  expect(result.disks).toEqual([
-    expect.objectContaining({ path: '/var/lib/docker', source: '/dev/nvme0n1p2' }),
-    { path: '/mnt/unplugged', use: 'listed', error: 'unavailable' },
-    expect.objectContaining({ path: '/srv/cache', source: 'bulk' }),
-  ]);
+  expect(second).toBe(first);
+  expect(attempts).toEqual([['/var/lib/docker', '/srv/cache']]);
+  await manager.diskUsage(['/srv/other'], []);
+  expect(attempts).toHaveLength(2);
 });
