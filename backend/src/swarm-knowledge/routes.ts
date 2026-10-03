@@ -24,7 +24,7 @@ function invalid(reply: FastifyReply, error: unknown) {
   throw error;
 }
 
-/** Read-only operator review API. The existing dashboard has no app authentication. */
+/** Read-only operator review API (signed-in dashboard only, like every route). */
 export function registerKnowledgeRoutes(app: FastifyInstance, catalog: KnowledgeCatalog = swarmKnowledge) {
   app.get<{ Querystring: { parentId?: string; offset?: number; limit?: number } }>(
     '/api/knowledge',
