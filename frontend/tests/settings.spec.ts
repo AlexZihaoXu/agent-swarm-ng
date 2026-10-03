@@ -162,6 +162,13 @@ test('Settings → Swarm edits limits within their bounds, saves only changes, a
     memoryIndexMaxChars: { min: 500, max: 40000, default: 4000, label: 'Memory index size', unit: 'chars' },
     memoryMaxChars: { min: 200, max: 20000, default: 2000, label: 'Largest memory', unit: 'chars' },
     memoryMaxCount: { min: 10, max: 10000, default: 1000, label: 'Memories per agent', unit: '' },
+    lockdownFailures: {
+      min: 0,
+      max: 1000,
+      default: 20,
+      label: 'Lock down after failed sign-ins in an hour (0: never)',
+      unit: '',
+    },
   };
   // In-memory settings: the shared test backend's real settings stay untouched.
   let settings = Object.fromEntries(Object.entries(bounds).map(([key, bound]) => [key, bound.default]));

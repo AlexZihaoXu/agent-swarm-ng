@@ -191,6 +191,9 @@
                         },
                         "name": {
                           "type": "string"
+                        },
+                        "lockedDown": {
+                          "type": "boolean"
                         }
                       }
                     }
@@ -352,6 +355,24 @@
             }
           },
           "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "423": {
             "description": "Default Response",
             "content": {
               "application/json": {
@@ -618,7 +639,9 @@
                           "ip",
                           "targetId",
                           "targetName",
-                          "detail"
+                          "detail",
+                          "ipLabel",
+                          "ipTrusted"
                         ],
                         "properties": {
                           "sequence": {
@@ -684,6 +707,19 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "ipLabel": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "ipTrusted": {
+                            "type": "boolean"
                           }
                         }
                       }
@@ -697,6 +733,1031 @@
                           "type": "null"
                         }
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/security": {
+      "get": {
+        "operationId": "getSecurity",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "yourAddress",
+                    "yourLabel",
+                    "yourTrusted",
+                    "lockdown",
+                    "addresses"
+                  ],
+                  "properties": {
+                    "yourAddress": {
+                      "type": "string"
+                    },
+                    "yourLabel": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "yourTrusted": {
+                      "type": "boolean"
+                    },
+                    "lockdown": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "since",
+                            "failures"
+                          ],
+                          "properties": {
+                            "since": {
+                              "type": "string"
+                            },
+                            "failures": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "addresses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "address",
+                          "label",
+                          "trusted",
+                          "createdAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "address": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "trusted": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/security/addresses": {
+      "post": {
+        "operationId": "addKnownAddress",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "address",
+                  "label",
+                  "trusted"
+                ],
+                "properties": {
+                  "address": {
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  "label": {
+                    "minLength": 1,
+                    "maxLength": 60,
+                    "pattern": "\\S",
+                    "type": "string"
+                  },
+                  "trusted": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "yourAddress",
+                    "yourLabel",
+                    "yourTrusted",
+                    "lockdown",
+                    "addresses"
+                  ],
+                  "properties": {
+                    "yourAddress": {
+                      "type": "string"
+                    },
+                    "yourLabel": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "yourTrusted": {
+                      "type": "boolean"
+                    },
+                    "lockdown": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "since",
+                            "failures"
+                          ],
+                          "properties": {
+                            "since": {
+                              "type": "string"
+                            },
+                            "failures": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "addresses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "address",
+                          "label",
+                          "trusted",
+                          "createdAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "address": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "trusted": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/security/addresses/{id}": {
+      "patch": {
+        "operationId": "updateKnownAddress",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "minLength": 1,
+                    "maxLength": 60,
+                    "pattern": "\\S",
+                    "type": "string"
+                  },
+                  "trusted": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "yourAddress",
+                    "yourLabel",
+                    "yourTrusted",
+                    "lockdown",
+                    "addresses"
+                  ],
+                  "properties": {
+                    "yourAddress": {
+                      "type": "string"
+                    },
+                    "yourLabel": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "yourTrusted": {
+                      "type": "boolean"
+                    },
+                    "lockdown": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "since",
+                            "failures"
+                          ],
+                          "properties": {
+                            "since": {
+                              "type": "string"
+                            },
+                            "failures": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "addresses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "address",
+                          "label",
+                          "trusted",
+                          "createdAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "address": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "trusted": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeKnownAddress",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "yourAddress",
+                    "yourLabel",
+                    "yourTrusted",
+                    "lockdown",
+                    "addresses"
+                  ],
+                  "properties": {
+                    "yourAddress": {
+                      "type": "string"
+                    },
+                    "yourLabel": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "yourTrusted": {
+                      "type": "boolean"
+                    },
+                    "lockdown": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "since",
+                            "failures"
+                          ],
+                          "properties": {
+                            "since": {
+                              "type": "string"
+                            },
+                            "failures": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "addresses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "address",
+                          "label",
+                          "trusted",
+                          "createdAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "address": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "trusted": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/security/unlock": {
+      "post": {
+        "operationId": "unlockSignIn",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "yourAddress",
+                    "yourLabel",
+                    "yourTrusted",
+                    "lockdown",
+                    "addresses"
+                  ],
+                  "properties": {
+                    "yourAddress": {
+                      "type": "string"
+                    },
+                    "yourLabel": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "yourTrusted": {
+                      "type": "boolean"
+                    },
+                    "lockdown": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "since",
+                            "failures"
+                          ],
+                          "properties": {
+                            "since": {
+                              "type": "string"
+                            },
+                            "failures": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "addresses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "address",
+                          "label",
+                          "trusted",
+                          "createdAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "address": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "trusted": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/alerts": {
+      "get": {
+        "operationId": "listAlerts",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "alerts"
+                  ],
+                  "properties": {
+                    "alerts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "kind",
+                          "title",
+                          "detail",
+                          "startedAt",
+                          "endedAt",
+                          "dismissable",
+                          "logs"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          },
+                          "startedAt": {
+                            "type": "string"
+                          },
+                          "endedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "dismissable": {
+                            "type": "boolean"
+                          },
+                          "logs": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "signin"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "system"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/alerts/{id}/dismiss": {
+      "post": {
+        "operationId": "dismissAlert",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/access": {
+      "get": {
+        "operationId": "getAccessLog",
+        "parameters": [
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "1h"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "24h"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "7d"
+                  ]
+                }
+              ]
+            },
+            "in": "query",
+            "name": "range",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "ip",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "range",
+                    "bucketMinutes",
+                    "buckets",
+                    "series",
+                    "totals",
+                    "countries",
+                    "addresses",
+                    "routes",
+                    "statuses"
+                  ],
+                  "properties": {
+                    "range": {
+                      "type": "string"
+                    },
+                    "bucketMinutes": {
+                      "type": "integer"
+                    },
+                    "buckets": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    "series": {
+                      "type": "object",
+                      "required": [
+                        "ok",
+                        "redirect",
+                        "client",
+                        "server"
+                      ],
+                      "properties": {
+                        "ok": {
+                          "type": "array",
+                          "items": {
+                            "type": "integer"
+                          }
+                        },
+                        "redirect": {
+                          "type": "array",
+                          "items": {
+                            "type": "integer"
+                          }
+                        },
+                        "client": {
+                          "type": "array",
+                          "items": {
+                            "type": "integer"
+                          }
+                        },
+                        "server": {
+                          "type": "array",
+                          "items": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "totals": {
+                      "type": "object",
+                      "required": [
+                        "requests",
+                        "errors",
+                        "addresses",
+                        "countries"
+                      ],
+                      "properties": {
+                        "requests": {
+                          "type": "integer"
+                        },
+                        "errors": {
+                          "type": "integer"
+                        },
+                        "addresses": {
+                          "type": "integer"
+                        },
+                        "countries": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "countries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "key",
+                          "requests",
+                          "errors",
+                          "avgMs",
+                          "maxMs"
+                        ],
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "requests": {
+                            "type": "integer"
+                          },
+                          "errors": {
+                            "type": "integer"
+                          },
+                          "avgMs": {
+                            "type": "number"
+                          },
+                          "maxMs": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "addresses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "ip",
+                          "label",
+                          "trusted",
+                          "country",
+                          "users",
+                          "requests",
+                          "errors",
+                          "avgMs",
+                          "maxMs"
+                        ],
+                        "properties": {
+                          "ip": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "trusted": {
+                            "type": "boolean"
+                          },
+                          "country": {
+                            "type": "string"
+                          },
+                          "users": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "requests": {
+                            "type": "integer"
+                          },
+                          "errors": {
+                            "type": "integer"
+                          },
+                          "avgMs": {
+                            "type": "number"
+                          },
+                          "maxMs": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "routes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "key",
+                          "requests",
+                          "errors",
+                          "avgMs",
+                          "maxMs"
+                        ],
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "requests": {
+                            "type": "integer"
+                          },
+                          "errors": {
+                            "type": "integer"
+                          },
+                          "avgMs": {
+                            "type": "number"
+                          },
+                          "maxMs": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "statuses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "key",
+                          "requests",
+                          "errors",
+                          "avgMs",
+                          "maxMs"
+                        ],
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "requests": {
+                            "type": "integer"
+                          },
+                          "errors": {
+                            "type": "integer"
+                          },
+                          "avgMs": {
+                            "type": "number"
+                          },
+                          "maxMs": {
+                            "type": "integer"
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -2868,7 +3929,8 @@
                         "memoryIndexMaxLines",
                         "memoryIndexMaxChars",
                         "memoryMaxChars",
-                        "memoryMaxCount"
+                        "memoryMaxCount",
+                        "lockdownFailures"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -2926,6 +3988,9 @@
                           "type": "integer"
                         },
                         "memoryMaxCount": {
+                          "type": "integer"
+                        },
+                        "lockdownFailures": {
                           "type": "integer"
                         }
                       }
@@ -2951,7 +4016,8 @@
                         "memoryIndexMaxLines",
                         "memoryIndexMaxChars",
                         "memoryMaxChars",
-                        "memoryMaxCount"
+                        "memoryMaxCount",
+                        "lockdownFailures"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -3441,6 +4507,33 @@
                           }
                         },
                         "memoryMaxCount": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "lockdownFailures": {
                           "type": "object",
                           "required": [
                             "min",
@@ -3541,6 +4634,9 @@
                   },
                   "memoryMaxCount": {
                     "type": "integer"
+                  },
+                  "lockdownFailures": {
+                    "type": "integer"
                   }
                 },
                 "additionalProperties": false,
@@ -3582,7 +4678,8 @@
                         "memoryIndexMaxLines",
                         "memoryIndexMaxChars",
                         "memoryMaxChars",
-                        "memoryMaxCount"
+                        "memoryMaxCount",
+                        "lockdownFailures"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -3640,6 +4737,9 @@
                           "type": "integer"
                         },
                         "memoryMaxCount": {
+                          "type": "integer"
+                        },
+                        "lockdownFailures": {
                           "type": "integer"
                         }
                       }
@@ -3665,7 +4765,8 @@
                         "memoryIndexMaxLines",
                         "memoryIndexMaxChars",
                         "memoryMaxChars",
-                        "memoryMaxCount"
+                        "memoryMaxCount",
+                        "lockdownFailures"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -4155,6 +5256,33 @@
                           }
                         },
                         "memoryMaxCount": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "lockdownFailures": {
                           "type": "object",
                           "required": [
                             "min",
@@ -25100,6 +26228,150 @@
         }
       }
     },
+    "/api/dashboard/live": {
+      "get": {
+        "operationId": "getDashboardLive",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "intervalMs",
+                    "cores",
+                    "devices",
+                    "points"
+                  ],
+                  "properties": {
+                    "intervalMs": {
+                      "type": "integer"
+                    },
+                    "cores": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "device",
+                          "label"
+                        ],
+                        "properties": {
+                          "device": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "points": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "t",
+                          "cpuPercent",
+                          "memUsed",
+                          "memTotal",
+                          "netRx",
+                          "netTx",
+                          "disks"
+                        ],
+                        "properties": {
+                          "t": {
+                            "type": "number"
+                          },
+                          "cpuPercent": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "memUsed": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "memTotal": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "netRx": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "netTx": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "disks": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "object",
+                              "required": [
+                                "read",
+                                "write"
+                              ],
+                              "properties": {
+                                "read": {
+                                  "type": "number"
+                                },
+                                "write": {
+                                  "type": "number"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/dashboard": {
       "get": {
         "operationId": "getDashboard",
@@ -25168,6 +26440,7 @@
                     "bucketMs",
                     "buckets",
                     "system",
+                    "diskIo",
                     "disks",
                     "computers",
                     "agents",
@@ -25199,7 +26472,9 @@
                       "required": [
                         "cpuPercent",
                         "memUsed",
-                        "memTotal"
+                        "memTotal",
+                        "netRx",
+                        "netTx"
                       ],
                       "properties": {
                         "cpuPercent": {
@@ -25237,6 +26512,78 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "netRx": {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "netTx": {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "diskIo": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "device",
+                          "label",
+                          "read",
+                          "write"
+                        ],
+                        "properties": {
+                          "device": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "read": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "write": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
                         }
                       }
                     },

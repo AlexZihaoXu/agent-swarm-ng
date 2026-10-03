@@ -486,6 +486,8 @@ model SwarmSettings {
   memoryIndexMaxChars      Int @default(4000)
   memoryMaxChars           Int @default(2000)
   memoryMaxCount           Int @default(1000)
+  /// Failed sign-ins (from any address) within an hour that lock the dashboard down (0: never).
+  lockdownFailures         Int @default(20)
   /// Host folders new computers keep their files in (Settings → Computers → Storage); null = Docker volumes.
   computerKeepFolder  String?
   computerCacheFolder String?
@@ -698,8 +700,24 @@ model SystemSample {
   cpuPercent Float
   memUsed    BigInt
   memTotal   BigInt
+  /// Bytes per second over the minute across the physical network interfaces, in and out (null: unknown).
+  netRx      Float?
+  netTx      Float?
 
   @@index([at])
+}
+
+/// One physical disk's throughput over a minute (bytes per second), from /proc/diskstats. Kept 14 days.
+model DiskIoSample {
+  sequence Int      @id @default(autoincrement())
+  at       DateTime @default(now())
+  /// The whole-disk device name (nvme0n1, sda, …).
+  device   String
+  read     Float
+  write    Float
+
+  @@index([at])
+  @@index([device, at])
 }
 
 /// One physical storage device the platform uses (or an operator-listed one), sampled every few minutes. `disk` is a
@@ -768,4 +786,67 @@ model AgentRunSpan {
 
   @@index([agentId, startedAt])
   @@index([startedAt])
+}
+
+/// A known client address or range (docs/login.md): a label shown in the audit log, and whether it is trusted (it
+/// may sign in during a lockdown).
+model KnownAddress {
+  sequence  Int      @id @default(autoincrement())
+  id        String   @unique @default(uuid())
+  /// An IP address or a CIDR range (100.64.0.0/10, 2001:db8::/32), normalized.
+  address   String   @unique
+  label     String
+  trusted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+/// Present while the dashboard is locked down: only trusted addresses may sign in until it is lifted.
+model Lockdown {
+  id        Int      @id @default(1)
+  since     DateTime @default(now())
+  /// Failed sign-ins in the hour that triggered it.
+  failures  Int
+}
+
+/// A critical event shown as a banner until dismissed (docs/dashboard.md#critical-events): a possible power outage or
+/// crash, a burst of failed sign-ins. Ongoing conditions (a lockdown, a full disk) are not stored: they show while true.
+model Alert {
+  sequence    Int       @id @default(autoincrement())
+  id          String    @unique @default(uuid())
+  /// outage, signin-failures
+  kind        String
+  title       String
+  detail      String
+  /// The event's own span (an outage: last reading → start-up).
+  startedAt   DateTime
+  endedAt     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  dismissedAt DateTime?
+
+  @@index([dismissedAt, createdAt])
+}
+
+/// The access log (docs/access-log.md), separate from the audit log: requests folded per minute, so a flood stays
+/// a few rows. Kept 30 days.
+model AccessMinute {
+  sequence Int    @id @default(autoincrement())
+  /// Minutes since 1970 (UTC).
+  minute   Int
+  ip       String
+  /// Two-letter country from Cloudflare, or LAN / Tailnet / Local / ?? for the rest.
+  country  String
+  /// The signed-in person, or "" when none.
+  user     String
+  method   String
+  /// The route pattern (/api/agents/:id), or the raw path (at most 80 characters) when nothing matched.
+  route    String
+  status   Int
+  count    Int
+  totalMs  Int
+  maxMs    Int
+
+  @@unique([minute, ip, user, method, route, status])
+  @@index([minute])
+  @@index([ip, minute])
 }

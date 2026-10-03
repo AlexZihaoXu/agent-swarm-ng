@@ -29,7 +29,7 @@ CMD ["bun", "run", "dev"]
 FROM base AS production
 COPY backend/assets assets
 COPY backend/src src
-COPY backend/scripts/migrate.ts backend/scripts/reset-password.ts scripts/
+COPY backend/scripts/migrate.ts backend/scripts/reset-password.ts backend/scripts/unlock.ts scripts/
 ENV NODE_ENV=production
 USER bun
 EXPOSE 3000

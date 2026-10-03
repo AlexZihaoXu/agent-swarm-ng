@@ -3,6 +3,9 @@ import { Type, type Static } from '@sinclair/typebox';
 import type { PlatformStore } from '../platform-store';
 import { clientAddress } from '../auth/routes';
 import { AUDIT_CATEGORIES, type AuditCategory, type AuditLog } from './store';
+import type { KnownAddresses } from '../security/addresses';
+import type { Alerts } from '../security/alerts';
+import type { AccessLog } from '../access/log';
 
 type Target = 'agent' | 'computer' | 'organization';
 type Rule = { kind: string; target: Target; section?: string };
@@ -38,6 +41,8 @@ declare module 'fastify' {
   }
   interface FastifyInstance {
     audit: AuditLog;
+    alerts: Alerts;
+    access: AccessLog;
   }
 }
 
@@ -51,6 +56,9 @@ const Event = Type.Object({
   targetId: Type.Union([Type.String(), Type.Null()]),
   targetName: Type.Union([Type.String(), Type.Null()]),
   detail: Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()]),
+  /** The known address's label (Settings → Security) and whether it is trusted. */
+  ipLabel: Type.Union([Type.String(), Type.Null()]),
+  ipTrusted: Type.Boolean(),
 });
 const Query = Type.Object({
   category: Type.Optional(Type.Union(Object.keys(AUDIT_CATEGORIES).map(key => Type.Literal(key)))),
@@ -62,7 +70,12 @@ const bodyFields = (body: unknown) =>
   body && typeof body === 'object' && !Array.isArray(body) ? Object.keys(body).slice(0, 30) : [];
 
 /** The audit log's route hooks (create, edit, delete of organizations, computers and agents) and its read API. */
-export function registerAudit(app: FastifyInstance, platform: PlatformStore, audit: AuditLog) {
+export function registerAudit(
+  app: FastifyInstance,
+  platform: PlatformStore,
+  audit: AuditLog,
+  addresses?: KnownAddresses,
+) {
   const nameOf = async (target: Target, id: string) => {
     await platform.initialize();
     const client = platform.client;
@@ -146,7 +159,14 @@ export function registerAudit(app: FastifyInstance, platform: PlatformStore, aud
     async (request, reply) => {
       reply.header('cache-control', 'no-store');
       const { category, before, limit } = request.query as Static<typeof Query>;
-      return audit.list({ category: category as AuditCategory | undefined, before, limit });
+      const page = await audit.list({ category: category as AuditCategory | undefined, before, limit });
+      const events = await Promise.all(
+        page.events.map(async event => {
+          const known = await addresses?.match(event.ip);
+          return { ...event, ipLabel: known?.label ?? null, ipTrusted: Boolean(known?.trusted) };
+        }),
+      );
+      return { ...page, events };
     },
   );
 }

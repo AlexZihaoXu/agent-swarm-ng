@@ -13,6 +13,10 @@ function readers(stats: string[]): HostReaders {
   return {
     procStat: async () => stats.shift() ?? '',
     meminfo: async () => 'MemTotal: 16000000 kB\nMemAvailable: 12000000 kB\n',
+    diskstats: async () => '',
+    uptime: async () => '1000.00 4000.00',
+    hostNet: async () => null,
+    blockInfo: async () => ({ model: null, bytes: null }),
     mountinfo: async () => '879 850 259:2 /x/.local /app/.local rw - ext4 /dev/nvme0n1p2 rw',
     statfs: async () => ({ bsize: 1024, blocks: 468 * 1024 ** 2, bfree: 96 * 1024 ** 2, bavail: 71 * 1024 ** 2 }),
     realpath: async () => '/app/.local',
@@ -30,7 +34,15 @@ it('samples host CPU against the previous reading, and memory', async () => {
   expect(await sampler.sampleSystem()).toBe(false); // baseline only
   expect(await sampler.sampleSystem()).toBe(true);
   expect(await store.client.systemSample.findMany({ omit: { sequence: true } })).toEqual([
-    { at: NOW, cpuPercent: 30, memUsed: BigInt(4000000 * 1024), memTotal: BigInt(16000000 * 1024) },
+    {
+      at: NOW,
+      cpuPercent: 30,
+      memUsed: BigInt(4000000 * 1024),
+      memTotal: BigInt(16000000 * 1024),
+      // Throughput needs two readings of its counters: the first sample has none yet.
+      netRx: null,
+      netTx: null,
+    },
   ]);
   // Without a controller, computers are simply not sampled.
   expect(await sampler.sampleComputers()).toBe(0);

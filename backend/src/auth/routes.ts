@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import { hostname } from '../host-policy';
 import type { AuditLog } from '../audit/store';
+import type { SignInGuard } from '../security/guard';
 import {
   Accounts,
   PASSWORD_MAX,
@@ -50,7 +51,13 @@ const PasswordChange = Type.Object({
 });
 const SessionState = Type.Union([
   Type.Object({ signedIn: Type.Literal(true), name: Type.String() }),
-  Type.Object({ signedIn: Type.Literal(false), setupRequired: Type.Boolean(), name: Type.Optional(Type.String()) }),
+  Type.Object({
+    signedIn: Type.Literal(false),
+    setupRequired: Type.Boolean(),
+    name: Type.Optional(Type.String()),
+    /** Locked down, and this address is not trusted: signing in will be refused. */
+    lockedDown: Type.Optional(Type.Boolean()),
+  }),
 ]);
 const Message = Type.Object({ message: Type.String() });
 const SignedInResponse = Type.Object({ signedIn: Type.Literal(true), name: Type.String() });
@@ -221,7 +228,7 @@ function crossOrigin(request: FastifyRequest) {
 export function registerAuth(
   app: FastifyInstance,
   accounts: Accounts,
-  { requireLogin, audit }: { requireLogin: boolean; audit?: AuditLog },
+  { requireLogin, audit, guard }: { requireLogin: boolean; audit?: AuditLog; guard?: SignInGuard },
 ) {
   const failures = new Failures();
   const streams = new SessionStreams(accounts);
@@ -272,7 +279,8 @@ export function registerAuth(
     await audit.record(
       {
         kind: event.kind,
-        outcome: reply.statusCode < 300 ? 'ok' : reply.statusCode === 429 ? 'denied' : 'failed',
+        outcome:
+          reply.statusCode < 300 ? 'ok' : reply.statusCode === 429 || reply.statusCode === 423 ? 'denied' : 'failed',
         actor: event.actor.slice(0, 64),
         ip,
         detail: event.reason ? { reason: event.reason } : undefined,
@@ -312,9 +320,9 @@ export function registerAuth(
       reply.header('cache-control', 'no-store');
       if (request.signedIn) return { signedIn: true, name: request.signedIn.name };
       const waiting = await accounts.awaitingSetup();
-      return waiting
-        ? { signedIn: false, setupRequired: true, name: waiting.name }
-        : { signedIn: false, setupRequired: false };
+      if (waiting) return { signedIn: false, setupRequired: true, name: waiting.name };
+      const lockedDown = guard ? await guard.refuses(clientAddress(request)) : false;
+      return { signedIn: false, setupRequired: false, ...(lockedDown ? { lockedDown } : {}) };
     },
   );
 
@@ -358,11 +366,12 @@ export function registerAuth(
       schema: {
         operationId: 'signIn',
         body: SignInCredentials,
-        response: { 200: SignedInResponse, 401: Message, 429: Message },
+        response: { 200: SignedInResponse, 401: Message, 423: Message, 429: Message },
       },
     },
     async (request, reply) => {
       const { name, password } = request.body as Static<typeof SignInCredentials>;
+      const ip = clientAddress(request);
       request.authEvent = { kind: 'auth.login', actor: name.trim() };
       const account = `account:${name.trim().toLowerCase()}`;
       const address = `address:${clientAddress(request)}`;
@@ -377,6 +386,13 @@ export function registerAuth(
         reply.header('retry-after', String(wait));
         return reply.code(429).send({ message: `Too many wrong passwords. Try again in ${Math.ceil(wait / 60)} min.` });
       }
+      if (guard && (await guard.refuses(ip))) {
+        note(request, 'locked down: not a trusted address');
+        return reply.code(423).send({
+          message:
+            'Sign-in is locked down after many failed attempts. Sign in from a trusted address, or have the host unlock it.',
+        });
+      }
       if (hashing >= MAX_HASHING) {
         note(request, 'busy');
         return busy(reply);
@@ -385,9 +401,11 @@ export function registerAuth(
       const user = await hash(() => accounts.verify(name.trim(), password));
       if (user === null) {
         note(request, 'wrong name or password');
+        await guard?.failed(ip, name.trim()).catch(() => undefined);
         return reply.code(401).send({ message: 'Wrong name or password.' });
       }
       failures.forgive([address, account], at, pair);
+      await guard?.succeeded(ip, user.name).catch(() => undefined);
       return signIn(request, reply, user.id, user.name);
     },
   );

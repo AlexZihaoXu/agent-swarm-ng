@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { backfillUsageHistory, startUsageRecording } from './usage/backfill';
 import { usageRecorder } from './usage/recorder';
 import { MetricsSampler } from './metrics/sampler';
+import { detectOutage } from './security/outage';
 
 process.umask(0o077);
 let stopPowerWatch = () => {};
@@ -37,6 +38,8 @@ await app.listen({
   port: Number(process.env.PORT ?? 3000),
 });
 void backfillUsageHistory(database, app.log);
+// Down without a clean stop since the last minute sample? A banner says so (before this start is recorded).
+await detectOutage(database, app.alerts).catch(error => app.log.error(error, 'Outage check failed'));
 await app.audit.record({
   kind: 'system.start',
   outcome: 'ok',
@@ -47,6 +50,10 @@ await app.audit.record({
 const pruneAudit = () => void app.audit.prune().catch(error => app.log.error(error, 'Audit log pruning failed'));
 pruneAudit();
 setInterval(pruneAudit, 3_600_000).unref();
+// The access log keeps 30 days, pruned hourly.
+const pruneAccess = () => void app.access.prune().catch(error => app.log.error(error, 'Access log pruning failed'));
+pruneAccess();
+setInterval(pruneAccess, 3_600_000).unref();
 // Re-apply explicit power-offs the controller's own boot reconciliation may
 // have revived. Non-fatal: a controller outage must not block the dashboard.
 const power = await reconcileStoppedComputers(new ComputerStore(database), computerControllerFromEnv());

@@ -68,6 +68,8 @@ const loadComputers = () => import('@/components/computers-panel');
 const Settings = lazy(() => loadSettings().then(module => ({ default: module.Settings })));
 const KnowledgeBrowser = lazy(() => loadKnowledge().then(module => ({ default: module.KnowledgeBrowser })));
 const Dashboard = lazy(() => import('@/components/dashboard').then(module => ({ default: module.Dashboard })));
+import { AlertBanner } from '@/components/alert-banner';
+const AccessLog = lazy(() => import('@/components/access-log').then(module => ({ default: module.AccessLog })));
 const AuditLog = lazy(() => import('@/components/audit-log').then(module => ({ default: module.AuditLog })));
 const ComputersPanel = lazy(() => loadComputers().then(module => ({ default: module.ComputersPanel })));
 const whenIdle = (task: () => void) => {
@@ -667,6 +669,8 @@ export function App() {
             <PortalButton onClick={() => setPortalOpen(true)} className="h-9 w-9 justify-center px-0" />
           </div>
         )}
+        {/* Under the phone's top bar (which keeps the notch clear); when that bar is hidden, it clears the notch itself. */}
+        <AlertBanner onNavigate={navigate} insetTop={computerViewerOpen || narrowDetail} />
         {!computerViewerOpen && (
           <header
             className={cn(
@@ -1378,7 +1382,7 @@ export function App() {
           forceMount
           className={cn(
             'tab-enter min-h-0 flex-1 outline-none data-[state=inactive]:hidden',
-            route.kind === 'knowledge' || route.kind === 'audit'
+            route.kind === 'knowledge' || route.kind === 'audit' || route.kind === 'access'
               ? 'overflow-hidden data-[state=active]:flex data-[state=active]:flex-col'
               : 'overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0',
           )}
@@ -1386,12 +1390,17 @@ export function App() {
           {/* Settings stays mounted after its first visit so endpoint edits survive switching tabs. */}
           <Suspense fallback={loading}>
             {(settingsSeen || activeTab === 'settings') && (
-              <div className={route.kind === 'knowledge' || route.kind === 'audit' ? 'hidden' : ''}>
+              <div
+                className={
+                  route.kind === 'knowledge' || route.kind === 'audit' || route.kind === 'access' ? 'hidden' : ''
+                }
+              >
                 <Settings route={route} onNavigate={navigate} />
               </div>
             )}
             {route.kind === 'knowledge' && <KnowledgeBrowser id={route.knowledgeId} onNavigate={navigate} />}
             {route.kind === 'audit' && <AuditLog onNavigate={navigate} />}
+            {route.kind === 'access' && <AccessLog onNavigate={navigate} />}
           </Suspense>
         </Tabs.Content>
       </Tabs.Root>

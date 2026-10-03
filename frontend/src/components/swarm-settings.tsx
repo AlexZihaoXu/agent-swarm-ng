@@ -26,6 +26,12 @@ const groups: { title: string; description: string; keys: Key[] }[] = [
       'Each agent’s long-term memory. The index (one line per memory) is in every turn it takes, so a larger index costs more on every reply.',
     keys: ['memoryIndexMaxLines', 'memoryIndexMaxChars', 'memoryMaxChars', 'memoryMaxCount'],
   },
+  {
+    title: 'Security',
+    description:
+      'Failed sign-ins in an hour (from any address) that lock sign-in down: only trusted addresses (Settings → Security) can sign in then. Signed-in browsers keep working.',
+    keys: ['lockdownFailures'],
+  },
 ];
 
 /** Settings → Swarm: operator-wide limits, stored by the backend (not environment variables). */
@@ -104,33 +110,37 @@ export function SwarmSettings({ card }: { card: string }) {
         )}
         {saved && (
           <div className="space-y-6">
-            {groups.map(group => (
-              <fieldset key={group.title} className="space-y-4">
-                <legend className="text-sm font-semibold">{group.title}</legend>
-                <p className="-mt-2 text-xs text-muted-foreground">{group.description}</p>
-                <div className="grid gap-5 sm:grid-cols-2">
-                  {group.keys.map(key => {
-                    const bound = saved.bounds[key];
-                    return (
-                      <NumberField
-                        key={key}
-                        label={bound.unit ? `${bound.label} (${bound.unit})` : bound.label}
-                        unit={bound.unit}
-                        value={draft[key] ?? ''}
-                        min={bound.min}
-                        max={bound.max}
-                        disabled={status === 'saving'}
-                        onChange={value => {
-                          setMessage('');
-                          setDraft(current => ({ ...current, [key]: value }));
-                        }}
-                        hint={`${bound.min}–${bound.max}${bound.unit ? ` ${bound.unit}` : ''} · default ${bound.default}`}
-                      />
-                    );
-                  })}
-                </div>
-              </fieldset>
-            ))}
+            {/* A setting the backend does not know (an older backend) is left out rather than breaking the page. */}
+            {groups
+              .map(group => ({ ...group, keys: group.keys.filter(key => saved.bounds[key]) }))
+              .filter(group => group.keys.length)
+              .map(group => (
+                <fieldset key={group.title} className="space-y-4">
+                  <legend className="text-sm font-semibold">{group.title}</legend>
+                  <p className="-mt-2 text-xs text-muted-foreground">{group.description}</p>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    {group.keys.map(key => {
+                      const bound = saved.bounds[key];
+                      return (
+                        <NumberField
+                          key={key}
+                          label={bound.unit ? `${bound.label} (${bound.unit})` : bound.label}
+                          unit={bound.unit}
+                          value={draft[key] ?? ''}
+                          min={bound.min}
+                          max={bound.max}
+                          disabled={status === 'saving'}
+                          onChange={value => {
+                            setMessage('');
+                            setDraft(current => ({ ...current, [key]: value }));
+                          }}
+                          hint={`${bound.min}–${bound.max}${bound.unit ? ` ${bound.unit}` : ''} · default ${bound.default}`}
+                        />
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              ))}
             <div className="flex flex-wrap items-center justify-end gap-2">
               {message && (
                 <p role="status" className="mr-auto text-sm text-muted-foreground">

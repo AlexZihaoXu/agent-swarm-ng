@@ -27,6 +27,7 @@ export type DashboardRoute = {
     | 'settings'
     | 'knowledge'
     | 'audit'
+    | 'access'
     | 'endpoint-new'
     | 'endpoint';
   agentId?: string;
@@ -139,6 +140,7 @@ export function parseDashboardPath(pathname: string): DashboardRoute {
         knowledgeId: parts.length > 2 ? parts.slice(2).join('/') : undefined,
       };
     if (parts.length === 2 && id === 'audit') return { tab: 'settings', kind: 'audit' };
+    if (parts.length === 2 && id === 'access') return { tab: 'settings', kind: 'access' };
     if (parts.length === 3 && id === 'endpoints' && third === 'new') return { tab: 'settings', kind: 'endpoint-new' };
     if (parts.length === 3 && id === 'endpoints') return { tab: 'settings', kind: 'endpoint', endpointId: third };
   }

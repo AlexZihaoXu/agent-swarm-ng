@@ -1,6 +1,7 @@
 import { DiscordOwnerSettings } from '@/components/discord-owner-settings';
 import { noAutofill, secretField } from '@/lib/no-autofill';
 import { AccountSettings } from '@/components/account-settings';
+import { SecuritySettings } from '@/components/security-settings';
 import { SwarmSettings } from '@/components/swarm-settings';
 import { OrganizationSettings } from '@/components/organization-settings';
 import { ComputerStorageSettings } from '@/components/computer-storage-settings';
@@ -426,6 +427,7 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
       />
       <div className="mx-auto w-full max-w-3xl space-y-8 px-4 pb-8 pt-6 md:px-6 md:pb-10">
         <AccountSettings />
+        <SecuritySettings onNavigate={onNavigate} />
         <CodexConnection />
         <OrganizationSettings card={settingsCard} />
         <section aria-labelledby="knowledge-title" className="space-y-4">

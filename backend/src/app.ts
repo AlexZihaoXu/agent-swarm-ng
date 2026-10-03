@@ -34,6 +34,11 @@ import { registerAuth } from './auth/routes';
 import { AuditLog } from './audit/store';
 import { registerAudit } from './audit/routes';
 import { registerDashboardRoutes } from './dashboard/routes';
+import { KnownAddresses } from './security/addresses';
+import { Alerts } from './security/alerts';
+import { SignInGuard } from './security/guard';
+import { registerSecurityRoutes } from './security/routes';
+import { AccessLog, registerAccessLog } from './access/log';
 
 export async function buildApp({
   fetcher,
@@ -74,8 +79,16 @@ export async function buildApp({
   // Every audit event also goes to the server log (docs/audit-log.md).
   const audit = new AuditLog(platform, event => app.log.info({ audit: event }, `audit ${event.kind} ${event.outcome}`));
   app.decorate('audit', audit);
-  app.decorate('watchSession', registerAuth(app, new Accounts(platform), { requireLogin, audit }));
-  registerAudit(app, platform, audit);
+  const addresses = new KnownAddresses(platform);
+  const alerts = new Alerts(platform);
+  const guard = new SignInGuard(platform, addresses, new SwarmSettingsStore(platform), audit, alerts);
+  app.decorate('alerts', alerts);
+  app.decorate('watchSession', registerAuth(app, new Accounts(platform), { requireLogin, audit, guard }));
+  registerAudit(app, platform, audit, addresses);
+  registerSecurityRoutes(app, platform, addresses, guard, alerts, audit);
+  const access = new AccessLog(platform);
+  app.decorate('access', access);
+  registerAccessLog(app, platform, access, addresses);
 
   app.get(
     '/api/health',

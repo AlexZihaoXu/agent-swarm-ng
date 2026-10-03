@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { ChoiceChips } from '@/components/ui/choice-chips';
@@ -16,6 +17,8 @@ type AuditEvent = {
   targetId: string | null;
   targetName: string | null;
   detail: Record<string, unknown> | null;
+  ipLabel?: string | null;
+  ipTrusted?: boolean;
 };
 
 const CATEGORIES: { value: Category; label: string }[] = [
@@ -32,6 +35,9 @@ const EVENTS: Record<string, string> = {
   'auth.setup': 'Password set (first sign-in)',
   'auth.logout': 'Sign-out',
   'auth.password': 'Password change',
+  'auth.lockdown': 'Sign-in locked down',
+  'auth.unlock': 'Lockdown lifted',
+  'auth.address': 'Known address changed',
   'agent.create': 'Agent created',
   'agent.update': 'Agent edited',
   'agent.delete': 'Agent deleted',
@@ -76,6 +82,8 @@ function describe(event: AuditEvent) {
   if (typeof detail.moved === 'string') parts.push(detail.moved);
   if (typeof detail.memory === 'string') parts.push(`memory “${detail.memory}”`);
   if (typeof detail.signal === 'string') parts.push(detail.signal);
+  if (typeof detail.change === 'string') parts.push(`${detail.change}${detail.trusted ? ' (trusted)' : ''}`);
+  if (typeof detail.addresses === 'string') parts.push(`from ${detail.addresses}`);
   if (typeof detail.status === 'number') parts.push(`HTTP ${detail.status}`);
   return parts.join(' · ');
 }
@@ -86,7 +94,15 @@ function describe(event: AuditEvent) {
  * first, filtered by category, with older events on request.
  */
 export function AuditLog({ onNavigate }: { onNavigate: (path: string) => void }) {
-  const [category, setCategory] = useState<Category>('all');
+  // A banner's "View logs" opens it on a category (?category=signin).
+  const asked = new URLSearchParams(useLocation().search).get('category');
+  const [category, setCategory] = useState<Category>(
+    CATEGORIES.some(item => item.value === asked) ? (asked as Category) : 'all',
+  );
+  // A banner's link while the page is already open switches the category too.
+  useEffect(() => {
+    if (CATEGORIES.some(item => item.value === asked)) setCategory(asked as Category);
+  }, [asked]);
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [next, setNext] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -215,7 +231,15 @@ export function AuditLog({ onNavigate }: { onNavigate: (path: string) => void })
                       <td className="max-w-40 truncate px-3 py-1.5" title={event.actor ?? undefined}>
                         {event.actor ?? '—'}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-1.5 font-mono text-xs">{event.ip ?? '—'}</td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-xs">
+                        {event.ipLabel && (
+                          <span className="mr-1.5 font-medium" title={event.ipTrusted ? 'Trusted address' : undefined}>
+                            {event.ipLabel}
+                            {event.ipTrusted ? ' ✓' : ''}
+                          </span>
+                        )}
+                        <span className="font-mono">{event.ip ?? '—'}</span>
+                      </td>
                       <td className="max-w-48 truncate px-3 py-1.5" title={event.targetId ?? undefined}>
                         {event.targetName ?? event.targetId ?? '—'}
                       </td>

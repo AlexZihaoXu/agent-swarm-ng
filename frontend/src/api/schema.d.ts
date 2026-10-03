@@ -100,6 +100,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/security": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSecurity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/security/addresses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addKnownAddress"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/security/addresses/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["removeKnownAddress"];
+        options?: never;
+        head?: never;
+        patch: operations["updateKnownAddress"];
+        trace?: never;
+    };
+    "/api/security/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unlockSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAlerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alerts/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["dismissAlert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAccessLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -1108,6 +1220,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/dashboard/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getDashboardLive"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dashboard": {
         parameters: {
             query?: never;
@@ -1290,6 +1418,7 @@ export interface operations {
                         signedIn: false;
                         setupRequired: boolean;
                         name?: string;
+                        lockedDown?: boolean;
                     };
                 };
             };
@@ -1379,6 +1508,17 @@ export interface operations {
             };
             /** @description Default Response */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            423: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1521,8 +1661,374 @@ export interface operations {
                             detail: {
                                 [key: string]: unknown;
                             } | null;
+                            ipLabel: string | null;
+                            ipTrusted: boolean;
                         }[];
                         next: number | null;
+                    };
+                };
+            };
+        };
+    };
+    getSecurity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        yourAddress: string;
+                        yourLabel: string | null;
+                        yourTrusted: boolean;
+                        lockdown: {
+                            since: string;
+                            failures: number;
+                        } | null;
+                        addresses: {
+                            id: string;
+                            address: string;
+                            label: string;
+                            trusted: boolean;
+                            createdAt: string;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    addKnownAddress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    address: string;
+                    label: string;
+                    trusted: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        yourAddress: string;
+                        yourLabel: string | null;
+                        yourTrusted: boolean;
+                        lockdown: {
+                            since: string;
+                            failures: number;
+                        } | null;
+                        addresses: {
+                            id: string;
+                            address: string;
+                            label: string;
+                            trusted: boolean;
+                            createdAt: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    removeKnownAddress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        yourAddress: string;
+                        yourLabel: string | null;
+                        yourTrusted: boolean;
+                        lockdown: {
+                            since: string;
+                            failures: number;
+                        } | null;
+                        addresses: {
+                            id: string;
+                            address: string;
+                            label: string;
+                            trusted: boolean;
+                            createdAt: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    updateKnownAddress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    label?: string;
+                    trusted?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        yourAddress: string;
+                        yourLabel: string | null;
+                        yourTrusted: boolean;
+                        lockdown: {
+                            since: string;
+                            failures: number;
+                        } | null;
+                        addresses: {
+                            id: string;
+                            address: string;
+                            label: string;
+                            trusted: boolean;
+                            createdAt: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    unlockSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        yourAddress: string;
+                        yourLabel: string | null;
+                        yourTrusted: boolean;
+                        lockdown: {
+                            since: string;
+                            failures: number;
+                        } | null;
+                        addresses: {
+                            id: string;
+                            address: string;
+                            label: string;
+                            trusted: boolean;
+                            createdAt: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    listAlerts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        alerts: {
+                            id: string;
+                            kind: string;
+                            title: string;
+                            detail: string;
+                            startedAt: string;
+                            endedAt: string | null;
+                            dismissable: boolean;
+                            logs: "signin" | "system" | null;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    dismissAlert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: boolean;
+                    };
+                };
+            };
+        };
+    };
+    getAccessLog: {
+        parameters: {
+            query?: {
+                range?: "1h" | "24h" | "7d";
+                ip?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        range: string;
+                        bucketMinutes: number;
+                        buckets: number[];
+                        series: {
+                            ok: number[];
+                            redirect: number[];
+                            client: number[];
+                            server: number[];
+                        };
+                        totals: {
+                            requests: number;
+                            errors: number;
+                            addresses: number;
+                            countries: number;
+                        };
+                        countries: {
+                            key: string;
+                            requests: number;
+                            errors: number;
+                            avgMs: number;
+                            maxMs: number;
+                        }[];
+                        addresses: {
+                            ip: string;
+                            label: string | null;
+                            trusted: boolean;
+                            country: string;
+                            users: string[];
+                            requests: number;
+                            errors: number;
+                            avgMs: number;
+                            maxMs: number;
+                        }[];
+                        routes: {
+                            key: string;
+                            requests: number;
+                            errors: number;
+                            avgMs: number;
+                            maxMs: number;
+                        }[];
+                        statuses: {
+                            key: string;
+                            requests: number;
+                            errors: number;
+                            avgMs: number;
+                            maxMs: number;
+                        }[];
                     };
                 };
             };
@@ -2397,6 +2903,7 @@ export interface operations {
                             memoryIndexMaxChars: number;
                             memoryMaxChars: number;
                             memoryMaxCount: number;
+                            lockdownFailures: number;
                         };
                         bounds: {
                             maxComputers: {
@@ -2526,6 +3033,13 @@ export interface operations {
                                 unit: string;
                             };
                             memoryMaxCount: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            lockdownFailures: {
                                 min: number;
                                 max: number;
                                 default: number;
@@ -2567,6 +3081,7 @@ export interface operations {
                     memoryIndexMaxChars?: number;
                     memoryMaxChars?: number;
                     memoryMaxCount?: number;
+                    lockdownFailures?: number;
                 };
             };
         };
@@ -2598,6 +3113,7 @@ export interface operations {
                             memoryIndexMaxChars: number;
                             memoryMaxChars: number;
                             memoryMaxCount: number;
+                            lockdownFailures: number;
                         };
                         bounds: {
                             maxComputers: {
@@ -2727,6 +3243,13 @@ export interface operations {
                                 unit: string;
                             };
                             memoryMaxCount: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            lockdownFailures: {
                                 min: number;
                                 max: number;
                                 default: number;
@@ -8322,6 +8845,47 @@ export interface operations {
             };
         };
     };
+    getDashboardLive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        intervalMs: number;
+                        cores: number | null;
+                        devices: {
+                            device: string;
+                            label: string;
+                        }[];
+                        points: {
+                            t: number;
+                            cpuPercent: number | null;
+                            memUsed: number | null;
+                            memTotal: number | null;
+                            netRx: number | null;
+                            netTx: number | null;
+                            disks: {
+                                [key: string]: {
+                                    read: number;
+                                    write: number;
+                                };
+                            };
+                        }[];
+                    };
+                };
+            };
+        };
+    };
     getDashboard: {
         parameters: {
             query?: {
@@ -8352,7 +8916,15 @@ export interface operations {
                             cpuPercent: (number | null)[];
                             memUsed: (number | null)[];
                             memTotal: number | null;
+                            netRx: (number | null)[];
+                            netTx: (number | null)[];
                         };
+                        diskIo: {
+                            device: string;
+                            label: string;
+                            read: (number | null)[];
+                            write: (number | null)[];
+                        }[];
                         disks: {
                             disk: string;
                             label: string;

@@ -28,6 +28,8 @@ services:
     init: true
     volumes:
       - platform_data:/app/.local
+      # The host's network counters, from host-net (the backend's own /proc/net/dev is its container's).
+      - host_net:/app/host-net:ro
     restart: unless-stopped
     logging: *logging
     networks:
@@ -41,6 +43,30 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+  # Copies the host's physical network interface counters (stamped with the host's uptime) once a second into a shared
+  # in-memory volume for the Dashboard (docs/dashboard.md). Host network namespace only: no privileges, no ports,
+  # read-only, as nobody.
+  host-net:
+    # Pinned by digest: it shares the host's network namespace.
+    image: busybox:1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
+    network_mode: host
+    read_only: true
+    user: "65534:65534"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - host_net:/out
+    command:
+      - sh
+      - -c
+      - >-
+        while :; do
+        { cut -d' ' -f1 /proc/uptime; for d in /sys/class/net/*; do [ -e "$$d/device" ] && echo "$${d##*/}"; done; echo ---; cat /proc/net/dev; }
+        > /out/net.tmp && mv /out/net.tmp /out/net;
+        sleep 1;
+        done
+    restart: unless-stopped
+    logging: *logging
   computer-image:
     profiles: [computer-images]
     image: agent-swarm-default:stage2
@@ -101,6 +127,8 @@ services:
         COMPUTER_VIEWER: ${COMPUTER_VIEWER:-on}
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      # Addresses whose forwarded client address Caddy believes (docs/login.md); default: private and tailnet ranges.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-private_ranges 100.64.0.0/10}
     networks:
       - default
       - computer_media
@@ -134,5 +162,11 @@ networks:
       com.docker.network.bridge.gateway_mode_ipv4: isolated
 volumes:
   platform_data:
+  # In memory: written every second, never worth a disk write.
+  host_net:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=1m,uid=65534,gid=65534,mode=0755"
   caddy_data:
   caddy_config:

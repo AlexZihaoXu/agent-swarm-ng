@@ -5,9 +5,11 @@
 	servers {
 		# Requests may arrive through a reverse proxy on the LAN or tailnet (for example Nginx Proxy Manager behind
 		# Cloudflare): trust its forwarded client address so sign-in limits apply per visitor (docs/login.md). A device
-		# in these ranges could claim another address; that only changes which sign-in limit it counts against and the
-		# address in the audit log.
-		trusted_proxies static private_ranges 100.64.0.0/10
+		# in these ranges could claim another address: which sign-in limit it counts against, the address in the logs, and
+		# whether it looks trusted during a lockdown.
+		# TRUSTED_PROXIES narrows it to your reverse proxy (for example its tailnet address), so no other device on the LAN
+		# or tailnet can claim another visitor's address.
+		trusted_proxies static {$TRUSTED_PROXIES:private_ranges 100.64.0.0/10}
 		client_ip_headers CF-Connecting-IP X-Forwarded-For
 		trusted_proxies_strict
 	}

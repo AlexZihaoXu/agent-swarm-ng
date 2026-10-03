@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import type { PlatformStore } from '../platform-store';
 import { EndpointStore } from '../endpoint-store';
+import { LiveMetrics } from '../metrics/live';
 
 const HOUR = 3_600_000;
 /** Each period and its bucket: about 60–100 points per chart. */
@@ -42,7 +43,16 @@ export const Dashboard = Type.Object({
   bucketMs: Type.Integer(),
   /** Bucket start times (ms), oldest first; every series below has one value per bucket (null: no data). */
   buckets: Type.Array(Type.Number()),
-  system: Type.Object({ cpuPercent: Series, memUsed: Series, memTotal: Type.Union([Type.Number(), Type.Null()]) }),
+  system: Type.Object({
+    cpuPercent: Series,
+    memUsed: Series,
+    memTotal: Type.Union([Type.Number(), Type.Null()]),
+    /** Bytes per second across the physical network interfaces. */
+    netRx: Series,
+    netTx: Series,
+  }),
+  /** Each physical disk's throughput (bytes per second). */
+  diskIo: Type.Array(Type.Object({ device: Type.String(), label: Type.String(), read: Series, write: Series })),
   disks: Type.Array(
     Type.Object({
       disk: Type.String(),
@@ -106,6 +116,7 @@ export async function dashboardData(
   organization?: string,
   now = Date.now(),
   endpointNames: Map<string, string> = new Map(),
+  labelOf?: (device: string) => Promise<string>,
 ): Promise<DashboardView> {
   await platform.initialize();
   const client = platform.client;
@@ -124,8 +135,18 @@ export async function dashboardData(
   // stored format, and unixepoch() then filters exactly.
   const indexFrom = new Date(from - 86_400_000).toISOString().slice(0, 10);
   const [system, disks, computers, agents] = await Promise.all([
-    client.$queryRawUnsafe<{ b: number; cpu: number; mem: number; total: number }[]>(
-      `SELECT ${bucketOf} AS b, AVG("cpuPercent") AS cpu, AVG("memUsed") AS mem, MAX("memTotal") AS total
+    client.$queryRawUnsafe<
+      {
+        b: number;
+        cpu: number;
+        mem: number;
+        total: number;
+        netRx: number | null;
+        netTx: number | null;
+      }[]
+    >(
+      `SELECT ${bucketOf} AS b, AVG("cpuPercent") AS cpu, AVG("memUsed") AS mem, MAX("memTotal") AS total,
+         AVG("netRx") AS "netRx", AVG("netTx") AS "netTx"
        FROM "SystemSample" WHERE "at" >= ? AND unixepoch("at") >= ? GROUP BY b ORDER BY b`,
       from,
       bucket,
@@ -176,12 +197,17 @@ export async function dashboardData(
 
   const cpuSeries: (number | null)[] = new Array(count).fill(null);
   const memSeries: (number | null)[] = new Array(count).fill(null);
+  const io = {
+    netRx: new Array<number | null>(count).fill(null),
+    netTx: new Array<number | null>(count).fill(null),
+  };
   let memTotal: number | null = null;
   for (const row of system) {
     const b = Number(row.b);
     if (!inRange(b)) continue;
     cpuSeries[b] = Number(row.cpu);
     memSeries[b] = Number(row.mem);
+    for (const key of ['netRx', 'netTx'] as const) io[key][b] = row[key] == null ? null : Number(row[key]);
     memTotal = Number(row.total);
   }
 
@@ -301,6 +327,34 @@ export async function dashboardData(
     provider.total += event.cost;
   }
   const total = (series: number[]) => series.reduce((sum, value) => sum + value, 0);
+  const ioRows = await client.$queryRawUnsafe<{ device: string; b: number; read: number; write: number }[]>(
+    `SELECT "device", ${bucketOf} AS b, AVG("read") AS "read", AVG("write") AS "write"
+     FROM "DiskIoSample" WHERE "at" >= ? AND unixepoch("at") >= ? GROUP BY "device", b ORDER BY "device", b`,
+    from,
+    bucket,
+    indexFrom,
+    from / 1000,
+  );
+  const diskIo = new Map<
+    string,
+    { device: string; label: string; read: (number | null)[]; write: (number | null)[] }
+  >();
+  for (const row of ioRows) {
+    const b = Number(row.b);
+    if (!inRange(b)) continue;
+    let view = diskIo.get(row.device);
+    if (!view) {
+      view = {
+        device: row.device,
+        label: (await labelOf?.(row.device)) ?? row.device,
+        read: new Array(count).fill(null),
+        write: new Array(count).fill(null),
+      };
+      diskIo.set(row.device, view);
+    }
+    view.read[b] = Number(row.read);
+    view.write[b] = Number(row.write);
+  }
 
   return {
     range,
@@ -308,7 +362,8 @@ export async function dashboardData(
     to: new Date(to).toISOString(),
     bucketMs: bucket,
     buckets,
-    system: { cpuPercent: cpuSeries, memUsed: memSeries, memTotal },
+    system: { cpuPercent: cpuSeries, memUsed: memSeries, memTotal, ...io },
+    diskIo: [...diskIo.values()],
     disks: [...diskViews.values()],
     computers: computerViews,
     agents: agentViews.map(view => ({
@@ -332,11 +387,48 @@ export async function dashboardData(
   };
 }
 
+const LivePoint = Type.Object({
+  t: Type.Number(),
+  cpuPercent: Point,
+  memUsed: Point,
+  memTotal: Point,
+  netRx: Point,
+  netTx: Point,
+  disks: Type.Record(Type.String(), Type.Object({ read: Type.Number(), write: Type.Number() })),
+});
+
 export function registerDashboardRoutes(
   app: FastifyInstance,
   platform: PlatformStore,
   endpoints: EndpointStore = new EndpointStore(),
+  live: LiveMetrics = new LiveMetrics(),
 ) {
+  // The live minute samples every second only while the server is up (never in tests that do not listen).
+  app.addHook('onListen', async () => live.start());
+  app.addHook('onClose', async () => live.stop());
+  app.get(
+    '/api/dashboard/live',
+    {
+      schema: {
+        operationId: 'getDashboardLive',
+        response: {
+          200: Type.Object({
+            intervalMs: Type.Integer(),
+            cores: Type.Union([Type.Integer(), Type.Null()]),
+            /** Each physical disk in the readings, with its label. */
+            devices: Type.Array(Type.Object({ device: Type.String(), label: Type.String() })),
+            points: Type.Array(LivePoint),
+          }),
+        },
+      },
+    },
+    async (_request, reply) => {
+      reply.header('cache-control', 'no-store');
+      const names = [...new Set(live.points.flatMap(point => Object.keys(point.disks)))].sort();
+      const devices = await Promise.all(names.map(async device => ({ device, label: await live.labelOf(device) })));
+      return { intervalMs: 1000, cores: live.cores, devices, points: live.points };
+    },
+  );
   app.get(
     '/api/dashboard',
     { schema: { operationId: 'getDashboard', querystring: Query, response: { 200: Dashboard } } },
@@ -344,7 +436,9 @@ export function registerDashboardRoutes(
       const { range = '48h', organization } = request.query as Static<typeof Query>;
       reply.header('cache-control', 'no-store');
       const names = new Map((await endpoints.read().catch(() => [])).map(endpoint => [endpoint.id, endpoint.name]));
-      return dashboardData(platform, range as DashboardRange, organization, Date.now(), names);
+      return dashboardData(platform, range as DashboardRange, organization, Date.now(), names, device =>
+        live.labelOf(device),
+      );
     },
   );
 }

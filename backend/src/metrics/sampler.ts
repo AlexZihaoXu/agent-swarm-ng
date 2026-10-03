@@ -6,8 +6,12 @@ import {
   cpuPercent,
   measureFolder,
   parseMeminfo,
+  parseDiskstats,
+  parseHostNet,
   parseProcStat,
   procReaders,
+  rate,
+  totals,
   type CpuTimes,
   type HostReaders,
 } from './host';
@@ -35,6 +39,7 @@ export class MetricsSampler {
   private readonly log: Log;
   private readonly now: () => Date;
   private previousCpu: CpuTimes | null = null;
+  private previousIo: { at: number; io: HostIo } | null = null;
   private readonly busy = new Set<string>();
 
   constructor(
@@ -53,13 +58,37 @@ export class MetricsSampler {
     const memory = parseMeminfo(await this.readers.meminfo());
     const previous = this.previousCpu;
     this.previousCpu = times;
-    if (!times || !previous || !memory) return false;
+    if (!previous) {
+      // The first call takes the baselines (CPU, and the network and disk counters) and stores nothing.
+      const io = await readIo(this.readers).catch(() => null);
+      this.previousIo = io ? { at: this.now().getTime(), io } : null;
+      return false;
+    }
+    if (!times || !memory) return false;
     const percent = cpuPercent(previous, times);
     if (percent === null) return false;
+    // Network and disk throughput over the minute, from the counters' change since the previous sample.
+    const at = this.now();
+    const io = await readIo(this.readers).catch(() => null);
+    const before = this.previousIo;
+    this.previousIo = io ? { at: at.getTime(), io } : null;
+    const seconds = before ? (at.getTime() - before.at) / 1000 : 0;
+    const rates = ioRates(before?.io, io, seconds);
     await this.database.initialize();
     await this.database.client.systemSample.create({
-      data: { at: this.now(), cpuPercent: percent, memUsed: BigInt(memory.used), memTotal: BigInt(memory.total) },
+      data: {
+        at,
+        cpuPercent: percent,
+        memUsed: BigInt(memory.used),
+        memTotal: BigInt(memory.total),
+        netRx: rates.netRx,
+        netTx: rates.netTx,
+      },
     });
+    if (rates.disks.size)
+      await this.database.client.diskIoSample.createMany({
+        data: [...rates.disks].map(([device, value]) => ({ at, device, ...value })),
+      });
     return true;
   }
 
@@ -168,6 +197,7 @@ export class MetricsSampler {
       [client.systemSample as unknown as Table, { at: { lt: samples } }],
       [client.diskSample as unknown as Table, { at: { lt: samples } }],
       [client.computerSample as unknown as Table, { at: { lt: samples } }],
+      [client.diskIoSample as unknown as Table, { at: { lt: samples } }],
       [client.usageEvent as unknown as Table, { at: { lt: usage } }],
       [client.agentRunSpan as unknown as Table, { startedAt: { lt: usage } }],
     ];
@@ -214,4 +244,47 @@ export class MetricsSampler {
     for (const timer of timers) timer.unref();
     return () => timers.forEach(clearInterval);
   }
+}
+
+export type HostIo = {
+  /** Byte counters and the host uptime (s) when the sidecar read them; null without a fresh snapshot. */
+  net: { rx: number; tx: number; at: number | null } | null;
+  /** Bytes read and written so far per whole physical disk. */
+  disks: Map<string, { read: number; write: number }>;
+};
+
+/** The host's network (via the host-net sidecar; null without it) and each physical disk's byte counters now. */
+export async function readIo(readers: HostReaders): Promise<HostIo> {
+  const [diskstats, hostNet, uptime] = await Promise.all([
+    readers.diskstats(),
+    readers.hostNet(),
+    readers.uptime().catch(() => ''),
+  ]);
+  const interfaces = hostNet ? parseHostNet(hostNet) : null;
+  const now = Number(uptime.split(' ')[0]);
+  // A snapshot more than three seconds old means the sidecar stopped: no network figures rather than a flat zero.
+  const stale = interfaces?.at != null && Number.isFinite(now) && now > 0 && now - interfaces.at > 3;
+  return {
+    net: interfaces?.size && !stale ? { ...totals(interfaces, ['rx', 'tx']), at: interfaces.at } : null,
+    disks: parseDiskstats(diskstats),
+  };
+}
+
+/** Bytes per second between two counter readings (null, or a missing disk, when unknown or a counter went back). */
+export function ioRates(before: HostIo | null | undefined, after: HostIo | null, seconds: number) {
+  const disks = new Map<string, { read: number; write: number }>();
+  for (const [device, now] of after?.disks ?? []) {
+    const then = before?.disks.get(device);
+    const read = rate(then?.read, now.read, seconds),
+      write = rate(then?.write, now.write, seconds);
+    if (read !== null && write !== null) disks.set(device, { read, write });
+  }
+  // The network's interval is the sidecar's own (its snapshots are not in step with ours): the same snapshot twice is
+  // no reading, not a zero followed by a double.
+  const netSeconds = before?.net?.at != null && after?.net?.at != null ? after.net.at - before.net.at : seconds;
+  return {
+    netRx: rate(before?.net?.rx, after?.net?.rx, netSeconds),
+    netTx: rate(before?.net?.tx, after?.net?.tx, netSeconds),
+    disks,
+  };
 }

@@ -71,6 +71,15 @@ export function SignIn({
               : 'Enter your name and password to open the dashboard.'}
           </p>
         </header>
+        {session.lockedDown && (
+          <p
+            role="alert"
+            className="mx-6 mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300"
+          >
+            Sign-in is locked down after many failed attempts. Sign in from a trusted address, or have the host run{' '}
+            <code className="break-all">scripts/unlock.ts</code>.
+          </p>
+        )}
         <form className="space-y-4 px-6 pb-6" onSubmit={submit} noValidate>
           <div className="space-y-2">
             <label htmlFor={`${id}-name`} className="text-sm font-medium">

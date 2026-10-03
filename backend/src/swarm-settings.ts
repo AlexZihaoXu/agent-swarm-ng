@@ -26,6 +26,13 @@ export const swarmSettingBounds = {
   memoryIndexMaxChars: { min: 500, max: 40000, default: 4000, label: 'Memory index size', unit: 'chars' },
   memoryMaxChars: { min: 200, max: 20000, default: 2000, label: 'Largest memory', unit: 'chars' },
   memoryMaxCount: { min: 10, max: 10000, default: 1000, label: 'Memories per agent', unit: '' },
+  lockdownFailures: {
+    min: 0,
+    max: 1000,
+    default: 20,
+    label: 'Lock down after failed sign-ins in an hour (0: never)',
+    unit: '',
+  },
 } as const;
 export type SwarmSettingKey = keyof typeof swarmSettingBounds;
 export type SwarmSettings = Record<SwarmSettingKey, number>;

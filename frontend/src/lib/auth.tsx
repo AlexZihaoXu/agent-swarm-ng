@@ -6,7 +6,8 @@ import { surface } from '@/lib/motion';
 import { SignIn } from '@/components/sign-in';
 
 export const SESSION_KEY = ['auth', 'session'] as const;
-export type AuthSession = { signedIn: true; name: string } | { signedIn: false; setupRequired: boolean; name?: string };
+export type AuthSession =
+  { signedIn: true; name: string } | { signedIn: false; setupRequired: boolean; name?: string; lockedDown?: boolean };
 
 const SignedInContext = createContext<{ name: string; signOut: () => Promise<void> } | null>(null);
 

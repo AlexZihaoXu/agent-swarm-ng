@@ -11,7 +11,17 @@ const sample = {
   to: new Date(to).toISOString(),
   bucketMs: BUCKET,
   buckets,
-  system: { cpuPercent: wave(30, 15), memUsed: wave(20e9, 3e9), memTotal: 64e9 },
+  system: {
+    cpuPercent: wave(30, 15).map((value, i) => (i > 40 && i < 50 ? null : value)),
+    memUsed: wave(20e9, 3e9),
+    memTotal: 64e9,
+    netRx: wave(2e6, 1e6),
+    netTx: wave(5e5, 2e5),
+  },
+  diskIo: [
+    { device: 'nvme0n1', label: 'nvme0n1 · HighRel 512GB SSD · 512 GB', read: wave(4e6, 2e6), write: wave(1e6, 5e5) },
+    { device: 'sda', label: 'sda · SABRENT · 1.4 TB', read: wave(1e5, 5e4), write: wave(2e5, 1e5) },
+  ],
   disks: [
     {
       disk: '/dev/nvme0n1p2',
@@ -87,11 +97,31 @@ const sample = {
   ],
 };
 
+const live = {
+  intervalMs: 1000,
+  cores: 16,
+  devices: [
+    { device: 'nvme0n1', label: 'nvme0n1 · HighRel 512GB SSD · 512 GB' },
+    { device: 'sda', label: 'sda · SABRENT · 1.4 TB' },
+  ],
+  points: Array.from({ length: 60 }, (_, i) => ({
+    t: Date.now() - (60 - i) * 1000,
+    cpuPercent: 10 + (i % 7),
+    memUsed: 8e9,
+    memTotal: 32e9,
+    netRx: 1e6 + i * 1e4,
+    netTx: 2e5,
+    disks: { nvme0n1: { read: 3e6, write: 1e6 }, sda: { read: 1e4, write: 5e4 } },
+  })),
+};
+
 async function mock(page: Page, ranges: string[]) {
   await page.route('**/api/dashboard**', route => {
     ranges.push(new URL(route.request().url()).searchParams.get('range') ?? '');
     return route.fulfill({ json: sample });
   });
+  // Registered last: Playwright tries the newest route first, so /live is not caught by the pattern above.
+  await page.route('**/api/dashboard/live', route => route.fulfill({ json: live }));
 }
 
 test('the Dashboard tab charts system, computers, agents, spend and tokens, and switches the period', async ({
@@ -104,9 +134,16 @@ test('the Dashboard tab charts system, computers, agents, spend and tokens, and 
   await page.getByRole('tab', { name: 'Dashboard' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole('heading', { name: 'Dashboard', level: 2 })).toBeVisible();
+  // Now: rings for CPU, memory and each storage area; network now; the last minute per physical disk.
+  const now = page.getByRole('region', { name: 'Now' });
+  for (const label of ['CPU', 'Memory', 'nvme0n1p2', 'bulk (ZFS)'])
+    await expect(now.locator(`[data-usage-label="${label}"]`)).toBeVisible();
+  await expect(now.locator('[data-usage-label="CPU"]')).toContainText('16 cores');
+  await expect(page.getByRole('heading', { name: 'Disk I/O · sda · SABRENT · 1.4 TB' }).first()).toBeVisible();
   for (const title of [
     'Host CPU',
     'Host memory',
+    'Host network',
     'Disk · nvme0n1p2',
     'Disk · bulk (ZFS)',
     'Computer CPU',

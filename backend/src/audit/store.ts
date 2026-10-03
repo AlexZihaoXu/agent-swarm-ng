@@ -28,7 +28,7 @@ export type AuditEventView = {
 
 /** Categories the dashboard filters by, as the exact kinds in each (an indexed `kind IN (…)`). */
 export const AUDIT_CATEGORIES = {
-  signin: ['auth.login', 'auth.setup', 'auth.logout', 'auth.password'],
+  signin: ['auth.login', 'auth.setup', 'auth.logout', 'auth.password', 'auth.lockdown', 'auth.unlock', 'auth.address'],
   agents: ['agent.create', 'agent.update', 'agent.delete'],
   computers: ['computer.create', 'computer.update', 'computer.delete'],
   organizations: ['organization.create', 'organization.update', 'organization.delete', 'organization.move'],

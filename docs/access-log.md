@@ -1,0 +1,17 @@
+# Access log
+
+**Settings → Access log** (`/settings/access`, also in Portal; linked from Settings → Security) shows who reaches the dashboard and how: every request's client address, where it came from, the signed-in person (only when signed in; otherwise the address alone), the method and route, the status and how long it took. It is separate from the [audit log](audit-log.md), which records what people changed; this one is for looking at traffic, especially under attack.
+
+## What it shows
+
+For the last hour, 24 hours or week: totals (requests, errors, addresses, countries), requests over time by status class (2xx, 3xx, 4xx, 5xx), the busiest addresses (with their [known-address labels](login.md#known-addresses-and-lockdown), country, who was signed in from them, requests, errors, average and slowest time; choosing one narrows everything to it), countries, statuses and routes.
+
+## How it is recorded
+
+- **Where:** the client address is the one Caddy resolved (`X-Real-IP`; [login](login.md)). The country is Cloudflare's `CF-IPCountry` for visitors through it (for example Cloudflare → a reverse proxy on a VPS → Tailscale → this server's Caddy); Tailscale, private and loopback addresses show as Tailnet, LAN and Local, and anything else as `??`. A device on a trusted proxy range could claim another address or country, as with sign-in limits.
+- **Compressed:** requests are folded per minute by (address, person, method, route, status) into one row with a count, total and slowest time, in memory, and written every ten seconds (also before the page loads and at shutdown; `AccessMinute`, `backend/src/access/log.ts`). A flood from one address to one route is a few rows a minute, not one per request. At most 20,000 distinct keys wait between writes; requests beyond that are dropped rather than growing memory, and the server log warns with how many.
+- **Short writes:** pending rows go out in chunks of 250, each one multi-row upsert (its own brief write), so a large batch never holds the database's write lock for long. If a write fails, the rows not yet written are kept for the next try as far as the 20,000-key limit allows; the rest count as dropped (and are warned about).
+- **Routes** are the route patterns (`/api/agents/:id`), so they group well. A path that matched no route (a probe such as `/wp-login.php`) is kept as its raw path, at most 80 characters, without its query, for the first 20 distinct such paths from one address in a minute; beyond that they fold into one `(other unmatched)` row, so a scanner trying random paths adds a bounded number of rows.
+- **WebSockets:** an accepted upgrade (a terminal stream) is recorded as status 101, with the time it took to accept; a refused upgrade is recorded with its refusal status like any other request.
+- **Desktops:** desktop streams go from Caddy to the computer, not through the backend, so only Caddy's sign-in check for them (`GET /api/auth/check`, under the visitor's resolved address) is recorded.
+- Kept 30 days, pruned hourly in batches. `GET /api/access?range=1h|24h|7d&ip=` serves the page (signed-in only); it aggregates in SQL (requests per time bucket and status class, totals, distinct addresses and countries, and the top countries, routes, statuses and 25 addresses with the people signed in from them) using the minute and (address, minute) indexes, so a week's rows are never loaded into memory.

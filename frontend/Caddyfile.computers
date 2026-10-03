@@ -12,6 +12,8 @@ header {
 @computerViewer path_regexp computerViewer (?i)^/computers/[^/]+/desktop(?:/|$)
 forward_auth @computerViewer backend:3000 {
 	uri /api/auth/check
+	# The backend logs the check under this address: the resolved client, never one the visitor sent.
+	header_up X-Real-IP {client_ip}
 	header_up -Upgrade
 	header_up -Connection
 }
