@@ -90,6 +90,24 @@ describe('audit log', { timeout: 60_000 }, () => {
     }
   });
 
+  it('logs at most 31 refused attempts per address in 15 minutes, the last saying so', async () => {
+    const { app, events } = await fixture();
+    try {
+      for (let i = 0; i < 40; i++)
+        await app.inject({
+          method: 'POST',
+          url: '/api/auth/login',
+          headers: { host: '127.0.0.1:19090', 'x-real-ip': '198.51.100.77' },
+          payload: { name: 'Bot', password: '' },
+        });
+      const logged = (await events('signin')).filter(event => event.ip === '198.51.100.77');
+      expect(logged).toHaveLength(31);
+      expect(logged[0]!.detail.reason).toContain('go unlogged');
+    } finally {
+      await app.close();
+    }
+  });
+
   it('prunes events older than a year in batches, keeping the rest', async () => {
     const { app, database } = await fixture();
     try {

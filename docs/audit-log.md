@@ -8,13 +8,13 @@
 | --- | --- | --- | --- |
 | `auth.login` | every sign-in attempt, also those refused before the password is checked | the name typed (even unknown names) | reason when refused: wrong name or password, too many wrong passwords, busy, invalid request, another site or host name |
 | `auth.setup` | the first sign-in setting the Admin password | the name typed | reason when refused |
-| `auth.logout`, `auth.password` | sign-out, password change | the signed-in person | reason when refused |
+| `auth.logout`, `auth.password` | sign-out, password change | the signed-in person | reason when a password change is refused |
 | `organization.create` / `update` / `delete` / `move` | an organization made, renamed, deleted, or something moved into it (not move previews) | the organization | changed fields; what moved |
 | `computer.create` / `update` / `delete` | a computer made (not a retried request), its settings changed or rebuilt, deleted | the computer | changed fields |
 | `agent.create` / `update` / `delete` | an agent made, edited, deleted | the agent (its name before a rename or delete) | which part (agent, settings, computers, Discord, bot connected/removed, memory edited/removed/restored/cleared, sleep window), changed field names, a new name |
 | `system.start` / `system.stop` | the backend starting (after it listens) and stopping on a signal | `system` | runtime and start-up time, signal |
 
-Each event has the outcome `ok`, `failed` (refused, or an error: the HTTP status is kept) or `denied` (held back by the sign-in limits), the signed-in person (or the name given at sign-in), and the client address Caddy resolved (`X-Real-IP`; see [login](login.md)). Behind a public reverse proxy, Caddy believes the `CF-Connecting-IP` or `X-Forwarded-For` it sends: if that proxy can be reached other than through Cloudflare, a visitor can choose the address it logs (restrict the proxy to Cloudflare's addresses to prevent it). **Values are never logged**: an edit lists field names, not instructions, tokens, keys or passwords.
+Each event has the outcome `ok`, `failed` (refused, or an error: the HTTP status is kept) or `denied` (held back by the sign-in limits), the signed-in person (or the name given at sign-in), and the client address Caddy resolved (`X-Real-IP`; see [login](login.md)). Caddy believes `CF-Connecting-IP` and `X-Forwarded-For` from any private or tailnet address (so a reverse proxy can pass the visitor's address): a device on the LAN or tailnet, or a visitor reaching a proxy other than through Cloudflare, can choose the address that is logged. Refused attempts are logged at most 31 times per address in 15 minutes (the last one says so), so a flood cannot push real history out. **Values are never logged**: an edit lists field names, not instructions, tokens, keys or passwords.
 
 ## Storage and access
 

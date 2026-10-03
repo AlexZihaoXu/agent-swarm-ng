@@ -241,6 +241,9 @@ export function registerAuth(
   // (to the millisecond), and whether it worked (ok), was refused (failed) or held back by the limits (denied).
   // Attempts refused before their handler ran (malformed body, another site, an unknown host name) count too.
   const ATTEMPTS: Record<string, string> = { '/api/auth/login': 'auth.login', '/api/auth/setup': 'auth.setup' };
+  // A flood of refused attempts from one address must not push real history out of the log: at most 30 such events per
+  // address in 15 minutes, then one note that further ones go unlogged until the window moves on.
+  const refusedLogged = new Failures();
   app.addHook('onResponse', async (request, reply) => {
     const early = ATTEMPTS[request.routeOptions.url ?? ''];
     const given = (request.body as { name?: unknown } | undefined)?.name;
@@ -257,12 +260,21 @@ export function registerAuth(
           }
         : undefined);
     if (!event || !audit) return;
+    const ip = clientAddress(request);
+    if (reply.statusCode >= 300) {
+      const key = `logged:${ip}`;
+      if (refusedLogged.wait([[key, 31]])) return;
+      refusedLogged.record([key]);
+      if (refusedLogged.wait([[key, 31]])) {
+        event.reason = `${event.reason ?? 'refused'}; further refused attempts from this address go unlogged for up to 15 minutes`;
+      }
+    }
     await audit.record(
       {
         kind: event.kind,
         outcome: reply.statusCode < 300 ? 'ok' : reply.statusCode === 429 ? 'denied' : 'failed',
         actor: event.actor.slice(0, 64),
-        ip: clientAddress(request),
+        ip,
         detail: event.reason ? { reason: event.reason } : undefined,
       },
       new Date(Date.now() - reply.elapsedTime),

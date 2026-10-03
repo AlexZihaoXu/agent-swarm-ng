@@ -84,7 +84,7 @@ bun run dev:backend
 bun run dev:frontend
 ```
 
-Open http://localhost:5173. Vite proxies `/api` to the backend on localhost:3000.
+Open http://localhost:5173. Vite proxies `/api` to the backend on 127.0.0.1:3000.
 
 ## Dashboard locations
 
@@ -304,7 +304,7 @@ The Compose services always run their production builds: the backend's `start` (
 3. **Sign-in:** open the dashboard right after the first start and set the Admin password ([login](login.md)); until then anyone who reaches it can.
 4. **Deploy:** `scripts/compose.sh <stack> build backend frontend computer-controller`, then `scripts/compose.sh <stack> up -d`. Accepted agent runs do not survive a backend restart (they stop with an incomplete status).
 5. **Logs:** each service keeps at most 5 × 10 MB of Docker logs (`x-logging` in `compose.yaml`).
-6. **Backups:** the backend saves one consistent copy of the database a day in `.local/backups/database/` (the newest `DATABASE_BACKUPS`, default 7). Copy `.local/` (database backups, `files/`, secrets) and each computer's Keep folder off the machine; restore by stopping the backend and putting a copy back as `.local/platform.db`.
+6. **Backups:** the backend saves one consistent copy of the database a day in `.local/backups/database/` (the newest `DATABASE_BACKUPS`, default 7). Copy `.local/` (database backups, `files/`, secrets) and each computer's Keep folder off the machine; restore by stopping the backend, deleting any `.local/platform.db-wal` and `.local/platform.db-shm`, and putting a copy back as `.local/platform.db`.
 7. **Health:** `GET /api/health` (backend), the controller's `/health` and Caddy's admin API back the Compose health checks; `scripts/compose.sh <stack> ps` shows them.
 
 ## Default environment image

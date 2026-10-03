@@ -107,6 +107,9 @@ export function AuditLog({ onNavigate }: { onNavigate: (path: string) => void })
 
   useEffect(() => {
     const controller = new AbortController();
+    // A new category starts from its own first page.
+    setEvents([]);
+    setNext(null);
     setLoading(true);
     setError('');
     load(undefined, controller.signal)
@@ -134,9 +137,9 @@ export function AuditLog({ onNavigate }: { onNavigate: (path: string) => void })
       setEvents(current => [...current, ...data.events]);
       setNext(data.next);
     } catch (caught) {
-      setError((caught as Error).message);
+      if (shown.current === asked) setError((caught as Error).message);
     } finally {
-      setLoading(false);
+      if (shown.current === asked) setLoading(false);
     }
   };
 
