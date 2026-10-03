@@ -6,6 +6,7 @@ services:
   backend:
     volumes: !override
       - ./.local:/app/.local
+      - host_net:/app/host-net:ro
   computer-image:
     image: agent-swarm-default:http-jpeg
     build:
