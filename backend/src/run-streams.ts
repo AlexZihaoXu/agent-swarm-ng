@@ -26,9 +26,12 @@ export function createRunStreams(runs: AgentRuns) {
       if (runId && event.type === 'done') reply.raw.end();
     });
     connections.add(reply);
+    // Signing out (or a password change) ends the stream: it must not keep showing that session's agents.
+    const unwatch = reply.server.watchSession?.(reply.request, () => reply.raw.destroy()) ?? (() => {});
     const heartbeat = setInterval(() => write({ type: 'heartbeat' }), 15000);
     reply.raw.once('close', () => {
       clearInterval(heartbeat);
+      unwatch();
       unsubscribe();
       connections.delete(reply);
     });

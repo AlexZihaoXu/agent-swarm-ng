@@ -438,3 +438,5 @@ Bun.serve<TerminalSocket>({
     }
   },
 });
+if (!process.env.COMPUTER_CONTROLLER_TOKEN)
+  console.error('computer-controller: COMPUTER_CONTROLLER_TOKEN is not set; refusing every request but GET /health.');

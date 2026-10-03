@@ -27,7 +27,18 @@ it('accepts relative paths at most three folders deep and refuses anything else'
   expect(() => scratchPath('a/b/c/d/e.md')).toThrow('3 levels');
   expect(scratchPath('a/b/c', { folder: true })).toBe('a/b/c');
   expect(() => scratchPath('a/b/c/d', { folder: true })).toThrow('3 levels');
-  for (const bad of ['', 'a//b', '../x', 'a/./b', 'a\\b', 'bad\u0007name', 'x'.repeat(81)])
+  for (const bad of [
+    '',
+    'a//b',
+    '../x',
+    'a/./b',
+    'a\\b',
+    'bad\u0007name',
+    'invoice\u202Efdp.exe',
+    'a\u200Bb',
+    'x\u2066y',
+    'x'.repeat(81),
+  ])
     expect(() => scratchPath(bad)).toThrow();
 });
 

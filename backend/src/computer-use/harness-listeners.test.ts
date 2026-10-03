@@ -34,6 +34,7 @@ async function fixture(created?: number) {
   };
   const woken: string[] = [];
   let release = () => {};
+  const clock = { now: 1_790_000_000_000 };
   const listeners = new HarnessListeners(
     db,
     service,
@@ -43,11 +44,14 @@ async function fixture(created?: number) {
       woken.push(text);
       return { handled: new Promise(resolve => (release = () => resolve(undefined))) };
     },
-    () => 1_790_000_000_000,
+    () => clock.now,
   );
   const line = (event: string, text = '', terminal = 't1') =>
     `${JSON.stringify({ v: 1, t: 1_790_000_000_500 + woken.length, event, terminal: { id: terminal, name: 'cc-api' }, text })}\n`;
-  return { db, ada, computer, service, listeners, opened, woken, line, release: () => release() };
+  /** A line at a given time, for floods of distinct lines. */
+  const at = (t: number, event: string, text = '') =>
+    `${JSON.stringify({ v: 1, t, event, terminal: { id: 't1', name: 'cc-api' }, text })}\n`;
+  return { db, ada, computer, service, listeners, opened, woken, line, at, clock, release: () => release() };
 }
 
 it('listens to a terminal with no claim, and wakes the agent once per handled turn with what happened', async () => {
@@ -183,6 +187,68 @@ it('ends a listener when Pi quits, and keeps it when a session is cleared or a n
     await vi.waitFor(() => expect(f.woken).toHaveLength(2));
     expect(f.woken[1]).toContain('is removed now that its session ended');
     expect(f.listeners.list(f.ada.id)).toEqual([]);
+  } finally {
+    f.listeners.close();
+    await f.db.close();
+  }
+});
+
+it('limits harness messages to one per 10 s and 30 an hour per terminal, telling the agent how many were dropped', async () => {
+  const f = await fixture();
+  try {
+    await f.listeners.add(f.ada.id, { terminal: 'cc-api', human: true });
+    // A guest that ignores its own limit: a burst of messages at once wakes the agent with only the first.
+    f.opened[0].push(Array.from({ length: 5 }, (_, i) => f.at(1_790_000_000_500 + i, 'message', `spam ${i}`)).join(''));
+    await vi.waitFor(() => expect(f.woken).toHaveLength(1));
+    expect(f.woken[0]).toContain('says: "spam 0"');
+    expect(f.woken[0]).not.toContain('spam 1');
+    expect(f.woken[0]).toContain('4 more messages from the harness were dropped (rate limit)');
+    f.release();
+    // Ten seconds on, one more passes; another arriving at once waits for the next batch's note.
+    f.clock.now += 10_000;
+    f.opened[0].push(f.at(1_790_000_001_000, 'message', 'later') + f.at(1_790_000_001_001, 'message', 'too soon'));
+    await vi.waitFor(() => expect(f.woken).toHaveLength(2));
+    expect(f.woken[1]).toContain('says: "later"');
+    expect(f.woken[1]).toContain('1 more message from the harness was dropped (rate limit)');
+    f.release();
+    // At most 30 an hour: 28 more spaced 11 s apart pass (30 in all), the next is dropped.
+    for (let i = 0; i < 29; i++) {
+      f.clock.now += 11_000;
+      f.opened[0].push(f.at(1_790_000_002_000 + i, 'message', `m${i}`));
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    await vi.waitFor(() => expect(f.woken).toHaveLength(3));
+    expect(f.woken[2]).toContain('Coding harness events (28, the newest 10 shown)');
+    expect(f.woken[2]).toContain('says: "m27"');
+    expect(f.woken[2]).not.toContain('"m28"');
+    expect(f.woken[2]).toContain('1 more message from the harness was dropped (rate limit)');
+    f.release();
+    // Other events are not limited this way.
+    f.opened[0].push(f.at(1_790_000_003_000, 'finished', 'ok'));
+    await vi.waitFor(() => expect(f.woken).toHaveLength(4));
+  } finally {
+    f.listeners.close();
+    await f.db.close();
+  }
+});
+
+it('bounds a flood of other events: a capped batch with a count, and at most one wake-up per batch window', async () => {
+  const f = await fixture();
+  try {
+    await f.listeners.add(f.ada.id, { terminal: 'cc-api', human: true });
+    f.opened[0].push(Array.from({ length: 120 }, (_, i) => f.at(1_790_000_000_500 + i, 'finished', `f${i}`)).join(''));
+    await vi.waitFor(() => expect(f.woken).toHaveLength(1));
+    expect(f.woken[0]).toContain('Coding harness events (120, the newest 10 shown)');
+    expect(f.woken[0]).toContain('"f119"');
+    expect(f.woken[0].split('\n').length).toBeLessThan(16);
+    // More arrive while the agent handles that; once handled they wait out a batch window rather than waking at once.
+    f.opened[0].push(f.at(1_790_000_001_000, 'permission', 'Bash: ls'));
+    await new Promise(resolve => setTimeout(resolve, 300));
+    f.release();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(f.woken).toHaveLength(1);
+    await vi.waitFor(() => expect(f.woken).toHaveLength(2));
+    expect(f.woken[1]).toContain('asks permission for Bash: ls');
   } finally {
     f.listeners.close();
     await f.db.close();

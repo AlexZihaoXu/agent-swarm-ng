@@ -8,7 +8,7 @@ import type { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
 import type { PlatformStore } from '../platform-store';
 import type { ChannelMessage } from '../chat-runtime';
-import { messageText } from '../message-text';
+import { messageText, neutralizeLabels } from '../message-text';
 import { triageGate } from '../triage-gate';
 import type { DiscordEvent } from './connections';
 import { authorRole as roleOf, placeOf, type Admission, type AuthorRole, type DiscordStore } from './store';
@@ -596,7 +596,7 @@ export class DiscordIntake {
         chainId,
         messageId: newest.id,
         ...(owner ? { human: true } : {}),
-        discord: { place: notice.place },
+        discord: { place: notice.place, unseen: notice.unseen },
       },
     });
   }
@@ -625,14 +625,16 @@ export class DiscordIntake {
       const body = messageText(message.content, 0, 1500);
       return [
         // The platform's label first, in brackets; the display name quoted: a name like "Sam (your owner)" is
-        // chosen by its author and proves nothing.
+        // chosen by its author and proves nothing. A body cannot start a line with a label (neutralizeLabels).
         `${clock(message.createdAt)} · [${roleLabel(message)}] ${JSON.stringify(message.authorName)} · message ${message.id}${message.note ? ` (${message.note})` : ''}:${
           message.replyTo
             ? ` [replying to ${JSON.stringify(message.replyTo.author)}'s message ${message.replyTo.id}: ${JSON.stringify(message.replyTo.text)}]`
             : ''
-        } ${body.text || '(no text)'}${body.truncated ? ' […]' : ''}`,
+        } ${neutralizeLabels(body.text) || '(no text)'}${body.truncated ? ' […]' : ''}`,
         ...(message.attachments.length
-          ? [`  [attachments: ${message.attachments.map(file => `${file.name} (${size(file.size)})`).join(', ')}]`]
+          ? [
+              `  [attachments: ${message.attachments.map(file => `${JSON.stringify(file.name)} (${size(file.size)})`).join(', ')}]`,
+            ]
           : []),
       ].join('\n');
     });
@@ -643,6 +645,6 @@ export class DiscordIntake {
         `+${more} more message${more === 1 ? '' : 's'} in this channel${previous ? ` since ${clock(previous.createdAt)}` : ''} (${authors.length} author${authors.length === 1 ? '' : 's'}, most from ${JSON.stringify(top.authorName)}). Read them with discord_read_messages(${JSON.stringify({ channelId: `discord:${channelId}`, ...(channel.announcedUpTo ? { after: channel.announcedUpTo } : {}) })}).`,
       );
     }
-    return { text: lines.join('\n'), place: placeOf(channel) };
+    return { text: lines.join('\n'), place: placeOf(channel), unseen: more };
   }
 }

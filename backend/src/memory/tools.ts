@@ -1,7 +1,7 @@
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import { Type } from '@earendil-works/pi-ai';
 import { classify, type AgentTool } from '../tool-access';
-import { type MemoryStore, type MemoryType, type Provenance } from './store';
+import { TRUST_RANK, type MemoryStore, type MemoryType, type Provenance } from './store';
 import type { DeepStorage } from './deep';
 import type { AgentMemory } from '../generated/prisma/client';
 
@@ -212,12 +212,18 @@ export function createMemoryTools({ memory, deep, agentId, provenance, shown, sl
           conflict: Type.Optional(
             Type.Boolean({ description: 'true marks it as contradicting another memory you could not settle.' }),
           ),
+          // Asleep, as for memorize: who caused the new content (unsure or unsaid: other).
+          ...(sleep ? { source: Type.Optional(sourceField) } : {}),
         },
         { additionalProperties: false },
       ),
-      async execute(_id, { name, ...changes }) {
+      async execute(_id, { name, ...rest }) {
+        const { source, ...changes } = rest as typeof rest & { source?: string };
         if (!Object.values(changes).some(value => value !== undefined)) throw new Error('Say what to change.');
-        const revised = await memory.revise(agentId, name, changes, by, expected(name));
+        // New content takes the least trusted of the memory's provenance and its cause's (the store compares).
+        const trust = (source && source in SLEEP_SOURCE ? source : 'other') as Provenance['trust'];
+        const from = sleep ? { by: SLEEP_SOURCE[trust], trust } : provenance?.();
+        const revised = await memory.revise(agentId, name, changes, by, expected(name), from);
         shown?.([revised.id]);
         sleep?.changed(
           `revised ${name}${changes.faded ? ' (faded from the index)' : ''}${changes.conflict ? ' (marked conflict)' : ''}`,
@@ -265,35 +271,37 @@ export const MEMORY_TOOL_NAMES = new Set([
 
 type Input = {
   text: string;
-  source?: { name: string; channelId: string; human?: boolean; platform?: string; discord?: unknown };
+  source?: {
+    name: string;
+    channelId: string;
+    human?: boolean;
+    platform?: string;
+    discord?: { place?: string; unseen?: number };
+  };
 };
-const RANK = { other: 0, agent: 1, self: 2, owner: 3 } as const;
-/** A Discord batch is the owner's only if every author line in it is labelled [your owner] (and nothing is unseen). */
-const ownerOnly = (text: string) => {
-  const authors = text.split('\n').filter(line => /^\d\d:\d\d:\d\d · \[/.test(line));
-  return (
-    authors.length > 0 &&
-    authors.every(line => /^\d\d:\d\d:\d\d · \[your owner\] /.test(line)) &&
-    !/^\+\d+ more message/m.test(text)
-  );
-};
+/**
+ * A Discord batch is the owner's only if the intake put it in the owner's lane (source.human: every message in it is
+ * the owner's) and it left nothing unseen ("+N more"); a reaction has no count and is not. Decided from the
+ * structured source, never from the text, whose labels a body could imitate.
+ */
+const ownerOnly = (discord: { unseen?: number }) => discord.unseen === 0;
 /**
  * Who causes a memory in this turn: the least trusted of its inputs (a batch mixing the owner and a stranger counts as
  * the stranger). No source is the owner's private chat; platform events (timers, heartbeats, computers) are the
  * agent's own work.
  */
 export function provenanceOf(inputs: Input[], privateChannelId: string): Provenance {
-  const each = inputs.map(({ source, text }): Provenance => {
+  const each = inputs.map(({ source }): Provenance => {
     if (!source) return { by: 'your owner', trust: 'owner', channelId: privateChannelId };
     if (source.platform) return { by: `you (${source.platform} event)`, trust: 'self', channelId: source.channelId };
     if (source.discord)
-      return source.human && ownerOnly(text)
+      return source.human && ownerOnly(source.discord)
         ? { by: 'your owner on Discord', trust: 'owner', channelId: source.channelId }
         : { by: `${source.human ? 'people' : source.name} on Discord`, trust: 'other', channelId: source.channelId };
     if (source.human) return { by: 'your owner', trust: 'owner', channelId: source.channelId };
     return { by: `agent ${source.name}`, trust: 'agent', channelId: source.channelId };
   });
   return each.length
-    ? each.reduce((least, next) => (RANK[next.trust] < RANK[least.trust] ? next : least))
+    ? each.reduce((least, next) => (TRUST_RANK[next.trust] < TRUST_RANK[least.trust] ? next : least))
     : { by: 'your owner', trust: 'owner', channelId: privateChannelId };
 }

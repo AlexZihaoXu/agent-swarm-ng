@@ -1,18 +1,36 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import { hostname } from '../host-policy';
-import { Accounts, PASSWORD_MAX, PASSWORD_MIN, SESSION_COOKIE, SESSION_DAYS, type SignedIn } from './sessions';
+import {
+  Accounts,
+  PASSWORD_MAX,
+  PASSWORD_MIN,
+  SECURE_SESSION_COOKIE,
+  SESSION_COOKIE,
+  SESSION_DAYS,
+  type SignedIn,
+} from './sessions';
 
 /** Reachable without signing in. Everything else (any path, WebSocket upgrades included) needs a session. */
 const PUBLIC = new Set(['/api/health', '/api/auth/session', '/api/auth/login', '/api/auth/setup']);
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const WINDOW = 15 * 60 * 1000;
-const MAX_PER_ACCOUNT = 10;
+/** Wrong passwords per account from one address, per address, and per account from everywhere (a slow, distributed
+ * guess). The first two cannot lock the owner out from another address; the third only after many attempts. */
+const MAX_PER_PAIR = 10;
 const MAX_PER_ADDRESS = 30;
+const MAX_PER_ACCOUNT = 100;
+/** Password hashing is deliberately slow: at most this many run at once, so a burst cannot exhaust the CPU. */
+const MAX_HASHING = 4;
+const MAX_TRACKED = 10_000;
 
 declare module 'fastify' {
   interface FastifyRequest {
     signedIn?: SignedIn;
+  }
+  interface FastifyInstance {
+    /** Closes a long-lived stream when its session ends; returns the unwatch. */
+    watchSession: (request: FastifyRequest, close: () => void) => () => void;
   }
 }
 
@@ -54,12 +72,73 @@ class Failures {
     return seconds;
   }
 
+  /** Counted before the password is checked, so concurrent guesses cannot all slip under the limit. */
   record(keys: string[], now = Date.now()) {
-    for (const key of keys) this.attempts.set(key, [...this.recent(key, now), now]);
+    for (const key of keys) {
+      const kept = this.recent(key, now);
+      // Re-inserted, so an address being limited is the newest entry and the last to be forgotten.
+      this.attempts.delete(key);
+      this.attempts.set(key, [...kept, now]);
+    }
+    // Bounded memory: forget the oldest entries (Map keeps insertion order).
+    for (const key of this.attempts.keys()) {
+      if (this.attempts.size <= MAX_TRACKED) break;
+      this.attempts.delete(key);
+    }
+    return now;
   }
 
-  clear(key: string) {
-    this.attempts.delete(key);
+  /** A correct password: that attempt does not count, and this address may try this account afresh. */
+  forgive(keys: string[], at: number, clear: string) {
+    for (const key of keys) {
+      const kept = this.attempts.get(key)?.filter(time => time !== at);
+      if (kept?.length) this.attempts.set(key, kept);
+      else this.attempts.delete(key);
+    }
+    this.attempts.delete(clear);
+  }
+}
+
+/** Ends a session's open streams (run events, terminals) when it is signed out, its password changes or a host reset
+ * removes it. Logout and password changes end them at once; a periodic check catches host resets. */
+class SessionStreams {
+  private readonly open = new Map<string, Set<() => void>>();
+  private timer: ReturnType<typeof setInterval> | undefined;
+
+  constructor(private readonly accounts: Accounts) {}
+
+  watch(signedIn: SignedIn | undefined, close: () => void) {
+    if (!signedIn) return () => {};
+    const closers = this.open.get(signedIn.tokenHash) ?? new Set();
+    closers.add(close);
+    this.open.set(signedIn.tokenHash, closers);
+    this.timer ??= setInterval(() => void this.recheck(), 60_000);
+    this.timer.unref?.();
+    return () => {
+      closers.delete(close);
+      if (!closers.size) this.open.delete(signedIn.tokenHash);
+      if (!this.open.size) this.stop();
+    };
+  }
+
+  end(tokenHashes: string[]) {
+    for (const hash of tokenHashes) {
+      const closers = this.open.get(hash);
+      this.open.delete(hash);
+      for (const close of closers ?? []) close();
+    }
+    if (!this.open.size) this.stop();
+  }
+
+  private async recheck() {
+    const ended: string[] = [];
+    for (const hash of this.open.keys()) if (!(await this.accounts.isValid(hash).catch(() => true))) ended.push(hash);
+    this.end(ended);
+  }
+
+  stop() {
+    clearInterval(this.timer);
+    this.timer = undefined;
   }
 }
 
@@ -80,17 +159,36 @@ function clientAddress(request: FastifyRequest) {
 
 const secure = (request: FastifyRequest) => request.headers['x-forwarded-proto'] === 'https';
 
-function setSessionCookie(request: FastifyRequest, reply: FastifyReply, token: string) {
-  reply.header(
-    'set-cookie',
-    `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_DAYS * 86400}${secure(request) ? '; Secure' : ''}`,
+// The HTTPS origin uses its own __Secure- cookie, so it never collides with the plain one the HTTP origin sets.
+const cookieName = (request: FastifyRequest) => (secure(request) ? SECURE_SESSION_COOKIE : SESSION_COOKIE);
+
+function sessionToken(request: FastifyRequest) {
+  const header = request.headers.cookie;
+  return (
+    (secure(request) ? cookieValue(header, SECURE_SESSION_COOKIE) : undefined) ?? cookieValue(header, SESSION_COOKIE)
   );
 }
 
-function clearSessionCookie(request: FastifyRequest, reply: FastifyReply) {
+function setSessionCookie(request: FastifyRequest, reply: FastifyReply, token: string) {
   reply.header(
     'set-cookie',
-    `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure(request) ? '; Secure' : ''}`,
+    `${cookieName(request)}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_DAYS * 86400}${secure(request) ? '; Secure' : ''}`,
+  );
+}
+
+/** Every session cookie this browser sends here: on HTTPS also the plain one the HTTP origin set (same host). */
+function sessionTokens(request: FastifyRequest) {
+  const header = request.headers.cookie;
+  const names = secure(request) ? [SECURE_SESSION_COOKIE, SESSION_COOKIE] : [SESSION_COOKIE];
+  return names.map(name => cookieValue(header, name)).filter((token): token is string => Boolean(token));
+}
+
+function clearSessionCookie(request: FastifyRequest, reply: FastifyReply) {
+  // On HTTPS both names go (a Secure clear also removes an older Secure cookie of the plain name).
+  const names = secure(request) ? [SECURE_SESSION_COOKIE, SESSION_COOKIE] : [SESSION_COOKIE];
+  reply.header(
+    'set-cookie',
+    names.map(name => `${name}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure(request) ? '; Secure' : ''}`),
   );
 }
 
@@ -110,17 +208,33 @@ function crossOrigin(request: FastifyRequest) {
 
 /**
  * Dashboard sign-in. With requireLogin every request needs a session cookie except health and the sign-in endpoints;
- * GET /api/auth/check is what Caddy asks before letting a browser reach a computer's desktop stream.
+ * GET /api/auth/check is what Caddy asks before letting a browser reach a computer's desktop stream. Returns the
+ * stream watch: long-lived streams call it so they close when their session ends.
  */
 export function registerAuth(app: FastifyInstance, accounts: Accounts, { requireLogin }: { requireLogin: boolean }) {
   const failures = new Failures();
+  const streams = new SessionStreams(accounts);
+  app.addHook('onClose', async () => streams.stop());
+  let hashing = 0;
+  /** Runs a password check unless too many already are; null when busy. */
+  const hash = async <T>(work: () => Promise<T>): Promise<T | null> => {
+    if (hashing >= MAX_HASHING) return null;
+    hashing++;
+    try {
+      return await work();
+    } finally {
+      hashing--;
+    }
+  };
+  const busy = (reply: FastifyReply) =>
+    reply.header('retry-after', '2').code(429).send({ message: 'The dashboard is busy. Try again in a moment.' });
 
   app.addHook('onRequest', async (request, reply) => {
     const path = request.url.split('?')[0]!;
     const upgrade = (request.headers.upgrade ?? '').toLowerCase() === 'websocket';
     if ((!SAFE_METHODS.has(request.method) || upgrade) && crossOrigin(request))
       return reply.code(403).send({ message: 'Requests from another site are not allowed.' });
-    const signedIn = await accounts.session(cookieValue(request.headers.cookie, SESSION_COOKIE));
+    const signedIn = await accounts.session(sessionToken(request));
     if (signedIn) request.signedIn = signedIn;
     if (requireLogin && !signedIn && !PUBLIC.has(path)) {
       reply.header('cache-control', 'no-store');
@@ -162,8 +276,9 @@ export function registerAuth(app: FastifyInstance, accounts: Accounts, { require
       if (!waiting) return reply.code(409).send({ message: 'The password is already set. Sign in instead.' });
       if (name.trim() !== waiting.name)
         return reply.code(400).send({ message: `Set the password of ${waiting.name}.` });
-      if (!(await accounts.setFirstPassword(waiting.id, password)))
-        return reply.code(409).send({ message: 'The password is already set. Sign in instead.' });
+      const set = await hash(() => accounts.setFirstPassword(waiting.id, password));
+      if (set === null) return busy(reply);
+      if (!set) return reply.code(409).send({ message: 'The password is already set. Sign in instead.' });
       return signIn(request, reply, waiting.id, waiting.name);
     },
   );
@@ -181,20 +296,21 @@ export function registerAuth(app: FastifyInstance, accounts: Accounts, { require
       const { name, password } = request.body as Static<typeof SignInCredentials>;
       const account = `account:${name.trim().toLowerCase()}`;
       const address = `address:${clientAddress(request)}`;
+      const pair = `${account}|${address}`;
       const wait = failures.wait([
-        [account, MAX_PER_ACCOUNT],
+        [pair, MAX_PER_PAIR],
         [address, MAX_PER_ADDRESS],
+        [account, MAX_PER_ACCOUNT],
       ]);
       if (wait) {
         reply.header('retry-after', String(wait));
         return reply.code(429).send({ message: `Too many wrong passwords. Try again in ${Math.ceil(wait / 60)} min.` });
       }
-      const user = await accounts.verify(name.trim(), password);
-      if (!user) {
-        failures.record([account, address]);
-        return reply.code(401).send({ message: 'Wrong name or password.' });
-      }
-      failures.clear(account);
+      if (hashing >= MAX_HASHING) return busy(reply);
+      const at = failures.record([pair, address, account]);
+      const user = await hash(() => accounts.verify(name.trim(), password));
+      if (user === null) return reply.code(401).send({ message: 'Wrong name or password.' });
+      failures.forgive([address, account], at, pair);
       return signIn(request, reply, user.id, user.name);
     },
   );
@@ -203,7 +319,9 @@ export function registerAuth(app: FastifyInstance, accounts: Accounts, { require
     '/api/auth/logout',
     { schema: { operationId: 'signOut', response: { 200: Type.Object({ signedIn: Type.Literal(false) }) } } },
     async (request, reply) => {
-      if (request.signedIn) await accounts.endSession(request.signedIn.tokenHash);
+      // Signing out ends every session this browser holds here, not only the one that answered.
+      const ended = await accounts.endTokens(sessionTokens(request));
+      streams.end(ended);
       clearSessionCookie(request, reply);
       return { signedIn: false as const };
     },
@@ -222,23 +340,30 @@ export function registerAuth(app: FastifyInstance, accounts: Accounts, { require
       const signedIn = request.signedIn;
       if (!signedIn) return reply.code(401).send({ message: 'Sign in first.' });
       const { current, password } = request.body as Static<typeof PasswordChange>;
-      const account = `account:${signedIn.name.toLowerCase()}`;
-      const wait = failures.wait([[account, MAX_PER_ACCOUNT]]);
+      const key = `password:${signedIn.tokenHash}`;
+      const wait = failures.wait([[key, MAX_PER_PAIR]]);
       if (wait) {
         reply.header('retry-after', String(wait));
         return reply.code(429).send({ message: `Too many wrong passwords. Try again in ${Math.ceil(wait / 60)} min.` });
       }
-      if (!(await accounts.verifyUser(signedIn.userId, current))) {
-        failures.record([account]);
-        return reply.code(403).send({ message: 'The current password is wrong.' });
-      }
-      await accounts.changePassword(signedIn.userId, password, signedIn.tokenHash);
+      if (hashing >= MAX_HASHING) return busy(reply);
+      const at = failures.record([key]);
+      const correct = await hash(() => accounts.verifyUser(signedIn.userId, current));
+      if (!correct) return reply.code(403).send({ message: 'The current password is wrong.' });
+      failures.forgive([], at, key);
+      const ended = await hash(() => accounts.changePassword(signedIn.userId, password, signedIn.tokenHash));
+      if (ended === null) return busy(reply);
+      streams.end(ended);
       return { signedIn: true as const, name: signedIn.name };
     },
   );
 
   app.get('/api/auth/check', { schema: { hide: true } }, async (request, reply) => {
     reply.header('cache-control', 'no-store');
+    // Browsers always send Origin on a WebSocket handshake: another site's page must not open a desktop.
+    if (crossOrigin(request)) return reply.code(403).send({ message: 'Requests from another site are not allowed.' });
     return request.signedIn ? reply.code(204).send() : reply.code(401).send({ message: 'Sign in first.' });
   });
+
+  return (request: FastifyRequest, close: () => void) => streams.watch(request.signedIn, close);
 }

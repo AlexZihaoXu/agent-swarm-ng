@@ -34,6 +34,14 @@ export const LISTENER_MAX = 8;
 const FOLLOW = '/opt/swarm/harness-assist/harness_follow.py';
 const BATCH_MS = 200;
 const SHOWN = 10;
+/** Lines kept for one wake-up; older ones beyond it are only counted. */
+const PENDING_MAX = 50;
+/**
+ * notify_supervisor's limits, enforced here too: the computer is untrusted, so a guest that skips supervisor_mcp.py's
+ * own check still cannot wake the agent more often (per listener and terminal).
+ */
+const MESSAGE_GAP_MS = 10_000;
+const MESSAGE_HOUR_MAX = 30;
 const ASSIGNMENT_CHECK_MS = 30_000;
 /**
  * A session that ends this way is over: Claude Code prompt_input_exit or logout, Codex other, Pi quit. A /clear, resume,
@@ -75,6 +83,8 @@ type Listener = {
   createdAt: number;
   fired: number;
   lastAt?: number;
+  /** When its recent harness messages were taken (backend time, the last hour). */
+  messages: number[];
 };
 type Follower = {
   key: string;
@@ -84,6 +94,10 @@ type Follower = {
   /** The newest line delivered: a restarted follower replays what came after it. */
   since: number;
   pending: Line[];
+  /** Lines pushed out of a full pending batch, counted in the next wake-up. */
+  overflow: number;
+  /** Harness messages dropped by the rate limit, told in the next wake-up. */
+  dropped: number;
   /** Lines already taken (time, terminal, event): a replay after a restart never delivers one twice. */
   seen: Set<string>;
   batch?: ReturnType<typeof setTimeout>;
@@ -183,6 +197,7 @@ export class HarnessListeners {
           human: input.human,
           createdAt: this.now(),
           fired: 0,
+          messages: [],
         };
     this.listeners.set(listener.id, listener);
     this.timer ??= setInterval(() => void this.checkAssignments(), ASSIGNMENT_CHECK_MS);
@@ -282,6 +297,8 @@ export class HarnessListeners {
       abort: new AbortController(),
       since,
       pending: previous?.pending ?? [],
+      overflow: previous?.overflow ?? 0,
+      dropped: previous?.dropped ?? 0,
       seen: previous?.seen ?? new Set(),
       paused: previous?.paused ?? false,
     };
@@ -340,12 +357,42 @@ export class HarnessListeners {
     follower.seen.add(key);
     if (follower.seen.size > 500) follower.seen.delete(follower.seen.values().next().value!);
     follower.since = Math.max(follower.since, Number(line.t) || 0);
+    if (line.event === 'message' && !this.messageAllowed(follower, line)) {
+      follower.dropped++;
+      return;
+    }
     follower.pending.push({ ...line, text: String(line.text ?? '').slice(0, 1000) });
-    if (follower.pending.length > 50) follower.pending.shift();
+    if (follower.pending.length > PENDING_MAX) {
+      follower.pending.shift();
+      follower.overflow++;
+    }
+    this.schedule(follower);
+  }
+
+  /** One wake-up per batch window: lines arriving within it (or while the agent is busy) come together. */
+  private schedule(follower: Follower) {
     follower.batch ??= setTimeout(() => {
       follower.batch = undefined;
       void this.wake(follower);
     }, BATCH_MS);
+  }
+
+  /** At most one harness message per 10 s and 30 an hour for the listener of its terminal (by the backend's clock). */
+  private messageAllowed(follower: Follower, line: Line) {
+    const listener = this.forAgent(follower.agentId).find(
+      item =>
+        item.computerId === follower.computerId &&
+        item.terminalId === line.terminal.id &&
+        item.events.includes('message'),
+    );
+    if (!listener) return true; // nobody wants it: the wake-up leaves it out
+    const now = this.now();
+    listener.messages = listener.messages.filter(at => now - at < 3600_000);
+    const last = listener.messages.at(-1);
+    if ((last !== undefined && now - last < MESSAGE_GAP_MS) || listener.messages.length >= MESSAGE_HOUR_MAX)
+      return false;
+    listener.messages.push(now);
+    return true;
   }
 
   /** Delivers what the follower collected to the agent (once per handled turn), and ends listeners whose session ended. */
@@ -355,8 +402,12 @@ export class HarnessListeners {
     const lines = follower.pending.filter(line =>
       listeners.some(item => item.terminalId === line.terminal.id && item.events.includes(line.event)),
     );
+    const total = lines.length + follower.overflow;
+    const dropped = follower.dropped;
     follower.pending = [];
+    follower.overflow = 0;
     if (!lines.length) return;
+    follower.dropped = 0;
     const ended: Listener[] = [];
     for (const line of lines) {
       const listener = listeners.find(item => item.terminalId === line.terminal.id)!;
@@ -367,10 +418,15 @@ export class HarnessListeners {
     }
     for (const listener of ended) await this.drop(listener);
     const shown = lines.slice(-SHOWN);
-    const hidden = lines.length - shown.length;
+    const hidden = total - shown.length;
     const text = [
-      `Coding harness events (${lines.length}${hidden ? `, the newest ${SHOWN} shown` : ''}):`,
+      `Coding harness events (${total}${hidden ? `, the newest ${SHOWN} shown` : ''}):`,
       ...shown.map(line => `- ${iso(line.t).slice(11, 19)} ${describe(line)}`),
+      ...(dropped
+        ? [
+            `${dropped} more message${dropped === 1 ? ' from the harness was' : 's from the harness were'} dropped (rate limit).`,
+          ]
+        : []),
       ...ended.map(
         listener =>
           `Your listener on ${quote(listener.terminalName)} is removed now that its session ended; add it again if a harness starts there again.`,
@@ -387,7 +443,7 @@ export class HarnessListeners {
       .catch(() => undefined)
       .then(() => {
         current.paused = false;
-        if (current.pending.length && this.followers.get(current.key) === current) void this.wake(current);
+        if (current.pending.length && this.followers.get(current.key) === current) this.schedule(current);
       });
   }
 

@@ -57,9 +57,11 @@ export function registerTerminalStreams(
         chain = Promise.resolve(),
         upstream: WebSocket | undefined;
       let connectionTimer: ReturnType<typeof setTimeout> | undefined;
+      let unwatch = () => {};
       const close = () => {
         if (closed) return;
         closed = true;
+        unwatch();
         clearTimeout(connectionTimer);
         total--;
         const left = (counts.get(id) ?? 1) - 1;
@@ -68,6 +70,8 @@ export function registerTerminalStreams(
         upstream?.close();
         socket.close(1011, 'Terminal disconnected. Inspect before repeating input.');
       };
+      // Signing out (or a password change) ends this terminal view.
+      unwatch = app.watchSession?.(request, close) ?? unwatch;
       // Attach handlers before async work, and serialize checks/sends without replay on reconnect.
       socket
         .on('close', close)

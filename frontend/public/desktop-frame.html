@@ -67,6 +67,49 @@
       });
     })();
   </script>
+  <!-- Owner clipboard gate. The guest (root in the computer) controls the Selkies server, so it can
+       re-enable clipboard sync and push or request contents at any time. The pinned client would then
+       write guest text to the owner's clipboard (paste-jacking) and read it on every focus. Here the
+       owner's clipboard is touched only right after the owner's own key in this unlocked, focused
+       viewer: Ctrl/Cmd+V allows reads for that paste, Ctrl/Cmd+C or X allows one write. Refused
+       writes are AbortError, not NotAllowedError, so Selkies drops them instead of retrying later. -->
+  <script>
+    (() => {
+      const clipboard = navigator.clipboard;
+      const execCommand = document.execCommand;
+      let pasteUntil = -Infinity, copyUntil = -Infinity;
+      window.addEventListener('keydown', event => {
+        if (!event.isTrusted || !window.swarmDesktopInputEnabled || !document.hasFocus() ||
+            !(event.ctrlKey || event.metaKey) || event.altKey || event.repeat) return;
+        const key = String(event.key || '').toLowerCase();
+        if (key === 'v' || event.code === 'KeyV') pasteUntil = performance.now() + 1500;
+        else if (key === 'c' || key === 'x' || event.code === 'KeyC' || event.code === 'KeyX') copyUntil = performance.now() + 3000;
+      }, { capture: true });
+      const mayRead = () => performance.now() <= pasteUntil;
+      const mayWrite = () => {
+        if (performance.now() > copyUntil) return false;
+        copyUntil = -Infinity;
+        return true;
+      };
+      const refuse = name => Promise.reject(new DOMException('Clipboard access needs your own copy or paste key in the desktop', name));
+      const guarded = clipboard && Object.freeze({
+        read: (...args) => mayRead() ? clipboard.read(...args) : refuse('NotAllowedError'),
+        readText: () => mayRead() ? clipboard.readText() : refuse('NotAllowedError'),
+        write: (...args) => mayWrite() ? clipboard.write(...args) : refuse('AbortError'),
+        writeText: text => mayWrite() ? clipboard.writeText(text) : refuse('AbortError'),
+      });
+      Object.defineProperty(navigator, 'clipboard', { value: guarded, configurable: false, writable: false });
+      Object.defineProperty(document, 'execCommand', {
+        configurable: false, writable: false,
+        value(command, ...args) {
+          const name = String(command).toLowerCase();
+          if ((name === 'copy' || name === 'cut') && !mayWrite()) return false;
+          if (name === 'paste' && !mayRead()) return false;
+          return execCommand.call(document, command, ...args);
+        },
+      });
+    })();
+  </script>
   <!-- Desktop sound is off until the viewer asks for it (the server captures nothing until then).
        Only the parent dashboard may toggle it; the Selkies client does the rest. -->
   <script>

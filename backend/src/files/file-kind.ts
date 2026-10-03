@@ -76,12 +76,21 @@ export function detectFile(name: string, head: Uint8Array): { kind: FileKind; mi
   return { kind: 'other', mime: 'application/octet-stream' };
 }
 
-/** A safe display name: no folders, control characters or leading dots; at most 255 characters. */
+/**
+ * Invisible characters that can disguise a name: bidi controls (U+061C, U+200E/F, U+202A–E, U+2066–9, which can make
+ * "invoice\u202Efdp.exe" display as "invoiceexe.pdf") and zero-width or invisible formatting (U+180E, U+200B,
+ * U+2060–4, U+FEFF). The joiners U+200C/D stay: scripts and emoji need them.
+ */
+export const INVISIBLE_NAME_CHARACTERS =
+  /[\u061c\u180e\u200b\u200e\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
+
+/** A safe display name: no folders, control or invisible characters, or leading dots; at most 255 characters. */
 export function fileName(raw: string) {
   const base = String(raw ?? '')
     .split(/[\\/]/)
     .pop()!
-    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, '')
+    .replace(INVISIBLE_NAME_CHARACTERS, '')
     .trim()
     .replace(/^\.+/, '');
   return (base || 'file').slice(0, 255);

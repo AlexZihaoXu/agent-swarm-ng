@@ -42,7 +42,7 @@ import {
 } from './chat-runtime';
 import { runChat } from './chat-runner';
 import { createChatHistoryTools } from './chat-history-tools';
-import { messageText } from './message-text';
+import { messageText, neutralizeLabels } from './message-text';
 import { isLiveChain } from './communication-policy';
 import { GroupStore, groupReplyInclude } from './group-store';
 import { createGroupTools } from './group-tools';
@@ -494,7 +494,7 @@ export class DmBroker {
           ];
     const lines = rows.map(row => {
       const text = messageText(row.content, 0, 300);
-      return `${row.createdAt.toISOString().slice(11, 19)} · [${who(row)}] ${JSON.stringify(row.authorName)} · message ${row.id}${row.replyToId ? ` · replying to ${row.replyToId}` : ''}: ${text.text || '(no text)'}${text.truncated ? ' […]' : ''}`;
+      return `${row.createdAt.toISOString().slice(11, 19)} · [${who(row)}] ${JSON.stringify(row.authorName)} · message ${row.id}${row.replyToId ? ` · replying to ${row.replyToId}` : ''}: ${neutralizeLabels(text.text) || '(no text)'}${text.truncated ? ' […]' : ''}`;
     });
     const speakers = [
       ...new Set(

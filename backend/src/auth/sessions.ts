@@ -2,7 +2,10 @@ import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual, typ
 import type { PlatformStore } from '../platform-store';
 
 export const SESSION_COOKIE = 'swarm_session';
+export const SECURE_SESSION_COOKIE = '__Secure-swarm_session';
 export const SESSION_DAYS = 30;
+/** However often it is used, a session ends this long after sign-in. */
+export const SESSION_MAX_DAYS = 90;
 export const PASSWORD_MIN = 8;
 export const PASSWORD_MAX = 256;
 const DAY = 24 * 60 * 60 * 1000;
@@ -93,14 +96,17 @@ export class Accounts {
     return user?.passwordHash ? verifyPassword(password, user.passwordHash) : false;
   }
 
-  /** Sets a new password and signs out every other browser of that user. */
+  /** Sets a new password and signs out every other browser of that user; returns the sessions it ended. */
   async changePassword(userId: string, password: string, keepTokenHash: string) {
     const client = await this.client();
     const passwordHash = await hashPassword(password);
-    await client.$transaction([
+    const others = { userId, tokenHash: { not: keepTokenHash } };
+    const [ended] = await client.$transaction([
+      client.userSession.findMany({ where: others, select: { tokenHash: true } }),
       client.user.update({ where: { id: userId }, data: { passwordHash, passwordChangedAt: new Date() } }),
-      client.userSession.deleteMany({ where: { userId, tokenHash: { not: keepTokenHash } } }),
+      client.userSession.deleteMany({ where: others }),
     ]);
+    return ended.map(session => session.tokenHash);
   }
 
   /** A new session; returns the cookie's token (only its hash is stored). Expired sessions are cleared on the way. */
@@ -125,21 +131,34 @@ export class Accounts {
     });
     const now = Date.now();
     if (!found) return null;
-    if (found.expiresAt.getTime() <= now) {
+    if (found.expiresAt.getTime() <= now || now - found.createdAt.getTime() > SESSION_MAX_DAYS * DAY) {
       await client.userSession.deleteMany({ where: { tokenHash } });
       return null;
     }
     if (now - found.lastSeenAt.getTime() > TOUCH_EVERY)
       await client.userSession.updateMany({
         where: { tokenHash },
-        data: { lastSeenAt: new Date(now), expiresAt: new Date(now + SESSION_DAYS * DAY) },
+        data: {
+          lastSeenAt: new Date(now),
+          expiresAt: new Date(Math.min(now + SESSION_DAYS * DAY, found.createdAt.getTime() + SESSION_MAX_DAYS * DAY)),
+        },
       });
     return { userId: found.userId, name: found.user.name, tokenHash };
   }
 
-  async endSession(tokenHash: string) {
+  /** Whether a session still exists and has not expired (no renewal: for stream checks). */
+  async isValid(tokenHash: string) {
     const client = await this.client();
-    await client.userSession.deleteMany({ where: { tokenHash } });
+    const found = await client.userSession.findUnique({ where: { tokenHash }, select: { expiresAt: true } });
+    return Boolean(found && found.expiresAt.getTime() > Date.now());
+  }
+
+  /** Ends the sessions behind these cookie tokens; returns their hashes. */
+  async endTokens(tokens: string[]) {
+    const hashes = tokens.filter(token => token.length <= 100).map(hashToken);
+    const client = await this.client();
+    await client.userSession.deleteMany({ where: { tokenHash: { in: hashes } } });
+    return hashes;
   }
 
   /** Host-side reset (scripts/reset-password.ts): forgets the password and signs everyone out; the next visit sets it. */

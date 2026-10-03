@@ -11,10 +11,13 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { InMemoryCredentialStore, InMemoryModelsStore } from '@earendil-works/pi-ai';
 import { getModels } from '@earendil-works/pi-ai/compat';
+import { createPublicFetch } from './web-fetch';
 import { validateWebCall, webToolNames } from './web-policy';
 
 // One process per turn: upstream caches/configuration are module-global.
 // This is configuration/state isolation, not an OS security sandbox.
+// Before the extension loads: every web request it makes connects only to an address checked at connection time.
+globalThis.fetch = createPublicFetch() as typeof fetch;
 const require = createRequire(import.meta.url);
 const entry = pathToFileURL(join(dirname(require.resolve('pi-web-access/package.json')), 'dist/index.js')).href;
 const webAccess = (await import(entry)).default as ExtensionFactory;

@@ -30,3 +30,18 @@ export function messageText(text: string, offset = 0, limit = 1000) {
     nextOffset: end < text.length ? end : null,
   };
 }
+
+/**
+ * Untrusted text (another agent's message, a Discord body, computer or harness output) embedded in a model input must
+ * never start a line with something the platform writes there: a bracketed label ("[your owner]", "[channel: …]", an
+ * event header), a Discord author line ("12:00:00 · […]") or "+N more messages". Such a line gets a leading backslash
+ * (after any indentation or invisible characters), so it reads as quoted text, never as the platform's own.
+ */
+export function neutralizeLabels(text: string) {
+  return text.replace(
+    // Any invisible or format character (bidi controls, zero-width, tags…) may precede it, and look-alike dots and plus
+    // signs count too.
+    /^([\s\p{Cf}\p{Default_Ignorable_Code_Point}]*)(?=[[［〔【⟦]|\d{1,2}:\d\d:\d\d\s*[·⋅•∙‧・]|[+＋﹢]\s*\d+\s+more\s+message)/gimu,
+    '$1\\',
+  );
+}

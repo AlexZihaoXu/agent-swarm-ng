@@ -10,5 +10,7 @@ it('requires the shared secret on everything but the container health check when
   expect(authorized(request('/computers/x/core/execute', {}, 'POST'), 'secret')).toBe(false);
   expect(authorized(request('/health'), 'secret')).toBe(true);
   expect(authorized(request('/health', {}, 'POST'), 'secret')).toBe(false);
-  expect(authorized(request('/computers'), '')).toBe(true); // no token configured: unchanged behavior
+  // No token configured: closed, except the health check.
+  expect(authorized(request('/computers'), '')).toBe(false);
+  expect(authorized(request('/health'), '')).toBe(true);
 });

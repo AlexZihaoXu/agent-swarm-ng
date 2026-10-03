@@ -24,7 +24,10 @@ it('trusted frame starts input-locked and gates keys, pointer and shortcut messa
   };
   const context = { window, location: { origin: 'http://dashboard' }, document: { activeElement: { blur() {} } } };
   for (const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))
-    if (match[1].includes('swarmDesktopInputEnabled') || match[1].includes('const shortcuts'))
+    if (
+      (match[1].includes('swarmDesktopInputEnabled') || match[1].includes('const shortcuts')) &&
+      !match[1].includes('navigator.clipboard') // covered by desktop-clipboard-gate.test.ts
+    )
       runInNewContext(match[1], context);
   const message = (data: object, source: object = parent) =>
     handlers.get('message')!.forEach(handler => handler({ data, source, origin: 'http://dashboard' }));

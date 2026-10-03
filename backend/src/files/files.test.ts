@@ -54,6 +54,13 @@ it('knows images and PDFs by their bytes, text by being UTF-8, and everything el
   expect(fileName('C:\\Users\\me\\report.pdf')).toBe('report.pdf');
   expect(fileName('...hidden')).toBe('hidden');
   expect(fileName('')).toBe('file');
+  // Bidi controls and invisible characters cannot disguise a name or its extension.
+  expect(fileName('invoice\u202Efdp.exe')).toBe('invoicefdp.exe');
+  expect(fileName('\u2066a\u2069\u200E\u200F\u061C\u202A\u202B\u202C\u202D\u2067\u2068b.txt')).toBe('ab.txt');
+  expect(fileName('re\u200Bport\uFEFF.pdf\u2060')).toBe('report.pdf');
+  expect(fileName('\u202E\u200B')).toBe('file');
+  // Joiners that real scripts and emoji need stay.
+  expect(fileName('\u{1F468}\u200D\u{1F4BB}.png')).toBe('\u{1F468}\u200D\u{1F4BB}.png');
 });
 
 it('names channels by kind and lets each actor see and post exactly where they already can talk', async () => {

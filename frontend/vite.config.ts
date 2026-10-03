@@ -41,6 +41,11 @@ export default defineConfig(({ mode }) => ({
       .split(',')
       .map(host => host.trim())
       .filter(Boolean),
+    // The dev server can read the whole repository (/@fs/…): never its secrets, data or scratch files. It listens on
+    // 127.0.0.1 (package.json) and must not be reachable from other machines.
+    fs: {
+      deny: ['.env', '.env.*', '*.{crt,pem,key}', '**/.git/**', '**/.local/**', '**/.scratch/**', '*.db', '*.db-*'],
+    },
     // Avoid transforming partially written files during local edits.
     watch: { awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 25 } },
     proxy: { '/api': { target: process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:3000', ws: true } },

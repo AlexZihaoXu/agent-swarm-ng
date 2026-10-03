@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { buildApp } from '../app';
 import { prepareDatabase } from '../test-database';
-import { SESSION_COOKIE } from './sessions';
+import { createHash } from 'node:crypto';
+import { SECURE_SESSION_COOKIE, SESSION_COOKIE } from './sessions';
 
 async function fixture() {
   const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
@@ -100,6 +101,102 @@ describe('dashboard sign-in', { timeout: 60_000 }, () => {
     }
   });
 
+  it('limits wrong passwords per address, so another address can still sign in, and counts concurrent guesses', async () => {
+    const { app, json } = await fixture();
+    try {
+      await json('POST', '/api/auth/setup', { name: 'Admin', password: 'correct horse battery' });
+      const from = (address: string, password: string) =>
+        app.inject({
+          method: 'POST',
+          url: '/api/auth/login',
+          headers: { host: '127.0.0.1:19090', 'x-forwarded-for': address },
+          payload: { name: 'Admin', password },
+        });
+      // A burst at once: at most a few slow checks run, never more wrong-password checks than the limit.
+      const burst = await Promise.all(Array.from({ length: 14 }, (_, i) => from('100.64.0.9', `wrong ${i} xxx`)));
+      expect(burst.filter(response => response.statusCode === 401).length).toBeLessThanOrEqual(10);
+      expect(burst.some(response => response.statusCode === 429)).toBe(true);
+      for (let i = 0; i < 12; i++) await from('100.64.0.9', `more wrong ${i} x`);
+      expect((await from('100.64.0.9', 'correct horse battery')).statusCode).toBe(429);
+      // The owner elsewhere is not locked out by someone else's guesses.
+      expect((await from('100.64.0.7', 'correct horse battery')).statusCode).toBe(200);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('uses a __Secure- cookie on the HTTPS origin and ends sessions after 90 days however often used', async () => {
+    const { app, database } = await fixture();
+    try {
+      const setup = await app.inject({
+        method: 'POST',
+        url: '/api/auth/setup',
+        headers: { host: '127.0.0.1:19091', 'x-forwarded-proto': 'https' },
+        payload: { name: 'Admin', password: 'correct horse battery' },
+      });
+      const cookie = setup.cookies.find(found => found.name === SECURE_SESSION_COOKIE)!;
+      expect(cookie).toMatchObject({ secure: true, httpOnly: true, sameSite: 'Strict' });
+      const check = () =>
+        app.inject({
+          method: 'GET',
+          url: '/api/auth/check',
+          headers: {
+            host: '127.0.0.1:19091',
+            'x-forwarded-proto': 'https',
+            cookie: `${SECURE_SESSION_COOKIE}=${cookie.value}`,
+          },
+        });
+      expect((await check()).statusCode).toBe(204);
+      await database.client.userSession.updateMany({ data: { createdAt: new Date(Date.now() - 91 * 86_400_000) } });
+      expect((await check()).statusCode).toBe(401);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('signing out on HTTPS also ends the plain session the HTTP origin set for the same host', async () => {
+    const { app, json, cookieOf } = await fixture();
+    try {
+      const plain = cookieOf(
+        await json('POST', '/api/auth/setup', { name: 'Admin', password: 'correct horse battery' }),
+      );
+      const https = { host: '127.0.0.1:19091', 'x-forwarded-proto': 'https' };
+      const login = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: https,
+        payload: { name: 'Admin', password: 'correct horse battery' },
+      });
+      const secure = `${SECURE_SESSION_COOKIE}=${login.cookies.find(found => found.name === SECURE_SESSION_COOKIE)!.value}`;
+      const both = { ...https, cookie: `${secure}; ${plain}` };
+      const logout = await app.inject({ method: 'POST', url: '/api/auth/logout', headers: both, payload: {} });
+      expect(logout.cookies.map(cookie => [cookie.name, cookie.maxAge])).toEqual([
+        [SECURE_SESSION_COOKIE, 0],
+        [SESSION_COOKIE, 0],
+      ]);
+      expect((await app.inject({ method: 'GET', url: '/api/auth/check', headers: both })).statusCode).toBe(401);
+      expect((await json('GET', '/api/auth/check', undefined, plain)).statusCode).toBe(401);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('closes a session’s open streams when it signs out', async () => {
+    const { app, json, cookieOf } = await fixture();
+    try {
+      const cookie = cookieOf(
+        await json('POST', '/api/auth/setup', { name: 'Admin', password: 'correct horse battery' }),
+      );
+      const tokenHash = createHash('sha256').update(cookie.split('=')[1]!).digest('hex');
+      let closed = 0;
+      app.watchSession({ signedIn: { userId: 'admin', name: 'Admin', tokenHash } } as never, () => closed++);
+      await json('POST', '/api/auth/logout', {}, cookie);
+      expect(closed).toBe(1);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('changes the password, keeping this browser and signing out the others', async () => {
     const { app, json, cookieOf } = await fixture();
     try {
@@ -143,6 +240,13 @@ describe('dashboard sign-in', { timeout: 60_000 }, () => {
         payload: {},
       });
       expect(crossSite.statusCode).toBe(403);
+      // Caddy's desktop check carries the page's Origin: another site cannot open a desktop.
+      const desktop = await app.inject({
+        method: 'GET',
+        url: '/api/auth/check',
+        headers: { host: '127.0.0.1:19090', origin: 'http://127.0.0.1:8080', cookie },
+      });
+      expect(desktop.statusCode).toBe(403);
       const upgrade = await app.inject({
         method: 'GET',
         url: '/api/computers/00000000-0000-4000-8000-000000000000/terminals/x/stream',

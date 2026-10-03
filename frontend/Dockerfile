@@ -15,7 +15,8 @@ WORKDIR /app/frontend
 
 FROM base AS development
 EXPOSE 5173
-CMD ["bun", "run", "dev"]
+# Inside the dev container only (reached through caddy-dev on loopback); on a host, dev listens on 127.0.0.1.
+CMD ["bun", "run", "dev:container"]
 
 FROM base AS build
 ARG VITE_COMPUTER_PORTAL_FREE=false

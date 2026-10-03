@@ -47,7 +47,13 @@ export function entryText(entry: Entry): { kind: string; text: string } | null {
   if (entry.type === 'compaction') return { kind: 'summary', text: entry.summary ?? '' };
   return null;
 }
-const channelOf = (text: string) => /^\[channel: ([^\]\s]+)\]/.exec(text)?.[1] ?? null;
+/**
+ * Every channel an input draws from: a prompt can batch inputs from several channels, each starting a line with its
+ * [channel: …] (bodies cannot forge one at a line start, and a forged extra channel could only hide an entry).
+ */
+const channelsOf = (text: string) => [
+  ...new Set([...text.matchAll(/^\[channel: ([^\]\s]+)\]/gm)].map(match => match[1])),
+];
 const clip = (text: string, around: number, size: number) => {
   const start = Math.max(0, around - Math.floor(size / 3));
   return `${start ? '…' : ''}${text.slice(start, start + size)}${start + size < text.length ? '…' : ''}`;
@@ -61,23 +67,25 @@ export class DeepStorage {
     private canRead: (agentId: string, channelId: string) => Promise<boolean>,
   ) {}
 
-  /** The channel an entry belongs to: the channel of the input that started its stretch of context. */
-  private async channelAt(agentId: string, position: number, own: Entry): Promise<string | null> {
+  /** The channels an entry belongs to: those of the input that started its stretch of context. */
+  private async channelsAt(agentId: string, position: number, own: Entry): Promise<string[]> {
     const ownText = entryText(own);
-    if (own.message?.role === 'user' && ownText) return channelOf(ownText.text);
+    if (own.message?.role === 'user' && ownText) return channelsOf(ownText.text);
     const before = await this.database.client.agentSessionEntry.findFirst({
       where: { agentId, position: { lt: position }, payload: { contains: '"role":"user"' } },
       orderBy: { position: 'desc' },
       select: { payload: true },
     });
     const text = before ? entryText(JSON.parse(before.payload) as Entry) : null;
-    return text ? channelOf(text.text) : null;
+    return text ? channelsOf(text.text) : [];
   }
-  private async readable(agentId: string, channel: string | null, cache: Map<string, boolean>) {
-    // Entries before any input (bootstrapping, platform notes) belong to the agent itself.
-    if (!channel) return true;
-    if (!cache.has(channel)) cache.set(channel, await this.canRead(agentId, channel).catch(() => false));
-    return cache.get(channel)!;
+  /** Readable only if every channel it draws from still is (entries before any input belong to the agent itself). */
+  private async readable(agentId: string, channels: string[], cache: Map<string, boolean>) {
+    for (const channel of channels) {
+      if (!cache.has(channel)) cache.set(channel, await this.canRead(agentId, channel).catch(() => false));
+      if (!cache.get(channel)) return false;
+    }
+    return true;
   }
 
   /**
@@ -127,13 +135,13 @@ export class DeepStorage {
         if (!words.every(word => lower.includes(word))) continue;
         const at = entry.timestamp ?? '';
         if ((from && at && new Date(at) < from) || (to && at && new Date(at) > to)) continue;
-        const where = await this.channelAt(agentId, row.position, entry);
-        if (channel && where !== channel) continue;
+        const where = await this.channelsAt(agentId, row.position, entry);
+        if (channel && !where.includes(channel)) continue;
         if (!(await this.readable(agentId, where, access))) continue;
         results.push({
           id: row.entryId,
           at,
-          channel: where,
+          channel: where.join(', ') || null,
           kind: said.kind,
           text: clip(said.text, lower.indexOf(words[0]), 300),
         });
@@ -165,7 +173,7 @@ export class DeepStorage {
       const entry = JSON.parse(item.payload) as Entry;
       const said = entryText(entry);
       if (!said) continue;
-      const where = await this.channelAt(agentId, item.position, entry);
+      const where = await this.channelsAt(agentId, item.position, entry);
       if (!(await this.readable(agentId, where, access))) {
         hidden++;
         continue;
@@ -173,7 +181,7 @@ export class DeepStorage {
       entries.push({
         id: item.entryId,
         at: entry.timestamp ?? '',
-        channel: where,
+        channel: where.join(', ') || null,
         kind: said.kind,
         text: clip(said.text, 0, 1500),
       });

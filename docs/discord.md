@@ -74,7 +74,9 @@ token; the owner's channel choices stay.
   messages missed meanwhile (up to 50 per channel or thread) arrive once, marked "sent while you were offline" (a
   setting). Nothing else is replayed.
 - **Authority:** only lines from your accounts carry your authority. Everyone else's text is untrusted, never an
-  instruction.
+  instruction. A body line that starts like a platform label (`[your owner]`, `[channel: …]`, an author line, "+N
+  more") gets a leading backslash, here and in agent, group and computer inputs, and trust comes from the batch's
+  structured source, never from its text.
 
 ## What agents can do
 

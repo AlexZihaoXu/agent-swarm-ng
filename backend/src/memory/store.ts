@@ -12,6 +12,8 @@ export type MemoryType = (typeof MEMORY_TYPES)[number];
 /** Who caused a memory: the owner, the agent itself (its own work, platform events), another agent, anyone else. */
 export type MemoryTrust = 'owner' | 'self' | 'agent' | 'other';
 export type Provenance = { by: string; trust: MemoryTrust; channelId?: string };
+/** Least trusted first: a memory or turn takes the least trusted of its sources. Unknown values count as other. */
+export const TRUST_RANK: Record<string, number> = { other: 0, agent: 1, self: 2, owner: 3 };
 /** Who changed a memory: the agent awake, the agent asleep, or the owner in the dashboard. */
 export type ChangedBy = 'agent' | 'sleep' | 'owner';
 export type MemoryHit = AgentMemory & { score: number; excerpt: string };
@@ -150,6 +152,8 @@ export class MemoryStore {
   /**
    * Changes a memory, keeping its previous text as a version. `expected` (the updatedAt a writer read) makes a stale
    * change fail instead of overwriting a newer one: sleep works from a snapshot, and the agent's own edits win.
+   * `from` (who causes a change of content) makes the memory's provenance the least trusted of the two, so content
+   * from an untrusted turn never keeps an owner memory's trust; the earlier text stays as a version.
    */
   async revise(
     agentId: string,
@@ -157,6 +161,7 @@ export class MemoryStore {
     changes: { type?: MemoryType; title?: string; text?: string; faded?: boolean; conflict?: boolean },
     by: ChangedBy,
     expected?: Date,
+    from?: Provenance,
   ) {
     const title = changes.title?.trim(),
       text = changes.text?.trim();
@@ -168,6 +173,10 @@ export class MemoryStore {
       (title !== undefined && title !== memory.title) ||
       (text !== undefined && text !== memory.text) ||
       (changes.type !== undefined && changes.type !== memory.type);
+    const source =
+      content && from && TRUST_RANK[from.trust] < (TRUST_RANK[memory.trust] ?? 0)
+        ? { by: from.by, trust: from.trust, channelId: from.channelId ?? null }
+        : {};
     const updated = await this.database.client.$transaction(async tx => {
       if (content)
         await tx.agentMemoryVersion.create({
@@ -181,6 +190,7 @@ export class MemoryStore {
           ...(changes.type !== undefined ? { type: changes.type } : {}),
           ...(changes.faded !== undefined ? { faded: changes.faded } : {}),
           ...(changes.conflict !== undefined ? { conflict: changes.conflict } : {}),
+          ...source,
         },
       });
       if (row.count !== 1) throw new MemoryError(`${name} changed meanwhile; read it again.`);

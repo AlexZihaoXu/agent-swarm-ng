@@ -15,7 +15,7 @@ services:
       # Days of operator activity to keep (0 keeps everything).
       ACTIVITY_RETENTION_DAYS: ${ACTIVITY_RETENTION_DAYS:-30}
       # Shared secret for the internal computer controller; empty disables the check.
-      COMPUTER_CONTROLLER_TOKEN: ${COMPUTER_CONTROLLER_TOKEN:-}
+      COMPUTER_CONTROLLER_TOKEN: ${COMPUTER_CONTROLLER_TOKEN:?Set COMPUTER_CONTROLLER_TOKEN in .env (openssl rand -hex 32)}
       COMPUTER_CONTROLLER_URL: http://computer-controller:3101
     init: true
     volumes:
@@ -59,7 +59,7 @@ services:
     environment:
       COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-agent-swarm-ng}
       # Most computers that can exist at once.
-      COMPUTER_CONTROLLER_TOKEN: ${COMPUTER_CONTROLLER_TOKEN:-}
+      COMPUTER_CONTROLLER_TOKEN: ${COMPUTER_CONTROLLER_TOKEN:?Set COMPUTER_CONTROLLER_TOKEN in .env (openssl rand -hex 32)}
       # Opt-in: shares ONLY this DRM render node with each sudo computer.
       COMPUTER_RENDER_DEVICE: ${COMPUTER_RENDER_DEVICE:-}
       COMPUTER_CPU_LIMIT: ${COMPUTER_CPU_LIMIT:-2}

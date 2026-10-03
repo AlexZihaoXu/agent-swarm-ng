@@ -71,3 +71,55 @@ it('finds archive entries word for word, newest first, only in channels still re
     await database.close();
   }
 });
+
+it('files a batch of inputs under every channel it draws from and hides it when any is unreadable', async () => {
+  const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
+  try {
+    const agent = await database.createAgent({ name: 'Ada', endpointId: 'm', model: 'm', thinkingLevel: 'off' });
+    const batch = {
+      type: 'message',
+      id: 'a',
+      timestamp: '2026-09-01T10:00:00Z',
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: '[channel: private-1]\nHello there.\n\n[channel: group:gone]\nThe launch code word is heron.',
+          },
+        ],
+      },
+    };
+    const entries = [batch, said('b', 'Heron noted.', '2026-09-01T10:00:05Z')];
+    const both = [
+      user('c', 'private-1', 'A heron flew by.', '2026-09-02T10:00:00Z'),
+      user('d', 'group:kept', 'Another heron.', '2026-09-02T10:00:01Z'),
+    ];
+    const all = [...entries, ...both];
+    await database.client.agentSession.create({
+      data: { agentId: agent.id, sessionId: 's', header: '{}', entryCount: all.length },
+    });
+    await database.client.agentSessionEntry.createMany({
+      data: all.map((entry, position) => ({
+        agentId: agent.id,
+        position,
+        entryId: entry.id,
+        parentId: position ? all[position - 1].id : null,
+        payload: JSON.stringify(entry),
+      })),
+    });
+    const deep = new DeepStorage(database, async (_agent, channel) => channel !== 'group:gone');
+    // The batch and the reply after it draw from group:gone too: neither is shown, under any channel.
+    expect((await deep.search(agent.id, { query: 'heron' })).map(item => item.id)).toEqual(['d', 'c']);
+    expect(await deep.search(agent.id, { query: 'heron', channel: 'private-1' })).toEqual([
+      expect.objectContaining({ id: 'c' }),
+    ]);
+    await expect(deep.episode(agent.id, 'b')).rejects.toThrow('can no longer read');
+    const readable = new DeepStorage(database, async () => true);
+    const found = await readable.search(agent.id, { query: 'launch heron' });
+    expect(found.map(item => [item.id, item.channel])).toEqual([['a', 'private-1, group:gone']]);
+    expect(await readable.search(agent.id, { query: 'launch', channel: 'group:gone' })).toHaveLength(1);
+  } finally {
+    await database.close();
+  }
+});

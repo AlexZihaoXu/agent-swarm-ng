@@ -1,5 +1,6 @@
 import type { PlatformStore } from './platform-store';
 import type { SwarmSettingsStore } from './swarm-settings';
+import { INVISIBLE_NAME_CHARACTERS } from './files/file-kind';
 import { applyEdits, pageText, type TextEdit } from './text-page';
 
 /** At most this many folders above a file: `a/b/c/file.md`. */
@@ -10,7 +11,7 @@ const PATH_MAX = 255;
 export class ScratchError extends Error {}
 
 /**
- * A scratch path: relative, `/`-separated, no `.`/`..` or empty segments, no control characters, at most three
+ * A scratch path: relative, `/`-separated, no `.`/`..` or empty segments, no control or invisible characters, at most three
  * folders deep. A leading `/` or `scratch:` is accepted and dropped. `''` is the root folder.
  */
 export function scratchPath(raw: string, { folder = false } = {}) {
@@ -29,6 +30,8 @@ export function scratchPath(raw: string, { folder = false } = {}) {
     if (segment === '.' || segment === '..') throw new ScratchError('A path has no "." or ".." parts.');
     if (segment.length > SEGMENT_MAX) throw new ScratchError(`Each name is at most ${SEGMENT_MAX} characters.`);
     if (/[\u0000-\u001f\u007f\\]/.test(segment)) throw new ScratchError('Names have no control characters or "\\".');
+    if (segment.search(INVISIBLE_NAME_CHARACTERS) >= 0)
+      throw new ScratchError('Names have no invisible characters (bidi controls, zero-width spaces).');
   }
   if (segments.length - (folder ? 0 : 1) > SCRATCH_MAX_FOLDERS)
     throw new ScratchError(`The scratchpad allows at most ${SCRATCH_MAX_FOLDERS} levels of folders.`);

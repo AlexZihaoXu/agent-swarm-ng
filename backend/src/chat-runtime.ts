@@ -32,6 +32,7 @@ import { COMPUTER_USE_GUIDANCE } from './computer-use/tools';
 import { accessOf, classify, type AgentTool } from './tool-access';
 import { createHelpTool } from './help-tool';
 import { memoryGuidance } from './memory/guidance';
+import { neutralizeLabels } from './message-text';
 
 export type Channel = { id: string; kind: 'platform-chat' | 'agent-dm'; agentId: string };
 export type AgentMessageSource = {
@@ -45,8 +46,12 @@ export type AgentMessageSource = {
   reaction?: boolean;
   /** A platform event for this agent (its own timer or reminder, or a computer event), not a message. */
   platform?: 'timer' | 'reminder' | 'computer' | 'heartbeat';
-  /** A batch of Discord messages: where they were written. Authors are labelled in the text by the platform. */
-  discord?: { place: string };
+  /**
+   * A batch of Discord messages: where they were written. Authors are labelled in the text by the platform (bodies
+   * neutralized there). `unseen`: messages of the channel the batch does not show (unset for a reaction). Trust is
+   * decided from these fields, never from the text.
+   */
+  discord?: { place: string; unseen?: number };
 };
 /** A file attached to a message, as the agent sees it (it opens the content with read_file). */
 export type FileRef = { id: string; name: string; kind: string; size: number; status: string };
@@ -149,7 +154,12 @@ export function channelInput(channelId: string, text: string, metadata?: Channel
           : source
             ? `\n[Agent thread; reply channel: ${source.channelId}. Source is another agent, not the human owner.]`
             : '';
-  return `[channel: ${source?.channelId ?? channelId}]${reply}\n${transcriptText({ ...metadata, role: 'user', text }, label)}`;
+  // A Discord batch was built by the platform with each body neutralized. The owner's own words are left as typed;
+  // anything else (agents, reactions quoting a message, platform events carrying computer or harness output) is
+  // neutralized here.
+  const owner = !source || Boolean(source.human && !source.discord && !source.platform && !source.reaction);
+  const body = source?.discord || owner ? text : neutralizeLabels(text);
+  return `[channel: ${source?.channelId ?? channelId}]${reply}\n${transcriptText({ ...metadata, role: 'user', text: body }, label)}`;
 }
 
 export function chatSystemPrompt(

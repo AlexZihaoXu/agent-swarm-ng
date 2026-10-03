@@ -7,8 +7,9 @@ header {
 }
 
 # Desktop viewers reach computers directly, not through the backend: Caddy asks the backend first whether the browser is
-# signed in (docs/login.md). The check is a plain GET, so the WebSocket upgrade headers stay off it.
-@computerViewer path /computers/*
+# signed in (docs/login.md). The check is a plain GET, so the WebSocket upgrade headers stay off it; the browser's
+# Origin goes along, so another site's page cannot open a desktop. Only desktop paths: /computers/… pages are the app.
+@computerViewer path_regexp computerViewer (?i)^/computers/[^/]+/desktop(?:/|$)
 forward_auth @computerViewer backend:3000 {
 	uri /api/auth/check
 	header_up -Upgrade
@@ -45,7 +46,19 @@ handle @computerWS {
 		# Selkies validates WebSocket Origin against Host. Its TLS upstream
 		# would otherwise replace the dashboard Host with the relay alias.
 		header_up Host {http.request.host}
+		# The computer is untrusted: it never sees the dashboard's credentials or the owner's address.
+		header_up -Cookie
+		header_up -Authorization
+		header_up -X-Forwarded-For
+		header_up -X-Forwarded-Host
 		header_down -Set-Cookie
+		# Nor may it clear or report on the dashboard's site data.
+		header_down -Clear-Site-Data
+		header_down -NEL
+		header_down -Report-To
+		header_down -Reporting-Endpoints
+		header_down -Strict-Transport-Security
+		header_down -Alt-Svc
 		transport http {
 			tls
 			# The backend is only a controller-labelled endpoint on the
@@ -61,6 +74,18 @@ handle @computerWS {
 handle @computerJSON {
 	reverse_proxy computer-{re.computerJSON.1}:8080 {
 		header_up Host {http.request.host}
+		# The computer is untrusted: it never sees the dashboard's credentials or the owner's address.
+		header_up -Cookie
+		header_up -Authorization
+		header_up -X-Forwarded-For
+		header_up -X-Forwarded-Host
+		# Nor may it clear or report on the dashboard's site data.
+		header_down -Clear-Site-Data
+		header_down -NEL
+		header_down -Report-To
+		header_down -Reporting-Endpoints
+		header_down -Strict-Transport-Security
+		header_down -Alt-Svc
 		header_down Content-Type "application/json; charset=utf-8"
 		header_down X-Content-Type-Options nosniff
 		header_down Content-Disposition attachment

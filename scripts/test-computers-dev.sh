@@ -4,6 +4,8 @@ set -eu
 [ "$(uname -s)" = Linux ] || { echo 'This sandboxed browser harness targets Linux Docker.' >&2; exit 1; }
 project="sng-comp-test-$(date +%M%S)-$$"
 export COMPUTER_NAMESPACE="$project" COMPUTER_TEST_NAMESPACE="$project"
+# The controller refuses to run open: this disposable stack gets its own random token.
+export COMPUTER_CONTROLLER_TOKEN="${COMPUTER_CONTROLLER_TOKEN:-$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')}"
 # The repository `.env` can grant the live computer a render node. A disposable
 # gate opts in explicitly with TEST_RENDER_DEVICE so the controller it starts
 # and the host-side assertions always agree on the device mapping.

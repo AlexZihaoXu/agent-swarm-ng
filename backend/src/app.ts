@@ -68,7 +68,7 @@ export async function buildApp({
   });
 
   // Before every route, so nothing is reachable without a session (sign-in endpoints and health aside).
-  registerAuth(app, new Accounts(platform), { requireLogin });
+  app.decorate('watchSession', registerAuth(app, new Accounts(platform), { requireLogin }));
 
   app.get(
     '/api/health',

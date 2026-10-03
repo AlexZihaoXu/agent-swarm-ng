@@ -5,6 +5,8 @@ set -eu
 cd "$(dirname "$0")/.."
 project="sng-x11-test-$(date +%M%S)-$$"
 export COMPUTER_NAMESPACE="$project"
+# The controller refuses to run open: this disposable stack gets its own random token.
+export COMPUTER_CONTROLLER_TOKEN="${COMPUTER_CONTROLLER_TOKEN:-$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')}"
 # GPU proof is opt-in and grants only the single existing render node to the
 # disposable computer. The default no-device gate remains unchanged.
 case "${TEST_RENDER_DEVICE:-}" in ''|/dev/dri/renderD128) ;; *) echo 'Invalid disposable render device' >&2; exit 1;; esac

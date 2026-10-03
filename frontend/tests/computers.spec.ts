@@ -872,6 +872,61 @@ test('trusted desktop frame smooths a downscaled stream despite upstream pixelat
   }
 });
 
+test('trusted desktop frame touches the owner clipboard only after their own paste or copy key', async ({ page }) => {
+  // The guest controls Selkies's clipboard messages; the pinned client reads on focus and writes on a push.
+  await page.addInitScript(() => {
+    const calls: string[] = [];
+    (window as any).__clipboardCalls = calls;
+    const fake = Object.fromEntries(
+      ['read', 'readText', 'write', 'writeText'].map(name => [
+        name,
+        async () => {
+          calls.push(name);
+          return name === 'readText' ? 'owner secret' : undefined;
+        },
+      ]),
+    );
+    Object.defineProperty(Navigator.prototype, 'clipboard', { get: () => fake, configurable: true });
+  });
+  await page.route('**/assets/index-CPWh3fQ6.js', route => route.fulfill({ contentType: 'text/javascript', body: '' }));
+  await page.route('**/assets/index-D97fjY6g.css', route => route.fulfill({ contentType: 'text/css', body: '' }));
+  await page.goto('/desktop-frame.html');
+  const attempt = (action: string) =>
+    page.evaluate(
+      action =>
+        (action === 'read' ? navigator.clipboard.readText() : navigator.clipboard.writeText('rm -rf ~')).then(
+          () => 'allowed',
+          error => error.name,
+        ),
+      action,
+    );
+  await page.keyboard.press('ControlOrMeta+V'); // input still locked
+  expect(await attempt('read')).toBe('NotAllowedError');
+  await page.evaluate(() => window.postMessage({ type: 'swarm:desktop-input', enabled: true }, location.origin));
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })));
+  expect(await attempt('read')).toBe('NotAllowedError');
+  expect(await attempt('write')).toBe('AbortError');
+  // The owner's own key opens a short window; a busy test machine may need the frame focused and another press.
+  await page.bringToFront();
+  await expect
+    .poll(async () => {
+      await page.keyboard.press('ControlOrMeta+V');
+      return attempt('read');
+    })
+    .toBe('allowed');
+  await expect
+    .poll(async () => {
+      await page.keyboard.press('ControlOrMeta+C');
+      return attempt('write');
+    })
+    .toBe('allowed');
+  expect(await attempt('write')).toBe('AbortError');
+  // Only reads after a paste key and one write after a copy key ever reached the real clipboard.
+  const calls: string[] = await page.evaluate(() => (window as any).__clipboardCalls);
+  expect(calls.at(-1)).toBe('writeText');
+  expect(calls.slice(0, -1).every(call => call === 'readText')).toBe(true);
+});
+
 test('keeps saved computers visible but controls disabled when their controller is offline', async ({ page }) => {
   await mockComputers(page);
   await page.route(/\/api\/computers(?:\?.*)?$/, route =>
