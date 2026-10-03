@@ -1,4 +1,5 @@
 import { DiscordOwnerSettings } from '@/components/discord-owner-settings';
+import { AccountSettings } from '@/components/account-settings';
 import { SwarmSettings } from '@/components/swarm-settings';
 import { OrganizationSettings } from '@/components/organization-settings';
 import { ComputerStorageSettings } from '@/components/computer-storage-settings';
@@ -420,11 +421,12 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
     <div>
       <PageHeader
         title="Settings"
-        description="Organizations, model connections, Knowledge and swarm limits."
+        description="Your account, organizations, model connections, Knowledge and swarm limits."
         width="max-w-3xl"
         sticky
       />
       <div className="mx-auto w-full max-w-3xl space-y-8 px-4 pb-8 pt-6 md:px-6 md:pb-10">
+        <AccountSettings />
         <CodexConnection />
         <OrganizationSettings card={settingsCard} />
         <section aria-labelledby="knowledge-title" className="space-y-4">

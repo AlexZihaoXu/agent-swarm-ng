@@ -180,7 +180,7 @@ it('retains one private Pi working session across a group turn and a later human
     await f.broker.sendHumanGroup(group.id, 'Earlier shared finding', crypto.randomUUID());
     await f.idle();
     expect(await f.database.client.agentSessionEntry.count({ where: { agentId: f.a.id } })).toBeGreaterThan(0);
-    app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+    app = await buildApp({ requireLogin: false, database: f.database, endpointStore: f.endpoints, codex: f.codex });
     const response = await app.inject({
       method: 'POST',
       url: '/api/chat',
@@ -235,7 +235,7 @@ it('gives group agents the parent preview and lets them publish a scoped reply v
 
 it('exposes operator group creation, membership editing and human publication without DM side effects', async () => {
   const f = await fixture();
-  const app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+  const app = await buildApp({ requireLogin: false, database: f.database, endpointStore: f.endpoints, codex: f.codex });
   try {
     await f.broker.store.updateSettings(f.a.id, { allowedDmAgentIds: [] });
     const created = await app.inject({
@@ -287,7 +287,7 @@ it('requires typed confirmation and refuses deletion while group agents are resp
     release = resolve;
   });
   const f = await fixture(false, gate);
-  const app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+  const app = await buildApp({ requireLogin: false, database: f.database, endpointStore: f.endpoints, codex: f.codex });
   try {
     const created = await app.inject({
       method: 'POST',
@@ -341,7 +341,7 @@ it('requires typed confirmation and refuses deletion while group agents are resp
 
 it('lets an agent reference the human message in its own private chat without exposing another channel', async () => {
   const f = await fixture();
-  const app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+  const app = await buildApp({ requireLogin: false, database: f.database, endpointStore: f.endpoints, codex: f.codex });
   try {
     const channel = f.a.channels[0].id;
     const parent = await f.database.appendMessage(channel, 'assistant', 'Earlier private answer');
@@ -374,7 +374,7 @@ it('lets an agent reference the human message in its own private chat without ex
 
 it('exposes bounded, authorized reply previews through private and group HTTP publications', async () => {
   const f = await fixture();
-  const app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+  const app = await buildApp({ requireLogin: false, database: f.database, endpointStore: f.endpoints, codex: f.codex });
   try {
     const privateId = f.a.channels[0].id;
     const parent = await f.database.appendMessage(privateId, 'assistant', 'Earlier answer '.repeat(50));
@@ -545,7 +545,7 @@ it('bounds reaction decision fan-in per agent while preserving the saved emoji',
 
 it('commits new human emoji before admission and does not replay duplicate or removed reactions', async () => {
   const f = await fixture();
-  const app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+  const app = await buildApp({ requireLogin: false, database: f.database, endpointStore: f.endpoints, codex: f.codex });
   try {
     const message = await f.database.appendMessage(f.a.channels[0].id, 'assistant', 'Finished');
     const path = `/api/chats/${f.a.channels[0].id}/messages/${message.id}/reaction`;
@@ -665,7 +665,7 @@ it('admits and coalesces private human work while the same agent is busy in a DM
     release = resolve;
   });
   const f = await fixture(false, gate);
-  const app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+  const app = await buildApp({ requireLogin: false, database: f.database, endpointStore: f.endpoints, codex: f.codex });
   try {
     const post = (agentId: string, message: string) =>
       app.inject({
@@ -767,7 +767,7 @@ it('cancels descendant work before deleting its origin, without a late publicati
 }, 20000);
 it('exposes atomic settings and inspectable transcripts without granting an HTTP model-send endpoint', async () => {
   const f = await fixture();
-  const app = await buildApp({ database: f.database, endpointStore: f.endpoints, codex: f.codex });
+  const app = await buildApp({ requireLogin: false, database: f.database, endpointStore: f.endpoints, codex: f.codex });
   try {
     const path = `/api/agents/${f.a.id}/settings`;
     expect((await app.inject({ method: 'GET', url: path })).json().allowedDmAgents).toEqual([

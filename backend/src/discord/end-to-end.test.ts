@@ -128,7 +128,13 @@ it('your Discord DM reaches the agent as you, and its reply comes back through i
   const database = await prepareDatabase(join(root, 'platform.db'));
   const endpoints = new EndpointStore(join(root, 'endpoints.json'));
   await endpoints.save({ id: 'endpoint', name: 'Mock', baseUrl: modelUrl, apiKey: 'key' });
-  const app = await buildApp({ database, endpointStore: endpoints, discordApi: discord.api, computerController: null });
+  const app = await buildApp({
+    requireLogin: false,
+    database,
+    endpointStore: endpoints,
+    discordApi: discord.api,
+    computerController: null,
+  });
   try {
     const agent = (
       await app.inject({
@@ -198,7 +204,13 @@ it('checks untargeted server messages in a visible, cheap branch before giving t
       threads: [],
     },
   ];
-  const app = await buildApp({ database, endpointStore: endpoints, discordApi: discord.api, computerController: null });
+  const app = await buildApp({
+    requireLogin: false,
+    database,
+    endpointStore: endpoints,
+    discordApi: discord.api,
+    computerController: null,
+  });
   try {
     const agent = (
       await app.inject({

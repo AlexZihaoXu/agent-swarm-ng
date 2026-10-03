@@ -100,7 +100,7 @@ it('serves organizations to the dashboard and creates agents in the chosen one',
   const db = await prepareDatabase(join(folder, 'api.db'));
   const endpoints = new EndpointStore(join(folder, 'endpoints.json'));
   await endpoints.save({ id: 'fixture', name: 'Fixture', baseUrl: 'http://test.invalid/v1', apiKey: '' });
-  const app = await buildApp({ database: db, endpointStore: endpoints, computerController: null });
+  const app = await buildApp({ requireLogin: false, database: db, endpointStore: endpoints, computerController: null });
   try {
     const created = await app.inject({ method: 'POST', url: '/api/organizations', payload: { name: 'Lab' } });
     const lab = created.json().organizations.find((org: { name: string }) => org.name === 'Lab');

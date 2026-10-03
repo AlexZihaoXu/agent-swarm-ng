@@ -168,7 +168,7 @@ it('gives every agent scratch tools that return its mistakes as tool errors', as
 it('lets the dashboard browse an agent’s scratchpad read-only', async () => {
   const { buildApp } = await import('./app');
   const { database, agent, pad } = await setup();
-  const app = await buildApp({ database, computerController: null });
+  const app = await buildApp({ requireLogin: false, database, computerController: null });
   try {
     await pad.write(agent.id, 'drafts/report.md', '# Report\n');
     const list = await app.inject({ method: 'GET', url: `/api/agents/${agent.id}/scratch` });

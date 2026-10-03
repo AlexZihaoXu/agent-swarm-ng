@@ -34,7 +34,7 @@ it('starts from defaults, saves only valid whole numbers within bounds, and surv
 
 it('serves Settings → Swarm over the API with bounds, and rejects bad edits', async () => {
   const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
-  const app = await buildApp({ database, computerController: null });
+  const app = await buildApp({ requireLogin: false, database, computerController: null });
   try {
     const read = await app.inject({ method: 'GET', url: '/api/settings/swarm' });
     expect(read.statusCode).toBe(200);

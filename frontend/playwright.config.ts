@@ -8,7 +8,13 @@ const data = fileURLToPath(new URL('../.scratch/e2e-data', import.meta.url));
 export default defineConfig({
   testDir: './tests',
   outputDir: '../.scratch/test-results',
-  use: { baseURL: 'http://127.0.0.1:5173', browserName: 'chromium' },
+  // Every test starts signed in as Admin (tests/sign-in.setup.ts).
+  globalSetup: './tests/sign-in.setup.ts',
+  use: {
+    baseURL: 'http://127.0.0.1:5173',
+    browserName: 'chromium',
+    storageState: fileURLToPath(new URL('../.scratch/e2e-signed-in.json', import.meta.url)),
+  },
   webServer: [
     {
       command: `rm -rf "${data}" && bun run --cwd ../backend start`,

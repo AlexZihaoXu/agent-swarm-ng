@@ -3,7 +3,7 @@ import { buildApp } from './app';
 
 describe('platform health contract', () => {
   it('returns the documented health response', async () => {
-    const app = await buildApp();
+    const app = await buildApp({ requireLogin: false });
     try {
       const response = await app.inject({ method: 'GET', url: '/api/health' });
       expect(response.statusCode).toBe(200);

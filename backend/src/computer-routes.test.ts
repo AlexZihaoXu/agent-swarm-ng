@@ -82,7 +82,7 @@ async function fixture() {
       });
     },
   };
-  const app = await buildApp({ database, computerController: controller });
+  const app = await buildApp({ requireLogin: false, database, computerController: controller });
   return { app, database, calls, settingsCalls, limitCalls, observed, controller };
 }
 
@@ -481,7 +481,7 @@ it('shows saved computers as unavailable during a controller outage without hidi
   const store = new ComputerStore(database);
   const { computer } = await store.reserve('Kept machine', crypto.randomUUID());
   await store.markRunning(computer.id);
-  const app = await buildApp({ database, computerController: null });
+  const app = await buildApp({ requireLogin: false, database, computerController: null });
   try {
     const response = await app.inject({ method: 'GET', url: '/api/computers' });
     expect(response.statusCode).toBe(200);
@@ -546,6 +546,7 @@ it("reports the controller's own refusal and leaves no stray record when a creat
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
   const app = await buildApp({
+    requireLogin: false,
     database,
     computerController: new HttpComputerController(`http://127.0.0.1:${(server.address() as { port: number }).port}`),
   });
@@ -608,7 +609,7 @@ it('marks a computer as deleting before releasing its holder, so nobody can clai
       throw new Error('unused');
     },
   };
-  const app = await buildApp({ database, computerController: { ...controller, runtime } });
+  const app = await buildApp({ requireLogin: false, database, computerController: { ...controller, runtime } });
   try {
     const created = (
       await app.inject({

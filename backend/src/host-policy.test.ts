@@ -41,7 +41,7 @@ describe('Host enforcement on the API', () => {
   });
   async function start() {
     const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
-    const app = await buildApp({ database, computerController: null });
+    const app = await buildApp({ requireLogin: false, database, computerController: null });
     const sockets = new Set<import('node:net').Socket>();
     app.server.on('connection', socket => {
       sockets.add(socket);

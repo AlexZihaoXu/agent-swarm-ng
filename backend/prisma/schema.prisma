@@ -643,3 +643,28 @@ model DiscordDmAllow {
   @@id([agentId, discordUserId])
 }
 
+
+/// A person who signs in to the dashboard. The migration creates "Admin" with no password: the first sign-in sets it.
+model User {
+  sequence          Int           @id @default(autoincrement())
+  id                String        @unique @default(uuid())
+  name              String        @unique
+  /// scrypt hash (auth/sessions.ts); null until the first sign-in sets it (or after a host-side reset).
+  passwordHash      String?
+  passwordChangedAt DateTime?
+  createdAt         DateTime      @default(now())
+  sessions          UserSession[]
+}
+
+/// A signed-in browser. Only the SHA-256 of the cookie's random token is stored.
+model UserSession {
+  tokenHash  String   @id
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  expiresAt  DateTime
+
+  @@index([userId])
+  @@index([expiresAt])
+}

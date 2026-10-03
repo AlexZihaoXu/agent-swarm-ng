@@ -11,7 +11,7 @@ it('saves avatar identity at creation and edits only appearance, surviving reope
   const database = await prepareDatabase(file);
   const endpoints = new EndpointStore(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.json`));
   await endpoints.save({ id: 'fixture', name: 'Fixture', baseUrl: 'http://test.invalid/v1', apiKey: '' });
-  const app = await buildApp({ database, endpointStore: endpoints });
+  const app = await buildApp({ requireLogin: false, database, endpointStore: endpoints });
   let id = '';
   const avatar = { shape: 'bean', color: '#55bea9', seed: 42 };
   const edited = { shape: 'triangle', color: '#F7AD51', seed: 321, eyeStyle: 'round' };

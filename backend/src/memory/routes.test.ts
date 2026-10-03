@@ -16,7 +16,7 @@ it('lets the owner see, edit, forget, restore and erase memories, and set the sl
     { type: 'person', title: 'Sam', text: 'Sam runs the release.' },
     { by: 'agent Bo', trust: 'agent' },
   );
-  const app = await buildApp({ database: db, computerController: null });
+  const app = await buildApp({ requireLogin: false, database: db, computerController: null });
   const base = `/api/agents/${agent.id}/memory`;
   try {
     const first = await app.inject(base);

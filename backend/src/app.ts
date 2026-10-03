@@ -29,6 +29,8 @@ import { DiscordTokenStore } from './discord/token-store';
 import { DiscordStore } from './discord/store';
 import { DiscordConnections } from './discord/connections';
 import { registerDiscordRoutes } from './discord/routes';
+import { Accounts } from './auth/sessions';
+import { registerAuth } from './auth/routes';
 
 export async function buildApp({
   fetcher,
@@ -37,6 +39,7 @@ export async function buildApp({
   codex = new CodexProvider(),
   computerController,
   discordApi,
+  requireLogin = true,
 }: {
   fetcher?: typeof fetch;
   endpointStore?: EndpointStore;
@@ -45,6 +48,8 @@ export async function buildApp({
   computerController?: ComputerController | null;
   /** Discord's REST base (tests point it at a mock). */
   discordApi?: string;
+  /** Dashboard sign-in for every request (docs/login.md). Only tests of other features turn it off. */
+  requireLogin?: boolean;
 } = {}) {
   const app = Fastify({ logger: true });
   const hostAllowed = allowedHosts();
@@ -61,6 +66,9 @@ export async function buildApp({
       components: { schemas: { AgentActivityEntry: ActivityEntrySchema } },
     },
   });
+
+  // Before every route, so nothing is reachable without a session (sign-in endpoints and health aside).
+  registerAuth(app, new Accounts(platform), { requireLogin });
 
   app.get(
     '/api/health',

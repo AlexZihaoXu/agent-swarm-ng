@@ -15,7 +15,7 @@ it('serves no-store operator pages/fragments with ownership, bounds, retries and
   await recorder.start();
   recorder.record('assistant', 'Internal output', 'x'.repeat(7000), 'output');
   await recorder.flush();
-  const app = await buildApp({ database: db, computerController: null });
+  const app = await buildApp({ requireLogin: false, database: db, computerController: null });
   try {
     expect((await db.client.activity.findUnique({ where: { id: 'run:run-status' } }))?.state).toBe('active');
     const page = await app.inject(`/api/agents/${agent.id}/activity`);

@@ -1,6 +1,6 @@
 # Agent computer use
 
-Status: deployed to the trusted dashboard from `6cfb464` on 2026-09-27. This capability is separate from human desktop viewing, agent identity and channels. No account/login system is added. Computer assignments start empty and are set explicitly by the human.
+Status: deployed to the trusted dashboard from `6cfb464` on 2026-09-27. This capability is separate from human desktop viewing, agent identity and channels. The dashboard itself needs a sign-in ([login](login.md)). Computer assignments start empty and are set explicitly by the human.
 
 ## Assignment and control
 

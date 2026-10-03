@@ -5,7 +5,7 @@ import { prepareDatabase } from '../test-database';
 
 it('serves only bounded, read-only catalog pages for operator review', async () => {
   const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
-  const app = await buildApp({ database, computerController: null });
+  const app = await buildApp({ requireLogin: false, database, computerController: null });
   try {
     const roots = await app.inject({ method: 'GET', url: '/api/knowledge' });
     expect(roots.statusCode).toBe(200);

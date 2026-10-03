@@ -1,10 +1,18 @@
-# Site-wide hardening. The dashboard has no login, so it must not be frameable by another site (clickjacking on
-# one-click actions). The desktop viewer iframe is same-origin, so 'self' still allows it.
+# Site-wide hardening. The dashboard must not be frameable by another site (clickjacking on one-click actions). The desktop viewer iframe is same-origin, so 'self' still allows it.
 header {
 	X-Frame-Options SAMEORIGIN
 	Content-Security-Policy "frame-ancestors 'self'"
 	Referrer-Policy no-referrer
 	X-Content-Type-Options nosniff
+}
+
+# Desktop viewers reach computers directly, not through the backend: Caddy asks the backend first whether the browser is
+# signed in (docs/login.md). The check is a plain GET, so the WebSocket upgrade headers stay off it.
+@computerViewer path /computers/*
+forward_auth @computerViewer backend:3000 {
+	uri /api/auth/check
+	header_up -Upgrade
+	header_up -Connection
 }
 
 # Shared by production Caddy and the isolated development proxy. The root

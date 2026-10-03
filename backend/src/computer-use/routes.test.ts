@@ -13,6 +13,7 @@ it('serves explicit assignments, human release and scoped expiring images withou
   });
   const pool = new ScreenshotPool(join(db.dataDirectory, 'computer-screenshots'));
   const app = await buildApp({
+    requireLogin: false,
     database: db,
     computerController: { runtime: { cancel: async () => {} } } as unknown as ComputerController,
   });

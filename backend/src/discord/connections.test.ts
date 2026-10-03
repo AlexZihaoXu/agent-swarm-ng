@@ -40,7 +40,7 @@ async function setup() {
   const root = join(process.env.SQLITE_TEST_ROOT!, crypto.randomUUID());
   await mkdir(root, { recursive: true });
   const database = await prepareDatabase(join(root, 'platform.db'));
-  const app = await buildApp({ database, computerController: null, discordApi: discord.api });
+  const app = await buildApp({ requireLogin: false, database, computerController: null, discordApi: discord.api });
   const agent = await database.createAgent({ name: 'Aether', endpointId: 'mock', model: 'm', thinkingLevel: 'off' });
   const url = `/api/agents/${agent.id}/discord`;
   return { root, database, app, agent, url };

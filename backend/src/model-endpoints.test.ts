@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app';
 
 async function testEndpoint(fetcher: typeof fetch, body: Record<string, unknown>) {
-  const app = await buildApp({ fetcher });
+  const app = await buildApp({ requireLogin: false, fetcher });
   try {
     return await app.inject({ method: 'POST', url: '/api/model-endpoints/test', payload: body });
   } finally {

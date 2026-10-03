@@ -1,8 +1,8 @@
 import { isIP } from 'node:net';
 
 /**
- * The dashboard has no login, so a web page the operator visits must not be able to reach it by pointing its own
- * DNS name at this address (DNS rebinding). Browsers always send the attacker's hostname in `Host`, so accept only
+ * Defense in depth beside the sign-in (docs/login.md): a web page the operator visits must not be able to reach the
+ * dashboard by pointing its own DNS name at this address (DNS rebinding). Browsers always send the attacker's hostname in `Host`, so accept only
  * IP literals, localhost, and names the operator lists in ALLOWED_HOSTS (comma-separated hostnames, ports ignored).
  */
 export function hostname(header: string | undefined) {

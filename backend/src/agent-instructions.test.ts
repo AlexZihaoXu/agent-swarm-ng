@@ -52,7 +52,7 @@ it('puts the owner’s instructions for an agent last in its system prompt, from
   const database = await prepareDatabase(join(root, 'platform.db'));
   const endpoints = new EndpointStore(join(root, 'endpoints.json'));
   await endpoints.save({ id: 'endpoint', name: 'Mock', baseUrl: modelUrl, apiKey: 'key' });
-  const app = await buildApp({ database, endpointStore: endpoints, computerController: null });
+  const app = await buildApp({ requireLogin: false, database, endpointStore: endpoints, computerController: null });
   try {
     const agent = (
       await app.inject({

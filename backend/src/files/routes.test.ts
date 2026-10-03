@@ -11,7 +11,7 @@ async function setup() {
   const root = join(process.env.SQLITE_TEST_ROOT!, crypto.randomUUID());
   await mkdir(root, { recursive: true });
   const database = await prepareDatabase(join(root, 'platform.db'));
-  const app = await buildApp({ database, computerController: null });
+  const app = await buildApp({ requireLogin: false, database, computerController: null });
   const agent = await database.createAgent({ name: 'Aether', endpointId: 'mock', model: 'm', thinkingLevel: 'off' });
   const upload = (channelKey: string, name: string, payload: Buffer | string) =>
     app.inject({

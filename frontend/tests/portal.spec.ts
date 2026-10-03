@@ -48,6 +48,8 @@ test('Ctrl+K opens Portal, prefixes narrow it, Enter floats and Shift+Enter goes
   await mocks(page);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/agents/avery');
+  // The app (and its shortcut) mounts once the sign-in check answers.
+  await expect(page.getByRole('button', { name: 'Open Portal' })).toBeVisible();
   await page.keyboard.press('Control+k');
   const portal = page.getByRole('dialog', { name: 'Portal' });
   await expect(portal).toBeVisible();
@@ -128,8 +130,11 @@ test('Ctrl+K opens Portal, prefixes narrow it, Enter floats and Shift+Enter goes
 test('keys inside a focused terminal stay with the computer', async ({ page }) => {
   await mocks(page);
   await page.goto('/agents/avery');
+  // The app (and its shortcut) mounts once the sign-in check answers.
+  await expect(page.getByRole('button', { name: 'Open Portal' })).toBeVisible();
   await page.keyboard.press('Control+k');
   await page.getByRole('dialog', { name: 'Portal' }).getByRole('combobox').fill(':build');
+  await expect(page.getByRole('option', { name: /build-web/, selected: true })).toBeVisible();
   await page.keyboard.press('Enter');
   const terminal = page.getByRole('region', { name: 'Floating terminal build-web' });
   await terminal.locator('.xterm-helper-textarea').focus();

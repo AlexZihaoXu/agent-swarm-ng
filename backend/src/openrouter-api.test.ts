@@ -24,7 +24,12 @@ it('discovers tool-capable OpenRouter models and applies provider capabilities w
   const fetcher = vi.fn().mockResolvedValue(Response.json(catalog));
   const store = new EndpointStore(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.json`));
   const db = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
-  const app = await buildApp({ endpointStore: store, database: db, fetcher: fetcher as unknown as typeof fetch });
+  const app = await buildApp({
+    requireLogin: false,
+    endpointStore: store,
+    database: db,
+    fetcher: fetcher as unknown as typeof fetch,
+  });
   try {
     const saved = await app.inject({
       method: 'POST',

@@ -64,7 +64,7 @@ it('summarizes earlier context in the background during work and later turns sta
   const database = await prepareDatabase(join(root, 'platform.db'));
   const endpoints = new EndpointStore(join(root, 'endpoints.json'));
   await endpoints.save({ id: 'endpoint', name: 'Mock', baseUrl: modelUrl, apiKey: 'key' });
-  const app = await buildApp({ database, endpointStore: endpoints, computerController: null });
+  const app = await buildApp({ requireLogin: false, database, endpointStore: endpoints, computerController: null });
   try {
     const agent = (
       await app.inject({

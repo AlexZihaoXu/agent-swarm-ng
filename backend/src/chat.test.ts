@@ -220,6 +220,7 @@ async function testApp(database?: PlatformStore, codex?: CodexProvider) {
   const store = new EndpointStore(join(folder, `${crypto.randomUUID()}.json`));
   await store.save({ id: 'endpoint', name: 'Mock', baseUrl, apiKey: '!literal-key-$NOT_AN_ENV_LOOKUP' });
   return buildApp({
+    requireLogin: false,
     codex,
     endpointStore: store,
     database: database ?? (await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`))),

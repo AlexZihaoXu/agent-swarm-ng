@@ -53,6 +53,7 @@ it('runs claimed computer tools in a real Pi turn with image context, Knowledge 
     baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`,
   });
   const app = await buildApp({
+    requireLogin: false,
     database: db,
     endpointStore: endpoints,
     computerController: {

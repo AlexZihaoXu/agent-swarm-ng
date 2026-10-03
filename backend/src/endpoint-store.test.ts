@@ -46,7 +46,7 @@ describe('saved endpoint preferences', () => {
 
   it('never returns keys and can test by saved ID after an app restart', async () => {
     const path = await storePath();
-    const first = await buildApp({ endpointStore: new EndpointStore(path) });
+    const first = await buildApp({ requireLogin: false, endpointStore: new EndpointStore(path) });
     try {
       const save = await first.inject({ method: 'POST', url: '/api/model-endpoints', payload: endpoint });
       expect(save.statusCode).toBe(200);
@@ -58,6 +58,7 @@ describe('saved endpoint preferences', () => {
     const fetcher = vi.fn().mockResolvedValue(Response.json({ data: [{ id: 'example-model' }] }));
     const { prepareDatabase } = await import('./test-database');
     const second = await buildApp({
+      requireLogin: false,
       endpointStore: new EndpointStore(path),
       fetcher: fetcher as unknown as typeof fetch,
       database: await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`)),
@@ -105,7 +106,7 @@ it('refuses to remove an endpoint that agents still use, and removes it once the
   const { prepareDatabase } = await import('./test-database');
   const database = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
   const store = new EndpointStore(join(folder, 'endpoints.json'));
-  const app = await buildApp({ endpointStore: store, database });
+  const app = await buildApp({ requireLogin: false, endpointStore: store, database });
   try {
     await store.save({ id: 'in-use', name: 'Local', baseUrl: 'http://127.0.0.1:1/v1', apiKey: 'k' });
     const agent = await database.createAgent({
