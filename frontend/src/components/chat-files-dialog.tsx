@@ -141,7 +141,7 @@ export function ChatFilesDialog({
                 Files · {title}
               </Dialog.Title>
               <Dialog.Close asChild>
-                <Button variant="outline" size="sm" className="size-10 shrink-0 p-0" aria-label="Close files">
+                <Button variant="flat" size="sm" className="size-10 shrink-0 p-0" aria-label="Close files">
                   ×
                 </Button>
               </Dialog.Close>

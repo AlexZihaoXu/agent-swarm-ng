@@ -572,7 +572,7 @@ export function AgentActivityPanel({
               </Popover.Root>
               <Dialog.Close asChild>
                 <Button
-                  variant="outline"
+                  variant="flat"
                   size="sm"
                   aria-label="Close activity"
                   className="ml-auto size-11 border-0 p-0 sm:size-7"

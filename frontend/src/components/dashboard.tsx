@@ -41,7 +41,7 @@ const NET_IN = 'var(--chart-2)',
   DISK_WRITE = 'var(--chart-5)';
 const TOKEN_TYPES = [
   ['input', 'Input'],
-  ['output', 'Output (other than reasoning)'],
+  ['output', 'Output (excl. reasoning)'],
   ['cacheRead', 'Cache read'],
   ['cacheWrite', 'Cache write'],
   ['reasoning', 'Reasoning'],

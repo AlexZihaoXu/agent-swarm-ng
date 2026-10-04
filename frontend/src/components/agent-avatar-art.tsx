@@ -323,7 +323,7 @@ export function AgentAvatarArt({
         {/* Ambient occlusion, as on the app icon: shade gathering low on the body, a soft light along its top. */}
         <linearGradient id={shadeId} gradientUnits="userSpaceOnUse" x1="0" y1="30" x2="0" y2="62">
           <stop offset="0" stopColor="#0b2233" stopOpacity="0" />
-          <stop offset="1" stopColor="#0b2233" stopOpacity="0.34" />
+          <stop offset="1" stopColor="#0b2233" stopOpacity="0.2" />
         </linearGradient>
         <linearGradient id={lightId} gradientUnits="userSpaceOnUse" x1="0" y1="4" x2="0" y2="22">
           <stop offset="0" stopColor="#ffffff" stopOpacity="0.26" />

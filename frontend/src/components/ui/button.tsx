@@ -10,6 +10,8 @@ const buttonVariants = cva(
       variant: {
         default: 'ao-raised bg-primary text-primary-foreground hover:bg-primary/90',
         outline: 'ao-raised border border-border bg-background hover:bg-muted',
+        // Close (×) buttons: the outline look, without lighting.
+        flat: 'border border-border bg-background hover:bg-muted',
         // Bare icon actions (a card's … menu): no surface or lighting until hovered.
         ghost: 'border border-transparent bg-transparent hover:border-border hover:bg-muted/70',
       },

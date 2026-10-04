@@ -450,7 +450,7 @@ export function ComputerTerminals({
                 Terminals · {computer.name}
               </Dialog.Title>
               <Dialog.Close asChild>
-                <Button variant="outline" size="sm" className="size-10 shrink-0 p-0" aria-label="Close terminals">
+                <Button variant="flat" size="sm" className="size-10 shrink-0 p-0" aria-label="Close terminals">
                   ×
                 </Button>
               </Dialog.Close>

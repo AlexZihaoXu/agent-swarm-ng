@@ -504,26 +504,26 @@
    gathering at its bottom edge and a small contact shadow under it. They set Tailwind's shadow variables, so
    focus rings and other shadows still compose with them. */
 @utility ao-card {
-  --tw-inset-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), inset 0 -24px 24px -21px rgb(0 0 0 / 0.4);
-  --tw-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 16px -10px rgb(0 0 0 / 0.45);
-  background-image: linear-gradient(rgb(255 255 255 / 0.02), rgb(0 0 0 / 0.08));
+  --tw-inset-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), inset 0 -24px 24px -21px rgb(0 0 0 / 0.2);
+  --tw-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 16px -10px rgb(0 0 0 / 0.25);
+  background-image: linear-gradient(rgb(255 255 255 / 0.02), rgb(0 0 0 / 0.04));
   box-shadow:
     var(--tw-inset-shadow), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
     var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
 /* Controls and selection pills: the same light, tighter, with a slight top-to-bottom grade. */
 @utility ao-raised {
-  --tw-inset-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), inset 0 -6px 8px -5px rgb(0 0 0 / 0.36);
-  --tw-shadow: 0 1px 2px rgb(0 0 0 / 0.42), 0 3px 6px -3px rgb(0 0 0 / 0.32);
-  background-image: linear-gradient(rgb(255 255 255 / 0.04), rgb(0 0 0 / 0.1));
+  --tw-inset-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), inset 0 -6px 8px -5px rgb(0 0 0 / 0.18);
+  --tw-shadow: 0 1px 2px rgb(0 0 0 / 0.25), 0 3px 6px -3px rgb(0 0 0 / 0.18);
+  background-image: linear-gradient(rgb(255 255 255 / 0.04), rgb(0 0 0 / 0.05));
   box-shadow:
     var(--tw-inset-shadow), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
     var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
 /* Fields (text inputs, the message box) are pressed in: shade under the top edge, a faint light along the bottom. */
 @utility ao-inset {
-  --tw-inset-shadow: inset 0 2px 4px rgb(0 0 0 / 0.28), inset 0 -1px 0 rgb(255 255 255 / 0.035);
-  background-image: linear-gradient(rgb(0 0 0 / 0.08), transparent 60%);
+  --tw-inset-shadow: inset 0 2px 4px rgb(0 0 0 / 0.15), inset 0 -1px 0 rgb(255 255 255 / 0.035);
+  background-image: linear-gradient(rgb(0 0 0 / 0.04), transparent 60%);
   box-shadow:
     var(--tw-inset-shadow), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
     var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow, 0 0 #0000);
