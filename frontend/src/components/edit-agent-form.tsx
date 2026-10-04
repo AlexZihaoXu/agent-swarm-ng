@@ -162,8 +162,7 @@ export function EditAgentForm({
   return (
     <section
       aria-label={`Settings for ${agent.name}`}
-      // Phones: the floating bottom navigation stays over the page, so the page (and its action bar) ends above it.
-      className="flex min-h-0 min-w-0 flex-1 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)] md:pb-0"
+      className="flex min-h-0 min-w-0 flex-1 flex-col motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)]"
     >
       <form
         aria-label="Agent settings"
@@ -209,7 +208,11 @@ export function EditAgentForm({
             sectionSlot,
           )}
         <ScrollArea label="Agent editor" viewportTabIndex={-1} className="min-h-0 flex-1">
-          <div ref={sectionList} className="mx-auto w-full max-w-5xl space-y-8 px-4 pb-8 pt-6 md:px-6">
+          {/* Phones: the settings scroll on under the floating navigation (glass), the last one clearing it. */}
+          <div
+            ref={sectionList}
+            className="mx-auto w-full max-w-5xl space-y-8 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6 md:px-6 md:pb-8"
+          >
             <section aria-label="Channels" className="space-y-4">
               <div>
                 <h3 className="text-lg font-semibold">Channels</h3>
@@ -359,7 +362,8 @@ export function EditAgentForm({
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={surface}
-              className="shrink-0 overflow-hidden border-t border-border"
+              // Phones: above the floating navigation.
+              className="shrink-0 overflow-hidden border-t border-border max-md:mb-[calc(4.5rem+env(safe-area-inset-bottom))]"
             >
               <div className="mx-auto w-full max-w-5xl px-4 py-3 md:px-6 md:py-4">
                 {loadError ? (

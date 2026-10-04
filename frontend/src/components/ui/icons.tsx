@@ -26,12 +26,13 @@ export const DashboardIcon = (props: ComponentProps<'svg'>) => (
     <path d="M18 17V9M13 17V5M8 17v-3" />
   </Icon>
 );
+/** Agents: a person with a gear (Lucide user-cog), the page where agents are configured. */
 export const AgentsIcon = (props: ComponentProps<'svg'>) => (
   <Icon {...props}>
-    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="18" cy="15" r="3" />
     <circle cx="9" cy="7" r="4" />
-    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    <path d="M10 15H6a4 4 0 0 0-4 4v2" />
+    <path d="m21.7 16.4-.9-.3M15.2 13.9l-.9-.3M16.6 18.7l.3-.9M19.1 12.2l.3-.9M19.6 18.7l-.4-1M16.8 12.3l-.4-1M14.3 16.6l1-.4M20.7 13.8l1-.4" />
   </Icon>
 );
 export const ChatIcon = (props: ComponentProps<'svg'>) => (

@@ -679,7 +679,7 @@ export function App() {
           <header
             className={cn(
               // Phones: a floating capsule over the page (content scrolls beneath it), icons only. Wider screens: the header row.
-              'fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] z-40 rounded-full border border-border bg-sidebar/75 backdrop-blur-xl max-md:ao-raised md:relative md:inset-x-0 md:bottom-0 md:z-auto md:order-first md:flex md:h-14 md:min-h-14 md:shrink-0 md:items-center md:justify-center md:rounded-none md:border-x-0 md:border-b md:border-t-0 md:bg-sidebar md:px-4 md:backdrop-blur-none',
+              'fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] z-40 rounded-full border border-white/10 bg-sidebar/40 backdrop-blur-xl backdrop-saturate-150 max-md:ao-raised md:relative md:inset-x-0 md:bottom-0 md:z-auto md:order-first md:flex md:h-14 md:min-h-14 md:shrink-0 md:items-center md:justify-center md:rounded-none md:border-x-0 md:border-b md:border-t-0 md:bg-sidebar md:px-4 md:backdrop-blur-none',
               narrowDetail && 'max-md:hidden',
             )}
           >
