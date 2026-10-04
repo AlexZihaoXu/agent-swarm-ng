@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { timeNoteFor } from './time-notes';
+import { canonicalTimeZone, timeNoteFor } from './time-notes';
 
 it('gives one note per clock-aligned window, always with the current time', () => {
   const at = (iso: string) => new Date(iso);
@@ -23,4 +23,13 @@ it('gives one note per clock-aligned window, always with the current time', () =
   expect(edt.text).toContain('1:10 AM');
   const est = timeNoteFor(at('2026-11-01T06:20:00Z'), 60, 'America/Toronto', edt.window)!;
   expect(est.text).toContain('1:20 AM');
+});
+
+it('accepts time zones in their standard form and refuses offsets and junk', () => {
+  // The runtime's standard spelling may be an older alias of the same zone (Buenos Aires, Kyiv).
+  for (const zone of ['America/Argentina/Buenos_Aires', 'Etc/GMT+5', 'UTC', 'Europe/Kyiv'])
+    expect(canonicalTimeZone(zone)).toBeTruthy();
+  expect(canonicalTimeZone('Etc/GMT+5')).toBe('Etc/GMT+5');
+  expect(canonicalTimeZone('america/toronto')).toBe('America/Toronto');
+  for (const junk of ['Mars/Olympus', '', '+05:00', 'Etc/Unknown']) expect(canonicalTimeZone(junk)).toBeNull();
 });

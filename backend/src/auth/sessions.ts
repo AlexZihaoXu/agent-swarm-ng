@@ -44,7 +44,7 @@ export async function verifyPassword(password: string, stored: string) {
 }
 
 /** The person behind a session (docs/users.md): admin reaches everything, a user only their own organizations. */
-export type SignedIn = { userId: string; name: string; tokenHash: string; admin: boolean };
+export type SignedIn = { userId: string; name: string; tokenHash: string; admin: boolean; timeZone: string };
 
 /** Dashboard users and their signed-in browsers. Passwords are scrypt hashes; session tokens are stored hashed. */
 export class Accounts {
@@ -64,7 +64,7 @@ export class Accounts {
     return client.user.findFirst({
       where: { passwordHash: null, role: 'admin' },
       orderBy: { sequence: 'asc' },
-      select: { id: true, name: true },
+      select: { id: true, name: true, timeZone: true },
     });
   }
 
@@ -77,6 +77,12 @@ export class Accounts {
       data: { passwordHash, passwordChangedAt: new Date() },
     });
     return done.count === 1;
+  }
+
+  /** Sets a person's own time zone (an IANA name; checked by the caller). */
+  async setTimeZone(userId: string, timeZone: string) {
+    const client = await this.client();
+    await client.user.update({ where: { id: userId }, data: { timeZone } });
   }
 
   /** The user for these credentials, or null. Takes about as long for an unknown name as for a wrong password. */
@@ -128,7 +134,7 @@ export class Accounts {
     const tokenHash = hashToken(token);
     const found = await client.userSession.findUnique({
       where: { tokenHash },
-      include: { user: { select: { name: true, role: true, disabledAt: true } } },
+      include: { user: { select: { name: true, role: true, disabledAt: true, timeZone: true } } },
     });
     const now = Date.now();
     if (!found) return null;
@@ -148,7 +154,13 @@ export class Accounts {
           expiresAt: new Date(Math.min(now + SESSION_DAYS * DAY, found.createdAt.getTime() + SESSION_MAX_DAYS * DAY)),
         },
       });
-    return { userId: found.userId, name: found.user.name, tokenHash, admin: found.user.role === 'admin' };
+    return {
+      userId: found.userId,
+      name: found.user.name,
+      tokenHash,
+      admin: found.user.role === 'admin',
+      timeZone: found.user.timeZone,
+    };
   }
 
   /** Whether a session still exists and has not expired (no renewal: for stream checks). */

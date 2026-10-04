@@ -677,6 +677,8 @@ model User {
   disabledAt        DateTime?
   /// The most RAM (GiB) the computers in their organizations may have in total; null: no cap.
   memoryLimitGiB    Int?
+  /// Their IANA time zone (docs/users.md#time-zone): their agents tell and take times in it. "" until set.
+  timeZone          String        @default("")
   organizations     Organization[]
   /// scrypt hash (auth/sessions.ts); null until the first sign-in sets it (or after a host-side reset).
   passwordHash      String?

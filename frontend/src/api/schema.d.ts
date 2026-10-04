@@ -84,6 +84,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateOwnAccount"];
+        trace?: never;
+    };
     "/api/users": {
         parameters: {
             query?: never;
@@ -1462,6 +1478,7 @@ export interface operations {
                         signedIn: true;
                         name: string;
                         admin: boolean;
+                        timeZone: string;
                     } | {
                         /** @enum {boolean} */
                         signedIn: false;
@@ -1500,6 +1517,7 @@ export interface operations {
                         signedIn: true;
                         name: string;
                         admin: boolean;
+                        timeZone: string;
                     };
                 };
             };
@@ -1554,6 +1572,7 @@ export interface operations {
                         signedIn: true;
                         name: string;
                         admin: boolean;
+                        timeZone: string;
                     };
                 };
             };
@@ -1642,6 +1661,7 @@ export interface operations {
                         signedIn: true;
                         name: string;
                         admin: boolean;
+                        timeZone: string;
                     };
                 };
             };
@@ -1669,6 +1689,45 @@ export interface operations {
             };
             /** @description Default Response */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    updateOwnAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    timeZone: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        timeZone: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

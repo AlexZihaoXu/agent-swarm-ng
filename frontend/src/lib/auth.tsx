@@ -7,10 +7,16 @@ import { SignIn } from '@/components/sign-in';
 
 export const SESSION_KEY = ['auth', 'session'] as const;
 export type AuthSession =
-  | { signedIn: true; name: string; admin: boolean }
+  | { signedIn: true; name: string; admin: boolean; timeZone: string }
   | { signedIn: false; setupRequired: boolean; name?: string; lockedDown?: boolean };
 
-const SignedInContext = createContext<{ name: string; admin: boolean; signOut: () => Promise<void> } | null>(null);
+const SignedInContext = createContext<{
+  name: string;
+  admin: boolean;
+  timeZone: string;
+  setTimeZone: (timeZone: string) => Promise<void>;
+  signOut: () => Promise<void>;
+} | null>(null);
 
 /**
  * The signed-in person and sign-out, for Settings → Account. `admin`: the admin account, which sees every
@@ -69,11 +75,28 @@ export function AuthGate({ children }: { children: ReactNode }) {
     switchTo({ signedIn: false, setupRequired: false });
   };
   const state = session.data;
+  // A person's time zone (docs/users.md#time-zone): the browser's until they choose one.
+  const setTimeZone = async (timeZone: string) => {
+    const { data, error } = await api.PATCH('/api/auth/account', { body: { timeZone } });
+    if (!data) throw new Error(error?.message ?? 'Could not save the time zone.');
+    queryClient.setQueryData<AuthSession>(SESSION_KEY, current =>
+      current?.signedIn ? { ...current, timeZone: data.timeZone } : current,
+    );
+  };
+  const signedInZone = state?.signedIn ? state.timeZone : undefined;
+  useEffect(() => {
+    if (signedInZone !== '') return;
+    const browser = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (browser) void setTimeZone(browser).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedInZone]);
   return (
     <AnimatePresence mode="wait" initial={false}>
       {state?.signedIn ? (
         <m.div key="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={surface}>
-          <SignedInContext.Provider value={{ name: state.name, admin: state.admin, signOut }}>
+          <SignedInContext.Provider
+            value={{ name: state.name, admin: state.admin, timeZone: state.timeZone, setTimeZone, signOut }}
+          >
             {children}
           </SignedInContext.Provider>
         </m.div>

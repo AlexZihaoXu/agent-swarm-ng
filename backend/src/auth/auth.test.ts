@@ -47,6 +47,7 @@ describe('dashboard sign-in', { timeout: 60_000 }, () => {
         signedIn: true,
         name: 'Admin',
         admin: true,
+        timeZone: '',
       });
       expect((await json('GET', '/api/agents', undefined, cookie)).statusCode).toBe(200);
       // Setup happens once: nobody can set the password again that way.

@@ -77,15 +77,15 @@ export class Organizations {
     return (await this.database.client.organization.findUnique({ where: { id }, select: { name: true } }))?.name;
   }
   /** A new organization, owned by whoever creates it. */
-  /** The name of the person who owns it (docs/users.md). */
-  async ownerName(id: string) {
+  /** The person who owns it (docs/users.md): their name and time zone ("" when they set none). */
+  async owner(id: string) {
     await this.database.initialize();
     return (
       await this.database.client.organization.findUnique({
         where: { id },
-        select: { owner: { select: { name: true } } },
+        select: { owner: { select: { name: true, timeZone: true } } },
       })
-    )?.owner.name;
+    )?.owner;
   }
   async create(name: string, ownerId: string) {
     await this.database.initialize();

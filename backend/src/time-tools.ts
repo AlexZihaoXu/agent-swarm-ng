@@ -59,20 +59,21 @@ export function createTimeTools(
   humanAuthority: () => boolean,
   watches?: ComputerWatches,
   recordings?: AgentRecordings,
+  /** The default zone: the agent's owner's (docs/users.md#time-zone), else the platform's. */
+  zone?: string,
 ): AgentTool[] {
   return classify({ current_time: 'r', set_timer: 'w', set_reminder: 'w', list_timers: 'r', cancel_timer: 'w' }, [
     defineTool({
       name: 'current_time',
       label: 'Current time',
-      description:
-        'The current date and time (UTC, Unix ms, and local time in an IANA time zone such as "America/Toronto"; the platform zone by default). Use it before computing a delay for set_timer or set_reminder. Read practices/scheduling for scheduling patterns.',
+      description: `The current date and time (UTC, Unix ms, and local time in an IANA time zone such as "America/Toronto"; your owner's zone${zone ? ` (${zone})` : ''} by default). Use it before computing a delay for set_timer or set_reminder. Read practices/scheduling for scheduling patterns.`,
       parameters: Type.Object(
         { timezone: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })) },
         { additionalProperties: false },
       ),
       async execute(_call, { timezone }) {
         try {
-          return reply(currentTime(timezone));
+          return reply(currentTime(timezone ?? zone));
         } catch {
           return reply({ error: 'Unknown time zone; use an IANA name such as "Europe/London".' }, true);
         }

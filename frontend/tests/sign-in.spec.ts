@@ -29,14 +29,14 @@ test.describe('signed out', () => {
     await page.route('**/api/auth/session', route =>
       route.fulfill({
         json: signedIn
-          ? { signedIn: true, name: 'Admin', admin: true }
+          ? { signedIn: true, name: 'Admin', admin: true, timeZone: 'UTC' }
           : { signedIn: false, setupRequired: true, name: 'Admin' },
       }),
     );
     await page.route('**/api/auth/setup', async route => {
       expect(route.request().postDataJSON()).toEqual({ name: 'Admin', password: 'a brand new password' });
       signedIn = true;
-      await route.fulfill({ json: { signedIn: true, name: 'Admin', admin: true } });
+      await route.fulfill({ json: { signedIn: true, name: 'Admin', admin: true, timeZone: 'UTC' } });
     });
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Set the Admin password' })).toBeVisible();

@@ -160,7 +160,8 @@
                       "required": [
                         "signedIn",
                         "name",
-                        "admin"
+                        "admin",
+                        "timeZone"
                       ],
                       "properties": {
                         "signedIn": {
@@ -174,6 +175,9 @@
                         },
                         "admin": {
                           "type": "boolean"
+                        },
+                        "timeZone": {
+                          "type": "string"
                         }
                       }
                     },
@@ -248,7 +252,8 @@
                   "required": [
                     "signedIn",
                     "name",
-                    "admin"
+                    "admin",
+                    "timeZone"
                   ],
                   "properties": {
                     "signedIn": {
@@ -262,6 +267,9 @@
                     },
                     "admin": {
                       "type": "boolean"
+                    },
+                    "timeZone": {
+                      "type": "string"
                     }
                   }
                 }
@@ -346,7 +354,8 @@
                   "required": [
                     "signedIn",
                     "name",
-                    "admin"
+                    "admin",
+                    "timeZone"
                   ],
                   "properties": {
                     "signedIn": {
@@ -360,6 +369,9 @@
                     },
                     "admin": {
                       "type": "boolean"
+                    },
+                    "timeZone": {
+                      "type": "string"
                     }
                   }
                 }
@@ -490,7 +502,8 @@
                   "required": [
                     "signedIn",
                     "name",
-                    "admin"
+                    "admin",
+                    "timeZone"
                   ],
                   "properties": {
                     "signedIn": {
@@ -504,6 +517,9 @@
                     },
                     "admin": {
                       "type": "boolean"
+                    },
+                    "timeZone": {
+                      "type": "string"
                     }
                   }
                 }
@@ -547,6 +563,70 @@
             }
           },
           "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/account": {
+      "patch": {
+        "operationId": "updateOwnAccount",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "timeZone"
+                ],
+                "properties": {
+                  "timeZone": {
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "timeZone"
+                  ],
+                  "properties": {
+                    "timeZone": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
             "description": "Default Response",
             "content": {
               "application/json": {

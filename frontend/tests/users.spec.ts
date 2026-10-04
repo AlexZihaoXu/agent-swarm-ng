@@ -48,7 +48,7 @@ test("admin's switcher lists everyone's organizations in sections", async ({ pag
 
 test("a user's Settings show only their own account, connections, organizations and Knowledge", async ({ page }) => {
   await page.route('**/api/auth/session', route =>
-    route.fulfill({ json: { signedIn: true, name: 'Sam', admin: false } }),
+    route.fulfill({ json: { signedIn: true, name: 'Sam', admin: false, timeZone: 'UTC' } }),
   );
   await page.goto('/settings');
   for (const title of ['Account', 'API endpoints', 'Swarm Knowledge'])

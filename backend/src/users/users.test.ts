@@ -296,3 +296,32 @@ describe('users', { timeout: 120_000 }, () => {
     }
   });
 });
+
+it("keeps a time zone per person, refuses names that are not zones, and gives agents their owner's", async () => {
+  const { app, database, call, samCookie, samOrg, agent } = await fixture();
+  try {
+    expect((await call('PATCH', '/api/auth/account', samCookie, { timeZone: 'Mars/Olympus' })).statusCode).toBe(400);
+    expect((await call('PATCH', '/api/auth/account', samCookie, { timeZone: 'Asia/Tokyo' })).json()).toEqual({
+      timeZone: 'Asia/Tokyo',
+    });
+    expect((await call('GET', '/api/auth/session', samCookie)).json()).toMatchObject({ timeZone: 'Asia/Tokyo' });
+    const { Organizations } = await import('../organizations');
+    expect(await new Organizations(database).owner(samOrg)).toEqual({ name: 'Sam', timeZone: 'Asia/Tokyo' });
+    await agent('Bo', samOrg);
+    const { createTimeTools } = await import('../time-tools');
+    const { AgentTimers } = await import('../agent-timers');
+    const tools = createTimeTools(
+      new AgentTimers(database, (() => {}) as never),
+      'x',
+      () => true,
+      undefined,
+      undefined,
+      'Asia/Tokyo',
+    );
+    const now = tools.find(tool => tool.name === 'current_time')!;
+    const result = await now.execute('c', {}, undefined, undefined, undefined as never);
+    expect(JSON.stringify(result.content)).toContain('Asia/Tokyo');
+  } finally {
+    await app.close();
+  }
+});

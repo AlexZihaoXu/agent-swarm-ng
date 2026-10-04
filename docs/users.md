@@ -36,6 +36,10 @@ API endpoints (and their keys), the ChatGPT login and the Discord accounts that 
 
 A user's endpoint must be a **public** address, by the same policy as the agents' web tools (`web-policy.ts`): loopback, private, link-local, tailnet, multicast and single-label or internal names (the platform's own Docker services) are refused, checked when it is tested and saved and again on every turn (a name re-pointed at a private address refuses the turn until it is fixed in Settings; the check resolves before the model call, not at connect time). Admin's endpoints may point anywhere, such as a model server on the LAN.
 
+## Time zone
+
+Each person has a time zone (`User.timeZone`, Settings → Account). The dashboard sets the browser's while none is chosen. An agent uses its organization owner's: its time notes and `current_time` default to it, and its system prompt says to give the owner clock times in it (message timestamps are UTC). Without one, the platform's zone (the backend's `TZ`, UTC unless set) applies. `PATCH /api/auth/account {timeZone}` (an IANA name) sets one's own.
+
 ## In chats
 
 A human message records who wrote it. Each agent's system prompt names its owner, and history shows a human message's writer ("Human (Admin)"); a message written live by someone other than the owner says so ("Human: Admin, the platform administrator, not your owner"), so an agent never mistakes one person for another. Chats show the writer's name above messages that are not yours. Older messages, written before there were users, are the owner's.

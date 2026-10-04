@@ -44,3 +44,16 @@ export function timeNoteFor(now: Date, minutes: number, zone: string, lastWindow
     text: `[Time note from the platform (not a message): it is now ${shown} (${zone}; ${utc} UTC).]`,
   };
 }
+
+/**
+ * An IANA zone name the runtime knows, in its standard form ("america/toronto" → "America/Toronto"), or null. Offsets
+ * ("+05:00") are refused: a zone follows its daylight-saving rules, an offset does not.
+ */
+export function canonicalTimeZone(zone: string) {
+  if (/^[+-]\d/.test(zone.trim())) return null;
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: zone.trim() }).resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
+}

@@ -4,6 +4,7 @@ import { hostname } from '../host-policy';
 import type { AuditLog } from '../audit/store';
 import type { SignInGuard } from '../security/guard';
 import { viewerOf } from '../users/reach';
+import { canonicalTimeZone } from '../time-notes';
 import {
   Accounts,
   PASSWORD_MAX,
@@ -54,7 +55,13 @@ const PasswordChange = Type.Object({
 });
 const SessionState = Type.Union([
   /** `admin`: the admin account (docs/users.md), which reaches everything. */
-  Type.Object({ signedIn: Type.Literal(true), name: Type.String(), admin: Type.Boolean() }),
+  Type.Object({
+    signedIn: Type.Literal(true),
+    name: Type.String(),
+    admin: Type.Boolean(),
+    /** Their IANA time zone ("" until set; the dashboard sets the browser's). */
+    timeZone: Type.String(),
+  }),
   Type.Object({
     signedIn: Type.Literal(false),
     setupRequired: Type.Boolean(),
@@ -64,7 +71,12 @@ const SessionState = Type.Union([
   }),
 ]);
 const Message = Type.Object({ message: Type.String() });
-const SignedInResponse = Type.Object({ signedIn: Type.Literal(true), name: Type.String(), admin: Type.Boolean() });
+const SignedInResponse = Type.Object({
+  signedIn: Type.Literal(true),
+  name: Type.String(),
+  admin: Type.Boolean(),
+  timeZone: Type.String(),
+});
 
 /** Failed sign-ins in a sliding window, per account and per client address. In memory: a restart forgets them. */
 class Failures {
@@ -311,10 +323,14 @@ export function registerAuth(
     }
   });
 
-  const signIn = async (request: FastifyRequest, reply: FastifyReply, userId: string, name: string, admin: boolean) => {
-    setSessionCookie(request, reply, await accounts.startSession(userId));
+  const signIn = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    user: { id: string; name: string; admin: boolean; timeZone: string },
+  ) => {
+    setSessionCookie(request, reply, await accounts.startSession(user.id));
     reply.header('cache-control', 'no-store');
-    return { signedIn: true as const, name, admin };
+    return { signedIn: true as const, name: user.name, admin: user.admin, timeZone: user.timeZone };
   };
 
   app.get(
@@ -322,7 +338,13 @@ export function registerAuth(
     { schema: { operationId: 'getAuthSession', response: { 200: SessionState } } },
     async (request, reply): Promise<Static<typeof SessionState>> => {
       reply.header('cache-control', 'no-store');
-      if (request.signedIn) return { signedIn: true, name: request.signedIn.name, admin: request.signedIn.admin };
+      if (request.signedIn)
+        return {
+          signedIn: true,
+          name: request.signedIn.name,
+          admin: request.signedIn.admin,
+          timeZone: request.signedIn.timeZone,
+        };
       const waiting = await accounts.awaitingSetup();
       if (waiting) return { signedIn: false, setupRequired: true, name: waiting.name };
       const lockedDown = guard ? await guard.refuses(clientAddress(request)) : false;
@@ -360,7 +382,7 @@ export function registerAuth(
         note(request, 'password already set');
         return reply.code(409).send({ message: 'The password is already set. Sign in instead.' });
       }
-      return signIn(request, reply, waiting.id, waiting.name, true);
+      return signIn(request, reply, { id: waiting.id, name: waiting.name, admin: true, timeZone: waiting.timeZone });
     },
   );
 
@@ -410,7 +432,12 @@ export function registerAuth(
       }
       failures.forgive([address, account], at, pair);
       await guard?.succeeded(ip, user.name).catch(() => undefined);
-      return signIn(request, reply, user.id, user.name, user.role === 'admin');
+      return signIn(request, reply, {
+        id: user.id,
+        name: user.name,
+        admin: user.role === 'admin',
+        timeZone: user.timeZone,
+      });
     },
   );
 
@@ -462,7 +489,28 @@ export function registerAuth(
       const ended = await hash(() => accounts.changePassword(signedIn.userId, password, signedIn.tokenHash));
       if (ended === null) return busy(reply);
       streams.end(ended);
-      return { signedIn: true as const, name: signedIn.name, admin: signedIn.admin };
+      return { signedIn: true as const, name: signedIn.name, admin: signedIn.admin, timeZone: signedIn.timeZone };
+    },
+  );
+
+  // A person's own time zone (Settings → Account; the dashboard fills it from the browser while it is unset).
+  app.patch<{ Body: { timeZone: string } }>(
+    '/api/auth/account',
+    {
+      schema: {
+        operationId: 'updateOwnAccount',
+        body: Type.Object({ timeZone: Type.String({ minLength: 1, maxLength: 64 }) }, { additionalProperties: false }),
+        response: { 200: Type.Object({ timeZone: Type.String() }), 400: Message },
+      },
+    },
+    async (request, reply) => {
+      reply.header('cache-control', 'no-store');
+      const signedIn = request.signedIn;
+      if (!signedIn) return reply.code(400).send({ message: 'Sign in first.' });
+      const timeZone = canonicalTimeZone(request.body.timeZone);
+      if (!timeZone) return reply.code(400).send({ message: 'That is not a time zone (e.g. America/Toronto).' });
+      await accounts.setTimeZone(signedIn.userId, timeZone);
+      return { timeZone };
     },
   );
 

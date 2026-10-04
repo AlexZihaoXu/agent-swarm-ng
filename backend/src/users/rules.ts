@@ -40,6 +40,7 @@ export const RULES: Record<string, Rule> = {
   'POST /api/auth/login': 'public',
   'POST /api/auth/logout': 'public',
   'POST /api/auth/password': 'signed-in',
+  'PATCH /api/auth/account': 'signed-in',
   // Caddy's desktop check: the handler checks the computer in the forwarded path.
   'GET /api/auth/check': 'signed-in',
 

@@ -90,6 +90,8 @@ export type ChatConfiguration = {
   organization?: string;
   /** Its organization owner's name (docs/users.md): the human it answers to; another named human is someone else. */
   owner?: string;
+  /** The owner's time zone (docs/users.md#time-zone): clock times for them are given in it. */
+  ownerTimeZone?: string;
   publishPeer?: (
     channelId: string,
     text: string,
@@ -504,7 +506,7 @@ export async function createChatSession(
   if (config.organization) {
     const current = resources.getSystemPrompt() ?? '';
     resources.getSystemPrompt = () =>
-      `${current}\n\n## Your organization\nYou are in the organization ${JSON.stringify(config.organization)}. The computers, agents and group chats you can reach are all in it; other organizations are kept apart from you, so someone the human mentions may simply be out of your reach. Only the human moves agents and computers between organizations.${config.owner ? ` Your owner is ${JSON.stringify(config.owner)}: "the human" means them. A human message labelled with another person's name (the platform administrator) is from that person, not your owner.` : ''}`;
+      `${current}\n\n## Your organization\nYou are in the organization ${JSON.stringify(config.organization)}. The computers, agents and group chats you can reach are all in it; other organizations are kept apart from you, so someone the human mentions may simply be out of your reach. Only the human moves agents and computers between organizations.${config.owner ? ` Your owner is ${JSON.stringify(config.owner)}: "the human" means them. A human message labelled with another person's name (the platform administrator) is from that person, not your owner.` : ''}${config.ownerTimeZone ? `\n\nTime zone: your owner's is ${JSON.stringify(config.ownerTimeZone)}. Message timestamps are UTC: when you give your owner a clock time or date, give it in their zone (say which zone when it could be unclear); current_time and your time notes use it.` : ''}`;
   }
   const instructions = config.instructions?.trim();
   if (instructions) {

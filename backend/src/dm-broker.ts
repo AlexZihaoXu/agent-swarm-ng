@@ -2,6 +2,7 @@ import { TerminalWatcher } from './computer-use/terminal-watcher';
 import { AgentTimers } from './agent-timers';
 import { createTimeTools } from './time-tools';
 import { createTodoTools, Todos } from './todos';
+import { platformZone } from './time-notes';
 import { Scratchpad } from './scratchpad';
 import { createScratchTools } from './scratch-tools';
 import { SwarmSettingsStore } from './swarm-settings';
@@ -894,6 +895,9 @@ export class DmBroker {
     const agent = await this.database.findAgent(agentId);
     if (!agent) throw new Error('Agent no longer exists.');
     const channel = { id: agent.channels[0].id, kind: 'platform-chat' as const, agentId };
+    // The owner's time zone (docs/users.md#time-zone): times for them are told and taken in it.
+    const owner = await this.organizations.owner(agent.organizationId);
+    const zone = owner?.timeZone || platformZone();
     const connection = await this.connections.forAgent(agent, context.signal);
     const human = await this.database.context(
       channel.id,
@@ -1011,7 +1015,9 @@ ${preview.text}`
         instructions: agent.instructions,
         memoryIndex: agent.memoryIndex,
         organization: await this.organizations.name(agent.organizationId),
-        owner: await this.organizations.ownerName(agent.organizationId),
+        owner: owner?.name,
+        // Named in the prompt only when the owner chose one (the platform's fallback is not theirs).
+        ownerTimeZone: owner?.timeZone || undefined,
         ...(branch ? { heartbeat: () => !branch.promoted } : {}),
         publishPeer: async (channelId, text, callId, replyToId, fileIds) => {
           if (channelId.startsWith('discord:'))
@@ -1094,7 +1100,7 @@ ${preview.text}`
           shown: ids => this.cues.shown(agentId, ids),
         }),
         // Every agent's sense of time: current time, timers and reminders (no computer needed).
-        ...createTimeTools(this.timers, agentId, () => humanAuthority, this.watches, this.recordings),
+        ...createTimeTools(this.timers, agentId, () => humanAuthority, this.watches, this.recordings, zone),
         ...createTodoTools(this.todos, agentId),
         ...createScratchTools(this.scratch, agentId, this.screenshots),
         // An agent whose owner configured a Discord bot for it gets the Discord tools (checked again on every call).
@@ -1142,6 +1148,7 @@ ${preview.text}`
       {
         sessionStore: this.sessions,
         timeNotes: {
+          zone,
           minutes: () => this.timeNoteMinutes.get(agentId) ?? agent.timeNoteMinutes,
           last: () => this.timeNoteWindows.get(agentId),
           given: window => this.timeNoteWindows.set(agentId, window),

@@ -9,7 +9,7 @@ import { createActivityRecorder } from './agent-activity';
 import { accessOf, type AgentTool } from './tool-access';
 import { openTodos, type Todo } from './todos';
 import { checkTodos } from './todo-check';
-import { platformZone, timeNoteFor } from './time-notes';
+import { timeNoteFor } from './time-notes';
 
 /** Continuations in a row a turn's todo checks may start (docs/agent-todos.md). */
 export const TODO_CONTINUATIONS = 3;
@@ -66,7 +66,13 @@ export type InboxHooks = {
    */
   todos?: { get: () => Promise<Todo[]>; stoppedOn: () => string | undefined; stopped: (list: string) => void };
   /** Time notes (docs/agent-time.md#time-notes): one per clock window of `minutes`; `last`/`given` its window. */
-  timeNotes?: { minutes: () => number; last: () => string | undefined; given: (window: string) => void };
+  timeNotes?: {
+    /** The owner's zone (docs/users.md#time-zone), else the platform's. */
+    zone: string;
+    minutes: () => number;
+    last: () => string | undefined;
+    given: (window: string) => void;
+  };
 };
 
 export async function runChat(
@@ -228,7 +234,7 @@ export async function runChat(
     const timeNote = () => {
       const notes = hooks.timeNotes;
       if (!notes || (heartbeat && !promoted)) return null;
-      const note = timeNoteFor(new Date(), notes.minutes(), platformZone(), notes.last());
+      const note = timeNoteFor(new Date(), notes.minutes(), notes.zone, notes.last());
       if (!note) return null;
       notes.given(note.window);
       activity.record('status', 'Time note', note.text);

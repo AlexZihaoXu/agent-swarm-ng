@@ -2,6 +2,7 @@ import { useId, useState, type FormEvent } from 'react';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { useSignedIn } from '@/lib/auth';
+import { Select } from '@/components/ui/select';
 import { settingsCard, settingsInput } from '@/lib/styles';
 
 const PASSWORD_MIN = 8;
@@ -57,6 +58,7 @@ export function AccountSettings() {
           Sign out
         </Button>
       </div>
+      <TimeZoneCard />
       <form className={`${settingsCard} space-y-3`} onSubmit={change} aria-labelledby={`${id}-change`}>
         <h4 id={`${id}-change`} className="text-sm font-semibold">
           Change password
@@ -98,5 +100,56 @@ export function AccountSettings() {
         </div>
       </form>
     </section>
+  );
+}
+
+/** Every IANA zone the browser knows (the person's current one first if it is missing from the list). */
+const zones = (current: string) => {
+  const known = (Intl as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.('timeZone') ?? [];
+  return [...new Set([current, 'UTC', ...known].filter(Boolean))];
+};
+
+/**
+ * Your time zone (docs/users.md#time-zone): set from this browser until you choose one. Your agents tell you times in
+ * it, and their time notes and current_time use it.
+ */
+function TimeZoneCard() {
+  const id = useId();
+  const { timeZone, setTimeZone } = useSignedIn();
+  const [message, setMessage] = useState('');
+  const browser = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return (
+    <div className={`${settingsCard} space-y-3`}>
+      <div>
+        <label htmlFor={`${id}-zone`} className="text-sm font-semibold">
+          Time zone
+        </label>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Your agents give you times in it; their time notes and current_time use it.
+          {browser && browser !== timeZone ? ` This browser is in ${browser}.` : ''}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="w-full max-w-72">
+          <Select
+            id={`${id}-zone`}
+            value={timeZone || browser}
+            onValueChange={value => {
+              setMessage('');
+              void setTimeZone(value).then(
+                () => setMessage('Saved. Your agents use it once they finish what they are doing.'),
+                (error: Error) => setMessage(error.message),
+              );
+            }}
+            options={zones(timeZone || browser).map(zone => ({ value: zone, label: zone.replaceAll('_', ' ') }))}
+          />
+        </div>
+        {message && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {message}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
