@@ -1,4 +1,4 @@
-import { PlusIcon } from '@/components/ui/icons';
+import { GroupAddIcon } from '@/components/ui/icons';
 import { useOrganizations } from '@/lib/organizations';
 import { useEffect, useRef, useState } from 'react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
@@ -198,7 +198,7 @@ export function ChatPanel({
                     aria-label="Create group chat"
                     title="Create group chat"
                   >
-                    <PlusIcon />
+                    <GroupAddIcon className="size-5" />
                   </Button>
                 </GroupEditor>
               }

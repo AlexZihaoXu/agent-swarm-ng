@@ -61,6 +61,27 @@ export const PlusIcon = (props: ComponentProps<'svg'>) => (
     <path d="M5 12h14M12 5v14" />
   </Icon>
 );
+/** Create buttons: the thing being made with a plus at its lower right (as Tabler's *-plus icons). */
+export const ComputerAddIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="M13 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v7" />
+    <path d="M7 21h5M9.5 17v4M16 18h6M19 15v6" />
+  </Icon>
+);
+export const AgentAddIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M19 8v6M22 11h-6" />
+  </Icon>
+);
+export const GroupAddIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 2.5.88" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75M16 18h6M19 15v6" />
+  </Icon>
+);
 export const TrashIcon = (props: ComponentProps<'svg'>) => (
   <Icon {...props}>
     <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />

@@ -8,7 +8,15 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatSkeleton, EdgeSkeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { AgentsIcon, ChatIcon, ComputerIcon, DashboardIcon, PlusIcon, SettingsIcon } from '@/components/ui/icons';
+import {
+  AgentAddIcon,
+  AgentsIcon,
+  ChatIcon,
+  ComputerIcon,
+  DashboardIcon,
+  PlusIcon,
+  SettingsIcon,
+} from '@/components/ui/icons';
 import { JumpToLatest } from '@/components/jump-to-latest';
 import { useMessageWindow } from '@/lib/use-message-window';
 import { AgentPanel } from '@/components/agent-panel';
@@ -834,7 +842,7 @@ export function App() {
                     title="Create new agent"
                     onClick={() => leave(() => navigate('/agents/new'))}
                   >
-                    <PlusIcon />
+                    <AgentAddIcon className="size-5" />
                   </Button>
                 </div>
                 {!agents.length && !agentsLoading && !agentsFailed && agentsCursor === null && (

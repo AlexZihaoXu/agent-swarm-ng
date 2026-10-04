@@ -10,7 +10,7 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { ComputerIcon, PlusIcon } from '@/components/ui/icons';
+import { ComputerIcon, ComputerAddIcon } from '@/components/ui/icons';
 import { randomUuid } from '@/lib/random-uuid';
 import { generateComputerName } from '@/lib/computer-name';
 import { defaultComputerSettings, parseComputerSettings, type ComputerSettingsDraft } from '@/lib/computer-settings';
@@ -402,7 +402,7 @@ export function ComputersPanel({
                     aria-label="Create computer"
                     className="size-11 p-0 md:size-9"
                   >
-                    <PlusIcon />
+                    <ComputerAddIcon className="size-5" />
                   </Button>
                 </Dialog.Trigger>
                 <ComputerDialog>
