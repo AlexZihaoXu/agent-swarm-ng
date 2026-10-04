@@ -6,6 +6,13 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 const desktopPath = /^\/computers\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/desktop(?:\/|$)/;
 
+/**
+ * Bumped whenever the icons change: browsers and installed apps keep icons by address (favicon caches, Android's
+ * installed app, the service worker's precache), so a new address is what makes them fetch the new art. index.html
+ * carries the same version.
+ */
+const ICONS = '?v=2';
+
 export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
@@ -27,11 +34,11 @@ export default defineConfig(({ mode }) => ({
         theme_color: '#151515',
         background_color: '#242424',
         icons: [
-          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-          { src: '/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
-          { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: `/icon-192.png${ICONS}`, sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: `/icon-512.png${ICONS}`, sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: `/icon.svg${ICONS}`, sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: `/icon-maskable-192.png${ICONS}`, sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: `/icon-maskable-512.png${ICONS}`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {

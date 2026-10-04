@@ -8,10 +8,10 @@ test.use({ storageState: { cookies: [], origins: [] }, channel: 'chromium' });
 
 const frontend = fileURLToPath(new URL('..', import.meta.url));
 const icons = [
-  { src: '/icon-192.png', size: 192, purpose: 'any' },
-  { src: '/icon-512.png', size: 512, purpose: 'any' },
-  { src: '/icon-maskable-192.png', size: 192, purpose: 'maskable' },
-  { src: '/icon-maskable-512.png', size: 512, purpose: 'maskable' },
+  { src: '/icon-192.png?v=2', size: 192, purpose: 'any' },
+  { src: '/icon-512.png?v=2', size: 512, purpose: 'any' },
+  { src: '/icon-maskable-192.png?v=2', size: 192, purpose: 'maskable' },
+  { src: '/icon-maskable-512.png?v=2', size: 512, purpose: 'maskable' },
 ];
 
 /** The natural size of an image as the browser decodes it. */
@@ -26,8 +26,8 @@ const imageSize = (page: Page, src: string) =>
 test('the sign-in page links the favicon and home-screen icons', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Sign in to Agent Swarm' })).toBeVisible();
-  await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute('href', '/favicon.svg');
-  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', '/apple-touch-icon.png');
+  await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute('href', '/favicon.svg?v=2');
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', '/apple-touch-icon.png?v=2');
   await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute('content', 'yes');
   await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute('content', 'Agent Swarm');
   for (const [src, size] of [
@@ -104,7 +104,7 @@ test.describe('production build', () => {
         type: 'image/png',
         purpose: icon.purpose,
       });
-    expect(manifest.icons).toContainEqual(expect.objectContaining({ src: '/icon.svg', type: 'image/svg+xml' }));
+    expect(manifest.icons).toContainEqual(expect.objectContaining({ src: '/icon.svg?v=2', type: 'image/svg+xml' }));
     await page.goto(`${origin}/`);
     for (const icon of icons) {
       expect((await page.request.get(`${origin}${icon.src}`)).status(), icon.src).toBe(200);
