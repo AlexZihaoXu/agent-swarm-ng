@@ -59,6 +59,7 @@ type Container = {
     Devices?: { PathOnHost: string; PathInContainer: string; CgroupPermissions: string }[] | null;
     NanoCpus?: number;
     Memory?: number;
+    Sysctls?: Record<string, string> | null;
   };
   NetworkSettings: { Networks: Record<string, { IPAddress: string; Aliases?: string[] | null; DNSNames?: string[] }> };
 };
@@ -646,6 +647,11 @@ export class ComputerManager {
       throw new ResourceError(503, 'Media bridge subnet is unavailable.');
     const mediaName = this.names.media(id);
     let relay = await this.container(mediaName, id, 'media', name);
+    // A relay made before forwarding was turned off in it: replaced while stopped (it holds no state).
+    if (relay && !relay.State.Running && relay.HostConfig?.Sysctls?.['net.ipv4.ip_forward'] !== '0') {
+      await this.docker.request('DELETE', `${this.path('containers', relay.Id)}?v=false`);
+      relay = null;
+    }
     if (!relay) {
       await this.approvedImage(this.mediaImage);
       await this.docker.request('POST', `/containers/create?name=${encodeURIComponent(mediaName)}`, {
@@ -660,6 +666,8 @@ export class ComputerManager {
           Memory: 64 * 1024 * 1024,
           PidsLimit: 64,
           RestartPolicy: { Name: 'no' },
+          // It copies bytes in user space and joins two networks: it must never route packets between them.
+          Sysctls: { 'net.ipv4.ip_forward': '0' },
         },
         NetworkingConfig: {
           EndpointsConfig: {

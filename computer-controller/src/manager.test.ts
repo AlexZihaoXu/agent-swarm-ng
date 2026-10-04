@@ -250,6 +250,8 @@ it('never starts an owned relay whose target changed to another address', async 
   resources.set(`/containers/${manager.names.media(id)}/json`, {
     Id: 'relay',
     State: { Running: false },
+    // Made with forwarding off, so only its changed target is at issue.
+    HostConfig: { Sysctls: { 'net.ipv4.ip_forward': '0' } },
     Config: {
       Labels: manager.names.labels(id, 'media', name),
       Env: ['COMPUTER_PRIVATE_IP=172.25.10.99', 'COMPUTER_MEDIA_SUBNET=172.25.7.0/24'],
@@ -263,6 +265,37 @@ it('never starts an owned relay whose target changed to another address', async 
   });
   await expect(manager.create(id, name)).rejects.toMatchObject({ code: 409 });
   expect(request).not.toHaveBeenCalled();
+});
+
+it('replaces a stopped relay made before forwarding was turned off in it', async () => {
+  const { manager, resources, request } = fixture();
+  existingRunning(manager, resources);
+  resources.set(`/networks/${manager.names.mediaNetwork}`, {
+    Id: 'media',
+    Driver: 'bridge',
+    Internal: true,
+    EnableIPv6: false,
+    Labels: { 'com.docker.compose.project': manager.names.namespace },
+    Options: { 'com.docker.network.bridge.gateway_mode_ipv4': 'isolated' },
+    IPAM: { Config: [{ Subnet: '172.25.7.0/24', Gateway: '' }] },
+  });
+  resources.set(`/containers/${manager.names.media(id)}/json`, {
+    Id: 'relay',
+    State: { Running: false },
+    Config: {
+      Labels: manager.names.labels(id, 'media', name),
+      Env: ['COMPUTER_PRIVATE_IP=172.25.10.99', 'COMPUTER_MEDIA_SUBNET=172.25.7.0/24'],
+    },
+    NetworkSettings: {
+      Networks: {
+        [manager.names.mediaNetwork]: { IPAddress: '172.25.7.3', DNSNames: [manager.names.mediaAlias(id)] },
+        [manager.names.privateNetwork(id)]: { IPAddress: '172.25.10.3' },
+      },
+    },
+  });
+  // Deleted rather than reused or refused; recreating it then needs the approved media image (absent here).
+  await expect(manager.create(id, name)).rejects.toThrow();
+  expect(request).toHaveBeenCalledWith('DELETE', expect.stringMatching(/\/containers\/relay\?v=false$/));
 });
 
 it('stops a running owned desktop on controller restart if its GPU grant was revoked', async () => {

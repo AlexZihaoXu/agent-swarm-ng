@@ -1,3 +1,4 @@
+import { viewerOf } from './users/reach';
 import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import { messageText } from './message-text';
@@ -121,8 +122,12 @@ export function registerSwarmRoutes(
       reply.header('Cache-Control', 'no-store');
       if (!(await database.findAgent(request.params.id))) return reply.code(404).send({ message: 'Agent not found.' });
       const page = await swarm.dmPeers(request.params.id, request.query.after);
+      // Only peers the person reaches (docs/users.md): a DM with another owner's agent (from before a move) is not theirs.
+      const viewer = viewerOf(request);
+      const peers = [];
+      for (const peer of page.peers) if (await app.reach.agent(viewer, peer.id)) peers.push(peer);
       return {
-        peers: page.peers.map(peer => ({
+        peers: peers.map(peer => ({
           id: peer.id,
           name: peer.name,
           avatar: peer.avatar ? JSON.parse(peer.avatar) : null,
@@ -165,8 +170,11 @@ export function registerSwarmRoutes(
       reply.header('Cache-Control', 'no-store');
       if (!(await database.findAgent(request.params.id))) return reply.code(404).send({ message: 'Agent not found.' });
       const page = await swarm.received(request.params.id, request.query.before);
+      const viewer = viewerOf(request);
+      const messages = [];
+      for (const message of page.messages) if (await app.reach.agent(viewer, message.senderId)) messages.push(message);
       return {
-        messages: page.messages.map(message => ({
+        messages: messages.map(message => ({
           id: message.id,
           sequence: message.sequence,
           conversationId: message.conversationId,

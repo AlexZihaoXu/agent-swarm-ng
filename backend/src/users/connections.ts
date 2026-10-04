@@ -1,7 +1,8 @@
 import { unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { CodexProvider, codexFiles } from '../codex-provider';
-import { resolveChatConnection } from '../chat-connection';
+import { ConnectionError, resolveChatConnection } from '../chat-connection';
+import { isPublicUrl } from './public-address';
 import { databaseFile } from '../database-location';
 import type { EndpointStore } from '../endpoint-store';
 import { ADMIN_ID, type Reach } from './reach';
@@ -37,7 +38,17 @@ export class Connections {
 
   async forAgent(agent: { id: string; endpointId: string }, signal: AbortSignal) {
     const owner = await this.ownerOfAgent(agent.id);
-    return resolveChatConnection(agent.endpointId, await this.endpoints.readFor(owner), this.codex(owner), signal);
+    const connection = await resolveChatConnection(
+      agent.endpointId,
+      await this.endpoints.readFor(owner),
+      this.codex(owner),
+      signal,
+    );
+    // A user's endpoint must still point at the public internet (its name could have been re-pointed since it was
+    // saved, docs/users.md#model-connections): checked again on every turn.
+    if (owner !== ADMIN_ID && !connection.subscriptionRuntime && !(await isPublicUrl(new URL(connection.baseUrl))))
+      throw new ConnectionError(400, 'This endpoint no longer points at a public address. Check it in Settings.');
+    return connection;
   }
 
   /** A deleted person's endpoints and ChatGPT login go with them. */

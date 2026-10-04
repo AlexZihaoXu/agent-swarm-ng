@@ -95,7 +95,7 @@ export function createTimeTools(
     defineTool({
       name: 'set_reminder',
       label: 'Set reminder',
-      description: `A repeating reminder: fires every every_seconds (${MIN_REMINDER_SECONDS}..${MAX_DELAY_SECONDS}), times times in all (1 or more; leave out to repeat until cancel_timer). The first firing is start_in_seconds from now (default: one interval). Each firing wakes you with your note (required, up to ${TIMER_NOTE_MAX} characters), its index/total, the previous firing time, and whether it is the last. Survives restarts; occurrences missed while the platform was offline are counted, not replayed.`,
+      description: `A repeating reminder: fires every every_seconds (${MIN_REMINDER_SECONDS}..${MAX_DELAY_SECONDS}), times times in all (1 or more; leave out to repeat until cancel_timer). More often than every 300 seconds, times is required and at most 360. The first firing is start_in_seconds from now (default: one interval). Each firing wakes you with your note (required, up to ${TIMER_NOTE_MAX} characters), its index/total, the previous firing time, and whether it is the last. Survives restarts; occurrences missed while the platform was offline are counted, not replayed.`,
       parameters: Type.Object(
         {
           every_seconds: Type.Number({ minimum: MIN_REMINDER_SECONDS, maximum: MAX_DELAY_SECONDS }),

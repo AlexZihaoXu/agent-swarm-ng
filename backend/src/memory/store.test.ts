@@ -158,6 +158,17 @@ it('takes provenance from the least trusted input, and a Discord batch is the ow
   const discord = { name: 'Human', channelId: 'discord:1', human: true, discord: { place: '#general', unseen: 0 } };
   const owner = '12:00:00 · [your owner] "Alex" · message 1: remember the build moved';
   expect(provenanceOf([{ text: 'hi' }], 'p')).toMatchObject({ trust: 'owner', channelId: 'p' });
+  // Computer events carry computer output (a harness's notify_supervisor): untrusted, unlike timers.
+  const event = (platform: 'computer' | 'timer') => ({
+    agentId: 'a',
+    name: 'n',
+    channelId: 'p',
+    chainId: '',
+    messageId: 'm',
+    platform,
+  });
+  expect(provenanceOf([{ text: 'done', source: event('computer') }], 'p')).toMatchObject({ trust: 'other' });
+  expect(provenanceOf([{ text: 'tick', source: event('timer') }], 'p')).toMatchObject({ trust: 'self' });
   expect(provenanceOf([{ text: owner, source: discord }], 'p')).toMatchObject({
     trust: 'owner',
     by: 'your owner on Discord',

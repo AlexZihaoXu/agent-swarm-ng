@@ -9,7 +9,8 @@ import type { AgentMemory } from '../generated/prisma/client';
  */
 export const MEMORY_TYPES = ['person', 'preference', 'project', 'skill', 'reference'] as const;
 export type MemoryType = (typeof MEMORY_TYPES)[number];
-/** Who caused a memory: the owner, the agent itself (its own work, platform events), another agent, anyone else. */
+/** Who caused a memory: the owner, the agent itself (its own work, timers, heartbeats), another agent, anyone else
+ * (Discord people, computer output). */
 export type MemoryTrust = 'owner' | 'self' | 'agent' | 'other';
 export type Provenance = { by: string; trust: MemoryTrust; channelId?: string };
 /** Least trusted first: a memory or turn takes the least trusted of its sources. Unknown values count as other. */

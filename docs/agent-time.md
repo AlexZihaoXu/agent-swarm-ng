@@ -6,7 +6,7 @@ Every agent can tell the time and wake itself later, with or without a computer.
 | --- | --- | --- |
 | `current_time` | `timezone?` | Current UTC time, Unix milliseconds and local time in an IANA zone (the platform's zone by default). |
 | `set_timer` | `seconds, note?` | Fire once after 1 s – 30 days. |
-| `set_reminder` | `every_seconds, times?, note, start_in_seconds?` | Fire every 10 s – 30 days, `times` times in all (1 or more; omitted = until cancelled). The first firing is `start_in_seconds` from now (default one interval). |
+| `set_reminder` | `every_seconds, times?, note, start_in_seconds?` | Fire every 10 s – 30 days, `times` times in all (1 or more; omitted = until cancelled). More often than every 5 minutes, `times` is required and at most 360, so nothing (untrusted content included) can start an endless fast loop of turns. The first firing is `start_in_seconds` from now (default one interval). |
 | `list_timers` | none | Pending timers and reminders, soonest first, plus the agent's [computer watches](agent-computer-use.md#watches). |
 | `cancel_timer` | `id` | Stop one timer, reminder or watch. |
 

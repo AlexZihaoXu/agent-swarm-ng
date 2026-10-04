@@ -48,7 +48,7 @@ describe('users', { timeout: 120_000 }, () => {
   });
 
   it('keeps a user inside their own organizations and admin everywhere', async () => {
-    const { app, database, call, admin, sam, samCookie, samOrg, agent, computer } = await fixture();
+    const { app, database, call, admin, sam, samCookie, samOrg, agent, computer, endpointStore } = await fixture();
     try {
       expect(sam.organizations.map(org => org.name)).toEqual(["Sam's Organization"]);
       const ada = await agent('Ada', 'personal');
@@ -149,6 +149,23 @@ describe('users', { timeout: 120_000 }, () => {
       expect(await discord.who('111111111111111111', bo.id)).toBeNull();
       expect(await discord.who('222222222222222222', bo.id)).toMatchObject({ role: 'agent' });
       expect(await discord.who('333333333333333333', bo.id)).toBeNull();
+
+      // A DM thread between Sam's agent and another owner's agent (from before a move) is not Sam's.
+      await agent('Dee', 'personal');
+      const dee = await database.client.agent.findFirstOrThrow({ where: { name: 'Dee' } });
+      expect((await call('GET', `/api/agents/${bo.id}/dms/${dee.id}`, samCookie)).statusCode).toBe(404);
+
+      // A user's endpoint is checked again on every turn: re-pointed at a private address, it is refused.
+      const { Connections } = await import('./connections');
+      const { Reach } = await import('./reach');
+      const { CodexProvider } = await import('../codex-provider');
+      await endpointStore.save({ id: 'mine', name: 'Mine', baseUrl: 'http://10.0.0.5/v1', apiKey: 'k' }, sam.id);
+      await expect(
+        new Connections(endpointStore, new Reach(database), new CodexProvider()).forAgent(
+          bo,
+          AbortSignal.timeout(5000),
+        ),
+      ).rejects.toThrow('public address');
 
       // Sam keeps at least one organization.
       expect((await call('DELETE', `/api/organizations/${samOrg}`, samCookie)).statusCode).toBe(409);

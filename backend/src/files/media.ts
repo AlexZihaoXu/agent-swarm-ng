@@ -12,14 +12,67 @@ const PDF_TEXT_CHARACTERS = 50_000;
 
 export class MediaError extends Error {}
 
-/** Re-encodes an image (a JPEG screenshot, say) as PNG at its own size. */
-export async function toPng(bytes: Uint8Array) {
-  let image;
+/** Decoding is refused above this (a 48-megapixel photo fits; about 160 MB of pixels at most). */
+const MAX_DECODE_PIXELS = 40_000_000;
+const MAX_DECODE_SIDE = 20_000;
+
+/**
+ * Width and height from the header alone (PNG, JPEG, GIF, WebP), so a small file declaring enormous dimensions (a
+ * decompression bomb from untrusted chat or Discord) is refused before it is decoded. Null when unreadable.
+ */
+export function imageDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+  const data = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (data.length >= 24 && data.readUInt32BE(0) === 0x89504e47 && data.toString('ascii', 12, 16) === 'IHDR')
+    return { width: data.readUInt32BE(16), height: data.readUInt32BE(20) };
+  if (data.length >= 10 && data.toString('ascii', 0, 3) === 'GIF')
+    return { width: data.readUInt16LE(6), height: data.readUInt16LE(8) };
+  if (data.length >= 30 && data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP') {
+    const chunk = data.toString('ascii', 12, 16);
+    if (chunk === 'VP8X') return { width: 1 + data.readUIntLE(24, 3), height: 1 + data.readUIntLE(27, 3) };
+    if (chunk === 'VP8L') {
+      const bits = data.readUInt32LE(21);
+      return { width: 1 + (bits & 0x3fff), height: 1 + ((bits >> 14) & 0x3fff) };
+    }
+    if (chunk === 'VP8 ') return { width: data.readUInt16LE(26) & 0x3fff, height: data.readUInt16LE(28) & 0x3fff };
+    return null;
+  }
+  if (data.length >= 4 && data[0] === 0xff && data[1] === 0xd8) {
+    let at = 2;
+    while (at + 9 < data.length) {
+      if (data[at] !== 0xff) return null;
+      const marker = data[at + 1]!;
+      if (marker === 0xff) {
+        at++;
+        continue;
+      }
+      // Start of frame (baseline, progressive, …): height then width.
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker))
+        return { width: data.readUInt16BE(at + 7), height: data.readUInt16BE(at + 5) };
+      if (marker === 0xd8 || (marker >= 0xd0 && marker <= 0xd7)) {
+        at += 2;
+        continue;
+      }
+      at += 2 + data.readUInt16BE(at + 2);
+    }
+  }
+  return null;
+}
+
+async function decode(bytes: Uint8Array) {
+  const size = imageDimensions(bytes);
+  if (!size) throw new MediaError('This image could not be decoded.');
+  if (size.width > MAX_DECODE_SIDE || size.height > MAX_DECODE_SIDE || size.width * size.height > MAX_DECODE_PIXELS)
+    throw new MediaError(`This image is too large to open (${size.width}×${size.height}).`);
   try {
-    image = await loadImage(Buffer.from(bytes));
+    return await loadImage(Buffer.from(bytes));
   } catch {
     throw new MediaError('This image could not be decoded.');
   }
+}
+
+/** Re-encodes an image (a JPEG screenshot, say) as PNG at its own size. */
+export async function toPng(bytes: Uint8Array) {
+  const image = await decode(bytes);
   const canvas = createCanvas(image.width, image.height);
   canvas.getContext('2d').drawImage(image, 0, 0);
   return canvas.encode('png');
@@ -27,12 +80,7 @@ export async function toPng(bytes: Uint8Array) {
 
 /** Decodes an image (PNG, JPEG, GIF first frame, WebP) and re-encodes it small enough for a model. */
 export async function fitImage(bytes: Uint8Array) {
-  let image;
-  try {
-    image = await loadImage(Buffer.from(bytes));
-  } catch {
-    throw new MediaError('This image could not be decoded.');
-  }
+  const image = await decode(bytes);
   if (!image.width || !image.height) throw new MediaError('This image has no pixels.');
   let scale = Math.min(1, MAX_SIDE / Math.max(image.width, image.height));
   for (let attempt = 0; attempt < 4; attempt++, scale *= 0.7) {

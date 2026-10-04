@@ -81,13 +81,13 @@ it('survives a restart: an unlimited reminder resumes and counts what was missed
   const before = make();
   await before.create(agent.id, {
     kind: 'reminder',
-    delaySeconds: 10,
-    everySeconds: 10,
+    delaySeconds: 300,
+    everySeconds: 300,
     note: 'poll the queue',
     human: true,
   });
   before.close(); // the platform goes down
-  advance(35_000); // occurrences at 10s, 20s and 30s fell due while it was down
+  advance(1_050_000); // occurrences at 5, 10 and 15 minutes fell due while it was down
   const after = make();
   try {
     await after.check();
@@ -100,7 +100,7 @@ it('survives a restart: an unlimited reminder resumes and counts what was missed
       kind: 'reminder',
       fired: 3,
       total: 'unlimited',
-      nextAt: '2026-09-29T12:00:40.000Z',
+      nextAt: '2026-09-29T12:20:00.000Z',
     });
   } finally {
     after.close();
@@ -119,8 +119,24 @@ it('rejects bad timers and caps how many one agent holds; cancelling frees a slo
       { kind: 'reminder' as const, delaySeconds: 5, everySeconds: 5, note: 'too often' },
       { kind: 'reminder' as const, delaySeconds: 60, everySeconds: 60, times: 0, note: 'never' },
       { kind: 'reminder' as const, delaySeconds: 60, everySeconds: 60 },
+      // Faster than every 5 minutes: never endless, at most 360 firings.
+      { kind: 'reminder' as const, delaySeconds: 60, everySeconds: 60, note: 'endless and fast' },
+      { kind: 'reminder' as const, delaySeconds: 60, everySeconds: 60, times: 361, note: 'too many' },
     ])
       await expect(timers.create(agent.id, { ...bad, human: false })).rejects.toBeInstanceOf(TimerError);
+    // Every 5 minutes or slower may repeat until cancelled.
+    await timers.cancel(
+      agent.id,
+      (
+        await timers.create(agent.id, {
+          kind: 'reminder',
+          delaySeconds: 300,
+          everySeconds: 300,
+          note: 'ok',
+          human: false,
+        })
+      ).id,
+    );
     const made = [];
     for (let i = 0; i < MAX_ACTIVE_TIMERS; i++)
       made.push(await timers.create(agent.id, { kind: 'timer', delaySeconds: 600, human: false }));

@@ -1,3 +1,4 @@
+import { imageDimensions } from '../files/media';
 import type { PlatformStore } from '../platform-store';
 import type { ComputerUseService } from './service';
 import type { SwarmSettingsStore } from '../swarm-settings';
@@ -58,6 +59,50 @@ export type StopResult = {
   error?: string;
 };
 
+const text = (value: unknown, max: number) =>
+  typeof value === 'string'
+    ? value.replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, '').slice(0, max)
+    : '';
+const count = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+/**
+ * The recorder runs in the computer, which is untrusted: its answer is checked like every other guest result before
+ * it reaches the agent (bounded names and counts, a folder in the home, a real small JPEG contact sheet).
+ */
+export function checkedStop(raw: unknown, fallbackFolder: string): StopResult {
+  const value = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const folder = text(value.folder, 512);
+  const files = (Array.isArray(value.files) ? value.files : []).slice(0, 50).flatMap(item => {
+    const file = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+    const name = text(file.name, 255);
+    const size = count(file.size);
+    return name && size !== undefined
+      ? [
+          {
+            name,
+            size,
+            ...(count(file.seconds) !== undefined ? { seconds: count(file.seconds) } : {}),
+            ...(count(file.events) !== undefined ? { events: count(file.events) } : {}),
+          },
+        ]
+      : [];
+  });
+  const sheet = value.sheet as Record<string, unknown> | null | undefined;
+  let checkedSheet: StopResult['sheet'] = null;
+  if (sheet && typeof sheet.data === 'string' && sheet.data.length <= 4 * 1024 * 1024) {
+    const size = imageDimensions(Buffer.from(sheet.data, 'base64'));
+    const jpeg = Buffer.from(sheet.data.slice(0, 8), 'base64');
+    if (size && jpeg[0] === 0xff && jpeg[1] === 0xd8 && size.width <= 4096 && size.height <= 4096)
+      checkedSheet = { mimeType: 'image/jpeg', data: sheet.data, width: size.width, height: size.height };
+  }
+  return {
+    folder: folder.startsWith('/home/agent/') && !/(^|\/)\.\.(\/|$)/.test(folder) ? folder : fallbackFolder,
+    files,
+    sheet: checkedSheet,
+    ...(value.error !== undefined ? { error: text(value.error, 500) || 'not saved' } : {}),
+  };
+}
+
 const stamp = (at: number) => new Date(at).toISOString().slice(0, 19).replace('T', '_').replaceAll(':', '-');
 const safe = (text: string) =>
   text
@@ -87,8 +132,11 @@ export class AgentRecordings {
       for (const row of rows) {
         let text: string;
         try {
-          const result = await this.call(row.computerId, 'stop', { id: row.id, reason: 'platform restarted' });
-          text = `The platform restarted, so your recording (${row.label}) was stopped and saved in ${result.folder ?? row.folder}.`;
+          const result = checkedStop(
+            await this.call(row.computerId, 'stop', { id: row.id, reason: 'platform restarted' }),
+            `/home/agent/${row.folder}`,
+          );
+          text = `The platform restarted, so your recording (${row.label}) was stopped and saved in ${result.folder}.`;
         } catch {
           text = `The platform restarted while you were recording (${row.label}); it could not be saved (the computer was off or unreachable).`;
         }
@@ -378,11 +426,14 @@ export class AgentRecordings {
     this.active.delete(item.id);
     let result: StopResult;
     try {
-      result = (await this.call(item.computerId, 'stop', {
-        id: item.id,
-        reason,
-        notes: item.notes.slice(-50),
-      })) as StopResult;
+      result = checkedStop(
+        await this.call(item.computerId, 'stop', {
+          id: item.id,
+          reason,
+          notes: item.notes.slice(-50),
+        }),
+        `/home/agent/${item.folder}`,
+      );
     } catch (error) {
       result = {
         folder: `/home/agent/${item.folder}`,
@@ -395,7 +446,10 @@ export class AgentRecordings {
   }
 
   private summary(item: Recording, result: StopResult, reason: string) {
-    const files = result.files.map(file => `${file.name} (${Math.round(file.size / 1024)} KB)`).join(', ');
+    // File names come from the computer: quoted, as data.
+    const files = result.files
+      .map(file => `${JSON.stringify(file.name)} (${Math.round(file.size / 1024)} KB)`)
+      .join(', ');
     return result.error
       ? `Your recording ${item.label} on ${item.computerName} stopped (${reason}) but could not be saved: ${result.error}`
       : `Your recording ${item.label} on ${item.computerName} stopped (${reason}) and was saved in ${result.folder}: ${files || 'nothing was captured'}. Share a file with upload_file from computer:${item.computerName}:<path>.`;

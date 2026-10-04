@@ -4,6 +4,12 @@ export const TIMER_NOTE_MAX = 256;
 /** Timers may be set up to 30 days ahead; reminders repeat no more often than every 10 seconds. */
 export const MAX_DELAY_SECONDS = 30 * 24 * 60 * 60;
 export const MIN_REMINDER_SECONDS = 10;
+/**
+ * Reminders more often than every 5 minutes need `times`, at most 360 (an hour at 10 s): untrusted content must not
+ * be able to set an endless fast loop of model turns.
+ */
+export const FAST_REMINDER_SECONDS = 300;
+export const MAX_FAST_REMINDER_TIMES = 360;
 /** Pending timers and reminders one agent may hold at once. */
 export const MAX_ACTIVE_TIMERS = 25;
 
@@ -96,6 +102,13 @@ export class AgentTimers {
         throw new TimerError(`A reminder repeats every ${MIN_REMINDER_SECONDS} to ${MAX_DELAY_SECONDS} seconds.`);
       if (input.times !== undefined && (!Number.isInteger(input.times) || input.times < 1))
         throw new TimerError('times must be a whole number of at least 1 (leave it out to repeat until cancelled).');
+      if (
+        input.everySeconds! < FAST_REMINDER_SECONDS &&
+        (input.times === undefined || input.times > MAX_FAST_REMINDER_TIMES)
+      )
+        throw new TimerError(
+          `A reminder more often than every ${FAST_REMINDER_SECONDS} seconds needs times, at most ${MAX_FAST_REMINDER_TIMES}. To follow work on a computer, use a watch or monitor.`,
+        );
       if (!note) throw new TimerError('A reminder needs a note saying what it is for.');
     } else if (input.delaySeconds < 1) throw new TimerError('A timer needs at least 1 second.');
     await this.database.initialize();

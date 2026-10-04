@@ -287,12 +287,13 @@ type Input = {
 const ownerOnly = (discord: { unseen?: number }) => discord.unseen === 0;
 /**
  * Who causes a memory in this turn: the least trusted of its inputs (a batch mixing the owner and a stranger counts as
- * the stranger). No source is the owner's private chat; platform events (timers, heartbeats, computers) are the
- * agent's own work.
+ * the stranger). No source is the owner's private chat; timers, reminders and heartbeats are the agent's own work;
+ * computer events carry computer output (a harness's notify_supervisor, screen and terminal text), which is untrusted.
  */
 export function provenanceOf(inputs: Input[], privateChannelId: string): Provenance {
   const each = inputs.map(({ source }): Provenance => {
     if (!source) return { by: 'your owner', trust: 'owner', channelId: privateChannelId };
+    if (source.platform === 'computer') return { by: 'computer output', trust: 'other', channelId: source.channelId };
     if (source.platform) return { by: `you (${source.platform} event)`, trust: 'self', channelId: source.channelId };
     if (source.discord)
       return source.human && ownerOnly(source.discord)

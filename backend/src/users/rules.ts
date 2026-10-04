@@ -124,7 +124,9 @@ export const RULES: Record<string, Rule> = {
   'GET /api/agents/:id/memory/:name/versions': agent,
   'GET /api/agents/:id/dm-peers': agent,
   'GET /api/agents/:id/dm-inbox': agent,
-  'GET /api/agents/:id/dms/:peerId': agent,
+  // Both ends: a DM with another owner's agent (from before a move) is not the person's.
+  'GET /api/agents/:id/dms/:peerId': async (request, reach, viewer) =>
+    (await reach.agent(viewer, param(request, 'id'))) && reach.agent(viewer, param(request, 'peerId')),
   'GET /api/agents/:id/discord': agent,
   'PATCH /api/agents/:id/discord': agent,
   'PUT /api/agents/:id/discord/token': agent,

@@ -146,6 +146,7 @@ export class ReactionCoordinator {
         const channel = { id: agent.channels[0].id, kind: 'platform-chat' as const, agentId };
         const connection = await this.connections.forAgent(agent, controller.signal);
         activity?.protect(connection.apiKey ?? '');
+        activity?.protect(connection.accessKey);
         const history = await this.database.context(channel.id);
         phase = 'evaluation';
         const decision = await triageGate(agentId, () =>

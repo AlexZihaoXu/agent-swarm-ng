@@ -436,6 +436,7 @@ export class DmBroker {
       activity.record('metadata', 'Discord source', JSON.stringify({ channelId: `discord:${channelId}` }));
       const connection = await this.connections.forAgent(agent, controller.signal);
       activity.protect(connection.apiKey ?? '');
+      activity.protect(connection.accessKey);
       const transcript = await this.discordTranscript(agentId, channelId);
       const tools = this.discord
         ? createDiscordReadTools({ agentId, store: this.discord.store, connections: this.discord.connections }).filter(
@@ -1299,6 +1300,7 @@ ${preview.text}`
         this.activity,
       );
       activity.protect(connection.apiKey ?? '');
+      activity.protect(connection.accessKey);
       await activity.start('Idle compaction');
       // A temporary session over the saved context: it only lends its model and credentials to the summary.
       const session = await createChatSession(
@@ -1366,6 +1368,7 @@ ${preview.text}`
       this.activity,
     );
     activity.protect(connection.apiKey ?? '');
+    activity.protect(connection.accessKey);
     await activity.start('Sleep');
     let failed = false;
     try {
