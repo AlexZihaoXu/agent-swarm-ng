@@ -96,42 +96,69 @@ test('buttons give press feedback, and dialogs open over the shared blurred back
   await expect(page.locator('[data-state="open"].fixed.inset-0').first()).toHaveCSS('backdrop-filter', 'blur(2px)');
 });
 
+const sectionNames = [
+  'Channels',
+  'Model',
+  'Instructions',
+  'Heartbeat',
+  'Time notes',
+  'Computers',
+  'Scratchpad',
+  'Memory',
+  'Avatar',
+  'Organization',
+  'Delete agent',
+];
+
 test('agent settings offer jump links that follow the reader and land each heading in view', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 700 });
   await page.goto('/agents/avery');
   const pane = page.getByRole('region', { name: 'Settings for Avery' });
-  const nav = pane.getByRole('navigation', { name: 'Jump to section' });
-  await expect(nav.getByRole('link')).toHaveText([
-    'Channels',
-    'Model',
-    'Instructions',
-    'Heartbeat',
-    'Time notes',
-    'Computers',
-    'Scratchpad',
-    'Memory',
-    'Avatar',
-    'Organization',
-    'Delete agent',
-  ]);
-  // On wide screens the links share the header row with the title (no separate strip or subtitle).
-  const title = (await pane.getByRole('heading', { name: 'Agent settings' }).boundingBox())!;
-  const links = (await nav.boundingBox())!;
-  expect(Math.abs(title.y + title.height / 2 - (links.y + links.height / 2))).toBeLessThan(6);
+  // Wide screens list the sections down the Agents panel, under the picker, not in the editor.
+  const panel = page.getByRole('complementary', { name: 'Agents', exact: true });
+  const nav = panel.getByRole('navigation', { name: 'Jump to section' });
+  await expect(nav.getByRole('link')).toHaveText(sectionNames);
+  await expect(pane.getByRole('navigation', { name: 'Jump to section' })).toHaveCount(0);
+  const picker = (await panel.getByRole('combobox', { name: 'Agent' }).boundingBox())!;
+  const first = (await nav.getByRole('link').first().boundingBox())!;
+  const second = (await nav.getByRole('link').nth(1).boundingBox())!;
+  expect(first.y).toBeGreaterThan(picker.y + picker.height);
+  expect(second.y).toBeGreaterThan(first.y); // a vertical list
+  expect(Math.abs(second.x - first.x)).toBeLessThan(2);
   await expect(pane).not.toContainText('Name, model, channels');
   await expect(nav.locator('[aria-current="location"]')).toHaveText('Channels');
   await nav.getByRole('link', { name: 'Avatar' }).click();
   await expect(nav.locator('[aria-current="location"]')).toHaveText('Avatar');
   const heading = pane.getByRole('heading', { name: 'Avatar', exact: true });
-  await expect.poll(async () => (await heading.boundingBox())!.y).toBeGreaterThan((await nav.boundingBox())!.y);
-  const navBottom = (await nav.boundingBox())!.y + (await nav.boundingBox())!.height;
+  const editor = pane.getByRole('region', { name: 'Agent editor' });
+  const top = (await editor.boundingBox())!.y;
   // Near the end of the page the scroll bottoms out, so allow the heading anywhere in the upper half.
-  await expect.poll(async () => (await heading.boundingBox())!.y - navBottom).toBeLessThan(700 / 2);
-  expect((await heading.boundingBox())!.y).toBeGreaterThanOrEqual(navBottom);
+  await expect.poll(async () => (await heading.boundingBox())!.y - top).toBeLessThan(700 / 2);
+  expect((await heading.boundingBox())!.y).toBeGreaterThanOrEqual(top);
   await expect(pane.getByRole('region', { name: 'Avatar' })).toBeFocused();
   // Scrolling by hand moves the highlight back.
-  await pane.getByRole('region', { name: 'Agent editor' }).evaluate(element => element.scrollTo({ top: 0 }));
+  await editor.evaluate(element => element.scrollTo({ top: 0 }));
   await expect(nav.locator('[aria-current="location"]')).toHaveText('Channels');
+});
+
+test('phone agent settings keep a sticky strip of jump links that lands headings below it', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/agents/avery');
+  const pane = page.getByRole('region', { name: 'Settings for Avery' });
+  const nav = pane.getByRole('navigation', { name: 'Jump to section' });
+  await expect(nav.getByRole('link')).toHaveText(sectionNames);
+  await expect(nav).toHaveCSS('position', 'sticky');
+  const first = (await nav.getByRole('link').first().boundingBox())!;
+  const second = (await nav.getByRole('link').nth(1).boundingBox())!;
+  expect(Math.abs(second.y - first.y)).toBeLessThan(2); // one horizontal row
+  await expect(nav.locator('[aria-current="location"]')).toHaveText('Channels');
+  await nav.getByRole('link', { name: 'Avatar' }).click();
+  await expect(nav.locator('[aria-current="location"]')).toHaveText('Avatar');
+  const heading = pane.getByRole('heading', { name: 'Avatar', exact: true });
+  const navBottom = (await nav.boundingBox())!.y + (await nav.boundingBox())!.height;
+  await expect.poll(async () => (await heading.boundingBox())!.y - navBottom).toBeLessThan(844 / 2);
+  expect((await heading.boundingBox())!.y).toBeGreaterThanOrEqual(navBottom);
+  await expect(pane.getByRole('region', { name: 'Avatar' })).toBeFocused();
 });
 
 test('empty screens say what is missing and point to the next step', async ({ page }) => {

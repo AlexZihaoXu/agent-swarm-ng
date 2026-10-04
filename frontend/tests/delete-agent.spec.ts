@@ -32,8 +32,10 @@ test('requires exact typed confirmation, supports cancellation, and persists del
     return route.fulfill({ json: { deleted: true } });
   });
   await page.goto('/');
-  const card = page.getByRole('button', { name: `Open settings for ${agent.name}`, exact: true });
-  await card.click();
+  // Wide screens: the picker's area carries the selected agent, and its context menu deletes that one.
+  const picker = page.getByRole('combobox', { name: 'Agent' });
+  const card = page.locator(`aside[aria-label="Agents"] [data-agent-id="${agent.id}"]`).first();
+  await expect(picker).toContainText(agent.name);
   await card.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Delete agent', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Delete agent', exact: true });
@@ -45,43 +47,55 @@ test('requires exact typed confirmation, supports cancellation, and persists del
   await page.getByLabel('Confirm agent name').fill(agent.name);
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect(attempts).toBe(0);
-  await expect(card).toBeFocused();
-  await card.press('Shift+F10');
+  await expect(picker).toBeFocused();
+  await picker.press('Shift+F10');
   await page.getByRole('menuitem', { name: 'Delete agent', exact: true }).click();
   await expect(page.getByLabel('Confirm agent name')).toHaveValue('');
   await page.getByLabel('Confirm agent name').fill(agent.name);
   await remove.click();
   await expect(dialog.getByRole('alert')).toContainText('Stop it');
-  await expect(
-    page.getByRole('button', { name: `Open settings for ${agent.name}`, exact: true, includeHidden: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Agent', includeHidden: true })).toContainText(agent.name);
   await remove.click();
   await expect(dialog).toHaveCount(0);
   await expect(card).toHaveCount(0);
+  await expect(picker).toBeDisabled();
   await expect(page.getByRole('complementary', { name: 'Agents', exact: true })).toBeFocused();
   await expect(page.getByText('Select or create an agent to configure.', { exact: true })).toBeVisible();
   await page.reload();
   await expect(card).toHaveCount(0);
+  await expect(picker).toBeDisabled();
   expect(attempts).toBe(2);
 });
 
 test('deleting an unselected saved agent does not change selection; last deletion shows an empty state', async ({
   page,
 }) => {
-  await page.goto('/');
+  // Only the phone list offers every agent's own menu; wide screens act on the selected agent.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/agents');
   const cards = page.getByRole('button', { name: /^Open settings for / });
   await expect(cards.first()).toBeVisible();
   const names = await cards.evaluateAll(elements =>
     elements.map(element => element.getAttribute('aria-label')!.replace('Open settings for ', '')),
   );
-  for (const name of [...names.slice(1), names[0]]) {
+  for (const name of names.slice(1)) {
     await page.getByRole('button', { name: `Open settings for ${name}`, exact: true }).click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Delete agent', exact: true }).click();
     await page.getByLabel('Confirm agent name').fill(name);
     await page.getByRole('dialog').getByRole('button', { name: 'Delete agent', exact: true }).click();
-    if (name !== names[0]) await expect(page.getByRole('region', { name: `Settings for ${names[0]}` })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: `Open settings for ${name}`, exact: true })).toHaveCount(0);
   }
-  await expect(cards).toHaveCount(0);
+  await expect(cards).toHaveCount(1);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/agents');
+  const settings = page.getByRole('region', { name: `Settings for ${names[0]}` });
+  await expect(settings).toBeVisible();
+  await page.locator('aside[aria-label="Agents"] [data-agent-id]').first().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Delete agent', exact: true }).click();
+  await page.getByLabel('Confirm agent name').fill(names[0]);
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete agent', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Agent' })).toBeDisabled();
   await expect(page.getByText('Select or create an agent to configure.', { exact: true })).toBeVisible();
 });
 
@@ -89,8 +103,12 @@ test('cancelling a delete keeps its own content while the dialog animates closed
   await page.route('**/api/agents', route => route.fulfill({ json: { agents: [agent], nextCursor: null } }));
   await page.route('**/api/channels/*/messages*', route => route.fulfill({ json: { messages: [], nextCursor: null } }));
   await page.goto('/');
-  const card = page.getByRole('button', { name: `Open settings for ${agent.name}`, exact: true });
-  await card.click({ button: 'right' });
+  await expect(page.getByRole('combobox', { name: 'Agent' })).toContainText(agent.name);
+  // The panel's section list belongs to the selected agent too: its menu offers that agent's delete.
+  await page
+    .getByRole('navigation', { name: 'Jump to section' })
+    .getByRole('link', { name: 'Model' })
+    .click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Delete agent', exact: true }).click();
   await expect(page.getByLabel('Confirm agent name')).toBeVisible();
   // Watch every frame of the close: the other (Create agent) form must never show.

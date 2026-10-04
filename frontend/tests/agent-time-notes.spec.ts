@@ -19,6 +19,8 @@ test('an agent’s time notes default to every 15 minutes and save with the page
   await settings.getByRole('button', { name: 'Save changes' }).click();
   await expect(section.getByRole('status')).toContainText('next step');
   expect(body).toEqual({ timeNoteMinutes: 5 });
-  // Listed among the sections to jump to.
-  await expect(settings.getByRole('link', { name: 'Time notes' }).first()).toBeAttached();
+  // Listed among the sections to jump to (wide screens: in the Agents panel).
+  await expect(
+    page.getByRole('navigation', { name: 'Jump to section' }).getByRole('link', { name: 'Time notes' }),
+  ).toBeVisible();
 });

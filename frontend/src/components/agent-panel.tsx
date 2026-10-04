@@ -59,8 +59,11 @@ export function AgentPanel({
             onContextMenuCapture={event => {
               const card = (event.target as HTMLElement).closest<HTMLElement>('[data-agent-id]');
               setContextAgent(agents.find(agent => agent.id === card?.dataset.agentId) ?? null);
+              // A wide screen's picker area is not focusable itself; focus returns to its picker.
+              const focusable =
+                card && card.tabIndex < 0 ? card.querySelector<HTMLElement>('button, [tabindex="0"]') : card;
               returnFocus.current =
-                card ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+                focusable ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
             }}
             onKeyDown={event => {
               if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;

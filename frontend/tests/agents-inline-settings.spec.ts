@@ -12,7 +12,8 @@ test('Agents opens selected agent settings directly, keeps Avatar inline, and ha
   await page.screenshot({ path: test.info().outputPath('agents-settings-desktop.png'), animations: 'disabled' });
   await expect(page.getByRole('form', { name: 'Message composer' })).toHaveCount(0);
   await expect(page.getByRole('dialog', { name: 'Edit agent' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Open settings for Avery' }).click({ button: 'right' });
+  // The panel's picker area carries the selected agent, so its menu acts on Avery.
+  await page.locator('aside[aria-label="Agents"] [data-agent-id="avery"]').first().click({ button: 'right' });
   await expect(page.getByRole('menuitem', { name: 'Edit agent' })).toHaveCount(0);
   await expect(page.getByRole('menuitem', { name: 'Delete agent' })).toBeVisible();
   await page.keyboard.press('Escape');

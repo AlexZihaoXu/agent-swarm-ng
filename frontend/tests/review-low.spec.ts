@@ -22,11 +22,13 @@ test('sidebars carry no placeholder account row, and the composer has no dead at
 test('both sidebars label a conversation the same way, and an old conversation is dated instead of looking like today', async ({
   page,
 }) => {
-  await page.goto('/agents/avery');
+  // The Agents list (with its time labels) is a phone screen; wide screens pick agents from a select.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/agents');
   const agentsRow = page.getByRole('button', { name: 'Open settings for Avery' });
   const agentsLabel = (await agentsRow.locator('[data-slot="swap-text"]').first().innerText()).trim();
   expect(agentsLabel).toBe('Jan 1, 2030'); // sample history is not from today
-  await page.goto('/chat/agents/avery');
+  await page.goto('/chat');
   const chatLabel = (
     await page
       .getByRole('button', { name: 'Open conversation with Avery' })
@@ -255,7 +257,7 @@ test('Settings, Computers and Knowledge load on demand and still work', async ({
     if (/\/src\/components\/(settings|computers-panel|knowledge-browser)\.tsx/.test(path)) scripts.push(path);
   });
   await page.goto('/agents/avery');
-  await expect(page.getByRole('button', { name: 'Open settings for Avery' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Agent' })).toContainText('Avery');
   expect(scripts).toEqual([]); // nothing from the other tabs was fetched for the first screen
   const initial = scripts.length;
   await page.getByRole('tab', { name: 'Settings' }).click();

@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test, expect, chooseAgent } from './fixtures';
 import { defaultAvatar } from '../src/lib/agent-avatar';
 
 test('saved agents keep the sidebar and open inline settings; Chat owns messages', async ({ page }) => {
@@ -15,7 +15,7 @@ test('saved agents keep the sidebar and open inline settings; Chat owns messages
   await expect(page.getByRole('region', { name: 'Settings for Avery' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create new agent' })).toBeVisible();
   await expect(page.getByRole('form', { name: 'Message composer' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Open settings for Morgan' }).click();
+  await chooseAgent(page, 'Morgan');
   await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await expect(page.getByLabel('Message Morgan')).toBeVisible();
@@ -37,7 +37,8 @@ test('agent panel context menu opens the creation form', async ({ page }) => {
   await expect(dialog.getByRole('button', { name: 'Create agent', exact: true })).toBeDisabled();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(page.getByRole('button', { name: /^Open settings for/ })).toHaveCount(4);
+  await page.getByRole('combobox', { name: 'Agent' }).click();
+  await expect(page.getByRole('option')).toHaveCount(4);
 });
 
 test('agent context menu and placeholder support keyboard dismissal and focus return', async ({ page }) => {
@@ -276,8 +277,23 @@ test('chat scrollbar appears during scrolling and fades away when idle', async (
 
 test('agent search filters names and handles no matches', async ({ page }) => {
   await page.goto('/');
-  const search = page.getByRole('searchbox', { name: 'Search agents' });
+  await page.getByRole('combobox', { name: 'Agent' }).click();
+  const search = page.getByPlaceholder('Search agents…');
   await expect(search).toBeVisible();
+  await search.fill('  MOR  ');
+  await expect(page.getByRole('option')).toHaveCount(1);
+  await expect(page.getByRole('option')).toContainText('Morgan');
+  await search.fill('unknown');
+  await expect(page.getByText('No matches')).toBeVisible();
+  await search.fill('');
+  await expect(page.getByRole('option')).toHaveCount(4);
+  await expect(page.getByRole('form', { name: 'Message composer' })).toHaveCount(0);
+});
+
+test('phone agent search filters the list and handles no matches', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/agents');
+  const search = page.getByRole('searchbox', { name: 'Search agents' });
   await search.fill('  MOR  ');
   await expect(page.getByRole('button', { name: /^Open settings for/ })).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Open settings for Morgan' })).toBeVisible();
@@ -285,7 +301,6 @@ test('agent search filters names and handles no matches', async ({ page }) => {
   await expect(page.getByText('No agents found.')).toBeVisible();
   await search.fill('');
   await expect(page.getByRole('button', { name: /^Open settings for/ })).toHaveCount(4);
-  await expect(page.getByRole('form', { name: 'Message composer' })).toHaveCount(0);
 });
 
 test('navigation is centered with a moving indicator and pointer cursors', async ({ page }) => {
@@ -297,7 +312,8 @@ test('navigation is centered with a moving indicator and pointer cursors', async
   const width = await page.evaluate(() => window.innerWidth);
   expect(Math.abs(box!.x + box!.width / 2 - width / 2)).toBeLessThan(2);
   await expect(tabs.getByRole('tab', { name: 'Settings' })).toHaveCSS('cursor', 'pointer');
-  await expect(page.getByRole('button', { name: 'Open settings for Morgan' })).toHaveCSS('cursor', 'pointer');
+  await expect(page.getByRole('combobox', { name: 'Agent' })).toHaveCSS('cursor', 'pointer');
+  await expect(page.getByRole('button', { name: 'Create new agent' })).toHaveCSS('cursor', 'pointer');
   await expect(indicator).toHaveCSS('transition-property', /\btransform\b/);
   const initial = await indicator.boundingBox();
   await tabs.getByRole('tab', { name: 'Settings' }).click();

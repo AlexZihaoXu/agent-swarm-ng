@@ -49,6 +49,7 @@ import { useOrganizations } from '@/lib/organizations';
 import { PortalWindows } from '@/components/portal-windows';
 import type { ComputerAgentState } from '@/components/computer-control';
 import { ConversationRow } from '@/components/conversation-row';
+import { AgentPicker } from '@/components/agent-picker';
 import {
   agentDmPath,
   agentPath,
@@ -334,6 +335,8 @@ export function App() {
     if (selectedGroup && deletedGroup.current === selectedGroup) navigate('/chat', { replace: true });
   }, [selectedGroup, navigate]);
   const [search, setSearch] = useState('');
+  // Where the agent editor lists its sections on wide screens: the Agents panel, under the picker.
+  const [sectionSlot, setSectionSlot] = useState<HTMLDivElement | null>(null);
   const [activityOpen, setActivityOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -766,7 +769,8 @@ export function App() {
             <AgentPanel
               agents={agents}
               route={route}
-              onNavigate={navigate}
+              // Creating replaces the editor: unsaved settings ask first, as with any other way out.
+              onNavigate={path => (path === '/agents/new' ? leave(() => navigate(path)) : navigate(path))}
               onDeleted={() => {
                 focusAgentsAfterDelete.current = true;
                 navigate('/agents');
@@ -790,96 +794,182 @@ export function App() {
                 mobileConversation ? 'hidden' : 'flex',
               )}
             >
-              <SidebarSearch
-                label="Search agents"
-                placeholder="Search agents"
-                value={search}
-                onChange={setSearch}
-                action={
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="size-11 shrink-0 p-0 text-lg sm:size-8"
-                    aria-label="Create new agent"
-                    title="Create new agent"
-                    onClick={() => navigate('/agents/new')}
+              {isPhone ? (
+                // Phones: the list is the picker, a screen of its own; the settings open over it.
+                <>
+                  <SidebarSearch
+                    label="Search agents"
+                    placeholder="Search agents"
+                    value={search}
+                    onChange={setSearch}
+                    action={
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="size-11 shrink-0 p-0 text-lg sm:size-8"
+                        aria-label="Create new agent"
+                        title="Create new agent"
+                        onClick={() => leave(() => navigate('/agents/new'))}
+                      >
+                        +
+                      </Button>
+                    }
+                  />
+                  <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
+                    {visibleAgents.length === 0 &&
+                      !agentsLoading &&
+                      !agentsFailed &&
+                      !(searchTerm && (agentSearch.isFetching || agentSearch.isError)) && (
+                        <p role="status" className="px-2 py-4 text-xs text-muted-foreground">
+                          {search.trim() ? 'No agents found.' : 'No agents yet. Use + to create one.'}
+                        </p>
+                      )}
+                    <ul className="space-y-0.5">
+                      {visibleAgents.map(item => {
+                        const lastMessage = conversations[item.channelId]?.at(-1);
+                        return (
+                          <ConversationRow
+                            key={item.id}
+                            data={{ 'data-agent-id': item.id }}
+                            label={`Open settings for ${item.name}`}
+                            selected={item.id === agent.id}
+                            selectionGroup="agents"
+                            onClick={() => leave(() => navigate(agentPath(item.id)))}
+                            avatar={
+                              <Avatar
+                                initials={item.initials}
+                                avatar={item.avatar}
+                                ready={Boolean(item.real)}
+                                typing={typingIn(item.channelId, item.channelId)}
+                                working={busy[item.channelId]}
+                                compaction={compactions[item.id]}
+                              />
+                            }
+                            name={item.name}
+                            time={listTime(
+                              lastMessage?.timestamp ??
+                                item.real?.lastMessage?.timestamp ??
+                                item.real?.createdAt ??
+                                Date.now(),
+                            )}
+                            previewPrefix={lastMessage?.author === 'user' ? 'You: ' : ''}
+                            preview={lastMessage ? messagePreview(lastMessage.text, lastMessage.files) : ''}
+                          />
+                        );
+                      })}
+                    </ul>
+                    {searchTerm
+                      ? (agentSearch.isFetching || agentSearch.isError || agentSearch.hasNextPage) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-3 w-full"
+                            disabled={agentSearch.isFetching}
+                            onClick={() =>
+                              void (agentSearch.isError ? agentSearch.refetch() : agentSearch.fetchNextPage())
+                            }
+                          >
+                            {agentSearch.isFetching
+                              ? 'Searching…'
+                              : agentSearch.isError
+                                ? 'Retry search'
+                                : 'Load more matches'}
+                          </Button>
+                        )
+                      : (agentsLoading || agentsFailed || agentsCursor !== null) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-3 w-full"
+                            disabled={agentsLoading}
+                            onClick={() => void loadAgents(agentsCursor ?? undefined)}
+                          >
+                            {agentsLoading
+                              ? 'Loading agents…'
+                              : agentsFailed
+                                ? 'Retry loading agents'
+                                : 'Load more agents'}
+                          </Button>
+                        )}
+                  </div>
+                </>
+              ) : (
+                // Wide screens: which agent, then its settings' sections (the editor fills this list).
+                <>
+                  <div
+                    className="flex items-center gap-2 border-b border-border p-4"
+                    data-agent-id={agent.id || undefined}
                   >
-                    +
-                  </Button>
-                }
-              />
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
-                {visibleAgents.length === 0 &&
-                  !agentsLoading &&
-                  !agentsFailed &&
-                  !(searchTerm && (agentSearch.isFetching || agentSearch.isError)) && (
-                    <p role="status" className="px-2 py-4 text-xs text-muted-foreground">
-                      {search.trim() ? 'No agents found.' : 'No agents yet. Use + to create one.'}
+                    <div className="min-w-0 flex-1">
+                      <AgentPicker
+                        agents={agents}
+                        status={
+                          agent.id ? (
+                            <Avatar
+                              initials={agent.initials}
+                              avatar={agent.avatar}
+                              ready={Boolean(agent.real)}
+                              typing={typingIn(agent.channelId, agent.channelId)}
+                              working={busy[agent.channelId]}
+                              compaction={compactions[agent.id]}
+                            />
+                          ) : undefined
+                        }
+                        selected={agent.id ? agent : undefined}
+                        onSelect={id => leave(() => navigate(agentPath(id)))}
+                        more={
+                          agentsLoading || agentsFailed || agentsCursor !== null
+                            ? {
+                                label: agentsLoading
+                                  ? 'Loading agents…'
+                                  : agentsFailed
+                                    ? 'Retry loading agents'
+                                    : 'Load more agents',
+                                busy: agentsLoading,
+                                load: () => void loadAgents(agentsCursor ?? undefined),
+                              }
+                            : undefined
+                        }
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="size-12 shrink-0 p-0 text-lg"
+                      aria-label="Create new agent"
+                      title="Create new agent"
+                      onClick={() => leave(() => navigate('/agents/new'))}
+                    >
+                      +
+                    </Button>
+                  </div>
+                  {!agents.length && !agentsLoading && !agentsFailed && agentsCursor === null && (
+                    <p role="status" className="px-6 py-4 text-xs text-muted-foreground">
+                      No agents yet. Use + to create one.
                     </p>
                   )}
-                <ul className="space-y-0.5">
-                  {visibleAgents.map(item => {
-                    const lastMessage = conversations[item.channelId]?.at(-1);
-                    return (
-                      <ConversationRow
-                        key={item.id}
-                        data={{ 'data-agent-id': item.id }}
-                        label={`Open settings for ${item.name}`}
-                        selected={item.id === agent.id}
-                        selectionGroup="agents"
-                        onClick={() => leave(() => navigate(agentPath(item.id)))}
-                        avatar={
-                          <Avatar
-                            initials={item.initials}
-                            avatar={item.avatar}
-                            ready={Boolean(item.real)}
-                            typing={typingIn(item.channelId, item.channelId)}
-                            working={busy[item.channelId]}
-                            compaction={compactions[item.id]}
-                          />
-                        }
-                        name={item.name}
-                        time={listTime(
-                          lastMessage?.timestamp ??
-                            item.real?.lastMessage?.timestamp ??
-                            item.real?.createdAt ??
-                            Date.now(),
-                        )}
-                        previewPrefix={lastMessage?.author === 'user' ? 'You: ' : ''}
-                        preview={lastMessage ? messagePreview(lastMessage.text, lastMessage.files) : ''}
-                      />
-                    );
-                  })}
-                </ul>
-                {searchTerm
-                  ? (agentSearch.isFetching || agentSearch.isError || agentSearch.hasNextPage) && (
+                  {/* A failed first page is retried in plain sight, not only from inside the picker. */}
+                  {!agents.length && agentsFailed && (
+                    <div className="px-4 pt-3">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="mt-3 w-full"
-                        disabled={agentSearch.isFetching}
-                        onClick={() => void (agentSearch.isError ? agentSearch.refetch() : agentSearch.fetchNextPage())}
-                      >
-                        {agentSearch.isFetching
-                          ? 'Searching…'
-                          : agentSearch.isError
-                            ? 'Retry search'
-                            : 'Load more matches'}
-                      </Button>
-                    )
-                  : (agentsLoading || agentsFailed || agentsCursor !== null) && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-3 w-full"
+                        className="w-full"
                         disabled={agentsLoading}
-                        onClick={() => void loadAgents(agentsCursor ?? undefined)}
+                        onClick={() => void loadAgents()}
                       >
-                        {agentsLoading ? 'Loading agents…' : agentsFailed ? 'Retry loading agents' : 'Load more agents'}
+                        Retry loading agents
                       </Button>
-                    )}
-              </div>
+                    </div>
+                  )}
+                  <div
+                    ref={setSectionSlot}
+                    data-agent-id={agent.id || undefined}
+                    className="min-h-0 flex-1 overflow-y-auto p-3"
+                  />
+                </>
+              )}
             </AgentPanel>
           )}
 
@@ -890,6 +980,7 @@ export function App() {
                 agent={agent}
                 route={route}
                 mobile={mobileConversation}
+                sectionSlot={isPhone ? null : sectionSlot}
                 onNavigate={navigate}
                 onSave={editAvatar}
                 onModelSaved={applyAgent}
@@ -912,7 +1003,7 @@ export function App() {
                     <EmptyDescription>Select or create an agent to configure.</EmptyDescription>
                   </EmptyHeader>
                   <EmptyContent>
-                    <Button type="button" className="gap-1.5" onClick={() => navigate('/agents/new')}>
+                    <Button type="button" className="gap-1.5" onClick={() => leave(() => navigate('/agents/new'))}>
                       <PlusIcon />
                       Create agent
                     </Button>

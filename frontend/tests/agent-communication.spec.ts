@@ -1,4 +1,4 @@
-import { test, expect, type Page } from './fixtures';
+import { test, expect, chooseAgent, type Page } from './fixtures';
 import { sampleAgents } from './sample-agents';
 async function openEditor(page: Page) {
   await page.goto('/agents/avery');
@@ -176,12 +176,12 @@ test('one saved connection automatically enables the other agent and either side
   await settings.getByRole('checkbox', { name: 'Morgan', exact: true }).check();
   await settings.getByRole('button', { name: 'Save changes' }).click();
   await expect(settings.getByRole('status')).toContainText('Saved', { timeout: 15_000 });
-  await page.getByRole('button', { name: 'Open settings for Morgan' }).click();
+  await chooseAgent(page, 'Morgan');
   settings = page.getByRole('region', { name: 'Settings for Morgan' });
   await expect(settings.getByRole('checkbox', { name: 'Avery', exact: true })).toBeChecked();
   await settings.getByRole('checkbox', { name: 'Avery', exact: true }).uncheck();
   await settings.getByRole('button', { name: 'Save changes' }).click();
-  await page.getByRole('button', { name: 'Open settings for Avery' }).click();
+  await chooseAgent(page, 'Avery');
   settings = page.getByRole('region', { name: 'Settings for Avery' });
   await expect(settings.getByRole('checkbox', { name: 'Morgan', exact: true })).not.toBeChecked();
 });

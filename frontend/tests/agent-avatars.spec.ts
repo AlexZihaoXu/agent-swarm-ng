@@ -230,7 +230,8 @@ test('existing agents can edit and persist appearance without changing their cha
   const beforeMessages = await page.getByRole('list', { name: 'Messages' }).innerText();
   await page.getByRole('tab', { name: 'Agents', exact: true }).click();
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
-  const card = page.getByRole('button', { name: 'Open settings for Avery' });
+  // Wide screens show the selected agent's avatar in the Agents panel's picker.
+  const card = page.getByRole('combobox', { name: 'Agent' });
   await settings.getByRole('heading', { name: 'Avatar' }).scrollIntoViewIfNeeded();
   await settings.getByRole('button', { name: 'Preview Triangle', exact: true }).click();
   await select(page, 'Avatar color', 'Apricot');
@@ -316,10 +317,11 @@ test('creation sends appearance but never the preview state', async ({ page }) =
     stretch: 0.2,
   });
   expect(created?.avatar).not.toHaveProperty('state');
-  const sidebar = page.getByRole('button', { name: 'Open settings for New avatar' }).locator('[data-avatar-state]');
+  const sidebar = page.getByRole('combobox', { name: 'Agent' }).locator('[data-avatar-state]');
+  await expect(page.getByRole('combobox', { name: 'Agent' })).toContainText('New avatar');
   await expect(sidebar).toHaveAttribute('data-avatar-state', 'idle');
   await expect(sidebar).toHaveAttribute('data-mouth', 'smile');
-  // The 32px sidebar avatar is large enough to keep its accessory.
+  // The picker's 32px avatar (with its live state) is large enough to keep its accessory.
   await expect(sidebar).toHaveAttribute('data-accessory', 'antenna');
 });
 

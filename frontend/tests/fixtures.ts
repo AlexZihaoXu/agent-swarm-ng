@@ -239,3 +239,15 @@ export const test = base.extend({
     await use(page);
   },
 });
+
+/** An agent's option in the Agents panel's open picker, by its exact name. */
+export function agentOption(page: import('@playwright/test').Page, name: string) {
+  const exact = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+  return page.getByRole('option').filter({ has: page.locator('[data-option-label]', { hasText: exact }) });
+}
+
+/** Opens an agent's settings from the Agents panel's picker (wide screens). */
+export async function chooseAgent(page: import('@playwright/test').Page, name: string) {
+  await page.getByRole('combobox', { name: 'Agent' }).click();
+  await agentOption(page, name).click();
+}

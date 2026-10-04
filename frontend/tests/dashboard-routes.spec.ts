@@ -1,10 +1,10 @@
-import { test, expect } from './fixtures';
+import { test, expect, chooseAgent } from './fixtures';
 
 // Route destinations are stable URLs, not serialized chat text or API keys.
 test('main tabs and selected agent survive refresh and browser history', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveURL(/\/agents\/avery$/);
-  await page.getByRole('button', { name: 'Open settings for Morgan' }).click();
+  await chooseAgent(page, 'Morgan');
   await expect(page).toHaveURL(/\/agents\/morgan$/);
   await page.reload();
   await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();

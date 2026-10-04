@@ -32,15 +32,22 @@ test('the switcher scopes the dashboard to one organization and agents move betw
     });
   });
   await page.goto('/agents');
-  const list = page.getByRole('complementary', { name: 'Agents', exact: true });
-  await expect(list.getByText('Riley')).toBeVisible();
+  // Wide screens list the agents in the Agents panel's picker.
+  const picker = page.getByRole('combobox', { name: 'Agent' });
+  const option = (name: string) => page.getByRole('option').filter({ hasText: name });
+  await picker.click();
+  await expect(option('Riley')).toBeVisible();
+  await expect(option('Avery')).toBeVisible();
+  await page.keyboard.press('Escape');
   const switcher = page.getByRole('button', { name: 'Organization: All organizations' }).filter({ visible: true });
   await expect(switcher).toContainText('4 agents · 0 computers');
   await switcher.click();
   await page.getByRole('menuitem', { name: /^Lab / }).click();
   await expect(page.getByRole('button', { name: 'Organization: Lab' }).filter({ visible: true })).toBeVisible();
-  await expect(list.getByText('Riley')).toBeVisible();
-  await expect(list.getByText('Avery')).toHaveCount(0);
+  await picker.click();
+  await expect(option('Riley')).toBeVisible();
+  await expect(option('Avery')).toHaveCount(0);
+  await page.keyboard.press('Escape');
   // The choice is per browser and survives a reload.
   await page.reload();
   await expect(page.getByRole('button', { name: 'Organization: Lab' }).filter({ visible: true })).toBeVisible();

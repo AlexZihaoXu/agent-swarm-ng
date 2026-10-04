@@ -3,6 +3,7 @@ import { AgentMemory } from '@/components/agent-memory';
 import { MoveToOrganization } from '@/components/organization-fields';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
+import { createPortal } from 'react-dom';
 import { surface } from '@/lib/motion';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ export function EditAgentForm({
   agent,
   route,
   mobile,
+  sectionSlot,
   onNavigate,
   onSave,
   onModelSaved,
@@ -42,6 +44,8 @@ export function EditAgentForm({
   onUnsavedChange: (labels: string[]) => void;
   route: DashboardRoute;
   mobile: boolean;
+  /** On wide screens, the Agents panel's place for the section list. */
+  sectionSlot?: HTMLElement | null;
   onNavigate: (path: string) => void;
   onSave: (agent: ChatAgent, avatar: AvatarAppearance, allowedDmAgentIds: string[]) => Promise<void>;
   onBack: () => void;
@@ -187,12 +191,31 @@ export function EditAgentForm({
             </button>
           }
           description={saved ? <p role="status">Saved.</p> : undefined}
-          // Wider screens jump between sections from the header; phones keep a sticky strip under it.
-          action={<SectionNav container={sectionList} inline className="hidden md:block" />}
-          actionShrinks
         />
+        {/* Wider screens list the sections in the Agents panel; phones keep a sticky strip over the page. */}
+        {sectionSlot &&
+          createPortal(
+            // A portal's React events bubble to this form, not the panel: hand right-clicks to the panel's menu.
+            <div
+              onContextMenu={event => {
+                event.preventDefault();
+                event.stopPropagation();
+                openPanelMenu(sectionSlot, event.clientX, event.clientY);
+              }}
+              // The menu key and Shift+F10 too, as the panel itself handles them.
+              onKeyDown={event => {
+                if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+                event.preventDefault();
+                const bounds = (event.target as HTMLElement).getBoundingClientRect();
+                openPanelMenu(sectionSlot, bounds.left + 16, bounds.top + 16);
+              }}
+            >
+              <SectionNav container={sectionList} vertical />
+            </div>,
+            sectionSlot,
+          )}
         <ScrollArea label="Agent editor" viewportTabIndex={-1} className="min-h-0 flex-1">
-          <SectionNav container={sectionList} className="md:hidden" />
+          {!sectionSlot && <SectionNav container={sectionList} />}
           <div ref={sectionList} className="mx-auto w-full max-w-5xl space-y-8 px-4 pb-8 pt-6 md:px-6">
             <section aria-label="Channels" className="space-y-4">
               <div>
@@ -408,4 +431,9 @@ export function EditAgentForm({
       </form>
     </section>
   );
+}
+
+/** Opens the Agents panel's context menu from its section list, which is portalled there. */
+function openPanelMenu(slot: HTMLElement, clientX: number, clientY: number) {
+  slot.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX, clientY }));
 }

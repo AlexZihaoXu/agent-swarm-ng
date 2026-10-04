@@ -2,7 +2,9 @@ import { test, expect } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
 test('agent cards keep the same avatar and presence sizes in Chat and Agents', async ({ page }) => {
-  await page.goto('/');
+  // Agent cards are the phone Agents list; wide screens choose agents from a picker.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/agents');
   const agentCard = page
     .getByRole('complementary', { name: 'Agents' })
     .getByRole('button', { name: 'Open settings for Avery' });
