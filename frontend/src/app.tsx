@@ -39,16 +39,12 @@ import { ChatFilesDialog } from '@/components/chat-files-dialog';
 import { chatFilesKey, dmFilesKey, messagePreview } from '@/lib/chat-files';
 import { useAttachments } from '@/lib/use-attachments';
 import { useGroupEvents } from '@/use-groups';
-import { useAgentSearch } from '@/use-agent-search';
-import { listTime } from '@/lib/format-time';
-import { SidebarSearch } from '@/components/sidebar-search';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Portal, PortalButton, usePortalShortcut } from '@/components/portal';
 import { OrganizationSwitcher } from '@/components/organization-switcher';
 import { useOrganizations } from '@/lib/organizations';
 import { PortalWindows } from '@/components/portal-windows';
 import type { ComputerAgentState } from '@/components/computer-control';
-import { ConversationRow } from '@/components/conversation-row';
 import { AgentPicker } from '@/components/agent-picker';
 import {
   agentDmPath,
@@ -261,7 +257,7 @@ export function App() {
   const changeTab = (value: string) => {
     const target =
       value === 'agents'
-        ? !isPhone && selectedId
+        ? selectedId
           ? agentPath(selectedId)
           : '/agents'
         : value === 'chat'
@@ -287,7 +283,8 @@ export function App() {
   }, [location.pathname]);
   useEffect(() => {
     if (route.kind === 'root') navigate('/agents', { replace: true });
-    else if (!isPhone && !agentsLoading && agents[0] && (route.kind === 'agents-list' || route.kind === 'chat-list'))
+    // Agents always shows one agent's settings (phones too: the picker is above them); Chat lists on phones.
+    else if (!agentsLoading && agents[0] && (route.kind === 'agents-list' || (!isPhone && route.kind === 'chat-list')))
       navigate(route.kind === 'chat-list' ? chatAgentPath(agents[0].id) : agentPath(agents[0].id), { replace: true });
   }, [route.kind, isPhone, agentsLoading, agents, navigate]);
   useEffect(() => {
@@ -334,7 +331,6 @@ export function App() {
   useEffect(() => {
     if (selectedGroup && deletedGroup.current === selectedGroup) navigate('/chat', { replace: true });
   }, [selectedGroup, navigate]);
-  const [search, setSearch] = useState('');
   // Where the agent editor lists its sections on wide screens: the Agents panel, under the picker.
   const [sectionSlot, setSectionSlot] = useState<HTMLDivElement | null>(null);
   const [activityOpen, setActivityOpen] = useState(false);
@@ -343,14 +339,10 @@ export function App() {
   const pendingSend = useRef<string | null>(null);
   const [replyTargets, setReplyTargets] = useState<Record<string, ChatMessage>>({});
   const pendingReplyAcks = useRef(new Map<string, { channelId: string; targetId: string }>());
-  // Server-side, like the Chat sidebar: a client-side filter would miss agents beyond the loaded page.
-  const { agents: searched, query: agentSearch, term: searchTerm } = useAgentSearch(search, agents);
-  const visibleAgents = searched.filter(item => inScope(item.real?.organizationId));
   const agent = route.agentId
     ? (agents.find(item => item.id === route.agentId) ?? emptyAgent)
     : (agents[0] ?? emptyAgent);
-  const narrowDetail =
-    (activeTab === 'agents' || activeTab === 'chat') && mobileConversation && Boolean(selectedGroup || agent.id);
+  const narrowDetail = activeTab === 'chat' && mobileConversation && Boolean(selectedGroup || agent.id);
   const inbox = useDmInbox(agent.id);
   const dmConversations = useDmConversations(agent.id);
   const [conversation, setConversation] = useState<{
@@ -733,7 +725,11 @@ export function App() {
         <Tabs.Content
           key={activeTab === 'chat' ? 'chat' : 'agents'}
           value={activeTab === 'chat' ? 'chat' : 'agents'}
-          className="tab-enter min-h-0 flex-1 outline-none data-[state=active]:flex"
+          className={cn(
+            'tab-enter min-h-0 flex-1 outline-none data-[state=active]:flex',
+            // Phones stack the Agents picker over the settings.
+            activeTab === 'agents' && 'max-md:flex-col',
+          )}
         >
           {activeTab === 'chat' ? (
             <ChatPanel
@@ -787,189 +783,87 @@ export function App() {
               onCreated={real => {
                 addAgent(real);
                 navigate(agentPath(real.id));
-                setSearch('');
               }}
-              className={cn(
-                'phone-list-enter min-h-0 w-full shrink-0 flex-col border-border bg-sidebar pb-[calc(5rem+env(safe-area-inset-bottom))] md:flex md:w-72 md:border-r md:pb-0',
-                mobileConversation ? 'hidden' : 'flex',
-              )}
+              // Phones: a bar over the settings; wider screens: a side panel.
+              className="flex w-full shrink-0 flex-col border-b border-border bg-sidebar md:min-h-0 md:w-72 md:border-b-0 md:border-r"
             >
-              {isPhone ? (
-                // Phones: the list is the picker, a screen of its own; the settings open over it.
-                <>
-                  <SidebarSearch
-                    label="Search agents"
-                    placeholder="Search agents"
-                    value={search}
-                    onChange={setSearch}
-                    action={
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="size-11 shrink-0 p-0 text-lg sm:size-8"
-                        aria-label="Create new agent"
-                        title="Create new agent"
-                        onClick={() => leave(() => navigate('/agents/new'))}
-                      >
-                        +
-                      </Button>
-                    }
-                  />
-                  <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
-                    {visibleAgents.length === 0 &&
-                      !agentsLoading &&
-                      !agentsFailed &&
-                      !(searchTerm && (agentSearch.isFetching || agentSearch.isError)) && (
-                        <p role="status" className="px-2 py-4 text-xs text-muted-foreground">
-                          {search.trim() ? 'No agents found.' : 'No agents yet. Use + to create one.'}
-                        </p>
-                      )}
-                    <ul className="space-y-0.5">
-                      {visibleAgents.map(item => {
-                        const lastMessage = conversations[item.channelId]?.at(-1);
-                        return (
-                          <ConversationRow
-                            key={item.id}
-                            data={{ 'data-agent-id': item.id }}
-                            label={`Open settings for ${item.name}`}
-                            selected={item.id === agent.id}
-                            selectionGroup="agents"
-                            onClick={() => leave(() => navigate(agentPath(item.id)))}
-                            avatar={
-                              <Avatar
-                                initials={item.initials}
-                                avatar={item.avatar}
-                                ready={Boolean(item.real)}
-                                typing={typingIn(item.channelId, item.channelId)}
-                                working={busy[item.channelId]}
-                                compaction={compactions[item.id]}
-                              />
-                            }
-                            name={item.name}
-                            time={listTime(
-                              lastMessage?.timestamp ??
-                                item.real?.lastMessage?.timestamp ??
-                                item.real?.createdAt ??
-                                Date.now(),
-                            )}
-                            previewPrefix={lastMessage?.author === 'user' ? 'You: ' : ''}
-                            preview={lastMessage ? messagePreview(lastMessage.text, lastMessage.files) : ''}
+              {/* Which agent, then (wide screens) its settings' sections, which the editor fills in. */}
+              <>
+                <div
+                  className="flex items-center gap-2 border-border p-3 md:border-b md:p-4"
+                  data-agent-id={agent.id || undefined}
+                >
+                  <div className="min-w-0 flex-1">
+                    <AgentPicker
+                      agents={agents}
+                      status={
+                        agent.id ? (
+                          <Avatar
+                            initials={agent.initials}
+                            avatar={agent.avatar}
+                            ready={Boolean(agent.real)}
+                            typing={typingIn(agent.channelId, agent.channelId)}
+                            working={busy[agent.channelId]}
+                            compaction={compactions[agent.id]}
                           />
-                        );
-                      })}
-                    </ul>
-                    {searchTerm
-                      ? (agentSearch.isFetching || agentSearch.isError || agentSearch.hasNextPage) && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="mt-3 w-full"
-                            disabled={agentSearch.isFetching}
-                            onClick={() =>
-                              void (agentSearch.isError ? agentSearch.refetch() : agentSearch.fetchNextPage())
+                        ) : undefined
+                      }
+                      selected={agent.id ? agent : undefined}
+                      onSelect={id => leave(() => navigate(agentPath(id)))}
+                      more={
+                        agentsLoading || agentsFailed || agentsCursor !== null
+                          ? {
+                              label: agentsLoading
+                                ? 'Loading agents…'
+                                : agentsFailed
+                                  ? 'Retry loading agents'
+                                  : 'Load more agents',
+                              busy: agentsLoading,
+                              load: () => void loadAgents(agentsCursor ?? undefined),
                             }
-                          >
-                            {agentSearch.isFetching
-                              ? 'Searching…'
-                              : agentSearch.isError
-                                ? 'Retry search'
-                                : 'Load more matches'}
-                          </Button>
-                        )
-                      : (agentsLoading || agentsFailed || agentsCursor !== null) && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="mt-3 w-full"
-                            disabled={agentsLoading}
-                            onClick={() => void loadAgents(agentsCursor ?? undefined)}
-                          >
-                            {agentsLoading
-                              ? 'Loading agents…'
-                              : agentsFailed
-                                ? 'Retry loading agents'
-                                : 'Load more agents'}
-                          </Button>
-                        )}
+                          : undefined
+                      }
+                    />
                   </div>
-                </>
-              ) : (
-                // Wide screens: which agent, then its settings' sections (the editor fills this list).
-                <>
-                  <div
-                    className="flex items-center gap-2 border-b border-border p-4"
-                    data-agent-id={agent.id || undefined}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="size-12 shrink-0 p-0 text-lg"
+                    aria-label="Create new agent"
+                    title="Create new agent"
+                    onClick={() => leave(() => navigate('/agents/new'))}
                   >
-                    <div className="min-w-0 flex-1">
-                      <AgentPicker
-                        agents={agents}
-                        status={
-                          agent.id ? (
-                            <Avatar
-                              initials={agent.initials}
-                              avatar={agent.avatar}
-                              ready={Boolean(agent.real)}
-                              typing={typingIn(agent.channelId, agent.channelId)}
-                              working={busy[agent.channelId]}
-                              compaction={compactions[agent.id]}
-                            />
-                          ) : undefined
-                        }
-                        selected={agent.id ? agent : undefined}
-                        onSelect={id => leave(() => navigate(agentPath(id)))}
-                        more={
-                          agentsLoading || agentsFailed || agentsCursor !== null
-                            ? {
-                                label: agentsLoading
-                                  ? 'Loading agents…'
-                                  : agentsFailed
-                                    ? 'Retry loading agents'
-                                    : 'Load more agents',
-                                busy: agentsLoading,
-                                load: () => void loadAgents(agentsCursor ?? undefined),
-                              }
-                            : undefined
-                        }
-                      />
-                    </div>
+                    +
+                  </Button>
+                </div>
+                {!agents.length && !agentsLoading && !agentsFailed && agentsCursor === null && (
+                  // Phones show the page's own empty state right below.
+                  <p role="status" className="px-6 py-4 text-xs text-muted-foreground max-md:hidden">
+                    No agents yet. Use + to create one.
+                  </p>
+                )}
+                {/* A failed first page is retried in plain sight, not only from inside the picker. */}
+                {!agents.length && agentsFailed && (
+                  <div className="px-3 pb-3 md:px-4 md:pb-0 md:pt-3">
                     <Button
-                      type="button"
                       variant="outline"
-                      className="size-12 shrink-0 p-0 text-lg"
-                      aria-label="Create new agent"
-                      title="Create new agent"
-                      onClick={() => leave(() => navigate('/agents/new'))}
+                      size="sm"
+                      className="w-full"
+                      disabled={agentsLoading}
+                      onClick={() => void loadAgents()}
                     >
-                      +
+                      Retry loading agents
                     </Button>
                   </div>
-                  {!agents.length && !agentsLoading && !agentsFailed && agentsCursor === null && (
-                    <p role="status" className="px-6 py-4 text-xs text-muted-foreground">
-                      No agents yet. Use + to create one.
-                    </p>
-                  )}
-                  {/* A failed first page is retried in plain sight, not only from inside the picker. */}
-                  {!agents.length && agentsFailed && (
-                    <div className="px-4 pt-3">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        disabled={agentsLoading}
-                        onClick={() => void loadAgents()}
-                      >
-                        Retry loading agents
-                      </Button>
-                    </div>
-                  )}
+                )}
+                {!isPhone && (
                   <div
                     ref={setSectionSlot}
                     data-agent-id={agent.id || undefined}
                     className="min-h-0 flex-1 overflow-y-auto p-3"
                   />
-                </>
-              )}
+                )}
+              </>
             </AgentPanel>
           )}
 
@@ -979,21 +873,14 @@ export function App() {
                 key={agent.id}
                 agent={agent}
                 route={route}
-                mobile={mobileConversation}
-                sectionSlot={isPhone ? null : sectionSlot}
+                sectionSlot={sectionSlot}
                 onNavigate={navigate}
                 onSave={editAvatar}
                 onModelSaved={applyAgent}
                 onUnsavedChange={setUnsaved}
-                onBack={() =>
-                  leave(() => {
-                    focusAgentsAfterDelete.current = true;
-                    navigate('/agents');
-                  })
-                }
               />
             ) : (
-              <section aria-label="No agent selected" className="hidden min-w-0 flex-1 md:flex">
+              <section aria-label="No agent selected" className="flex min-w-0 flex-1">
                 <Empty>
                   <EmptyHeader>
                     <EmptyMedia>

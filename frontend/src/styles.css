@@ -500,6 +500,15 @@
   }
 }
 
+/* The app fills the screen and scrolls inside its panes: the page itself must not bounce (iOS pulls the whole app
+   down, showing the background above its bars). */
+html,
+body {
+  overscroll-behavior: none;
+  /* Pans only: no pinch or double-tap zoom (see main.tsx). */
+  touch-action: pan-x pan-y;
+}
+
 body {
   margin: 0;
   background: var(--background);

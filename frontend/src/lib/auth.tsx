@@ -90,6 +90,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     if (browser) void setTimeZone(browser).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedInZone]);
+  const settled = Boolean(state) || session.isError;
+  useEffect(() => {
+    if (settled) hideSplash();
+  }, [settled]);
   return (
     <AnimatePresence mode="wait" initial={false}>
       {state?.signedIn ? (
@@ -108,5 +112,18 @@ export function AuthGate({ children }: { children: ReactNode }) {
         </div>
       ) : null}
     </AnimatePresence>
+  );
+}
+
+/** Dissolves index.html's splash once the gate knows what to show, then removes it. */
+function hideSplash() {
+  const splash = document.getElementById('splash');
+  if (!splash || splash.classList.contains('done')) return;
+  // After the app's first frame is painted beneath it, so the splash dissolves into real content.
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      splash.classList.add('done');
+      setTimeout(() => splash.remove(), 560);
+    }),
   );
 }

@@ -19,7 +19,7 @@ The shared selector is the app-wide combobox adapted from Kibo `combobox-standar
 
 ## Mutual connections
 
-Select an agent in **Agents**, then use the visible **Channels → Swarm App → Allowed DMs** controls. All sections (Channels, Model, Instructions, Heartbeat, Time notes, Computers, Scratchpad, Memory, Avatar, Organization, Delete agent) stay on one scrolling page; the Agents panel lists them under the agent picker as **Jump to section** links (a sticky strip over the page on phones), and there is no permission-tile drilldown. Right-click remains for Create/Delete, not editing. Save changes and Discard appear in an action bar only while some section differs from its saved values; one Save covers every changed section, and Discard restores them.
+Select an agent in **Agents**, then use the visible **Channels → Swarm App → Allowed DMs** controls. All sections (Channels, Model, Instructions, Heartbeat, Time notes, Computers, Scratchpad, Memory, Avatar, Organization, Delete agent) stay on one scrolling page; the Agents panel lists them under the agent picker as **Jump to section** links (wide screens; phones just scroll the page), and there is no permission-tile drilldown. Right-click remains for Create/Delete, not editing. Save changes and Discard appear in an action bar only while some section differs from its saved values; one Save covers every changed section, and Discard restores them.
 
 Enabling A↔B allows both agents to initiate and reply. Disabling the connection from either side blocks subsequent sends in both directions. Both directed grant rows change in one transaction; unrelated connections remain intact. Self/unknown recipients are rejected, and new connections respect the 100-peer limit.
 

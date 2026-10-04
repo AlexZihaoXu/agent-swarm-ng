@@ -17,7 +17,9 @@ test('main tabs and selected agent survive refresh and browser history', async (
   await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
 });
 
-test('switching Agents and Chat keeps the selected agent on desktop but shows lists on phones', async ({ page }) => {
+test('switching Agents and Chat keeps the selected agent on desktop; phones list chats but keep Agents on an agent', async ({
+  page,
+}) => {
   const path = () => new URL(page.url()).pathname;
   await page.goto('/agents/morgan');
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
@@ -26,10 +28,11 @@ test('switching Agents and Chat keeps the selected agent on desktop but shows li
   await page.getByRole('tab', { name: 'Agents', exact: true }).click();
   await expect.poll(path).toBe('/agents/morgan');
   await page.setViewportSize({ width: 320, height: 700 });
-  await page.getByRole('button', { name: 'Back to agents' }).click();
-  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
-  await expect(page).toHaveURL(/\/chat$/);
+  await page.goto('/chat');
   await expect(page.getByRole('complementary', { name: 'Chats' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Agents', exact: true }).click();
+  await expect.poll(path).toMatch(/^\/agents\/[^/]+$/);
+  await expect(page.getByRole('combobox', { name: 'Agent' })).toBeVisible();
 });
 
 test('Settings endpoint editor can be bookmarked without placing unsaved keys in the URL', async ({ page }) => {
@@ -57,10 +60,11 @@ test('phone agent location and agent-to-agent conversation restore from a direct
   await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
-  await page.getByRole('button', { name: 'Back to agents' }).click();
-  await expect(page).toHaveURL(/\/agents$/);
-  await expect(page.getByRole('complementary', { name: 'Agents' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Agent' })).toContainText('Morgan');
+  await chooseAgent(page, 'Avery');
+  await expect(page.getByRole('region', { name: 'Settings for Avery' })).toBeVisible();
   await page.goBack();
+  await expect(page).toHaveURL(/\/agents\/morgan$/);
   await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
 });
 

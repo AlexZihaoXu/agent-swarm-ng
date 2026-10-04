@@ -126,9 +126,12 @@ test('keeps paginated existing grants on mobile, supports search and reduced mot
   expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   const save = (await dialog.getByRole('button', { name: 'Save changes' }).boundingBox())!;
   expect(save.y + save.height).toBeLessThan(780);
+  // The phone bottom navigation stays on Agents; the action bar ends above it.
+  const nav = (await page.getByRole('tablist', { name: 'Main navigation' }).boundingBox())!;
+  expect(save.y + save.height).toBeLessThanOrEqual(nav.y);
   await dialog.screenshot({ path: '../.scratch/agent-communication-settings-mobile.png', animations: 'disabled' });
   await dialog.getByRole('button', { name: 'Discard changes', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Back to agents' }).click();
+  await expect(dialog.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
 });
 test('tracks peer work separately from human messages and stops the peer run without chat notifications', async ({
   page,

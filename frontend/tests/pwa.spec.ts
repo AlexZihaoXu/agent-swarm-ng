@@ -26,6 +26,8 @@ const imageSize = (page: Page, src: string) =>
 test('the sign-in page links the favicon and home-screen icons', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Sign in to Agent Swarm' })).toBeVisible();
+  // The splash shows the icon until the gate knows what to show, then dissolves and is removed.
+  await expect(page.locator('#splash')).toHaveCount(0);
   await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute('href', '/favicon.svg?v=2');
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', '/apple-touch-icon.png?v=2');
   await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute('content', 'yes');

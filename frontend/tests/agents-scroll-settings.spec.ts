@@ -38,7 +38,9 @@ test('legacy avatar links land at the scroll section and phone controls remain r
   await expect(pane.getByRole('heading', { name: 'Avatar', exact: true })).toBeVisible();
   await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(100);
   await expect(pane.getByRole('button', { name: 'Preview Triangle' })).toBeVisible();
-  await expect(pane.getByRole('button', { name: 'Back to agents' })).toBeVisible();
+  // Phones keep the picker and + above the settings, not a Back button.
+  await expect(page.getByRole('combobox', { name: 'Agent' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Back to agents' })).toHaveCount(0);
   await expect(pane.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   await pane.getByRole('button', { name: 'Preview Triangle' }).click();
   await expect(pane.getByRole('button', { name: 'Save changes' })).toBeVisible();

@@ -2,9 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#151515" />
-    <meta name="description" content="Persistent agents, shared conversations, and explicit capabilities with Agent Swarm NG." />
+    <meta
+      name="description"
+      content="Persistent agents, shared conversations, and explicit capabilities with Agent Swarm NG."
+    />
     <title>Agent Swarm NG</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=2" />
@@ -12,9 +15,178 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Agent Swarm" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <!-- Translucent: the app draws under the status bar; its top bars pad for the notch in their own colour, so there is no separate band. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Splash: the icon from the first paint until the app knows who is signed in; it then flies open into the app
+         (docs/development.md#progressive-web-app). -->
+    <style>
+      html,
+      body {
+        background: #242424;
+      }
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background: #242424;
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      #splash > * {
+        grid-area: 1 / 1;
+      }
+      /* The icon's tile, drawn separately so it can open out past the screen's edges. */
+      .splash-tile {
+        width: 112px;
+        height: 112px;
+        border-radius: 24.5px;
+        background: linear-gradient(#262626, #101010);
+        animation: splash-pop 420ms var(--ease) both;
+      }
+      .splash-avatar {
+        position: relative;
+        animation: splash-pop 420ms var(--ease) 60ms both;
+      }
+      .splash-body,
+      .splash-eyes {
+        transform-box: fill-box;
+        transform-origin: center;
+      }
+      /* Waiting: the avatar floats and blinks, like the agents do. */
+      .splash-body {
+        animation: splash-float 2.4s ease-in-out 480ms infinite;
+      }
+      .splash-eyes {
+        animation: splash-blink 2.6s ease-in-out 900ms infinite;
+      }
+      /* Leaving (~0.5 s): one quick blink, then the tile opens past the edges while the avatar flies toward the
+         viewer, and everything dissolves into the app beneath. */
+      #splash.done {
+        pointer-events: none;
+        animation: splash-fade 200ms ease-out 300ms forwards;
+      }
+      #splash.done .splash-tile {
+        animation: splash-open 420ms cubic-bezier(0.55, 0, 0.75, 0.2) 90ms forwards;
+      }
+      #splash.done .splash-avatar {
+        animation: splash-fly 360ms cubic-bezier(0.4, 0, 0.8, 0.4) 90ms forwards;
+      }
+      #splash.done .splash-eyes {
+        animation: splash-blink-once 110ms ease-in-out;
+      }
+      #splash.done .splash-body {
+        animation: none;
+      }
+      @keyframes splash-pop {
+        from {
+          transform: scale(0.86);
+          opacity: 0;
+        }
+      }
+      @keyframes splash-float {
+        50% {
+          transform: translateY(-3%);
+        }
+      }
+      @keyframes splash-blink {
+        0%,
+        92%,
+        100% {
+          transform: scaleY(1);
+        }
+        96% {
+          transform: scaleY(0.1);
+        }
+      }
+      @keyframes splash-blink-once {
+        50% {
+          transform: scaleY(0.1);
+        }
+      }
+      @keyframes splash-open {
+        to {
+          transform: scale(28);
+          border-radius: 4px;
+        }
+      }
+      @keyframes splash-fly {
+        to {
+          transform: scale(1.9);
+          opacity: 0;
+        }
+      }
+      @keyframes splash-fade {
+        to {
+          opacity: 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #splash *,
+        #splash.done * {
+          animation: none !important;
+        }
+        #splash.done {
+          animation: none;
+          opacity: 0;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="splash" aria-hidden="true">
+      <div class="splash-tile"></div>
+      <svg class="splash-avatar" viewBox="0 0 512 512" width="112" height="112" aria-hidden="true">
+        <defs>
+          <clipPath id="splash-bc">
+            <path d="M31 7 C47 4 59 18 57 36 C56 51 43 58 27 57 C12 56 5 46 7 30 C8 15 17 9 31 7 Z" />
+          </clipPath>
+          <linearGradient id="splash-ao" gradientUnits="userSpaceOnUse" x1="0" y1="30" x2="0" y2="60">
+            <stop offset="0" stop-color="#0369a1" stop-opacity="0" />
+            <stop offset="1" stop-color="#075985" stop-opacity=".85" />
+          </linearGradient>
+          <linearGradient id="splash-top" gradientUnits="userSpaceOnUse" x1="0" y1="4" x2="0" y2="22">
+            <stop offset="0" stop-color="#bae6fd" stop-opacity=".55" />
+            <stop offset="1" stop-color="#bae6fd" stop-opacity="0" />
+          </linearGradient>
+          <filter id="splash-soft" filterUnits="userSpaceOnUse" x="-64" y="-64" width="192" height="192">
+            <feGaussianBlur stdDeviation="2.2" />
+          </filter>
+          <filter id="splash-cs" filterUnits="userSpaceOnUse" x="-64" y="-64" width="192" height="192">
+            <feGaussianBlur stdDeviation="1.6" />
+          </filter>
+        </defs>
+        <g transform="translate(32 36) scale(7) rotate(-7 32 32)">
+          <ellipse cx="33" cy="57.5" rx="20" ry="3.2" fill="#000" opacity=".6" filter="url(#splash-cs)" />
+          <g class="splash-body">
+            <path d="M31 7 C47 4 59 18 57 36 C56 51 43 58 27 57 C12 56 5 46 7 30 C8 15 17 9 31 7 Z" fill="#38bdf8" />
+            <g clip-path="url(#splash-bc)">
+              <path
+                d="M31 7 C47 4 59 18 57 36 C56 51 43 58 27 57 C12 56 5 46 7 30 C8 15 17 9 31 7 Z"
+                fill="none"
+                stroke="url(#splash-ao)"
+                stroke-width="9"
+                filter="url(#splash-soft)"
+              />
+              <path
+                d="M31 7 C47 4 59 18 57 36 C56 51 43 58 27 57 C12 56 5 46 7 30 C8 15 17 9 31 7 Z"
+                fill="none"
+                stroke="url(#splash-top)"
+                stroke-width="6"
+                filter="url(#splash-soft)"
+              />
+            </g>
+            <g class="splash-eyes">
+              <g stroke="#101418" stroke-width="6.09" stroke-linecap="round" fill="none">
+                <path d="M25 25 Q25 28.5 25 32" />
+                <path d="M38 24 Q38 27.5 38 31" />
+              </g>
+            </g>
+          </g>
+        </g>
+      </svg>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

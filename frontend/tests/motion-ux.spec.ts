@@ -141,26 +141,6 @@ test('agent settings offer jump links that follow the reader and land each headi
   await expect(nav.locator('[aria-current="location"]')).toHaveText('Channels');
 });
 
-test('phone agent settings keep a sticky strip of jump links that lands headings below it', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/agents/avery');
-  const pane = page.getByRole('region', { name: 'Settings for Avery' });
-  const nav = pane.getByRole('navigation', { name: 'Jump to section' });
-  await expect(nav.getByRole('link')).toHaveText(sectionNames);
-  await expect(nav).toHaveCSS('position', 'sticky');
-  const first = (await nav.getByRole('link').first().boundingBox())!;
-  const second = (await nav.getByRole('link').nth(1).boundingBox())!;
-  expect(Math.abs(second.y - first.y)).toBeLessThan(2); // one horizontal row
-  await expect(nav.locator('[aria-current="location"]')).toHaveText('Channels');
-  await nav.getByRole('link', { name: 'Avatar' }).click();
-  await expect(nav.locator('[aria-current="location"]')).toHaveText('Avatar');
-  const heading = pane.getByRole('heading', { name: 'Avatar', exact: true });
-  const navBottom = (await nav.boundingBox())!.y + (await nav.boundingBox())!.height;
-  await expect.poll(async () => (await heading.boundingBox())!.y - navBottom).toBeLessThan(844 / 2);
-  expect((await heading.boundingBox())!.y).toBeGreaterThanOrEqual(navBottom);
-  await expect(pane.getByRole('region', { name: 'Avatar' })).toBeFocused();
-});
-
 test('empty screens say what is missing and point to the next step', async ({ page }) => {
   await page.route(/\/api\/computers(?:\?.*)?$/, route =>
     route.fulfill({ json: { computers: [], controllerConnected: true } }),

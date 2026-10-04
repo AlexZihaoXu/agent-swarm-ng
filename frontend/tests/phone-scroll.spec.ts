@@ -69,7 +69,9 @@ test.describe('phone touch scrolling', () => {
     await expect.poll(() => viewport.evaluate(el => el.scrollTop)).toBeLessThan(readingPosition + 30);
   });
 
-  test('agent list, chat list and Settings still accept native vertical swipes', async ({ page }) => {
+  test('agent settings, the agent picker, chat list and Settings still accept native vertical swipes', async ({
+    page,
+  }) => {
     const agents = Array.from({ length: 30 }, (_, index) => ({
       ...sampleAgents[0],
       id: `peer-${index}`,
@@ -80,17 +82,19 @@ test.describe('phone touch scrolling', () => {
     await page.route(/\/api\/agents(?:\?.*)?$/, route => route.fulfill({ json: { agents, nextCursor: null } }));
     await page.setViewportSize({ width: 390, height: 640 });
     await page.goto('/');
-    for (const [tab, label] of [
-      ['Agents', 'Agents'],
-      ['Chat', 'Chats'],
-    ] as const) {
-      if (tab === 'Chat') await page.getByRole('tab', { name: tab }).click();
-      const list = page.getByRole('complementary', { name: label }).locator('[class*="overflow-y-auto"]').first();
-      await expect.poll(() => list.evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(300);
-      const bounds = (await list.boundingBox())!;
+    const swipes = async (scroller: ReturnType<Page['locator']>) => {
+      await expect.poll(() => scroller.evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(300);
+      const bounds = (await scroller.boundingBox())!;
       await swipeUp(page, bounds.x + bounds.width / 2, bounds.y + Math.min(320, bounds.height - 80));
-      await expect.poll(() => list.evaluate(el => el.scrollTop)).toBeGreaterThan(30);
-    }
+      await expect.poll(() => scroller.evaluate(el => el.scrollTop)).toBeGreaterThan(30);
+    };
+    // Agents: the settings page, then the picker's own list.
+    await swipes(page.getByRole('region', { name: 'Agent editor' }));
+    await page.getByRole('combobox', { name: 'Agent' }).click();
+    await swipes(page.locator('[cmdk-list]'));
+    await page.keyboard.press('Escape');
+    await page.getByRole('tab', { name: 'Chat' }).click();
+    await swipes(page.getByRole('complementary', { name: 'Chats' }).locator('[class*="overflow-y-auto"]').first());
     await page.getByRole('tab', { name: 'Settings' }).click();
     for (let index = 0; index < 3; index++) await page.getByRole('button', { name: 'Add endpoint' }).click();
     const settings = page.getByRole('tabpanel', { name: 'Settings' });

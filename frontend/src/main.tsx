@@ -22,6 +22,10 @@ document.addEventListener('contextmenu', event => {
   event.preventDefault();
 });
 
+// Nor does it zoom (owner's choice): the viewport meta covers Android, but iOS ignores it, so Safari's pinch
+// gestures are cancelled here and double-tap zoom by touch-action in styles.css.
+for (const type of ['gesturestart', 'gesturechange']) document.addEventListener(type, event => event.preventDefault());
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>

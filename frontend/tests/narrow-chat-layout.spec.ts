@@ -77,9 +77,14 @@ test('the phone bottom navigation and one-row conversation headers navigate clea
   expect(await tabs.locator('xpath=..').evaluate(element => getComputedStyle(element).borderTopWidth)).toBe('1px');
   expect((await bounds(tabs)).width).toBeGreaterThanOrEqual(388);
   expect((await bounds(page.getByRole('button', { name: 'Open Portal' }))).y).toBeLessThan(60);
-  const lastRow = page.getByRole('button', { name: /^Open settings for / }).last();
-  expect((await bounds(lastRow)).y + (await bounds(lastRow)).height).toBeLessThan((await bounds(tabs)).y); // the list clears the bottom bar
-  await page.screenshot({ path: test.info().outputPath('phone-agent-list.png'), animations: 'disabled' });
+  // Agents keeps the bottom bar: the picker sits under the top bar and the settings end above the bottom bar.
+  await expect(page).toHaveURL(/\/agents\/avery$/);
+  await expect(tabs).toBeVisible();
+  const picker = await bounds(page.getByRole('combobox', { name: 'Agent' }));
+  expect(picker.y).toBeLessThan(140);
+  const settings = await bounds(page.getByRole('region', { name: 'Agent editor' }));
+  expect(settings.y + settings.height).toBeLessThanOrEqual((await bounds(tabs)).y + 1);
+  await page.screenshot({ path: test.info().outputPath('phone-agents.png'), animations: 'disabled' });
   await page.getByRole('tab', { name: 'Chat' }).click();
   await expect(page.getByRole('complementary', { name: 'Chats' })).toBeVisible();
   await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
@@ -109,12 +114,18 @@ test('phone navigation transitions animate only when motion is allowed', async (
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('/');
-  const agents = page.getByRole('complementary', { name: 'Agents' });
-  await expect(agents).toHaveCSS('animation-name', 'phone-list-in');
-  await page.getByRole('button', { name: 'Open settings for Avery' }).click();
-  await expect(page.getByRole('region', { name: 'Settings for Avery' })).toHaveCSS('animation-name', 'phone-detail-in');
-  await page.getByRole('button', { name: 'Back to agents' }).click();
-  await expect(agents).toHaveCSS('animation-name', 'phone-list-in');
+  // Agents is one screen on phones too: its settings fade in like on wide screens.
+  await expect(page.getByRole('region', { name: 'Settings for Avery' })).toHaveCSS('animation-name', 'view-in');
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  const chats = page.getByRole('complementary', { name: 'Chats' });
+  await expect(chats).toHaveCSS('animation-name', 'phone-list-in');
+  await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
+  await expect(page.getByRole('region', { name: 'Conversation with Avery' })).toHaveCSS(
+    'animation-name',
+    'phone-detail-in',
+  );
+  await page.getByRole('button', { name: 'Back to chats' }).click();
+  await expect(chats).toHaveCSS('animation-name', 'phone-list-in');
   await page.getByRole('tab', { name: 'Settings' }).click();
   const settings = page.getByRole('tabpanel', { name: 'Settings' });
   await expect(settings).toHaveCSS('animation-name', 'tab-in');

@@ -14,28 +14,23 @@ function scrollParent(element: HTMLElement | null): HTMLElement | null {
 }
 
 /**
- * Jump links for a long settings page, adapted from Kibo tabs-layout-3 (Scrollable Tabs) in the main tab bar's
- * muted pill style. Every section stays on the page, so these are links with `aria-current`, not tabs. The
- * active pill follows the reader's scroll position and glides between sections. `vertical` lists them down a side
- * panel instead, with the side panels' row highlight.
+ * Jump links for a long settings page, listed down a side panel outside the scrolling page, with the side panels'
+ * row highlight. Every section stays on the page, so these are links with `aria-current`, not tabs. The lit row
+ * follows the reader's scroll position and glides between sections.
  */
 export function SectionNav({
   container,
   label = 'Jump to section',
   className,
-  vertical = false,
 }: {
   /** The element whose direct `section[aria-label]` children (each with an h3) are listed. */
   container: RefObject<HTMLElement | null>;
   label?: string;
   className?: string;
-  /** A list down a side panel (wide screens), outside the scrolling page. */
-  vertical?: boolean;
 }) {
   const group = useId();
   const [items, setItems] = useState<Item[]>([]);
   const [active, setActive] = useState('');
-  const strip = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
   // The clicked target and when the hold ends; the page may bottom out before the target is computed.
   const jumping = useRef<{ id: string; until: number } | null>(null);
@@ -103,29 +98,17 @@ export function SectionNav({
     };
   }, [container, items]);
 
-  // Keep the lit pill visible when the strip is wider than a phone screen.
+  // The panel may be shorter than the list: keep the lit item in it, scrolling only the panel (scrollIntoView would
+  // also move the page and cancel a gliding jump).
   useEffect(() => {
-    // Scroll only the strip: scrollIntoView would also move the page and cancel a gliding jump.
-    const row = strip.current;
-    if (vertical) {
-      // The panel may be shorter than the list: keep the lit item in it, scrolling only the panel.
-      const item = list.current?.querySelector<HTMLElement>('[aria-current="location"]');
-      const panel = scrollParent(item ?? null);
-      if (!item || !panel) return;
-      const top = item.getBoundingClientRect().top - panel.getBoundingClientRect().top + panel.scrollTop;
-      if (top < panel.scrollTop) panel.scrollTo({ top: top - 8, behavior: 'smooth' });
-      else if (top + item.offsetHeight > panel.scrollTop + panel.clientHeight)
-        panel.scrollTo({ top: top + item.offsetHeight - panel.clientHeight + 8, behavior: 'smooth' });
-      return;
-    }
-    const pill = row?.querySelector<HTMLElement>('[aria-current="location"]');
-    if (!row || !pill) return;
-    const start = pill.getBoundingClientRect().left - row.getBoundingClientRect().left + row.scrollLeft;
-    const left = start - 16;
-    const right = start + pill.offsetWidth + 16 - row.clientWidth;
-    if (row.scrollLeft > left) row.scrollTo({ left, behavior: 'smooth' });
-    else if (row.scrollLeft < right) row.scrollTo({ left: right, behavior: 'smooth' });
-  }, [active, vertical]);
+    const item = list.current?.querySelector<HTMLElement>('[aria-current="location"]');
+    const panel = scrollParent(item ?? null);
+    if (!item || !panel) return;
+    const top = item.getBoundingClientRect().top - panel.getBoundingClientRect().top + panel.scrollTop;
+    if (top < panel.scrollTop) panel.scrollTo({ top: top - 8, behavior: 'smooth' });
+    else if (top + item.offsetHeight > panel.scrollTop + panel.clientHeight)
+      panel.scrollTo({ top: top + item.offsetHeight - panel.clientHeight + 8, behavior: 'smooth' });
+  }, [active]);
 
   const jump = (item: Item) => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -133,10 +116,8 @@ export function SectionNav({
     setActive(item.id);
     const scroller = scrollParent(item.element);
     if (scroller) {
-      // Land the heading just below a sticky strip rather than underneath it.
-      const offset = (vertical ? 0 : (strip.current?.parentElement?.offsetHeight ?? 0)) + 16;
       const top =
-        scroller.scrollTop + item.element.getBoundingClientRect().top - scroller.getBoundingClientRect().top - offset;
+        scroller.scrollTop + item.element.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 16;
       scroller.scrollTo({ top, behavior: reduced ? 'instant' : 'smooth' });
     }
     // Like a skip link, move focus to the section so the next Tab continues from there.
@@ -146,59 +127,17 @@ export function SectionNav({
   };
 
   if (items.length < 2) return null;
-  if (vertical)
-    return (
-      <nav
-        aria-label={label}
-        className={cn('motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)]', className)}
-      >
-        <ul ref={list} className="space-y-0.5">
-          {items.map(item => {
-            const on = item.id === active;
-            return (
-              <li key={item.id}>
-                <a
-                  href={`#${encodeURIComponent(item.id)}`}
-                  aria-current={on ? 'location' : undefined}
-                  onClick={event => {
-                    event.preventDefault();
-                    jump(item);
-                  }}
-                  className={cn(
-                    'relative isolate flex min-h-9 items-center rounded-lg px-3 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                    on
-                      ? 'font-medium text-foreground'
-                      : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
-                  )}
-                >
-                  {on && (
-                    <m.span
-                      aria-hidden="true"
-                      layoutId={`${group}-section`}
-                      transition={glide}
-                      className="absolute inset-0 -z-10 rounded-lg bg-foreground/10"
-                    />
-                  )}
-                  {item.label}
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-    );
   return (
     <nav
       aria-label={label}
-      className={cn('sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur', className)}
+      className={cn('motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)]', className)}
     >
-      <div ref={strip} className="mx-auto w-full max-w-5xl overflow-x-auto px-4 py-2 [scrollbar-width:none] md:px-6">
-        <div className="inline-flex min-w-max items-center gap-0.5 rounded-lg bg-muted p-1">
-          {items.map(item => {
-            const on = item.id === active;
-            return (
+      <ul ref={list} className="space-y-0.5">
+        {items.map(item => {
+          const on = item.id === active;
+          return (
+            <li key={item.id}>
               <a
-                key={item.id}
                 href={`#${encodeURIComponent(item.id)}`}
                 aria-current={on ? 'location' : undefined}
                 onClick={event => {
@@ -206,8 +145,10 @@ export function SectionNav({
                   jump(item);
                 }}
                 className={cn(
-                  'relative isolate flex min-h-9 items-center rounded-md px-3 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring md:min-h-7',
-                  on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                  'relative isolate flex min-h-9 items-center rounded-lg px-3 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                  on
+                    ? 'font-medium text-foreground'
+                    : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
                 )}
               >
                 {on && (
@@ -215,15 +156,15 @@ export function SectionNav({
                     aria-hidden="true"
                     layoutId={`${group}-section`}
                     transition={glide}
-                    className="absolute inset-0 -z-10 rounded-md bg-background shadow-sm"
+                    className="absolute inset-0 -z-10 rounded-lg bg-foreground/10"
                   />
                 )}
                 {item.label}
               </a>
-            );
-          })}
-        </div>
-      </div>
+            </li>
+          );
+        })}
+      </ul>
     </nav>
   );
 }

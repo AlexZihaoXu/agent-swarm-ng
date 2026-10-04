@@ -85,20 +85,21 @@ test('inline avatar and DM grants save together, and Discard restores unsaved ch
   await expect(page).toHaveURL(/\/agents\/avery$/);
 });
 
-test('phone Agents list opens inline settings with Back, while legacy peer links move to Chat', async ({ page }) => {
+test('phone Agents opens inline settings under the picker, while legacy peer links move to Chat', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/agents');
-  await page.getByRole('button', { name: 'Open settings for Avery' }).click();
+  await expect(page).toHaveURL(/\/agents\/avery$/);
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
   await expect(settings).toBeVisible();
   await expect(settings.getByRole('checkbox', { name: 'Morgan' })).toBeVisible();
-  await expect(page.getByRole('complementary', { name: 'Agents' })).toBeHidden();
-  await expect(settings.getByRole('button', { name: 'Back to agents' })).toBeVisible();
+  const panel = page.getByRole('complementary', { name: 'Agents' });
+  await expect(panel.getByRole('combobox', { name: 'Agent' })).toContainText('Avery');
+  await expect(page.getByRole('button', { name: 'Back to agents' })).toHaveCount(0);
+  expect((await settings.boundingBox())!.y).toBeGreaterThanOrEqual(
+    (await panel.boundingBox())!.y + (await panel.boundingBox())!.height - 1,
+  );
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath('agents-settings-phone.png'), animations: 'disabled' });
-  await settings.getByRole('button', { name: 'Back to agents' }).click();
-  await expect(page).toHaveURL(/\/agents$/);
-  await expect(page.getByRole('complementary', { name: 'Agents' })).toBeVisible();
   await page.goto('/agents/avery/dm/morgan');
   await expect(page).toHaveURL(/\/chat\/agents\/avery\/dm\/morgan$/);
   await expect(page.getByRole('button', { name: 'Back to chats' })).toBeVisible();

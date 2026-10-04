@@ -329,9 +329,10 @@ test('mobile inline avatar settings scroll without overflow and unsaved changes 
   await page.setViewportSize({ width: 360, height: 780 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/agents');
-  const card = page.getByRole('button', { name: 'Open settings for Avery' });
+  // Phones show the selected agent (with its avatar) in the picker above its settings.
+  const card = page.getByRole('combobox', { name: 'Agent' });
   const original = defaultAvatar('avery');
-  await card.click();
+  await expect(card).toContainText('Avery');
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
   await settings.getByRole('heading', { name: 'Avatar' }).scrollIntoViewIfNeeded();
   await settings.getByRole('button', { name: 'Preview Triangle', exact: true }).click();
@@ -342,7 +343,6 @@ test('mobile inline avatar settings scroll without overflow and unsaved changes 
   });
   await settings.screenshot({ path: '../.scratch/agent-avatar-preview-mobile.png', animations: 'disabled' });
   await settings.getByRole('button', { name: 'Discard changes' }).click();
-  await settings.getByRole('button', { name: 'Back to agents' }).click();
   await expect(card.locator('[data-avatar-shape]')).toHaveAttribute('data-avatar-seed', String(original.seed));
 });
 

@@ -231,7 +231,7 @@ for (const width of [320, 390]) {
     expect(overflow).toBeLessThanOrEqual(0);
     await page.screenshot({ path: `../.scratch/shots/dashboard-phone-${width}.png` });
     for (const [tab, url] of [
-      ['Agents', /\/agents$/],
+      ['Agents', /\/agents\/[^/]+$/], // Agents opens an agent on phones too
       ['Chat', /\/chat$/],
       ['Computers', /\/computers$/],
       ['Settings', /\/settings$/],

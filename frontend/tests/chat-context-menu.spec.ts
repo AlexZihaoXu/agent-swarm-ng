@@ -1,28 +1,6 @@
 import { test, expect } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
-test('agent cards keep the same avatar and presence sizes in Chat and Agents', async ({ page }) => {
-  // Agent cards are the phone Agents list; wide screens choose agents from a picker.
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/agents');
-  const agentCard = page
-    .getByRole('complementary', { name: 'Agents' })
-    .getByRole('button', { name: 'Open settings for Avery' });
-  const agentFace = await agentCard.locator('span.relative').first().boundingBox();
-  const agentDot = await agentCard.locator('[data-slot="online-indicator"]').boundingBox();
-  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
-  const chatCard = page
-    .getByRole('complementary', { name: 'Chats' })
-    .getByRole('button', { name: 'Open conversation with Avery' });
-  const chatFace = await chatCard.getByTestId('chat-avatar').boundingBox();
-  const chatDot = await chatCard.locator('[data-slot="online-indicator"]').boundingBox();
-  // Sub-pixel noise is possible while the tab entrance animation settles.
-  expect(chatFace!.width).toBeCloseTo(agentFace!.width, 1);
-  expect(chatFace!.height).toBeCloseTo(agentFace!.height, 1);
-  expect(chatDot!.width).toBeCloseTo(agentDot!.width, 1);
-  expect(chatDot!.height).toBeCloseTo(agentDot!.height, 1);
-});
-
 test('Chat sidebar context menu creates and edits groups, and navigates from agent DMs', async ({ page }) => {
   let group = {
     id: 'team',

@@ -42,7 +42,8 @@ async function configure(page: Page, model = 'test-model') {
   await page.goto('/');
   await page
     .getByRole('complementary', { name: 'Agents', exact: true })
-    .click({ button: 'right', position: { x: 40, y: 360 } });
+    // The panel's padding: on phones the panel is only a bar over the settings.
+    .click({ button: 'right', position: { x: 4, y: 4 } });
   await page.getByRole('menuitem', { name: 'Create new agent' }).click();
   await page.getByLabel('Agent name', { exact: true }).fill(real.name);
   await page.getByLabel('Endpoint', { exact: true }).click();

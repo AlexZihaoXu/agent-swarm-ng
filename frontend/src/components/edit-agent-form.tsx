@@ -22,8 +22,6 @@ import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { SectionNav } from '@/components/section-nav';
-import { ChevronLeftIcon } from '@/components/ui/icons';
-import { backLink } from '@/lib/styles';
 import type { SettingsSection } from '@/lib/settings-sections';
 
 // Kibo's spacious section-form layout adapted to a left-aligned, scrollable
@@ -31,24 +29,20 @@ import type { SettingsSection } from '@/lib/settings-sections';
 export function EditAgentForm({
   agent,
   route,
-  mobile,
   sectionSlot,
   onNavigate,
   onSave,
   onModelSaved,
-  onBack,
   onUnsavedChange,
 }: {
   agent: ChatAgent;
   onModelSaved: (agent: RealAgent) => void;
   onUnsavedChange: (labels: string[]) => void;
   route: DashboardRoute;
-  mobile: boolean;
   /** On wide screens, the Agents panel's place for the section list. */
   sectionSlot?: HTMLElement | null;
   onNavigate: (path: string) => void;
   onSave: (agent: ChatAgent, avatar: AvatarAppearance, allowedDmAgentIds: string[]) => Promise<void>;
-  onBack: () => void;
 }) {
   const [avatar, setAvatar] = useState(() => agent.avatar ?? defaultAvatar(agent.id));
   const [savedAvatar, setSavedAvatar] = useState(() => agent.avatar ?? defaultAvatar(agent.id));
@@ -168,10 +162,8 @@ export function EditAgentForm({
   return (
     <section
       aria-label={`Settings for ${agent.name}`}
-      className={cn(
-        'phone-detail-enter min-h-0 min-w-0 flex-1 flex-col md:motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)] md:flex',
-        mobile ? 'flex' : 'hidden',
-      )}
+      // Phones: the fixed bottom navigation stays over the page, so the page (and its action bar) ends above it.
+      className="flex min-h-0 min-w-0 flex-1 flex-col pb-[calc(3.5rem+1px+env(safe-area-inset-bottom))] motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)] md:pb-0"
     >
       <form
         aria-label="Agent settings"
@@ -181,18 +173,20 @@ export function EditAgentForm({
         }}
         className="flex min-h-0 min-w-0 flex-1 flex-col"
       >
-        <PageHeader
-          width="max-w-5xl"
-          title="Agent settings"
-          leading={
-            <button type="button" onClick={onBack} aria-label="Back to agents" className={cn(backLink, 'md:hidden')}>
-              <ChevronLeftIcon />
-              Agents
-            </button>
-          }
-          description={saved ? <p role="status">Saved.</p> : undefined}
-        />
-        {/* Wider screens list the sections in the Agents panel; phones keep a sticky strip over the page. */}
+        {/* Phones name the agent in the picker above, so the header (only a title) would just take room. */}
+        <div className="max-md:hidden">
+          <PageHeader
+            width="max-w-5xl"
+            title="Agent settings"
+            description={saved ? <p role="status">Saved.</p> : undefined}
+          />
+        </div>
+        {saved && (
+          <p role="status" className="sr-only md:hidden">
+            Saved.
+          </p>
+        )}
+        {/* Wider screens list the sections in the Agents panel; phones scroll the page alone. */}
         {sectionSlot &&
           createPortal(
             // A portal's React events bubble to this form, not the panel: hand right-clicks to the panel's menu.
@@ -210,12 +204,11 @@ export function EditAgentForm({
                 openPanelMenu(sectionSlot, bounds.left + 16, bounds.top + 16);
               }}
             >
-              <SectionNav container={sectionList} vertical />
+              <SectionNav container={sectionList} />
             </div>,
             sectionSlot,
           )}
         <ScrollArea label="Agent editor" viewportTabIndex={-1} className="min-h-0 flex-1">
-          {!sectionSlot && <SectionNav container={sectionList} />}
           <div ref={sectionList} className="mx-auto w-full max-w-5xl space-y-8 px-4 pb-8 pt-6 md:px-6">
             <section aria-label="Channels" className="space-y-4">
               <div>
@@ -368,7 +361,7 @@ export function EditAgentForm({
               transition={surface}
               className="shrink-0 overflow-hidden border-t border-border"
             >
-              <div className="mx-auto w-full max-w-5xl px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 md:px-6 md:py-4">
+              <div className="mx-auto w-full max-w-5xl px-4 py-3 md:px-6 md:py-4">
                 {loadError ? (
                   <p role="alert" className="mb-3 text-sm">
                     Could not load permissions.{' '}

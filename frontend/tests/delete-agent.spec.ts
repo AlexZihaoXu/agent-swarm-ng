@@ -67,35 +67,28 @@ test('requires exact typed confirmation, supports cancellation, and persists del
   expect(attempts).toBe(2);
 });
 
-test('deleting an unselected saved agent does not change selection; last deletion shows an empty state', async ({
+test('phones delete the shown agent from the Agents bar and move on; last deletion shows an empty state', async ({
   page,
 }) => {
-  // Only the phone list offers every agent's own menu; wide screens act on the selected agent.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/agents');
-  const cards = page.getByRole('button', { name: /^Open settings for / });
-  await expect(cards.first()).toBeVisible();
-  const names = await cards.evaluateAll(elements =>
-    elements.map(element => element.getAttribute('aria-label')!.replace('Open settings for ', '')),
-  );
-  for (const name of names.slice(1)) {
-    await page.getByRole('button', { name: `Open settings for ${name}`, exact: true }).click({ button: 'right' });
+  const picker = page.getByRole('combobox', { name: 'Agent' });
+  await picker.click();
+  const names = await page.getByRole('option').locator('[data-option-label]').allInnerTexts();
+  await page.keyboard.press('Escape');
+  expect(names.length).toBeGreaterThan(1);
+  for (const [index, name] of names.entries()) {
+    await expect(page.getByRole('region', { name: `Settings for ${name}` })).toBeVisible();
+    await page.locator('aside[aria-label="Agents"] [data-agent-id]').first().click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Delete agent', exact: true }).click();
     await page.getByLabel('Confirm agent name').fill(name);
     await page.getByRole('dialog').getByRole('button', { name: 'Delete agent', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: `Open settings for ${name}`, exact: true })).toHaveCount(0);
+    // The next agent opens in its place.
+    if (index < names.length - 1) await expect(picker).toContainText(names[index + 1]);
   }
-  await expect(cards).toHaveCount(1);
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/agents');
-  const settings = page.getByRole('region', { name: `Settings for ${names[0]}` });
-  await expect(settings).toBeVisible();
-  await page.locator('aside[aria-label="Agents"] [data-agent-id]').first().click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Delete agent', exact: true }).click();
-  await page.getByLabel('Confirm agent name').fill(names[0]);
-  await page.getByRole('dialog').getByRole('button', { name: 'Delete agent', exact: true }).click();
-  await expect(page.getByRole('combobox', { name: 'Agent' })).toBeDisabled();
+  await expect(picker).toBeDisabled();
+  await expect(page.getByRole('region', { name: 'No agent selected' })).toBeVisible();
   await expect(page.getByText('Select or create an agent to configure.', { exact: true })).toBeVisible();
 });
 

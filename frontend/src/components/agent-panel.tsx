@@ -35,10 +35,8 @@ export function AgentPanel({
   const dialogOpen = route.kind === 'agent-new' || Boolean(deletingAgent);
   // While it animates closed, the dialog keeps what it showed (Cancel must not flash the other form).
   const shownDelete = useRetained(deletingAgent, dialogOpen);
-  const close = () =>
-    onNavigate(
-      route.agentId && !window.matchMedia('(max-width: 767px)').matches ? agentPath(route.agentId) : '/agents',
-    );
+  // Every width shows the agent's settings behind the dialog, so closing returns to them.
+  const close = () => onNavigate(route.agentId ? agentPath(route.agentId) : '/agents');
   const panelRef = useRef<HTMLElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
 

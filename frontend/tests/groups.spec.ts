@@ -173,7 +173,6 @@ for (const mobile of [false, true])
     });
     if (mobile) await page.getByRole('button', { name: 'Back to chats' }).click();
     await page.getByRole('tab', { name: 'Agents', exact: true }).click();
-    if (mobile) await page.getByRole('button', { name: 'Open settings for Avery' }).click();
     await expect(page.getByRole('region', { name: 'Settings for Avery' })).toBeVisible();
     await expect(page.getByRole('combobox', { name: 'Chat with' })).toHaveCount(0);
   });

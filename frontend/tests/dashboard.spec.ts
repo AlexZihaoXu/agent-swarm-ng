@@ -290,17 +290,20 @@ test('agent search filters names and handles no matches', async ({ page }) => {
   await expect(page.getByRole('form', { name: 'Message composer' })).toHaveCount(0);
 });
 
-test('phone agent search filters the list and handles no matches', async ({ page }) => {
+test('phone agent search filters the picker and handles no matches', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/agents');
-  const search = page.getByRole('searchbox', { name: 'Search agents' });
+  await page.getByRole('combobox', { name: 'Agent' }).click();
+  const search = page.getByPlaceholder('Search agents…');
+  await expect(search).toHaveCSS('font-size', '16px');
   await search.fill('  MOR  ');
-  await expect(page.getByRole('button', { name: /^Open settings for/ })).toHaveCount(1);
-  await expect(page.getByRole('button', { name: 'Open settings for Morgan' })).toBeVisible();
+  await expect(page.getByRole('option')).toHaveCount(1);
+  await expect(page.getByRole('option')).toContainText('Morgan');
   await search.fill('unknown');
-  await expect(page.getByText('No agents found.')).toBeVisible();
+  await expect(page.getByText('No matches')).toBeVisible();
   await search.fill('');
-  await expect(page.getByRole('button', { name: /^Open settings for/ })).toHaveCount(4);
+  await expect(page.getByRole('option')).toHaveCount(4);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test('navigation is centered with a moving indicator and pointer cursors', async ({ page }) => {
@@ -337,14 +340,14 @@ test('settings is reachable with keyboard-accessible tabs', async ({ page }) => 
   await expect(page.getByRole('region', { name: 'Settings for Avery' })).toBeVisible();
 });
 
-test('mobile can move between agent list and inline settings without overflow', async ({ page }) => {
+test('mobile moves between agents with the picker, inline settings and no overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Open settings for Riley' }).click();
+  await chooseAgent(page, 'Riley');
   await expect(page.getByRole('region', { name: 'Settings for Riley' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole('button', { name: 'Back to agents' }).click();
-  await expect(page.getByRole('button', { name: 'Open settings for Avery' })).toBeVisible();
+  await chooseAgent(page, 'Avery');
+  await expect(page.getByRole('region', { name: 'Settings for Avery' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create new agent' })).toBeVisible();
 });
 

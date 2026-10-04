@@ -19,15 +19,7 @@ test('sidebars carry no placeholder account row, and the composer has no dead at
   await expect(page.getByText('Your account')).toHaveCount(0);
 });
 
-test('both sidebars label a conversation the same way, and an old conversation is dated instead of looking like today', async ({
-  page,
-}) => {
-  // The Agents list (with its time labels) is a phone screen; wide screens pick agents from a select.
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/agents');
-  const agentsRow = page.getByRole('button', { name: 'Open settings for Avery' });
-  const agentsLabel = (await agentsRow.locator('[data-slot="swap-text"]').first().innerText()).trim();
-  expect(agentsLabel).toBe('Jan 1, 2030'); // sample history is not from today
+test('an old conversation is dated in the Chat list instead of looking like today', async ({ page }) => {
   await page.goto('/chat');
   const chatLabel = (
     await page
@@ -36,7 +28,7 @@ test('both sidebars label a conversation the same way, and an old conversation i
       .first()
       .innerText()
   ).trim();
-  expect(chatLabel).toBe(agentsLabel);
+  expect(chatLabel).toBe('Jan 1, 2030'); // sample history is not from today
 });
 
 test('creating an agent shows a backend failure with Retry instead of a misleading setup hint', async ({ page }) => {

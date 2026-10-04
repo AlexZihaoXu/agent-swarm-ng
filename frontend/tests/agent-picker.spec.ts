@@ -1,7 +1,7 @@
 import { test, expect, chooseAgent, agentOption as option, type Page } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
-// Wide screens: the Agents panel chooses an agent from a picker and lists that agent's settings sections.
+// The Agents panel (a side panel on wide screens, a top bar on phones) chooses an agent from a picker and lists that agent's settings sections.
 const picker = (page: Page) => page.getByRole('combobox', { name: 'Agent' });
 
 test('the picker shows each agent with avatar, name and organization', async ({ page }) => {
@@ -111,4 +111,39 @@ test('the panel lists the settings sections and marks the one jumped to', async 
   await expect(nav.getByRole('link', { name: 'Channels' })).not.toHaveAttribute('aria-current', 'location');
   await expect(nav.locator('[aria-current="location"]')).toHaveCount(1);
   await expect(nav.getByRole('link', { name: 'Model' })).toHaveCSS('cursor', 'pointer');
+});
+
+test('phones open the first agent under a top bar with the picker and +, keeping the bottom navigation', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/agents');
+  await expect(page).toHaveURL(/\/agents\/avery$/);
+  const panel = page.getByRole('complementary', { name: 'Agents', exact: true });
+  const settings = page.getByRole('region', { name: 'Settings for Avery' });
+  await expect(settings).toBeVisible();
+  await expect(picker(page).locator('[data-option-label]')).toHaveText('Avery');
+  const bar = (await panel.boundingBox())!;
+  const pickerBox = (await picker(page).boundingBox())!;
+  const create = (await panel.getByRole('button', { name: 'Create new agent' }).boundingBox())!;
+  expect(bar.y).toBeLessThan(80); // under the slim top bar
+  expect(Math.abs(create.y + create.height / 2 - (pickerBox.y + pickerBox.height / 2))).toBeLessThan(4); // one row
+  expect(create.x).toBeGreaterThan(pickerBox.x + pickerBox.width - 1);
+  expect((await settings.boundingBox())!.y).toBeGreaterThanOrEqual(bar.y + bar.height - 1);
+  const tabs = page.getByRole('tablist', { name: 'Main navigation' });
+  await expect(tabs).toBeVisible();
+  expect((await tabs.boundingBox())!.y).toBeGreaterThan(760);
+  // Phones have no section list: neither the panel's nor a strip in the editor.
+  await expect(page.getByRole('navigation', { name: 'Jump to section' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Back to agents' })).toHaveCount(0);
+  await chooseAgent(page, 'Morgan');
+  await expect(page).toHaveURL(/\/agents\/morgan$/);
+  await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
+  await expect(picker(page).locator('[data-option-label]')).toHaveText('Morgan');
+  await expect(tabs).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  // The page itself never scrolls (its panes do), nor bounces or zooms on touch.
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(844);
+  expect(await page.evaluate(() => getComputedStyle(document.body).overscrollBehaviorY)).toBe('none');
+  expect(await page.evaluate(() => getComputedStyle(document.body).touchAction)).toBe('pan-x pan-y');
 });
