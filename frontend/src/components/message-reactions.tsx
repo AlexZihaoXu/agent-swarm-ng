@@ -252,7 +252,7 @@ export function MessageReactions({
               if (pickerOpen || replyChosen.current) event.preventDefault();
               replyChosen.current = false;
             }}
-            className="context-menu-content phone-menu-targets z-50 max-h-[calc(100dvh-16px)] min-w-52 max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-border bg-background p-1 shadow-lg sm:max-h-none sm:overflow-visible"
+            className="context-menu-content phone-menu-targets z-50 max-h-[calc(100dvh-16px)] min-w-52 max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-border bg-background p-1 ao-top shadow-lg sm:max-h-none sm:overflow-visible"
           >
             {recent.data.length > 0 && (
               <>
@@ -317,7 +317,7 @@ export function MessageReactions({
               <ContextMenu.Portal>
                 <ContextMenu.SubContent
                   sideOffset={4}
-                  className="context-menu-content z-[60] rounded-lg border border-border bg-background shadow-lg"
+                  className="context-menu-content z-[60] rounded-lg border border-border bg-background ao-top shadow-lg"
                 >
                   <EmojiSearch
                     onSelect={emoji => {
@@ -384,7 +384,7 @@ export function MessageReactions({
                 align="start"
                 sideOffset={4}
                 collisionPadding={12}
-                className="z-[60] rounded-lg border border-border bg-background shadow-lg origin-[var(--radix-popover-content-transform-origin)] motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]"
+                className="z-[60] rounded-lg border border-border bg-background ao-top shadow-lg origin-[var(--radix-popover-content-transform-origin)] motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]"
               >
                 <EmojiSearch
                   onSelect={emoji => {

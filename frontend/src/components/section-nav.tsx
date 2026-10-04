@@ -156,7 +156,7 @@ export function SectionNav({
                     aria-hidden="true"
                     layoutId={`${group}-section`}
                     transition={glide}
-                    className="absolute inset-0 -z-10 rounded-lg bg-foreground/10"
+                    className="ao-raised absolute inset-0 -z-10 rounded-lg bg-foreground/10"
                   />
                 )}
                 {item.label}

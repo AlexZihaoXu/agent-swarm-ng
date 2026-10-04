@@ -84,7 +84,7 @@ export function AgentPanel({
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content
-            className="context-menu-content phone-menu-targets z-50 min-w-48 rounded-lg border border-border bg-background p-1 shadow-lg"
+            className="context-menu-content phone-menu-targets z-50 min-w-48 rounded-lg border border-border bg-background p-1 ao-top shadow-lg"
             onCloseAutoFocus={event => {
               if (dialogOpen) event.preventDefault();
             }}
@@ -128,7 +128,7 @@ export function AgentPanel({
       <Dialog.Portal>
         <Dialog.Overlay className={dialogOverlay} />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-h-[90dvh] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-background p-2 shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]"
+          className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-h-[90dvh] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-background ao-card p-2 shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]"
           onCloseAutoFocus={event => {
             event.preventDefault();
             const target = returnFocus.current;

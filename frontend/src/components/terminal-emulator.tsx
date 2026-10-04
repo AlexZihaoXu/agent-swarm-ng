@@ -354,7 +354,7 @@ export function TerminalEmulator({
       className={`flex min-h-0 min-w-0 flex-1 ${fill ? '' : 'items-center justify-center overflow-hidden p-2 sm:p-4'}`}
     >
       <div
-        className={`flex max-h-full min-h-0 max-w-full flex-col overflow-hidden rounded-xl border bg-[#141414] transition-[border-color,box-shadow] duration-200 ${inactive ? 'border-white/[0.08] shadow-lg shadow-black/40' : 'border-white/15 shadow-2xl shadow-black/60'}`}
+        className={`flex max-h-full min-h-0 max-w-full flex-col overflow-hidden rounded-xl border bg-[#141414] transition-[border-color,box-shadow] duration-200 ${inactive ? 'border-white/[0.08] ao-top shadow-lg shadow-black/40' : 'border-white/15 shadow-2xl shadow-black/60'}`}
         style={fill || fit.pan ? { width: '100%', height: '100%' } : undefined}
       >
         <div

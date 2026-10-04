@@ -34,7 +34,7 @@ export function NewTerminalDialog({
         <Dialog.Overlay className={dialogOverlay} />
         <Dialog.Content
           aria-describedby={undefined}
-          className={`fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl ${dialogMotion}`}
+          className={`fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background ao-card p-6 shadow-xl ${dialogMotion}`}
         >
           <form
             className="space-y-3"

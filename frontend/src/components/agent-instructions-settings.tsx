@@ -80,7 +80,7 @@ export function AgentInstructionsSettings({
           them at the start of everything it does. Select text to format it. Use Save changes at the bottom.
         </p>
       </div>
-      <div className="space-y-2 rounded-lg border border-border bg-sidebar/30 p-4">
+      <div className="space-y-2 rounded-lg border border-border bg-sidebar/30 ao-card p-4">
         <div className="relative rounded-lg border border-border bg-background focus-within:ring-1 focus-within:ring-ring">
           <EditorProvider
             key={`${agent.id}:${version}`}

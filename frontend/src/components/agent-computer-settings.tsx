@@ -99,7 +99,7 @@ export function AgentComputerSettings({
           Several agents can be assigned; only one agent holds control at a time.
         </p>
       </div>
-      <div className="space-y-4 rounded-lg border border-border bg-sidebar/30 p-4">
+      <div className="space-y-4 rounded-lg border border-border bg-sidebar/30 ao-card p-4">
         <p className="text-xs leading-relaxed text-muted-foreground">
           Changes are saved with the rest of this page. Tools require an active claim and use the guest account's
           permissions, including configured sudo—not platform-host access. Removing access releases control only after

@@ -138,7 +138,7 @@ export function ComputerCard({
       data-computer-id={computer.id}
       aria-label={computer.name}
       style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
-      className="card-enter min-w-0 overflow-hidden rounded-xl border border-border bg-sidebar shadow-sm transition-colors duration-200 hover:border-foreground/20"
+      className="card-enter min-w-0 overflow-hidden rounded-xl border border-border bg-sidebar ao-card shadow-sm transition-colors duration-200 hover:border-foreground/20"
     >
       <button
         type="button"

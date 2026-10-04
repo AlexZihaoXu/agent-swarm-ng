@@ -98,7 +98,7 @@ export function FloatingComputer({
       exit={{ opacity: 0, scale: 0.12, transition: { duration: 0.2, ease: [0.4, 0, 1, 1] } }}
       data-floating-window
       data-focused={layer.focused ? '' : undefined}
-      className={`portal-glass fixed flex flex-col overflow-hidden rounded-xl border transition-[border-color,box-shadow] duration-200 ${layer.focused ? 'border-white/15 shadow-2xl shadow-black/60' : 'border-white/[0.08] shadow-lg shadow-black/40'}`}
+      className={`portal-glass fixed flex flex-col overflow-hidden rounded-xl border transition-[border-color,box-shadow] duration-200 ${layer.focused ? 'border-white/15 shadow-2xl shadow-black/60' : 'border-white/[0.08] ao-top shadow-lg shadow-black/40'}`}
       onPointerDownCapture={() => raiseWindow(windowId)}
       style={{
         left: box.x,

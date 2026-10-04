@@ -484,7 +484,7 @@ export function PortalButton({ onClick, className }: { onClick: () => void; clas
       aria-label="Open Portal"
       aria-keyshortcuts={isMac ? 'Meta+K' : 'Control+K'}
       className={cn(
-        'flex items-center gap-2 rounded-lg border border-border bg-muted/60 px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
+        'ao-raised flex items-center gap-2 rounded-lg border border-border bg-muted/60 px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
         className,
       )}
     >

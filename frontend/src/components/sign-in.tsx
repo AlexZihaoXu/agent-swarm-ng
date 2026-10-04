@@ -55,7 +55,7 @@ export function SignIn({
     <div className="grid min-h-dvh place-items-center bg-background p-4">
       <m.section
         aria-labelledby={`${id}-title`}
-        className="w-full max-w-md rounded-xl border border-border bg-sidebar/30 shadow-sm"
+        className="w-full max-w-md rounded-xl border border-border bg-sidebar/30 ao-card shadow-sm"
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.97 }}

@@ -78,7 +78,7 @@ export function ChatComposer({
         attachments.add(event.dataTransfer.files);
       }}
       className={cn(
-        'rounded-3xl border border-foreground/20 bg-transparent p-3 transition-[border-color,box-shadow] duration-200 focus-within:border-foreground/30 focus-within:ring-1 focus-within:ring-ring sm:p-2',
+        'ao-inset rounded-3xl border border-foreground/20 bg-transparent p-3 transition-[border-color,box-shadow] duration-200 focus-within:border-foreground/30 focus-within:ring-1 focus-within:ring-ring sm:p-2',
         dragging && 'border-primary ring-2 ring-primary/40',
       )}
     >
@@ -95,7 +95,7 @@ export function ChatComposer({
               {files.map(file => (
                 <li
                   key={file.key}
-                  className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-sidebar/60 px-2 py-1 motion-safe:animate-[fade-in_120ms_ease-out]"
+                  className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-sidebar/60 ao-card px-2 py-1 motion-safe:animate-[fade-in_120ms_ease-out]"
                 >
                   {file.preview ? (
                     <img

@@ -252,7 +252,7 @@ export function TerminalWorkspace({
                     </ContextMenu.Trigger>
                     <ContextMenu.Portal>
                       <ContextMenu.Content
-                        className="context-menu-content phone-menu-targets z-[60] min-w-52 rounded-lg border border-border bg-background p-1 text-sm shadow-lg"
+                        className="context-menu-content phone-menu-targets z-[60] min-w-52 rounded-lg border border-border bg-background p-1 text-sm ao-top shadow-lg"
                         aria-label={`Settings for ${item.name}`}
                         onCloseAutoFocus={event => {
                           if (!focusRename.current) return;
@@ -279,7 +279,7 @@ export function TerminalWorkspace({
                           </ContextMenu.SubTrigger>
                           <ContextMenu.Portal>
                             <ContextMenu.SubContent
-                              className="context-menu-content z-[60] min-w-44 rounded-lg border border-border bg-background p-1 text-sm shadow-lg"
+                              className="context-menu-content z-[60] min-w-44 rounded-lg border border-border bg-background p-1 text-sm ao-top shadow-lg"
                               sideOffset={4}
                             >
                               <ContextMenu.RadioGroup
@@ -442,7 +442,7 @@ export function ComputerTerminals({
               )
               ?.focus();
           }}
-          className="fixed left-1/2 top-1/2 z-50 flex h-[min(90dvh,52rem)] max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] min-w-0 max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in] sm:w-[calc(100%-2rem)]"
+          className="fixed left-1/2 top-1/2 z-50 flex h-[min(90dvh,52rem)] max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] min-w-0 max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background ao-card shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in] sm:w-[calc(100%-2rem)]"
         >
           <header className="shrink-0 border-b border-border px-3 py-3 sm:px-5">
             <div className="flex min-w-0 items-center justify-between gap-3">

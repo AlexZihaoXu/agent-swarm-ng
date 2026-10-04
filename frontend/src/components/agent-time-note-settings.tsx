@@ -65,7 +65,7 @@ export function AgentTimeNoteSettings({
           been working, and shows in Activity.
         </p>
       </div>
-      <div className="space-y-2 rounded-lg border border-border bg-sidebar/30 p-4">
+      <div className="space-y-2 rounded-lg border border-border bg-sidebar/30 ao-card p-4">
         <label htmlFor={`${id}-minutes`} className="block text-sm font-medium">
           Tell the time
         </label>

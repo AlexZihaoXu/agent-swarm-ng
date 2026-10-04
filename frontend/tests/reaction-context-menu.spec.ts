@@ -7,13 +7,15 @@ test('right-click menus share a surface and fade-scale from their anchor, highli
   const bubble = page.locator('[data-message-id="avery-0"]');
   const other = page.locator('[data-message-id="avery-1"]');
   const idleShadow = await bubble.evaluate(element => getComputedStyle(element).boxShadow);
+  // Bubbles carry their resting light (ambient occlusion); only the active one gains the highlight.
+  const otherIdle = await other.evaluate(element => getComputedStyle(element).boxShadow);
   await bubble.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: 'Message actions' });
   await expect(menu).toHaveCSS('background-color', 'rgb(36, 36, 36)');
   await expect(menu).toHaveCSS('animation-name', 'dialog-in');
   await expect(bubble).toHaveAttribute('data-state', 'open');
   await expect.poll(() => bubble.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe(idleShadow);
-  await expect(other).toHaveCSS('box-shadow', 'none');
+  await expect(other).toHaveCSS('box-shadow', otherIdle);
   const origin = await menu.evaluate(element => getComputedStyle(element).transformOrigin);
   expect(origin).toMatch(/^0px /);
   await menu.getByRole('menuitem', { name: 'Add reaction' }).hover();

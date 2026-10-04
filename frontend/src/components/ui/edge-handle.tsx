@@ -77,7 +77,7 @@ export function EdgeHandle({
         level === 'far' && 'border-transparent bg-transparent text-white/70 opacity-0 focus-visible:opacity-100',
         level === 'near' && 'border-transparent bg-transparent text-white/80 drop-shadow-[0_1px_2px_rgb(0_0_0/0.8)]',
         (level === 'close' || level === 'touch') &&
-          'border-white/15 bg-black/55 text-white/80 shadow-lg backdrop-blur hover:bg-black/80 hover:text-white',
+          'border-white/15 bg-black/55 text-white/80 ao-top shadow-lg backdrop-blur hover:bg-black/80 hover:text-white',
         level === 'touch' && 'px-3',
         className,
       )}

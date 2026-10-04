@@ -51,7 +51,7 @@ function ComputerDialog({ children }: { children: ReactNode }) {
   return (
     <Dialog.Portal>
       <Dialog.Overlay className={dialogOverlay} />
-      <Dialog.Content className="computer-dialog fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl">
+      <Dialog.Content className="computer-dialog fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background ao-card p-6 shadow-xl">
         {children}
       </Dialog.Content>
     </Dialog.Portal>
@@ -422,7 +422,7 @@ export function ComputersPanel({
                       value={name}
                       disabled={createBusy}
                       onChange={event => setName(event.target.value)}
-                      className="mt-2 h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10 sm:text-sm"
+                      className="mt-2 ao-inset h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10 sm:text-sm"
                     />
                     {limitsQuery.isError && (
                       <p role="alert" className="mt-4 text-sm text-red-400">
@@ -504,7 +504,7 @@ export function ComputersPanel({
                     className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-4 md:gap-5"
                   >
                     {[0, 1].map(index => (
-                      <div key={index} className="overflow-hidden rounded-xl border border-border bg-sidebar">
+                      <div key={index} className="overflow-hidden rounded-xl border border-border bg-sidebar ao-card">
                         <Skeleton
                           className="aspect-video rounded-none"
                           style={{ animationDelay: `${index * 120}ms` }}
@@ -573,7 +573,7 @@ export function ComputersPanel({
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
               <ContextMenu.Content
-                className="context-menu-content phone-menu-targets z-50 min-w-56 rounded-lg border border-border bg-background p-1 text-sm shadow-lg"
+                className="context-menu-content phone-menu-targets z-50 min-w-56 rounded-lg border border-border bg-background p-1 text-sm ao-top shadow-lg"
                 onCloseAutoFocus={event => {
                   if (createOpen || selected !== null || settingsComputer !== null || filesOpen || terminalsOpen)
                     event.preventDefault();
@@ -850,7 +850,7 @@ export function ComputersPanel({
                 value={confirmation}
                 disabled={deleteBusy}
                 onChange={event => setConfirmation(event.target.value)}
-                className="mt-2 h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10 sm:text-sm"
+                className="mt-2 ao-inset h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10 sm:text-sm"
               />
               {deleteError && (
                 <p role="alert" className="mt-4 text-sm text-red-400">

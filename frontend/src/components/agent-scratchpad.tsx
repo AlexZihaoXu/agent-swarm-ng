@@ -76,7 +76,7 @@ export function AgentScratchpad({ agentId, agentName }: { agentId: string; agent
           Text files and images {agentName} drafts and presents. Read-only here: ask {agentName} to change them.
         </p>
       </div>
-      <div className="min-w-0 space-y-3 rounded-lg border border-border bg-sidebar/30 p-4">
+      <div className="min-w-0 space-y-3 rounded-lg border border-border bg-sidebar/30 ao-card p-4">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <BorderedBreadcrumb
             label="Scratchpad location"

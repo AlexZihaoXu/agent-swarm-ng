@@ -89,7 +89,7 @@ export function CodexConnection() {
               readOnly
               value={connection.login.userCode}
               onFocus={event => event.target.select()}
-              className="h-10 w-full rounded-lg border border-border bg-sidebar px-3 font-mono text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="ao-inset h-10 w-full rounded-lg border border-border bg-sidebar px-3 font-mono text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             <a
               href="https://auth.openai.com/codex/device"

@@ -168,7 +168,7 @@ export function EditorBubbleMenu() {
   return (
     <BubbleMenu
       editor={editor}
-      className="flex overflow-hidden rounded-xl border border-border bg-background p-0.5 shadow-lg"
+      className="flex overflow-hidden rounded-xl border border-border bg-background ao-card p-0.5 ao-top shadow-lg"
     >
       <Popover.Root open={open} onOpenChange={setOpen}>
         <Popover.Trigger asChild>
@@ -190,7 +190,7 @@ export function EditorBubbleMenu() {
           <Popover.Content
             align="start"
             sideOffset={5}
-            className="z-[70] w-48 rounded-lg border border-border bg-background p-1 shadow-lg"
+            className="z-[70] w-48 rounded-lg border border-border bg-background p-1 ao-top shadow-lg"
           >
             {nodes.map(node => (
               <button

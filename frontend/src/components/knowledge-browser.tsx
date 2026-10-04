@@ -216,7 +216,7 @@ export function KnowledgeBrowser({
               value={search}
               onChange={event => setSearch(event.target.value)}
               placeholder="Search knowledge"
-              className="h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:text-sm"
+              className="ao-inset h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:text-sm"
             />
             <button
               type="button"

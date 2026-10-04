@@ -265,7 +265,7 @@ export function ChatPanel({
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content
-            className="context-menu-content phone-menu-targets z-50 min-w-48 rounded-lg border border-border bg-background p-1 shadow-lg"
+            className="context-menu-content phone-menu-targets z-50 min-w-48 rounded-lg border border-border bg-background p-1 ao-top shadow-lg"
             onCloseAutoFocus={event => {
               if (route.kind === 'group-edit' || route.kind === 'group-new') event.preventDefault();
             }}

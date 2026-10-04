@@ -336,7 +336,7 @@ function Run({
     <section
       data-anchor-id={`run:${run.id}`}
       aria-label={`Run at ${time(run.started)}`}
-      className="card-enter rounded-xl border border-border bg-background/40 p-3"
+      className="card-enter rounded-xl border border-border bg-background/40 ao-card p-3"
       title={`Channel ${run.channelId} · Run ${run.id}`}
     >
       <Disclosure
@@ -563,7 +563,7 @@ export function AgentActivityPanel({
                     side="bottom"
                     align="start"
                     sideOffset={6}
-                    className="context-menu-content z-[60] max-w-72 rounded-lg border border-border bg-background p-3 text-xs leading-relaxed text-muted-foreground shadow-lg"
+                    className="context-menu-content z-[60] max-w-72 rounded-lg border border-border bg-background p-3 text-xs leading-relaxed text-muted-foreground ao-top shadow-lg"
                   >
                     Saved runtime history for operators; none of it is sent to chat. Reasoning appears only when the
                     model provides it, and credentials and hidden provider data are never stored here.

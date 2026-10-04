@@ -138,7 +138,7 @@ export function AgentMemory({
           and events come in. When it sleeps, its memory is reorganised and the index it always sees is rebuilt.
         </p>
       </div>
-      <div className="min-w-0 space-y-4 rounded-lg border border-border bg-sidebar/30 p-4">
+      <div className="min-w-0 space-y-4 rounded-lg border border-border bg-sidebar/30 ao-card p-4">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm">

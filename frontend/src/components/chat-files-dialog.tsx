@@ -134,7 +134,7 @@ export function ChatFilesDialog({
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className={dialogOverlay} />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(85dvh,44rem)] max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] min-w-0 max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in] sm:w-[calc(100%-2rem)]">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(85dvh,44rem)] max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] min-w-0 max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background ao-card shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in] sm:w-[calc(100%-2rem)]">
           <header className="shrink-0 border-b border-border px-3 py-3 sm:px-5">
             <div className="flex min-w-0 items-center justify-between gap-3">
               <Dialog.Title className="min-w-0 text-sm font-semibold [overflow-wrap:anywhere]">

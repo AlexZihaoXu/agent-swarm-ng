@@ -684,7 +684,7 @@ export function App() {
               <span
                 aria-hidden="true"
                 data-testid="tab-indicator"
-                className="pointer-events-none absolute inset-y-1.5 left-0 rounded-md bg-muted shadow-sm transition-[transform,width] duration-200 ease-out motion-reduce:transition-none md:inset-y-1 md:bg-background"
+                className="pointer-events-none absolute inset-y-1.5 left-0 ao-raised rounded-md bg-muted transition-[transform,width] duration-200 ease-out motion-reduce:transition-none md:inset-y-1 md:bg-background"
                 // Measured from the active tab, so tabs can be as wide as their labels (even gaps between them).
                 style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width }}
               />

@@ -152,7 +152,9 @@ export function AgentAvatarArt({
     topping = useRef<SVGGElement>(null);
   const ids = useId().replace(/[^a-zA-Z0-9]/g, '');
   const bodyId = `avatar-body-${ids}`,
-    clipId = `avatar-clip-${ids}`;
+    clipId = `avatar-clip-${ids}`,
+    shadeId = `avatar-shade-${ids}`,
+    lightId = `avatar-light-${ids}`;
   // Fine details only where they can be seen: markings from 24px, accessories from 20px.
   const detailed = size >= 24;
   const wearing = size >= 20 ? accessory : 'none';
@@ -318,6 +320,15 @@ export function AgentAvatarArt({
         <clipPath id={clipId}>
           <use href={`#${bodyId}`} />
         </clipPath>
+        {/* Ambient occlusion, as on the app icon: shade gathering low on the body, a soft light along its top. */}
+        <linearGradient id={shadeId} gradientUnits="userSpaceOnUse" x1="0" y1="30" x2="0" y2="62">
+          <stop offset="0" stopColor="#0b2233" stopOpacity="0" />
+          <stop offset="1" stopColor="#0b2233" stopOpacity="0.42" />
+        </linearGradient>
+        <linearGradient id={lightId} gradientUnits="userSpaceOnUse" x1="0" y1="4" x2="0" y2="22">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.32" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </linearGradient>
       </defs>
       {/* Room above the head for an accessory: the whole figure settles slightly lower and smaller. */}
       <g
@@ -334,6 +345,10 @@ export function AgentAvatarArt({
             fill={color}
             className="transition-[fill] duration-240 ease-out motion-reduce:transition-none"
           />
+          <g clipPath={`url(#${clipId})`} data-slot="avatar-shading">
+            <rect x="-8" y="-8" width="80" height="80" fill={`url(#${shadeId})`} />
+            <rect x="-8" y="-8" width="80" height="80" fill={`url(#${lightId})`} />
+          </g>
           <g clipPath={`url(#${clipId})`} fill={tint} data-slot="avatar-markings">
             {detailed && marking === 'spots' && (
               <>

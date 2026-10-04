@@ -109,7 +109,7 @@ export function AgentAvatarPreview({
   const set = (patch: Partial<AvatarAppearance>) => onChange({ ...value, ...patch });
 
   return (
-    <section className="rounded-lg border border-border bg-sidebar/30 p-3">
+    <section className="rounded-lg border border-border bg-sidebar/30 ao-card p-3">
       {collapsible && (
         <button
           type="button"

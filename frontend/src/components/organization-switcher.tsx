@@ -66,7 +66,7 @@ export function OrganizationSwitcher({
       <DropdownMenu.Trigger
         aria-label={`Organization: ${label}`}
         className={cn(
-          'flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background text-left outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring',
+          'ao-raised flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background text-left outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring',
           // Beside the centred tabs only the badge fits until wide screens.
           bar ? 'h-9 min-w-0 max-w-[60vw] px-1.5 pr-2.5' : 'h-10 justify-between px-2 lg:w-56',
           className,
@@ -94,7 +94,7 @@ export function OrganizationSwitcher({
           side="bottom"
           sideOffset={6}
           collisionPadding={12}
-          className="z-50 w-64 rounded-lg border border-border bg-background p-1 text-sm shadow-lg motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]"
+          className="z-50 w-64 rounded-lg border border-border bg-background p-1 text-sm ao-top shadow-lg motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]"
         >
           {!others && (
             <>

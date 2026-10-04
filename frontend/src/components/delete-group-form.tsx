@@ -56,7 +56,7 @@ export function DeleteGroupForm({
       <Dialog.Portal>
         <Dialog.Overlay className={dialogOverlay} />
         <Dialog.Content
-          className={`fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl ${dialogMotion}`}
+          className={`fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background ao-card p-6 shadow-xl ${dialogMotion}`}
         >
           <form
             onSubmit={event => {
@@ -84,7 +84,7 @@ export function DeleteGroupForm({
               disabled={busy}
               {...noAutofill}
               spellCheck={false}
-              className="mt-2 h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10 sm:text-sm"
+              className="mt-2 ao-inset h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10 sm:text-sm"
             />
             {error && (
               <p role="alert" className="mt-4 text-sm text-red-400">

@@ -55,7 +55,7 @@ export function ConversationRow({
             data-slot="row-selection"
             layoutId={`${selectionGroup}-selection`}
             transition={glide}
-            className="absolute inset-0 -z-10 rounded-lg bg-foreground/10"
+            className="ao-raised absolute inset-0 -z-10 rounded-lg bg-foreground/10"
           />
         )}
         {avatar}

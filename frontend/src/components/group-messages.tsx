@@ -73,8 +73,9 @@ export function GroupMessages<M extends ShownMessage>({
         const textClass = cn(
           'w-fit max-w-full min-w-0 whitespace-pre-wrap text-sm leading-5 [overflow-wrap:anywhere]',
           human
-            ? 'rounded-2xl bg-primary px-3.5 py-2 text-primary-foreground'
-            : 'rounded-2xl bg-foreground/[0.07] px-3.5 py-2 md:rounded-md md:bg-transparent md:px-0 md:py-0.5',
+            ? 'ao-raised rounded-2xl bg-primary px-3.5 py-2 text-primary-foreground'
+            : // Phones show it as a bubble; wider screens as plain lines.
+              'max-md:ao-raised rounded-2xl bg-foreground/[0.07] px-3.5 py-2 md:rounded-md md:bg-transparent md:px-0 md:py-0.5',
         );
         const textBody = (
           <>

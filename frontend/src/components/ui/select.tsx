@@ -130,7 +130,7 @@ export function Select({
           }
         }}
         className={cn(
-          'flex h-11 min-h-11 w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-lg border border-border bg-sidebar px-3 text-left text-sm outline-none [contain:inline-size] data-[placeholder]:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 enabled:hover:bg-muted enabled:data-[state=open]:bg-muted transition-colors duration-120 motion-reduce:transition-none sm:h-10 sm:min-h-0',
+          'ao-raised flex h-11 min-h-11 w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-lg border border-border bg-sidebar px-3 text-left text-sm outline-none [contain:inline-size] data-[placeholder]:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 enabled:hover:bg-muted enabled:data-[state=open]:bg-muted transition-colors duration-120 motion-reduce:transition-none sm:h-10 sm:min-h-0',
           triggerClassName,
         )}
       >
@@ -149,7 +149,7 @@ export function Select({
           data-slot="combobox-content"
           onOpenAutoFocus={event => event.preventDefault()}
           className={cn(
-            `z-[60] flex flex-col max-h-[min(18rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-24px)] overflow-hidden rounded-lg border border-border bg-sidebar text-foreground shadow-lg origin-[var(--radix-popover-content-transform-origin)] motion-safe:data-[state=open]:animate-[dialog-in_120ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_100ms_ease-in]`,
+            `z-[60] flex flex-col max-h-[min(18rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-24px)] overflow-hidden rounded-lg border border-border bg-sidebar text-foreground ao-top shadow-lg origin-[var(--radix-popover-content-transform-origin)] motion-safe:data-[state=open]:animate-[dialog-in_120ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_100ms_ease-in]`,
             options.some(option => option.icon) && 'min-w-48',
             contentClassName,
           )}

@@ -36,7 +36,7 @@ export function PickerDialog({
         <Dialog.Overlay className={dialogOverlay} />
         <Dialog.Content
           aria-describedby={undefined}
-          className={`fixed left-1/2 top-[max(1rem,12dvh)] z-50 flex max-h-[min(80dvh,36rem)] w-[calc(100%-1rem)] max-w-lg -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl ${dialogMotion}`}
+          className={`fixed left-1/2 top-[max(1rem,12dvh)] z-50 flex max-h-[min(80dvh,36rem)] w-[calc(100%-1rem)] max-w-lg -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background ao-card shadow-xl ${dialogMotion}`}
         >
           <Dialog.Title className="sr-only">{title}</Dialog.Title>
           <Command

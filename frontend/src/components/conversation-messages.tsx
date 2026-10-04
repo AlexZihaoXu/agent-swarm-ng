@@ -97,7 +97,7 @@ export function ConversationMessages({
           );
           const textClass = cn(
             'min-w-0 max-w-full whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-5 [overflow-wrap:anywhere]',
-            user ? 'bg-primary text-primary-foreground' : 'bg-foreground/[0.07]',
+            user ? 'ao-raised bg-primary text-primary-foreground' : 'ao-raised bg-foreground/[0.07]',
           );
           const textBody = (
             <>

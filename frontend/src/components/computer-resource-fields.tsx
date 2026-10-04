@@ -131,7 +131,7 @@ export function ComputerResourceFields({
           value={value.timezone}
           disabled={disabled}
           onChange={event => onChange({ ...value, timezone: event.target.value })}
-          className="h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+          className="ao-inset h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
         />
         <datalist id={listId}>
           {[...new Set(zones)].map(zone => (

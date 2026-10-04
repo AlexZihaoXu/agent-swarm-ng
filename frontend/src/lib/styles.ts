@@ -1,8 +1,8 @@
 /** The bordered panel every settings section puts its controls in (Agent settings and Settings share it). */
-export const settingsCard = 'rounded-lg border border-border bg-sidebar/30 p-4';
+export const settingsCard = 'ao-card rounded-lg border border-border bg-sidebar/30 p-4';
 /** Text fields on the Settings page. */
 export const settingsInput =
-  'h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10';
+  'ao-inset h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-10';
 
 /** Every modal shares one backdrop: dimmed, lightly blurred, fading with the dialog. */
 export const dialogOverlay =

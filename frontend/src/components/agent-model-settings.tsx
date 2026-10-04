@@ -148,7 +148,7 @@ export function AgentModelSettings({
           responding. Use Save changes at the bottom.
         </p>
       </div>
-      <div className="space-y-4 rounded-lg border border-border bg-sidebar/30 p-4">
+      <div className="space-y-4 rounded-lg border border-border bg-sidebar/30 ao-card p-4">
         <fieldset disabled={busy} className="min-w-0 space-y-4">
           <div className="space-y-2">
             <label htmlFor={`${id}-name`} className="block text-sm font-medium">

@@ -215,7 +215,7 @@ export function EditAgentForm({
                 <h3 className="text-lg font-semibold">Channels</h3>
                 <p className="mt-1 text-sm text-muted-foreground">Manage this agent's communication permissions.</p>
               </div>
-              <div className="rounded-lg border border-border bg-sidebar/30 p-4">
+              <div className="rounded-lg border border-border bg-sidebar/30 ao-card p-4">
                 <AgentChannelSettings
                   agentId={agent.id}
                   screen={route.channelScreen ?? 'channels'}
@@ -320,7 +320,7 @@ export function EditAgentForm({
                     Agents, computers and group chats in different organizations are kept apart.
                   </p>
                 </div>
-                <div className="rounded-lg border border-border bg-sidebar/30 p-4">
+                <div className="rounded-lg border border-border bg-sidebar/30 ao-card p-4">
                   <MoveToOrganization
                     kind="agent"
                     id={agent.id}

@@ -85,7 +85,7 @@ export function AgentHeartbeatSettings({
           makes it a normal turn. Use Save changes at the bottom.
         </p>
       </div>
-      <div className="space-y-4 rounded-lg border border-border bg-sidebar/30 p-4">
+      <div className="space-y-4 rounded-lg border border-border bg-sidebar/30 ao-card p-4">
         <div className="flex items-center justify-between gap-4">
           <label htmlFor={`${id}-on`} className="cursor-pointer text-sm font-medium">
             Wake up periodically

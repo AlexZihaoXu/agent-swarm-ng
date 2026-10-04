@@ -58,7 +58,7 @@ export function JumpToLatest({
                 element.scrollTop = bottom - element.clientHeight;
               element.scrollTo({ top: element.scrollHeight, behavior: reduced ? 'instant' : 'smooth' });
             }}
-            className="pointer-events-auto flex min-h-9 items-center gap-1.5 rounded-full border border-border bg-background/90 px-3.5 text-xs font-medium text-foreground shadow-lg shadow-black/30 backdrop-blur outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            className="pointer-events-auto flex min-h-9 items-center gap-1.5 rounded-full border border-border bg-background/90 px-3.5 text-xs font-medium text-foreground ao-top shadow-lg shadow-black/30 backdrop-blur outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
           >
             {fresh && <span aria-hidden="true" className="size-1.5 rounded-full bg-teal-400" />}
             {fresh ? 'New messages' : 'Jump to latest'}
