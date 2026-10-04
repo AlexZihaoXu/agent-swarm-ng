@@ -30,13 +30,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <LazyMotion strict features={() => import('./lib/motion-features').then(module => module.default)}>
           {/* Nothing below loads until someone is signed in (docs/login.md). */}
           <AuthGate>
-            <OrganizationsProvider>
-              <BrowserRouter>
+            <BrowserRouter>
+              <OrganizationsProvider>
                 <Routes>
                   <Route path="*" element={<App />} />
                 </Routes>
-              </BrowserRouter>
-            </OrganizationsProvider>
+              </OrganizationsProvider>
+            </BrowserRouter>
           </AuthGate>
         </LazyMotion>
       </MotionConfig>

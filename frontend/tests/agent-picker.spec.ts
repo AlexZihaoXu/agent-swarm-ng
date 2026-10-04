@@ -42,6 +42,7 @@ test('searching filters the agents', async ({ page }) => {
   await search.fill('ri');
   await option(page, 'Riley').click();
   await expect(page).toHaveURL(/\/agents\/riley$/);
+  await expect(page.getByRole('listbox')).toHaveCount(0);
   await picker(page).click();
   await expect(page.getByPlaceholder('Search agents…')).toHaveValue('');
   await expect(page.getByRole('option')).toHaveCount(sampleAgents.length);

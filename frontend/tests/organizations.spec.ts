@@ -48,9 +48,24 @@ test('the switcher scopes the dashboard to one organization and agents move betw
   await expect(option('Riley')).toBeVisible();
   await expect(option('Avery')).toHaveCount(0);
   await page.keyboard.press('Escape');
-  // The choice is per browser and survives a reload.
+  // The address names the organization shown: it stays across in-app navigation and a reload.
+  await expect(page).toHaveURL(/[?&]org=lab(&|$)/);
+  await page.getByRole('tab', { name: 'Chat' }).filter({ visible: true }).first().click();
+  await expect(page).toHaveURL(/\/chat.*[?&]org=lab/);
   await page.reload();
   await expect(page.getByRole('button', { name: 'Organization: Lab' }).filter({ visible: true })).toBeVisible();
+  await expect(page).toHaveURL(/[?&]org=lab/);
+  // An address naming another organization shows that one; Back returns to the one before.
+  await page.goto('/agents?org=personal');
+  await expect(page.getByRole('button', { name: 'Organization: Personal' }).filter({ visible: true })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('button', { name: 'Organization: Lab' }).filter({ visible: true })).toBeVisible();
+  // All organizations leave the address plain.
+  await page.getByRole('button', { name: 'Organization: Lab' }).filter({ visible: true }).click();
+  await page.getByRole('menuitem', { name: /^All organizations/ }).click();
+  await expect(page).not.toHaveURL(/org=/);
+  await page.getByRole('button', { name: 'Organization: All organizations' }).filter({ visible: true }).click();
+  await page.getByRole('menuitem', { name: /^Lab / }).click();
 
   // Moving an agent: the confirmation lists the links it drops.
   await page.goto('/agents/riley');

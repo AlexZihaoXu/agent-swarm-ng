@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import type { operations } from '@/api/schema';
@@ -8,6 +9,9 @@ export type Organization =
 /** The organization the dashboard shows, or every one. */
 export type OrganizationScope = 'all' | string;
 const KEY = 'swarm.organization';
+/** The address names the organization shown (`?org=<id>`; none for all), so a refresh or a shared link keeps it. */
+const PARAM = 'org';
+const fromUrl = (search: string) => new URLSearchParams(search).get(PARAM);
 const read = () => {
   try {
     return localStorage.getItem(KEY) || 'all';
@@ -30,8 +34,9 @@ type Value = {
 const Context = createContext<Value | null>(null);
 
 /**
- * Organizations (docs/organizations.md): which one the dashboard shows is a per-browser choice (it never changes what
- * agents can reach). With a single organization, "all" and that one are the same.
+ * Organizations (docs/organizations.md): which one the dashboard shows is a view (it never changes what agents can
+ * reach), named in the address and remembered by the browser for addresses without one. With a single organization,
+ * "all" and that one are the same.
  */
 export function OrganizationsProvider({ children }: { children: ReactNode }) {
   const client = useQueryClient();
@@ -44,7 +49,9 @@ export function OrganizationsProvider({ children }: { children: ReactNode }) {
     staleTime: 30_000,
   });
   const organizations = useMemo(() => query.data ?? [], [query.data]);
-  const [chosen, setChosen] = useState<OrganizationScope>(read);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [chosen, setChosen] = useState<OrganizationScope>(() => fromUrl(location.search) ?? read());
   // A deleted (or unknown) organization falls back to all.
   const current = chosen !== 'all' && query.data && !organizations.some(org => org.id === chosen) ? 'all' : chosen;
   const setCurrent = useCallback((scope: OrganizationScope) => {
@@ -55,6 +62,25 @@ export function OrganizationsProvider({ children }: { children: ReactNode }) {
       // Private windows: the choice lasts for this page only.
     }
   }, []);
+  // An address naming another organization (back/forward, a pasted link) shows that one.
+  const named = fromUrl(location.search);
+  useEffect(() => {
+    if (named && named !== chosen) setCurrent(named);
+    // Only when the address changes: a choice made here updates the address below.
+  }, [named]);
+  // Keep the address naming the shown organization: in-app links carry only paths.
+  useEffect(() => {
+    const want = current === 'all' ? null : current;
+    if ((named ?? null) === want || (named && !query.data)) return;
+    // The address as it is now: a page's effect may have just moved it (this provider's effects run after the page's).
+    const { pathname, search: now, hash } = window.location;
+    if (fromUrl(now) === want) return;
+    const params = new URLSearchParams(now);
+    if (want) params.set(PARAM, want);
+    else params.delete(PARAM);
+    const search = params.toString();
+    navigate({ pathname, search: search ? `?${search}` : '', hash }, { replace: true });
+  }, [current, named, query.data, location, navigate]);
   const value = useMemo<Value>(() => {
     const single = organizations.length === 1 ? organizations[0].id : undefined;
     return {
