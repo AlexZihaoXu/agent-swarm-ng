@@ -16,7 +16,7 @@ The core separation: an agent is a persistent identity (concepts/agents). Channe
 Topics:
 - concepts/tools: every tool an agent can have, what it does and when to use it.
 - concepts/system: the platform's parts, what is saved, and what happens on restarts, shutdowns and power loss.
-- concepts/agents, concepts/memory, concepts/channels, concepts/platform-events, concepts/time, concepts/scratchpad, concepts/chat-files, concepts/discord.
+- concepts/agents, concepts/memory, concepts/channels, concepts/platform-events, concepts/time, concepts/todos, concepts/scratchpad, concepts/chat-files, concepts/discord.
 - concepts/computers, with concepts/computers/desktop, concepts/computers/terminals, concepts/computers/files and concepts/computers/watches.
 
 Answering questions about the swarm itself (what can you do, what happens if it restarts, how do I give you a computer): read the relevant concept or practice and answer from it; practices/dashboard explains where things are in the app.`,
@@ -99,6 +99,23 @@ list_timers lists pending timers, reminders and computer watches; cancel_timer({
 Guarantees: timers and reminders are saved in the platform database before the tool returns, so they survive restarts and power loss. A firing that fell due while the platform was down fires once when it is back and says how late it is; missed reminder occurrences are counted toward times, not replayed (so a limited reminder can finish early after an outage). A firing is a platform event (concepts/platform-events).
 
 What they are not: not cron (no calendar expressions; compute delays yourself, practices/scheduling), not a way to watch for a condition on a computer (that is a watch, concepts/computers/watches), and not a background job runner.`,
+} satisfies KnowledgeEntry;
+
+export const todosConcept = {
+  id: 'concepts/todos',
+  parentId: 'concepts',
+  title: 'Todo list and the turn-end check',
+  summary:
+    'todo_write keeps your list for multi-step work; unfinished items make the platform check whether to continue.',
+  source: 'docs/agent-todos.md',
+  related: ['concepts/time', 'practices/waiting', 'concepts/discord'],
+  content: `todo_write({todos: [{content, status}]}) replaces your whole list (at most 30 items, each up to 200 characters). status is "pending", "in_progress" (one at a time: the item you are on) or "completed"; [] clears it. Your owner sees the list and its counts live in the dashboard. Use it for work with several steps; skip it for one-step requests.
+
+How to keep it: write it when you start, mark an item in_progress before you work on it and completed as soon as it is done (not all at the end), add steps you discover, drop steps that no longer apply.
+
+The turn-end check: when a turn ends while items are unfinished, the platform at once makes a temporary read-only copy of your conversation (your read tools only; anything that changes something is refused; at most 10 model turns) that decides STOP or CONTINUE. CONTINUE comes back to you as a platform note (not a human message) saying what to do next, and you keep working. STOP ends the turn: the work was done (mark it), you are blocked on something that will wake you (a timer, a watch or monitor, a reply you asked for), or it needs your owner. At most 3 continuations in a row; a list the check already stopped on is not checked again until it changes. Waiting is normal: mark what you wait for in the list, set the wake-up, end your turn.
+
+Discord: if you have a bot and nothing else should be shown, your current item makes a good custom status (discord_set_status), e.g. "Writing the release notes (2/5)". Everyone sees it: never include private or sensitive details.`,
 } satisfies KnowledgeEntry;
 
 export const computersConcept = {

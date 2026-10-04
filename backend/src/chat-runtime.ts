@@ -1,4 +1,5 @@
 import { TIME_GUIDANCE } from './time-tools';
+import { todoGuidance } from './todos';
 import { SCRATCH_GUIDANCE } from './scratch-tools';
 import { DISCORD_GUIDANCE } from './discord/guidance';
 import {
@@ -478,6 +479,11 @@ export async function createChatSession(
   if (additionalTools.some(tool => tool.name === 'current_time')) {
     const current = resources.getSystemPrompt() ?? '';
     resources.getSystemPrompt = () => `${current}\n\n${TIME_GUIDANCE}`;
+  }
+  if (additionalTools.some(tool => tool.name === 'todo_write')) {
+    const current = resources.getSystemPrompt() ?? '';
+    const discord = additionalTools.some(tool => tool.name === 'discord_set_status');
+    resources.getSystemPrompt = () => `${current}\n\n${todoGuidance(discord)}`;
   }
   if (additionalTools.some(tool => tool.name === 'discord_send_message')) {
     const current = resources.getSystemPrompt() ?? '';

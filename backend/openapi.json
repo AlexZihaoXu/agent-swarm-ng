@@ -17142,7 +17142,8 @@
                           "compaction",
                           "heartbeat",
                           "instructions",
-                          "organizationId"
+                          "organizationId",
+                          "todos"
                         ],
                         "properties": {
                           "name": {
@@ -17912,6 +17913,43 @@
                           },
                           "organizationId": {
                             "type": "string"
+                          },
+                          "todos": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "content",
+                                "status"
+                              ],
+                              "properties": {
+                                "content": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "pending"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "in_progress"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "completed"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              }
+                            }
                           }
                         }
                       }
@@ -18269,7 +18307,8 @@
                     "compaction",
                     "heartbeat",
                     "instructions",
-                    "organizationId"
+                    "organizationId",
+                    "todos"
                   ],
                   "properties": {
                     "name": {
@@ -19039,6 +19078,43 @@
                     },
                     "organizationId": {
                       "type": "string"
+                    },
+                    "todos": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "content",
+                          "status"
+                        ],
+                        "properties": {
+                          "content": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "pending"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "in_progress"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "completed"
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -19704,7 +19780,8 @@
                     "compaction",
                     "heartbeat",
                     "instructions",
-                    "organizationId"
+                    "organizationId",
+                    "todos"
                   ],
                   "properties": {
                     "name": {
@@ -20474,6 +20551,43 @@
                     },
                     "organizationId": {
                       "type": "string"
+                    },
+                    "todos": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "content",
+                          "status"
+                        ],
+                        "properties": {
+                          "content": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "pending"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "in_progress"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "completed"
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      }
                     }
                   }
                 }

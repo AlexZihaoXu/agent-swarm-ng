@@ -121,6 +121,9 @@ model Agent {
   heartbeatChecklist  String               @default("")
   organizationId      String               @default("personal")
   organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  /// Its todo list (todo_write, JSON [{content, status}]): unfinished items make the platform check, when a turn
+  /// ends, whether it should continue (docs/agent-todos.md).
+  todos               String               @default("[]")
   /// Long-term memory: the index (one line per memory) shown in its system prompt, rebuilt when it sleeps.
   memoryIndex         String               @default("")
   /// Sleep (memory reorganising) runs outside its active hours, or in this window when it is active all day.

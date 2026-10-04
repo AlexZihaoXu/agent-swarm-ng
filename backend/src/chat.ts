@@ -29,6 +29,7 @@ import type { ComputerUseService } from './computer-use/service';
 import type { ScreenshotPool } from './computer-use/image-pool';
 import { registerActivityRoutes } from './activity-routes';
 import { Connections } from './users/connections';
+import { parseTodos } from './todos';
 import { checkMemoryCap } from './users/store';
 import { ADMIN_ID, Reach, connectionOwner, viewerOf } from './users/reach';
 
@@ -98,6 +99,13 @@ const Agent = Type.Object(
     instructions: Type.String(),
     /** Its organization (organizations.ts): it reaches only computers, agents and groups of the same one. */
     organizationId: Type.String(),
+    /** Its todo list (todo_write, docs/agent-todos.md); live changes come as todos_updated events. */
+    todos: Type.Array(
+      Type.Object({
+        content: Type.String(),
+        status: Type.Union([Type.Literal('pending'), Type.Literal('in_progress'), Type.Literal('completed')]),
+      }),
+    ),
   },
   { additionalProperties: false },
 );
@@ -153,6 +161,7 @@ function agentView(
     thinkingLevel: agent.thinkingLevel,
     instructions: agent.instructions,
     organizationId: agent.organizationId,
+    todos: parseTodos(agent.todos),
     heartbeat: {
       enabled: agent.heartbeatEnabled,
       minutes: agent.heartbeatMinutes,

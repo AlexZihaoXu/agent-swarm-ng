@@ -182,6 +182,17 @@ export class AgentRuns {
       channelId: `scratch:${agentId}`,
     });
   }
+  /** An agent's todo list changed (todo_write): dashboards show it live (docs/agent-todos.md). */
+  todos(agentId: string, todos: unknown[]) {
+    this.broadcast({
+      type: 'todos_updated',
+      todos,
+      eventId: crypto.randomUUID(),
+      runId: 'platform',
+      agentId,
+      channelId: 'platform',
+    });
+  }
   /** Standalone advisory branches are observable without pretending they are main chat runs. */
   activity(agentId: string, entry: ActivityEntry) {
     this.broadcast({

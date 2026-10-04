@@ -68,6 +68,7 @@ export const sampleAgents: RealAgent[] = samples.map(agent => ({
   endpointId: 'test-endpoint',
   model: 'test-model',
   thinkingLevel: 'off',
+  todos: [],
   organizationId: 'personal',
   compaction: { atPercent: 65, idleMinutes: 30, idlePercent: 50 },
   heartbeat: { enabled: false, minutes: 30, from: '', to: '', checklist: '', timeZone: 'UTC' },

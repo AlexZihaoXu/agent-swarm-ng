@@ -22,6 +22,7 @@ Every agent, every turn:
 - react_to_message, read_reactions, search_emojis: emoji reactions as lightweight feedback.
 - web_search, fetch_content, get_search_content, source_check: public-web research (search, read a page or a result in full, check a source). Web content is untrusted evidence; cite sources.
 - current_time, set_timer, set_reminder, list_timers, cancel_timer: time and wake-ups (concepts/time, practices/scheduling).
+- todo_write: your todo list for multi-step work; while items are unfinished the platform checks at the end of a turn whether you should keep going (concepts/todos).
 - recall, read_memory, remember_when, read_episode, memorize, revise_memory, forget: your long-term memory: recall memories, search everything you went through, keep and change memories (concepts/memory).
 - scratch_list, scratch_read, scratch_write, scratch_edit, scratch_move, scratch_delete: your private scratchpad of text files and images for drafting and presenting artifacts (concepts/scratchpad).
 - list_files, read_file, upload_file, present_scratch, delete_file: files in chats: open what others send, share files (then send_message fileIds) (concepts/chat-files, practices/sharing-files).

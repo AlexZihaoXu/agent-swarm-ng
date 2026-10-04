@@ -69,6 +69,7 @@ const Settings = lazy(() => loadSettings().then(module => ({ default: module.Set
 const KnowledgeBrowser = lazy(() => loadKnowledge().then(module => ({ default: module.KnowledgeBrowser })));
 const Dashboard = lazy(() => import('@/components/dashboard').then(module => ({ default: module.Dashboard })));
 import { AlertBanner } from '@/components/alert-banner';
+import { AgentTodos } from '@/components/agent-todos';
 const AccessLog = lazy(() => import('@/components/access-log').then(module => ({ default: module.AccessLog })));
 const AuditLog = lazy(() => import('@/components/audit-log').then(module => ({ default: module.AuditLog })));
 const ComputersPanel = lazy(() => loadComputers().then(module => ({ default: module.ComputersPanel })));
@@ -1145,6 +1146,7 @@ export function App() {
                   />
                 </div>
               </header>
+              <AgentTodos key={agent.id} todos={agent.real?.todos ?? []} />
 
               <ScrollArea
                 key={`${agent.id}:${conversationPeer}`}

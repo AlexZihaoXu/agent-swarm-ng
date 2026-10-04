@@ -7,6 +7,11 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { createActivityRecorder } from './agent-activity';
 import { accessOf, type AgentTool } from './tool-access';
+import { openTodos, type Todo } from './todos';
+import { checkTodos } from './todo-check';
+
+/** Continuations in a row a turn's todo checks may start (docs/agent-todos.md). */
+export const TODO_CONTINUATIONS = 3;
 import { HEARTBEAT_NOTE_QUESTION, heartbeatPromotion, promotes, type HeartbeatBranch } from './heartbeat';
 import { channelInput, createChatSession, type ChatConfiguration, type ChannelMessage } from './chat-runtime';
 import { createWebTools } from './web-tools';
@@ -54,6 +59,11 @@ export type InboxHooks = {
     atPercent: number;
     ended?: (usage: ReturnType<AgentSession['getContextUsage']>) => void;
   };
+  /**
+   * The agent's todo list (docs/agent-todos.md): when a turn ends with unfinished items, a read-only fork decides
+   * whether it continues. `stoppedOn`/`stopped`: the list a check last decided to stop on (not checked again).
+   */
+  todos?: { get: () => Promise<Todo[]>; stoppedOn: () => string | undefined; stopped: (list: string) => void };
 };
 
 export async function runChat(
@@ -386,6 +396,95 @@ export async function runChat(
       await hooks.noticesSaved?.();
     }
     const stopReason = (): string | undefined => lastStopReason;
+    // Unfinished todos when a turn ends: a read-only fork of the conversation decides whether to keep going, and
+    // its note continues the main branch (at most TODO_CONTINUATIONS times in a row).
+    const reads = new Set([...access].flatMap(([name, kind]) => (kind === 'r' ? [name] : [])));
+    const todoGate = async (peerOnly: boolean) => {
+      if (!hooks.todos) return;
+      for (let round = 0; round <= TODO_CONTINUATIONS; round++) {
+        // A turn ends by stopping, or by delivering its final reply (send_message final:true ends it at once).
+        const ended =
+          stopReason() === 'stop' || (finalPublished && !['error', 'aborted', 'length'].includes(stopReason() ?? ''));
+        if (signal.aborted || main.isStreaming || inbox.hasPending() || !ended) return;
+        if (heartbeat && !promoted) return;
+        const todos = await hooks.todos.get().catch(() => []);
+        const open = openTodos(todos);
+        const list = JSON.stringify(todos);
+        if (!open.length || list === hooks.todos.stoppedOn()) return;
+        if (round === TODO_CONTINUATIONS) {
+          activity.record(
+            'status',
+            'Todo check: limit',
+            `Continued ${TODO_CONTINUATIONS} times in a row; stopping here with ${open.length} unfinished.`,
+          );
+          // Not again for this list: every later turn would otherwise repeat the same continuations.
+          hooks.todos.stopped(list);
+          return;
+        }
+        activity.record(
+          'status',
+          'Todo check',
+          `${open.length} of ${todos.length} unfinished: a read-only fork decides whether to continue.`,
+        );
+        // Not under the triage lock, and cancelled the moment a message arrives: new messages come first.
+        const arrived = new AbortController();
+        const previousOnAdd = inbox.onAdd;
+        inbox.onAdd = () => {
+          previousOnAdd?.();
+          arrived.abort();
+        };
+        let decision: Awaited<ReturnType<typeof checkTodos>>;
+        try {
+          decision = await checkTodos({
+            main,
+            thinkingLevel: config.thinkingLevel,
+            channelId: channel.id,
+            todos,
+            reads,
+            signal: AbortSignal.any([signal, arrived.signal]),
+            trace: activity.branch('Todo check'),
+            agentId: channel.agentId,
+          });
+        } finally {
+          inbox.onAdd = previousOnAdd;
+        }
+        if (arrived.signal.aborted || signal.aborted) {
+          activity.record('status', 'Todo check: cancelled', 'A message arrived; it comes first.');
+          return;
+        }
+        activity.record(
+          'status',
+          decision.action === 'continue' ? 'Todo check: continue' : 'Todo check: stop',
+          decision.note,
+        );
+        if (decision.action !== 'continue') {
+          // A real decision is remembered; a failed check is not (the next turn may check again).
+          if (!decision.failed) hooks.todos.stopped(list);
+          return;
+        }
+        // A message that arrived during the check comes first; the list is checked again after it.
+        if (inbox.hasPending() || signal.aborted) return;
+        const before = published;
+        await main.sendCustomMessage(
+          {
+            customType: 'todo-continue',
+            display: false,
+            content: `Automatic todo check (from the platform, not a human message), continuation ${round + 1}/${TODO_CONTINUATIONS}. Your own read-only review says: ${decision.note}`,
+          },
+          { triggerTurn: true },
+        );
+        // A continuation that ended without telling anyone: the usual reminder that plain output is internal.
+        if (!peerOnly && published === before && !signal.aborted && !main.isStreaming && stopReason() === 'stop')
+          await main.sendCustomMessage(
+            {
+              customType: 'channel-delivery-reminder',
+              display: false,
+              content: `Automatic channel reminder: you continued your work but sent nothing to channel ${channel.id}. Plain assistant output is internal. If you finished something the human is waiting for, report it with send_message (channelId=${JSON.stringify(channel.id)}, final:true); otherwise remain silent.`,
+            },
+            { triggerTurn: true },
+          );
+      }
+    };
     while (inbox.hasPending() && !signal.aborted) {
       const batch = await inbox.take(signal);
       // A summary finished since the last prompt (or while idle): this prompt's first model call already uses it.
@@ -442,6 +541,7 @@ export async function runChat(
               { triggerTurn: true },
             );
           }
+          await todoGate(peerOnly);
           // A quiet heartbeat asks once for a note before it is dropped.
           if (heartbeat && !promoted && !signal.aborted && !inbox.hasPending() && stopReason() !== 'error') {
             heartbeat.branch.asking = true;

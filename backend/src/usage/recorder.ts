@@ -2,7 +2,8 @@ import type { PlatformStore } from '../platform-store';
 import { CODEX_CONNECTION } from '../codex-provider';
 
 /** What a model call was for (the dashboard's breakdown). */
-export type UsagePurpose = 'turn' | 'triage' | 'watch' | 'heartbeat' | 'sleep' | 'compaction' | 'discord' | 'other';
+export type UsagePurpose =
+  'turn' | 'triage' | 'watch' | 'todo' | 'heartbeat' | 'sleep' | 'compaction' | 'discord' | 'other';
 
 /** Pi's usage block, as assistant messages and compaction results carry it. */
 export type PiUsage = {

@@ -310,6 +310,16 @@ export function useChat() {
 
   function applyEvent(event: Record<string, any>) {
     if (event.type === 'heartbeat') return;
+    // An agent's todo list changed (todo_write): shown live (docs/agent-todos.md).
+    if (event.type === 'todos_updated' && typeof event.agentId === 'string' && Array.isArray(event.todos)) {
+      const todos = event.todos as RealAgent['todos'];
+      setAgents(current =>
+        current.map(item =>
+          item.id === event.agentId && item.real ? { ...item, real: { ...item.real, todos } } : item,
+        ),
+      );
+      return;
+    }
     if (event.type === 'compaction' && typeof event.agentId === 'string') {
       const agentId = event.agentId;
       const state = event.state === 'running' || event.state === 'sleeping' ? event.state : null;

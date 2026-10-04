@@ -1,6 +1,7 @@
 import { TerminalWatcher } from './computer-use/terminal-watcher';
 import { AgentTimers } from './agent-timers';
 import { createTimeTools } from './time-tools';
+import { createTodoTools, Todos } from './todos';
 import { Scratchpad } from './scratchpad';
 import { createScratchTools } from './scratch-tools';
 import { SwarmSettingsStore } from './swarm-settings';
@@ -120,6 +121,9 @@ export class DmBroker {
   peerLimits = { queueTimeoutMs: 300000, executionTimeoutMs: 90000 };
   private linked = new WeakSet<AbortSignal>();
   readonly timers: AgentTimers;
+  /** Each agent's todo list (todo_write); the list a turn-end check last decided to stop on. */
+  readonly todos: Todos;
+  private readonly todoStoppedOn = new Map<string, string>();
   /** Every agent's private scratchpad of text files. */
   readonly scratch: Scratchpad;
   /** Settings → Swarm (file and scratchpad limits). */
@@ -260,6 +264,7 @@ export class DmBroker {
     });
     this.knowledge = new SwarmKnowledgePlugin(database);
     this.memory = new MemoryStore(database, this.settings);
+    this.todos = new Todos(database, (agentId, todos) => runs.todos(agentId, todos));
     this.organizations = new Organizations(
       database,
       computers ? (agentId, ids) => computers.assign(agentId, ids) : undefined,
@@ -1083,6 +1088,7 @@ ${preview.text}`
         }),
         // Every agent's sense of time: current time, timers and reminders (no computer needed).
         ...createTimeTools(this.timers, agentId, () => humanAuthority, this.watches, this.recordings),
+        ...createTodoTools(this.todos, agentId),
         ...createScratchTools(this.scratch, agentId, this.screenshots),
         // An agent whose owner configured a Discord bot for it gets the Discord tools (checked again on every call).
         ...(this.discord && this.discord.connections.status(agentId).state !== 'off'
@@ -1128,6 +1134,11 @@ ${preview.text}`
       ],
       {
         sessionStore: this.sessions,
+        todos: {
+          get: () => this.todos.get(agentId),
+          stoppedOn: () => this.todoStoppedOn.get(agentId),
+          stopped: list => this.todoStoppedOn.set(agentId, list),
+        },
         wrote: () => this.discord?.presence?.wrote(agentId),
         // A heartbeat leaves last night's note for the next real turn (a dropped branch would lose it).
         memory: {

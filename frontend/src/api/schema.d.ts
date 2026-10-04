@@ -6272,6 +6272,10 @@ export interface operations {
                             };
                             instructions: string;
                             organizationId: string;
+                            todos: {
+                                content: string;
+                                status: "pending" | "in_progress" | "completed";
+                            }[];
                         }[];
                         nextCursor: number | null;
                     };
@@ -6405,6 +6409,10 @@ export interface operations {
                         };
                         instructions: string;
                         organizationId: string;
+                        todos: {
+                            content: string;
+                            status: "pending" | "in_progress" | "completed";
+                        }[];
                     };
                 };
             };
@@ -6716,6 +6724,10 @@ export interface operations {
                         };
                         instructions: string;
                         organizationId: string;
+                        todos: {
+                            content: string;
+                            status: "pending" | "in_progress" | "completed";
+                        }[];
                     };
                 };
             };
