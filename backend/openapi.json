@@ -159,7 +159,8 @@
                       "type": "object",
                       "required": [
                         "signedIn",
-                        "name"
+                        "name",
+                        "admin"
                       ],
                       "properties": {
                         "signedIn": {
@@ -170,6 +171,9 @@
                         },
                         "name": {
                           "type": "string"
+                        },
+                        "admin": {
+                          "type": "boolean"
                         }
                       }
                     },
@@ -243,7 +247,8 @@
                   "type": "object",
                   "required": [
                     "signedIn",
-                    "name"
+                    "name",
+                    "admin"
                   ],
                   "properties": {
                     "signedIn": {
@@ -254,6 +259,9 @@
                     },
                     "name": {
                       "type": "string"
+                    },
+                    "admin": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -337,7 +345,8 @@
                   "type": "object",
                   "required": [
                     "signedIn",
-                    "name"
+                    "name",
+                    "admin"
                   ],
                   "properties": {
                     "signedIn": {
@@ -348,6 +357,9 @@
                     },
                     "name": {
                       "type": "string"
+                    },
+                    "admin": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -477,7 +489,8 @@
                   "type": "object",
                   "required": [
                     "signedIn",
-                    "name"
+                    "name",
+                    "admin"
                   ],
                   "properties": {
                     "signedIn": {
@@ -488,6 +501,9 @@
                     },
                     "name": {
                       "type": "string"
+                    },
+                    "admin": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -551,6 +567,486 @@
         }
       }
     },
+    "/api/users": {
+      "get": {
+        "operationId": "listUsers",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "users"
+                  ],
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "admin",
+                          "disabled",
+                          "memoryLimitGiB",
+                          "memoryUsedGiB",
+                          "organizations",
+                          "createdAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "admin": {
+                            "type": "boolean"
+                          },
+                          "disabled": {
+                            "type": "boolean"
+                          },
+                          "memoryLimitGiB": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "memoryUsedGiB": {
+                            "type": "integer"
+                          },
+                          "organizations": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "name"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "name",
+                  "password"
+                ],
+                "properties": {
+                  "name": {
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  "password": {
+                    "minLength": 8,
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  "memoryLimitGiB": {
+                    "anyOf": [
+                      {
+                        "minimum": 1,
+                        "maximum": 4096,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name",
+                    "admin",
+                    "disabled",
+                    "memoryLimitGiB",
+                    "memoryUsedGiB",
+                    "organizations",
+                    "createdAt"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "admin": {
+                      "type": "boolean"
+                    },
+                    "disabled": {
+                      "type": "boolean"
+                    },
+                    "memoryLimitGiB": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "memoryUsedGiB": {
+                      "type": "integer"
+                    },
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{id}": {
+      "patch": {
+        "operationId": "updateUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "minProperties": 1,
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "minLength": 8,
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  "disabled": {
+                    "type": "boolean"
+                  },
+                  "memoryLimitGiB": {
+                    "anyOf": [
+                      {
+                        "minimum": 1,
+                        "maximum": 4096,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name",
+                    "admin",
+                    "disabled",
+                    "memoryLimitGiB",
+                    "memoryUsedGiB",
+                    "organizations",
+                    "createdAt"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "admin": {
+                      "type": "boolean"
+                    },
+                    "disabled": {
+                      "type": "boolean"
+                    },
+                    "memoryLimitGiB": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "memoryUsedGiB": {
+                      "type": "integer"
+                    },
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteUser",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/audit": {
       "get": {
         "operationId": "listAuditEvents",
@@ -580,6 +1076,12 @@
                   "type": "string",
                   "enum": [
                     "organizations"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "users"
                   ]
                 },
                 {
@@ -1798,6 +2300,17 @@
     "/api/model-endpoints": {
       "get": {
         "operationId": "listModelEndpoints",
+        "parameters": [
+          {
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "organizationId",
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",
@@ -2006,6 +2519,10 @@
                   },
                   "endpointId": {
                     "maxLength": 100,
+                    "type": "string"
+                  },
+                  "organizationId": {
+                    "maxLength": 64,
                     "type": "string"
                   }
                 }
@@ -7766,6 +8283,8 @@
                           "id",
                           "name",
                           "createdAt",
+                          "ownerId",
+                          "ownerName",
                           "agents",
                           "computers",
                           "groups"
@@ -7778,6 +8297,12 @@
                             "type": "string"
                           },
                           "createdAt": {
+                            "type": "string"
+                          },
+                          "ownerId": {
+                            "type": "string"
+                          },
+                          "ownerName": {
                             "type": "string"
                           },
                           "agents": {
@@ -7841,6 +8366,8 @@
                           "id",
                           "name",
                           "createdAt",
+                          "ownerId",
+                          "ownerName",
                           "agents",
                           "computers",
                           "groups"
@@ -7853,6 +8380,12 @@
                             "type": "string"
                           },
                           "createdAt": {
+                            "type": "string"
+                          },
+                          "ownerId": {
+                            "type": "string"
+                          },
+                          "ownerName": {
                             "type": "string"
                           },
                           "agents": {
@@ -7948,6 +8481,8 @@
                           "id",
                           "name",
                           "createdAt",
+                          "ownerId",
+                          "ownerName",
                           "agents",
                           "computers",
                           "groups"
@@ -7960,6 +8495,12 @@
                             "type": "string"
                           },
                           "createdAt": {
+                            "type": "string"
+                          },
+                          "ownerId": {
+                            "type": "string"
+                          },
+                          "ownerName": {
                             "type": "string"
                           },
                           "agents": {
@@ -8050,6 +8591,8 @@
                           "id",
                           "name",
                           "createdAt",
+                          "ownerId",
+                          "ownerName",
                           "agents",
                           "computers",
                           "groups"
@@ -8062,6 +8605,12 @@
                             "type": "string"
                           },
                           "createdAt": {
+                            "type": "string"
+                          },
+                          "ownerId": {
+                            "type": "string"
+                          },
+                          "ownerName": {
                             "type": "string"
                           },
                           "agents": {
@@ -8210,6 +8759,24 @@
             }
           },
           "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
             "description": "Default Response",
             "content": {
               "application/json": {
@@ -16402,6 +16969,15 @@
             "in": "query",
             "name": "endpointId",
             "required": false
+          },
+          {
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "organizationId",
+            "required": false
           }
         ],
         "responses": {
@@ -17210,6 +17786,21 @@
                                             }
                                           }
                                         }
+                                      }
+                                    }
+                                  },
+                                  "author": {
+                                    "type": "object",
+                                    "required": [
+                                      "userId",
+                                      "name"
+                                    ],
+                                    "properties": {
+                                      "userId": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
                                       }
                                     }
                                   }
@@ -18324,6 +18915,21 @@
                                   }
                                 }
                               }
+                            },
+                            "author": {
+                              "type": "object",
+                              "required": [
+                                "userId",
+                                "name"
+                              ],
+                              "properties": {
+                                "userId": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              }
                             }
                           }
                         },
@@ -18859,6 +19465,21 @@
                                     }
                                   }
                                 }
+                              }
+                            }
+                          },
+                          "author": {
+                            "type": "object",
+                            "required": [
+                              "userId",
+                              "name"
+                            ],
+                            "properties": {
+                              "userId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
                               }
                             }
                           }
@@ -19729,6 +20350,21 @@
                                   }
                                 }
                               }
+                            },
+                            "author": {
+                              "type": "object",
+                              "required": [
+                                "userId",
+                                "name"
+                              ],
+                              "properties": {
+                                "userId": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              }
                             }
                           }
                         },
@@ -20488,6 +21124,21 @@
                                   }
                                 }
                               }
+                            }
+                          }
+                        },
+                        "author": {
+                          "type": "object",
+                          "required": [
+                            "userId",
+                            "name"
+                          ],
+                          "properties": {
+                            "userId": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
                             }
                           }
                         }
@@ -26920,6 +27571,24 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -28992,6 +29661,17 @@
     "/api/providers/openai-codex": {
       "get": {
         "operationId": "getCodexProvider",
+        "parameters": [
+          {
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "organizationId",
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",

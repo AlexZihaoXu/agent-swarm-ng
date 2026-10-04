@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { randomUuid } from '@/lib/random-uuid';
 import { PageHeader } from '@/components/page-header';
+import { UserSettings } from '@/components/user-settings';
+import { useSignedIn } from '@/lib/auth';
 import { settingsCard, settingsInput } from '@/lib/styles';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { endpointPath, type DashboardRoute } from '@/lib/dashboard-location';
@@ -364,6 +366,7 @@ function EndpointCard({
 }
 
 export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavigate: (path: string) => void }) {
+  const { admin } = useSignedIn();
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const newEndpointId = useRef(randomUuid());
   const [loading, setLoading] = useState(true);
@@ -421,13 +424,19 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
     <div>
       <PageHeader
         title="Settings"
-        description="Your account, organizations, model connections, Knowledge, the audit log and swarm limits."
+        description={
+          admin
+            ? 'Your account, users, organizations, model connections, Knowledge, the audit log and swarm limits.'
+            : 'Your account, organizations, model connections and Knowledge.'
+        }
         width="max-w-3xl"
         sticky
       />
+      {/* Users see their own account, connections, organizations and Knowledge; the rest is admin's (docs/users.md). */}
       <div className="mx-auto w-full max-w-3xl space-y-8 px-4 pb-8 pt-6 md:px-6 md:pb-10">
         <AccountSettings />
-        <SecuritySettings onNavigate={onNavigate} />
+        {admin && <UserSettings />}
+        {admin && <SecuritySettings onNavigate={onNavigate} />}
         <CodexConnection />
         <OrganizationSettings card={settingsCard} />
         <section aria-labelledby="knowledge-title" className="space-y-4">
@@ -452,28 +461,30 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
             </Button>
           </div>
         </section>
-        <section aria-labelledby="audit-title" className="space-y-4">
-          <div>
-            <h3 id="audit-title" className="text-lg font-semibold">
-              Audit log
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Sign-in attempts (name, address, time to the millisecond), agents, computers and organizations created,
-              edited or deleted, and the platform starting and stopping.
-            </p>
-          </div>
-          <div className={settingsCard}>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-11 sm:min-h-0"
-              onClick={() => onNavigate('/settings/audit')}
-            >
-              Open the audit log
-            </Button>
-          </div>
-        </section>
+        {admin && (
+          <section aria-labelledby="audit-title" className="space-y-4">
+            <div>
+              <h3 id="audit-title" className="text-lg font-semibold">
+                Audit log
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Sign-in attempts (name, address, time to the millisecond), agents, computers and organizations created,
+                edited or deleted, and the platform starting and stopping.
+              </p>
+            </div>
+            <div className={settingsCard}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11 sm:min-h-0"
+                onClick={() => onNavigate('/settings/audit')}
+              >
+                Open the audit log
+              </Button>
+            </div>
+          </section>
+        )}
         <section aria-labelledby="endpoints-title" className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -556,8 +567,8 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
           </p>
         </section>
         <DiscordOwnerSettings card={settingsCard} />
-        <SwarmSettings card={settingsCard} />
-        <ComputerStorageSettings card={settingsCard} />
+        {admin && <SwarmSettings card={settingsCard} />}
+        {admin && <ComputerStorageSettings card={settingsCard} />}
       </div>
     </div>
   );

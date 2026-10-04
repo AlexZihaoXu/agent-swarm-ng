@@ -1,14 +1,20 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import { EndpointStore, endpointView } from './endpoint-store';
 import { readModelCatalog } from './model-catalog';
 import { isOpenRouter, openRouterCatalog } from './openrouter';
+import { isPublicUrl } from './users/public-address';
+import { connectionOwner, viewerOf, type Reach } from './users/reach';
+
+const INTERNAL_URL = 'Use a public address: endpoints of users cannot reach the platform or private networks.';
 
 const ConnectionBody = Type.Object(
   {
     baseUrl: Type.String({ minLength: 1, maxLength: 2048 }),
     apiKey: Type.Optional(Type.String({ maxLength: 4096, pattern: '^[^\\r\\n]*$' })),
     endpointId: Type.Optional(Type.String({ maxLength: 100 })),
+    /** Whose saved endpoint `endpointId` is: this organization's owner's (default: your own). */
+    organizationId: Type.Optional(Type.String({ maxLength: 64 })),
   },
   { additionalProperties: false },
 );
@@ -26,8 +32,14 @@ export function registerModelEndpoints(
   app: FastifyInstance,
   fetcher: typeof fetch = fetch,
   store = new EndpointStore(),
-  agentsUsing: (endpointId: string) => Promise<number> = async () => 0,
+  /** Agents of this person's organizations on this endpoint. */
+  agentsUsing: (endpointId: string, ownerId: string) => Promise<number> = async () => 0,
+  reach?: Reach,
 ) {
+  // A person's own endpoints (docs/users.md): admin choosing a model in Sam's organization reads Sam's.
+  const ownerFor = (request: FastifyRequest, organizationId?: string) =>
+    reach ? connectionOwner(reach, viewerOf(request), organizationId) : Promise.resolve(viewerOf(request).userId);
+  const allowedUrl = async (request: FastifyRequest, url: URL) => viewerOf(request).admin || (await isPublicUrl(url));
   const View = Type.Object({
     id: Type.String(),
     name: Type.String(),
@@ -43,14 +55,21 @@ export function registerModelEndpoints(
     },
     { additionalProperties: false },
   );
-  app.get(
+  app.get<{ Querystring: { organizationId?: string } }>(
     '/api/model-endpoints',
     {
-      schema: { operationId: 'listModelEndpoints', response: { 200: Type.Array(View) } },
+      schema: {
+        operationId: 'listModelEndpoints',
+        querystring: Type.Object({
+          /** Whose endpoints: this organization's owner's (default: your own). */
+          organizationId: Type.Optional(Type.String({ maxLength: 64 })),
+        }),
+        response: { 200: Type.Array(View) },
+      },
     },
-    async (_request, reply) => {
+    async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
-      return (await store.read()).map(endpointView);
+      return (await store.readFor(await ownerFor(request, request.query.organizationId))).map(endpointView);
     },
   );
   app.post<{ Body: Static<typeof SaveBody> }>(
@@ -63,19 +82,24 @@ export function registerModelEndpoints(
       reply.header('Cache-Control', 'no-store');
       let baseUrl: string;
       try {
-        baseUrl = parseBaseUrl(request.body.baseUrl).toString().replace(/\/+$/, '');
+        const url = parseBaseUrl(request.body.baseUrl);
+        if (!(await allowedUrl(request, url))) return reply.code(400).send({ message: INTERNAL_URL });
+        baseUrl = url.toString().replace(/\/+$/, '');
       } catch {
         return reply
           .code(400)
           .send({ message: 'Enter a valid HTTP(S) base URL without credentials, query parameters, or fragments.' });
       }
       return endpointView(
-        await store.save({
-          ...request.body,
-          name: request.body.name.trim(),
-          baseUrl,
-          apiKey: request.body.apiKey?.trim(),
-        }),
+        await store.save(
+          {
+            ...request.body,
+            name: request.body.name.trim(),
+            baseUrl,
+            apiKey: request.body.apiKey?.trim(),
+          },
+          viewerOf(request).userId,
+        ),
       );
     },
   );
@@ -91,12 +115,13 @@ export function registerModelEndpoints(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       // Removing an endpoint (and its saved key) would strand every agent that runs on it, and agents cannot be re-pointed.
-      const using = await agentsUsing(request.params.id);
+      const owner = viewerOf(request).userId;
+      const using = await agentsUsing(request.params.id, owner);
       if (using > 0)
         return reply.code(409).send({
           message: `${using} ${using === 1 ? 'agent uses' : 'agents use'} this endpoint. Change ${using === 1 ? 'its' : 'their'} endpoint in Agents, or delete ${using === 1 ? 'it' : 'them'}, first.`,
         });
-      await store.remove(request.params.id);
+      await store.remove(request.params.id, owner);
       return { removed: true };
     },
   );
@@ -126,11 +151,14 @@ export function registerModelEndpoints(
           .code(400)
           .send({ message: 'Enter an HTTP(S) base URL without credentials, query parameters, or fragments.' });
       }
+      if (!(await allowedUrl(request, url))) return reply.code(400).send({ message: INTERNAL_URL });
 
       const signal = AbortSignal.timeout(10_000);
       try {
         const saved = request.body.endpointId
-          ? (await store.read()).find(row => row.id === request.body.endpointId)
+          ? (await store.readFor(await ownerFor(request, request.body.organizationId))).find(
+              row => row.id === request.body.endpointId,
+            )
           : undefined;
         const sameUrl =
           saved && parseBaseUrl(saved.baseUrl).toString() === parseBaseUrl(request.body.baseUrl).toString();

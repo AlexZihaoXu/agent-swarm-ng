@@ -81,12 +81,26 @@ export class PlatformStore {
     // Foreign keys cascade to the agent's channels and messages in the same statement.
     return (await this.client.agent.deleteMany({ where: { id, name } })).count > 0;
   }
-  async listAgents(after?: number, limit = 100, search?: string, organizationId?: string) {
+  /** `organizationIds`: only these organizations' agents (the ones a person reaches; null or undefined: all). */
+  async listAgents(
+    after?: number,
+    limit = 100,
+    search?: string,
+    organizationId?: string,
+    organizationIds?: string[] | null,
+  ) {
     await this.initialize();
     const rows = await this.client.agent.findMany({
       where: {
         ...(after ? { sequence: { gt: after } } : {}),
         ...(organizationId ? { organizationId } : {}),
+        ...(organizationIds
+          ? {
+              organizationId: organizationId
+                ? { in: organizationIds.filter(id => id === organizationId) }
+                : { in: organizationIds },
+            }
+          : {}),
         ...(search?.trim() ? { name: { contains: search.trim() } } : {}),
       },
       orderBy: { sequence: 'asc' },
@@ -147,12 +161,17 @@ export class PlatformStore {
     text: string,
     id: string = crypto.randomUUID(),
     replyToId?: string,
+    /** The person who wrote a human message (docs/users.md#in-chats). */
+    author?: { userId: string; name: string },
   ) {
     await this.initialize();
     return this.client.$transaction(async tx => {
       if (replyToId && !(await tx.message.findFirst({ where: { id: replyToId, channelId }, select: { id: true } })))
         throw new Error('Reply target not found in this channel.');
-      return tx.message.create({ data: { id, channelId, role, text, replyToId }, include: channelReplyInclude });
+      return tx.message.create({
+        data: { id, channelId, role, text, replyToId, authorUserId: author?.userId, authorName: author?.name },
+        include: channelReplyInclude,
+      });
     });
   }
   async findMessage(id: string) {
@@ -172,12 +191,11 @@ export class PlatformStore {
               include: channelReplyInclude,
             })
           ).reverse();
-    const agent = messages.some(message => message.replyTo)
-      ? await this.client.channel.findUnique({
-          where: { id: channelId },
-          select: { agent: { select: { name: true } } },
-        })
-      : null;
+    const agent = await this.client.channel.findUnique({
+      where: { id: channelId },
+      select: { agent: { select: { name: true, organization: { select: { ownerId: true } } } } },
+    });
+    const owner = agent?.agent.organization.ownerId;
     return messages
       .filter(message => message.id !== excludeMessageId)
       .slice(-8)
@@ -187,6 +205,10 @@ export class PlatformStore {
         role: message.role,
         timestamp: message.createdAt.getTime(),
         replyTo: channelReplyContext(message, agent?.agent.name ?? 'Agent'),
+        // Written by someone other than its owner (admin in a user's organization): the agent is told who.
+        ...(message.authorUserId && message.authorUserId !== owner && message.authorName
+          ? { writer: message.authorName }
+          : {}),
         ...messageText(message.text),
       }));
   }

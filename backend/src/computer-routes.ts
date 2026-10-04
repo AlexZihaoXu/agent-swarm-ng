@@ -1,3 +1,5 @@
+import { checkMemoryCap } from './users/store';
+import { viewerOf } from './users/reach';
 import { Organizations } from './organizations';
 import { SwarmSettingsStore } from './swarm-settings';
 import type { FastifyInstance, FastifyReply } from 'fastify';
@@ -118,10 +120,11 @@ export function registerComputerRoutes(
         },
       },
     },
-    async (_, reply) => {
+    async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
-        const records = await store.list();
+        const reachable = await app.reach.organizations(viewerOf(request));
+        const records = (await store.list()).filter(record => !reachable || reachable.includes(record.organizationId));
         const observed = controller ? await controller.observe().catch(() => null) : null;
         const reconciled = await Promise.all(
           records.map(async record => {
@@ -212,9 +215,19 @@ export function registerComputerRoutes(
         }
         // New computers use the Keep/Cache folders chosen in Settings now; they stay there afterwards.
         const folders = await computerStorageFolders(platform);
-        const organizationId = await new Organizations(platform).resolve(request.body.organizationId).catch(() => {
-          throw new ComputerStoreError('missing', 'Organization not found.');
+        const organizationId = await new Organizations(platform)
+          .resolve(viewerOf(request), request.body.organizationId)
+          .catch(() => {
+            throw new ComputerStoreError('missing', 'Organization not found.');
+          });
+        // Its owner's RAM cap (docs/users.md); a retried create (same request key) is already counted.
+        await platform.initialize();
+        const retry = await platform.client.computer.findFirst({
+          where: { requestKey: request.body.requestKey },
+          select: { id: true },
         });
+        const capped = await checkMemoryCap(platform, organizationId, settings.memoryGiB, retry?.id);
+        if (capped) throw new ComputerStoreError('invalid', capped);
         const { computer, created } = await store.reserve(
           request.body.name,
           request.body.requestKey,
@@ -374,6 +387,8 @@ export function registerComputerRoutes(
         if (request.body.cpuCores > limits.cpuCores.max || request.body.memoryGiB > limits.memoryGiB.max) {
           throw new ComputerStoreError('invalid', 'Computer settings exceed this host’s capacity.');
         }
+        const capped = await checkMemoryCap(platform, record.organizationId, request.body.memoryGiB, record.id);
+        if (capped) throw new ComputerStoreError('invalid', capped);
         await controller.updateResources(record.id, record.name, request.body);
         const updated = await store.updateResources(record.id, request.body);
         const observed = await controller.observe();
@@ -427,6 +442,8 @@ export function registerComputerRoutes(
         if (request.body.cpuCores > limits.cpuCores.max || request.body.memoryGiB > limits.memoryGiB.max) {
           throw new ComputerStoreError('invalid', 'Computer settings exceed this host’s capacity.');
         }
+        const capped = await checkMemoryCap(platform, record.organizationId, request.body.memoryGiB, record.id);
+        if (capped) throw new ComputerStoreError('invalid', capped);
         const settings = {
           cpuCores: request.body.cpuCores,
           memoryGiB: request.body.memoryGiB,

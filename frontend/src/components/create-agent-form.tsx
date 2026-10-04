@@ -17,14 +17,15 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
   const id = useId();
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState(() => randomizeAvatar());
-  const choice = useModelSelection();
+  // Into the organization shown, or the one chosen while showing all (docs/organizations.md); its owner's
+  // connections (docs/users.md).
+  const organization = useCreateOrganization();
+  const choice = useModelSelection(undefined, organization.value || undefined);
   const { endpoints, endpointId, models, model, levels, thinking, loading } = choice;
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const error = createError || choice.error;
   const creation = useRef<AbortController | null>(null);
-  // Into the organization shown, or the one chosen while showing all (docs/organizations.md).
-  const organization = useCreateOrganization();
   useEffect(() => () => creation.current?.abort(), []);
 
   async function create() {

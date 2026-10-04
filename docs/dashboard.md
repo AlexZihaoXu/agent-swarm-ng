@@ -2,6 +2,8 @@
 
 The **Dashboard** tab (`/dashboard`, also in Portal) shows how the platform and its agents are doing over a period: the last 12, 24, **48** (default, remembered per browser), 72 hours or a week. The period sets each chart's span and how much accumulates (spend, tokens, active hours). It refreshes every minute while open.
 
+A user sees their own organizations (all of them, or one); admin any. Host stats are system-wide for everyone ([users](users.md)).
+
 ## What it shows
 
 | Chart | Scope | Source |
@@ -26,7 +28,7 @@ Lines break where there is no data (the platform or host was off, or a reading w
 
 ## Critical events
 
-A banner across the top of every page (Kibo `alert/error/alert-error-5`; failed sign-ins in amber) reports, with its time span and (except a full disk) a **View logs** link to the audit log on the right category:
+A banner across the top of every page, for admin only (Kibo `alert/error/alert-error-5`; failed sign-ins in amber), reports, with its time span and (except a full disk) a **View logs** link to the audit log on the right category:
 
 - **Possible power outage** — at start-up the last minute sample is more than five minutes old, no clean `system.stop` followed it, and the host booted since (`/proc/uptime`); without a host reboot it reads **The platform stopped unexpectedly** (a crash or a killed container). A clean stop is not reported.
 - **Failed sign-ins** — five or more from any address within an hour, with the names tried and the addresses ([login](login.md#known-addresses-and-lockdown)).

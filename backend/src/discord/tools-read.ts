@@ -440,7 +440,7 @@ export function createDiscordReadTools(context: DiscordToolContext): AgentTool[]
         async execute(_call, args) {
           const { rest } = bot(context);
           const user = (await call(() => rest.get(Routes.user(args.userId)))) as APIUser;
-          const account = await store.who(args.userId);
+          const account = await store.who(args.userId, context.agentId);
           let member: APIGuildMember | undefined;
           let roles: string[] = [];
           if (args.serverId) {

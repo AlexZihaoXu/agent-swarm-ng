@@ -37,7 +37,11 @@ export function createChatHistoryTools(
   const history = new ChannelHistory(store, channel.id);
   /** Adds attached file references, when files are wired. */
   const withFiles = async <T extends { id: string }>(items: T[]) => (await files?.annotate('chat', items)) ?? items;
-  const author = (row: Row) => ({ role: row.role, name: row.role === 'user' ? 'Human' : name });
+  // A human message names its writer when it recorded one (your owner, or the administrator: docs/users.md).
+  const author = (row: Row) => ({
+    role: row.role,
+    name: row.role === 'user' ? (row.authorName ? `Human (${row.authorName})` : 'Human') : name,
+  });
   const view = (row: Row, offset = 0, length = 1000) => ({
     ...position(row),
     author: author(row),

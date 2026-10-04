@@ -21,7 +21,13 @@ const metadata = (row: Row) => ({
   author: {
     kind: row.role === 'user' ? 'human' : 'agent',
     id: row.authorId,
-    name: row.role === 'user' ? 'Human' : row.authorName,
+    // The writer, when recorded (your owner, or the administrator: docs/users.md); older messages say "You".
+    name:
+      row.role === 'user'
+        ? row.authorName && row.authorName !== 'You'
+          ? `Human (${row.authorName})`
+          : 'Human'
+        : row.authorName,
   },
   timestamp: row.createdAt.toISOString(),
   replyTo: groupReply(row),

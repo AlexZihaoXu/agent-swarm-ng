@@ -7,11 +7,15 @@ import { SignIn } from '@/components/sign-in';
 
 export const SESSION_KEY = ['auth', 'session'] as const;
 export type AuthSession =
-  { signedIn: true; name: string } | { signedIn: false; setupRequired: boolean; name?: string; lockedDown?: boolean };
+  | { signedIn: true; name: string; admin: boolean }
+  | { signedIn: false; setupRequired: boolean; name?: string; lockedDown?: boolean };
 
-const SignedInContext = createContext<{ name: string; signOut: () => Promise<void> } | null>(null);
+const SignedInContext = createContext<{ name: string; admin: boolean; signOut: () => Promise<void> } | null>(null);
 
-/** The signed-in person and sign-out, for Settings → Account. */
+/**
+ * The signed-in person and sign-out, for Settings → Account. `admin`: the admin account, which sees every
+ * organization and the admin-only settings (docs/users.md); what it may do is enforced on the server.
+ */
 export function useSignedIn() {
   const value = useContext(SignedInContext);
   if (!value) throw new Error('useSignedIn needs the AuthGate');
@@ -69,7 +73,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
     <AnimatePresence mode="wait" initial={false}>
       {state?.signedIn ? (
         <m.div key="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={surface}>
-          <SignedInContext.Provider value={{ name: state.name, signOut }}>{children}</SignedInContext.Provider>
+          <SignedInContext.Provider value={{ name: state.name, admin: state.admin, signOut }}>
+            {children}
+          </SignedInContext.Provider>
         </m.div>
       ) : state ? (
         <SignIn key="sign-in" session={state} onSignedIn={switchTo} />

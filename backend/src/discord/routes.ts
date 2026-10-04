@@ -1,3 +1,4 @@
+import { viewerOf } from '../users/reach';
 import { Type } from '@sinclair/typebox';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { PermissionFlagsBits } from 'discord-api-types/v10';
@@ -297,15 +298,13 @@ export function registerDiscordRoutes(
           })
         ).map(row => [row.id, row]),
       );
+      // As this agent knows them: another person's accounts and bots are people here (docs/users.md).
       const people = new Map(
         (
-          await database.client.discordAccount.findMany({
-            where: {
-              discordUserId: {
-                in: [...new Set([...page, ...replies.values()].map(row => row.authorId))],
-              },
-            },
-          })
+          await store.accountsFor(
+            id,
+            [...page, ...replies.values()].map(row => row.authorId),
+          )
         ).map(account => [account.discordUserId, account]),
       );
       const opened = await files.forMessages(
@@ -371,9 +370,10 @@ export function registerDiscordRoutes(
   app.get(
     '/api/discord/owner',
     { schema: { operationId: 'getDiscordOwner', response: { 200: Owner } } },
-    async (_request, reply) => {
+    async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
-      return { accounts: (await store.ownerAccounts()).map(row => ({ id: row.discordUserId, name: row.name })) };
+      const accounts = await store.ownerAccounts(viewerOf(request).userId);
+      return { accounts: accounts.map(row => ({ id: row.discordUserId, name: row.name })) };
     },
   );
   app.put<{ Body: { accounts: { id: string; name: string }[] } }>(
@@ -395,7 +395,7 @@ export function registerDiscordRoutes(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
-        const accounts = await store.setOwnerAccounts(request.body.accounts);
+        const accounts = await store.setOwnerAccounts(request.body.accounts, viewerOf(request).userId);
         return { accounts: accounts.map(row => ({ id: row.discordUserId, name: row.name })) };
       } catch (error) {
         return fail(reply, error);

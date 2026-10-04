@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 
 test('Settings supports ChatGPT device sign-in, cancellation, connection, and disconnect', async ({ page }) => {
-  await page.route('**/api/model-endpoints', route => route.fulfill({ json: [] }));
+  await page.route('**/api/model-endpoints*', route => route.fulfill({ json: [] }));
   let state = 'idle';
   let connected = false;
   await page.route(/\/api\/providers\/openai-codex(?:\/login)?$/, route => {
@@ -43,8 +43,8 @@ test('Settings supports ChatGPT device sign-in, cancellation, connection, and di
 });
 
 test('connected Codex is available for agent creation without an API endpoint', async ({ page }) => {
-  await page.route('**/api/model-endpoints', route => route.fulfill({ json: [] }));
-  await page.route('**/api/providers/openai-codex', route =>
+  await page.route('**/api/model-endpoints*', route => route.fulfill({ json: [] }));
+  await page.route('**/api/providers/openai-codex*', route =>
     route.fulfill({ json: { connected: true, models: ['test-codex'], login: { state: 'connected' } } }),
   );
   await page.route('**/api/agents/model-capabilities?*', route => {

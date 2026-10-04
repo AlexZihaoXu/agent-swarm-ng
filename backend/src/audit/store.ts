@@ -32,6 +32,7 @@ export const AUDIT_CATEGORIES = {
   agents: ['agent.create', 'agent.update', 'agent.delete'],
   computers: ['computer.create', 'computer.update', 'computer.delete'],
   organizations: ['organization.create', 'organization.update', 'organization.delete', 'organization.move'],
+  users: ['user.create', 'user.update', 'user.delete'],
   system: ['system.start', 'system.stop'],
 } as const;
 export type AuditCategory = keyof typeof AUDIT_CATEGORIES;

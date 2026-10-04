@@ -233,7 +233,7 @@ export function createDiscordWriteTools(context: DiscordWriteContext): AgentTool
           'Open a DM with someone, as clicking Message on their profile does. Your owner and your fellow agents always; anyone else only if your owner put them on your DM list. Then post with discord_send_message.',
         parameters: Type.Object({ userId: Id }, { additionalProperties: false }),
         async execute(_call, { userId }) {
-          const account = await store.who(userId);
+          const account = await store.who(userId, agentId);
           if (!account && !(await store.canDm(agentId, userId)))
             throw new Error('Your owner has not put this person on your DM list (Agents → you → Channels → Discord).');
           const dm = (await call(() => bot(context).api.users.createDM(userId))) as APIChannel;

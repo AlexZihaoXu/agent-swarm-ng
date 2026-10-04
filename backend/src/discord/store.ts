@@ -83,7 +83,7 @@ export class DiscordStore {
    * else (their DMs are dropped unread).
    */
   async canDm(agentId: string, discordUserId: string) {
-    if (await this.who(discordUserId)) return true;
+    if (await this.who(discordUserId, agentId)) return true;
     return Boolean(
       await this.database.client.discordDmAllow.findUnique({
         where: { agentId_discordUserId: { agentId, discordUserId } },
@@ -244,12 +244,16 @@ export class DiscordStore {
     ]);
   }
 
-  async ownerAccounts() {
+  /** A person's own Discord accounts (docs/users.md): they carry that person's authority over their agents. */
+  async ownerAccounts(userId = 'admin') {
     await this.database.initialize();
-    return this.database.client.discordAccount.findMany({ where: { role: 'owner' }, orderBy: { createdAt: 'asc' } });
+    return this.database.client.discordAccount.findMany({
+      where: { role: 'owner', userId },
+      orderBy: { createdAt: 'asc' },
+    });
   }
-  /** Replaces the owner's Discord accounts (only these carry human authority on Discord). */
-  async setOwnerAccounts(input: { id: string; name: string }[]) {
+  /** Replaces a person's Discord accounts (only an agent's owner's carry human authority over it on Discord). */
+  async setOwnerAccounts(input: { id: string; name: string }[], userId = 'admin') {
     const accounts = [...new Map(input.map(account => [account.id, account])).values()];
     if (accounts.length > 20) throw new DiscordSettingsError('At most 20 accounts.');
     for (const account of accounts)
@@ -259,17 +263,26 @@ export class DiscordStore {
       where: { role: 'agent', discordUserId: { in: accounts.map(account => account.id) } },
     });
     if (agentBots.length) throw new DiscordSettingsError(`${agentBots[0].name} is one of your agents’ bots.`);
+    const others = await this.database.client.discordAccount.count({
+      where: { role: 'owner', userId: { not: userId }, discordUserId: { in: accounts.map(account => account.id) } },
+    });
+    // Admin may take an account back from a user who claimed it (a person's own Discord account is theirs alone).
+    if (others && userId !== 'admin') throw new DiscordSettingsError('One of these accounts cannot be used.');
     await this.database.client.$transaction([
-      this.database.client.discordAccount.deleteMany({ where: { role: 'owner' } }),
+      this.database.client.discordAccount.deleteMany({
+        where: { role: 'owner', userId: { not: userId }, discordUserId: { in: accounts.map(account => account.id) } },
+      }),
+      this.database.client.discordAccount.deleteMany({ where: { role: 'owner', userId } }),
       this.database.client.discordAccount.createMany({
         data: accounts.map(account => ({
           discordUserId: account.id,
           role: 'owner',
+          userId,
           name: account.name.trim() || 'You',
         })),
       }),
     ]);
-    return this.ownerAccounts();
+    return this.ownerAccounts(userId);
   }
   async messageTime(agentId: string, id: string) {
     await this.database.initialize();
@@ -387,10 +400,49 @@ export class DiscordStore {
       if (rows.length < batch) return total;
     }
   }
-  /** Who a Discord account is: the owner, one of our agents, or null (anyone else). */
-  async who(discordUserId: string) {
-    await this.database.initialize();
-    const account = await this.database.client.discordAccount.findUnique({ where: { discordUserId } });
+  /**
+   * Who a Discord account is to this agent: its owner (an account of its organization's owner, docs/users.md), one
+   * of our agents' bots, or null (anyone else, including other people's owner accounts).
+   */
+  async who(discordUserId: string, agentId: string) {
+    const [account] = await this.accountsFor(agentId, [discordUserId]);
     return account ? { role: account.role as 'owner' | 'agent', agentId: account.agentId, name: account.name } : null;
+  }
+  /**
+   * Accounts as this agent knows them (docs/users.md): owner accounts only of its organization's owner, agent bots
+   * only of its own organization (links never cross one). Everyone else is a person.
+   */
+  async accountsFor(agentId: string, discordUserIds: string[]) {
+    await this.database.initialize();
+    const self = await this.database.client.agent.findUnique({
+      where: { id: agentId },
+      select: { organizationId: true, organization: { select: { ownerId: true } } },
+    });
+    const rows = await this.database.client.discordAccount.findMany({
+      where: { discordUserId: { in: [...new Set(discordUserIds)] } },
+    });
+    const bots = await this.database.client.agent.findMany({
+      where: { id: { in: rows.flatMap(row => (row.role === 'agent' && row.agentId ? [row.agentId] : [])) } },
+      select: { id: true, organizationId: true },
+    });
+    const sameOrganization = new Set(
+      bots.filter(bot => bot.organizationId === self?.organizationId).map(bot => bot.id),
+    );
+    return rows.filter(row =>
+      row.role === 'owner'
+        ? row.userId === self?.organization.ownerId
+        : row.role === 'agent'
+          ? Boolean(row.agentId && sameOrganization.has(row.agentId))
+          : false,
+    );
+  }
+  /** The person an agent answers to: its organization's owner. */
+  async ownerOf(agentId: string) {
+    await this.database.initialize();
+    const agent = await this.database.client.agent.findUnique({
+      where: { id: agentId },
+      select: { organization: { select: { ownerId: true } } },
+    });
+    return agent?.organization.ownerId ?? null;
   }
 }

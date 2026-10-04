@@ -31,6 +31,10 @@ model Organization {
   sequence  Int         @id @default(autoincrement())
   id        String      @unique @default(uuid())
   name      String
+  /// Its owner (docs/users.md): the only user, besides admin, who reaches it; its agents use the owner's model
+  /// connections. Deleting a user hands their organizations to admin first.
+  ownerId   String      @default("admin")
+  owner     User        @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   createdAt DateTime    @default(now())
   agents    Agent[]
   computers Computer[]
@@ -38,124 +42,126 @@ model Organization {
 }
 
 model Computer {
-  sequence   Int      @id @default(autoincrement())
-  id         String   @unique @default(uuid())
-  name       String
-  requestKey String   @unique
-  state      String   @default("creating")
-  desiredState String @default("running")
+  sequence       Int                  @id @default(autoincrement())
+  id             String               @unique @default(uuid())
+  name           String
+  requestKey     String               @unique
+  state          String               @default("creating")
+  desiredState   String               @default("running")
   // Null denotes a pre-settings computer: infer effective values from Docker,
   // never fabricate a requested policy for an existing owner workspace.
-  cpuCores   Int?
-  memoryGiB  Int?
-  timezone   String?
+  cpuCores       Int?
+  memoryGiB      Int?
+  timezone       String?
   // Where its Keep and Cache folders live (host folders chosen in Settings when it was created; null = its own
   // Docker volumes), and the paths it keeps beyond the home folder (JSON array of absolute paths).
-  keepFolder  String?
-  cacheFolder String?
-  keptPaths   String   @default("[\"/home/agent\",\"/usr/local\"]")
-  organizationId String @default("personal")
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  assignments ComputerAssignment[]
-  claim       ComputerClaim?
+  keepFolder     String?
+  cacheFolder    String?
+  keptPaths      String               @default("[\"/home/agent\",\"/usr/local\"]")
+  organizationId String               @default("personal")
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  assignments    ComputerAssignment[]
+  claim          ComputerClaim?
 }
 
 model ComputerAssignment {
-  agentId String
+  agentId    String
   computerId String
-  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  computer Computer @relation(fields: [computerId], references: [id], onDelete: Cascade)
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  computer   Computer @relation(fields: [computerId], references: [id], onDelete: Cascade)
+
   @@id([agentId, computerId])
   @@index([computerId])
 }
 
 // Durable only to recover/release a claim after backend restart. Not an assignment.
 model ComputerClaim {
-  computerId String @id
-  agentId String @unique
-  token String @unique @default(uuid())
-  claimedAt DateTime @default(now())
-  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  computer Computer @relation(fields: [computerId], references: [id], onDelete: Cascade)
+  computerId String   @id
+  agentId    String   @unique
+  token      String   @unique @default(uuid())
+  claimedAt  DateTime @default(now())
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  computer   Computer @relation(fields: [computerId], references: [id], onDelete: Cascade)
 }
 
 model ComputerNotice {
-  id String @id @default(uuid())
-  agentId String
-  text String
+  id        String   @id @default(uuid())
+  agentId   String
+  text      String
   createdAt DateTime @default(now())
-  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
   @@index([agentId, createdAt])
 }
 
 model Agent {
-  sequence         Int               @id @default(autoincrement())
-  id               String            @unique @default(uuid())
-  name             String
-  avatar           String?
-  endpointId       String
-  model            String
-  thinkingLevel    ThinkingLevel
+  sequence            Int                  @id @default(autoincrement())
+  id                  String               @unique @default(uuid())
+  name                String
+  avatar              String?
+  endpointId          String
+  model               String
+  thinkingLevel       ThinkingLevel
   /// Background compaction during work starts at this share of the context window (percent).
-  compactAtPercent   Int             @default(65)
+  compactAtPercent    Int                  @default(65)
   /// After this many idle minutes (0 = never), compact if the context is at least idleCompactPercent full.
-  idleCompactMinutes Int             @default(30)
-  idleCompactPercent Int             @default(50)
+  idleCompactMinutes  Int                  @default(30)
+  idleCompactPercent  Int                  @default(50)
   /// The owner's own instructions for this agent, appended to its system prompt (Markdown).
-  instructions       String          @default("")
+  instructions        String               @default("")
   /// Heartbeat: a periodic wake-up that reads freely and is dropped unless it changes something.
-  heartbeatEnabled   Boolean         @default(false)
-  heartbeatMinutes   Int             @default(30)
+  heartbeatEnabled    Boolean              @default(false)
+  heartbeatMinutes    Int                  @default(30)
   /// Active hours in the server's time zone ("HH:MM"); both empty means all day.
-  heartbeatFrom      String          @default("")
-  heartbeatTo        String          @default("")
+  heartbeatFrom       String               @default("")
+  heartbeatTo         String               @default("")
   /// What the owner wants checked on each heartbeat (plain text).
-  heartbeatChecklist String          @default("")
-  organizationId     String          @default("personal")
-  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  heartbeatChecklist  String               @default("")
+  organizationId      String               @default("personal")
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   /// Long-term memory: the index (one line per memory) shown in its system prompt, rebuilt when it sleeps.
-  memoryIndex        String          @default("")
+  memoryIndex         String               @default("")
   /// Sleep (memory reorganising) runs outside its active hours, or in this window when it is active all day.
-  sleepFrom          String          @default("03:00")
-  sleepTo            String          @default("05:00")
-  sleptAt            DateTime?
+  sleepFrom           String               @default("03:00")
+  sleepTo             String               @default("05:00")
+  sleptAt             DateTime?
   /// The saved-session archive position its last sleep covered (the next sleep starts there).
-  sleptPosition      Int             @default(0)
+  sleptPosition       Int                  @default(0)
   /// What the last sleep changed, told to the agent once at its next turn ("last night").
-  sleepNote          String          @default("")
-  sleepNoteTold      Boolean         @default(false)
-  createdAt        DateTime          @default(now())
-  channels         Channel[]
-  dmAllowed        DmGrant[]         @relation("DmSenderGrant")
-  dmAllowedBy      DmGrant[]         @relation("DmRecipientGrant")
-  dmSent           DmMessage[]       @relation("DmSender")
-  dmReceived       DmMessage[]       @relation("DmRecipient")
-  dmChains         DmChain[]
-  groupMemberships GroupMember[]
-  reactions        MessageReaction[]
-  recentEmojis     AgentEmojiRecent[]
-  privateSession   AgentSession?
+  sleepNote           String               @default("")
+  sleepNoteTold       Boolean              @default(false)
+  createdAt           DateTime             @default(now())
+  channels            Channel[]
+  dmAllowed           DmGrant[]            @relation("DmSenderGrant")
+  dmAllowedBy         DmGrant[]            @relation("DmRecipientGrant")
+  dmSent              DmMessage[]          @relation("DmSender")
+  dmReceived          DmMessage[]          @relation("DmRecipient")
+  dmChains            DmChain[]
+  groupMemberships    GroupMember[]
+  reactions           MessageReaction[]
+  recentEmojis        AgentEmojiRecent[]
+  privateSession      AgentSession?
   computerAssignments ComputerAssignment[]
-  computerClaim ComputerClaim?
-  computerNotices ComputerNotice[]
-  timers           AgentTimer[]
-  watches          ComputerWatch[]
-  scratchFiles     ScratchFile[]
-  recordings       AgentRecording[]
-  discordBot       DiscordBot?
-  discordChannels  DiscordChannel[]
-  discordMessages  DiscordMessage[]
-  activity         Activity[]
-  discordDmAllows  DiscordDmAllow[]
-  memories         AgentMemory[]
+  computerClaim       ComputerClaim?
+  computerNotices     ComputerNotice[]
+  timers              AgentTimer[]
+  watches             ComputerWatch[]
+  scratchFiles        ScratchFile[]
+  recordings          AgentRecording[]
+  discordBot          DiscordBot?
+  discordChannels     DiscordChannel[]
+  discordMessages     DiscordMessage[]
+  activity            Activity[]
+  discordDmAllows     DiscordDmAllow[]
+  memories            AgentMemory[]
 }
 
 /// One long-term memory of an agent (memorize). Forgetting sets deletedAt (restorable); every earlier text is a
 /// version. Provenance: who caused it (by), how far that source is trusted, and where.
 model AgentMemory {
-  id             String    @id @default(uuid())
+  id             String               @id @default(uuid())
   agentId        String
   name           String
   type           String
@@ -164,16 +170,16 @@ model AgentMemory {
   by             String
   trust          String
   channelId      String?
-  recalls        Int       @default(0)
+  recalls        Int                  @default(0)
   lastRecalledAt DateTime?
   /// Faded by sleep: out of the index, still recallable.
-  faded          Boolean   @default(false)
+  faded          Boolean              @default(false)
   /// Sleep found it contradicts another memory it could not settle: ask when relevant.
-  conflict       Boolean   @default(false)
+  conflict       Boolean              @default(false)
   deletedAt      DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  agent          Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  agent          Agent                @relation(fields: [agentId], references: [id], onDelete: Cascade)
   versions       AgentMemoryVersion[]
 
   @@unique([agentId, name])
@@ -218,6 +224,7 @@ model ComputerWatch {
   human      Boolean  @default(false)
   createdAt  DateTime @default(now())
   agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
   @@index([agentId])
 }
 
@@ -237,14 +244,15 @@ model AgentTimer {
   human       Boolean   @default(false)
   createdAt   DateTime  @default(now())
   agent       Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
   @@index([nextAt])
   @@index([agentId])
 }
 
 // Operator-visible traces only; never agent working context or channel publications.
 model Activity {
-  sequence  Int    @id @default(autoincrement())
-  id        String @unique
+  sequence  Int     @id @default(autoincrement())
+  id        String  @unique
   agentId   String
   runId     String
   channelId String
@@ -255,7 +263,7 @@ model Activity {
   revision  Int
   // Only the run-status entry has lifecycle state; startup interrupts active rows.
   state     String?
-  agent     Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agent     Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   @@index([agentId, sequence])
   @@index([agentId, label, sequence])
@@ -290,22 +298,22 @@ model DmChain {
 }
 
 model DmMessage {
-  sequence       Int      @id @default(autoincrement())
-  id             String   @unique @default(uuid())
+  sequence       Int         @id @default(autoincrement())
+  id             String      @unique @default(uuid())
   conversationId String
   senderId       String
   recipientId    String
-  sender         Agent    @relation("DmSender", fields: [senderId], references: [id], onDelete: Cascade)
-  recipient      Agent    @relation("DmRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender         Agent       @relation("DmSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient      Agent       @relation("DmRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
   text           String
   replyToId      String?
   replyTo        DmMessage?  @relation("DmReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies        DmMessage[] @relation("DmReplies")
   chainId        String
-  chain          DmChain  @relation(fields: [chainId], references: [id], onDelete: Restrict)
-  deliveryKey    String   @unique
-  status         String   @default("queued")
-  createdAt      DateTime @default(now())
+  chain          DmChain     @relation(fields: [chainId], references: [id], onDelete: Restrict)
+  deliveryKey    String      @unique
+  status         String      @default("queued")
+  createdAt      DateTime    @default(now())
 
   @@index([conversationId, sequence])
   @@index([recipientId, status, sequence])
@@ -317,15 +325,15 @@ model DmMessage {
 }
 
 model GroupChat {
-  sequence  Int            @id @default(autoincrement())
-  id        String         @unique @default(uuid())
-  name      String
-  organizationId String @default("personal")
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  createdAt DateTime       @default(now())
-  members   GroupMember[]
-  messages  GroupMessage[]
-  chains    DmChain[]
+  sequence       Int            @id @default(autoincrement())
+  id             String         @unique @default(uuid())
+  name           String
+  organizationId String         @default("personal")
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdAt      DateTime       @default(now())
+  members        GroupMember[]
+  messages       GroupMessage[]
+  chains         DmChain[]
 }
 
 model GroupMember {
@@ -393,9 +401,9 @@ model AgentEmojiRecent {
 
 // Private Pi working history; never returned as platform chat or operator activity.
 model AgentSession {
-  agentId    String              @id
-  sessionId  String
-  header     String
+  agentId       String              @id
+  sessionId     String
+  header        String
   entryCount    Int                 @default(0)
   activeStart   Int                 @default(0)
   leafId        String?
@@ -403,8 +411,8 @@ model AgentSession {
   dmCursor      Int                 @default(0)
   groupCursor   Int                 @default(0)
   updatedAt     DateTime            @updatedAt
-  agent      Agent               @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  entries    AgentSessionEntry[]
+  agent         Agent               @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  entries       AgentSessionEntry[]
 }
 
 model AgentSessionEntry {
@@ -446,17 +454,20 @@ model Channel {
 }
 
 model Message {
-  sequence  Int               @id @default(autoincrement())
-  id        String            @unique @default(uuid())
-  channelId String
-  role      MessageRole
-  text      String
-  replyToId String?
-  replyTo   Message?          @relation("ChannelReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies   Message[]         @relation("ChannelReplies")
-  createdAt DateTime          @default(now())
-  channel   Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  reactions MessageReaction[]
+  sequence     Int               @id @default(autoincrement())
+  id           String            @unique @default(uuid())
+  channelId    String
+  role         MessageRole
+  /// The person who wrote a human message (null: written before there were users, by the owner).
+  authorUserId String?
+  authorName   String?
+  text         String
+  replyToId    String?
+  replyTo      Message?          @relation("ChannelReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies      Message[]         @relation("ChannelReplies")
+  createdAt    DateTime          @default(now())
+  channel      Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  reactions    MessageReaction[]
 
   @@index([channelId, sequence])
   @@index([channelId, createdAt, sequence])
@@ -465,33 +476,33 @@ model Message {
 
 // Operator-wide settings for the whole swarm (one row, id 1). Absent row = defaults.
 model SwarmSettings {
-  id                Int      @id @default(1)
-  maxComputers      Int      @default(4)
-  uploadMaxMb       Int      @default(100)
-  scratchFileMaxKb  Int      @default(1024)
-  scratchMaxFiles   Int      @default(500)
-  scratchTotalMb    Int      @default(50)
-  storageBudgetGb   Int      @default(10)
+  id                       Int      @id @default(1)
+  maxComputers             Int      @default(4)
+  uploadMaxMb              Int      @default(100)
+  scratchFileMaxKb         Int      @default(1024)
+  scratchMaxFiles          Int      @default(500)
+  scratchTotalMb           Int      @default(50)
+  storageBudgetGb          Int      @default(10)
   /// Days saved Discord messages are kept (older ones are pruned hourly).
-  discordHistoryDays Int     @default(30)
-  recordingLeaseSeconds    Int @default(300)
-  recordingReminderSeconds Int @default(150)
-  recordingMaxMinutes      Int @default(30)
-  recordingDesktopKbps     Int @default(1000)
-  recordingDesktopFps      Int @default(30)
-  recordingTerminalFps     Int @default(15)
-  recordingPadBeforeMs     Int @default(500)
-  recordingPadAfterMs      Int @default(500)
-  memoryIndexMaxLines      Int @default(60)
-  memoryIndexMaxChars      Int @default(4000)
-  memoryMaxChars           Int @default(2000)
-  memoryMaxCount           Int @default(1000)
+  discordHistoryDays       Int      @default(30)
+  recordingLeaseSeconds    Int      @default(300)
+  recordingReminderSeconds Int      @default(150)
+  recordingMaxMinutes      Int      @default(30)
+  recordingDesktopKbps     Int      @default(1000)
+  recordingDesktopFps      Int      @default(30)
+  recordingTerminalFps     Int      @default(15)
+  recordingPadBeforeMs     Int      @default(500)
+  recordingPadAfterMs      Int      @default(500)
+  memoryIndexMaxLines      Int      @default(60)
+  memoryIndexMaxChars      Int      @default(4000)
+  memoryMaxChars           Int      @default(2000)
+  memoryMaxCount           Int      @default(1000)
   /// Failed sign-ins (from any address) within an hour that lock the dashboard down (0: never).
-  lockdownFailures         Int @default(20)
+  lockdownFailures         Int      @default(20)
   /// Host folders new computers keep their files in (Settings → Computers → Storage); null = Docker volumes.
-  computerKeepFolder  String?
-  computerCacheFolder String?
-  updatedAt         DateTime @updatedAt
+  computerKeepFolder       String?
+  computerCacheFolder      String?
+  updatedAt                DateTime @updatedAt
 }
 
 // An agent's scratchpad: private text files kept in the database, with folder paths (at most 3 folders deep).
@@ -508,6 +519,7 @@ model ScratchFile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
   @@unique([agentId, path])
 }
 
@@ -525,28 +537,28 @@ model FileBlob {
 // A file posted to a channel: `chat:<channelId>`, `dm:<agentA>:<agentB>` or `group:<groupId>` (Discord etc.
 // later). Deleting keeps the row as a tombstone (name, who deleted it and when) and drops its bytes.
 model ChannelFile {
-  id            String    @id @default(uuid())
-  channelKey    String
-  messageKind   String?
-  messageId     String?
-  uploaderKind  String
-  uploaderId    String?
-  uploaderName  String
-  name          String
-  mime          String
-  kind          String
-  size          Int
-  blobId        String?
-  blob          FileBlob? @relation(fields: [blobId], references: [id], onDelete: SetNull)
-  status        String    @default("available")
-  deletedByKind String?
-  deletedById   String?
-  deletedByName String?
-  deletedAt     DateTime?
+  id             String    @id @default(uuid())
+  channelKey     String
+  messageKind    String?
+  messageId      String?
+  uploaderKind   String
+  uploaderId     String?
+  uploaderName   String
+  name           String
+  mime           String
+  kind           String
+  size           Int
+  blobId         String?
+  blob           FileBlob? @relation(fields: [blobId], references: [id], onDelete: SetNull)
+  status         String    @default("available")
+  deletedByKind  String?
+  deletedById    String?
+  deletedByName  String?
+  deletedAt      DateTime?
   /// A live scratch preview (kind "scratch"): the presenting agent's scratch file, read when shown.
   scratchAgentId String?
   scratchPath    String?
-  createdAt     DateTime  @default(now())
+  createdAt      DateTime  @default(now())
 
   @@index([channelKey, createdAt])
   @@index([messageKind, messageId])
@@ -555,21 +567,21 @@ model ChannelFile {
 
 /// An agent's own Discord bot (its token lives in .local/discord-bots.json, never here). Policies are the owner's.
 model DiscordBot {
-  agentId     String   @id
-  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agentId      String   @id
+  agent        Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
   /// Learned when the bot logs in.
-  botUserId   String?
-  botName     String?
+  botUserId    String?
+  botName      String?
   /// Default admission for allowed server channels: "mention" | "check" | "all".
-  admission   String    @default("check")
+  admission    String   @default("check")
   /// After an outage, deliver missed DMs and mentions as one labelled batch.
-  catchUp     Boolean  @default(true)
+  catchUp      Boolean  @default(true)
   /// The status the agent chose: "auto" (online, idle after 10 min without write activity), "idle" or "dnd".
-  presenceMode String  @default("auto")
+  presenceMode String   @default("auto")
   /// The bot's custom status text ("" for none).
-  statusText  String   @default("")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  statusText   String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 /// A Discord channel as one agent's bot knows it: its allow-list entry and intake state.
@@ -603,6 +615,8 @@ model DiscordChannel {
 model DiscordAccount {
   discordUserId String   @id
   role          String
+  /// The person an owner account belongs to (docs/users.md): it carries authority over that person's agents.
+  userId        String   @default("admin")
   agentId       String?
   name          String
   createdAt     DateTime @default(now())
@@ -645,16 +659,23 @@ model DiscordDmAllow {
   @@id([agentId, discordUserId])
 }
 
-
-/// A person who signs in to the dashboard. The migration creates "Admin" with no password: the first sign-in sets it.
+/// A person who signs in to the dashboard (docs/users.md). The migration creates "Admin" (role admin) with no
+/// password: the first sign-in sets it. Admin creates the users.
 model User {
-  sequence          Int           @id @default(autoincrement())
-  id                String        @unique @default(uuid())
-  name              String        @unique
+  sequence          Int            @id @default(autoincrement())
+  id                String         @unique @default(uuid())
+  name              String         @unique
+  /// 'admin' (one, reaches everything) or 'user' (reaches only the organizations they own).
+  role              String         @default("user")
+  /// Disabled: refused at sign-in, signed out everywhere; their agents keep running.
+  disabledAt        DateTime?
+  /// The most RAM (GiB) the computers in their organizations may have in total; null: no cap.
+  memoryLimitGiB    Int?
+  organizations     Organization[]
   /// scrypt hash (auth/sessions.ts); null until the first sign-in sets it (or after a host-side reset).
   passwordHash      String?
   passwordChangedAt DateTime?
-  createdAt         DateTime      @default(now())
+  createdAt         DateTime       @default(now())
   sessions          UserSession[]
 }
 
@@ -802,10 +823,10 @@ model KnownAddress {
 
 /// Present while the dashboard is locked down: only trusted addresses may sign in until it is lifted.
 model Lockdown {
-  id        Int      @id @default(1)
-  since     DateTime @default(now())
+  id       Int      @id @default(1)
+  since    DateTime @default(now())
   /// Failed sign-ins in the hour that triggered it.
-  failures  Int
+  failures Int
 }
 
 /// A critical event shown as a banner until dismissed (docs/dashboard.md#critical-events): a possible power outage or

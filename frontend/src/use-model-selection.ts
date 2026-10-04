@@ -9,8 +9,14 @@ export const codexConnection = 'provider:openai-codex';
 /**
  * Endpoint -> model -> thinking level choices, shared by agent creation and editing.
  * With `initial`, the agent's current choice is preserved on the first load instead of being cleared.
+ * `organizationId`: the agent's organization, whose owner's connections it uses (docs/users.md#model-connections):
+ * admin choosing for an agent in Sam's organization sees Sam's endpoints and ChatGPT models.
  */
-export function useModelSelection(initial?: { endpointId: string; model: string; thinkingLevel: Thinking }) {
+export function useModelSelection(
+  initial?: { endpointId: string; model: string; thinkingLevel: Thinking },
+  organizationId?: string,
+) {
+  const owner = organizationId ? { organizationId } : {};
   const [endpoints, setEndpoints] = useState<ModelEndpoint[]>([]);
   const [endpointId, setEndpointId] = useState(initial?.endpointId ?? '');
   const [models, setModels] = useState<string[]>([]);
@@ -30,8 +36,8 @@ export function useModelSelection(initial?: { endpointId: string; model: string;
     setLoadFailed(false);
     setError('');
     void Promise.all([
-      api.GET('/api/model-endpoints', { signal: controller.signal }),
-      api.GET('/api/providers/openai-codex', { signal: controller.signal }),
+      api.GET('/api/model-endpoints', { params: { query: owner }, signal: controller.signal }),
+      api.GET('/api/providers/openai-codex', { params: { query: owner }, signal: controller.signal }),
     ])
       .then(([{ data, error: endpointError }, { data: codex }]) => {
         if (controller.signal.aborted) return;
@@ -50,7 +56,8 @@ export function useModelSelection(initial?: { endpointId: string; model: string;
         }
       });
     return () => controller.abort();
-  }, [attempt]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt, organizationId]);
 
   useEffect(() => {
     setModels([]);
@@ -66,7 +73,10 @@ export function useModelSelection(initial?: { endpointId: string; model: string;
     const controller = new AbortController();
     setLoading(true);
     void api
-      .POST('/api/model-endpoints/test', { body: { endpointId, baseUrl: endpoint.baseUrl }, signal: controller.signal })
+      .POST('/api/model-endpoints/test', {
+        body: { endpointId, baseUrl: endpoint.baseUrl, ...owner },
+        signal: controller.signal,
+      })
       .then(({ data, error: testError }) => {
         if (controller.signal.aborted) return;
         if (testError || !data) setError(testError?.message ?? 'Could not list models.');
@@ -87,7 +97,10 @@ export function useModelSelection(initial?: { endpointId: string; model: string;
     if (!model) return;
     const controller = new AbortController();
     void api
-      .GET('/api/agents/model-capabilities', { params: { query: { model, endpointId } }, signal: controller.signal })
+      .GET('/api/agents/model-capabilities', {
+        params: { query: { model, endpointId, ...owner } },
+        signal: controller.signal,
+      })
       .then(({ data }) => {
         if (controller.signal.aborted) return;
         if (!data) {

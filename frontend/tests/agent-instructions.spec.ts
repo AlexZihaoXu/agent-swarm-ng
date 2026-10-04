@@ -15,6 +15,9 @@ test('per-agent instructions: a rich editor saved as Markdown, after a plain-wor
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
   const section = settings.getByRole('region', { name: 'Instructions' });
   const editor = section.getByRole('textbox', { name: 'Instructions for Avery' });
+  // The dashboard warms the next views' code when idle; in development that is many module loads, which can delay the
+  // editor's selection event behind this test's instant keystrokes.
+  await page.waitForLoadState('networkidle');
   await editor.click();
   await page.keyboard.type('Keep replies short.');
   // Formatting from the bubble menu on a selection.

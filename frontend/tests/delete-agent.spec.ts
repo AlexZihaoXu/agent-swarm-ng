@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/api/model-endpoints', route => route.fulfill({ json: [] }));
+  await page.route('**/api/model-endpoints*', route => route.fulfill({ json: [] }));
 });
 
 const agent = {

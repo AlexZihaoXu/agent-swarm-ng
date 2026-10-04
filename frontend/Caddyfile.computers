@@ -9,11 +9,13 @@ header {
 # Desktop viewers reach computers directly, not through the backend: Caddy asks the backend first whether the browser is
 # signed in (docs/login.md). The check is a plain GET, so the WebSocket upgrade headers stay off it; the browser's
 # Origin goes along, so another site's page cannot open a desktop. Only desktop paths: /computers/… pages are the app.
-@computerViewer path_regexp computerViewer (?i)^/computers/[^/]+/desktop(?:/|$)
+@computerViewer path_regexp computerViewer (?i)^/computers/([^/]+)/desktop(?:/|$)
 forward_auth @computerViewer backend:3000 {
 	uri /api/auth/check
 	# The backend logs the check under this address: the resolved client, never one the visitor sent.
 	header_up X-Real-IP {client_ip}
+	# The computer as Caddy matched it (the cleaned path): the backend lets a user open only their own (docs/users.md).
+	header_up X-Computer-Id {re.computerViewer.1}
 	header_up -Upgrade
 	header_up -Connection
 }

@@ -42,7 +42,7 @@ test('Settings endpoint editor can be bookmarked without placing unsaved keys in
   await expect(page.getByLabel('API key')).toHaveValue('');
   await page.getByRole('button', { name: 'Remove endpoint' }).click();
   await expect(page).toHaveURL(/\/settings$/);
-  await page.route('**/api/model-endpoints', route =>
+  await page.route('**/api/model-endpoints*', route =>
     route.fulfill({ json: [{ id: 'saved-1', name: 'Local', baseUrl: 'http://localhost:11434/v1', hasApiKey: false }] }),
   );
   await page.goto('/settings/endpoints/saved-1');

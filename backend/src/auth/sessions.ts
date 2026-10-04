@@ -43,7 +43,8 @@ export async function verifyPassword(password: string, stored: string) {
   return actual !== null && actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-export type SignedIn = { userId: string; name: string; tokenHash: string };
+/** The person behind a session (docs/users.md): admin reaches everything, a user only their own organizations. */
+export type SignedIn = { userId: string; name: string; tokenHash: string; admin: boolean };
 
 /** Dashboard users and their signed-in browsers. Passwords are scrypt hashes; session tokens are stored hashed. */
 export class Accounts {
@@ -57,11 +58,11 @@ export class Accounts {
     return this.platform.client;
   }
 
-  /** The account still waiting for its first password (the default "Admin"), if any. */
+  /** The admin account while it waits for its first password, if it does (users always get one from admin). */
   async awaitingSetup() {
     const client = await this.client();
     return client.user.findFirst({
-      where: { passwordHash: null },
+      where: { passwordHash: null, role: 'admin' },
       orderBy: { sequence: 'asc' },
       select: { id: true, name: true },
     });
@@ -82,7 +83,7 @@ export class Accounts {
   async verify(name: string, password: string) {
     const client = await this.client();
     const user = await client.user.findUnique({ where: { name } });
-    if (!user?.passwordHash) {
+    if (!user?.passwordHash || user.disabledAt) {
       this.dummy ??= hashPassword('not a real password');
       await verifyPassword(password, await this.dummy);
       return null;
@@ -127,10 +128,14 @@ export class Accounts {
     const tokenHash = hashToken(token);
     const found = await client.userSession.findUnique({
       where: { tokenHash },
-      include: { user: { select: { name: true } } },
+      include: { user: { select: { name: true, role: true, disabledAt: true } } },
     });
     const now = Date.now();
     if (!found) return null;
+    if (found.user.disabledAt) {
+      await client.userSession.deleteMany({ where: { userId: found.userId } });
+      return null;
+    }
     if (found.expiresAt.getTime() <= now || now - found.createdAt.getTime() > SESSION_MAX_DAYS * DAY) {
       await client.userSession.deleteMany({ where: { tokenHash } });
       return null;
@@ -143,7 +148,7 @@ export class Accounts {
           expiresAt: new Date(Math.min(now + SESSION_DAYS * DAY, found.createdAt.getTime() + SESSION_MAX_DAYS * DAY)),
         },
       });
-    return { userId: found.userId, name: found.user.name, tokenHash };
+    return { userId: found.userId, name: found.user.name, tokenHash, admin: found.user.role === 'admin' };
   }
 
   /** Whether a session still exists and has not expired (no renewal: for stream checks). */

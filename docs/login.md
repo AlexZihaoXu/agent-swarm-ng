@@ -1,6 +1,6 @@
 # Dashboard sign-in
 
-The dashboard needs a signed-in person. There is one account, **Admin**, created by the migration without a password: the first visit shows **Set the Admin password**, and whoever completes it sets the password and is signed in. Set it right after deploying: until then anyone who can reach the dashboard could set it (the owner's choice, over a setup code). The same holds after `reset-password.ts`. Afterwards the dashboard shows **Sign in to Agent Swarm** (Kibo's Login Card, `card/standard/card-standard-2`, without its social sign-in and sign-up links).
+The dashboard needs a signed-in person. The admin account, **Admin**, is created by the migration without a password (other people are added by admin, with a password admin chooses: [users](users.md)): the first visit shows **Set the Admin password**, and whoever completes it sets the password and is signed in. Set it right after deploying: until then anyone who can reach the dashboard could set it (the owner's choice, over a setup code). The same holds after `reset-password.ts`. Afterwards the dashboard shows **Sign in to Agent Swarm** (Kibo's Login Card, `card/standard/card-standard-2`, without its social sign-in and sign-up links).
 
 ## What is protected
 
@@ -39,7 +39,7 @@ On the host, in the project folder, with the stack you run (for example `tailnet
 scripts/compose.sh tailnet-dual exec backend bun scripts/reset-password.ts   # [name], default Admin
 ```
 
-It clears the password and signs out every browser; the next visit sets a new one, as on the first day.
+It clears the password and signs out every browser; for Admin the next visit sets a new one, as on the first day. A user's password is set by admin in Settings → Users instead (a host reset of a user only signs them out and leaves them without one until admin sets it).
 
 ## Tests
 

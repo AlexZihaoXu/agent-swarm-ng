@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import type { operations } from '@/api/schema';
 import { Button } from '@/components/ui/button';
+import { useSignedIn } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
 type Alert = operations['listAlerts']['responses'][200]['content']['application/json']['alerts'][number];
@@ -37,6 +38,8 @@ export function AlertBanner({
 }) {
   const queryClient = useQueryClient();
   const [all, setAll] = useState(false);
+  // Critical events are admin's (docs/users.md): users never ask.
+  const { admin } = useSignedIn();
   const query = useQuery({
     queryKey: ['alerts'],
     queryFn: async ({ signal }) => {
@@ -44,9 +47,10 @@ export function AlertBanner({
       return data?.alerts ?? [];
     },
     refetchInterval: 30_000,
+    enabled: admin,
   });
   const alerts = query.data ?? [];
-  if (!alerts.length) return null;
+  if (!admin || !alerts.length) return null;
   const dismiss = async (alert: Alert) => {
     queryClient.setQueryData<Alert[]>(['alerts'], current => current?.filter(item => item.id !== alert.id));
     await api.POST('/api/alerts/{id}/dismiss', { params: { path: { id: alert.id } } }).catch(() => undefined);

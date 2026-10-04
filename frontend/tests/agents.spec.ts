@@ -13,7 +13,7 @@ const real = {
 };
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/api/model-endpoints', route =>
+  await page.route('**/api/model-endpoints*', route =>
     route.fulfill({
       json: [{ id: 'saved-endpoint', name: 'Test endpoint', baseUrl: 'http://test.invalid/v1', hasApiKey: true }],
     }),

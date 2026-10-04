@@ -1,3 +1,4 @@
+import { useSignedIn } from '@/lib/auth';
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
@@ -85,6 +86,7 @@ export function DiscordTranscript({
   agentName,
   agentAvatar,
   avatarOf,
+  ownerName,
   viewport,
 }: {
   agentId: string;
@@ -93,8 +95,13 @@ export function DiscordTranscript({
   agentAvatar: AvatarAppearance;
   /** Another of our agents' avatar, for messages from its bot. */
   avatarOf: (agentId: string) => AvatarAppearance | null | undefined;
+  /** The agent's organization owner (docs/users.md): their Discord accounts read as You only to them. */
+  ownerName?: string;
   viewport: RefObject<HTMLDivElement | null>;
 }) {
+  const { name: me } = useSignedIn();
+  // The owner's Discord accounts: You for the owner, the owner's name for admin looking in.
+  const ownerLabel = !ownerName || ownerName === me ? 'You' : ownerName;
   const [messages, setMessages] = useState<Message[]>([]),
     [cursor, setCursor] = useState<string | null>(null);
   // "ready" after the first page; "older" while Load earlier runs (refreshes stay quiet).
@@ -178,12 +185,20 @@ export function DiscordTranscript({
           ? `${message.authorName} · bot`
           : message.role === 'agent'
             ? `${message.authorName} · agent`
-            : message.authorName,
+            : message.role === 'owner'
+              ? ownerLabel
+              : message.authorName,
       authorAvatar: own ? agentAvatar : message.agentId ? (avatarOf(message.agentId) ?? null) : null,
       text: message.text,
       timestamp: message.timestamp,
       files: message.files,
-      replyTo: message.replyTo ? { role: message.replyTo.owner ? 'user' : 'assistant', ...message.replyTo } : null,
+      replyTo: message.replyTo
+        ? {
+            role: message.replyTo.owner ? 'user' : 'assistant',
+            ...message.replyTo,
+            ...(message.replyTo.owner ? { authorName: ownerLabel } : {}),
+          }
+        : null,
       note:
         [
           message.deleted ? 'deleted' : message.edited ? 'edited' : '',

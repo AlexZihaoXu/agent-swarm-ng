@@ -50,11 +50,10 @@ export function AgentModelSettings({
 }) {
   const id = useId();
   const saved = agent.real;
-  const choice = useModelSelection({
-    endpointId: saved.endpointId,
-    model: saved.model,
-    thinkingLevel: saved.thinkingLevel,
-  });
+  const choice = useModelSelection(
+    { endpointId: saved.endpointId, model: saved.model, thinkingLevel: saved.thinkingLevel },
+    saved.organizationId,
+  );
   const [name, setName] = useState(saved.name);
   const [memory, setMemory] = useState(() => memoryOf(saved));
   const memoryChanges = Object.fromEntries(

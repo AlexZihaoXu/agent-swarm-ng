@@ -23,7 +23,7 @@ function TopTable({ title, rows, keyLabel }: { title: string; rows: Access['coun
     <section aria-label={title} className={cn(settingsCard, 'min-w-0 space-y-2')}>
       <h3 className="text-sm font-semibold">{title}</h3>
       {rows.length ? (
-        <div className="w-full overflow-x-auto">
+        <div className="relative w-full overflow-x-auto">
           <table className="w-full min-w-[20rem] text-sm">
             <thead>
               <tr className="h-8 border-b border-border text-left text-xs text-muted-foreground">
@@ -161,7 +161,7 @@ export function AccessLog({ onNavigate }: { onNavigate: (path: string) => void }
               </section>
               <section aria-label="Addresses" className={cn(settingsCard, 'min-w-0 space-y-2')}>
                 <h3 className="text-sm font-semibold">Addresses</h3>
-                <div className="w-full overflow-x-auto">
+                <div className="relative w-full overflow-x-auto">
                   <table className="w-full min-w-[44rem] text-sm">
                     <thead>
                       <tr className="h-8 border-b border-border text-left text-xs text-muted-foreground">

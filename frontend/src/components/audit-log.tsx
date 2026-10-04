@@ -6,7 +6,7 @@ import { ChoiceChips } from '@/components/ui/choice-chips';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
-type Category = 'all' | 'signin' | 'agents' | 'computers' | 'organizations' | 'system';
+type Category = 'all' | 'signin' | 'users' | 'agents' | 'computers' | 'organizations' | 'system';
 type AuditEvent = {
   sequence: number;
   at: string;
@@ -24,6 +24,7 @@ type AuditEvent = {
 const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'signin', label: 'Sign-in' },
+  { value: 'users', label: 'Users' },
   { value: 'agents', label: 'Agents' },
   { value: 'computers', label: 'Computers' },
   { value: 'organizations', label: 'Organizations' },
@@ -38,6 +39,9 @@ const EVENTS: Record<string, string> = {
   'auth.lockdown': 'Sign-in locked down',
   'auth.unlock': 'Lockdown lifted',
   'auth.address': 'Known address changed',
+  'user.create': 'User created',
+  'user.update': 'User changed',
+  'user.delete': 'User deleted',
   'agent.create': 'Agent created',
   'agent.update': 'Agent edited',
   'agent.delete': 'Agent deleted',
@@ -167,7 +171,9 @@ export function AuditLog({ onNavigate }: { onNavigate: (path: string) => void })
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 md:px-0">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold">Audit log</h2>
-          <p className="text-xs text-muted-foreground">Sign-ins and changes to agents, computers and organizations</p>
+          <p className="text-xs text-muted-foreground">
+            Sign-ins and changes to users, agents, computers and organizations
+          </p>
         </div>
         <div className="flex shrink-0 gap-2">
           <Button
@@ -201,7 +207,7 @@ export function AuditLog({ onNavigate }: { onNavigate: (path: string) => void })
             </p>
           )}
           {/* Wide on phones: the table scrolls sideways inside its frame, never the page. */}
-          <div className="w-full overflow-x-auto rounded-md border border-border bg-background">
+          <div className="relative w-full overflow-x-auto rounded-md border border-border bg-background">
             <table className="w-full min-w-[46rem] caption-bottom text-sm">
               <thead>
                 <tr className="h-8 border-b border-border text-left text-xs text-muted-foreground">

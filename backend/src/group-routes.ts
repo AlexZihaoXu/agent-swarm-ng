@@ -1,3 +1,4 @@
+import { viewerOf } from './users/reach';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import { AvatarSchema } from './agent-avatar';
@@ -131,6 +132,7 @@ export function registerGroupRoutes(
           request.query.after,
           request.query.limit,
           request.query.search,
+          await app.reach.organizations(viewerOf(request)),
         );
         // The chat list previews a files-only last message by its files.
         const files = await broker.files.forMessages(
@@ -156,9 +158,11 @@ export function registerGroupRoutes(
     (request, reply) =>
       safely(reply, async () => {
         writable();
-        const organizationId = await broker.organizations.resolve(request.body.organizationId).catch(() => {
-          throw new SwarmError('missing', 'Organization not found.');
-        });
+        const organizationId = await broker.organizations
+          .resolve(viewerOf(request), request.body.organizationId)
+          .catch(() => {
+            throw new SwarmError('missing', 'Organization not found.');
+          });
         const group = await broker.groups.create(request.body.name, request.body.agentIds, organizationId);
         announce(group.id);
         return groupView(group);
@@ -272,6 +276,7 @@ export function registerGroupRoutes(
             request.body.clientMessageId,
             request.body.replyToMessageId,
             fileIds,
+            viewerOf(request).name,
           );
           const files = (await broker.files.forMessages('group', [publication.message.id])).get(publication.message.id);
           return {

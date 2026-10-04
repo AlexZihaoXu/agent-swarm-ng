@@ -17,6 +17,8 @@ import { GroupEditor } from '@/components/group-editor';
 import { cn } from '@/lib/utils';
 import { chatGroupPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { messagePreview } from '@/lib/chat-files';
+import { useSignedIn } from '@/lib/auth';
+import { humanName } from '@/lib/people';
 
 function GroupAvatar({ group }: { group: GroupChat }) {
   return (
@@ -76,6 +78,7 @@ export function ChatPanel({
   loadAgents: (after?: number) => Promise<void>;
   onPrefetchAgent: (agent: ChatAgent) => void;
 }) {
+  const { name: me } = useSignedIn();
   const client = useQueryClient();
   const [search, setSearch] = useState('');
   const [context, setContext] = useState<{ kind: 'dm'; agent: ChatAgent } | { kind: 'group'; group: GroupChat } | null>(
@@ -212,7 +215,7 @@ export function ChatPanel({
                   const latest = item.kind === 'dm' ? conversations[item.agent.channelId]?.at(-1) : undefined;
                   const preview =
                     item.kind === 'group'
-                      ? `${item.group.lastMessage ? `${item.group.lastMessage.role === 'user' ? 'You' : item.group.lastMessage.authorName}: ${messagePreview(item.group.lastMessage.text, item.group.lastMessage.files)}` : ''}`
+                      ? `${item.group.lastMessage ? `${item.group.lastMessage.role === 'user' ? humanName(item.group.lastMessage.authorName, me) : item.group.lastMessage.authorName}: ${messagePreview(item.group.lastMessage.text, item.group.lastMessage.files)}` : ''}`
                       : latest
                         ? messagePreview(latest.text, latest.files)
                         : messagePreview(item.agent.real?.lastMessage?.text ?? '', item.agent.real?.lastMessage?.files);

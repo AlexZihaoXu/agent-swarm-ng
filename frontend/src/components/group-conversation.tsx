@@ -20,6 +20,8 @@ import { chatGroupPath } from '@/lib/dashboard-location';
 import { ChatFilesDialog } from '@/components/chat-files-dialog';
 import { groupFilesKey, messagePreview } from '@/lib/chat-files';
 import { useAttachments } from '@/lib/use-attachments';
+import { useSignedIn } from '@/lib/auth';
+import { humanName } from '@/lib/people';
 
 class GroupNotFoundError extends Error {}
 
@@ -50,6 +52,7 @@ export function GroupConversation({
   runOf: (channelId: string) => { clientMessageId: string } | undefined;
   onStop: (channelId: string) => void;
 }) {
+  const { name: me } = useSignedIn();
   const client = useQueryClient();
   const group = useQuery({
     queryKey: ['group', groupId],
@@ -312,7 +315,7 @@ export function GroupConversation({
           reply={
             replyTo
               ? {
-                  author: replyTo.role === 'user' ? 'You' : replyTo.authorName,
+                  author: replyTo.role === 'user' ? humanName(replyTo.authorName, me) : replyTo.authorName,
                   text: replyExcerpt(messagePreview(replyTo.text, replyTo.files)),
                 }
               : undefined

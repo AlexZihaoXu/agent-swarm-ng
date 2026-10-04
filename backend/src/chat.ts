@@ -28,6 +28,9 @@ import { channelReply, channelReplyContext } from './reply-preview';
 import type { ComputerUseService } from './computer-use/service';
 import type { ScreenshotPool } from './computer-use/image-pool';
 import { registerActivityRoutes } from './activity-routes';
+import { Connections } from './users/connections';
+import { checkMemoryCap } from './users/store';
+import { ADMIN_ID, Reach, connectionOwner, viewerOf } from './users/reach';
 
 const Thinking = Type.Union(Object.values(ThinkingLevel).map(value => Type.Literal(value)));
 const Selection = Type.Object(
@@ -56,6 +59,8 @@ const Message = Type.Object({
     Type.Null(),
   ]),
   files: Type.Optional(Type.Array(FileSchema)),
+  /** Who wrote a human message (docs/users.md#in-chats); absent on older messages, written by the owner. */
+  author: Type.Optional(Type.Object({ userId: Type.String(), name: Type.String() })),
 });
 const Cursor = Type.Union([Type.Integer(), Type.Null()]);
 /** Background compaction (see background-compaction.ts): during work at atPercent; when idle, after idleMinutes at idlePercent. */
@@ -129,6 +134,9 @@ const messageView = (message: Awaited<ReturnType<PlatformStore['appendMessage']>
   timestamp: message.createdAt.getTime(),
   replyTo: channelReply(message),
   ...(files?.length ? { files } : {}),
+  ...(message.authorUserId && message.authorName
+    ? { author: { userId: message.authorUserId, name: message.authorName } }
+    : {}),
 });
 function agentView(
   agent: NonNullable<Awaited<ReturnType<PlatformStore['findAgent']>>>,
@@ -173,10 +181,11 @@ export function registerChat(
   files?: FileStore,
   transfers?: DmBroker['transfers'],
   discord?: { store: DiscordStore; connections: DiscordConnections; tokens: DiscordTokenStore },
+  connections: Connections = new Connections(store, new Reach(database), codex),
 ) {
   const runs = new AgentRuns();
   const streams = createRunStreams(runs);
-  const broker = new DmBroker(database, store, codex, runs, computers, screenshots, files);
+  const broker = new DmBroker(database, store, codex, runs, computers, screenshots, files, connections);
   const channelFiles = broker.files;
   broker.transfers = transfers;
   if (discord) {
@@ -206,7 +215,16 @@ export function registerChat(
   registerActivityRoutes(app, database, broker.activity);
   registerScratchRoutes(app, database, broker.scratch);
   registerMemoryRoutes(app, database, broker.memory, broker.sleeper, broker.settings);
-  registerOrganizationRoutes(app, broker.organizations);
+  registerOrganizationRoutes(app, broker.organizations, async (computerId, organizationId) => {
+    await database.initialize();
+    const computer = await database.client.computer.findUnique({
+      where: { id: computerId },
+      select: { memoryGiB: true, organization: { select: { ownerId: true } } },
+    });
+    const target = await connections.reach.ownerOf(organizationId);
+    if (!computer?.memoryGiB || computer.organization.ownerId === target) return null;
+    return checkMemoryCap(database, organizationId, computer.memoryGiB, computerId);
+  });
   app.addHook('onListen', async () => {
     await broker.ready();
   });
@@ -287,7 +305,7 @@ export function registerChat(
       return { stopped: (await runs.stop(request.params.id, request.body.clientMessageId)) || Boolean(target) };
     },
   );
-  app.get<{ Querystring: { model: string; endpointId?: string } }>(
+  app.get<{ Querystring: { model: string; endpointId?: string; organizationId?: string } }>(
     '/api/agents/model-capabilities',
     {
       schema: {
@@ -295,6 +313,8 @@ export function registerChat(
         querystring: Type.Object({
           model: Type.String({ maxLength: 512 }),
           endpointId: Type.Optional(Type.String({ maxLength: 100 })),
+          /** Whose connections: this organization's owner's (default: your own). */
+          organizationId: Type.Optional(Type.String({ maxLength: 64 })),
         }),
         response: {
           200: Type.Object({ thinkingLevels: Type.Array(Thinking), reasoning: Type.Boolean() }),
@@ -305,8 +325,10 @@ export function registerChat(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
-        if (request.query.endpointId === CODEX_CONNECTION) return await codex.capabilities(request.query.model);
-        const endpoint = (await store.read()).find(row => row.id === request.query.endpointId);
+        const owner = await connectionOwner(connections.reach, viewerOf(request), request.query.organizationId);
+        if (request.query.endpointId === CODEX_CONNECTION)
+          return await connections.codex(owner).capabilities(request.query.model);
+        const endpoint = (await store.readFor(owner)).find(row => row.id === request.query.endpointId);
         return await endpointCapabilities(request.query.model, endpoint?.baseUrl);
       } catch {
         return reply.code(503).send({
@@ -338,6 +360,7 @@ export function registerChat(
         request.query.limit,
         request.query.search,
         request.query.organizationId,
+        await connections.reach.organizations(viewerOf(request)),
       );
       const files = await channelFiles.forMessages(
         'chat',
@@ -368,13 +391,20 @@ export function registerChat(
     },
   );
   /** Shared by create and edit: the endpoint, model and thinking level must be usable together right now. */
-  async function checkSelection(input: {
-    endpointId: string;
-    model: string;
-    thinkingLevel: Static<typeof Selection>['thinkingLevel'];
-  }): Promise<{ status: 400 | 404; message: string } | null> {
+  async function checkSelection(
+    input: {
+      endpointId: string;
+      model: string;
+      thinkingLevel: Static<typeof Selection>['thinkingLevel'];
+    },
+    /** Whose connections the agent will use: its organization's owner. */
+    owner: string,
+  ): Promise<{ status: 400 | 404; message: string } | null> {
+    const codex = connections.codex(owner);
     const endpoint =
-      input.endpointId === CODEX_CONNECTION ? undefined : (await store.read()).find(row => row.id === input.endpointId);
+      input.endpointId === CODEX_CONNECTION
+        ? undefined
+        : (await store.readFor(owner)).find(row => row.id === input.endpointId);
     let capabilities;
     try {
       capabilities =
@@ -417,10 +447,12 @@ export function registerChat(
       reply.header('Cache-Control', 'no-store');
       const input = request.body;
       if (!input.name.trim()) return reply.code(400).send({ message: 'Choose a name and a supported thinking level.' });
-      const problem = await checkSelection(input);
-      if (problem) return reply.code(problem.status).send({ message: problem.message });
-      const organizationId = await broker.organizations.resolve(input.organizationId).catch(() => null);
+      const organizationId = await broker.organizations
+        .resolve(viewerOf(request), input.organizationId)
+        .catch(() => null);
       if (!organizationId) return reply.code(404).send({ message: 'Organization not found.' });
+      const problem = await checkSelection(input, (await connections.reach.ownerOf(organizationId)) ?? ADMIN_ID);
+      if (problem) return reply.code(problem.status).send({ message: problem.message });
       return agentView(await database.createAgent({ ...input, name: input.name.trim(), organizationId }));
     },
   );
@@ -483,7 +515,7 @@ export function registerChat(
           next.model !== record.model ||
           next.thinkingLevel !== record.thinkingLevel
         ) {
-          const problem = await checkSelection(next);
+          const problem = await checkSelection(next, await connections.ownerOfAgent(id));
           if (problem)
             return reply.code(problem.status === 404 ? 400 : problem.status).send({ message: problem.message });
           // A summary being written for the old model is not applied to the new one.
@@ -623,17 +655,20 @@ export function registerChat(
         const agent = agentView(record);
         if (await database.findMessage(clientMessageId))
           return reply.code(409).send({ message: 'This message was already received. Reload the channel history.' });
-        await resolveChatConnection(agent.endpointId, store, codex, controller.signal);
+        await connections.forAgent(agent, controller.signal);
         controller.signal.throwIfAborted();
         const fileTarget = { channelKey: chatKey(agent.channelId), uploader: { kind: 'human' as const } };
         await channelFiles.attachable(fileIds, fileTarget);
+        const viewer = viewerOf(request);
         const userMessage = await database.appendMessage(
           agent.channelId,
           'user',
           message,
           clientMessageId,
           replyToMessageId,
+          { userId: viewer.userId, name: viewer.name },
         );
+        const owner = await connections.ownerOfAgent(agentId);
         const attached = await channelFiles.attach(fileIds, {
           ...fileTarget,
           messageKind: 'chat',
@@ -647,6 +682,7 @@ export function registerChat(
           sequence: userMessage.sequence,
           timestamp: userMessage.createdAt.getTime(),
           replyTo: channelReplyContext(userMessage, agent.name),
+          ...(viewer.userId !== owner ? { writer: viewer.name } : {}),
         };
         if (stopVersion !== runs.stopVersion(agentId))
           return reply.code(409).send({

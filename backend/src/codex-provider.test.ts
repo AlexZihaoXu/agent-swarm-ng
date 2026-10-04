@@ -7,6 +7,7 @@ import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { InMemoryCredentialStore, InMemoryModelsStore, getSupportedThinkingLevels } from '@earendil-works/pi-ai';
 import { createChatSession } from './chat-runtime';
 import { CodexProvider } from './codex-provider';
+import { Connections } from './users/connections';
 import { registerCodex } from './codex-routes';
 
 function fixture() {
@@ -164,7 +165,7 @@ describe('ChatGPT subscription connection', () => {
   it('rejects cross-site login and serves uncached safe status', async () => {
     const { codex, runtime } = fixture();
     const app = Fastify();
-    registerCodex(app, codex);
+    registerCodex(app, new Connections({} as never, {} as never, codex));
     try {
       expect(
         (

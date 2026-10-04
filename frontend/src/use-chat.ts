@@ -55,6 +55,7 @@ const asMessage = (message: SavedMessage): ChatMessage => ({
   time: clock(message.timestamp),
   replyTo: message.replyTo,
   ...(message.files?.length ? { files: message.files } : {}),
+  ...(message.author ? { writer: message.author.name } : {}),
 });
 export const asAgent = (real: RealAgent): ChatAgent => ({
   avatar: real.avatar ?? defaultAvatar(real.id),

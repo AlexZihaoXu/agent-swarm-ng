@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { Type } from '@sinclair/typebox';
-import { CodexProvider } from './codex-provider';
+import type { FastifyRequest } from 'fastify';
+import type { Connections } from './users/connections';
+import { connectionOwner, viewerOf } from './users/reach';
 
 const Status = Type.Object({
   connected: Type.Boolean(),
@@ -13,10 +15,12 @@ const Status = Type.Object({
   }),
 });
 const ErrorResponse = Type.Object({ message: Type.String() });
-export function registerCodex(app: FastifyInstance, codex: CodexProvider) {
+/** Each person's own ChatGPT login (docs/users.md#model-connections). */
+export function registerCodex(app: FastifyInstance, connections: Connections) {
   const schema = { response: { 200: Status, 403: ErrorResponse, 503: ErrorResponse } };
+  const own = (request: FastifyRequest) => connections.codex(viewerOf(request).userId);
   app.addHook('onClose', async () => {
-    await codex.cancel();
+    await connections.close();
   });
   app.register(async routes => {
     routes.addHook('onRequest', async (request, reply) => {
@@ -35,12 +39,22 @@ export function registerCodex(app: FastifyInstance, codex: CodexProvider) {
       )
         return reply.code(403).send({ message: 'Cross-site provider access is not allowed.' });
     });
-    routes.get(
+    routes.get<{ Querystring: { organizationId?: string } }>(
       '/api/providers/openai-codex',
-      { schema: { ...schema, operationId: 'getCodexProvider' } },
-      async (_request, reply) => {
+      {
+        schema: {
+          ...schema,
+          operationId: 'getCodexProvider',
+          // Whose login: this organization's owner's, for choosing an agent's model there (default: your own).
+          querystring: Type.Object({ organizationId: Type.Optional(Type.String({ maxLength: 64 })) }),
+        },
+      },
+      async (request, reply) => {
         try {
-          return await codex.status();
+          const owner = await connectionOwner(connections.reach, viewerOf(request), request.query.organizationId);
+          const status = await connections.codex(owner).status();
+          // Someone else's sign-in in progress is theirs alone.
+          return owner === viewerOf(request).userId ? status : { ...status, login: { state: 'idle' as const } };
         } catch {
           return reply.code(503).send({ message: 'Could not read provider connection.' });
         }
@@ -55,10 +69,10 @@ export function registerCodex(app: FastifyInstance, codex: CodexProvider) {
           body: Type.Object({}, { additionalProperties: false }),
         },
       },
-      async (_request, reply) => {
+      async (request, reply) => {
         try {
-          codex.start();
-          return await codex.status();
+          own(request).start();
+          return await own(request).status();
         } catch {
           return reply.code(503).send({ message: 'Could not start provider sign-in.' });
         }
@@ -67,10 +81,10 @@ export function registerCodex(app: FastifyInstance, codex: CodexProvider) {
     routes.delete(
       '/api/providers/openai-codex/login',
       { schema: { ...schema, operationId: 'cancelCodexLogin' } },
-      async (_request, reply) => {
+      async (request, reply) => {
         try {
-          await codex.cancel();
-          return await codex.status();
+          await own(request).cancel();
+          return await own(request).status();
         } catch {
           return reply.code(503).send({ message: 'Could not cancel sign-in.' });
         }
@@ -79,10 +93,10 @@ export function registerCodex(app: FastifyInstance, codex: CodexProvider) {
     routes.delete(
       '/api/providers/openai-codex',
       { schema: { ...schema, operationId: 'disconnectCodexProvider' } },
-      async (_request, reply) => {
+      async (request, reply) => {
         try {
-          await codex.disconnect();
-          return await codex.status();
+          await own(request).disconnect();
+          return await own(request).status();
         } catch {
           return reply.code(503).send({ message: 'Could not disconnect provider.' });
         }

@@ -3,6 +3,7 @@ import { useLocation } from 'react-router';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { useSignedIn } from '@/lib/auth';
 import { useOrganizations, type Organization } from '@/lib/organizations';
 
 const fieldClass =
@@ -19,6 +20,7 @@ const failure = (error: unknown, fallback: string) =>
 export function OrganizationSettings({ card }: { card: string }) {
   const id = useId();
   const { organizations, refresh, setCurrent } = useOrganizations();
+  const { name: me } = useSignedIn();
   const location = useLocation();
   const section = useRef<HTMLElement>(null);
   const newName = useRef<HTMLInputElement>(null);
@@ -86,6 +88,8 @@ export function OrganizationSettings({ card }: { card: string }) {
             const draft = drafts[org.id] ?? org.name;
             const changed = draft.trim() !== org.name;
             const empty = !org.agents && !org.computers && !org.groups;
+            // Everyone keeps at least one organization (docs/users.md).
+            const last = organizations.filter(item => item.ownerId === org.ownerId).length < 2;
             return (
               <li key={org.id} className="flex flex-wrap items-center gap-2 py-3 first:pt-0 last:pb-0">
                 <input
@@ -96,7 +100,9 @@ export function OrganizationSettings({ card }: { card: string }) {
                   onChange={event => setDrafts(current => ({ ...current, [org.id]: event.target.value }))}
                   className={fieldClass}
                 />
-                <span className="w-full text-xs text-muted-foreground sm:order-last">{describe(org)}</span>
+                <span className="w-full text-xs text-muted-foreground sm:order-last">
+                  {(org.ownerName ?? me) === me ? describe(org) : `${org.ownerName}'s · ${describe(org)}`}
+                </span>
                 {changed && (
                   <Button
                     type="button"
@@ -112,13 +118,15 @@ export function OrganizationSettings({ card }: { card: string }) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={busy || !empty || organizations.length < 2}
+                  disabled={busy || !empty || last}
                   title={
-                    organizations.length < 2
-                      ? 'The last organization cannot be deleted.'
+                    last
+                      ? 'Everyone keeps at least one organization.'
                       : empty
                         ? undefined
-                        : 'Move or delete what is in it first.'
+                        : org.agents
+                          ? 'Delete its agents first.'
+                          : 'Move or delete its computers and groups first.'
                   }
                   className="min-h-11 text-red-400 sm:min-h-0"
                   onClick={() => setDeleting(org)}

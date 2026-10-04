@@ -7,7 +7,6 @@ import { ReactionCoordinator } from './reaction-coordinator';
 import type { ActivityTrace } from './activity-events';
 const mocks = vi.hoisted(() => ({ evaluate: vi.fn(), connection: vi.fn() }));
 vi.mock('./reaction-triage', () => ({ evaluateReaction: mocks.evaluate }));
-vi.mock('./chat-connection', () => ({ resolveChatConnection: mocks.connection }));
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.connection.mockResolvedValue({ baseUrl: 'http://mock.invalid/v1', apiKey: 'mock-secret' });
@@ -22,7 +21,7 @@ async function fixture() {
     emitted: any[] = [];
   await reactions.set(channel, message.id, '👍', true);
   const enqueue = vi.fn().mockReturnValue({ runId: 'scheduled-run' });
-  const coordinator = new ReactionCoordinator(db, {} as any, {} as any, { enqueue } as any, vi.fn(), {
+  const coordinator = new ReactionCoordinator(db, { forAgent: mocks.connection } as any, { enqueue } as any, vi.fn(), {
     store: archive,
     emit: (_agent, entry) => emitted.push(entry),
   });

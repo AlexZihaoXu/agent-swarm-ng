@@ -29,7 +29,7 @@ describe('saved endpoint preferences', () => {
     const store = new EndpointStore(path);
     await store.save(endpoint);
     const reopened = new EndpointStore(path);
-    expect(await reopened.read()).toEqual([endpoint]);
+    expect(await reopened.read()).toEqual([{ ...endpoint, ownerId: 'admin' }]);
     await reopened.save({ id: endpoint.id, name: 'Renamed', baseUrl: endpoint.baseUrl });
     expect((await reopened.read())[0].apiKey).toBe('test-secret');
     await reopened.save({ id: endpoint.id, name: 'Renamed', baseUrl: 'https://different.example/v1' });

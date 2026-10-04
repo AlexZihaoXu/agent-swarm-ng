@@ -106,11 +106,13 @@ export class GroupStore {
       return tx.groupChat.findUniqueOrThrow({ where: { id: groupId }, include: { members: memberView } });
     });
   }
-  async list(agentId?: string, after?: number, limit = 40, search?: string) {
+  /** `organizationIds`: only these organizations' groups (the ones a person reaches; null or undefined: all). */
+  async list(agentId?: string, after?: number, limit = 40, search?: string, organizationIds?: string[] | null) {
     window(after, limit);
     await this.store.initialize();
     const rows = await this.store.client.groupChat.findMany({
       where: {
+        ...(organizationIds ? { organizationId: { in: organizationIds } } : {}),
         ...(search?.trim() ? { name: { contains: search.trim() } } : {}),
         ...(agentId === undefined ? {} : { members: { some: { agentId } } }),
         ...(after === undefined ? {} : { sequence: { gt: after } }),
@@ -142,8 +144,25 @@ export class GroupStore {
   static humanKey = (clientMessageId: string) => `human:${clientMessageId}`;
   static agentKey = (agentId: string, deliveryKey: string) => `agent:${agentId}:${deliveryKey}`;
   /** A message may be empty only when it carries files. */
-  publishHuman(groupId: string, text: string, clientMessageId: string, replyToId?: string, hasFiles = false) {
-    return this.publish(groupId, text, GroupStore.humanKey(clientMessageId), replyToId, undefined, undefined, hasFiles);
+  /** `humanName`: the person writing (docs/users.md#in-chats); older messages say "You". */
+  publishHuman(
+    groupId: string,
+    text: string,
+    clientMessageId: string,
+    replyToId?: string,
+    hasFiles = false,
+    humanName?: string,
+  ) {
+    return this.publish(
+      groupId,
+      text,
+      GroupStore.humanKey(clientMessageId),
+      replyToId,
+      undefined,
+      undefined,
+      hasFiles,
+      humanName,
+    );
   }
   publishAgent(
     groupId: string,
@@ -172,6 +191,7 @@ export class GroupStore {
     actorId?: string,
     inheritedChain?: string,
     hasFiles = false,
+    humanName?: string,
   ) {
     if ((!text.trim() && !hasFiles) || text.length > (actorId ? 8000 : 20000) || submissionKey.length > 400)
       throw new SwarmError('invalid', 'Invalid group message.');
@@ -219,7 +239,7 @@ export class GroupStore {
         });
       const author = actorId
         ? await tx.agent.findUniqueOrThrow({ where: { id: actorId }, select: { name: true, avatar: true } })
-        : { name: 'You', avatar: null };
+        : { name: humanName ?? 'You', avatar: null };
       const message = await tx.groupMessage.create({
         data: {
           groupId,

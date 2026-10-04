@@ -1,3 +1,4 @@
+import { viewerOf } from '../users/reach';
 import { Type } from '@sinclair/typebox';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { open } from 'node:fs/promises';
@@ -211,21 +212,27 @@ export function registerFileRoutes(
     async request => {
       const q = request.query.q.trim();
       await database.initialize();
+      // A user finds only files of their organizations (docs/users.md): scratchpads by agent, chat files by channel.
+      const viewer = viewerOf(request);
+      const reachable = await app.reach.organizations(viewer);
       const [found, scratch] = await Promise.all([
         database.client.channelFile.findMany({
           where: { name: { contains: q }, status: { not: 'deleted' }, messageId: { not: null } },
           orderBy: { createdAt: 'desc' },
-          take: 10,
+          take: reachable ? 50 : 10,
           select: { id: true, name: true, channelKey: true, kind: true, size: true },
         }),
         database.client.scratchFile.findMany({
-          where: { path: { contains: q } },
+          where: { path: { contains: q }, ...(reachable ? { agent: { organizationId: { in: reachable } } } : {}) },
           orderBy: { updatedAt: 'desc' },
           take: 10,
           select: { agentId: true, path: true, size: true },
         }),
       ]);
-      return { files: found, scratch };
+      const files: typeof found = [];
+      for (const file of found)
+        if (files.length < 10 && (!reachable || (await app.reach.channel(viewer, file.channelKey)))) files.push(file);
+      return { files, scratch };
     },
   );
   app.get<{ Params: { id: string }; Querystring: { download?: '1' } }>(

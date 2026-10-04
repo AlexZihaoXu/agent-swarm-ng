@@ -13,6 +13,12 @@ export type CodexLogin = {
   message?: string;
 };
 
+/** A person's ChatGPT login files beside the database: admin keeps the original names (docs/users.md). */
+export const codexFiles = (ownerId: string) =>
+  ownerId === 'admin'
+    ? { auth: 'openai-auth.json', models: 'openai-models.json' }
+    : { auth: `openai-auth-${ownerId}.json`, models: `openai-models-${ownerId}.json` };
+
 export class CodexProvider {
   private runtimePromise?: Promise<ModelRuntime>;
   private login: CodexLogin = { state: 'idle' };
@@ -21,17 +27,22 @@ export class CodexProvider {
   private refreshAfter = 0;
   private pending?: { controller: AbortController; work: Promise<void> };
   constructor(
-    private factory = async () => {
+    private factory = async (files = codexFiles('admin')) => {
       const directory = dirname(databaseFile());
       await mkdir(directory, { recursive: true, mode: 0o700 });
       return ModelRuntime.create({
-        authPath: join(directory, 'openai-auth.json'),
+        authPath: join(directory, files.auth),
         modelsPath: null,
-        modelsStorePath: join(directory, 'openai-models.json'),
+        modelsStorePath: join(directory, files.models),
         allowModelNetwork: false,
       });
     },
   ) {}
+
+  /** The login of another person (its own files). */
+  static forOwner(ownerId: string) {
+    return new CodexProvider(() => new CodexProvider().factory(codexFiles(ownerId)));
+  }
 
   runtime() {
     return (this.runtimePromise ??= this.factory());

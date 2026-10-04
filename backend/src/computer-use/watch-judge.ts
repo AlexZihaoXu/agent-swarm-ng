@@ -12,7 +12,7 @@ import { createActivityRecorder, type ActivityEntry } from '../agent-activity';
 import type { ActivityStore } from '../activity-store';
 import type { PlatformStore } from '../platform-store';
 import type { EndpointStore } from '../endpoint-store';
-import type { CodexProvider } from '../codex-provider';
+import type { Connections } from '../users/connections';
 import { WatchEnd, type Judge } from './watches';
 import { forkContext } from '../interruption-triage';
 import { TRIAGE_MAX_TOKENS } from '../triage-turns';
@@ -214,8 +214,8 @@ export async function judgeWatch(input: JudgeInput): Promise<Verdict> {
  */
 export function createWatchJudge(deps: {
   database: PlatformStore;
-  endpoints: EndpointStore;
-  codex: CodexProvider;
+  /** Model connections by organization owner (users/connections.ts). */
+  connections: Connections;
   basis: (agentId: string) => ForkBasis | undefined;
   archive?: { store: ActivityStore; emit: (agentId: string, entry: ActivityEntry) => void };
 }): Judge {
@@ -248,7 +248,7 @@ export function createWatchJudge(deps: {
           until: watch.until,
         }),
       );
-      const connection = await resolveChatConnection(agent.endpointId, deps.endpoints, deps.codex, signal);
+      const connection = await deps.connections.forAgent(agent, signal);
       activity?.protect(connection.apiKey ?? '');
       activity?.protect(connection.accessKey);
       const { model, modelRuntime } = await resolveChatModel(

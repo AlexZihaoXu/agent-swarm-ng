@@ -3,6 +3,7 @@ import { Type, type Static } from '@sinclair/typebox';
 import { hostname } from '../host-policy';
 import type { AuditLog } from '../audit/store';
 import type { SignInGuard } from '../security/guard';
+import { viewerOf } from '../users/reach';
 import {
   Accounts,
   PASSWORD_MAX,
@@ -36,6 +37,8 @@ declare module 'fastify' {
   interface FastifyInstance {
     /** Closes a long-lived stream when its session ends; returns the unwatch. */
     watchSession: (request: FastifyRequest, close: () => void) => () => void;
+    /** Closes the streams of sessions ended elsewhere (admin set a user's password, disabled or deleted them). */
+    endSessions: (tokenHashes: string[]) => void;
   }
 }
 
@@ -50,7 +53,8 @@ const PasswordChange = Type.Object({
   password: Password,
 });
 const SessionState = Type.Union([
-  Type.Object({ signedIn: Type.Literal(true), name: Type.String() }),
+  /** `admin`: the admin account (docs/users.md), which reaches everything. */
+  Type.Object({ signedIn: Type.Literal(true), name: Type.String(), admin: Type.Boolean() }),
   Type.Object({
     signedIn: Type.Literal(false),
     setupRequired: Type.Boolean(),
@@ -60,7 +64,7 @@ const SessionState = Type.Union([
   }),
 ]);
 const Message = Type.Object({ message: Type.String() });
-const SignedInResponse = Type.Object({ signedIn: Type.Literal(true), name: Type.String() });
+const SignedInResponse = Type.Object({ signedIn: Type.Literal(true), name: Type.String(), admin: Type.Boolean() });
 
 /** Failed sign-ins in a sliding window, per account and per client address. In memory: a restart forgets them. */
 class Failures {
@@ -307,10 +311,10 @@ export function registerAuth(
     }
   });
 
-  const signIn = async (request: FastifyRequest, reply: FastifyReply, userId: string, name: string) => {
+  const signIn = async (request: FastifyRequest, reply: FastifyReply, userId: string, name: string, admin: boolean) => {
     setSessionCookie(request, reply, await accounts.startSession(userId));
     reply.header('cache-control', 'no-store');
-    return { signedIn: true as const, name };
+    return { signedIn: true as const, name, admin };
   };
 
   app.get(
@@ -318,7 +322,7 @@ export function registerAuth(
     { schema: { operationId: 'getAuthSession', response: { 200: SessionState } } },
     async (request, reply): Promise<Static<typeof SessionState>> => {
       reply.header('cache-control', 'no-store');
-      if (request.signedIn) return { signedIn: true, name: request.signedIn.name };
+      if (request.signedIn) return { signedIn: true, name: request.signedIn.name, admin: request.signedIn.admin };
       const waiting = await accounts.awaitingSetup();
       if (waiting) return { signedIn: false, setupRequired: true, name: waiting.name };
       const lockedDown = guard ? await guard.refuses(clientAddress(request)) : false;
@@ -356,7 +360,7 @@ export function registerAuth(
         note(request, 'password already set');
         return reply.code(409).send({ message: 'The password is already set. Sign in instead.' });
       }
-      return signIn(request, reply, waiting.id, waiting.name);
+      return signIn(request, reply, waiting.id, waiting.name, true);
     },
   );
 
@@ -406,7 +410,7 @@ export function registerAuth(
       }
       failures.forgive([address, account], at, pair);
       await guard?.succeeded(ip, user.name).catch(() => undefined);
-      return signIn(request, reply, user.id, user.name);
+      return signIn(request, reply, user.id, user.name, user.role === 'admin');
     },
   );
 
@@ -458,7 +462,7 @@ export function registerAuth(
       const ended = await hash(() => accounts.changePassword(signedIn.userId, password, signedIn.tokenHash));
       if (ended === null) return busy(reply);
       streams.end(ended);
-      return { signedIn: true as const, name: signedIn.name };
+      return { signedIn: true as const, name: signedIn.name, admin: signedIn.admin };
     },
   );
 
@@ -466,8 +470,18 @@ export function registerAuth(
     reply.header('cache-control', 'no-store');
     // Browsers always send Origin on a WebSocket handshake: another site's page must not open a desktop.
     if (crossOrigin(request)) return reply.code(403).send({ message: 'Requests from another site are not allowed.' });
-    return request.signedIn ? reply.code(204).send() : reply.code(401).send({ message: 'Sign in first.' });
+    if (!request.signedIn) return reply.code(401).send({ message: 'Sign in first.' });
+    // Caddy names the computer it matched in the cleaned path (X-Computer-Id, set by Caddy, never the visitor's): a
+    // user opens only their organizations' computers, and without a computer named nothing (fails closed).
+    const viewer = viewerOf(request);
+    const computer = String(request.headers['x-computer-id'] ?? '');
+    if (!viewer.admin && !(computer && (await app.reach.computer(viewer, computer))))
+      return reply.code(404).send({ message: 'Not found.' });
+    return reply.code(204).send();
   });
 
-  return (request: FastifyRequest, close: () => void) => streams.watch(request.signedIn, close);
+  return {
+    watch: (request: FastifyRequest, close: () => void) => streams.watch(request.signedIn, close),
+    end: (tokenHashes: string[]) => streams.end(tokenHashes),
+  };
 }

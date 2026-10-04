@@ -1,3 +1,4 @@
+import { viewerOf } from '../users/reach';
 import type { FastifyInstance } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import { ComputerUseError, type ComputerUseService } from './service';
@@ -95,11 +96,18 @@ export function registerComputerUseRoutes(app: FastifyInstance, service: Compute
         },
       },
     },
-    async (_request, reply) => {
+    async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
         const [holders, readers] = await Promise.all([service.holders(), service.readers()]);
-        return { holders, readers, recordings: recordingsView() };
+        // Only the computers this person reaches (docs/users.md).
+        const viewer = viewerOf(request);
+        const mine = async <T extends { computerId: string }>(rows: T[]) => {
+          const kept: T[] = [];
+          for (const row of rows) if (await app.reach.computer(viewer, row.computerId)) kept.push(row);
+          return kept;
+        };
+        return { holders: await mine(holders), readers: await mine(readers), recordings: await mine(recordingsView()) };
       } catch {
         return reply.code(503).send({ message: 'Could not read computer control.' });
       }

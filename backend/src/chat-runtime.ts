@@ -66,6 +66,11 @@ export type ChannelMessage = {
   nextOffset?: number | null;
   totalCharacters?: number;
   replyTo?: { id: string; author: string; text: string } | null;
+  /**
+   * A human message written by someone other than the agent's owner (docs/users.md#in-chats): admin writing in a
+   * user's organization. The agent is told who, so it never mistakes them for its owner.
+   */
+  writer?: string;
 };
 export type ChatConfiguration = {
   name: string;
@@ -82,6 +87,8 @@ export type ChatConfiguration = {
   memoryIndex?: string;
   /** Its organization's name: everything it can reach is in it. */
   organization?: string;
+  /** Its organization owner's name (docs/users.md): the human it answers to; another named human is someone else. */
+  owner?: string;
   publishPeer?: (
     channelId: string,
     text: string,
@@ -159,7 +166,8 @@ export function channelInput(channelId: string, text: string, metadata?: Channel
   // neutralized here.
   const owner = !source || Boolean(source.human && !source.discord && !source.platform && !source.reaction);
   const body = source?.discord || owner ? text : neutralizeLabels(text);
-  return `[channel: ${source?.channelId ?? channelId}]${reply}\n${transcriptText({ ...metadata, role: 'user', text: body }, label)}`;
+  const by = metadata?.writer ? `${label}: ${metadata.writer}, the platform administrator, not your owner` : label;
+  return `[channel: ${source?.channelId ?? channelId}]${reply}\n${transcriptText({ ...metadata, role: 'user', text: body }, by)}`;
 }
 
 export function chatSystemPrompt(
@@ -490,7 +498,7 @@ export async function createChatSession(
   if (config.organization) {
     const current = resources.getSystemPrompt() ?? '';
     resources.getSystemPrompt = () =>
-      `${current}\n\n## Your organization\nYou are in the organization ${JSON.stringify(config.organization)}. The computers, agents and group chats you can reach are all in it; other organizations are kept apart from you, so someone the human mentions may simply be out of your reach. Only the human moves agents and computers between organizations.`;
+      `${current}\n\n## Your organization\nYou are in the organization ${JSON.stringify(config.organization)}. The computers, agents and group chats you can reach are all in it; other organizations are kept apart from you, so someone the human mentions may simply be out of your reach. Only the human moves agents and computers between organizations.${config.owner ? ` Your owner is ${JSON.stringify(config.owner)}: "the human" means them. A human message labelled with another person's name (the platform administrator) is from that person, not your owner.` : ''}`;
   }
   const instructions = config.instructions?.trim();
   if (instructions) {

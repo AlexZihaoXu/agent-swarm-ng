@@ -39,7 +39,7 @@ test('both sidebars label a conversation the same way, and an old conversation i
 
 test('creating an agent shows a backend failure with Retry instead of a misleading setup hint', async ({ page }) => {
   let failing = true;
-  await page.route('**/api/model-endpoints', route =>
+  await page.route('**/api/model-endpoints*', route =>
     failing
       ? route.fulfill({ status: 500, json: { message: 'boom' } })
       : route.fulfill({

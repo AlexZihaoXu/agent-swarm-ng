@@ -269,7 +269,7 @@ test('existing agents can edit and persist appearance without changing their cha
 });
 
 test('creation sends appearance but never the preview state', async ({ page }) => {
-  await page.route('**/api/model-endpoints', route =>
+  await page.route('**/api/model-endpoints*', route =>
     route.fulfill({ json: [{ id: 'fixture', name: 'Fixture', baseUrl: 'http://test.invalid/v1' }] }),
   );
   await page.route('**/api/model-endpoints/test', route => route.fulfill({ json: { models: ['test-model'] } }));

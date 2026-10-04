@@ -1,4 +1,5 @@
 import type { PlatformStore } from './platform-store';
+import type { Viewer } from './users/reach';
 
 /**
  * Organizations (docs/organizations.md): folders of agents, computers and group chats, kept apart. Every one of them
@@ -32,40 +33,65 @@ export class Organizations {
     private assign?: (agentId: string, computerIds: string[]) => Promise<void>,
   ) {}
 
-  async list() {
+  /** The organizations a person reaches (admin: all), with their owner for the switcher's sections. */
+  async list(viewer?: Viewer) {
     await this.database.initialize();
     const rows = await this.database.client.organization.findMany({
+      where: viewer && !viewer.admin ? { ownerId: viewer.userId } : {},
       orderBy: { sequence: 'asc' },
-      take: 200,
-      include: { _count: { select: { agents: true, computers: true, groups: true } } },
+      take: 500,
+      include: {
+        _count: { select: { agents: true, computers: true, groups: true } },
+        owner: { select: { id: true, name: true } },
+      },
     });
     return rows.map(row => ({
       id: row.id,
       name: row.name,
+      ownerId: row.owner.id,
+      ownerName: row.owner.name,
       createdAt: row.createdAt.toISOString(),
       agents: row._count.agents,
       computers: row._count.computers,
       groups: row._count.groups,
     }));
   }
-  /** The organization to create something in: the one asked for (it must exist), else the first. */
-  async resolve(id?: string) {
+  /**
+   * The organization to create something in: the one asked for (it must exist and the person must reach it), else
+   * the person's first own one.
+   */
+  async resolve(viewer: Viewer, id?: string) {
     await this.database.initialize();
     const found = id
       ? await this.database.client.organization.findUnique({ where: { id } })
-      : await this.database.client.organization.findFirst({ orderBy: { sequence: 'asc' } });
-    if (!found) throw new OrganizationError('Organization not found.', 404);
+      : await this.database.client.organization.findFirst({
+          where: { ownerId: viewer.userId },
+          orderBy: { sequence: 'asc' },
+        });
+    if (!found || (!viewer.admin && found.ownerId !== viewer.userId))
+      throw new OrganizationError('Organization not found.', 404);
     return found.id;
   }
   async name(id: string) {
     await this.database.initialize();
     return (await this.database.client.organization.findUnique({ where: { id }, select: { name: true } }))?.name;
   }
-  async create(name: string) {
+  /** A new organization, owned by whoever creates it. */
+  /** The name of the person who owns it (docs/users.md). */
+  async ownerName(id: string) {
     await this.database.initialize();
-    if ((await this.database.client.organization.count()) >= 200)
+    return (
+      await this.database.client.organization.findUnique({
+        where: { id },
+        select: { owner: { select: { name: true } } },
+      })
+    )?.owner.name;
+  }
+  async create(name: string, ownerId: string) {
+    await this.database.initialize();
+    if ((await this.database.client.organization.count({ where: { ownerId } })) >= 200)
       throw new OrganizationError('At most 200 organizations.');
-    const row = await this.database.client.organization.create({ data: { name: cleanName(name) } });
+    const row = await this.database.client.organization.create({ data: { name: cleanName(name), ownerId } });
     return row.id;
   }
   async rename(id: string, name: string) {
@@ -76,7 +102,10 @@ export class Organizations {
     });
     if (!changed.count) throw new OrganizationError('Organization not found.', 404);
   }
-  /** Deletes an empty organization (never the last one): move or delete what is in it first. */
+  /**
+   * Deletes an empty organization (delete its agents, and move or delete its computers and groups, first); its owner
+   * always keeps at least one.
+   */
   async remove(id: string) {
     await this.database.initialize();
     await this.database.client.$transaction(async tx => {
@@ -88,11 +117,13 @@ export class Organizations {
       const { agents, computers, groups } = org._count;
       if (agents + computers + groups)
         throw new OrganizationError(
-          `${org.name} still has ${agents} agent(s), ${computers} computer(s) and ${groups} group(s): move or delete them first.`,
+          agents
+            ? `${org.name} still has ${agents} agent(s): delete them first.`
+            : `${org.name} still has ${computers} computer(s) and ${groups} group(s): move or delete them first.`,
           409,
         );
-      if ((await tx.organization.count()) <= 1)
-        throw new OrganizationError('The last organization cannot be deleted.', 409);
+      if ((await tx.organization.count({ where: { ownerId: org.ownerId } })) <= 1)
+        throw new OrganizationError('Everyone keeps at least one organization: this is the last one.', 409);
       await tx.organization.delete({ where: { id } });
     });
   }
@@ -104,14 +135,27 @@ export class Organizations {
   async move(kind: MoveKind, id: string, to: string, apply: boolean) {
     await this.database.initialize();
     const db = this.database.client;
-    const target = await db.organization.findUnique({ where: { id: to }, select: { id: true, name: true } });
+    const target = await db.organization.findUnique({
+      where: { id: to },
+      select: { id: true, name: true, ownerId: true, owner: { select: { name: true } } },
+    });
     if (!target) throw new OrganizationError('Organization not found.', 404);
     const outside = { organizationId: { not: to } };
     const dropped: string[] = [];
     if (kind === 'agent') {
-      const agent = await db.agent.findUnique({ where: { id }, select: { organizationId: true } });
+      const agent = await db.agent.findUnique({
+        where: { id },
+        select: { organizationId: true, endpointId: true, organization: { select: { ownerId: true } } },
+      });
       if (!agent) throw new OrganizationError('Agent not found.', 404);
       if (agent.organizationId === to) return { dropped, moved: false };
+      // Model connections belong to the organization's owner (docs/users.md): another owner's are not its.
+      if (agent.organization.ownerId !== target.ownerId)
+        dropped.push(
+          agent.endpointId === 'provider:openai-codex'
+            ? `Model: now uses ${target.owner.name}'s ChatGPT login`
+            : `Model endpoint: cleared (it was the old owner's); choose one of ${target.owner.name}'s after moving`,
+        );
       const [assignments, grants, memberships] = await Promise.all([
         db.computerAssignment.findMany({ where: { agentId: id }, include: { computer: true } }),
         db.dmGrant.findMany({ where: { senderId: id, recipient: outside }, include: { recipient: true } }),
@@ -141,7 +185,16 @@ export class Organizations {
         db.groupMember.deleteMany({ where: { agentId: id, group: outside } }),
         // Again here, with the move: an assignment made meanwhile cannot survive it (tools recheck assignment).
         db.computerAssignment.deleteMany({ where: { agentId: id, computer: outside } }),
-        db.agent.update({ where: { id }, data: { organizationId: to } }),
+        // Another owner's endpoint is not its (an id of the same name would be someone else's key): it chooses again.
+        db.agent.update({
+          where: { id },
+          data: {
+            organizationId: to,
+            ...(agent.organization.ownerId !== target.ownerId && agent.endpointId !== 'provider:openai-codex'
+              ? { endpointId: '' }
+              : {}),
+          },
+        }),
       ]);
     } else if (kind === 'computer') {
       const computer = await db.computer.findUnique({ where: { id }, select: { organizationId: true } });

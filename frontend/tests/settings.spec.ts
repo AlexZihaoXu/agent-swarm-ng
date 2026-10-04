@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 
 test.beforeEach(async ({ page }) => {
   // Never load or modify the developer's actual saved endpoint settings.
-  await page.route('**/api/model-endpoints', route => route.fulfill({ json: [] }));
+  await page.route('**/api/model-endpoints*', route => route.fulfill({ json: [] }));
 });
 
 async function openEndpoint(page: import('@playwright/test').Page) {
@@ -40,7 +40,7 @@ test('unsaved endpoint form tests models and clears on refresh', async ({ page }
 
 test('saving restores endpoint metadata after refresh without exposing its key', async ({ page }) => {
   let saved: { id: string; name: string; baseUrl: string; hasApiKey: boolean } | undefined;
-  await page.route('**/api/model-endpoints', async route => {
+  await page.route('**/api/model-endpoints*', async route => {
     if (route.request().method() === 'POST') {
       const { id, name, baseUrl, apiKey } = route.request().postDataJSON();
       expect(apiKey).toBe('saved-test-key');
@@ -75,7 +75,7 @@ for (const width of [390, 1280])
   test(`OpenRouter preset uses existing secure endpoint flow at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     let saved: { id: string; name: string; baseUrl: string; hasApiKey: boolean } | undefined;
-    await page.route('**/api/model-endpoints', async route => {
+    await page.route('**/api/model-endpoints*', async route => {
       if (route.request().method() === 'POST') {
         const { id, name, baseUrl, apiKey } = route.request().postDataJSON();
         expect(apiKey).toBe('sk-or-test-only');
@@ -135,7 +135,7 @@ test('endpoint test shows loading and supports a small viewport', async ({ page 
 
 test('saved endpoints rest collapsed; Edit expands, and Cancel reverts unsaved changes', async ({ page }) => {
   const saved = { id: 'kept', name: 'Kept server', baseUrl: 'http://127.0.0.1:9000/v1', hasApiKey: false };
-  await page.route('**/api/model-endpoints', route => route.fulfill({ json: [saved] }));
+  await page.route('**/api/model-endpoints*', route => route.fulfill({ json: [saved] }));
   await page.goto('/settings');
   const card = page.getByRole('region', { name: 'Kept server' });
   await expect(card).toContainText('http://127.0.0.1:9000/v1');

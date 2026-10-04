@@ -141,7 +141,7 @@ export function SecuritySettings({ onNavigate }: { onNavigate: (path: string) =>
           </p>
         )}
         {state && state.addresses.length > 0 && (
-          <div className="w-full overflow-x-auto rounded-md border border-border bg-background">
+          <div className="relative w-full overflow-x-auto rounded-md border border-border bg-background">
             <table className="w-full min-w-[32rem] text-sm">
               <thead>
                 <tr className="h-8 border-b border-border text-left text-xs text-muted-foreground">

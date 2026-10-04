@@ -31,9 +31,10 @@ import type { AgentRuns, RunContext, RunEvent } from './agent-runs';
 import type { PlatformStore } from './platform-store';
 import type { EndpointStore } from './endpoint-store';
 import type { CodexProvider } from './codex-provider';
+import { Connections } from './users/connections';
+import { Reach } from './users/reach';
 import { SwarmStore, dmReplyInclude } from './swarm-store';
 import { createDmTools, type DmReceipt } from './dm-tools';
-import { resolveChatConnection } from './chat-connection';
 import {
   createChatSession,
   type AgentMessageSource,
@@ -148,6 +149,8 @@ export class DmBroker {
       new BlobStore(join(database.dataDirectory, 'files')),
       new SwarmSettingsStore(database),
     ),
+    /** Model connections by organization owner (shared with the app, so a move is seen at once). */
+    readonly connections: Connections = new Connections(endpoints, new Reach(database), codex),
   ) {
     this.store = new SwarmStore(database);
     this.groups = new GroupStore(database);
@@ -186,8 +189,7 @@ export class DmBroker {
           (agentId, text, human) => this.wakeForWatch(agentId, text, human),
           createWatchJudge({
             database,
-            endpoints,
-            codex,
+            connections: this.connections,
             basis: agentId => this.bases.get(agentId)?.basis(),
             archive: { store: this.activity, emit: (agentId, entry) => runs.activity(agentId, entry) },
           }),
@@ -272,8 +274,7 @@ export class DmBroker {
     );
     this.reactionCoordinator = new ReactionCoordinator(
       database,
-      endpoints,
-      codex,
+      this.connections,
       runs,
       (agentId, input, context) => this.runInbox(agentId, input, context),
       { store: this.activity, emit: (agentId, entry) => runs.activity(agentId, entry) },
@@ -433,7 +434,7 @@ export class DmBroker {
     try {
       await activity.start(label);
       activity.record('metadata', 'Discord source', JSON.stringify({ channelId: `discord:${channelId}` }));
-      const connection = await resolveChatConnection(agent.endpointId, this.endpoints, this.codex, controller.signal);
+      const connection = await this.connections.forAgent(agent, controller.signal);
       activity.protect(connection.apiKey ?? '');
       const transcript = await this.discordTranscript(agentId, channelId);
       const tools = this.discord
@@ -480,11 +481,13 @@ export class DmBroker {
       })
     ).reverse();
     if (!rows.length) return '(no earlier messages seen here)';
+    // As this agent knows them: only its owner's accounts and its organization's bots (docs/users.md).
     const accounts = new Map(
       (
-        await this.database.client.discordAccount.findMany({
-          where: { discordUserId: { in: [...new Set(rows.map(row => row.authorId))] } },
-        })
+        (await this.discord?.store.accountsFor(
+          agentId,
+          rows.map(row => row.authorId),
+        )) ?? []
       ).map(account => [account.discordUserId, account]),
     );
     const who = (row: (typeof rows)[number]) =>
@@ -718,13 +721,22 @@ export class DmBroker {
     clientMessageId: string,
     replyToId?: string,
     fileIds: string[] = [],
+    /** The person writing (docs/users.md#in-chats). */
+    humanName?: string,
   ) {
     if (this.closing) throw new Error('Group delivery is unavailable.');
     await this.ready();
     const target = { channelKey: `group:${groupId}`, uploader: { kind: 'human' as const } };
     const retried = await this.groups.submitted(GroupStore.humanKey(clientMessageId));
     await this.files.attachable(fileIds, { ...target, messageId: retried?.id });
-    const publication = await this.groups.publishHuman(groupId, text, clientMessageId, replyToId, fileIds.length > 0);
+    const publication = await this.groups.publishHuman(
+      groupId,
+      text,
+      clientMessageId,
+      replyToId,
+      fileIds.length > 0,
+      humanName,
+    );
     if (!publication.duplicate) {
       // Delivery goes ahead even if attaching fails (it was checked just before), so no member misses the message.
       try {
@@ -794,6 +806,15 @@ export class DmBroker {
     const chain = await this.database.client.dmChain.findUnique({ where: { id: message.chainId } });
     const views = (await this.files.forMessages('group', [message.id])).get(message.id);
     const files = FileStore.refs(views);
+    // Written by a person other than the group organization's owner (admin): members are told who.
+    const owner = await this.database.client.groupChat.findUnique({
+      where: { id: message.groupId },
+      select: { organization: { select: { owner: { select: { name: true } } } } },
+    });
+    const writer =
+      !message.authorId && message.authorName !== 'You' && message.authorName !== owner?.organization.owner.name
+        ? message.authorName
+        : undefined;
     for (const delivery of publication.deliveries) {
       const agentId = delivery.agentId;
       try {
@@ -809,6 +830,7 @@ export class DmBroker {
           replyTo: groupReplyContext(message),
           source: groupSource(message),
           files,
+          ...(writer ? { writer } : {}),
         };
         const channelId = recipient.channels[0].id;
         const run =
@@ -859,7 +881,7 @@ export class DmBroker {
     const agent = await this.database.findAgent(agentId);
     if (!agent) throw new Error('Agent no longer exists.');
     const channel = { id: agent.channels[0].id, kind: 'platform-chat' as const, agentId };
-    const connection = await resolveChatConnection(agent.endpointId, this.endpoints, this.codex, context.signal);
+    const connection = await this.connections.forAgent(agent, context.signal);
     const human = await this.database.context(
       channel.id,
       incoming.source ? undefined : incoming.id,
@@ -976,6 +998,7 @@ ${preview.text}`
         instructions: agent.instructions,
         memoryIndex: agent.memoryIndex,
         organization: await this.organizations.name(agent.organizationId),
+        owner: await this.organizations.ownerName(agent.organizationId),
         ...(branch ? { heartbeat: () => !branch.promoted } : {}),
         publishPeer: async (channelId, text, callId, replyToId, fileIds) => {
           if (channelId.startsWith('discord:'))
@@ -1266,7 +1289,7 @@ ${preview.text}`
       const manager = await this.sessions.load(agentId);
       if (!manager) continue;
       const controller = new AbortController();
-      const connection = await resolveChatConnection(agent.endpointId, this.endpoints, this.codex, controller.signal);
+      const connection = await this.connections.forAgent(agent, controller.signal);
       const activity = createActivityRecorder(
         agentId,
         agent.channels[0].id,
@@ -1333,7 +1356,7 @@ ${preview.text}`
     if (!agent) return;
     const controller = new AbortController();
     this.sleepers.set(agentId, controller);
-    const connection = await resolveChatConnection(agent.endpointId, this.endpoints, this.codex, controller.signal);
+    const connection = await this.connections.forAgent(agent, controller.signal);
     const activity = createActivityRecorder(
       agentId,
       agent.channels[0].id,

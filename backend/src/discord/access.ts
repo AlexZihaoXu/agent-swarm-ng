@@ -74,7 +74,7 @@ export function whoIs(context: DiscordToolContext, botUserId: string): Who {
   return async userId => {
     if (userId === botUserId) return 'you';
     if (!cache.has(userId)) {
-      const account = await context.store.who(userId);
+      const account = await context.store.who(userId, context.agentId);
       cache.set(userId, account?.role === 'owner' ? 'your owner' : account?.role === 'agent' ? 'agent' : '');
     }
     return cache.get(userId)!;

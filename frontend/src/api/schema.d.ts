@@ -84,6 +84,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listUsers"];
+        put?: never;
+        post: operations["createUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteUser"];
+        options?: never;
+        head?: never;
+        patch: operations["updateUser"];
+        trace?: never;
+    };
     "/api/audit": {
         parameters: {
             query?: never;
@@ -1429,6 +1461,7 @@ export interface operations {
                         /** @enum {boolean} */
                         signedIn: true;
                         name: string;
+                        admin: boolean;
                     } | {
                         /** @enum {boolean} */
                         signedIn: false;
@@ -1466,6 +1499,7 @@ export interface operations {
                         /** @enum {boolean} */
                         signedIn: true;
                         name: string;
+                        admin: boolean;
                     };
                 };
             };
@@ -1519,6 +1553,7 @@ export interface operations {
                         /** @enum {boolean} */
                         signedIn: true;
                         name: string;
+                        admin: boolean;
                     };
                 };
             };
@@ -1606,6 +1641,7 @@ export interface operations {
                         /** @enum {boolean} */
                         signedIn: true;
                         name: string;
+                        admin: boolean;
                     };
                 };
             };
@@ -1644,10 +1680,227 @@ export interface operations {
             };
         };
     };
+    listUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        users: {
+                            id: string;
+                            name: string;
+                            admin: boolean;
+                            disabled: boolean;
+                            memoryLimitGiB: number | null;
+                            memoryUsedGiB: number;
+                            organizations: {
+                                id: string;
+                                name: string;
+                            }[];
+                            createdAt: string;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    createUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    password: string;
+                    memoryLimitGiB?: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        name: string;
+                        admin: boolean;
+                        disabled: boolean;
+                        memoryLimitGiB: number | null;
+                        memoryUsedGiB: number;
+                        organizations: {
+                            id: string;
+                            name: string;
+                        }[];
+                        createdAt: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    deleteUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deleted: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    updateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    password?: string;
+                    disabled?: boolean;
+                    memoryLimitGiB?: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        name: string;
+                        admin: boolean;
+                        disabled: boolean;
+                        memoryLimitGiB: number | null;
+                        memoryUsedGiB: number;
+                        organizations: {
+                            id: string;
+                            name: string;
+                        }[];
+                        createdAt: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
     listAuditEvents: {
         parameters: {
             query?: {
-                category?: "signin" | "agents" | "computers" | "organizations" | "system";
+                category?: "signin" | "agents" | "computers" | "organizations" | "users" | "system";
                 before?: number;
                 limit?: number;
             };
@@ -2075,7 +2328,9 @@ export interface operations {
     };
     listModelEndpoints: {
         parameters: {
-            query?: never;
+            query?: {
+                organizationId?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2191,6 +2446,7 @@ export interface operations {
                     baseUrl: string;
                     apiKey?: string;
                     endpointId?: string;
+                    organizationId?: string;
                 };
             };
         };
@@ -4091,6 +4347,8 @@ export interface operations {
                             id: string;
                             name: string;
                             createdAt: string;
+                            ownerId: string;
+                            ownerName: string;
                             agents: number;
                             computers: number;
                             groups: number;
@@ -4126,6 +4384,8 @@ export interface operations {
                             id: string;
                             name: string;
                             createdAt: string;
+                            ownerId: string;
+                            ownerName: string;
                             agents: number;
                             computers: number;
                             groups: number;
@@ -4168,6 +4428,8 @@ export interface operations {
                             id: string;
                             name: string;
                             createdAt: string;
+                            ownerId: string;
+                            ownerName: string;
                             agents: number;
                             computers: number;
                             groups: number;
@@ -4227,6 +4489,8 @@ export interface operations {
                             id: string;
                             name: string;
                             createdAt: string;
+                            ownerId: string;
+                            ownerName: string;
                             agents: number;
                             computers: number;
                             groups: number;
@@ -4291,6 +4555,17 @@ export interface operations {
             };
             /** @description Default Response */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5857,6 +6132,7 @@ export interface operations {
             query: {
                 model: string;
                 endpointId?: string;
+                organizationId?: string;
             };
             header?: never;
             path?: never;
@@ -5974,6 +6250,10 @@ export interface operations {
                                         path: string;
                                     };
                                 }[];
+                                author?: {
+                                    userId: string;
+                                    name: string;
+                                };
                             } | null;
                             compaction: {
                                 atPercent: number;
@@ -6103,6 +6383,10 @@ export interface operations {
                                     path: string;
                                 };
                             }[];
+                            author?: {
+                                userId: string;
+                                name: string;
+                            };
                         } | null;
                         compaction: {
                             atPercent: number;
@@ -6210,6 +6494,10 @@ export interface operations {
                                     path: string;
                                 };
                             }[];
+                            author?: {
+                                userId: string;
+                                name: string;
+                            };
                         }[];
                         nextCursor: number | null;
                     };
@@ -6406,6 +6694,10 @@ export interface operations {
                                     path: string;
                                 };
                             }[];
+                            author?: {
+                                userId: string;
+                                name: string;
+                            };
                         } | null;
                         compaction: {
                             atPercent: number;
@@ -6560,6 +6852,10 @@ export interface operations {
                                     path: string;
                                 };
                             }[];
+                            author?: {
+                                userId: string;
+                                name: string;
+                            };
                         };
                     };
                 };
@@ -9008,6 +9304,17 @@ export interface operations {
                     };
                 };
             };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
         };
     };
     getAgentDiscord: {
@@ -9528,7 +9835,9 @@ export interface operations {
     };
     getCodexProvider: {
         parameters: {
-            query?: never;
+            query?: {
+                organizationId?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;

@@ -187,7 +187,7 @@ export class DiscordIntake {
     if (data.author.id === botUserId) return;
     if (data.type === MessageType.PollResult) return this.pollEnded(agentId, data);
     if (data.type !== MessageType.Default && data.type !== MessageType.Reply) return;
-    const account = await this.store.who(data.author.id);
+    const account = await this.store.who(data.author.id, agentId);
     const role = roleOf(account, Boolean(data.author.bot));
     const place = await this.place(agentId, data, role);
     if (!place) return;
@@ -298,7 +298,7 @@ export class DiscordIntake {
     });
     if (waiting.length || Date.now() - row.createdAt.getTime() > EDIT_WINDOW_MS) return;
     const channel = await this.store.usable(agentId, data.channel_id);
-    const account = await this.store.who(row.authorId);
+    const account = await this.store.who(row.authorId, agentId);
     const addressed = channel?.kind === 'dm' || row.mentionsBot || account?.role === 'owner';
     if (!channel || !addressed) return;
     this.collect(agentId, {
@@ -358,7 +358,7 @@ export class DiscordIntake {
     for (const [key, at] of this.reactions) if (now - at > REACTION_WINDOW_MS) this.reactions.delete(key);
     if (this.reactions.has(once)) return;
     this.reactions.set(once, now);
-    const account = await this.store.who(data.user_id);
+    const account = await this.store.who(data.user_id, agentId);
     const own = await this.database.client.discordMessage.findUnique({
       where: { agentId_id: { agentId, id: data.message_id } },
     });

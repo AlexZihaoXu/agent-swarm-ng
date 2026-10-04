@@ -161,7 +161,7 @@ export function App() {
     compactions,
   } = useChat();
   // Organizations: the dashboard shows the chosen one's agents (docs/organizations.md).
-  const { inScope, setCurrent, current: organization } = useOrganizations();
+  const { inScope, setCurrent, current: organization, organizations } = useOrganizations();
   // Switching organization swaps the lists below the header: a short fade marks it (nothing remounts, so drafts and
   // scroll positions stay). Skipped on the first render and with reduced motion.
   const tabsRoot = useRef<HTMLDivElement>(null);
@@ -1234,6 +1234,7 @@ export function App() {
                     agentName={agent.name}
                     agentAvatar={agent.avatar ?? defaultAvatar(agent.id)}
                     avatarOf={id => agents.find(item => item.id === id)?.avatar}
+                    ownerName={organizations.find(org => org.id === agent.real?.organizationId)?.ownerName}
                     viewport={scrollRef}
                   />
                 ) : peer ? (

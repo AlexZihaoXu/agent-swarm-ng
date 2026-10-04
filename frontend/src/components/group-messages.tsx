@@ -9,6 +9,8 @@ import { MessageReactions, useMessageReactions, ReactionLoadError } from '@/comp
 import { MessageReply } from '@/components/message-reply';
 import { MessageFiles } from '@/components/message-files';
 import type { GroupChat, GroupMessage } from '@/use-groups';
+import { useSignedIn } from '@/lib/auth';
+import { humanName } from '@/lib/people';
 
 const clock = clockTime;
 /** What the transcript shows: a group message, or another multi-author chat mapped onto one (Discord). */
@@ -33,6 +35,7 @@ export function GroupMessages<M extends ShownMessage>({
   /** Platform reactions exist only for the platform's own chats. */
   reactions?: boolean;
 }) {
+  const { name: me } = useSignedIn();
   const channelId = withReactions && messages.length ? `group:${messages[0].groupId}` : undefined;
   const reactions = useMessageReactions(
     channelId,
@@ -78,7 +81,11 @@ export function GroupMessages<M extends ShownMessage>({
             {message.replyTo && (
               <div className="mb-1">
                 <MessageReply
-                  author={message.replyTo.role === 'user' ? 'You' : message.replyTo.authorName}
+                  author={
+                    message.replyTo.role === 'user'
+                      ? humanName(message.replyTo.authorName, me)
+                      : message.replyTo.authorName
+                  }
                   text={message.replyTo.text}
                 />
               </div>
@@ -144,7 +151,9 @@ export function GroupMessages<M extends ShownMessage>({
               <div className={cn('min-w-0 pr-3', human && 'flex flex-col items-end')}>
                 {!continued && (
                   <div className={cn('mb-0.5 flex max-w-full items-baseline gap-2', human && 'max-md:hidden')}>
-                    <span className="truncate text-sm font-semibold">{human ? 'You' : message.authorName}</span>
+                    <span className="truncate text-sm font-semibold">
+                      {human ? humanName(message.authorName, me) : message.authorName}
+                    </span>
                     <time
                       dateTime={date.toISOString()}
                       title={date.toLocaleString()}
@@ -154,7 +163,9 @@ export function GroupMessages<M extends ShownMessage>({
                     </time>
                   </div>
                 )}
-                {continued && <span className="sr-only">{human ? 'You' : message.authorName}: </span>}
+                {continued && (
+                  <span className="sr-only">{human ? humanName(message.authorName, me) : message.authorName}: </span>
+                )}
                 {channelId ? (
                   <MessageReactions
                     channelId={channelId}

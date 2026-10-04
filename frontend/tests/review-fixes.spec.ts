@@ -37,7 +37,7 @@ test('Agents search asks the server, so agents beyond the loaded page are found'
 test('removing an endpoint asks first, and explains when agents still use it', async ({ page }) => {
   let endpoints = [{ id: 'ep-1', name: 'Local server', baseUrl: 'http://127.0.0.1:1/v1', hasApiKey: true }];
   let attempts = 0;
-  await page.route('**/api/model-endpoints', route => route.fulfill({ json: endpoints }));
+  await page.route('**/api/model-endpoints*', route => route.fulfill({ json: endpoints }));
   await page.route('**/api/model-endpoints/ep-1', route => {
     attempts++;
     if (attempts === 1)
@@ -68,7 +68,7 @@ test('an agent can be renamed and moved to another model without recreating it',
   await page.route(/\/api\/agents(?:\?.*)?$/, route =>
     route.request().method() === 'GET' ? route.fulfill({ json: { agents, nextCursor: null } }) : route.fallback(),
   );
-  await page.route('**/api/model-endpoints', route =>
+  await page.route('**/api/model-endpoints*', route =>
     route.fulfill({ json: [{ id: 'ep-1', name: 'Local server', baseUrl: 'http://127.0.0.1:1/v1', hasApiKey: false }] }),
   );
   await page.route('**/api/model-endpoints/test', route => route.fulfill({ json: { models: ['m1', 'm2'] } }));
@@ -175,7 +175,7 @@ test('one Save covers every section, and leaving with unsaved changes asks first
   await page.route(/\/api\/agents(?:\?.*)?$/, route =>
     route.request().method() === 'GET' ? route.fulfill({ json: { agents, nextCursor: null } }) : route.fallback(),
   );
-  await page.route('**/api/model-endpoints', route =>
+  await page.route('**/api/model-endpoints*', route =>
     route.fulfill({ json: [{ id: 'ep-1', name: 'Local server', baseUrl: 'http://127.0.0.1:1/v1', hasApiKey: false }] }),
   );
   await page.route('**/api/model-endpoints/test', route => route.fulfill({ json: { models: ['m1', 'm2'] } }));

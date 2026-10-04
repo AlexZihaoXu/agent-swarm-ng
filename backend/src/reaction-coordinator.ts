@@ -1,6 +1,6 @@
 import type { PlatformStore } from './platform-store';
 import type { EndpointStore } from './endpoint-store';
-import type { CodexProvider } from './codex-provider';
+import type { Connections } from './users/connections';
 import type { AgentRuns, RunContext } from './agent-runs';
 import type { ChannelMessage } from './chat-runtime';
 import { resolveChatConnection } from './chat-connection';
@@ -18,8 +18,7 @@ export class ReactionCoordinator {
   private closing = false;
   constructor(
     private database: PlatformStore,
-    private endpoints: EndpointStore,
-    private codex: CodexProvider,
+    private connections: Connections,
     private runs: AgentRuns,
     private runInbox: (agentId: string, input: ChannelMessage, context: RunContext) => Promise<void>,
     private archive?: { store: ActivityStore; emit: (agentId: string, entry: ActivityEntry) => void },
@@ -145,7 +144,7 @@ export class ReactionCoordinator {
         const agent = await this.database.findAgent(agentId);
         if (!agent) return;
         const channel = { id: agent.channels[0].id, kind: 'platform-chat' as const, agentId };
-        const connection = await resolveChatConnection(agent.endpointId, this.endpoints, this.codex, controller.signal);
+        const connection = await this.connections.forAgent(agent, controller.signal);
         activity?.protect(connection.apiKey ?? '');
         const history = await this.database.context(channel.id);
         phase = 'evaluation';

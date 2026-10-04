@@ -26,7 +26,7 @@ async function setup() {
 it('keeps links inside one organization: assignments, DM permissions and group members', async () => {
   const { db, service, orgs, agent, computer, swarm, groups } = await setup();
   try {
-    const lab = await orgs.create('Lab');
+    const lab = await orgs.create('Lab', 'admin');
     const [ada, bo] = [await agent('Ada'), await agent('Bo')];
     const desk = await computer('Desk');
     const rig = await computer('Rig', lab);
@@ -74,13 +74,13 @@ it('keeps links inside one organization: assignments, DM permissions and group m
 it('creates, renames and deletes organizations: never one with things in it, never the last', async () => {
   const { db, orgs, agent } = await setup();
   try {
-    const lab = await orgs.create('  Lab ');
+    const lab = await orgs.create('  Lab ', 'admin');
     await orgs.rename(lab, 'Research');
     expect((await orgs.list()).map(org => [org.name, org.agents])).toEqual([
       ['Personal', 0],
       ['Research', 0],
     ]);
-    await expect(orgs.create('')).rejects.toThrow('1–60 characters');
+    await expect(orgs.create('', 'admin')).rejects.toThrow('1–60 characters');
     const ada = await agent('Ada');
     await orgs.move('agent', ada.id, lab, true);
     await expect(orgs.remove(lab)).rejects.toThrow('still has 1 agent(s)');
@@ -88,7 +88,7 @@ it('creates, renames and deletes organizations: never one with things in it, nev
     await orgs.remove(lab);
     await expect(orgs.remove('personal')).rejects.toThrow('still has 1 agent(s)');
     await db.client.agent.deleteMany();
-    await expect(orgs.remove('personal')).rejects.toThrow('last organization');
+    await expect(orgs.remove('personal')).rejects.toThrow('this is the last one');
     await expect(orgs.move('agent', 'nobody', 'personal', false)).rejects.toThrow('Agent not found');
   } finally {
     await db.close();

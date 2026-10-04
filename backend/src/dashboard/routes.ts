@@ -1,3 +1,4 @@
+import { viewerOf } from '../users/reach';
 import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import type { PlatformStore } from '../platform-store';
@@ -113,7 +114,8 @@ const summed = (count: number) => new Array<number>(count).fill(0);
 export async function dashboardData(
   platform: PlatformStore,
   range: DashboardRange,
-  organization?: string,
+  /** One organization, several (a user's own, docs/users.md), or undefined for all. */
+  organization?: string | string[],
   now = Date.now(),
   endpointNames: Map<string, string> = new Map(),
   labelOf?: (device: string) => Promise<string>,
@@ -155,12 +157,16 @@ export async function dashboardData(
     ),
     client.diskSample.findMany({ where: { at: since }, orderBy: { at: 'asc' } }),
     client.computer.findMany({
-      where: organization ? { organizationId: organization } : {},
+      where: organization
+        ? { organizationId: typeof organization === 'string' ? organization : { in: organization } }
+        : {},
       select: { id: true, name: true },
       orderBy: { createdAt: 'asc' },
     }),
     client.agent.findMany({
-      where: organization ? { organizationId: organization } : {},
+      where: organization
+        ? { organizationId: typeof organization === 'string' ? organization : { in: organization } }
+        : {},
       select: { id: true, name: true },
       orderBy: { createdAt: 'asc' },
     }),
@@ -492,14 +498,25 @@ export function registerDashboardRoutes(
   );
   app.get(
     '/api/dashboard',
-    { schema: { operationId: 'getDashboard', querystring: Query, response: { 200: Dashboard } } },
+    {
+      schema: {
+        operationId: 'getDashboard',
+        querystring: Query,
+        response: { 200: Dashboard, 404: Type.Object({ message: Type.String() }) },
+      },
+    },
     async (request, reply) => {
       const { range = '48h', organization } = request.query as Static<typeof Query>;
       reply.header('cache-control', 'no-store');
-      const names = new Map((await endpoints.read().catch(() => [])).map(endpoint => [endpoint.id, endpoint.name]));
-      return dashboardData(platform, range as DashboardRange, organization, Date.now(), names, device =>
-        live.labelOf(device),
-      );
+      // A user sees their own organizations (all of them, or one they reach); admin any.
+      const viewer = viewerOf(request);
+      const reachable = await app.reach.organizations(viewer);
+      if (organization && reachable && !reachable.includes(organization))
+        return reply.code(404).send({ message: 'Organization not found.' });
+      const scope = organization ?? reachable ?? undefined;
+      const saved = viewer.admin ? endpoints.read() : endpoints.readFor(viewer.userId);
+      const names = new Map((await saved.catch(() => [])).map(endpoint => [endpoint.id, endpoint.name]));
+      return dashboardData(platform, range as DashboardRange, scope, Date.now(), names, device => live.labelOf(device));
     },
   );
 }

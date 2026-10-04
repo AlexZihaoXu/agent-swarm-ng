@@ -1,3 +1,5 @@
+import { useSignedIn } from '@/lib/auth';
+import { humanName } from '@/lib/people';
 import { useRef } from 'react';
 import { MessageMarkdown } from '@/components/message-markdown';
 import { cn } from '@/lib/utils';
@@ -33,6 +35,7 @@ export function ConversationMessages({
   senderStyles?: { agent: AvatarAppearance; user: AvatarAppearance };
   onReply?: (message: ChatMessage) => void;
 }) {
+  const { name: me } = useSignedIn();
   // Stagger the history present on entry; newly appended messages enter immediately.
   const reactions = useMessageReactions(
     reactionChannel,
@@ -166,6 +169,10 @@ export function ConversationMessages({
           return (
             <li key={message.id} data-window-id={message.id} className="relative">
               {label(index)}
+              {/* Someone else wrote it (admin in your organization, or you as admin in someone's): their name. */}
+              {message.author === 'user' && humanName(message.writer, me) !== 'You' && (
+                <p className="mb-1 text-right text-xs text-muted-foreground">{message.writer}</p>
+              )}
               <div className={cn('flex', message.author === 'user' && 'justify-end')}>
                 {reactionChannel ? (
                   <div

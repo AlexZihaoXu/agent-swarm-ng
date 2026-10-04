@@ -7,7 +7,7 @@ import type { KnownAddresses } from '../security/addresses';
 import type { Alerts } from '../security/alerts';
 import type { AccessLog } from '../access/log';
 
-type Target = 'agent' | 'computer' | 'organization';
+type Target = 'agent' | 'computer' | 'organization' | 'user';
 type Rule = { kind: string; target: Target; section?: string };
 
 /** Changes that are logged, by method and route. Edits log which fields changed, never their values. */
@@ -16,6 +16,9 @@ const RULES: Record<string, Rule> = {
   'PATCH /api/organizations/:id': { kind: 'organization.update', target: 'organization' },
   'DELETE /api/organizations/:id': { kind: 'organization.delete', target: 'organization' },
   'POST /api/organizations/:id/move': { kind: 'organization.move', target: 'organization' },
+  'POST /api/users': { kind: 'user.create', target: 'user' },
+  'PATCH /api/users/:id': { kind: 'user.update', target: 'user' },
+  'DELETE /api/users/:id': { kind: 'user.delete', target: 'user' },
   'POST /api/computers': { kind: 'computer.create', target: 'computer' },
   'PATCH /api/computers/:id/settings': { kind: 'computer.update', target: 'computer', section: 'settings' },
   'POST /api/computers/:id/settings/replacement': { kind: 'computer.update', target: 'computer', section: 'rebuilt' },
@@ -84,7 +87,9 @@ export function registerAudit(
         ? await client.agent.findUnique({ where: { id }, select: { name: true } })
         : target === 'computer'
           ? await client.computer.findUnique({ where: { id }, select: { name: true } })
-          : await client.organization.findUnique({ where: { id }, select: { name: true } });
+          : target === 'user'
+            ? await client.user.findUnique({ where: { id }, select: { name: true } })
+            : await client.organization.findUnique({ where: { id }, select: { name: true } });
     return found?.name;
   };
 

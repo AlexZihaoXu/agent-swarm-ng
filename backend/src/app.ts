@@ -4,7 +4,12 @@ import websocket from '@fastify/websocket';
 import { registerTerminalStreams } from './computer-terminal-stream';
 import { Type } from '@sinclair/typebox';
 import { registerModelEndpoints } from './model-endpoints';
-import type { EndpointStore } from './endpoint-store';
+import { EndpointStore } from './endpoint-store';
+import { Reach } from './users/reach';
+import { registerRules } from './users/rules';
+import { Connections } from './users/connections';
+import { Users } from './users/store';
+import { registerUserRoutes } from './users/routes';
 import { registerChat } from './chat';
 import { PlatformStore } from './platform-store';
 import { CodexProvider } from './codex-provider';
@@ -67,6 +72,11 @@ export async function buildApp({
       return reply.code(403).send({ message: 'This host name is not allowed. Add it to ALLOWED_HOSTS.' });
   });
   const platform = database ?? new PlatformStore();
+  // Who may reach what (docs/users.md): every route has a rule; users reach only their own organizations. First, so
+  // it sees every route as it is added.
+  const reach = new Reach(platform);
+  app.decorate('reach', reach);
+  registerRules(app, reach);
   await app.register(websocket, { options: { maxPayload: 16384, perMessageDeflate: false } });
   await app.register(swagger, {
     openapi: {
@@ -83,7 +93,12 @@ export async function buildApp({
   const alerts = new Alerts(platform);
   const guard = new SignInGuard(platform, addresses, new SwarmSettingsStore(platform), audit, alerts);
   app.decorate('alerts', alerts);
-  app.decorate('watchSession', registerAuth(app, new Accounts(platform), { requireLogin, audit, guard }));
+  const sessions = registerAuth(app, new Accounts(platform), { requireLogin, audit, guard });
+  app.decorate('watchSession', sessions.watch);
+  app.decorate('endSessions', sessions.end);
+  const endpoints = endpointStore ?? new EndpointStore();
+  const connections = new Connections(endpoints, reach, codex);
+  registerUserRoutes(app, new Users(platform, userId => connections.forgetOwner(userId)));
   registerAudit(app, platform, audit, addresses);
   registerSecurityRoutes(app, platform, addresses, guard, alerts, audit);
   const access = new AccessLog(platform);
@@ -101,11 +116,17 @@ export async function buildApp({
     async () => ({ status: 'ok' as const }),
   );
 
-  registerModelEndpoints(app, fetcher, endpointStore, async id => {
-    await platform.initialize();
-    return platform.client.agent.count({ where: { endpointId: id } });
-  });
-  registerCodex(app, codex);
+  registerModelEndpoints(
+    app,
+    fetcher,
+    endpoints,
+    async (id, ownerId) => {
+      await platform.initialize();
+      return platform.client.agent.count({ where: { endpointId: id, organization: { ownerId } } });
+    },
+    reach,
+  );
+  registerCodex(app, connections);
   const controller = computerController === undefined ? computerControllerFromEnv() : computerController;
   const computers = new ComputerUseService(platform, controller?.runtime ?? null);
   const screenshots = new ScreenshotPool(join(platform.dataDirectory, 'computer-screenshots'));
@@ -119,17 +140,24 @@ export async function buildApp({
   const discordTokens = new DiscordTokenStore(join(platform.dataDirectory, 'discord-bots.json'));
   const discordStore = new DiscordStore(platform);
   const discord = new DiscordConnections(discordTokens, discordStore, { api: discordApi });
-  registerChat(app, endpointStore, platform, codex, computers, screenshots, files, controller, {
-    store: discordStore,
-    connections: discord,
-    tokens: discordTokens,
-  });
+  registerChat(
+    app,
+    endpoints,
+    platform,
+    codex,
+    computers,
+    screenshots,
+    files,
+    controller,
+    { store: discordStore, connections: discord, tokens: discordTokens },
+    connections,
+  );
   registerComputerRoutes(app, platform, controller, computers, swarmSettings);
   registerComputerStorageRoutes(app, platform, controller);
   registerComputerUseRoutes(app, computers, screenshots);
   registerTerminalStreams(app, computers, controller);
   registerKnowledgeRoutes(app);
-  registerDashboardRoutes(app, platform, endpointStore);
+  registerDashboardRoutes(app, platform, endpoints);
   registerDiscordRoutes(app, platform, discordStore, discordTokens, discord, files);
   // Saved Discord messages are kept for Settings → Swarm's period: pruned at start and hourly.
   const pruneDiscord = () =>
