@@ -26372,6 +26372,24 @@
         }
       }
     },
+    "/api/dashboard/live/stream": {
+      "get": {
+        "operationId": "followDashboardLive",
+        "responses": {
+          "200": {
+            "description": "NDJSON: {type:\"snapshot\", ...getDashboardLive} then {type:\"point\", point} per reading, and heartbeats.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "NDJSON: {type:\"snapshot\", ...getDashboardLive} then {type:\"point\", point} per reading, and heartbeats.",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/dashboard": {
       "get": {
         "operationId": "getDashboard",

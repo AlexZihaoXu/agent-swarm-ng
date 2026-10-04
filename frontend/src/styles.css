@@ -20,6 +20,17 @@
   --chart-6: #22d3ee;
   --chart-7: #a3e635;
   --chart-8: #fb923c;
+  /* Usage (Dashboard dials and their charts): CPU blue, memory cyan, each storage area a green; any of them turns
+     yellow when fairly high and red when nearly full (usage-dial.tsx). */
+  --usage-cpu: #60a5fa;
+  --usage-memory: #22d3ee;
+  --usage-storage-1: #4ade80;
+  --usage-storage-2: #16a34a;
+  --usage-storage-3: #86efac;
+  --usage-storage-4: #15803d;
+  --usage-storage-5: #34d399;
+  --usage-high: #facc15;
+  --usage-full: #f87171;
 }
 
 @theme inline {

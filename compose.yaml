@@ -43,9 +43,9 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-  # Copies the host's physical network interface counters (stamped with the host's uptime) once a second into a shared
-  # in-memory volume for the Dashboard (docs/dashboard.md). Host network namespace only: no privileges, no ports,
-  # read-only, as nobody.
+  # Copies the host's physical network interface counters (stamped with the host's uptime) four times a second into a
+  # shared in-memory volume for the Dashboard (docs/dashboard.md). Host network namespace only: no privileges, no
+  # ports, read-only, as nobody.
   host-net:
     # Pinned by digest: it shares the host's network namespace.
     image: busybox:1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
@@ -63,7 +63,7 @@ services:
         while :; do
         { cut -d' ' -f1 /proc/uptime; for d in /sys/class/net/*; do [ -e "$$d/device" ] && echo "$${d##*/}"; done; echo ---; cat /proc/net/dev; }
         > /out/net.tmp && mv /out/net.tmp /out/net;
-        sleep 1;
+        sleep 0.25;
         done
     restart: unless-stopped
     logging: *logging
@@ -162,7 +162,7 @@ networks:
       com.docker.network.bridge.gateway_mode_ipv4: isolated
 volumes:
   platform_data:
-  # In memory: written every second, never worth a disk write.
+  # In memory: written four times a second, never worth a disk write.
   host_net:
     driver_opts:
       type: tmpfs

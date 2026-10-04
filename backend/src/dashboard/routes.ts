@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import type { PlatformStore } from '../platform-store';
 import { EndpointStore } from '../endpoint-store';
-import { LiveMetrics } from '../metrics/live';
+import { LIVE_INTERVAL_MS, LiveMetrics } from '../metrics/live';
 
 const HOUR = 3_600_000;
 /** Each period and its bucket: about 60–100 points per chart. */
@@ -403,9 +403,18 @@ export function registerDashboardRoutes(
   endpoints: EndpointStore = new EndpointStore(),
   live: LiveMetrics = new LiveMetrics(),
 ) {
-  // The live minute samples every second only while the server is up (never in tests that do not listen).
+  // The live minute samples only while the server is up (never in tests that do not listen).
+  const followers = new Set<NodeJS.WritableStream & { end(): void }>();
   app.addHook('onListen', async () => live.start());
-  app.addHook('onClose', async () => live.stop());
+  app.addHook('onClose', async () => {
+    live.stop();
+    for (const follower of followers) follower.end();
+  });
+  const snapshot = async () => {
+    const names = [...new Set(live.points.flatMap(point => Object.keys(point.disks)))].sort();
+    const devices = await Promise.all(names.map(async device => ({ device, label: await live.labelOf(device) })));
+    return { intervalMs: LIVE_INTERVAL_MS, cores: live.cores, devices, points: live.points };
+  };
   app.get(
     '/api/dashboard/live',
     {
@@ -424,9 +433,61 @@ export function registerDashboardRoutes(
     },
     async (_request, reply) => {
       reply.header('cache-control', 'no-store');
-      const names = [...new Set(live.points.flatMap(point => Object.keys(point.disks)))].sort();
-      const devices = await Promise.all(names.map(async device => ({ device, label: await live.labelOf(device) })));
-      return { intervalMs: 1000, cores: live.cores, devices, points: live.points };
+      return snapshot();
+    },
+  );
+  // The same as it happens, like the agent-run stream: the snapshot, then each reading as one NDJSON line. A new disk
+  // sends a fresh snapshot (with its label). Signing out ends it; a slow reader is dropped.
+  app.get(
+    '/api/dashboard/live/stream',
+    {
+      schema: {
+        operationId: 'followDashboardLive',
+        response: {
+          200: Type.String({
+            description:
+              'NDJSON: {type:"snapshot", ...getDashboardLive} then {type:"point", point} per reading, and heartbeats.',
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      if (reply.raw.destroyed) return reply;
+      const first = await snapshot();
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        'Content-Type': 'application/x-ndjson',
+        'Cache-Control': 'no-store, no-transform',
+        'X-Accel-Buffering': 'no',
+      });
+      const out = reply.raw;
+      // Gone while the snapshot was read (a disk's label): its close already fired, so nothing to follow.
+      if (out.destroyed) return reply;
+      const write = (event: object) => {
+        if (out.destroyed || out.writableEnded) return;
+        if (out.writableLength > 1_048_576) return void out.destroy();
+        out.write(`${JSON.stringify(event)}\n`);
+      };
+      const known = new Set(first.devices.map(item => item.device));
+      const unsubscribe = live.subscribe(point => {
+        if (Object.keys(point.disks).some(device => !known.has(device)))
+          return void snapshot().then(next => {
+            for (const item of next.devices) known.add(item.device);
+            write({ type: 'snapshot', ...next });
+          });
+        write({ type: 'point', point });
+      });
+      const unwatch = app.watchSession?.(request, () => out.destroy()) ?? (() => {});
+      const heartbeat = setInterval(() => write({ type: 'heartbeat' }), 15_000);
+      followers.add(out);
+      out.once('close', () => {
+        clearInterval(heartbeat);
+        unwatch();
+        unsubscribe();
+        followers.delete(out);
+      });
+      write({ type: 'snapshot', ...first });
+      return reply;
     },
   );
   app.get(

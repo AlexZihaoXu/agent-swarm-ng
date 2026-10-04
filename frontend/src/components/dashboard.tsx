@@ -1,7 +1,9 @@
-import { createContext, useContext, useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { api } from '@/api/client';
+import { consumeEvents } from '@/api/events';
+import { LiveChart, type LiveClock } from '@/components/live-chart';
 import type { operations } from '@/api/schema';
 import { ChoiceChips } from '@/components/ui/choice-chips';
 import { PageHeader } from '@/components/page-header';
@@ -32,6 +34,11 @@ const RANGES: { value: Range; label: string }[] = [
 ];
 const RANGE_KEY = 'agent-swarm.dashboard-range';
 const COLORS = Array.from({ length: 8 }, (_, i) => `var(--chart-${i + 1})`);
+// Throughput lines: memory has cyan, so network in is violet.
+const NET_IN = 'var(--chart-2)',
+  NET_OUT = 'var(--chart-8)',
+  DISK_READ = 'var(--chart-3)',
+  DISK_WRITE = 'var(--chart-5)';
 const TOKEN_TYPES = [
   ['input', 'Input'],
   ['output', 'Output (other than reasoning)'],
@@ -336,71 +343,139 @@ export function Dashboard() {
 }
 
 type Live = operations['getDashboardLive']['responses'][200]['content']['application/json'];
+type LivePoint = Live['points'][number];
+
+/** Each storage area's green, in order (styles.css). */
+const STORAGE_COLORS = Array.from({ length: 5 }, (_, i) => `var(--usage-storage-${i + 1})`);
+const storageColor = (i: number) => STORAGE_COLORS[i % STORAGE_COLORS.length]!;
 
 /**
- * Now: host CPU, memory and each storage area's space as rings (the computer cards' UsageDial, larger), network now,
- * then the last minute of one-second readings (CPU, memory, network, each physical disk's I/O), redrawn every two
- * seconds while the page is visible.
+ * The live readings as they are taken (GET /api/dashboard/live/stream, NDJSON like the agent-run stream): a snapshot
+ * of the last minute, then each reading. Followed only while the page is visible; a dropped stream reconnects and its
+ * snapshot fills what was missed. The clock offset is the smallest recent delay between a reading and its arrival.
+ */
+function useLiveReadings() {
+  const [live, setLive] = useState<Live | null>(null);
+  const [failed, setFailed] = useState(false);
+  const clock = useRef<LiveClock>({ offset: 0, delay: 750 });
+  useEffect(() => {
+    let controller: AbortController | undefined;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const lags: number[] = [];
+    const heard = (t: number) => {
+      lags.push(Date.now() - t);
+      if (lags.length > 40) lags.shift();
+      clock.current.offset = Math.min(...lags);
+    };
+    async function connect() {
+      controller?.abort();
+      clearTimeout(retry);
+      const current = new AbortController();
+      controller = current;
+      try {
+        const { data, response } = await api.GET('/api/dashboard/live/stream', {
+          parseAs: 'stream',
+          signal: current.signal,
+        });
+        if (!response.ok || !data) throw new Error('Live readings unavailable');
+        await consumeEvents(data, current.signal, event => {
+          if (event.type === 'snapshot') {
+            const snapshot = event as Live & { type: string };
+            lags.length = 0;
+            if (snapshot.points.length) heard(snapshot.points.at(-1)!.t);
+            clock.current.delay = snapshot.intervalMs * 3;
+            setLive(snapshot);
+            setFailed(false);
+          } else if (event.type === 'point') {
+            const point = event.point as LivePoint;
+            heard(point.t);
+            setLive(
+              previous =>
+                previous && {
+                  ...previous,
+                  points: [...previous.points.filter(item => item.t > point.t - 60_000), point],
+                },
+            );
+          }
+        });
+      } catch {
+        if (!current.signal.aborted) setFailed(true);
+      }
+      if (controller === current && !current.signal.aborted && !document.hidden)
+        retry = setTimeout(() => void connect(), 2000);
+    }
+    const visibility = () => {
+      if (document.hidden) {
+        clearTimeout(retry);
+        controller?.abort();
+      } else void connect();
+    };
+    document.addEventListener('visibilitychange', visibility);
+    if (!document.hidden) void connect();
+    return () => {
+      document.removeEventListener('visibilitychange', visibility);
+      clearTimeout(retry);
+      controller?.abort();
+    };
+  }, []);
+  return { live, failed, clock };
+}
+
+/** The mean of the last second's readings (four of them): steadier figures than each quarter second's. */
+function recent(points: LivePoint[], pick: (point: LivePoint) => number | null | undefined) {
+  const end = points.at(-1)?.t ?? 0;
+  const values = points
+    .filter(point => point.t > end - 1000)
+    .map(pick)
+    .filter((value): value is number => value != null);
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+/**
+ * Now: host CPU, memory and each storage area's space as rings (the computer cards' UsageDial, larger; blue, cyan and
+ * greens, yellow when fairly high and red when nearly full), network now, then the last minute of readings (four a
+ * second: CPU, memory, network, each physical disk's I/O) on charts that slide smoothly while the page is visible.
  */
 function LiveMinute({ disks }: { disks: Data['disks'] }) {
-  const query = useQuery({
-    queryKey: ['dashboard-live'],
-    queryFn: async ({ signal }) => {
-      const { data, error } = await api.GET('/api/dashboard/live', { signal });
-      if (!data || error) throw new Error('Could not load live readings.');
-      return data as Live;
-    },
-    refetchInterval: 2000,
-    placeholderData: previous => previous,
-  });
-  const live = query.data;
-  // A missing second (a skipped reading, a restart) is a gap: an empty point between readings more than 1.5 s apart.
-  const points = (live?.points ?? []).flatMap((point, i, all) =>
-    i > 0 && point.t - all[i - 1]!.t > 1500
-      ? [
-          {
-            t: all[i - 1]!.t + 1000,
-            cpuPercent: null,
-            memUsed: null,
-            memTotal: null,
-            netRx: null,
-            netTx: null,
-            disks: {},
-          },
-          point,
-        ]
-      : [point],
-  );
-  const times = points.map(point => point.t);
+  const { live, failed, clock } = useLiveReadings();
+  const points = live?.points ?? [];
+  const gap = (live?.intervalMs ?? 250) * 3;
+  const times = useMemo(() => points.map(point => point.t), [points]);
   const series = (key: 'cpuPercent' | 'memUsed' | 'netRx' | 'netTx') => points.map(point => point[key] ?? null);
   // A disk missing from a reading (no counters yet, or a reset) is a gap, never a fake zero.
   const deviceSeries = (device: string, key: 'read' | 'write') =>
     points.map(point => point.disks[device]?.[key] ?? null);
-  const now = points.at(-1);
-  const memTotal = now?.memTotal ?? undefined;
+  const cpu = recent(points, point => point.cpuPercent);
+  const memUsed = recent(points, point => point.memUsed);
+  const netRx = recent(points, point => point.netRx);
+  const netTx = recent(points, point => point.netTx);
+  const memTotal = points.at(-1)?.memTotal ?? undefined;
   return (
     <section aria-labelledby="dashboard-now" className="space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 id="dashboard-now" className="text-sm font-semibold">
           Now
         </h3>
-        <span className="text-xs text-muted-foreground">System-wide · live, every second</span>
+        <span role="status" className={cn('text-xs', failed ? 'text-amber-300' : 'text-muted-foreground')}>
+          {failed ? 'Reconnecting… these are the last readings' : 'System-wide · live, four readings a second'}
+        </span>
       </div>
-      <div className={cn(settingsCard, 'flex flex-wrap gap-x-8 gap-y-4')}>
+      {/* Lost the stream: the last readings stay, dimmed, until it is back. */}
+      <div className={cn(settingsCard, 'flex flex-wrap gap-x-8 gap-y-4 transition-opacity', failed && 'opacity-50')}>
         <UsageDial
           large
           label="CPU"
           value={live?.cores ? `${live.cores} cores` : '—'}
-          fraction={now?.cpuPercent == null ? null : now.cpuPercent / 100}
-          color="var(--chart-1)"
+          fraction={cpu === null ? null : cpu / 100}
+          color="var(--usage-cpu)"
         />
         <UsageDial
           large
           label="Memory"
-          value={now?.memUsed != null ? bytes(now.memUsed) : '—'}
+          value={memUsed !== null ? bytes(memUsed) : '—'}
           caption={memTotal ? `of ${bytes(memTotal)}` : undefined}
-          fraction={now?.memUsed != null && memTotal ? now.memUsed / memTotal : null}
-          color="var(--chart-2)"
+          fraction={memUsed !== null && memTotal ? memUsed / memTotal : null}
+          color="var(--usage-memory)"
         />
         {disks.map((disk, i) => {
           const used = last(disk.used);
@@ -412,16 +487,16 @@ function LiveMinute({ disks }: { disks: Data['disks'] }) {
               value={used !== null ? bytes(used) : '—'}
               caption={disk.total ? `of ${bytes(disk.total)}` : undefined}
               fraction={used !== null && disk.total ? used / disk.total : null}
-              color={COLORS[(i + 2) % COLORS.length]}
+              color={storageColor(i)}
             />
           );
         })}
         <div className="min-w-0 leading-tight">
           <div className="text-sm font-semibold">Network</div>
-          {now?.netRx != null ? (
+          {netRx !== null ? (
             <>
-              <div className="text-xs tabular-nums text-muted-foreground">↓ {throughput(now.netRx)}</div>
-              <div className="text-xs tabular-nums text-muted-foreground">↑ {throughput(now.netTx ?? 0)}</div>
+              <div className="text-xs tabular-nums text-muted-foreground">↓ {throughput(netRx)}</div>
+              <div className="text-xs tabular-nums text-muted-foreground">↑ {throughput(netTx ?? 0)}</div>
             </>
           ) : (
             <div className="text-xs text-muted-foreground">Waiting for the host-net helper</div>
@@ -430,51 +505,59 @@ function LiveMinute({ disks }: { disks: Data['disks'] }) {
       </div>
       {points.length < 2 ? (
         <div className={settingsCard}>
-          <Empty>{query.isError ? 'Could not load live readings.' : 'Collecting the first readings…'}</Empty>
+          <Empty>{failed ? 'Could not load live readings.' : 'Collecting the first readings…'}</Empty>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <Panel title="CPU · last minute" scope="system">
-            <TimeChart
-              buckets={times}
-              series={[{ key: 'cpu', label: 'CPU', values: series('cpuPercent') }]}
+            <LiveChart
+              area
+              label="CPU, last minute"
+              times={times}
+              series={[{ key: 'cpu', label: 'CPU', values: series('cpuPercent'), color: 'var(--usage-cpu)' }]}
               format={percent}
               max={100}
-              className="h-32"
+              gap={gap}
+              clock={clock}
             />
           </Panel>
           <Panel title="Memory · last minute" scope="system">
-            <TimeChart
-              buckets={times}
-              series={[{ key: 'mem', label: 'Used', values: series('memUsed'), color: 'var(--chart-2)' }]}
+            <LiveChart
+              area
+              label="Memory, last minute"
+              times={times}
+              series={[{ key: 'mem', label: 'Used', values: series('memUsed'), color: 'var(--usage-memory)' }]}
               format={bytes}
               max={memTotal}
-              className="h-32"
+              gap={gap}
+              clock={clock}
             />
           </Panel>
           <Panel title="Network · last minute" scope="system">
-            <TimeChart
-              line
-              buckets={times}
+            <LiveChart
+              label="Network, last minute"
+              times={times}
               series={[
-                { key: 'in', label: 'In', values: series('netRx'), color: 'var(--chart-6)' },
-                { key: 'out', label: 'Out', values: series('netTx'), color: 'var(--chart-8)' },
+                { key: 'in', label: 'In', values: series('netRx'), color: NET_IN },
+                { key: 'out', label: 'Out', values: series('netTx'), color: NET_OUT },
               ]}
               format={throughput}
-              className="h-32"
+              gap={gap}
+              clock={clock}
             />
           </Panel>
           {(live?.devices ?? []).map(({ device, label }) => (
             <Panel key={device} title={`Disk I/O · ${label}`} scope="system">
-              <TimeChart
-                line
-                buckets={times}
+              <LiveChart
+                label={`Disk I/O of ${label}, last minute`}
+                times={times}
                 series={[
-                  { key: 'read', label: 'Read', values: deviceSeries(device, 'read'), color: 'var(--chart-3)' },
-                  { key: 'write', label: 'Write', values: deviceSeries(device, 'write'), color: 'var(--chart-5)' },
+                  { key: 'read', label: 'Read', values: deviceSeries(device, 'read'), color: DISK_READ },
+                  { key: 'write', label: 'Write', values: deviceSeries(device, 'write'), color: DISK_WRITE },
                 ]}
                 format={throughput}
-                className="h-32"
+                gap={gap}
+                clock={clock}
               />
             </Panel>
           ))}
@@ -530,7 +613,7 @@ function DashboardBody({ data }: { data: Data }) {
           {data.system.cpuPercent.some(value => value !== null) ? (
             <TimeChart
               buckets={data.buckets}
-              series={[{ key: 'cpu', label: 'CPU', values: data.system.cpuPercent }]}
+              series={[{ key: 'cpu', label: 'CPU', values: data.system.cpuPercent, color: 'var(--usage-cpu)' }]}
               format={percent}
               max={100}
             />
@@ -546,7 +629,7 @@ function DashboardBody({ data }: { data: Data }) {
           {data.system.memUsed.some(value => value !== null) ? (
             <TimeChart
               buckets={data.buckets}
-              series={[{ key: 'mem', label: 'Used', values: data.system.memUsed, color: 'var(--chart-2)' }]}
+              series={[{ key: 'mem', label: 'Used', values: data.system.memUsed, color: 'var(--usage-memory)' }]}
               format={bytes}
               max={data.system.memTotal ?? undefined}
             />
@@ -568,8 +651,8 @@ function DashboardBody({ data }: { data: Data }) {
               line
               buckets={data.buckets}
               series={[
-                { key: 'in', label: 'In', values: data.system.netRx, color: 'var(--chart-6)' },
-                { key: 'out', label: 'Out', values: data.system.netTx, color: 'var(--chart-8)' },
+                { key: 'in', label: 'In', values: data.system.netRx, color: NET_IN },
+                { key: 'out', label: 'Out', values: data.system.netTx, color: NET_OUT },
               ]}
               format={throughput}
             />
@@ -592,8 +675,8 @@ function DashboardBody({ data }: { data: Data }) {
                 line
                 buckets={data.buckets}
                 series={[
-                  { key: 'read', label: 'Read', values: disk.read, color: 'var(--chart-3)' },
-                  { key: 'write', label: 'Write', values: disk.write, color: 'var(--chart-5)' },
+                  { key: 'read', label: 'Read', values: disk.read, color: DISK_READ },
+                  { key: 'write', label: 'Write', values: disk.write, color: DISK_WRITE },
                 ]}
                 format={throughput}
               />
@@ -613,7 +696,7 @@ function DashboardBody({ data }: { data: Data }) {
             >
               <TimeChart
                 buckets={data.buckets}
-                series={[{ key: 'used', label: 'Used', values: disk.used, color: COLORS[(i + 2) % COLORS.length] }]}
+                series={[{ key: 'used', label: 'Used', values: disk.used, color: storageColor(i) }]}
                 format={bytes}
                 max={disk.total ?? undefined}
               />

@@ -98,14 +98,14 @@ const sample = {
 };
 
 const live = {
-  intervalMs: 1000,
+  intervalMs: 250,
   cores: 16,
   devices: [
     { device: 'nvme0n1', label: 'nvme0n1 · HighRel 512GB SSD · 512 GB' },
     { device: 'sda', label: 'sda · SABRENT · 1.4 TB' },
   ],
-  points: Array.from({ length: 60 }, (_, i) => ({
-    t: Date.now() - (60 - i) * 1000,
+  points: Array.from({ length: 240 }, (_, i) => ({
+    t: Date.now() - (240 - i) * 250,
     cpuPercent: 10 + (i % 7),
     memUsed: 8e9,
     memTotal: 32e9,
@@ -120,8 +120,17 @@ async function mock(page: Page, ranges: string[]) {
     ranges.push(new URL(route.request().url()).searchParams.get('range') ?? '');
     return route.fulfill({ json: sample });
   });
-  // Registered last: Playwright tries the newest route first, so /live is not caught by the pattern above.
-  await page.route('**/api/dashboard/live', route => route.fulfill({ json: live }));
+  // Registered last: Playwright tries the newest route first, so the stream is not caught by the pattern above. The
+  // snapshot, then one more reading (the stream ends there and the page reconnects).
+  await page.route('**/api/dashboard/live/stream', route => {
+    const t = Date.now();
+    const point = { ...live.points.at(-1)!, t };
+    const snapshot = { ...live, points: live.points.map((item, i) => ({ ...item, t: t - (240 - i) * 250 })) };
+    return route.fulfill({
+      contentType: 'application/x-ndjson',
+      body: `${JSON.stringify({ type: 'snapshot', ...snapshot })}\n${JSON.stringify({ type: 'point', point })}\n`,
+    });
+  });
 }
 
 test('the Dashboard tab charts system, computers, agents, spend and tokens, and switches the period', async ({
@@ -140,6 +149,18 @@ test('the Dashboard tab charts system, computers, agents, spend and tokens, and 
     await expect(now.locator(`[data-usage-label="${label}"]`)).toBeVisible();
   await expect(now.locator('[data-usage-label="CPU"]')).toContainText('16 cores');
   await expect(page.getByRole('heading', { name: 'Disk I/O · sda · SABRENT · 1.4 TB' }).first()).toBeVisible();
+  // CPU blue, memory cyan (25%: below the yellow mark).
+  const arc = (label: string) => now.locator(`[data-usage-label="${label}"] circle`).nth(1);
+  await expect(arc('CPU')).toHaveAttribute('style', /--usage-cpu/);
+  await expect(arc('Memory')).toHaveAttribute('style', /--usage-memory/);
+  // Storage areas are greens; one 83% full is fairly high: yellow.
+  await expect(arc('bulk (ZFS)')).toHaveAttribute('style', /--usage-storage-2/);
+  await expect(arc('nvme0n1p2')).toHaveAttribute('style', /--usage-high/);
+  // The live charts follow the stream and slide with the clock between readings.
+  await expect(page.getByRole('img', { name: /^CPU, last minute: CPU \d/ })).toBeVisible();
+  const slide = page.getByRole('img', { name: /^CPU, last minute/ }).locator('g[transform^="matrix"]');
+  const before = await slide.getAttribute('transform');
+  await expect.poll(() => slide.getAttribute('transform')).not.toBe(before);
   for (const title of [
     'Host CPU',
     'Host memory',
@@ -164,6 +185,25 @@ test('the Dashboard tab charts system, computers, agents, spend and tokens, and 
   await page.getByRole('radio', { name: 'Week' }).first().click();
   await expect.poll(() => ranges.at(-1)).toBe('7d');
   await page.screenshot({ path: '../.scratch/shots/dashboard-desktop.png', fullPage: false });
+});
+
+test('a dropped live stream says it is reconnecting and dims the last readings', async ({ page }) => {
+  await mock(page, []);
+  let calls = 0;
+  await page.route('**/api/dashboard/live/stream', route =>
+    // The first two (development StrictMode opens it twice), then the backend is gone.
+    ++calls <= 2
+      ? route.fulfill({
+          contentType: 'application/x-ndjson',
+          body: `${JSON.stringify({ type: 'snapshot', ...live })}\n`,
+        })
+      : route.fulfill({ status: 503, body: '' }),
+  );
+  await page.goto('/dashboard');
+  const now = page.getByRole('region', { name: 'Now' });
+  await expect(now.getByRole('status')).toHaveText(/four readings a second/);
+  await expect(now.getByRole('status')).toHaveText(/Reconnecting/);
+  await expect(now.locator('[data-usage-label="CPU"]')).toContainText('16 cores');
 });
 
 for (const width of [320, 390]) {

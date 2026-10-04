@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { usageColor } from '@/lib/usage-color';
 
 // Small circular usage dial. Kibo's catalogue has no radial progress pattern
 // (its `progress` patterns are linear bars and `chart/radial` is Recharts
@@ -17,7 +18,7 @@ export function UsageDial({
   fraction: number | null;
   /** The Dashboard's Now strip: a bigger ring with the share inside it, label and caption beside. */
   large?: boolean;
-  /** The arc's colour below 90% (it turns red from there, like everywhere). */
+  /** The arc's colour below 75% (it turns yellow from there and red from 90%, like everywhere). */
   color?: string;
 }) {
   const size = large ? 52 : 34,
@@ -26,6 +27,7 @@ export function UsageDial({
     circumference = 2 * Math.PI * radius;
   // null means "no reading": the ring stays empty rather than pretending 0%.
   const ratio = fraction === null ? 0 : Math.max(0, Math.min(1, fraction));
+  const level = usageColor(ratio, color);
   return (
     <div
       className={large ? 'flex min-w-0 items-center gap-3' : 'flex min-w-0 items-center gap-2'}
@@ -62,8 +64,12 @@ export function UsageDial({
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={circumference * (1 - ratio)}
-            className={ratio >= 0.9 ? 'text-red-400' : color ? '' : 'text-primary'}
-            style={ratio < 0.9 && color ? { color } : undefined}
+            // Live readings change several times a second: the arc and its colour glide rather than jump.
+            className={cn(
+              'transition-[stroke-dashoffset,color] duration-300 ease-out motion-reduce:transition-none',
+              !level && 'text-primary',
+            )}
+            style={level ? { color: level } : undefined}
           />
         </svg>
         {large && (

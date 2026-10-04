@@ -9,7 +9,9 @@ import {
 } from './host';
 import { ioRates, readIo, type HostIo } from './sampler';
 
-export const LIVE_POINTS = 60;
+/** A reading every quarter second, the last minute of them kept. */
+export const LIVE_INTERVAL_MS = 250;
+export const LIVE_POINTS = 60_000 / LIVE_INTERVAL_MS;
 export type LivePoint = {
   t: number;
   cpuPercent: number | null;
@@ -22,8 +24,9 @@ export type LivePoint = {
 };
 
 /**
- * The Dashboard's live minute: host CPU, memory, network and disk throughput every second, kept in memory (the last
- * 60 readings, nothing stored). Cheap: a few small /proc reads a second. Runs only while the server listens.
+ * The Dashboard's live minute: host CPU, memory, network and disk throughput four times a second, kept in memory (the
+ * last minute of readings, nothing stored) and pushed to whoever follows the stream. Cheap: a few small /proc reads
+ * each time. Runs only while the server listens.
  */
 export class LiveMetrics {
   readonly points: LivePoint[] = [];
@@ -32,6 +35,9 @@ export class LiveMetrics {
   private previous: { at: number; cpu: CpuTimes | null; io: HostIo | null } | null = null;
   private timer: ReturnType<typeof setInterval> | undefined;
   private running = false;
+  private readonly listeners = new Set<(point: LivePoint) => void>();
+  /** The last network snapshot that changed, when we took it, and the rate it gave. */
+  private net: { snapshot: NonNullable<HostIo['net']>; at: number; rx: number | null; tx: number | null } | null = null;
 
   constructor(
     private readonly readers: HostReaders = procReaders,
@@ -54,18 +60,51 @@ export class LiveMetrics {
       const before = this.previous;
       this.previous = { at, cpu, io };
       if (!before) return;
-      const seconds = (at - before.at) / 1000;
-      this.points.push({
+      const point: LivePoint = {
         t: at,
         cpuPercent: before.cpu && cpu ? cpuPercent(before.cpu, cpu) : null,
         memUsed: memory?.used ?? null,
         memTotal: memory?.total ?? null,
-        ...(({ disks, ...net }) => ({ ...net, disks: Object.fromEntries(disks) }))(ioRates(before.io, io, seconds)),
-      });
+        ...this.netRates(io?.net ?? null, at),
+        disks: Object.fromEntries(ioRates(before.io, io, (at - before.at) / 1000).disks),
+      };
+      this.points.push(point);
       if (this.points.length > LIVE_POINTS) this.points.splice(0, this.points.length - LIVE_POINTS);
+      for (const listener of this.listeners) listener(point);
     } finally {
       this.running = false;
     }
+  }
+
+  /**
+   * The sidecar writes its snapshot about as often as we read it, out of step: a snapshot we already have keeps the
+   * rate it gave for up to a second (the network did not pause), and the next new one is measured from it by the
+   * sidecar's own clock.
+   */
+  private netRates(snapshot: HostIo['net'], at: number) {
+    const previous = this.net;
+    if (!snapshot) {
+      this.net = null;
+      return { netRx: null, netTx: null };
+    }
+    if (previous && snapshot.at != null && snapshot.at === previous.snapshot.at)
+      // Held for a few of the sidecar's intervals; longer means it stopped, and that is a gap, not a flat line.
+      return at - previous.at < 1000 ? { netRx: previous.rx, netTx: previous.tx } : { netRx: null, netTx: null };
+    const { netRx, netTx } = previous
+      ? ioRates(
+          { net: previous.snapshot, disks: new Map() },
+          { net: snapshot, disks: new Map() },
+          (at - previous.at) / 1000,
+        )
+      : { netRx: null, netTx: null };
+    this.net = { snapshot, at, rx: netRx, tx: netTx };
+    return { netRx, netTx };
+  }
+
+  /** Each new reading as it is taken; returns the unsubscribe. */
+  subscribe(listener: (point: LivePoint) => void) {
+    this.listeners.add(listener);
+    return () => void this.listeners.delete(listener);
   }
 
   private labels = new Map<string, string>();
@@ -80,7 +119,7 @@ export class LiveMetrics {
   }
 
   start() {
-    this.timer ??= setInterval(() => void this.tick(), 1000);
+    this.timer ??= setInterval(() => void this.tick(), LIVE_INTERVAL_MS);
     this.timer.unref?.();
     void this.tick();
   }

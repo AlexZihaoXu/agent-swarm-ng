@@ -68,7 +68,7 @@ it('turns counters into bytes per second per disk, and a reset or missing counte
   expect(ioRates(null, before, 60).netRx).toBeNull();
 });
 
-it('keeps the last minute of one-second readings', async () => {
+it('keeps the last minute of quarter-second readings', async () => {
   let t = 1_000_000;
   let busy = 0;
   let rx = 0;
@@ -84,12 +84,17 @@ it('keeps the last minute of one-second readings', async () => {
       statfs: async () => ({ bsize: 0, blocks: 0, bfree: 0, bavail: 0 }),
       realpath: async path => path,
     },
-    () => (t += 1000),
+    () => (t += 250),
   );
-  for (let i = 0; i < 70; i++) await live.tick();
-  expect(live.points).toHaveLength(60);
+  const heard: number[] = [];
+  const stop = live.subscribe(point => heard.push(point.t));
+  for (let i = 0; i < 250; i++) await live.tick();
+  stop();
+  await live.tick();
+  expect(live.points).toHaveLength(240);
+  expect(heard).toHaveLength(249);
   const last = live.points.at(-1)!;
-  expect(last).toMatchObject({ memUsed: 750 * 1024, memTotal: 1000 * 1024, netRx: 2048, netTx: 0 });
+  expect(last).toMatchObject({ memUsed: 750 * 1024, memTotal: 1000 * 1024, netRx: 8192, netTx: 0 });
   expect(last.disks).toEqual({ nvme0n1: { read: 0, write: 0 }, sda: { read: 0, write: 0 } });
   expect(await live.labelOf('sda')).toBe('sda · SABRENT · 1.4 TB');
   expect(last.cpuPercent).toBe(50);
@@ -121,4 +126,42 @@ it("times network rates by the sidecar's own snapshots: a repeated snapshot is n
   // The sidecar stopped: its last snapshot is more than three seconds old.
   uptime = '110 0';
   expect((await readIo(readers)).net).toBeNull();
+});
+
+it('holds the network rate while the sidecar has not written a new snapshot', async () => {
+  let t = 100_000;
+  let file = NET(0, 0, 100);
+  const live = new LiveMetrics(
+    {
+      procStat: async () => '',
+      meminfo: async () => '',
+      diskstats: async () => '',
+      uptime: async () => `${t / 1000} 0`,
+      hostNet: async () => file,
+      blockInfo: async () => ({ model: null, bytes: null }),
+      mountinfo: async () => '',
+      statfs: async () => ({ bsize: 0, blocks: 0, bfree: 0, bavail: 0 }),
+      realpath: async path => path,
+    },
+    () => (t += 250),
+  );
+  await live.tick();
+  await live.tick();
+  file = NET(500, 50, 100.5);
+  await live.tick();
+  await live.tick(); // the same snapshot again
+  file = NET(1500, 150, 101);
+  await live.tick();
+  // The sidecar stops: its last rate is held for up to a second, then a gap.
+  for (let i = 0; i < 4; i++) await live.tick();
+  expect(live.points.map(point => [point.netRx, point.netTx])).toEqual([
+    [null, null],
+    [1000, 100],
+    [1000, 100],
+    [2000, 200],
+    [2000, 200],
+    [2000, 200],
+    [2000, 200],
+    [null, null],
+  ]);
 });
