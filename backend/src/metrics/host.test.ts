@@ -27,7 +27,7 @@ it('reads memory as total minus available, in bytes', () => {
 
 const mountinfo = [
   '850 820 0:52 / / rw,relatime master:1 - overlay overlay rw,lowerdir=/x',
-  '879 850 259:2 /home/user/services/agent-swarm-ng/.local /app/.local rw,relatime - ext4 /dev/nvme0n1p2 rw',
+  '879 850 259:2 /home/user/agent-swarm-ng/.local /app/.local rw,relatime - ext4 /dev/nvme0n1p2 rw',
   '880 850 0:60 / /srv/my\\040data rw - zfs bulk/data rw',
 ].join('\n');
 

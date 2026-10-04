@@ -108,3 +108,7 @@ Open http://localhost:5173 (dev servers listen on this machine only). `bun run t
 | Computers | [Computers](docs/computers.md) · [Agent computer use](docs/agent-computer-use.md) · [Terminals](docs/persistent-terminals.md) |
 | Dashboard | [Dashboard](docs/dashboard.md) · [Organizations](docs/organizations.md) · [Portal](docs/portal.md) · [Swarm Knowledge](docs/swarm-knowledge.md) |
 | Building and running | [Development and architecture](docs/development.md) · [Rollout history](docs/history.md) · [Feature consistency review](docs/feature-consistency-review.md) |
+
+## License
+
+[MIT](LICENSE). Mirrored and vendored third-party code keeps its own license (`docs/references/kibo/upstream/license.md`, `templates/default/vendor/nvm/LICENSE.md`).
