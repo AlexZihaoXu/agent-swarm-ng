@@ -30,7 +30,7 @@ function niceMax(value: number) {
 }
 
 /** Path segments in data units (x: ms after `origin`, y: the value); a missing reading or a gap breaks the line. */
-function segments(times: number[], values: (number | null)[], origin: number, gap: number) {
+function segments(times: number[], values: (number | null)[], origin: number, gap: number, unit: number) {
   const runs: [number, number][][] = [];
   let run: [number, number][] = [];
   times.forEach((t, i) => {
@@ -39,7 +39,7 @@ function segments(times: number[], values: (number | null)[], origin: number, ga
       if (run.length) runs.push(run);
       run = [];
     }
-    if (value != null) run.push([t - origin, value]);
+    if (value != null) run.push([t - origin, value / unit]);
   });
   if (run.length) runs.push(run);
   return runs;
@@ -123,17 +123,21 @@ export function LiveChart({
 
   const origin = times[0] ?? 0;
   const latest = times.at(-1) ?? 0;
+  // Paths are drawn in small numbers: browsers (Safari above all) hold path coordinates in single precision, so
+  // raw bytes (memory is ~10^10) jitter from frame to frame. The transform scales them back.
+  const peak = Math.max(0, ...series.flatMap(item => item.values.filter((v): v is number => v != null)));
+  const unit = max ?? (peak >= 1024 ? 1024 ** Math.floor(Math.log(peak) / Math.log(1024)) : 1);
   const paths = useMemo(
     () =>
       series.map(item => {
-        const runs = segments(times, item.values, origin, gap);
+        const runs = segments(times, item.values, origin, gap, unit);
         const line = runs.map(run => run.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join('')).join('');
         const fill = runs
           .map(run => `M${run[0]![0]} 0${run.map(([x, y]) => `L${x} ${y}`).join('')}L${run.at(-1)![0]} 0Z`)
           .join('');
         return { ...item, line, fill };
       }),
-    [series, times, origin, gap],
+    [series, times, origin, gap, unit],
   );
   const target = max ?? niceMax(Math.max(0, ...series.flatMap(item => item.values.filter(v => v != null))) as number);
   // Gridlines stay put; their labels follow the axis top as it eases.
@@ -162,7 +166,10 @@ export function LiveChart({
     state.max = still || !Number.isFinite(state.max) ? target : state.max + (target - state.max) * ease;
     state.end = end;
     const shift = LEFT + plotWidth + (origin - end) * perMs;
-    data.current?.setAttribute('transform', `matrix(${perMs} 0 0 ${-plotHeight / state.max} ${shift} ${bottom})`);
+    data.current?.setAttribute(
+      'transform',
+      `matrix(${perMs} 0 0 ${-plotHeight / (state.max / unit)} ${shift} ${bottom})`,
+    );
     timeAxis.current?.setAttribute('transform', `translate(${shift} 0)`);
     shares.forEach((share, i) => {
       const text = format(share * state.max);
