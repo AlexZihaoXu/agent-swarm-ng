@@ -83,7 +83,7 @@ export function AccessLog({ onNavigate }: { onNavigate: (path: string) => void }
   return (
     <section
       aria-label="Access log"
-      className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)] md:px-6"
+      className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col motion-safe:animate-[view-in_260ms_cubic-bezier(0.22,1,0.36,1)] md:px-6"
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 md:px-0">
         <div className="min-w-0">

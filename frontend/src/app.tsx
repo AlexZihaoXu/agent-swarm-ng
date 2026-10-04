@@ -1145,7 +1145,8 @@ export function App() {
                     <JumpToLatest viewport={scrollRef} newest={timeline.at(-1)?.id} onJump={history.toLatest} />
                   )
                 }
-                className="min-h-0 flex-1"
+                // Keyed per conversation: switching settles the new one in.
+                className="view-enter min-h-0 flex-1"
               >
                 {conversationPeer === 'you' ? (
                   <>

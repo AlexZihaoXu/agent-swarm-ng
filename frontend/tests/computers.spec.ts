@@ -19,6 +19,8 @@ type Computer = {
   outdated?: boolean | null;
 };
 async function expectCentered(page: Page, dialog: ReturnType<Page['getByRole']>) {
+  // Measured once its entrance (a short rise) has settled.
+  await dialog.evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished)));
   const box = await dialog.boundingBox();
   const viewport = page.viewportSize();
   expect(box && viewport).toBeTruthy();

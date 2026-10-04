@@ -103,9 +103,13 @@
 /* Bubbles swing in from their own side: --enter-x is negative for the agent (left), positive for you (right). */
 @keyframes message-in {
   from {
-    transform: translate(var(--enter-x, 0px), 6px) scale(0.65);
+    opacity: 0.15;
+    filter: blur(3px);
+    transform: translate(calc(var(--enter-x, 0px) * 0.6), 10px) scale(0.9);
   }
   to {
+    opacity: 1;
+    filter: none;
     transform: translateY(0) scale(1);
   }
 }
@@ -113,10 +117,12 @@
 @keyframes phone-detail-in {
   from {
     opacity: 0;
-    transform: translateX(12px);
+    filter: blur(4px);
+    transform: translateX(16px) scale(0.99);
   }
   to {
     opacity: 1;
+    filter: none;
     transform: translateX(0);
   }
 }
@@ -124,10 +130,12 @@
 @keyframes phone-list-in {
   from {
     opacity: 0;
-    transform: translateX(-12px);
+    filter: blur(4px);
+    transform: translateX(-16px) scale(0.99);
   }
   to {
     opacity: 1;
+    filter: none;
     transform: translateX(0);
   }
 }
@@ -218,10 +226,10 @@
 
 @media (max-width: 767px) and (prefers-reduced-motion: no-preference) {
   .phone-detail-enter {
-    animation: phone-detail-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: phone-detail-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .phone-list-enter {
-    animation: phone-list-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: phone-list-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 }
 
@@ -248,10 +256,9 @@
     animation: typing-dot 1s ease-in-out infinite;
   }
 
+  /* A bubble rises from its sender's side, growing out of a soft blur. */
   .message-enter {
-    animation:
-      message-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both,
-      fade-in 300ms ease-out both;
+    animation: message-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 }
 
@@ -276,32 +283,38 @@
 @keyframes dialog-in {
   from {
     opacity: 0;
-    transform: scale(0.96);
+    filter: blur(6px);
+    transform: translateY(6px) scale(0.95);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    filter: none;
+    transform: translateY(0) scale(1);
   }
 }
 
 @keyframes dialog-out {
   from {
     opacity: 1;
-    transform: scale(1);
+    filter: none;
+    transform: translateY(0) scale(1);
   }
   to {
     opacity: 0;
-    transform: scale(0.96);
+    filter: blur(3px);
+    transform: translateY(3px) scale(0.97);
   }
 }
 
 @keyframes tab-in {
   from {
     opacity: 0;
-    transform: translateX(var(--tab-shift, 0px));
+    filter: blur(3px);
+    transform: translateX(var(--tab-shift, 0px)) scale(0.995);
   }
   to {
     opacity: 1;
+    filter: none;
     transform: translateX(0);
   }
 }
@@ -340,10 +353,12 @@
 @keyframes view-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    filter: blur(5px);
+    transform: translateY(8px) scale(0.99);
   }
   to {
     opacity: 1;
+    filter: none;
     transform: translateY(0);
   }
 }
@@ -360,10 +375,12 @@
 @keyframes card-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    filter: blur(4px);
+    transform: translateY(10px) scale(0.97);
   }
   to {
     opacity: 1;
+    filter: none;
     transform: translateY(0) scale(1);
   }
 }
@@ -399,18 +416,43 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .context-menu-content[data-state='open'] {
-    animation: dialog-in 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: dialog-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .context-menu-content[data-state='closed'] {
-    animation: dialog-out 120ms ease-in both;
+    animation: dialog-out 130ms ease-in both;
   }
   /* Every top-level tab enters from the side it sits on in the tab bar, so the content moves with the indicator. */
   .tab-enter {
-    animation: tab-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: tab-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   /* A detail pane swapping to another item: a quick fade with a hint of rise, no sideways travel. */
   .view-enter {
-    animation: view-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: view-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  /* A settings page arriving (another agent): its sections rise in turn, 35ms apart, at most eight steps. */
+  .settings-stagger > section {
+    animation: view-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .settings-stagger > section:nth-child(2) {
+    animation-delay: 35ms;
+  }
+  .settings-stagger > section:nth-child(3) {
+    animation-delay: 70ms;
+  }
+  .settings-stagger > section:nth-child(4) {
+    animation-delay: 105ms;
+  }
+  .settings-stagger > section:nth-child(5) {
+    animation-delay: 140ms;
+  }
+  .settings-stagger > section:nth-child(6) {
+    animation-delay: 175ms;
+  }
+  .settings-stagger > section:nth-child(7) {
+    animation-delay: 210ms;
+  }
+  .settings-stagger > section:nth-child(n + 8) {
+    animation-delay: 245ms;
   }
   /* The one-line status above the composer eases in instead of popping. */
   .status-enter {
@@ -437,16 +479,16 @@
   }
   /* Grids arrive as a quick cascade; the delay is set per item and capped. */
   .card-enter {
-    animation: card-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: card-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .computer-viewer-enter {
     animation: computer-desktop-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .computer-dialog[data-state='open'] {
-    animation: dialog-in 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: dialog-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .computer-dialog[data-state='closed'] {
-    animation: dialog-out 120ms ease-in both;
+    animation: dialog-out 140ms ease-in both;
   }
   .message-context-target {
     transition: box-shadow 150ms ease-out;
@@ -619,20 +661,24 @@ body {
 @keyframes portal-in {
   from {
     opacity: 0;
-    transform: translateY(-8px) scale(0.97);
+    filter: blur(6px);
+    transform: translateY(-8px) scale(0.96);
   }
   to {
     opacity: 1;
+    filter: none;
     transform: translateY(0) scale(1);
   }
 }
 @keyframes portal-out {
   from {
     opacity: 1;
+    filter: none;
     transform: translateY(0) scale(1);
   }
   to {
     opacity: 0;
+    filter: blur(3px);
     transform: translateY(-6px) scale(0.98);
   }
 }

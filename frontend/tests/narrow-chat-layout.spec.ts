@@ -116,8 +116,10 @@ test('phone navigation transitions animate only when motion is allowed', async (
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('/');
-  // Agents is one screen on phones too: its settings fade in like on wide screens.
-  await expect(page.getByRole('region', { name: 'Settings for Avery' })).toHaveCSS('animation-name', 'view-in');
+  // Agents is one screen on phones too: its settings' sections rise in turn, as on wide screens.
+  await expect(
+    page.getByRole('region', { name: 'Settings for Avery' }).getByRole('region', { name: 'Channels' }),
+  ).toHaveCSS('animation-name', 'view-in');
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   const chats = page.getByRole('complementary', { name: 'Chats' });
   await expect(chats).toHaveCSS('animation-name', 'phone-list-in');

@@ -99,7 +99,7 @@ test('messages enter in order with overlapping timing and respect reduced motion
   await page.goto('/chat/agents/avery');
   const messages = page.getByRole('list', { name: 'Messages' }).locator('[data-message-id]');
   await expect(messages).toHaveCount(3);
-  await expect(messages.first()).toHaveCSS('animation-name', 'message-in, fade-in');
+  await expect(messages.first()).toHaveCSS('animation-name', 'message-in');
   const timing = await messages.evaluateAll(elements =>
     elements.map(element => {
       const style = getComputedStyle(element);
@@ -113,10 +113,10 @@ test('messages enter in order with overlapping timing and respect reduced motion
     .getByRole('region', { name: 'Conversation with Avery' })
     .locator('[data-slot="message-time"]')
     .first();
-  await expect(timestamp).toHaveCSS('animation-name', 'message-in, fade-in');
+  await expect(timestamp).toHaveCSS('animation-name', 'message-in');
   expect(await timestamp.evaluate(element => parseFloat(getComputedStyle(element).animationDelay))).toBe(0);
   expect(timing[0].delay).toBe(0.03);
-  expect(timing[0].duration).toBe(0.3);
+  expect(timing[0].duration).toBe(0.32);
   for (let i = 1; i < timing.length; i++) {
     expect(timing[i].delay).toBeGreaterThan(timing[i - 1].delay);
     expect(timing[i].delay - timing[i - 1].delay).toBeCloseTo(timing[i - 1].duration * 0.1);
@@ -171,7 +171,7 @@ test('sidebar preview and time use the shared swap, and sent history staggers on
   await page.getByRole('button', { name: 'Open conversation with Morgan' }).click();
   await row.click();
   const sentBubble = page.getByRole('list', { name: 'Messages' }).locator('[data-message-id]').last();
-  await expect(sentBubble).toHaveCSS('animation-name', 'message-in, fade-in');
+  await expect(sentBubble).toHaveCSS('animation-name', 'message-in');
   await expect(sentBubble).toHaveCSS('animation-delay', '0.12s');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.getByLabel('Message Avery').fill('Immediate preview');

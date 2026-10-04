@@ -68,7 +68,7 @@ export function AlertBanner({
             key={alert.id}
             role="alert"
             className={cn(
-              'flex flex-row items-start gap-3 border-b px-4 py-2.5 text-sm motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)]',
+              'flex flex-row items-start gap-3 border-b px-4 py-2.5 text-sm motion-safe:animate-[view-in_260ms_cubic-bezier(0.22,1,0.36,1)]',
               warning
                 ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
                 : 'border-red-500/40 bg-red-500/10 text-red-300',

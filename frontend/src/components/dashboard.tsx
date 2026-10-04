@@ -310,7 +310,7 @@ export function Dashboard() {
         }
       />
       <ScrollArea label="Dashboard" className="min-h-0 flex-1">
-        <div className="mx-auto w-full max-w-6xl space-y-4 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4 motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)] md:px-6 md:pb-8">
+        <div className="mx-auto w-full max-w-6xl space-y-4 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4 motion-safe:animate-[view-in_260ms_cubic-bezier(0.22,1,0.36,1)] md:px-6 md:pb-8">
           {/* Phones: the period gets its own row instead of squeezing the title. */}
           <ChoiceChips label="Period" value={range} options={RANGES} onChange={setRange} className="md:hidden" />
           {query.isError && (

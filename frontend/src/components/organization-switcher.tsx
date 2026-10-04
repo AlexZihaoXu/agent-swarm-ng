@@ -94,7 +94,7 @@ export function OrganizationSwitcher({
           side="bottom"
           sideOffset={6}
           collisionPadding={12}
-          className="z-50 w-64 rounded-lg border border-border bg-background p-1 text-sm ao-top shadow-lg motion-safe:data-[state=open]:animate-[dialog-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_120ms_ease-in]"
+          className="z-50 w-64 rounded-lg border border-border bg-background p-1 text-sm ao-top shadow-lg motion-safe:data-[state=open]:animate-[dialog-in_200ms_cubic-bezier(0.22,1,0.36,1)] motion-safe:data-[state=closed]:animate-[dialog-out_130ms_ease-in]"
         >
           {!others && (
             <>

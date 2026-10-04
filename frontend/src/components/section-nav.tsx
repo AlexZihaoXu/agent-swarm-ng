@@ -130,7 +130,7 @@ export function SectionNav({
   return (
     <nav
       aria-label={label}
-      className={cn('motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)]', className)}
+      className={cn('motion-safe:animate-[view-in_260ms_cubic-bezier(0.22,1,0.36,1)]', className)}
     >
       <ul ref={list} className="space-y-0.5">
         {items.map(item => {

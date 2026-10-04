@@ -160,10 +160,7 @@ export function EditAgentForm({
   };
   void sectionTick;
   return (
-    <section
-      aria-label={`Settings for ${agent.name}`}
-      className="flex min-h-0 min-w-0 flex-1 flex-col motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)]"
-    >
+    <section aria-label={`Settings for ${agent.name}`} className="flex min-h-0 min-w-0 flex-1 flex-col">
       <form
         aria-label="Agent settings"
         onSubmit={event => {
@@ -211,7 +208,7 @@ export function EditAgentForm({
           {/* Phones: the settings scroll on under the floating navigation (glass), the last one clearing it. */}
           <div
             ref={sectionList}
-            className="mx-auto w-full max-w-5xl space-y-8 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6 md:px-6 md:pb-8"
+            className="settings-stagger mx-auto w-full max-w-5xl space-y-8 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6 md:px-6 md:pb-8"
           >
             <section aria-label="Channels" className="space-y-4">
               <div>

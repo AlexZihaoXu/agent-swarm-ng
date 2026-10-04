@@ -47,7 +47,7 @@ export function AgentTodos({ todos }: { todos: Todo[] }) {
     .map(status => `${count(status)} ${LABELS[status]}`)
     .join(', ');
   return (
-    <div className="shrink-0 border-b border-border bg-sidebar/40 px-4 motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)]">
+    <div className="shrink-0 border-b border-border bg-sidebar/40 px-4 motion-safe:animate-[view-in_260ms_cubic-bezier(0.22,1,0.36,1)]">
       <button
         type="button"
         aria-expanded={open}

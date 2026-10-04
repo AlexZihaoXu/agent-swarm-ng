@@ -149,7 +149,7 @@ export function Select({
           data-slot="combobox-content"
           onOpenAutoFocus={event => event.preventDefault()}
           className={cn(
-            `z-[60] flex flex-col max-h-[min(18rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-24px)] overflow-hidden rounded-lg border border-border bg-sidebar text-foreground ao-top shadow-lg origin-[var(--radix-popover-content-transform-origin)] motion-safe:data-[state=open]:animate-[dialog-in_120ms_ease-out] motion-safe:data-[state=closed]:animate-[dialog-out_100ms_ease-in]`,
+            `z-[60] flex flex-col max-h-[min(18rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-24px)] overflow-hidden rounded-lg border border-border bg-sidebar text-foreground ao-top shadow-lg origin-[var(--radix-popover-content-transform-origin)] motion-safe:data-[state=open]:animate-[dialog-in_180ms_cubic-bezier(0.22,1,0.36,1)] motion-safe:data-[state=closed]:animate-[dialog-out_100ms_ease-in]`,
             options.some(option => option.icon) && 'min-w-48',
             contentClassName,
           )}
