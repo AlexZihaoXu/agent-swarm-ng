@@ -124,6 +124,13 @@ export class DmBroker {
   /** Each agent's todo list (todo_write); the list a turn-end check last decided to stop on. */
   readonly todos: Todos;
   private readonly todoStoppedOn = new Map<string, string>();
+  /** Each agent's last time-note window (docs/agent-time.md#time-notes). */
+  private readonly timeNoteWindows = new Map<string, string>();
+  /** Settings saved since a run read its agent: they apply from its very next model call. */
+  private readonly timeNoteMinutes = new Map<string, number>();
+  setTimeNoteMinutes(agentId: string, minutes: number) {
+    this.timeNoteMinutes.set(agentId, minutes);
+  }
   /** Every agent's private scratchpad of text files. */
   readonly scratch: Scratchpad;
   /** Settings → Swarm (file and scratchpad limits). */
@@ -1134,6 +1141,11 @@ ${preview.text}`
       ],
       {
         sessionStore: this.sessions,
+        timeNotes: {
+          minutes: () => this.timeNoteMinutes.get(agentId) ?? agent.timeNoteMinutes,
+          last: () => this.timeNoteWindows.get(agentId),
+          given: window => this.timeNoteWindows.set(agentId, window),
+        },
         todos: {
           get: () => this.todos.get(agentId),
           stoppedOn: () => this.todoStoppedOn.get(agentId),

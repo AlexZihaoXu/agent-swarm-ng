@@ -30,6 +30,7 @@ import type { ScreenshotPool } from './computer-use/image-pool';
 import { registerActivityRoutes } from './activity-routes';
 import { Connections } from './users/connections';
 import { parseTodos } from './todos';
+import { TIME_NOTE_CHOICES } from './time-notes';
 import { checkMemoryCap } from './users/store';
 import { ADMIN_ID, Reach, connectionOwner, viewerOf } from './users/reach';
 
@@ -99,6 +100,8 @@ const Agent = Type.Object(
     instructions: Type.String(),
     /** Its organization (organizations.ts): it reaches only computers, agents and groups of the same one. */
     organizationId: Type.String(),
+    /** Minutes per clock window with one time note while it works (0: off; docs/agent-time.md#time-notes). */
+    timeNoteMinutes: Type.Integer(),
     /** Its todo list (todo_write, docs/agent-todos.md); live changes come as todos_updated events. */
     todos: Type.Array(
       Type.Object({
@@ -162,6 +165,7 @@ function agentView(
     instructions: agent.instructions,
     organizationId: agent.organizationId,
     todos: parseTodos(agent.todos),
+    timeNoteMinutes: agent.timeNoteMinutes,
     heartbeat: {
       enabled: agent.heartbeatEnabled,
       minutes: agent.heartbeatMinutes,
@@ -471,6 +475,7 @@ export function registerChat(
     Body: Partial<Pick<Static<typeof Selection>, 'name' | 'endpointId' | 'model' | 'thinkingLevel'>> & {
       compaction?: Partial<Static<typeof Compaction>>;
       heartbeat?: Partial<Static<typeof Heartbeat>>;
+      timeNoteMinutes?: number;
       instructions?: string;
     };
   }>(
@@ -487,6 +492,8 @@ export function registerChat(
             thinkingLevel: Type.Optional(Thinking),
             compaction: Type.Optional(Type.Partial(Compaction)),
             heartbeat: Type.Optional(Type.Partial(Heartbeat)),
+            /** Minutes per clock window with one time note while working (0: off; docs/agent-time.md#time-notes). */
+            timeNoteMinutes: Type.Optional(Type.Union(TIME_NOTE_CHOICES.map(value => Type.Literal(value)))),
             instructions: Type.Optional(Type.String({ maxLength: 20000 })),
           },
           { additionalProperties: false, minProperties: 1 },
@@ -502,7 +509,7 @@ export function registerChat(
       // policy alone can change at any time (it is read when the next summary starts).
       // Instructions too: the next turn reads them; a running turn keeps the ones it started with.
       const identity = Object.keys(request.body).some(
-        key => !['compaction', 'instructions', 'heartbeat'].includes(key),
+        key => !['compaction', 'instructions', 'heartbeat', 'timeNoteMinutes'].includes(key),
       );
       if (active.has(id) || (identity && runs.has(id)))
         return reply
@@ -536,6 +543,8 @@ export function registerChat(
           to = beat.to ?? record.heartbeatTo;
         if (Boolean(from) !== Boolean(to))
           return reply.code(400).send({ message: 'Set both heartbeat hours, or neither for all day.' });
+        // A running agent's time notes follow the new setting from its next model call.
+        if (request.body.timeNoteMinutes !== undefined) broker.setTimeNoteMinutes(id, request.body.timeNoteMinutes);
         return agentView(
           await database.updateAgent(id, {
             ...next,
@@ -548,6 +557,7 @@ export function registerChat(
             heartbeatFrom: from,
             heartbeatTo: to,
             heartbeatChecklist: beat.checklist?.trim() ?? record.heartbeatChecklist,
+            timeNoteMinutes: request.body.timeNoteMinutes ?? record.timeNoteMinutes,
           }),
         );
       } catch {

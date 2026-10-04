@@ -106,6 +106,7 @@ test('agent settings offer jump links that follow the reader and land each headi
     'Model',
     'Instructions',
     'Heartbeat',
+    'Time notes',
     'Computers',
     'Scratchpad',
     'Memory',

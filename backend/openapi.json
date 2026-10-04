@@ -17143,6 +17143,7 @@
                           "heartbeat",
                           "instructions",
                           "organizationId",
+                          "timeNoteMinutes",
                           "todos"
                         ],
                         "properties": {
@@ -17914,6 +17915,9 @@
                           "organizationId": {
                             "type": "string"
                           },
+                          "timeNoteMinutes": {
+                            "type": "integer"
+                          },
                           "todos": {
                             "type": "array",
                             "items": {
@@ -18308,6 +18312,7 @@
                     "heartbeat",
                     "instructions",
                     "organizationId",
+                    "timeNoteMinutes",
                     "todos"
                   ],
                   "properties": {
@@ -19078,6 +19083,9 @@
                     },
                     "organizationId": {
                       "type": "string"
+                    },
+                    "timeNoteMinutes": {
+                      "type": "integer"
                     },
                     "todos": {
                       "type": "array",
@@ -19739,6 +19747,88 @@
                       }
                     }
                   },
+                  "timeNoteMinutes": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "enum": [
+                          0
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          1
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          2
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          3
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          4
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          5
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          6
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          10
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          12
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          15
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          20
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          30
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          60
+                        ]
+                      }
+                    ]
+                  },
                   "instructions": {
                     "maxLength": 20000,
                     "type": "string"
@@ -19781,6 +19871,7 @@
                     "heartbeat",
                     "instructions",
                     "organizationId",
+                    "timeNoteMinutes",
                     "todos"
                   ],
                   "properties": {
@@ -20551,6 +20642,9 @@
                     },
                     "organizationId": {
                       "type": "string"
+                    },
+                    "timeNoteMinutes": {
+                      "type": "integer"
                     },
                     "todos": {
                       "type": "array",

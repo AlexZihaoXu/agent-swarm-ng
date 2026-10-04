@@ -148,6 +148,10 @@ it('checks unfinished todos when the turn ends, continues with the note, and sto
   try {
     const response = await send();
     expect(response.statusCode).toBe(200);
+    // The turn starts with a time note (default every 15 minutes), stacked into its input, not as a message.
+    expect(JSON.stringify(requests[0]!.messages.at(-1))).toContain(
+      '[Time note from the platform (not a message): it is now',
+    );
     // The reply is out; the run goes on (the check, the continuation) until the list is complete.
     await vi.waitFor(async () => {
       const listed = (await app.inject({ method: 'GET', url: '/api/agents' })).json().agents[0];
@@ -212,6 +216,20 @@ it('refuses anything but read-only tools inside the check', async () => {
     expect(listed.todos).toHaveLength(2);
   } finally {
     checkTriesWrite = false;
+    await app.close();
+  }
+});
+
+it('accepts only time-note windows that divide the hour', async () => {
+  const { app, agent } = await setup();
+  try {
+    const patch = (timeNoteMinutes: number) =>
+      app.inject({ method: 'PATCH', url: `/api/agents/${agent.id}`, payload: { timeNoteMinutes } });
+    expect(agent.timeNoteMinutes).toBe(15);
+    expect((await patch(7)).statusCode).toBe(400);
+    expect((await patch(5)).json().timeNoteMinutes).toBe(5);
+    expect((await patch(0)).json().timeNoteMinutes).toBe(0);
+  } finally {
     await app.close();
   }
 });

@@ -9,6 +9,7 @@ import { createActivityRecorder } from './agent-activity';
 import { accessOf, type AgentTool } from './tool-access';
 import { openTodos, type Todo } from './todos';
 import { checkTodos } from './todo-check';
+import { platformZone, timeNoteFor } from './time-notes';
 
 /** Continuations in a row a turn's todo checks may start (docs/agent-todos.md). */
 export const TODO_CONTINUATIONS = 3;
@@ -64,6 +65,8 @@ export type InboxHooks = {
    * whether it continues. `stoppedOn`/`stopped`: the list a check last decided to stop on (not checked again).
    */
   todos?: { get: () => Promise<Todo[]>; stoppedOn: () => string | undefined; stopped: (list: string) => void };
+  /** Time notes (docs/agent-time.md#time-notes): one per clock window of `minutes`; `last`/`given` its window. */
+  timeNotes?: { minutes: () => number; last: () => string | undefined; given: (window: string) => void };
 };
 
 export async function runChat(
@@ -219,6 +222,32 @@ export async function runChat(
       // A real message arriving makes the heartbeat a real turn: that message is answered in it.
       inbox.onAdd = () => {
         if (promote('a new message arrived')) promotionNotice = heartbeatPromotion('a new message arrived');
+      };
+    }
+    // Time notes: the current time once per clock window, stacked before the next model call (never interrupting).
+    const timeNote = () => {
+      const notes = hooks.timeNotes;
+      if (!notes || (heartbeat && !promoted)) return null;
+      const note = timeNoteFor(new Date(), notes.minutes(), platformZone(), notes.last());
+      if (!note) return null;
+      notes.given(note.window);
+      activity.record('status', 'Time note', note.text);
+      return note.text;
+    };
+    const noteLine = () => {
+      const note = timeNote();
+      return note ? `${note}\n` : '';
+    };
+    if (hooks.timeNotes) {
+      const after = live.agent.afterToolCall;
+      live.agent.afterToolCall = async (context, callSignal) => {
+        const result = await after?.(context, callSignal);
+        const note = timeNote();
+        if (!note) return result;
+        return {
+          ...result,
+          content: [...(result?.content ?? context.result.content), { type: 'text' as const, text: note }],
+        };
       };
     }
     // Cue-driven recall: a tool's arguments and result may bring memories to mind (one short line each, a few per turn).
@@ -469,7 +498,7 @@ export async function runChat(
           {
             customType: 'todo-continue',
             display: false,
-            content: `Automatic todo check (from the platform, not a human message), continuation ${round + 1}/${TODO_CONTINUATIONS}. Your own read-only review says: ${decision.note}`,
+            content: `${noteLine()}Automatic todo check (from the platform, not a human message), continuation ${round + 1}/${TODO_CONTINUATIONS}. Your own read-only review says: ${decision.note}`,
           },
           { triggerTurn: true },
         );
@@ -479,7 +508,7 @@ export async function runChat(
             {
               customType: 'channel-delivery-reminder',
               display: false,
-              content: `Automatic channel reminder: you continued your work but sent nothing to channel ${channel.id}. Plain assistant output is internal. If you finished something the human is waiting for, report it with send_message (channelId=${JSON.stringify(channel.id)}, final:true); otherwise remain silent.`,
+              content: `${noteLine()}Automatic channel reminder: you continued your work but sent nothing to channel ${channel.id}. Plain assistant output is internal. If you finished something the human is waiting for, report it with send_message (channelId=${JSON.stringify(channel.id)}, final:true); otherwise remain silent.`,
             },
             { triggerTurn: true },
           );
@@ -511,6 +540,8 @@ export async function runChat(
           `${channelInput(channel.id, item.text, item)}${hits.length ? `\n${inputReminder(hits)}` : ''}${pointer ? `\n${knowledgeReminder(pointer)}` : ''}`,
         );
       }
+      const noted = timeNote();
+      if (noted) inputs.unshift(noted);
       if (batch.note)
         await main.sendCustomMessage(
           { customType: 'interruption-decision', display: false, content: batch.note },
@@ -534,9 +565,12 @@ export async function runChat(
               {
                 customType: 'channel-delivery-reminder',
                 display: false,
-                content: published
-                  ? `Automatic channel reminder: your earlier messages reached channel ${channel.id}, but no final reply was delivered. Plain assistant output is internal. Continue unfinished work, or deliver the actual result/limitation using send_message with channelId=${JSON.stringify(channel.id)} and final:true. Do not repeat delivered parts or the acknowledgment, or merely promise to send the result. If several sections remain, send them sequentially with final:false and use final:true only for the last part.`
-                  : `Automatic channel reminder: nothing was sent to channel ${channel.id}. Plain assistant output is internal. For an actionable task, acknowledge now with send_message and final:false, then continue working and publish the result with final:true. If the answer is already ready, deliver it now with final:true. Use channelId=${JSON.stringify(channel.id)}. If no reply was appropriate or the user requested silence, remain silent.`,
+                // A turn the platform starts gets a due time note too (before every model call).
+                content:
+                  noteLine() +
+                  (published
+                    ? `Automatic channel reminder: your earlier messages reached channel ${channel.id}, but no final reply was delivered. Plain assistant output is internal. Continue unfinished work, or deliver the actual result/limitation using send_message with channelId=${JSON.stringify(channel.id)} and final:true. Do not repeat delivered parts or the acknowledgment, or merely promise to send the result. If several sections remain, send them sequentially with final:false and use final:true only for the last part.`
+                    : `Automatic channel reminder: nothing was sent to channel ${channel.id}. Plain assistant output is internal. For an actionable task, acknowledge now with send_message and final:false, then continue working and publish the result with final:true. If the answer is already ready, deliver it now with final:true. Use channelId=${JSON.stringify(channel.id)}. If no reply was appropriate or the user requested silence, remain silent.`),
               },
               { triggerTurn: true },
             );

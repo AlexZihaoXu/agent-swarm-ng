@@ -124,6 +124,9 @@ model Agent {
   /// Its todo list (todo_write, JSON [{content, status}]): unfinished items make the platform check, when a turn
   /// ends, whether it should continue (docs/agent-todos.md).
   todos               String               @default("[]")
+  /// Minutes per clock-aligned window in which a working agent gets one note of the current time (0: off;
+  /// docs/agent-time.md#time-notes).
+  timeNoteMinutes     Int                  @default(15)
   /// Long-term memory: the index (one line per memory) shown in its system prompt, rebuilt when it sleeps.
   memoryIndex         String               @default("")
   /// Sleep (memory reorganising) runs outside its active hours, or in this window when it is active all day.

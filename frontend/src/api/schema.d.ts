@@ -6272,6 +6272,7 @@ export interface operations {
                             };
                             instructions: string;
                             organizationId: string;
+                            timeNoteMinutes: number;
                             todos: {
                                 content: string;
                                 status: "pending" | "in_progress" | "completed";
@@ -6409,6 +6410,7 @@ export interface operations {
                         };
                         instructions: string;
                         organizationId: string;
+                        timeNoteMinutes: number;
                         todos: {
                             content: string;
                             status: "pending" | "in_progress" | "completed";
@@ -6627,6 +6629,7 @@ export interface operations {
                         to?: "" | string;
                         checklist?: string;
                     };
+                    timeNoteMinutes?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 10 | 12 | 15 | 20 | 30 | 60;
                     instructions?: string;
                 };
             };
@@ -6724,6 +6727,7 @@ export interface operations {
                         };
                         instructions: string;
                         organizationId: string;
+                        timeNoteMinutes: number;
                         todos: {
                             content: string;
                             status: "pending" | "in_progress" | "completed";
