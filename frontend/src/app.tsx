@@ -670,7 +670,8 @@ export function App() {
         {!computerViewerOpen && (
           <header
             className={cn(
-              'fixed inset-x-0 bottom-0 z-40 border-t border-border bg-sidebar pb-[env(safe-area-inset-bottom)] md:relative md:z-auto md:order-first md:flex md:h-14 md:min-h-14 md:shrink-0 md:items-center md:justify-center md:border-b md:border-t-0 md:px-4 md:pb-0',
+              // Phones: a floating capsule over the page (content scrolls beneath it), icons only. Wider screens: the header row.
+              'fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] z-40 rounded-full border border-border bg-sidebar/75 backdrop-blur-xl max-md:ao-raised md:relative md:inset-x-0 md:bottom-0 md:z-auto md:order-first md:flex md:h-14 md:min-h-14 md:shrink-0 md:items-center md:justify-center md:rounded-none md:border-x-0 md:border-b md:border-t-0 md:bg-sidebar md:px-4 md:backdrop-blur-none',
               narrowDetail && 'max-md:hidden',
             )}
           >
@@ -679,12 +680,12 @@ export function App() {
             <Tabs.List
               aria-label="Main navigation"
               ref={tabList}
-              className="relative isolate grid h-14 w-full grid-cols-5 items-center px-1 md:flex md:h-9 md:w-auto md:gap-0.5 md:rounded-lg md:bg-muted md:p-1"
+              className="relative isolate grid h-14 w-full grid-cols-5 items-center px-1.5 md:flex md:h-9 md:w-auto md:gap-0.5 md:rounded-lg md:bg-muted md:p-1"
             >
               <span
                 aria-hidden="true"
                 data-testid="tab-indicator"
-                className="pointer-events-none absolute inset-y-1.5 left-0 ao-raised rounded-md bg-muted transition-[transform,width] duration-200 ease-out motion-reduce:transition-none md:inset-y-1 md:bg-background"
+                className="pointer-events-none absolute inset-y-1.5 left-0 ao-raised rounded-full bg-muted md:rounded-md transition-[transform,width] duration-200 ease-out motion-reduce:transition-none md:inset-y-1 md:bg-background"
                 // Measured from the active tab, so tabs can be as wide as their labels (even gaps between them).
                 style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width }}
               />
@@ -705,12 +706,12 @@ export function App() {
                   onMouseDown={event => {
                     if (event.button === 0 && !event.ctrlKey) changeTab(label.toLowerCase());
                   }}
-                  className="relative z-10 min-h-11 min-w-0 rounded-md px-0.5 py-1 text-[11px] font-medium md:min-h-0 md:px-3.5 md:text-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:text-foreground"
+                  className="relative z-10 min-h-11 min-w-0 rounded-full px-0.5 py-1 text-[11px] font-medium md:rounded-md md:min-h-0 md:px-3.5 md:text-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:text-foreground"
                 >
                   {/* Kibo tabs-standard-2 (Tabs with Icons): stacked on the phone bar, inline on desktop. */}
                   <span className="flex flex-col items-center gap-0.5 md:flex-row md:gap-1.5">
-                    <TabIcon className="size-5 md:size-4" />
-                    <span className="max-w-full truncate">{label}</span>
+                    <TabIcon className="size-6 md:size-4" />
+                    <span className="max-w-full truncate max-md:sr-only">{label}</span>
                   </span>
                 </Tabs.Trigger>
               ))}
@@ -833,7 +834,7 @@ export function App() {
                     title="Create new agent"
                     onClick={() => leave(() => navigate('/agents/new'))}
                   >
-                    +
+                    <PlusIcon />
                   </Button>
                 </div>
                 {!agents.length && !agentsLoading && !agentsFailed && agentsCursor === null && (

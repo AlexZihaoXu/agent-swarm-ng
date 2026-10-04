@@ -107,7 +107,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       ) : state ? (
         <SignIn key="sign-in" session={state} onSignedIn={switchTo} />
       ) : session.isError ? (
-        <div key="error" role="alert" className="grid min-h-dvh place-items-center p-4 text-sm text-muted-foreground">
+        <div key="error" role="alert" className="grid min-h-dvh place-items-center bg-background p-4 text-sm text-muted-foreground">
           Could not reach the dashboard. Reload to try again.
         </div>
       ) : null}

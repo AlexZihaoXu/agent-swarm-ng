@@ -73,9 +73,11 @@ test('the phone bottom navigation and one-row conversation headers navigate clea
   const tabs = page.getByRole('tablist', { name: 'Main navigation' });
   expect((await bounds(tabs)).y).toBeGreaterThan(760);
   expect(await tabs.locator('xpath=..').evaluate(element => getComputedStyle(element).position)).toBe('fixed');
-  // A full-width bottom bar under a top border; the organization and Portal sit in the slim top bar.
-  expect(await tabs.locator('xpath=..').evaluate(element => getComputedStyle(element).borderTopWidth)).toBe('1px');
-  expect((await bounds(tabs)).width).toBeGreaterThanOrEqual(388);
+  // A floating capsule inset from the edges; the organization and Portal sit in the slim top bar.
+  expect(
+    await tabs.locator('xpath=..').evaluate(element => parseFloat(getComputedStyle(element).borderRadius)),
+  ).toBeGreaterThan(28);
+  expect((await bounds(tabs)).width).toBeGreaterThanOrEqual(354);
   expect((await bounds(page.getByRole('button', { name: 'Open Portal' }))).y).toBeLessThan(60);
   // Agents keeps the bottom bar: the picker sits under the top bar and the settings end above the bottom bar.
   await expect(page).toHaveURL(/\/agents\/avery$/);

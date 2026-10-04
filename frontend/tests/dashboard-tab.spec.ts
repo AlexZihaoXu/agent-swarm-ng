@@ -213,8 +213,8 @@ for (const width of [320, 390]) {
     await page.goto('/dashboard');
     const nav = page.getByRole('tablist', { name: 'Main navigation' });
     const box = (await nav.boundingBox())!;
-    // A bottom bar across the whole width.
-    expect(box.width).toBeGreaterThanOrEqual(width - 2);
+    // A floating capsule across the width, inset 16px from each edge (icons only; the names are for screen readers).
+    expect(box.width).toBeGreaterThanOrEqual(width - 36);
     expect(box.y + box.height).toBeGreaterThan(780 - 80);
     for (const tab of ['Dashboard', 'Agents', 'Chat', 'Computers', 'Settings']) {
       const item = nav.getByRole('tab', { name: tab });

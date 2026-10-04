@@ -162,8 +162,8 @@ export function EditAgentForm({
   return (
     <section
       aria-label={`Settings for ${agent.name}`}
-      // Phones: the fixed bottom navigation stays over the page, so the page (and its action bar) ends above it.
-      className="flex min-h-0 min-w-0 flex-1 flex-col pb-[calc(3.5rem+1px+env(safe-area-inset-bottom))] motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)] md:pb-0"
+      // Phones: the floating bottom navigation stays over the page, so the page (and its action bar) ends above it.
+      className="flex min-h-0 min-w-0 flex-1 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] motion-safe:animate-[view-in_180ms_cubic-bezier(0.22,1,0.36,1)] md:pb-0"
     >
       <form
         aria-label="Agent settings"

@@ -3,7 +3,8 @@ import { defaultAvatar } from '../src/lib/agent-avatar';
 
 test('saved agents keep the sidebar and open inline settings; Chat owns messages', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(36, 36, 36)');
+  // The page behind the panes is the bars' colour (iOS shows it behind the status bar); the panes paint their own.
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(21, 21, 21)');
   await expect(page.getByRole('tablist', { name: 'Main navigation' }).getByRole('tab')).toHaveText([
     'Dashboard',
     'Agents',

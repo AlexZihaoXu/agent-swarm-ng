@@ -10,7 +10,7 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { ComputerIcon } from '@/components/ui/icons';
+import { ComputerIcon, PlusIcon } from '@/components/ui/icons';
 import { randomUuid } from '@/lib/random-uuid';
 import { generateComputerName } from '@/lib/computer-name';
 import { defaultComputerSettings, parseComputerSettings, type ComputerSettingsDraft } from '@/lib/computer-settings';
@@ -394,11 +394,15 @@ export function ComputersPanel({
                     size="sm"
                     disabled={!query.data?.controllerConnected || atLimit}
                     title={
-                      atLimit ? `Limit reached (${maxComputers}). Delete a computer to create another.` : undefined
+                      atLimit
+                        ? `Limit reached (${maxComputers}). Delete a computer to create another.`
+                        : 'Create computer'
                     }
-                    className="min-h-11 md:min-h-0"
+                    variant="outline"
+                    aria-label="Create computer"
+                    className="size-11 p-0 md:size-9"
                   >
-                    Create computer
+                    <PlusIcon />
                   </Button>
                 </Dialog.Trigger>
                 <ComputerDialog>
