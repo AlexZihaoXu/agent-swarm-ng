@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { computersQuery } from '@/lib/computers-query';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useLocation, useNavigate } from 'react-router';
@@ -48,7 +48,14 @@ import { ChatComposer } from '@/components/chat-composer';
 import { ChatFilesDialog } from '@/components/chat-files-dialog';
 import { chatFilesKey, dmFilesKey, messagePreview } from '@/lib/chat-files';
 import { useAttachments } from '@/lib/use-attachments';
-import { useGroupEvents } from '@/use-groups';
+import { groupQuery, useGroupEvents } from '@/use-groups';
+import {
+  ConversationMoreMenu,
+  MessageSearchButton,
+  MessageSearchPanel,
+  type SearchResult,
+} from '@/components/message-search';
+import { requestJump, useMessageJump } from '@/lib/message-jump';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Portal, PortalButton, usePortalShortcut } from '@/components/portal';
 import { OrganizationSwitcher } from '@/components/organization-switcher';
@@ -162,6 +169,8 @@ export function App() {
     historyFailed,
     historyCursor,
     loadHistory,
+    loadAround,
+    recordError,
     loadActivity,
     expandActivity,
     retryActivity,
@@ -349,6 +358,20 @@ export function App() {
   // Where the agent editor lists its sections on wide screens: the Agents panel, under the picker.
   const [sectionSlot, setSectionSlot] = useState<HTMLDivElement | null>(null);
   const [activityOpen, setActivityOpen] = useState(false);
+  // Message search (docs/chat-and-groups.md#search): one panel for the Chat tab, docked where Activity docks; the
+  // two take turns.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchFocus, setSearchFocus] = useState(0);
+  const searchOpener = useRef<HTMLElement | null>(null);
+  // Chat files, opened by its own header button or (phones) the More menu.
+  const [filesOpen, setFilesOpen] = useState(false);
+  const filesOpener = useRef<HTMLElement | null>(null);
+  const openSearch = (opener?: HTMLElement | null) => {
+    searchOpener.current = opener ?? (document.activeElement as HTMLElement | null);
+    setActivityOpen(false);
+    setSearchOpen(true);
+    setSearchFocus(count => count + 1);
+  };
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingSend = useRef<string | null>(null);
@@ -410,6 +433,11 @@ export function App() {
   const peer = peers.find(item => item.id === conversationPeer) ?? agents.find(item => item.id === conversationPeer);
   const peerRecord = agents.find(item => item.id === conversationPeer);
   const peerChannel = peerRecord?.channelId ?? peer?.channelId ?? '';
+  const conversationTitle = discordChannel
+    ? `${agent.name} on ${discordPlace?.place ?? 'Discord'}`
+    : peer
+      ? `${agent.name} and ${peer.name}`
+      : agent.name;
   useEffect(() => {
     if (
       conversationPeer === 'you' ||
@@ -458,6 +486,67 @@ export function App() {
     loadOlder: () => void loadHistory(agent, true),
     reset: `${agent.id}:${conversationPeer}`,
   });
+  // A search result's Jump into this private chat: load back to the message, then show it.
+  useMessageJump(
+    `chat:${agent.channelId}`,
+    activeTab === 'chat' && !selectedGroup && conversationPeer === 'you' && Boolean(historyReady[agent.channelId]),
+    messageId =>
+      void loadAround(agent, messageId).then(found => {
+        if (found) history.reveal(messageId);
+        else recordError(agent, 'Couldn’t open that message: it may have been deleted, or it is too far back to load.');
+      }),
+  );
+  // What the search panel searches by default: the conversation shown (a Discord view has none of its own).
+  const openGroup = useQuery({ ...groupQuery(selectedGroup), enabled: Boolean(selectedGroup) });
+  const searchConversation =
+    activeTab !== 'chat'
+      ? null
+      : selectedGroup
+        ? { key: `group:${selectedGroup}`, name: openGroup.data?.name ?? 'this group' }
+        : !agent.real || discordChannel
+          ? null
+          : conversationPeer === 'you'
+            ? { key: `chat:${agent.channelId}`, name: agent.name }
+            : peer
+              ? { key: dmFilesKey(agent.id, peer.id), name: `${agent.name} and ${peer.name}` }
+              : null;
+  const person = (item: { id: string; name: string; avatar?: AvatarAppearance | null }) => ({
+    id: item.id,
+    name: item.name,
+    avatar: item.avatar ?? defaultAvatar(item.id),
+  });
+  const searchPeople = selectedGroup
+    ? (openGroup.data?.members ?? []).map(person)
+    : [agent, ...(conversationPeer !== 'you' && peer ? [peer] : [])].filter(item => item.id).map(person);
+  const jumpTo = (result: SearchResult) => {
+    const target = result.conversation;
+    requestJump(target.key, result.id);
+    if (target.key !== searchConversation?.key)
+      navigate(
+        result.kind === 'group'
+          ? chatGroupPath(target.groupId!)
+          : result.kind === 'dm'
+            ? chatAgentDmPath(target.agentId!, target.peerId!)
+            : chatAgentPath(target.agentId!),
+      );
+    // Narrow screens show the panel over the chat: get it out of the way.
+    if (!window.matchMedia('(min-width: 1024px)').matches) setSearchOpen(false);
+  };
+  // Ctrl/⌘+F in Chat searches its messages (the browser's own find stays everywhere else).
+  const canSearch = activeTab === 'chat' && Boolean(selectedGroup || agent.real);
+  useEffect(() => {
+    if (!canSearch) return;
+    const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'f' || !(mac ? event.metaKey : event.ctrlKey) || event.altKey || event.shiftKey)
+        return;
+      if ((event.target as Element | null)?.closest?.('[data-keys-to-computer]')) return;
+      event.preventDefault();
+      openSearch();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [canSearch]);
   const previousConversation = useRef({
     id: agent.id,
     viewport: null as HTMLDivElement | null,
@@ -929,13 +1018,15 @@ export function App() {
               busy={busy}
               runOf={runOf}
               onStop={stop}
+              searchOpen={searchOpen}
+              onSearch={openSearch}
             />
           ) : agents.length > 0 ? (
             <section
               aria-label={`Conversation with ${agent.name}`}
               className={cn(
                 'phone-detail-enter min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none md:flex',
-                activityOpen && 'lg:mr-96',
+                (activityOpen || searchOpen) && 'lg:mr-96',
                 mobileConversation ? 'flex' : 'hidden',
               )}
             >
@@ -1109,6 +1200,9 @@ export function App() {
                     </div>
                   </div>
                   {agent.real && (
+                    <MessageSearchButton open={searchOpen} onOpen={openSearch} className="hidden md:inline-flex" />
+                  )}
+                  {agent.real && (
                     <ChatFilesDialog
                       channelKey={
                         discordChannel
@@ -1117,20 +1211,32 @@ export function App() {
                             ? dmFilesKey(agent.id, peer.id)
                             : chatFilesKey(agent.channelId)
                       }
-                      title={
-                        discordChannel
-                          ? `${agent.name} on ${discordPlace?.place ?? 'Discord'}`
-                          : peer
-                            ? `${agent.name} and ${peer.name}`
-                            : agent.name
-                      }
+                      title={conversationTitle}
+                      className="hidden md:inline-flex"
+                      open={filesOpen}
+                      onOpenChange={setFilesOpen}
+                      returnFocus={() => filesOpener.current}
+                    />
+                  )}
+                  {agent.real && (
+                    <ConversationMoreMenu
+                      conversation={conversationTitle}
+                      onSearch={openSearch}
+                      onFiles={opener => {
+                        filesOpener.current = opener;
+                        setFilesOpen(true);
+                      }}
+                      className="border-0 md:hidden"
                     />
                   )}
                   <AgentActivityPanel
                     agent={agent}
                     entries={activity[agent.id] ?? []}
                     open={activityOpen}
-                    onOpenChange={setActivityOpen}
+                    onOpenChange={open => {
+                      if (open) setSearchOpen(false);
+                      setActivityOpen(open);
+                    }}
                     history={activityHistory}
                     loadActivity={loadActivity}
                     expandActivity={expandActivity}
@@ -1412,6 +1518,16 @@ export function App() {
         onStop={stop}
       />
       <PortalWindows agentState={agentState} onNavigate={path => navigate(path)} />
+      <MessageSearchPanel
+        open={searchOpen && canSearch}
+        onOpenChange={setSearchOpen}
+        conversation={searchConversation}
+        people={searchPeople}
+        everyone={agents.filter(item => item.real).map(person)}
+        focusRequest={searchFocus}
+        returnFocus={() => searchOpener.current}
+        onJump={jumpTo}
+      />
       <ConfirmDialog
         open={pendingLeave !== null}
         onOpenChange={open => {

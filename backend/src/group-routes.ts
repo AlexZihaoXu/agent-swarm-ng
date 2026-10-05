@@ -1,4 +1,5 @@
 import { viewerOf } from './users/reach';
+import { AroundParam } from './search/schema';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import { AvatarSchema } from './agent-avatar';
@@ -211,7 +212,7 @@ export function registerGroupRoutes(
         return { deleted: true };
       }),
   );
-  app.get<{ Params: { id: string }; Querystring: { before?: number; limit?: number } }>(
+  app.get<{ Params: { id: string }; Querystring: { before?: number; limit?: number; around?: string } }>(
     '/api/groups/:id/messages',
     {
       schema: {
@@ -220,18 +221,16 @@ export function registerGroupRoutes(
         querystring: Type.Object({
           before: Type.Optional(Type.Integer({ minimum: 1 })),
           limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 40 })),
+          around: Type.Optional(AroundParam),
         }),
         response: { 200: Type.Object({ messages: Type.Array(GroupMessageSchema), nextCursor: Cursor }), ...errors },
       },
     },
     (request, reply) =>
       safely(reply, async () => {
-        const page = await broker.groups.history(
-          request.params.id,
-          undefined,
-          request.query.before,
-          request.query.limit,
-        );
+        const page = request.query.around
+          ? await broker.groups.historyAround(request.params.id, request.query.around, request.query.before)
+          : await broker.groups.history(request.params.id, undefined, request.query.before, request.query.limit);
         const files = await broker.files.forMessages(
           'group',
           page.messages.map(message => message.id),

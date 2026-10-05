@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { JumpToLatest } from '@/components/jump-to-latest';
 import { useMessageWindow } from '@/lib/use-message-window';
+import { useMessageJump } from '@/lib/message-jump';
 import { ChatSkeleton, EdgeSkeleton } from '@/components/ui/skeleton';
 import { ChatComposer } from '@/components/chat-composer';
 import { GroupEditor } from '@/components/group-editor';
@@ -12,18 +13,24 @@ import { DeleteGroupForm } from '@/components/delete-group-form';
 import { GroupMessages } from '@/components/group-messages';
 import { MobileConversationBreadcrumb } from '@/components/mobile-conversation-breadcrumb';
 import { AgentTypingStatus } from '@/components/agent-typing-status';
-import { mergeGroupMessages, useGroupMessages, type GroupMessage, type GroupPage } from '@/use-groups';
+import {
+  GroupNotFoundError,
+  groupQuery,
+  mergeGroupMessages,
+  useGroupMessages,
+  type GroupMessage,
+  type GroupPage,
+} from '@/use-groups';
 import { cn } from '@/lib/utils';
 import { randomUuid } from '@/lib/random-uuid';
 import { replyExcerpt } from '@/lib/reply-preview';
 import { chatGroupPath } from '@/lib/dashboard-location';
 import { ChatFilesDialog } from '@/components/chat-files-dialog';
+import { ConversationMoreMenu, MessageSearchButton } from '@/components/message-search';
 import { groupFilesKey, messagePreview } from '@/lib/chat-files';
 import { useAttachments } from '@/lib/use-attachments';
 import { useSignedIn } from '@/lib/auth';
 import { humanName } from '@/lib/people';
-
-class GroupNotFoundError extends Error {}
 
 export function GroupConversation({
   groupId,
@@ -38,6 +45,8 @@ export function GroupConversation({
   busy,
   runOf,
   onStop,
+  searchOpen,
+  onSearch,
 }: {
   groupId: string;
   modal: 'edit' | 'delete' | null;
@@ -51,22 +60,13 @@ export function GroupConversation({
   busy: Record<string, boolean>;
   runOf: (channelId: string) => { clientMessageId: string } | undefined;
   onStop: (channelId: string) => void;
+  /** Message search (docs/chat-and-groups.md#search): its panel docks beside the conversation. */
+  searchOpen: boolean;
+  onSearch: (opener: HTMLElement) => void;
 }) {
   const { name: me } = useSignedIn();
   const client = useQueryClient();
-  const group = useQuery({
-    queryKey: ['group', groupId],
-    retry: (failures, failure) => !(failure instanceof GroupNotFoundError) && failures < 3,
-    queryFn: async ({ signal }) => {
-      const { data, error, response } = await api.GET('/api/groups/{id}', {
-        params: { path: { id: groupId } },
-        signal,
-      });
-      if (response.status === 404) throw new GroupNotFoundError('Group not found.');
-      if (!data || error) throw new Error(error?.message ?? 'Could not load the group.');
-      return data;
-    },
-  });
+  const group = useQuery(groupQuery(groupId));
   useEffect(() => {
     if (group.error instanceof GroupNotFoundError)
       window.dispatchEvent(new CustomEvent('swarm-group-deleted', { detail: groupId }));
@@ -77,6 +77,8 @@ export function GroupConversation({
     [loadingOlder, setLoadingOlder] = useState(false),
     [error, setError] = useState('');
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const filesOpener = useRef<HTMLElement | null>(null);
   const attachments = useAttachments(groupFilesKey(groupId));
   const viewport = useRef<HTMLDivElement>(null);
   const loadOlder = () => {
@@ -95,6 +97,14 @@ export function GroupConversation({
     canLoadOlder: history.data?.nextCursor != null && !loadingOlder && !history.isFetching,
     loadOlder,
     reset: groupId,
+  });
+  // A search result's Jump into this group.
+  useMessageJump(`group:${groupId}`, history.isSuccess, messageId => {
+    setError('');
+    void history.around(messageId).then(found => {
+      if (found) window_.reveal(messageId);
+      else setError('Couldn’t open that message: it may have been deleted, or it is too far back to load.');
+    });
   });
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const previous = useRef({ first: '', last: '', height: 0 });
@@ -165,7 +175,11 @@ export function GroupConversation({
   return (
     <section
       aria-label={`Group conversation: ${name}`}
-      className={cn('phone-detail-enter min-h-0 min-w-0 flex-1 flex-col md:flex', mobile ? 'flex' : 'hidden')}
+      className={cn(
+        'phone-detail-enter min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none md:flex',
+        searchOpen && 'lg:mr-96',
+        mobile ? 'flex' : 'hidden',
+      )}
     >
       <header className="flex min-h-11 shrink-0 items-center gap-2 border-b border-border px-4 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] md:gap-3 md:pt-1.5">
         <div className="min-w-0 flex-1 md:hidden">
@@ -217,7 +231,28 @@ export function GroupConversation({
                 <span className="hidden md:inline">Edit group</span>
               </Button>
             </GroupEditor>
-            <ChatFilesDialog channelKey={groupFilesKey(groupId)} title={name} className="shrink-0 border md:size-9" />
+            <MessageSearchButton
+              open={searchOpen}
+              onOpen={onSearch}
+              className="hidden shrink-0 border md:inline-flex md:size-9"
+            />
+            <ChatFilesDialog
+              channelKey={groupFilesKey(groupId)}
+              title={name}
+              className="hidden shrink-0 border md:inline-flex md:size-9"
+              open={filesOpen}
+              onOpenChange={setFilesOpen}
+              returnFocus={() => filesOpener.current}
+            />
+            <ConversationMoreMenu
+              conversation={name}
+              onSearch={onSearch}
+              onFiles={opener => {
+                filesOpener.current = opener;
+                setFilesOpen(true);
+              }}
+              className="md:hidden"
+            />
             <DeleteGroupForm
               group={group.data}
               open={modal === 'delete'}

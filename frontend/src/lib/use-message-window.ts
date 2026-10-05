@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { showMessage } from './message-jump';
 
 const EDGE = 400; // px from an edge that counts as "near"
 const FOLLOW = 80; // px from the bottom that counts as following the latest
@@ -40,6 +41,8 @@ export function useMessageWindow<T>({
   const rendered = useRef<{ first?: string; last?: string }>({});
   const atNewest = useRef(true);
   const heldFirst = useRef<string | undefined>(undefined);
+  const revealing = useRef<string | null>(null);
+  const [revealed, setRevealed] = useState(0);
 
   useEffect(() => {
     setBounds({});
@@ -59,6 +62,12 @@ export function useMessageWindow<T>({
   if (wantOlder.current && heldFirst.current !== undefined && ids[0] !== heldFirst.current) {
     const held = ids.indexOf(heldFirst.current);
     if (held > 0) start = Math.max(0, held - step);
+  }
+  // A jump to a message (search): the window opens around it once it is held.
+  const revealAt = revealing.current ? ids.indexOf(revealing.current) : -1;
+  if (revealAt >= 0) {
+    start = Math.max(0, revealAt - Math.floor(max / 3));
+    end = Math.min(length, start + max);
   }
   if (end - start > max) end = start + max;
   const visible = items.slice(start, end);
@@ -94,6 +103,16 @@ export function useMessageWindow<T>({
       root.scrollTop = root.scrollHeight;
       return;
     }
+    if (root && revealing.current && ids.includes(revealing.current)) {
+      const id = revealing.current;
+      revealing.current = null;
+      following.current = false;
+      anchor.current = null;
+      rendered.current = { first: firstId, last: lastId };
+      showMessage(root, id);
+      measure();
+      return;
+    }
     const before = rendered.current;
     rendered.current = { first: firstId, last: lastId };
     // Following the latest and something arrived above (older history): stay at the bottom. New messages at the
@@ -106,7 +125,7 @@ export function useMessageWindow<T>({
     const element = root.querySelector<HTMLElement>(`[data-window-id="${CSS.escape(anchor.current.id)}"]`);
     if (!element) return;
     root.scrollTop += element.getBoundingClientRect().bottom - root.getBoundingClientRect().top - anchor.current.offset;
-  }, [firstId, lastId, length]);
+  }, [firstId, lastId, length, revealed]);
 
   // A short history that cannot scroll never produces a scroll event: fetch older pages until it can.
   const filledAt = useRef(-1);
@@ -161,7 +180,15 @@ export function useMessageWindow<T>({
     setBounds({});
   }, []);
 
+  /** Shows a message (held now or once it arrives) in the middle of the view, highlighted (a search's Jump). */
+  const reveal = useCallback((id: string) => {
+    revealing.current = id;
+    following.current = false;
+    setRevealed(count => count + 1);
+  }, []);
+
   return {
+    reveal,
     visible,
     olderHidden: start > 0,
     newerHidden: end < length,

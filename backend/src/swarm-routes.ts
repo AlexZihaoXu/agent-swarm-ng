@@ -1,4 +1,5 @@
 import { viewerOf } from './users/reach';
+import { AroundParam } from './search/schema';
 import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import { messageText } from './message-text';
@@ -190,7 +191,10 @@ export function registerSwarmRoutes(
       };
     },
   );
-  app.get<{ Params: { id: string; peerId: string }; Querystring: { before?: number; limit?: number } }>(
+  app.get<{
+    Params: { id: string; peerId: string };
+    Querystring: { before?: number; limit?: number; around?: string };
+  }>(
     '/api/agents/:id/dms/:peerId',
     {
       schema: {
@@ -199,6 +203,7 @@ export function registerSwarmRoutes(
         querystring: Type.Object({
           before: Type.Optional(Type.Integer({ minimum: 1 })),
           limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 40 })),
+          around: Type.Optional(AroundParam),
         }),
         response: {
           200: Type.Object({ messages: Type.Array(DmMessage), nextCursor: Type.Union([Type.Integer(), Type.Null()]) }),
@@ -213,12 +218,15 @@ export function registerSwarmRoutes(
         return reply.code(400).send({ message: 'Choose another agent.' });
       if (!(await database.findAgent(request.params.id)) || !(await database.findAgent(request.params.peerId)))
         return reply.code(404).send({ message: 'Agent not found.' });
-      const page = await swarm.history(
-        request.params.id,
-        request.params.peerId,
-        request.query.before,
-        request.query.limit,
-      );
+      const page = request.query.around
+        ? await swarm.historyAround(
+            request.params.id,
+            request.params.peerId,
+            request.query.around,
+            request.query.before,
+          )
+        : await swarm.history(request.params.id, request.params.peerId, request.query.before, request.query.limit);
+      if (!page) return reply.code(404).send({ message: 'Message not found in this conversation.' });
       const attached = await files.forMessages(
         'dm',
         page.messages.map(message => message.id),

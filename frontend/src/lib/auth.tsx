@@ -74,6 +74,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const signOut = async () => {
     // The next person signing in on this browser must not get this one's notifications.
     await forgetThisBrowser();
+    // Nor see their searches (Chat search history, per person in this browser).
+    try {
+      for (const key of Object.keys(localStorage))
+        if (key.startsWith('swarm.search-history')) localStorage.removeItem(key);
+    } catch {
+      // Blocked storage keeps nothing anyway.
+    }
     await api.POST('/api/auth/logout').catch(() => undefined);
     switchTo({ signedIn: false, setupRequired: false });
   };

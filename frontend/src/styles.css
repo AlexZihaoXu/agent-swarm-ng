@@ -408,6 +408,26 @@
   transform-origin: var(--radix-context-menu-content-transform-origin);
 }
 
+/* A search result's Jump: the message's row lights up and fades back (a still tint for reduced motion). */
+.message-jump-flash {
+  border-radius: 0.75rem;
+  background-color: color-mix(in srgb, var(--ring) 16%, transparent);
+}
+@keyframes jump-flash {
+  0%,
+  45% {
+    background-color: color-mix(in srgb, var(--ring) 22%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .message-jump-flash {
+    animation: jump-flash 2.2s ease-out both;
+  }
+}
+
 .message-context-target[data-state='open'] {
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--ring) 60%, transparent),

@@ -1,3 +1,4 @@
+import { historyAround } from './history-around';
 import type { PlatformStore } from './platform-store';
 import { encodeAvatar, type AgentAvatar } from './agent-avatar';
 import { liveChainWhere } from './communication-policy';
@@ -239,6 +240,30 @@ export class SwarmStore {
     });
     if (!message) throw new SwarmError('missing', 'Message not found in this DM conversation.');
     return message;
+  }
+  /** The page reaching back to a message of these agents' DMs (a search result's Jump), or null when not there. */
+  async historyAround(agentId: string, peerId: string, messageId: string, before?: number) {
+    await this.store.initialize();
+    const where = {
+      conversationId: dmConversationId(agentId, peerId),
+      OR: [
+        { senderId: agentId, recipientId: peerId },
+        { senderId: peerId, recipientId: agentId },
+      ],
+    };
+    const target = await this.store.client.dmMessage.findFirst({
+      where: { ...where, id: messageId },
+      select: { sequence: true },
+    });
+    if (!target) return null;
+    return historyAround(target.sequence, before, (sequence, order, take) =>
+      this.store.client.dmMessage.findMany({
+        where: { ...where, sequence },
+        orderBy: { sequence: order },
+        take,
+        include: { sender: { select: { name: true } }, recipient: { select: { name: true } }, ...dmReplyInclude },
+      }),
+    );
   }
   async history(agentId: string, peerId: string, before?: number, limit = 20) {
     if (

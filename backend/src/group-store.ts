@@ -1,3 +1,4 @@
+import { historyAround } from './history-around';
 import type { Prisma } from './generated/prisma/client';
 import type { PlatformStore } from './platform-store';
 import { SwarmError } from './swarm-store';
@@ -275,6 +276,25 @@ export class GroupStore {
       });
       const messages = rows.slice(0, limit).reverse();
       return { messages, nextCursor: rows.length > limit ? messages[0].sequence : null };
+    });
+  }
+  /** The page reaching back to a message of this group (a search result's Jump; the dashboard only). */
+  async historyAround(groupId: string, messageId: string, before?: number) {
+    if (before !== undefined && (!Number.isSafeInteger(before) || before < 1))
+      throw new SwarmError('invalid', 'Invalid history window.');
+    await this.store.initialize();
+    return this.store.client.$transaction(async tx => {
+      await this.authorize(tx, groupId);
+      const target = await tx.groupMessage.findFirst({ where: { id: messageId, groupId }, select: { sequence: true } });
+      if (!target) throw new SwarmError('missing', 'Message not found in this group.');
+      return historyAround(target.sequence, before, (sequence, order, take) =>
+        tx.groupMessage.findMany({
+          where: { groupId, sequence },
+          orderBy: { sequence: order },
+          take,
+          include: groupReplyInclude,
+        }),
+      );
     });
   }
   async message(groupId: string, messageId: string, agentId?: string) {

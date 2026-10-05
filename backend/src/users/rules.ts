@@ -26,7 +26,11 @@ type Rule =
   | Check;
 
 const param = (request: FastifyRequest, name: string) => (request.params as Record<string, string>)[name];
-const query = (request: FastifyRequest, name: string) => (request.query as Record<string, string> | undefined)?.[name];
+// Only a single string counts: a repeated parameter (an array) is not a value, and the route's own schema refuses it.
+const query = (request: FastifyRequest, name: string) => {
+  const value = (request.query as Record<string, unknown> | undefined)?.[name];
+  return typeof value === 'string' ? value : undefined;
+};
 const body = (request: FastifyRequest) => (request.body ?? {}) as Record<string, unknown>;
 const agent = { agent: 'id' },
   computer = { computer: 'id' },
@@ -160,6 +164,15 @@ export const RULES: Record<string, Rule> = {
   'DELETE /api/groups/:id': group,
   'GET /api/groups/:id/messages': group,
   'POST /api/groups/:id/messages': group,
+
+  // Message search (search/routes.ts): one conversation the person reaches, or their organizations (the handler
+  // scopes "all chats" and checks the conversation again).
+  'GET /api/search/messages': async (request, reach, viewer) => {
+    const conversation = query(request, 'conversation');
+    if (conversation) return reach.channel(viewer, conversation);
+    const organizationId = query(request, 'organizationId');
+    return organizationId ? reach.organization(viewer, organizationId) : true;
+  },
 
   'GET /api/files': channelKey,
   'POST /api/files': channelKey,

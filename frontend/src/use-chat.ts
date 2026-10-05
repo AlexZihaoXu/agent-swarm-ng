@@ -233,6 +233,40 @@ export function useChat() {
     }
   }
 
+  /**
+   * Loads older history until a message is held (a search result's Jump), a bounded page at a time from the oldest
+   * held message; false when it is not in this chat or the request failed.
+   */
+  async function loadAround(agent: ChatAgent, messageId: string) {
+    const channel = agent.channelId;
+    if ((conversations[channel] ?? []).some(message => message.id === messageId)) return true;
+    let before: number | null | undefined = historyCursor[channel];
+    if (!historyReady[channel] || before == null) return false;
+    // At most 25 pages of 200: about 5,000 messages back from what is held.
+    for (let round = 0; round < 25 && before != null; round++) {
+      const cursor: number = before;
+      const { data, error } = await api.GET('/api/channels/{channelId}/messages', {
+        params: { path: { channelId: channel }, query: { before: cursor, around: messageId } },
+      });
+      if (error || !data) return false;
+      for (const message of data.messages) remember(knownMessages.current, `${channel}:${message.id}`);
+      const messages = data.messages.map(asMessage);
+      setConversations(current => {
+        const existing = current[channel] ?? [];
+        return {
+          ...current,
+          [channel]: [...messages.filter(item => !existing.some(row => row.id === item.id)), ...existing],
+        };
+      });
+      const next = data.nextCursor;
+      before = next;
+      setHistoryCursor(current => ({ ...current, [channel]: next }));
+      if (messages.some(message => message.id === messageId)) return true;
+      if (!messages.length) return false;
+    }
+    return false;
+  }
+
   useEffect(() => {
     const sound = createNotificationSound();
     notification.current = sound;
@@ -705,6 +739,7 @@ export function useChat() {
     typingTargets,
     activity,
     errors,
+    recordError,
     addAgent,
     applyAgent,
     runOf: (channelId: string) => activeRuns.current.get(channelId),
@@ -722,6 +757,7 @@ export function useChat() {
     historyFailed,
     historyCursor,
     loadHistory,
+    loadAround,
     loadActivity,
     expandActivity,
     retryActivity,

@@ -9,6 +9,7 @@ import { MessageMarkdown } from '@/components/message-markdown';
 import { MessageReply } from '@/components/message-reply';
 import { MessageFiles } from '@/components/message-files';
 import { dmFilesKey, replaceFile, type ChatFile } from '@/lib/chat-files';
+import { showMessage, useMessageJump } from '@/lib/message-jump';
 type Message =
   paths['/api/agents/{id}/dms/{peerId}']['get']['responses'][200]['content']['application/json']['messages'][number];
 type BubbleView = {
@@ -92,6 +93,39 @@ export function AgentDmTranscript({
       window.removeEventListener('swarm-file-deleted', fileDeleted);
     };
   }, [agentId, peerId]);
+  // A search result's Jump into this conversation: older pages until the message is held, then show it.
+  const [reveal, setReveal] = useState<string | null>(null);
+  const held = useRef({ messages, cursor });
+  held.current = { messages, cursor };
+  useMessageJump(dmFilesKey(agentId, peerId), Boolean(bubbleView) && loaded.current && !busy, async messageId => {
+    let before: number | null = held.current.cursor;
+    for (let round = 0; round < 25 && !held.current.messages.some(message => message.id === messageId); round++) {
+      if (before == null)
+        return setError('Couldn’t open that message: it may have been deleted, or it is too far back to load.');
+      const cursor: number = before;
+      const { data } = await api.GET('/api/agents/{id}/dms/{peerId}', {
+        params: { path: { id: agentId, peerId }, query: { before: cursor, around: messageId } },
+      });
+      if (!data?.messages.length) return setError('Could not open that message.');
+      const page = data.messages;
+      setMessages(current =>
+        [...new Map([...page, ...current].map(message => [message.id, message])).values()].sort(
+          (a, b) => a.sequence - b.sequence,
+        ),
+      );
+      before = data.nextCursor;
+      setCursor(before);
+      if (page.some(message => message.id === messageId)) break;
+    }
+    setReveal(messageId);
+  });
+  useLayoutEffect(() => {
+    const viewport = bubbleView?.viewport.current;
+    if (!reveal || !viewport || !messages.some(message => message.id === reveal)) return;
+    position.current = null;
+    showMessage(viewport, reveal);
+    setReveal(null);
+  }, [reveal, messages]);
   useLayoutEffect(() => {
     const viewport = bubbleView?.viewport.current,
       previous = position.current;

@@ -404,6 +404,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/search/messages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['searchMessages'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/settings/swarm': {
     parameters: {
       query?: never;
@@ -3357,6 +3373,114 @@ export interface operations {
       };
     };
   };
+  searchMessages: {
+    parameters: {
+      query?: {
+        q?: string;
+        conversation?: string;
+        organizationId?: string;
+        from?: string;
+        has?: string;
+        /** @description YYYY-MM-DD */
+        before?: string;
+        /** @description YYYY-MM-DD */
+        after?: string;
+        /** @description YYYY-MM-DD */
+        during?: string;
+        sort?: 'newest' | 'oldest';
+        page?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            total: number;
+            more: boolean;
+            page: number;
+            pageSize: number;
+            results: {
+              id: string;
+              kind: 'chat' | 'group' | 'dm';
+              sequence: number;
+              timestamp: number;
+              conversation: {
+                key: string;
+                name: string;
+                agentId?: string;
+                peerId?: string;
+                groupId?: string;
+              };
+              author: {
+                kind: 'human' | 'agent';
+                id: string | null;
+                name: string | null;
+                avatar: {
+                  shape: 'pebble' | 'squircle' | 'gumdrop' | 'triangle' | 'bean' | 'pear' | 'capsule' | 'diamond';
+                  color: string;
+                  eyeStyle?: 'pill' | 'round';
+                  seed: number;
+                  stretch?: number;
+                  taper?: number;
+                  wobble?: number;
+                  eyeSize?: number;
+                  eyeGap?: number;
+                  mouth?: 'none' | 'smile' | 'flat' | 'open' | 'cat';
+                  marking?: 'none' | 'cheeks' | 'spots' | 'belly' | 'stripe';
+                  accent?: string;
+                  accessory?: 'none' | 'antenna' | 'sprout' | 'bow' | 'halo' | 'glasses';
+                } | null;
+              };
+              snippet: {
+                text: string;
+                ranges: {
+                  start: number;
+                  end: number;
+                }[];
+                clippedStart: boolean;
+                clippedEnd: boolean;
+              };
+              files: {
+                id: string;
+                name: string;
+                kind: string;
+              }[];
+            }[];
+          };
+        };
+      };
+      /** @description Default Response */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+      /** @description Default Response */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+    };
+  };
   getSwarmSettings: {
     parameters: {
       query?: never;
@@ -5129,6 +5253,8 @@ export interface operations {
       query?: {
         before?: number;
         limit?: number;
+        /** @description Reach back to this message (with a few before it), at most 200 per page; ignores limit. */
+        around?: string;
       };
       header?: never;
       path: {
@@ -5926,6 +6052,8 @@ export interface operations {
       query?: {
         before?: number;
         limit?: number;
+        /** @description Reach back to this message (with a few before it), at most 200 per page; ignores limit. */
+        around?: string;
       };
       header?: never;
       path: {
@@ -6698,6 +6826,8 @@ export interface operations {
       query?: {
         before?: number;
         limit?: number;
+        /** @description Reach back to this message (with a few before it), at most 200 per page; ignores limit. */
+        around?: string;
       };
       header?: never;
       path: {

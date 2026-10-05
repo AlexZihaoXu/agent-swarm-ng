@@ -88,6 +88,18 @@ export function useGroups(search = '') {
     getNextPageParam: page => page.nextCursor ?? undefined,
   });
 }
+export class GroupNotFoundError extends Error {}
+/** A group's details, shared by its conversation and the message search panel (one cache entry). */
+export const groupQuery = (groupId: string) => ({
+  queryKey: ['group', groupId],
+  retry: (failures: number, failure: Error) => !(failure instanceof GroupNotFoundError) && failures < 3,
+  queryFn: async ({ signal }: { signal: AbortSignal }) => {
+    const { data, error, response } = await api.GET('/api/groups/{id}', { params: { path: { id: groupId } }, signal });
+    if (response.status === 404) throw new GroupNotFoundError('Group not found.');
+    if (!data || error) throw new Error(error?.message ?? 'Could not load the group.');
+    return data;
+  },
+});
 /** Shared by the conversation and by hover prefetch, so a warmed group opens from cache. */
 export function groupMessagesOptions(client: QueryClient, groupId: string) {
   return {
@@ -119,5 +131,22 @@ export function useGroupMessages(groupId: string) {
       nextCursor: data.nextCursor,
     }));
   };
-  return { ...query, older };
+  /** Loads older pages until a message is held (a search result's Jump); false when it is not in this group. */
+  const around = async (messageId: string) => {
+    for (let round = 0; round < 25; round++) {
+      const held = client.getQueryData<GroupPage>(['group-messages', groupId]);
+      if (held?.messages.some(message => message.id === messageId)) return true;
+      if (!held || held.nextCursor == null) return false;
+      const { data, error } = await api.GET('/api/groups/{id}/messages', {
+        params: { path: { id: groupId }, query: { before: held.nextCursor, around: messageId } },
+      });
+      if (!data || error || !data.messages.length) return false;
+      client.setQueryData<GroupPage>(['group-messages', groupId], current => ({
+        messages: mergeGroupMessages(data.messages, current?.messages ?? []),
+        nextCursor: data.nextCursor,
+      }));
+    }
+    return false;
+  };
+  return { ...query, older, around };
 }

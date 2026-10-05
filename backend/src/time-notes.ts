@@ -10,7 +10,7 @@ export const TIME_NOTE_DEFAULT = 15;
 export const platformZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /** The zone's offset from UTC at that moment, in minutes ("GMT-04:00" → -240). */
-function offsetMinutes(now: Date, zone: string) {
+export function offsetMinutes(now: Date, zone: string) {
   const name =
     new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
       .formatToParts(now)

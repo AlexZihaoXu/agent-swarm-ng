@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -33,19 +33,32 @@ const grid = 'grid-cols-[1.5rem_minmax(0,1fr)_2.75rem] sm:grid-cols-[1.5rem_minm
 /**
  * A chat's Files (Kibo dialog-standard-3 frame, as the computer File browser, with a data-table-standard-1 table
  * and a data-table-standard-2 filter): every file sent here, searchable and sortable; the human downloads or
- * deletes them. A deleted file leaves a tombstone in the conversation.
+ * deletes them. A deleted file leaves a tombstone in the conversation. It may be opened from elsewhere too (the
+ * phone header's More menu): pass `open`/`onOpenChange`, and `returnFocus` for when its own button is hidden.
  */
 export function ChatFilesDialog({
   channelKey,
   title,
   className,
+  open: shown,
+  onOpenChange,
+  returnFocus,
 }: {
   channelKey: string;
   title: string;
   className?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  returnFocus?: () => HTMLElement | null;
 }) {
   const client = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = shown ?? ownOpen;
+  const setOpen = (next: boolean) => {
+    setOwnOpen(next);
+    onOpenChange?.(next);
+  };
+  const trigger = useRef<HTMLButtonElement>(null);
   const [search, setSearch] = useState(''),
     [query, setQuery] = useState('');
   const [sort, setSort] = useState<{ by: ChatFileSort; order: 'asc' | 'desc' }>({ by: 'date', order: 'desc' });
@@ -112,6 +125,7 @@ export function ChatFilesDialog({
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
         <Button
+          ref={trigger}
           variant="outline"
           size="sm"
           aria-label="Chat files"
@@ -134,7 +148,16 @@ export function ChatFilesDialog({
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className={dialogOverlay} />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(85dvh,44rem)] max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] min-w-0 max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background ao-card shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_200ms_cubic-bezier(0.22,1,0.36,1)] motion-safe:data-[state=closed]:animate-[dialog-out_130ms_ease-in] sm:w-[calc(100%-2rem)]">
+        <Dialog.Content
+          onCloseAutoFocus={event => {
+            // Its own button is hidden on phones: focus goes back to what opened it there.
+            const target = trigger.current?.offsetParent ? null : returnFocus?.();
+            if (!target) return;
+            event.preventDefault();
+            target.focus();
+          }}
+          className="fixed left-1/2 top-1/2 z-50 flex h-[min(85dvh,44rem)] max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] min-w-0 max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background ao-card shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_200ms_cubic-bezier(0.22,1,0.36,1)] motion-safe:data-[state=closed]:animate-[dialog-out_130ms_ease-in] sm:w-[calc(100%-2rem)]"
+        >
           <header className="shrink-0 border-b border-border px-3 py-3 sm:px-5">
             <div className="flex min-w-0 items-center justify-between gap-3">
               <Dialog.Title className="min-w-0 text-sm font-semibold [overflow-wrap:anywhere]">

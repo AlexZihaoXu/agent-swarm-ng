@@ -1,3 +1,4 @@
+import { historyAround } from './history-around';
 import { PrismaClient, type Prisma } from './generated/prisma/client';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { databaseUrl, databaseFile } from './database-location';
@@ -155,6 +156,23 @@ export class PlatformStore {
     const more = rows.length > limit;
     const messages = rows.slice(0, limit).reverse();
     return { messages, nextCursor: more ? messages[0].sequence : null };
+  }
+  /** The page reaching back to a message of this channel (a search result's Jump), or null when it is not here. */
+  async messagesAround(channelId: string, messageId: string, before?: number) {
+    await this.initialize();
+    const target = await this.client.message.findFirst({
+      where: { id: messageId, channelId },
+      select: { sequence: true },
+    });
+    if (!target) return null;
+    return historyAround(target.sequence, before, (sequence, order, take) =>
+      this.client.message.findMany({
+        where: { channelId, sequence },
+        orderBy: { sequence: order },
+        take,
+        include: channelReplyInclude,
+      }),
+    );
   }
   async appendMessage(
     channelId: string,

@@ -84,11 +84,24 @@ test('group header, reply and composer fit a narrow phone without horizontal ove
   const edit = await size(page.getByRole('button', { name: 'Edit group chat' }));
   expect(edit.height).toBeGreaterThanOrEqual(44);
   expect(edit.width).toBe(44);
-  expect((await size(page.getByRole('button', { name: 'Chat files' }))).width).toBe(44);
-  // Back, Files and Edit share the 320px header with the title, which keeps a readable width.
+  // Search and Files share one More menu on phones, so Back, Edit and More leave the title a readable width.
+  await expect(page.getByRole('button', { name: 'Chat files' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Search messages' })).toHaveCount(0);
+  const more = page.getByRole('button', { name: 'More for Research notes and plans' });
+  expect(await size(more)).toMatchObject({ width: 44, height: 44 });
   expect((await size(page.getByRole('heading', { name: 'Research notes and plans' }))).width).toBeGreaterThanOrEqual(
     110,
   );
+  await more.click();
+  const actions = page.getByRole('menu', { name: 'More for Research notes and plans' });
+  for (const name of ['Search messages', 'Chat files'])
+    expect((await size(actions.getByRole('menuitem', { name }))).height).toBeGreaterThanOrEqual(44);
+  await actions.getByRole('menuitem', { name: 'Chat files' }).click();
+  const files = page.getByRole('dialog', { name: 'Files · Research notes and plans' });
+  await expect(files).toBeVisible();
+  await files.getByRole('button', { name: 'Close files' }).click();
+  await expect(files).toBeHidden();
+  await expect(more).toBeFocused();
   await page.getByText('A result', { exact: true }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Reply' }).click();
   await expect(page.getByLabel('Replying to Avery')).toContainText('A result');

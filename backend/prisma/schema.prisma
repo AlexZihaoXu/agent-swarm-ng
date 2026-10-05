@@ -329,6 +329,8 @@ model DmMessage {
   @@index([senderId])
   @@index([chainId])
   @@index([replyToId])
+  /// Message search by day across all chats (docs/chat-and-groups.md#search).
+  @@index([createdAt])
 }
 
 model GroupChat {
@@ -380,6 +382,8 @@ model GroupMessage {
   @@index([authorId, sequence])
   @@index([chainId])
   @@index([replyToId])
+  /// Message search by day across all chats (docs/chat-and-groups.md#search).
+  @@index([createdAt])
 }
 
 model GroupDelivery {
@@ -479,6 +483,8 @@ model Message {
   @@index([channelId, sequence])
   @@index([channelId, createdAt, sequence])
   @@index([replyToId])
+  /// Message search by day across all chats (docs/chat-and-groups.md#search).
+  @@index([createdAt])
 }
 
 // Operator-wide settings for the whole swarm (one row, id 1). Absent row = defaults.

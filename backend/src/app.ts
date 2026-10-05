@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { registerSearchRoutes } from './search/routes';
 import swagger from '@fastify/swagger';
 import websocket from '@fastify/websocket';
 import { registerTerminalStreams } from './computer-terminal-stream';
@@ -144,6 +145,7 @@ export async function buildApp({
   // Uploads a restart interrupted leave temporary files; remove them before any new upload can start.
   await files.blobs.clearTemporary();
   registerFileRoutes(app, platform, files, new Scratchpad(platform, swarmSettings));
+  registerSearchRoutes(app, platform);
   registerSwarmSettingsRoutes(app, swarmSettings);
   // Each agent's own Discord bot: tokens beside the database, connections owned by the backend.
   const discordTokens = new DiscordTokenStore(join(platform.dataDirectory, 'discord-bots.json'));

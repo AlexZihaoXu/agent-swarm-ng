@@ -28,6 +28,7 @@ import { channelReply, channelReplyContext } from './reply-preview';
 import type { ComputerUseService } from './computer-use/service';
 import type { ScreenshotPool } from './computer-use/image-pool';
 import { registerActivityRoutes } from './activity-routes';
+import { AroundParam } from './search/schema';
 import { Connections } from './users/connections';
 import { parseTodos } from './todos';
 import { TIME_NOTE_CHOICES } from './time-notes';
@@ -382,7 +383,7 @@ export function registerChat(
       return { agents: page.agents.map(agent => agentView(agent, files)), nextCursor: page.nextCursor };
     },
   );
-  app.get<{ Params: { channelId: string }; Querystring: { before?: number; limit?: number } }>(
+  app.get<{ Params: { channelId: string }; Querystring: { before?: number; limit?: number; around?: string } }>(
     '/api/channels/:channelId/messages',
     {
       schema: {
@@ -391,6 +392,7 @@ export function registerChat(
         querystring: Type.Object({
           before: Type.Optional(Type.Integer({ minimum: 1 })),
           limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
+          around: Type.Optional(AroundParam),
         }),
         response: { 200: Type.Object({ messages: Type.Array(Message), nextCursor: Cursor }), 404: ErrorResponse },
       },
@@ -399,7 +401,10 @@ export function registerChat(
       reply.header('Cache-Control', 'no-store');
       if (!(await database.hasChannel(request.params.channelId)))
         return reply.code(404).send({ message: 'Channel not found.' });
-      const page = await database.messages(request.params.channelId, request.query.before, request.query.limit);
+      const page = request.query.around
+        ? await database.messagesAround(request.params.channelId, request.query.around, request.query.before)
+        : await database.messages(request.params.channelId, request.query.before, request.query.limit);
+      if (!page) return reply.code(404).send({ message: 'Message not found in this chat.' });
       return { messages: await withFiles(page.messages), nextCursor: page.nextCursor };
     },
   );
