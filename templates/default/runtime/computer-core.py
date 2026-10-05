@@ -51,6 +51,38 @@ def start_time(pid):
     return Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()[19]
 
 
+def alive(pid, start):
+    try: return start_time(pid) == start
+    except (FileNotFoundError, ProcessLookupError, ValueError, IndexError): return False
+
+
+def workers():
+    """Live operation workers: each is PID 1 of its operation's private PID namespace."""
+    found = []
+    for entry in Path('/proc').iterdir():
+        if not entry.name.isdigit(): continue
+        try:
+            if '/opt/swarm/computer-core-worker.py' in (entry / 'cmdline').read_bytes().decode(errors='replace'): found.append(int(entry.name))
+        except OSError: pass
+    return found
+
+
+def busy():
+    """Whether an earlier operation may still be running. A marker whose supervisor is gone (same pid and start time
+    no longer alive) and with no operation worker left is stale: the kernel ends a PID namespace with its init (the
+    worker), so nothing of that operation can still run. It is removed instead of holding the computer until a
+    restart. Callers hold operation.lock."""
+    marker = ROOT / 'active'
+    if not marker.exists(): return False
+    try:
+        record = json.loads(marker.read_text())
+        pid, start = int(record['pid']), str(record['start'])
+    except (OSError, ValueError, KeyError, TypeError): return True
+    if alive(pid, start) or workers(): return True
+    marker.unlink(missing_ok=True)
+    return False
+
+
 def descendants(pid):
     rows = []
     try: children = Path(f'/proc/{pid}/task/{pid}/children').read_text().split()
@@ -90,7 +122,7 @@ def settle(child):
 def execute(value, token):
     if ctypes.CDLL(None).prctl(36, 1, 0, 0, 0) != 0: raise RuntimeError('Cannot supervise descendants.')
     with locked('operation.lock'):
-        if (ROOT / 'active').exists(): raise RuntimeError('Previous supervisor settlement is unknown; restart the computer before transfer.')
+        if busy(): raise RuntimeError('Previous supervisor settlement is unknown; restart the computer before transfer.')
         if token != generation(): return {'started': False, 'settled': True, 'error': 'Stale command authorization; claim and retry only after inspecting effects.'}
         atomic('active', json.dumps({'pid': os.getpid(), 'start': start_time(os.getpid())}))
         child = None
@@ -127,7 +159,7 @@ def execute_terminal(value, token):
     # Same fence/admission as synchronous core operations, deliberately different lifetime:
     # only this short tmux request must settle. Existing terminal programs are NOT cancelled.
     with locked('operation.lock'):
-        if (ROOT / 'active').exists(): raise RuntimeError('Previous operation settlement is unknown.')
+        if busy(): raise RuntimeError('Previous operation settlement is unknown.')
         if token != generation(): return {'started': False, 'settled': True, 'error': 'Stale terminal authorization. Inspect before retrying.'}
         atomic('active', json.dumps({'pid': os.getpid(), 'start': start_time(os.getpid())}))
         # No private PID namespace or subreaper: the explicitly authorized tmux server outlives us.
@@ -159,11 +191,11 @@ def main():
     if mode == 'cancel':
         generation(True)
         with locked('operation.lock', 10):
-            if (ROOT / 'active').exists(): raise RuntimeError('Previous supervisor settlement is unknown; restart the computer before transfer.')
+            if busy(): raise RuntimeError('Previous supervisor settlement is unknown; restart the computer before transfer.')
         return {'settled': True}
     if mode == 'prepare':
         with locked('operation.lock'):
-            if (ROOT / 'active').exists(): raise RuntimeError('Previous supervisor settlement is unknown.')
+            if busy(): raise RuntimeError('Previous supervisor settlement is unknown.')
             return {'validationToken': generation()}
     if mode != 'execute' or not isinstance(value, dict): raise ValueError('Invalid core operation.')
     token = value.pop('validationToken', None)
