@@ -108,6 +108,9 @@ handle @computerUnknown {
 	respond "Unknown computer viewer path" 404
 }
 
+# API responses keep their own Content-Security-Policy: the dashboard's page policy (in each site's app `handle`) must
+# never apply here, or the sandboxed HTML viewer (/api/files/:id/view, docs/agent-files.md#html-viewer) could not run
+# its page's inline scripts. Only the site-wide frame-ancestors policy above is added, which still allows the frame.
 handle /api/* {
 	reverse_proxy backend:3000 {
 		# The visitor's address as Caddy resolved it (through trusted proxies), for sign-in limits.

@@ -17,6 +17,14 @@ export const dmFilesKey = (a: string, b: string) => `dm:${[a, b].sort().join(':'
 export const fileContentUrl = (id: string, download = false) =>
   `/api/files/${encodeURIComponent(id)}/content${download ? '?download=1' : ''}`;
 
+/** The sandboxed page of an HTML file (docs/agent-files.md#html-viewer). */
+export const fileViewUrl = (id: string) => `/api/files/${encodeURIComponent(id)}/view`;
+/** HTML the dashboard can render in its sandboxed viewer: a text file or live scratch preview named .html/.htm. */
+/** Larger HTML files only download (the view route refuses them). */
+export const HTML_VIEW_BYTES = 10 * 1024 * 1024;
+export const isHtmlFile = (file: Pick<ChatFile, 'kind' | 'name'>) =>
+  (file.kind === 'text' || file.kind === 'scratch') && /\.html?$/i.test(file.name);
+
 export async function listChatFiles(
   channelKey: string,
   options: { query?: string; sort?: ChatFileSort; order?: 'asc' | 'desc' },

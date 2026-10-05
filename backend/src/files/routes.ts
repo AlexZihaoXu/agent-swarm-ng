@@ -76,6 +76,28 @@ function byteRange(header: string | undefined, size: number) {
 }
 /** How much of a text file the dashboard preview reads. */
 export const PREVIEW_BYTES = 1024 * 1024;
+/** The largest HTML file the viewer renders (bigger ones download). */
+export const HTML_VIEW_BYTES = 10 * 1024 * 1024;
+/** An HTML chat file (or live scratch preview of one): the only files the dashboard renders, in a sandbox. */
+export const isHtmlFile = (view: Pick<FileView, 'kind' | 'name'>) =>
+  (view.kind === 'text' || view.kind === 'scratch') && /\.html?$/i.test(view.name);
+/**
+ * The viewer's own policy: an opaque-origin sandbox (also when opened directly) whose scripts may run but reach
+ * nothing: no network, no forms, no navigation of the dashboard; only inline and data:/blob: resources.
+ */
+export const HTML_VIEW_CSP = [
+  'sandbox allow-scripts',
+  "default-src 'none'",
+  "script-src 'unsafe-inline' 'unsafe-eval' data: blob:",
+  "style-src 'unsafe-inline' data:",
+  'img-src data: blob:',
+  'font-src data:',
+  'media-src data: blob:',
+  "connect-src 'none'",
+  "frame-ancestors 'self'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join('; ');
 
 const contentDisposition = (kind: 'inline' | 'attachment', name: string) =>
   `${kind}; filename="${name.replace(/[^\x20-\x7e]|["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`;
@@ -282,6 +304,48 @@ export function registerFileRoutes(
           .header('Content-Length', String(range.end - range.start + 1))
           .send(files.blobs.stream(blobId, range));
       return reply.header('Content-Length', String(view.size)).send(files.blobs.stream(blobId));
+    },
+  );
+
+  // Untrusted HTML, rendered only inside the dashboard's sandboxed viewer frame (docs/agent-files.md#html-viewer).
+  app.get<{ Params: { id: string } }>(
+    '/api/files/:id/view',
+    {
+      schema: {
+        operationId: 'viewHtmlFile',
+        params: Type.Object({ id: Type.String({ minLength: 1, maxLength: 64 }) }),
+      },
+    },
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      // Only as the dashboard viewer's frame: opened as a page, it would draw under the dashboard's own address.
+      const destination = request.headers['sec-fetch-dest'];
+      if (destination && destination !== 'iframe')
+        return reply.code(400).send({ message: 'HTML files open only in the dashboard’s page viewer.' });
+      const found = await visible(reply, request.params.id);
+      if (!found) return reply;
+      const { view, blobId } = found;
+      if (view.status === 'deleted') return reply.code(410).send({ message: `"${view.name}" was deleted.` });
+      if (!isHtmlFile(view)) return reply.code(400).send({ message: 'Only HTML files can be viewed.' });
+      const tooBig = () =>
+        reply.code(413).send({ message: `"${view.name}" is too large to view here (over 10 MB); download it.` });
+      const page = (body: Buffer | ReturnType<typeof files.blobs.stream>, length: number) =>
+        reply
+          .header('Content-Type', 'text/html; charset=utf-8')
+          .header('Content-Disposition', contentDisposition('inline', view.name))
+          .header('Content-Security-Policy', HTML_VIEW_CSP)
+          .header('X-Content-Type-Options', 'nosniff')
+          .header('Referrer-Policy', 'no-referrer')
+          .header('Content-Length', String(length))
+          .send(body);
+      if (view.scratch) {
+        const text = await liveScratch(reply, view);
+        if (text === null) return reply;
+        const bytes = Buffer.from(text);
+        return bytes.length > HTML_VIEW_BYTES ? tooBig() : page(bytes, bytes.length);
+      }
+      if (!blobId) return reply.code(410).send({ message: `"${view.name}" was deleted.` });
+      return view.size > HTML_VIEW_BYTES ? tooBig() : page(files.blobs.stream(blobId), view.size);
     },
   );
 

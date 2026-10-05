@@ -73,6 +73,16 @@ describe('users', { timeout: 120_000 }, () => {
         `/api/dashboard?organization=personal`,
       ])
         expect((await call('GET', url, samCookie)).statusCode, url).toBe(404);
+      // Files too, including the HTML viewer.
+      const page = await app.inject({
+        method: 'POST',
+        url: `/api/files?channelKey=chat:${ada.channels[0].id}&name=page.html`,
+        headers: { host: '127.0.0.1:19090', cookie: admin, 'content-type': 'application/octet-stream' },
+        payload: '<p>hi</p>',
+      });
+      for (const route of ['content', 'text', 'view'])
+        expect((await call('GET', `/api/files/${page.json().id}/${route}`, samCookie)).statusCode, route).toBe(404);
+      expect((await call('GET', `/api/files/${page.json().id}/view`, admin)).statusCode).toBe(200);
       expect((await call('GET', `/api/agents/${bo.id}/settings`, samCookie)).statusCode).toBe(200);
       expect((await call('GET', `/api/agents/${ada.id}/settings`, admin)).statusCode).toBe(200);
       expect(

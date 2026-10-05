@@ -3959,6 +3959,28 @@
         }
       }
     },
+    "/api/files/{id}/view": {
+      "get": {
+        "operationId": "viewHtmlFile",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/files/{id}/text": {
       "get": {
         "operationId": "previewFileText",

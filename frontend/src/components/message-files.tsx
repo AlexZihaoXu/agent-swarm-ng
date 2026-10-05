@@ -1,8 +1,10 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FileIcon } from '@/components/ui/file-icon';
 import { fileSize } from '@/lib/computer-files';
-import { fileContentUrl, previewChatFile, type ChatFile } from '@/lib/chat-files';
+import { HtmlViewer } from '@/components/html-viewer';
+import { ImageViewer } from '@/components/image-viewer';
+import { HTML_VIEW_BYTES, fileContentUrl, isHtmlFile, previewChatFile, type ChatFile } from '@/lib/chat-files';
 import { cn } from '@/lib/utils';
 import { useScratchRevision } from '@/lib/scratch-writers';
 import 'highlight.js/styles/github-dark.css';
@@ -126,12 +128,20 @@ function TextFile({ file }: { file: ChatFile }) {
         ) : (
           <span className="shrink-0 text-[11px] text-muted-foreground">{fileSize(file.size)}</span>
         )}
+        {isHtmlFile(file) && file.size <= HTML_VIEW_BYTES && (
+          <span className="ml-auto shrink-0">
+            <HtmlViewer id={file.id} name={file.name} revision={file.scratch ? revision : 0} />
+          </span>
+        )}
         {(more || expanded) && (
           <button
             type="button"
             aria-expanded={expanded}
             onClick={() => setExpanded(value => !value)}
-            className="ml-auto shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[11px] text-muted-foreground outline-none hover:bg-foreground/10 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+            className={cn(
+              'shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[11px] text-muted-foreground outline-none hover:bg-foreground/10 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring',
+              !(isHtmlFile(file) && file.size <= HTML_VIEW_BYTES) && 'ml-auto',
+            )}
           >
             {expanded ? 'Collapse' : 'Expand'}
           </button>
@@ -220,19 +230,24 @@ function VideoFile({ file }: { file: ChatFile }) {
   );
 }
 
-/** Images as a grid: one large, several as squares. Each opens full size in a new tab. */
+/** Images as a grid: one large, several as squares. Each opens in the full-screen viewer, paging through them all. */
 function ImageGrid({ images }: { images: ChatFile[] }) {
   const single = images.length === 1;
+  const [shown, setShown] = useState<number | null>(null);
+  const thumbnails = useRef<(HTMLButtonElement | null)[]>([]);
   return (
     <div className={cn('grid w-full max-w-md gap-1', !single && 'grid-cols-2', images.length >= 5 && 'sm:grid-cols-3')}>
-      {images.map(image => (
-        <a
+      {images.map((image, index) => (
+        <button
           key={image.id}
-          href={fileContentUrl(image.id)}
-          target="_blank"
-          rel="noopener noreferrer"
+          ref={element => {
+            thumbnails.current[index] = element;
+          }}
+          type="button"
+          onClick={() => setShown(index)}
+          aria-label={`View ${image.name}`}
           title={image.name}
-          className="block min-w-0 overflow-hidden rounded-lg border border-border bg-sidebar outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="block min-w-0 cursor-zoom-in overflow-hidden rounded-lg border border-border bg-sidebar p-0 outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <img
             src={fileContentUrl(image.id)}
@@ -240,8 +255,20 @@ function ImageGrid({ images }: { images: ChatFile[] }) {
             loading="lazy"
             className={cn('block w-full', single ? 'max-h-80 object-contain' : 'aspect-square object-cover')}
           />
-        </a>
+        </button>
       ))}
+      <ImageViewer
+        images={images.map(image => ({
+          id: image.id,
+          name: image.name,
+          src: fileContentUrl(image.id),
+          download: fileContentUrl(image.id, true),
+        }))}
+        index={shown}
+        onIndexChange={setShown}
+        onClose={() => setShown(null)}
+        returnFocus={index => thumbnails.current[index]}
+      />
     </div>
   );
 }

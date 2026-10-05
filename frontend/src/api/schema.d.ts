@@ -372,6 +372,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/files/{id}/view': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['viewHtmlFile'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/files/{id}/text': {
     parameters: {
       query?: never;
@@ -3117,6 +3133,26 @@ export interface operations {
       query?: {
         download?: '1';
       };
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  viewHtmlFile: {
+    parameters: {
+      query?: never;
       header?: never;
       path: {
         id: string;

@@ -48,7 +48,7 @@ it('uploads any file as a raw stream, serves images inline and everything else a
     const forced = await app.inject(`/api/files/${image.json().id}/content?download=1`);
     expect(forced.headers['content-disposition']).toMatch(/^attachment;/);
 
-    // HTML is text: previewed as source and downloaded, never rendered by the browser.
+    // HTML is text: previewed as source and downloaded, never rendered here (only by the sandboxed view route).
     const page = await upload(key, 'page.html', '<script>alert(1)</script>\nline 2\n');
     expect(page.json()).toMatchObject({ kind: 'text' });
     const html = await app.inject(`/api/files/${page.json().id}/content`);
@@ -68,6 +68,85 @@ it('uploads any file as a raw stream, serves images inline and everything else a
     const other = await database.createAgent({ name: 'Bram', endpointId: 'mock', model: 'm', thinkingLevel: 'off' });
     expect((await upload(dmKey(agent.id, other.id), 'a.txt', 'a')).statusCode).toBe(403);
     expect((await app.inject('/api/files/nope/content')).statusCode).toBe(404);
+  } finally {
+    await app.close();
+    await database.close();
+  }
+});
+
+it('renders HTML files only through the sandboxed view route, within its size cap', async () => {
+  const { database, app, agent, upload } = await setup();
+  try {
+    const key = chatKey(agent.channels[0].id);
+    const source = '<!doctype html><p id="x">hi</p><script>x.textContent = "ran"</script>';
+    const page = (await upload(key, 'Report.HTM', source)).json();
+    const viewed = await app.inject(`/api/files/${page.id}/view`);
+    // Only as the viewer's frame: opened as a page (a link to it) it is refused.
+    const asPage = await app.inject({ url: `/api/files/${page.id}/view`, headers: { 'sec-fetch-dest': 'document' } });
+    expect(asPage.statusCode).toBe(400);
+    expect(
+      (await app.inject({ url: `/api/files/${page.id}/view`, headers: { 'sec-fetch-dest': 'iframe' } })).statusCode,
+    ).toBe(200);
+    expect(viewed.statusCode).toBe(200);
+    expect(viewed.body).toBe(source);
+    expect(viewed.headers).toMatchObject({
+      'content-type': 'text/html; charset=utf-8',
+      'x-content-type-options': 'nosniff',
+      'cache-control': 'private, no-store',
+      'referrer-policy': 'no-referrer',
+      'content-security-policy':
+        "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' data: blob:; " +
+        "style-src 'unsafe-inline' data:; img-src data: blob:; font-src data:; media-src data: blob:; " +
+        "connect-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'",
+    });
+    expect(viewed.headers['content-disposition']).toMatch(/^inline;/);
+    // Its download stays an attachment, never rendered.
+    expect((await app.inject(`/api/files/${page.id}/content`)).headers['content-type']).toBe(
+      'application/octet-stream',
+    );
+
+    // Only HTML: other text, SVG and images are refused; unknown and deleted files are not served.
+    for (const [name, payload] of [
+      ['notes.txt', '<script>1</script>'],
+      ['logo.svg', '<svg xmlns="http://www.w3.org/2000/svg"/>'],
+      ['shot.html.png', png],
+      ['page.html.bin', Buffer.from([0, 1, 2])],
+    ] as const) {
+      const other = (await upload(key, name, payload)).json();
+      expect((await app.inject(`/api/files/${other.id}/view`)).statusCode, name).toBe(400);
+    }
+    expect((await app.inject('/api/files/nope/view')).statusCode).toBe(404);
+    await app.inject({ method: 'DELETE', url: `/api/files/${page.id}` });
+    expect((await app.inject(`/api/files/${page.id}/view`)).statusCode).toBe(410);
+
+    // Over 10 MB it downloads instead.
+    const big = (await upload(key, 'big.html', Buffer.alloc(10 * 1024 * 1024 + 1, 'a'))).json();
+    expect((await app.inject(`/api/files/${big.id}/view`)).statusCode).toBe(413);
+
+    // A live scratch preview of an HTML file renders as it is now.
+    await database.client.scratchFile.create({
+      data: { agentId: agent.id, path: 'site/index.html', content: '<b>live</b>', size: 11 },
+    });
+    const live = await database.client.channelFile.create({
+      data: {
+        channelKey: key,
+        uploaderKind: 'agent',
+        uploaderId: agent.id,
+        uploaderName: 'Aether',
+        name: 'index.html',
+        mime: 'text/plain',
+        kind: 'scratch',
+        size: 11,
+        scratchAgentId: agent.id,
+        scratchPath: 'site/index.html',
+      },
+    });
+    const scratchView = await app.inject(`/api/files/${live.id}/view`);
+    expect([scratchView.statusCode, scratchView.body, scratchView.headers['content-security-policy']]).toEqual([
+      200,
+      '<b>live</b>',
+      viewed.headers['content-security-policy'],
+    ]);
   } finally {
     await app.close();
     await database.close();

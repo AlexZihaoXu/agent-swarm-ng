@@ -180,6 +180,7 @@ export const RULES: Record<string, Rule> = {
   'DELETE /api/files/:id': { file: 'id' },
   'GET /api/files/:id/content': { file: 'id' },
   'GET /api/files/:id/text': { file: 'id' },
+  'GET /api/files/:id/view': { file: 'id' },
 
   'GET /api/computers': 'scoped',
   'POST /api/computers': 'scoped',
