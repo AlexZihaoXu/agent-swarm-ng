@@ -34,6 +34,8 @@ import { accessOf, classify, type AgentTool } from './tool-access';
 import { createHelpTool } from './help-tool';
 import { memoryGuidance } from './memory/guidance';
 import { neutralizeLabels } from './message-text';
+import type { EndpointLimits } from './endpoint-store';
+import { detectedLimits } from './endpoint-detection';
 
 export type Channel = { id: string; kind: 'platform-chat' | 'agent-dm'; agentId: string };
 export type AgentMessageSource = {
@@ -79,6 +81,8 @@ export type ChatConfiguration = {
   thinkingLevel: ModelThinkingLevel;
   baseUrl: string;
   apiKey?: string;
+  /** The endpoint's own model settings (Settings → model connections); unused for the subscription and OpenRouter. */
+  limits?: EndpointLimits;
   channel: Channel;
   /** Whether this turn is a heartbeat (help says what a class means there). */
   heartbeat?: () => boolean;
@@ -108,8 +112,36 @@ function capabilitiesFor(model?: Model<Api>) {
 export function modelCapabilities(id: string, provider: 'openai' | 'openai-codex' | 'openrouter' = 'openai') {
   return capabilitiesFor(getModels(provider).find(model => model.id === id));
 }
-export async function endpointCapabilities(id: string, baseUrl?: string) {
-  return baseUrl && isOpenRouter(baseUrl) ? capabilitiesFor(await openRouterCatalog.model(id)) : modelCapabilities(id);
+/** A model on a saved endpoint: the endpoint's Reasoning setting, when set, decides whether it offers thinking levels. */
+export async function endpointCapabilities(id: string, endpoint?: { baseUrl: string } & EndpointLimits) {
+  if (endpoint && isOpenRouter(endpoint.baseUrl)) return capabilitiesFor(await openRouterCatalog.model(id));
+  const known = getModels('openai').find(model => model.id === id);
+  return endpoint?.reasoning === undefined
+    ? capabilitiesFor(known)
+    : capabilitiesFor({ ...(known ?? ({} as Model<Api>)), reasoning: endpoint.reasoning });
+}
+
+/** Default context size of an OpenAI-compatible model nobody described (docs/development.md#model-limits). */
+export const DEFAULT_CONTEXT_WINDOW = 32768;
+/**
+ * An endpoint model's limits: the endpoint's settings, else what its server reported when its models were listed,
+ * else a known OpenAI model's, else defaults. Replies default to a quarter of the context (4,096 to 32,768 tokens).
+ */
+export function endpointModelLimits(
+  model: string,
+  baseUrl: string,
+  limits: EndpointLimits = {},
+  known?: Pick<Model<Api>, 'contextWindow' | 'input'>,
+) {
+  const contextWindow =
+    limits.contextWindow ??
+    detectedLimits.contextWindow(baseUrl, model) ??
+    known?.contextWindow ??
+    DEFAULT_CONTEXT_WINDOW;
+  const maxTokens = limits.maxOutputTokens ?? Math.max(4096, Math.min(32768, Math.floor(contextWindow / 4)));
+  const input: ('text' | 'image')[] =
+    limits.images === undefined ? (known?.input ?? ['text']) : limits.images ? ['text', 'image'] : ['text'];
+  return { contextWindow, maxTokens, input };
 }
 
 function transcriptText(message: ChannelMessage, author: string) {
@@ -245,12 +277,18 @@ async function createEndpointRuntime(config: ChatConfiguration) {
   const known = openrouter
     ? await openRouterCatalog.model(config.model)
     : getModels('openai').find(model => model.id === config.model);
-  const capabilities = capabilitiesFor(known);
+  const capabilities = openrouter
+    ? capabilitiesFor(known)
+    : await endpointCapabilities(config.model, { ...config.limits, baseUrl: config.baseUrl });
   if (!capabilities.thinkingLevels.includes(config.thinkingLevel)) throw new Error('Unsupported thinking level');
   const base = new URL(config.baseUrl);
   if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash)
     throw new Error('Invalid endpoint');
   const baseUrl = base.toString().replace(/\/+$/, '');
+  // After a restart nobody has listed this endpoint's models yet: ask it once for the size its model reports.
+  if (!openrouter && config.limits?.contextWindow === undefined)
+    await detectedLimits.lookup(baseUrl, config.model, config.apiKey).catch(() => undefined);
+  const limits = endpointModelLimits(config.model, baseUrl, config.limits, known);
   const model: Model<Api> = openrouter
     ? known!
     : {
@@ -261,9 +299,7 @@ async function createEndpointRuntime(config: ChatConfiguration) {
         baseUrl,
         reasoning: capabilities.reasoning,
         thinkingLevelMap: known?.thinkingLevelMap,
-        input: known?.input ?? ['text'],
-        contextWindow: known?.contextWindow ?? 32768,
-        maxTokens: 4096,
+        ...limits,
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         compat: {
           supportsDeveloperRole: false,

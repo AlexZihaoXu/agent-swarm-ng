@@ -11,6 +11,7 @@ import { surface } from '@/lib/motion';
 import { CodexConnection } from '@/components/codex-connection';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { randomUuid } from '@/lib/random-uuid';
 import { PageHeader } from '@/components/page-header';
@@ -22,14 +23,41 @@ import { endpointPath, type DashboardRoute } from '@/lib/dashboard-location';
 
 type TestResult =
   | { state: 'idle' | 'testing' | 'saved' }
-  | { state: 'success'; models: string[] }
+  | { state: 'success'; models: string[]; details?: { id: string; contextWindow: number }[] }
   | { state: 'error'; message: string };
 
 const inputClass = settingsInput;
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
 
-type Endpoint = { id: string; name: string; baseUrl: string; hasApiKey: boolean; saved: boolean };
+type Endpoint = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  hasApiKey: boolean;
+  saved: boolean;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+  images?: boolean;
+  reasoning?: boolean;
+  /** What its models reported when last listed, when they agree. */
+  detectedContextWindow?: number;
+};
+
+/** Model limits (docs/development.md#model-limits): the backend's ranges and defaults. */
+const CONTEXT_RANGE = { min: 1024, max: 10_000_000 };
+const REPLY_RANGE = { min: 256, max: 1_000_000 };
+const DEFAULT_CONTEXT = 32768;
+const tokens = (value: number) => value.toLocaleString('en-US');
+const defaultReply = (context: number) => Math.max(4096, Math.min(32768, Math.floor(context / 4)));
+/** A typed token count ("131,072" works too): undefined when empty, NaN when it is not a whole number in range. */
+function parseTokens(value: string, range: { min: number; max: number }) {
+  const digits = value.replace(/[\s,_]/g, '');
+  if (!digits) return undefined;
+  const parsed = /^\d+$/.test(digits) ? Number(digits) : NaN;
+  return parsed >= range.min && parsed <= range.max ? parsed : NaN;
+}
+const limitText = (value?: number) => (value === undefined ? '' : String(value));
 
 function EndpointCard({
   endpoint,
@@ -53,10 +81,31 @@ function EndpointCard({
   const [keyChanged, setKeyChanged] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<TestResult>({ state: 'idle' });
+  const [contextWindow, setContextWindow] = useState(limitText(endpoint.contextWindow));
+  const [maxOutputTokens, setMaxOutputTokens] = useState(limitText(endpoint.maxOutputTokens));
+  // Unset switches leave the choice to the model's defaults; touching one saves it.
+  const [images, setImages] = useState(endpoint.images);
+  const [reasoning, setReasoning] = useState(endpoint.reasoning);
   const request = useRef<AbortController | null>(null);
   const testing = result.state === 'testing';
   const openrouter = baseUrl.trim().replace(/\/+$/, '') === OPENROUTER_URL;
-  const dirty = name !== endpoint.name || baseUrl !== endpoint.baseUrl || keyChanged;
+  const parsedContext = parseTokens(contextWindow, CONTEXT_RANGE);
+  const parsedReply = parseTokens(maxOutputTokens, REPLY_RANGE);
+  const limitsInvalid = !openrouter && (Number.isNaN(parsedContext) || Number.isNaN(parsedReply));
+  const limitsDirty =
+    contextWindow !== limitText(endpoint.contextWindow) ||
+    maxOutputTokens !== limitText(endpoint.maxOutputTokens) ||
+    images !== endpoint.images ||
+    reasoning !== endpoint.reasoning;
+  const dirty = name !== endpoint.name || baseUrl !== endpoint.baseUrl || keyChanged || limitsDirty;
+  // A fresh model list says what the server reports now; otherwise what it reported when last listed.
+  const listed =
+    result.state === 'success' && result.details ? [...new Set(result.details.map(row => row.contextWindow))] : null;
+  const detected = listed ? (listed.length === 1 ? listed[0] : undefined) : endpoint.detectedContextWindow;
+  const effectiveContext =
+    (parsedContext !== undefined && !Number.isNaN(parsedContext) ? parsedContext : undefined) ??
+    detected ??
+    DEFAULT_CONTEXT;
 
   useEffect(() => () => request.current?.abort(), []);
 
@@ -75,7 +124,7 @@ function EndpointCard({
       });
       if (controller.signal.aborted) return;
       if (error || !data) setResult({ state: 'error', message: error?.message ?? 'The connection test failed.' });
-      else setResult({ state: 'success', models: data.models });
+      else setResult({ state: 'success', models: data.models, details: data.details });
     } catch {
       if (!controller.signal.aborted)
         setResult({
@@ -96,6 +145,15 @@ function EndpointCard({
           name: name.trim(),
           baseUrl: baseUrl.trim(),
           ...(keyChanged || !endpoint.saved ? { apiKey: apiKey.trim() } : {}),
+          // Empty clears a limit (null); OpenRouter's catalog sets its own, so its card leaves them as saved.
+          ...(openrouter
+            ? {}
+            : {
+                contextWindow: parsedContext ?? null,
+                maxOutputTokens: parsedReply ?? null,
+                images: images ?? null,
+                reasoning: reasoning ?? null,
+              }),
         },
       });
       if (error || !data) {
@@ -104,6 +162,10 @@ function EndpointCard({
       }
       onSaved({ ...data, saved: true });
       setBaseUrl(data.baseUrl);
+      setContextWindow(limitText(data.contextWindow));
+      setMaxOutputTokens(limitText(data.maxOutputTokens));
+      setImages(data.images);
+      setReasoning(data.reasoning);
       setApiKey('');
       setKeyChanged(false);
       setResult({ state: 'saved' });
@@ -149,6 +211,10 @@ function EndpointCard({
                 setBaseUrl(endpoint.baseUrl);
                 setApiKey('');
                 setKeyChanged(false);
+                setContextWindow(limitText(endpoint.contextWindow));
+                setMaxOutputTokens(limitText(endpoint.maxOutputTokens));
+                setImages(endpoint.images);
+                setReasoning(endpoint.reasoning);
                 setResult({ state: 'idle' });
               }
               setEditing(value => !value);
@@ -291,12 +357,63 @@ function EndpointCard({
                       Clear saved key
                     </button>
                   )}
+                  {!openrouter && (
+                    <fieldset className="min-w-0 space-y-4 border-t border-border pt-4">
+                      <legend className="float-left mb-1 w-full text-sm font-medium">Model limits</legend>
+                      <p className="clear-left text-xs leading-relaxed text-muted-foreground">
+                        Leave a field empty to use what the server reports, or the default. They apply to every model on
+                        this endpoint.
+                      </p>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <TokenField
+                          id={`${id}-context`}
+                          label="Context window (tokens)"
+                          value={contextWindow}
+                          onChange={setContextWindow}
+                          invalid={Number.isNaN(parsedContext)}
+                          range={CONTEXT_RANGE}
+                          placeholder={
+                            detected
+                              ? `Detected: ${tokens(detected)}`
+                              : listed && listed.length > 1
+                                ? 'Detected per model'
+                                : `Default: ${tokens(DEFAULT_CONTEXT)}`
+                          }
+                          help="How much the model can read at once: its instructions, the conversation and tool results."
+                        />
+                        <TokenField
+                          id={`${id}-reply`}
+                          label="Max reply length (tokens)"
+                          value={maxOutputTokens}
+                          onChange={setMaxOutputTokens}
+                          invalid={Number.isNaN(parsedReply)}
+                          range={REPLY_RANGE}
+                          placeholder={`Default: ${tokens(defaultReply(effectiveContext))}`}
+                          help="The longest single reply, thinking included. Defaults to a quarter of the context window."
+                        />
+                      </div>
+                      <SwitchRow
+                        id={`${id}-images`}
+                        label="Image input"
+                        help="The model can look at images, such as screenshots of a computer or attached photos."
+                        checked={images ?? false}
+                        onCheckedChange={setImages}
+                      />
+                      <SwitchRow
+                        id={`${id}-reasoning`}
+                        label="Reasoning"
+                        help="The model thinks before it answers. Agents on this endpoint can then choose a thinking level."
+                        checked={reasoning ?? false}
+                        onCheckedChange={setReasoning}
+                      />
+                    </fieldset>
+                  )}
                   <div className="flex flex-wrap items-center gap-3 pt-1">
                     <Button
                       type="button"
                       size="sm"
                       className="min-h-11 sm:min-h-0"
-                      disabled={testing || saving || !name.trim() || !baseUrl.trim()}
+                      disabled={testing || saving || !name.trim() || !baseUrl.trim() || limitsInvalid}
                       onClick={() => void saveEndpoint()}
                     >
                       {saving ? 'Saving…' : 'Save endpoint'}
@@ -362,6 +479,83 @@ function EndpointCard({
         </p>
       )}
     </section>
+  );
+}
+
+function TokenField({
+  id,
+  label,
+  value,
+  onChange,
+  invalid,
+  range,
+  placeholder,
+  help,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  invalid: boolean;
+  range: { min: number; max: number };
+  placeholder: string;
+  help: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <label htmlFor={id} className="block text-sm font-medium">
+        {label}
+      </label>
+      <input
+        id={id}
+        inputMode="numeric"
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        placeholder={placeholder}
+        aria-invalid={invalid || undefined}
+        aria-describedby={`${id}-help`}
+        {...noAutofill}
+        className={inputClass}
+      />
+      <p id={`${id}-help`} className="text-xs leading-relaxed text-muted-foreground">
+        {invalid ? `Enter a whole number from ${tokens(range.min)} to ${tokens(range.max)}.` : help}
+      </p>
+    </div>
+  );
+}
+
+/** A labelled on/off setting with its explanation (the heartbeat switch's row composition). */
+function SwitchRow({
+  id,
+  label,
+  help,
+  checked,
+  onCheckedChange,
+}: {
+  id: string;
+  label: string;
+  help: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="space-y-1">
+        <label htmlFor={id} className="block cursor-pointer text-sm font-medium">
+          {label}
+        </label>
+        <p id={`${id}-help`} className="text-xs leading-relaxed text-muted-foreground">
+          {help}
+        </p>
+      </div>
+      <Switch
+        id={id}
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        describedBy={`${id}-help`}
+        className="mt-0.5"
+      />
+    </div>
   );
 }
 

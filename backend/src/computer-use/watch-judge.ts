@@ -258,6 +258,7 @@ export function createWatchJudge(deps: {
           thinkingLevel: agent.thinkingLevel,
           baseUrl: connection.baseUrl,
           apiKey: connection.apiKey,
+          limits: connection.limits,
           channel,
         },
         connection.subscriptionRuntime,

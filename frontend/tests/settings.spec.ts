@@ -71,6 +71,64 @@ test('saving restores endpoint metadata after refresh without exposing its key',
   await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toContainText('Connected');
 });
 
+test('model limits save with the endpoint and come back after a reload', async ({ page }) => {
+  let saved: Record<string, unknown> | undefined;
+  await page.route('**/api/model-endpoints*', async route => {
+    if (route.request().method() === 'POST') {
+      const { apiKey: _, ...body } = route.request().postDataJSON();
+      saved = { ...body, hasApiKey: false };
+      await route.fulfill({ json: saved });
+    } else await route.fulfill({ json: saved ? [saved] : [] });
+  });
+  await openEndpoint(page);
+  const context = page.getByLabel('Context window (tokens)');
+  const reply = page.getByLabel('Max reply length (tokens)');
+  await expect(context).toHaveAttribute('placeholder', 'Default: 32,768');
+  await expect(reply).toHaveAttribute('placeholder', 'Default: 8,192');
+  await expect(context).toHaveAttribute('inputmode', 'numeric');
+  await context.fill('500');
+  await expect(page.getByText('Enter a whole number from 1,024 to 10,000,000.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save endpoint' })).toBeDisabled();
+  await context.fill('131,072');
+  // An empty reply length follows the context: a quarter of it, at most 32,768.
+  await expect(reply).toHaveAttribute('placeholder', 'Default: 32,768');
+  await reply.fill('16384');
+  const images = page.getByRole('switch', { name: 'Image input' });
+  const reasoning = page.getByRole('switch', { name: 'Reasoning' });
+  await expect(images).toHaveAttribute('aria-checked', 'false');
+  await expect(images).toHaveCSS('cursor', 'pointer');
+  await images.click();
+  await reasoning.click();
+  await page.getByRole('button', { name: 'Save endpoint' }).click();
+  await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toHaveText('Saved locally.');
+  expect(saved).toMatchObject({ contextWindow: 131072, maxOutputTokens: 16384, images: true, reasoning: true });
+  await page.reload();
+  await page.getByRole('tab', { name: 'Settings' }).click();
+  await expect(context).toHaveValue('131072');
+  await expect(reply).toHaveValue('16384');
+  await expect(images).toHaveAttribute('aria-checked', 'true');
+  await expect(reasoning).toHaveAttribute('aria-checked', 'true');
+  // Emptied fields go back to what the server reports (null clears the saved value).
+  await context.fill('');
+  await page.getByRole('button', { name: 'Save endpoint' }).click();
+  await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toHaveText('Saved locally.');
+  expect(saved).toMatchObject({ contextWindow: null, maxOutputTokens: 16384 });
+});
+
+test('the context size a server reports shows as the placeholder', async ({ page }) => {
+  await page.route('**/api/model-endpoints/test', route =>
+    route.fulfill({ json: { models: ['qwen3'], details: [{ id: 'qwen3', contextWindow: 131072 }] } }),
+  );
+  await openEndpoint(page);
+  await page.getByRole('button', { name: 'Test connection' }).click();
+  await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toContainText('Connected');
+  await expect(page.getByLabel('Context window (tokens)')).toHaveAttribute('placeholder', 'Detected: 131,072');
+  await expect(page.getByLabel('Max reply length (tokens)')).toHaveAttribute('placeholder', 'Default: 32,768');
+  // OpenRouter's catalog sets its own limits: no fields to fill.
+  await page.getByLabel('Base URL', { exact: true }).fill('https://openrouter.ai/api/v1');
+  await expect(page.getByLabel('Context window (tokens)')).toHaveCount(0);
+});
+
 for (const width of [390, 1280])
   test(`OpenRouter preset uses existing secure endpoint flow at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });

@@ -342,7 +342,7 @@ export function registerChat(
         if (request.query.endpointId === CODEX_CONNECTION)
           return await connections.codex(owner).capabilities(request.query.model);
         const endpoint = (await store.readFor(owner)).find(row => row.id === request.query.endpointId);
-        return await endpointCapabilities(request.query.model, endpoint?.baseUrl);
+        return await endpointCapabilities(request.query.model, endpoint);
       } catch {
         return reply.code(503).send({
           message: 'Could not load model capabilities. Check the connection and select a tool-capable text model.',
@@ -423,7 +423,7 @@ export function registerChat(
       capabilities =
         input.endpointId === CODEX_CONNECTION
           ? await codex.capabilities(input.model)
-          : await endpointCapabilities(input.model, endpoint?.baseUrl);
+          : await endpointCapabilities(input.model, endpoint);
     } catch {
       return {
         status: 400,

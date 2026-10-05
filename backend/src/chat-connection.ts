@@ -1,5 +1,5 @@
 import { CODEX_CONNECTION, type CodexProvider } from './codex-provider';
-import type { SavedEndpoint } from './endpoint-store';
+import { limitsOf, type SavedEndpoint } from './endpoint-store';
 export class ConnectionError extends Error {
   constructor(
     readonly status: 400 | 404,
@@ -34,5 +34,11 @@ export async function resolveChatConnection(
     : endpoint.apiKey;
   if (subscription && !accessKey) throw new ConnectionError(400, 'Reconnect OpenAI Codex in Settings.');
   signal.throwIfAborted();
-  return { ...endpoint, subscriptionRuntime, accessKey: accessKey ?? '' };
+  // The endpoint's model settings travel with it into every turn's configuration (chat-runtime.ts).
+  return {
+    ...endpoint,
+    limits: subscription ? {} : limitsOf(endpoint as SavedEndpoint),
+    subscriptionRuntime,
+    accessKey: accessKey ?? '',
+  };
 }

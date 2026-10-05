@@ -3,12 +3,46 @@ import { dirname, join } from 'node:path';
 import { databaseFile } from './database-location';
 import { randomUUID } from 'node:crypto';
 
+/**
+ * What the owner says about an endpoint's models (docs/development.md#model-limits): unset fields fall back to what the
+ * server reports, then to defaults (chat-runtime.ts).
+ */
+export type EndpointLimits = {
+  contextWindow?: number;
+  maxOutputTokens?: number;
+  images?: boolean;
+  reasoning?: boolean;
+};
+export const LIMIT_RANGES = {
+  contextWindow: { minimum: 1024, maximum: 10_000_000 },
+  maxOutputTokens: { minimum: 256, maximum: 1_000_000 },
+} as const;
+const LIMIT_FIELDS = ['contextWindow', 'maxOutputTokens', 'images', 'reasoning'] as const;
+
 /** A saved model connection. It belongs to a person (`ownerId`, admin for older rows); ids are unique per person. */
-export type SavedEndpoint = { id: string; name: string; baseUrl: string; apiKey: string; ownerId?: string };
+export type SavedEndpoint = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  ownerId?: string;
+} & EndpointLimits;
 export const endpointView = ({ apiKey, ownerId: _, ...endpoint }: SavedEndpoint) => ({
   ...endpoint,
   hasApiKey: Boolean(apiKey),
 });
+/** Only the limits an endpoint sets (rows written before they existed have none). */
+export const limitsOf = (row: EndpointLimits): EndpointLimits =>
+  Object.fromEntries(LIMIT_FIELDS.filter(key => row[key] !== undefined).map(key => [key, row[key]]));
+
+const validLimits = (row: Record<string, unknown>) =>
+  (['contextWindow', 'maxOutputTokens'] as const).every(key => {
+    const value = row[key];
+    const { minimum, maximum } = LIMIT_RANGES[key];
+    return (
+      value === undefined || (Number.isInteger(value) && (value as number) >= minimum && (value as number) <= maximum)
+    );
+  }) && (['images', 'reasoning'] as const).every(key => row[key] === undefined || typeof row[key] === 'boolean');
 const ownerOf = (row: SavedEndpoint) => row.ownerId ?? 'admin';
 
 export class EndpointStore {
@@ -25,7 +59,8 @@ export class EndpointStore {
           row =>
             row &&
             ['id', 'name', 'baseUrl', 'apiKey'].every(key => typeof row[key] === 'string') &&
-            (row.ownerId === undefined || typeof row.ownerId === 'string'),
+            (row.ownerId === undefined || typeof row.ownerId === 'string') &&
+            validLimits(row),
         )
       )
         throw new Error();
@@ -54,7 +89,13 @@ export class EndpointStore {
     return (await this.read()).filter(row => ownerOf(row) === ownerId);
   }
 
-  async save(input: { id: string; name: string; baseUrl: string; apiKey?: string }, ownerId = 'admin') {
+  /** Limits left out of `input` keep their saved value; `null` clears one (back to detected or default). */
+  async save(
+    input: { id: string; name: string; baseUrl: string; apiKey?: string } & {
+      [key in keyof EndpointLimits]?: EndpointLimits[key] | null;
+    },
+    ownerId = 'admin',
+  ) {
     const mine = (row: SavedEndpoint) => row.id === input.id && ownerOf(row) === ownerId;
     const rows = await this.update(current => {
       const previous = current.find(mine);
@@ -65,6 +106,11 @@ export class EndpointStore {
         // Never silently carry a saved credential to a different URL.
         apiKey: input.apiKey ?? (previous?.baseUrl === input.baseUrl ? previous.apiKey : ''),
         ownerId,
+        ...limitsOf(
+          Object.fromEntries(
+            LIMIT_FIELDS.map(key => [key, input[key] === undefined ? previous?.[key] : (input[key] ?? undefined)]),
+          ),
+        ),
       };
       return [...current.filter(row => !mine(row)), endpoint];
     });

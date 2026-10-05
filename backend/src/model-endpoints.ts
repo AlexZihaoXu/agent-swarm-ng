@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
-import { EndpointStore, endpointView } from './endpoint-store';
+import { EndpointStore, endpointView, LIMIT_RANGES, type SavedEndpoint } from './endpoint-store';
+import { detectedLimits } from './endpoint-detection';
 import { readModelCatalog } from './model-catalog';
 import { isOpenRouter, openRouterCatalog } from './openrouter';
 import { isPublicUrl } from './users/public-address';
@@ -40,18 +41,43 @@ export function registerModelEndpoints(
   const ownerFor = (request: FastifyRequest, organizationId?: string) =>
     reach ? connectionOwner(reach, viewerOf(request), organizationId) : Promise.resolve(viewerOf(request).userId);
   const allowedUrl = async (request: FastifyRequest, url: URL) => viewerOf(request).admin || (await isPublicUrl(url));
+  const Limits = {
+    /** Tokens the model can see at once (docs/development.md#model-limits). */
+    contextWindow: Type.Integer(LIMIT_RANGES.contextWindow),
+    /** Longest reply in tokens. */
+    maxOutputTokens: Type.Integer(LIMIT_RANGES.maxOutputTokens),
+    /** The model accepts images. */
+    images: Type.Boolean(),
+    /** The model reasons (thinking levels). */
+    reasoning: Type.Boolean(),
+  };
   const View = Type.Object({
     id: Type.String(),
     name: Type.String(),
     baseUrl: Type.String(),
     hasApiKey: Type.Boolean(),
+    contextWindow: Type.Optional(Limits.contextWindow),
+    maxOutputTokens: Type.Optional(Limits.maxOutputTokens),
+    images: Type.Optional(Limits.images),
+    reasoning: Type.Optional(Limits.reasoning),
+    /** The context size its models reported when last listed, when they all agree. */
+    detectedContextWindow: Type.Optional(Type.Integer()),
   });
+  const view = (row: SavedEndpoint) => {
+    const detected = detectedLimits.endpointContextWindow(row.baseUrl);
+    return { ...endpointView(row), ...(detected ? { detectedContextWindow: detected } : {}) };
+  };
   const SaveBody = Type.Object(
     {
       id: Type.String({ minLength: 1, maxLength: 100, pattern: '^[a-zA-Z0-9-]+$' }),
       name: Type.String({ minLength: 1, maxLength: 100 }),
       baseUrl: ConnectionBody.properties.baseUrl,
       apiKey: ConnectionBody.properties.apiKey,
+      // Left out: keeps the saved value; null: back to what the server reports, or the default.
+      contextWindow: Type.Optional(Type.Union([Limits.contextWindow, Type.Null()])),
+      maxOutputTokens: Type.Optional(Type.Union([Limits.maxOutputTokens, Type.Null()])),
+      images: Type.Optional(Type.Union([Limits.images, Type.Null()])),
+      reasoning: Type.Optional(Type.Union([Limits.reasoning, Type.Null()])),
     },
     { additionalProperties: false },
   );
@@ -69,7 +95,7 @@ export function registerModelEndpoints(
     },
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
-      return (await store.readFor(await ownerFor(request, request.query.organizationId))).map(endpointView);
+      return (await store.readFor(await ownerFor(request, request.query.organizationId))).map(view);
     },
   );
   app.post<{ Body: Static<typeof SaveBody> }>(
@@ -90,7 +116,7 @@ export function registerModelEndpoints(
           .code(400)
           .send({ message: 'Enter a valid HTTP(S) base URL without credentials, query parameters, or fragments.' });
       }
-      return endpointView(
+      return view(
         await store.save(
           {
             ...request.body,
@@ -133,7 +159,11 @@ export function registerModelEndpoints(
         operationId: 'testModelEndpoint',
         body: ConnectionBody,
         response: {
-          200: Type.Object({ models: Type.Array(Type.String()) }),
+          200: Type.Object({
+            models: Type.Array(Type.String()),
+            /** The context size each model reports, for the models that report one. */
+            details: Type.Optional(Type.Array(Type.Object({ id: Type.String(), contextWindow: Type.Integer() }))),
+          }),
           400: ConnectionError,
           502: ConnectionError,
           504: ConnectionError,
@@ -177,9 +207,10 @@ export function registerModelEndpoints(
         }
         const openrouter = isOpenRouter(request.body.baseUrl);
         const rows = await readModelCatalog(response, openrouter ? 4 * 1024 * 1024 : undefined);
-        return {
-          models: openrouter ? openRouterCatalog.remember(rows) : [...new Set(rows.map(row => row.id as string))],
-        };
+        if (openrouter) return { models: openRouterCatalog.remember(rows) };
+        // OpenRouter's catalog sets its own limits; other servers' reported sizes are remembered for their agents.
+        const details = detectedLimits.remember(parseBaseUrl(request.body.baseUrl).toString(), rows);
+        return { models: [...new Set(rows.map(row => row.id as string))], ...(details.length ? { details } : {}) };
       } catch (error) {
         if (signal.aborted || (error instanceof Error && error.name === 'TimeoutError')) {
           return reply.code(504).send({ message: 'Connection timed out after 10 seconds.' });
