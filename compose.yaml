@@ -22,6 +22,8 @@ services:
       ACTIVITY_RETENTION_DAYS: ${ACTIVITY_RETENTION_DAYS:-30}
       # Daily database copies kept in .local/backups/database (0 turns them off).
       DATABASE_BACKUPS: ${DATABASE_BACKUPS:-7}
+      # Who sends push notifications, as push services see it: an https address (docs/notifications.md).
+      PUSH_SUBJECT: ${PUSH_SUBJECT:-}
       # Required shared secret for the internal computer controller.
       COMPUTER_CONTROLLER_TOKEN: ${COMPUTER_CONTROLLER_TOKEN:?Set COMPUTER_CONTROLLER_TOKEN in .env (openssl rand -hex 32)}
       COMPUTER_CONTROLLER_URL: http://computer-controller:3101

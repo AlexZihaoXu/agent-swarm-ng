@@ -86,4 +86,13 @@ if (backups > 0) {
   setInterval(() => void backup(), 6 * 3_600_000).unref();
 }
 // The dashboard's resource history: host CPU/memory and running computers each minute, disks every 5 minutes, 14 days kept.
-stopSampler = new MetricsSampler(database, computerControllerFromEnv(), { log: app.log }).start();
+stopSampler = new MetricsSampler(database, computerControllerFromEnv(), {
+  log: app.log,
+  // Like its banner (security/routes.ts), told to admin as a notification.
+  onDiskFull: disk =>
+    app.alerts.announce({
+      kind: 'disk-full',
+      title: `Disk ${disk.label} is ${disk.percent}% full`,
+      detail: 'Free space or move computers’ files to another disk (Settings → Computer storage).',
+    }),
+}).start();

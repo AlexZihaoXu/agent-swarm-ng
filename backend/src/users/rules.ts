@@ -82,6 +82,16 @@ export const RULES: Record<string, Rule> = {
   'GET /api/computers/settings-limits': 'signed-in',
   // Filtered per person (run-streams.ts).
   'GET /api/events': 'signed-in',
+  // Push notifications: the handlers act only on the person's own devices and preferences (push/routes.ts).
+  'GET /api/push/key': 'signed-in',
+  'GET /api/push/subscriptions': 'signed-in',
+  'POST /api/push/subscriptions': 'signed-in',
+  'DELETE /api/push/subscriptions/:id': 'signed-in',
+  'GET /api/push/preferences': 'signed-in',
+  'PATCH /api/push/preferences': 'signed-in',
+  'POST /api/push/test': 'signed-in',
+  'POST /api/push/presence': 'signed-in',
+  'GET /api/push/avatars': 'scoped',
 
   'GET /api/organizations': 'scoped',
   'POST /api/organizations': 'signed-in',
@@ -113,6 +123,8 @@ export const RULES: Record<string, Rule> = {
   'GET /api/agents/:id/scratch/file': agent,
   'GET /api/agents/:id/scratch/image': agent,
   'GET /api/agents/:id/screenshots/:imageId': agent,
+  'GET /api/agents/:id/avatar.png': agent,
+  'PUT /api/agents/:id/avatar.png': agent,
   'GET /api/agents/:id/settings': agent,
   'PATCH /api/agents/:id/settings': agent,
   'GET /api/agents/:id/memory': agent,

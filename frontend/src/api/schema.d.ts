@@ -900,6 +900,134 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/push/key': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getPushKey'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/push/subscriptions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listPushDevices'];
+    put?: never;
+    post: operations['addPushDevice'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/push/subscriptions/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations['removePushDevice'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/push/preferences': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getPushPreferences'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations['setPushPreferences'];
+    trace?: never;
+  };
+  '/api/push/test': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['sendTestPush'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/push/presence': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['reportPresence'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/agents/{id}/avatar.png': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getAgentAvatarPng'];
+    put: operations['putAgentAvatarPng'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/push/avatars': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listStaleAvatarPngs'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/computers/{id}/files': {
     parameters: {
       query?: never;
@@ -7022,6 +7150,407 @@ export interface operations {
         content: {
           'application/json': {
             message: string;
+          };
+        };
+      };
+    };
+  };
+  getPushKey: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            publicKey: string;
+          };
+        };
+      };
+      /** @description Default Response */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+    };
+  };
+  listPushDevices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            devices: {
+              id: string;
+              label: string;
+              createdAt: string;
+              lastSuccessAt: string | null;
+              paused: boolean;
+            }[];
+          };
+        };
+      };
+    };
+  };
+  addPushDevice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          endpoint: string;
+          keys: {
+            p256dh: string;
+            auth: string;
+          } & {
+            [key: string]: unknown;
+          };
+          expirationTime?: number | null;
+          refresh?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+            label: string;
+            createdAt: string;
+            lastSuccessAt: string | null;
+            paused: boolean;
+          };
+        };
+      };
+      /** @description Default Response */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+      /** @description Default Response */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+    };
+  };
+  removePushDevice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {boolean} */
+            ok: true;
+          };
+        };
+      };
+      /** @description Default Response */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+    };
+  };
+  getPushPreferences: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            agentMessages: boolean;
+            groupChats: boolean;
+            agentProblems: boolean;
+            critical: boolean;
+            preview: boolean;
+          };
+        };
+      };
+    };
+  };
+  setPushPreferences: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          agentMessages?: boolean;
+          groupChats?: boolean;
+          agentProblems?: boolean;
+          critical?: boolean;
+          preview?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            agentMessages: boolean;
+            groupChats: boolean;
+            agentProblems: boolean;
+            critical: boolean;
+            preview: boolean;
+          };
+        };
+      };
+    };
+  };
+  sendTestPush: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            delivered: number;
+            failed: number;
+            expired: number;
+          };
+        };
+      };
+      /** @description Default Response */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+    };
+  };
+  reportPresence: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          tabId: string;
+          active: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Default Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getAgentAvatarPng: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  putAgentAvatarPng: {
+    parameters: {
+      query: {
+        look: string;
+      };
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {boolean} */
+            ok: true;
+          };
+        };
+      };
+      /** @description Default Response */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+      /** @description Default Response */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+      /** @description Default Response */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+    };
+  };
+  listStaleAvatarPngs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            stale: {
+              id: string;
+              avatar: {
+                shape: 'pebble' | 'squircle' | 'gumdrop' | 'triangle' | 'bean' | 'pear' | 'capsule' | 'diamond';
+                color: string;
+                eyeStyle?: 'pill' | 'round';
+                seed: number;
+                stretch?: number;
+                taper?: number;
+                wobble?: number;
+                eyeSize?: number;
+                eyeGap?: number;
+                mouth?: 'none' | 'smile' | 'flat' | 'open' | 'cat';
+                marking?: 'none' | 'cheeks' | 'spots' | 'belly' | 'stripe';
+                accent?: string;
+                accessory?: 'none' | 'antenna' | 'sprout' | 'bow' | 'halo' | 'glasses';
+              } | null;
+              look: string;
+            }[];
           };
         };
       };

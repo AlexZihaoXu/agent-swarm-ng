@@ -715,10 +715,13 @@ export function registerChat(
             return reply.code(409).send({ message: 'The run was stopped. Your message was saved.' });
           if (closing)
             return reply.code(503).send({ message: 'The backend is shutting down. Your message was saved.' });
-          run = runs.enqueue({ agentId, channelId: agent.channelId, clientMessageId }, async context => {
-            context.emit({ type: 'user_message', ...messageView(userMessage, attached) });
-            await broker.runInbox(agentId, incoming, context);
-          });
+          run = runs.enqueue(
+            { agentId, channelId: agent.channelId, clientMessageId, fromChat: true },
+            async context => {
+              context.emit({ type: 'user_message', ...messageView(userMessage, attached) });
+              await broker.runInbox(agentId, incoming, context);
+            },
+          );
         }
         if (controller.signal.aborted) run.controller.abort();
         if (reply.raw.destroyed) {
@@ -774,4 +777,5 @@ export function registerChat(
       }
     },
   );
+  return { runs };
 }

@@ -21512,6 +21512,900 @@
         }
       }
     },
+    "/api/push/key": {
+      "get": {
+        "operationId": "getPushKey",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "publicKey"
+                  ],
+                  "properties": {
+                    "publicKey": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/push/subscriptions": {
+      "get": {
+        "operationId": "listPushDevices",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "devices"
+                  ],
+                  "properties": {
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "label",
+                          "createdAt",
+                          "lastSuccessAt",
+                          "paused"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "lastSuccessAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "paused": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "addPushDevice",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "endpoint",
+                  "keys"
+                ],
+                "properties": {
+                  "endpoint": {
+                    "minLength": 1,
+                    "maxLength": 1024,
+                    "type": "string"
+                  },
+                  "keys": {
+                    "additionalProperties": true,
+                    "type": "object",
+                    "required": [
+                      "p256dh",
+                      "auth"
+                    ],
+                    "properties": {
+                      "p256dh": {
+                        "minLength": 16,
+                        "maxLength": 200,
+                        "pattern": "^[A-Za-z0-9_=-]+$",
+                        "type": "string"
+                      },
+                      "auth": {
+                        "minLength": 16,
+                        "maxLength": 200,
+                        "pattern": "^[A-Za-z0-9_=-]+$",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "expirationTime": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "refresh": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "label",
+                    "createdAt",
+                    "lastSuccessAt",
+                    "paused"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "lastSuccessAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "paused": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/push/subscriptions/{id}": {
+      "delete": {
+        "operationId": "removePushDevice",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/push/preferences": {
+      "get": {
+        "operationId": "getPushPreferences",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "agentMessages",
+                    "groupChats",
+                    "agentProblems",
+                    "critical",
+                    "preview"
+                  ],
+                  "properties": {
+                    "agentMessages": {
+                      "type": "boolean"
+                    },
+                    "groupChats": {
+                      "type": "boolean"
+                    },
+                    "agentProblems": {
+                      "type": "boolean"
+                    },
+                    "critical": {
+                      "type": "boolean"
+                    },
+                    "preview": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "setPushPreferences",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agentMessages": {
+                    "type": "boolean"
+                  },
+                  "groupChats": {
+                    "type": "boolean"
+                  },
+                  "agentProblems": {
+                    "type": "boolean"
+                  },
+                  "critical": {
+                    "type": "boolean"
+                  },
+                  "preview": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false,
+                "minProperties": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "agentMessages",
+                    "groupChats",
+                    "agentProblems",
+                    "critical",
+                    "preview"
+                  ],
+                  "properties": {
+                    "agentMessages": {
+                      "type": "boolean"
+                    },
+                    "groupChats": {
+                      "type": "boolean"
+                    },
+                    "agentProblems": {
+                      "type": "boolean"
+                    },
+                    "critical": {
+                      "type": "boolean"
+                    },
+                    "preview": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/push/test": {
+      "post": {
+        "operationId": "sendTestPush",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "delivered",
+                    "failed",
+                    "expired"
+                  ],
+                  "properties": {
+                    "delivered": {
+                      "type": "integer"
+                    },
+                    "failed": {
+                      "type": "integer"
+                    },
+                    "expired": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/push/presence": {
+      "post": {
+        "operationId": "reportPresence",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "tabId",
+                  "active"
+                ],
+                "properties": {
+                  "tabId": {
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  "active": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/avatar.png": {
+      "get": {
+        "operationId": "getAgentAvatarPng",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "put": {
+        "operationId": "putAgentAvatarPng",
+        "parameters": [
+          {
+            "schema": {
+              "pattern": "^[0-9a-f]{16}$",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "look",
+            "required": true
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/push/avatars": {
+      "get": {
+        "operationId": "listStaleAvatarPngs",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "stale"
+                  ],
+                  "properties": {
+                    "stale": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "avatar",
+                          "look"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "avatar": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "type": "object",
+                                "required": [
+                                  "shape",
+                                  "color",
+                                  "seed"
+                                ],
+                                "properties": {
+                                  "shape": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "pebble"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "squircle"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "gumdrop"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "triangle"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "bean"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "pear"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "capsule"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "diamond"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "color": {
+                                    "minLength": 7,
+                                    "maxLength": 7,
+                                    "pattern": "^#[0-9a-fA-F]{6}$",
+                                    "type": "string"
+                                  },
+                                  "eyeStyle": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "pill"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "round"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "seed": {
+                                    "minimum": 0,
+                                    "maximum": 2147483647,
+                                    "type": "integer"
+                                  },
+                                  "stretch": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "taper": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "wobble": {
+                                    "minimum": 0,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "eyeSize": {
+                                    "minimum": 0.75,
+                                    "maximum": 1.35,
+                                    "type": "number"
+                                  },
+                                  "eyeGap": {
+                                    "minimum": -1,
+                                    "maximum": 1,
+                                    "type": "number"
+                                  },
+                                  "mouth": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "smile"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "flat"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "open"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cat"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "marking": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "cheeks"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "spots"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "belly"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "stripe"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "accent": {
+                                    "minLength": 7,
+                                    "maxLength": 7,
+                                    "pattern": "^#[0-9a-fA-F]{6}$",
+                                    "type": "string"
+                                  },
+                                  "accessory": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "none"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "antenna"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "sprout"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "bow"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "halo"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "glasses"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "look": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/computers/{id}/files": {
       "get": {
         "operationId": "listComputerFiles",

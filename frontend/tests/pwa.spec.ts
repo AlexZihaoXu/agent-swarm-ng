@@ -1,6 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test, expect, type Page } from './fixtures';
+import { signedInState } from './sign-in.setup';
 
 // The app must be installable before anyone signs in (Chrome/Edge/Android install, iOS Add to Home Screen).
 // Full Chromium: the headless shell answers installability checks with no errors even when there is no manifest.
@@ -141,5 +142,98 @@ test.describe('production build', () => {
     await page.reload();
     await expect(page.getByRole('alert')).toHaveText('Could not reach the dashboard. Reload to try again.');
     await page.context().setOffline(false);
+  });
+
+  test('the service worker shows a pushed notification, with the agent’s avatar, and a tap opens its page', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ storageState: signedInState });
+    try {
+      await context.grantPermissions(['notifications'], { origin });
+      // The agent's avatar, as the backend would serve it (the suite's backend has no agents).
+      const png = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        'base64',
+      );
+      await context.route('**/api/agents/aether/avatar.png', route =>
+        route.fulfill({ contentType: 'image/png', body: png }),
+      );
+      const page = await context.newPage();
+      await page.goto(`${origin}/dashboard`);
+      await page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state);
+      const cdp = await context.newCDPSession(page);
+      const registrationId = new Promise<string>(resolve =>
+        cdp.on('ServiceWorker.workerRegistrationUpdated', ({ registrations }) => {
+          const found = registrations.find(item => item.scopeURL === `${origin}/` && !item.isDeleted);
+          if (found) resolve(found.registrationId);
+        }),
+      );
+      await cdp.send('ServiceWorker.enable');
+      const push = async (data: object) =>
+        cdp.send('ServiceWorker.deliverPushMessage', {
+          origin,
+          registrationId: await registrationId,
+          data: JSON.stringify(data),
+        });
+      const shown = () =>
+        page.evaluate(async () =>
+          (await (await navigator.serviceWorker.ready).getNotifications()).map(item => ({
+            title: item.title,
+            body: item.body,
+            tag: item.tag,
+            icon: item.icon.startsWith('data:image/png;base64,') ? 'avatar' : item.icon,
+            badge: item.badge,
+            url: (item.data as { url: string }).url,
+          })),
+        );
+      await push({
+        title: 'Aether',
+        body: 'The report is ready.',
+        tag: 'agent:aether',
+        url: '/chat/agents/aether',
+        icon: '/api/agents/aether/avatar.png',
+        timestamp: Date.now(),
+        renotify: true,
+      });
+      await expect.poll(shown, { timeout: 10_000 }).toEqual([
+        {
+          title: 'Aether',
+          body: 'The report is ready.',
+          tag: 'agent:aether',
+          icon: 'avatar',
+          badge: `${origin}/badge-96.png?v=1`,
+          url: `${origin}/chat/agents/aether`,
+        },
+      ]);
+      // System notifications (and agents without an avatar image yet) use the app icon; a burst replaces by tag;
+      // a link elsewhere is kept on the dashboard.
+      await push({ title: 'Aether · 2 new messages', body: 'Second', tag: 'agent:aether', url: '/chat/agents/aether' });
+      await push({ title: 'Sign-in is locked down', body: '…', tag: 'alert:lockdown', url: 'https://evil.example/' });
+      await push({
+        title: 'Bo',
+        body: 'Hi',
+        tag: 'agent:bo',
+        url: '/chat/agents/bo',
+        icon: '/api/agents/bo/avatar.png',
+      });
+      await expect
+        .poll(async () => (await shown()).map(item => [item.title, item.icon, item.url]).sort(), { timeout: 10_000 })
+        .toEqual([
+          ['Aether · 2 new messages', `${origin}/icon-192.png?v=2`, `${origin}/chat/agents/aether`],
+          ['Bo', `${origin}/icon-192.png?v=2`, `${origin}/chat/agents/bo`],
+          ['Sign-in is locked down', `${origin}/icon-192.png?v=2`, `${origin}/`],
+        ]);
+      // A tap: the open app goes to the notification's page without reloading.
+      await page.evaluate(() => Object.assign(window, { notReloaded: true }));
+      const worker = context.serviceWorkers().find(item => item.url().startsWith(origin))!;
+      await worker.evaluate(() =>
+        (self as unknown as { openApp: (path: string) => Promise<unknown> }).openApp('/settings'),
+      );
+      await expect(page).toHaveURL(`${origin}/settings`);
+      await expect(page.getByRole('heading', { name: 'Settings', level: 2 })).toBeVisible();
+      expect(await page.evaluate(() => (window as unknown as { notReloaded?: boolean }).notReloaded)).toBe(true);
+    } finally {
+      await context.close();
+    }
   });
 });

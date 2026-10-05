@@ -162,6 +162,7 @@ model Agent {
   activity            Activity[]
   discordDmAllows     DiscordDmAllow[]
   memories            AgentMemory[]
+  avatarImage         AgentAvatarImage?
 }
 
 /// One long-term memory of an agent (memorize). Forgetting sets deletedAt (restorable); every earlier text is a
@@ -668,33 +669,37 @@ model DiscordDmAllow {
 /// A person who signs in to the dashboard (docs/users.md). The migration creates "Admin" (role admin) with no
 /// password: the first sign-in sets it. Admin creates the users.
 model User {
-  sequence          Int            @id @default(autoincrement())
-  id                String         @unique @default(uuid())
-  name              String         @unique
+  sequence          Int                @id @default(autoincrement())
+  id                String             @unique @default(uuid())
+  name              String             @unique
   /// 'admin' (one, reaches everything) or 'user' (reaches only the organizations they own).
-  role              String         @default("user")
+  role              String             @default("user")
   /// Disabled: refused at sign-in, signed out everywhere; their agents keep running.
   disabledAt        DateTime?
   /// The most RAM (GiB) the computers in their organizations may have in total; null: no cap.
   memoryLimitGiB    Int?
   /// Their IANA time zone (docs/users.md#time-zone): their agents tell and take times in it. "" until set.
-  timeZone          String        @default("")
+  timeZone          String             @default("")
   organizations     Organization[]
   /// scrypt hash (auth/sessions.ts); null until the first sign-in sets it (or after a host-side reset).
   passwordHash      String?
   passwordChangedAt DateTime?
-  createdAt         DateTime       @default(now())
+  createdAt         DateTime           @default(now())
   sessions          UserSession[]
+  pushSubscriptions PushSubscription[]
+  pushPreferences   PushPreferences?
 }
 
 /// A signed-in browser. Only the SHA-256 of the cookie's random token is stored.
 model UserSession {
-  tokenHash  String   @id
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
-  lastSeenAt DateTime @default(now())
-  expiresAt  DateTime
+  tokenHash         String             @id
+  userId            String
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime           @default(now())
+  lastSeenAt        DateTime           @default(now())
+  expiresAt         DateTime
+  /// Devices subscribed for push from this browser session: signing out ends them too.
+  pushSubscriptions PushSubscription[]
 
   @@index([userId])
   @@index([expiresAt])
@@ -878,4 +883,51 @@ model AccessMinute {
   @@unique([minute, ip, user, method, route, status])
   @@index([minute])
   @@index([ip, minute])
+}
+
+/// A device that receives Web Push notifications for a person (docs/notifications.md). The endpoint is a capability
+/// URL at the browser's push service; with p256dh/auth it is secret-ish and never returned or logged.
+model PushSubscription {
+  id            String       @id @default(uuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The browser session that subscribed it: signing out, a password change or reset, disabling or deleting the
+  /// person ends the session and with it this device's pushes. Null only without sign-in (tests).
+  sessionId     String?
+  session       UserSession? @relation(fields: [sessionId], references: [tokenHash], onDelete: Cascade)
+  endpoint      String       @unique
+  p256dh        String
+  auth          String
+  /// Browser and device from its user agent ("Chrome on Android").
+  label         String
+  createdAt     DateTime     @default(now())
+  lastSuccessAt DateTime?
+  /// Failed deliveries in a row (other than expiry, which deletes it); reset by a success.
+  failures      Int          @default(0)
+
+  @@index([userId])
+  @@index([sessionId])
+}
+
+/// What a person is notified about (docs/notifications.md#settings). No row: everything on.
+model PushPreferences {
+  userId        String  @id
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentMessages Boolean @default(true)
+  groupChats    Boolean @default(true)
+  agentProblems Boolean @default(true)
+  /// Admin only: lockdown, failed sign-ins, outages, full disks.
+  critical      Boolean @default(true)
+  /// Off: message notifications say "New message" instead of the text.
+  preview       Boolean @default(true)
+}
+
+/// An agent's avatar drawn as a PNG by the dashboard, for notification icons (docs/notifications.md#icons).
+model AgentAvatarImage {
+  agentId   String   @id
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  png       Bytes
+  /// The saved avatar (JSON) it was drawn from: a different one means it needs drawing again.
+  source    String
+  updatedAt DateTime @updatedAt
 }

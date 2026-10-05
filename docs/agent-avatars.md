@@ -31,6 +31,8 @@ An additive nullable `Agent.avatar` TEXT column holds validated appearance JSON.
 
 Reviewed pinned Kibo source and rendered previews for Simple Select, Button with Text, toggle-group-standard (the trait chips, built on a radio group), slider-settings-1 "Volume Control" (proportion sliders) and radio-group layouts (color swatches), the existing dialog/context-menu compositions, and avatar badge placement. Those patterns provide controls/framing, not expressive artwork; the SVG family is original, following the custom illustration approach discussed with the owner.
 
+For [notification](notifications.md#icons) icons the dashboard also draws each avatar, at rest, as a 192 px PNG (`frontend/src/lib/avatar-png.tsx`) and uploads it whenever the backend has none for the agent's current look.
+
 Implementation lives in `frontend/src/lib/agent-avatar.ts`, `avatar-motion.ts`, `avatar-perspective.ts`, `components/agent-avatar-art.tsx`, `agent-avatar-preview.tsx`, and `edit-agent-form.tsx`; backend validation lives in `backend/src/agent-avatar.ts`.
 
 ## Validation

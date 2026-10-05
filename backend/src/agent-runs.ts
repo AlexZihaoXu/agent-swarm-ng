@@ -3,7 +3,14 @@ import { AgentWorkQueue, type WorkTicket } from './agent-work-queue';
 import type { ChannelMessage } from './chat-runtime';
 import type { ActivityEntry } from './agent-activity';
 import { runSpans } from './usage/run-spans';
-export type RunIdentity = { agentId: string; channelId: string; clientMessageId: string; inputSource?: 'agent' };
+export type RunIdentity = {
+  agentId: string;
+  channelId: string;
+  clientMessageId: string;
+  inputSource?: 'agent';
+  /** Started by a person's message in the agent's private chat (POST /api/chat). */
+  fromChat?: boolean;
+};
 export type RunState = RunIdentity & { runId: string; typing: boolean; typingTargets?: string[]; queued?: boolean };
 export type RunEvent = Record<string, unknown> & {
   type: string;
@@ -22,6 +29,10 @@ export type RunContext = {
 };
 type Run = RunState & {
   humanOwned: boolean;
+  /** A person's private-chat message started or joined it: they are waiting in the dashboard (push notifications). */
+  chatWaiting: boolean;
+  /** Why it was stopped, when it was: a person (Stop) or the platform shutting down. */
+  stoppedBy?: 'person' | 'shutdown';
   controller: AbortController;
   finished: Promise<void>;
   inbox: MessageInbox;
@@ -68,6 +79,7 @@ export class AgentRuns {
       );
     if (!run) return undefined;
     if (!message.source || message.source.human) run.humanOwned = true;
+    if ((event as { type?: string }).type === 'user_message') run.chatWaiting = true;
     run.emit(event);
     return run;
   }
@@ -231,6 +243,7 @@ export class AgentRuns {
     const run: Run = {
       ...identity,
       humanOwned: identity.inputSource !== 'agent',
+      chatWaiting: identity.fromChat === true,
       runId: crypto.randomUUID(),
       typing: false,
       queued: true,
@@ -307,7 +320,13 @@ export class AgentRuns {
           detach();
           run.inbox.close();
           this.runs.delete(run.runId);
-          run.emit({ type: 'done', stopped: run.controller.signal.aborted });
+          // `fromChat`: a person's private-chat message started or joined it; push notifications use both.
+          run.emit({
+            type: 'done',
+            stopped: run.controller.signal.aborted,
+            fromChat: run.chatWaiting,
+            ...(run.stoppedBy ? { stoppedBy: run.stoppedBy } : {}),
+          });
         });
       return run;
     } catch (error) {
@@ -323,6 +342,7 @@ export class AgentRuns {
     if (!run) return false;
     // Peer Stop must not invalidate a concurrent private-human admission.
     if (run.humanOwned && !run.channelId.startsWith('dm:')) this.stops.set(agentId, this.stopVersion(agentId) + 1);
+    run.stoppedBy ??= 'person';
     run.controller.abort();
     await run.finished;
     return true;
@@ -330,6 +350,7 @@ export class AgentRuns {
   async shutdown() {
     this.closing = true;
     const runs = [...this.runs.values()];
+    for (const run of runs) run.stoppedBy ??= 'shutdown';
     await this.queue.shutdown();
     await Promise.all(runs.map(run => run.finished));
   }

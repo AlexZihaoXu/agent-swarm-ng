@@ -170,6 +170,27 @@ it('samples each disk once with what lives there, asking the controller only for
   expect(quiet.error).toHaveBeenCalled();
 });
 
+it('tells once when a disk fills past 90%, again only after it fell below 88%', async () => {
+  const store = await database();
+  // 95% (told), 96%, 89% (still full), 95%, 50% (room again), 95% (told).
+  const free = [5, 4, 11, 5, 50, 5];
+  const full: { label: string; percent: number }[] = [];
+  const sampler = new MetricsSampler(store, null, {
+    readers: {
+      ...readers([]),
+      statfs: async () => ({ bsize: 1024, blocks: 100, bfree: free[0]!, bavail: free.shift()! }),
+    },
+    now: () => NOW,
+    log: quiet,
+    onDiskFull: disk => full.push(disk),
+  });
+  for (let i = 0; i < 6; i++) await sampler.sampleDisks();
+  expect(full).toEqual([
+    { label: 'nvme0n1p2', percent: 95 },
+    { label: 'nvme0n1p2', percent: 95 },
+  ]);
+});
+
 it('asks the controller for at most 16 distinct Keep/Cache folders, the Settings ones first', async () => {
   const store = await database();
   await store.client.swarmSettings.upsert({

@@ -79,13 +79,25 @@ test('the phone bottom navigation and one-row conversation headers navigate clea
   ).toBeGreaterThan(28);
   expect((await bounds(tabs)).width).toBeGreaterThanOrEqual(354);
   expect((await bounds(page.getByRole('button', { name: 'Open Portal' }))).y).toBeLessThan(60);
-  // Agents keeps the bottom bar: the picker sits under the top bar and the settings end above the bottom bar.
+  // Agents keeps the bottom bar: the picker sits under the top bar, and the settings scroll on beneath the glass bar
+  // (their last section padded clear of it).
   await expect(page).toHaveURL(/\/agents\/avery$/);
   await expect(tabs).toBeVisible();
   const picker = await bounds(page.getByRole('combobox', { name: 'Agent' }));
   expect(picker.y).toBeLessThan(140);
+  // Once loaded (no action bar), the editor reaches the bottom edge.
+  await expect(page.getByText('Loading settings…')).toHaveCount(0);
   const settings = await bounds(page.getByRole('region', { name: 'Agent editor' }));
-  expect(settings.y + settings.height).toBeLessThanOrEqual((await bounds(tabs)).y + 1);
+  expect(settings.y + settings.height).toBeGreaterThan((await bounds(tabs)).y);
+  const lastSection = page.getByRole('region', { name: 'Agent editor' }).locator('section').last();
+  await lastSection.scrollIntoViewIfNeeded();
+  await page.getByRole('region', { name: 'Agent editor' }).evaluate(element => {
+    const viewport = element.querySelector('[data-radix-scroll-area-viewport]') ?? element;
+    viewport.scrollTop = viewport.scrollHeight;
+  });
+  expect((await bounds(lastSection)).y + (await bounds(lastSection)).height).toBeLessThanOrEqual(
+    (await bounds(tabs)).y + 1,
+  );
   await page.screenshot({ path: test.info().outputPath('phone-agents.png'), animations: 'disabled' });
   await page.getByRole('tab', { name: 'Chat' }).click();
   await expect(page.getByRole('complementary', { name: 'Chats' })).toBeVisible();

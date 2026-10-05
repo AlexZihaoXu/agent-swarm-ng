@@ -44,6 +44,12 @@ import { Alerts } from './security/alerts';
 import { SignInGuard } from './security/guard';
 import { registerSecurityRoutes } from './security/routes';
 import { AccessLog, registerAccessLog } from './access/log';
+import { loadVapidKeys, vapidSubject } from './push/vapid';
+import { PushStore } from './push/store';
+import { PushSender, type PushTransport } from './push/sender';
+import { Presence } from './push/presence';
+import { PushNotifier } from './push/notifier';
+import { registerPushRoutes } from './push/routes';
 
 export async function buildApp({
   fetcher,
@@ -53,6 +59,7 @@ export async function buildApp({
   computerController,
   discordApi,
   requireLogin = true,
+  pushTransport,
 }: {
   fetcher?: typeof fetch;
   endpointStore?: EndpointStore;
@@ -63,6 +70,8 @@ export async function buildApp({
   discordApi?: string;
   /** Dashboard sign-in for every request (docs/login.md). Only tests of other features turn it off. */
   requireLogin?: boolean;
+  /** How push notifications reach push services (tests capture or fake them). */
+  pushTransport?: PushTransport;
 } = {}) {
   const app = Fastify({ logger: true });
   const hostAllowed = allowedHosts();
@@ -140,7 +149,7 @@ export async function buildApp({
   const discordTokens = new DiscordTokenStore(join(platform.dataDirectory, 'discord-bots.json'));
   const discordStore = new DiscordStore(platform);
   const discord = new DiscordConnections(discordTokens, discordStore, { api: discordApi });
-  registerChat(
+  const { runs } = registerChat(
     app,
     endpoints,
     platform,
@@ -152,6 +161,30 @@ export async function buildApp({
     { store: discordStore, connections: discord, tokens: discordTokens },
     connections,
   );
+  // Push notifications (docs/notifications.md): they watch the run events and critical events, never the chat path.
+  const push = new PushStore(platform);
+  // Made or read on first use, not here: building the app (OpenAPI generation) touches no files.
+  let keys: ReturnType<typeof loadVapidKeys> | undefined;
+  const vapid = () =>
+    (keys ??= loadVapidKeys(platform.dataDirectory).catch(error => ((keys = undefined), Promise.reject(error))));
+  const presence = new Presence();
+  const notifier = new PushNotifier({
+    platform,
+    reach,
+    store: push,
+    sender: new PushSender(push, vapid, vapidSubject(), app.log, pushTransport),
+    presence,
+    log: app.log,
+  });
+  app.decorate('push', notifier);
+  const unsubscribeRuns = runs.subscribe(notifier.observe);
+  const unlistenAlerts = alerts.listen(notifier.critical);
+  app.addHook('onClose', async () => {
+    unsubscribeRuns();
+    unlistenAlerts();
+    notifier.close();
+  });
+  registerPushRoutes(app, { keys: vapid, store: push, notifier, presence, platform });
   registerComputerRoutes(app, platform, controller, computers, swarmSettings);
   registerComputerStorageRoutes(app, platform, controller);
   registerComputerUseRoutes(app, computers, screenshots);

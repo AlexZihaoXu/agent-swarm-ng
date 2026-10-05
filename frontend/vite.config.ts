@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -12,6 +14,15 @@ const desktopPath = /^\/computers\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
  * carries the same version.
  */
 const ICONS = '?v=2';
+
+/**
+ * The push handlers (public/push-sw.js), imported by the generated service worker. Its address carries its content
+ * hash, so a change to it changes sw.js and the browser installs the new worker with it.
+ */
+const pushWorker = `/push-sw.js?v=${createHash('sha256')
+  .update(readFileSync(fileURLToPath(new URL('./public/push-sw.js', import.meta.url))))
+  .digest('hex')
+  .slice(0, 12)}`;
 
 export default defineConfig(({ mode }) => ({
   plugins: [
@@ -45,6 +56,7 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ['**/*.{js,css,html,png,svg,woff2,mp3}'],
         navigateFallbackDenylist: [/^\/api(?:\/|$)/, desktopPath],
         runtimeCaching: [],
+        importScripts: [pushWorker],
       },
     }),
   ],

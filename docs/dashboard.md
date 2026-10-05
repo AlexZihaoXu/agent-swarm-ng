@@ -35,6 +35,8 @@ A banner across the top of every page, for admin only (Kibo `alert/error/alert-e
 - **Sign-in is locked down** — while it lasts.
 - **Disk nearly full** — a storage area at 90% or more (from its latest reading within the hour), while it lasts.
 
+Each also reaches admin as a [push notification](notifications.md) when it starts (a disk when it crosses 90%), unless admin turned critical alerts off or has the dashboard open.
+
 Events (`Alert`) can be dismissed; ongoing conditions cannot and end on their own. `GET /api/alerts`, `POST /api/alerts/:id/dismiss`.
 
 ## How it is measured

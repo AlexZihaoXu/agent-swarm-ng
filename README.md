@@ -9,7 +9,7 @@ A self-hosted platform for **persistent AI agents**. Each agent has its own iden
 ## What it does
 
 - **Agents** with durable identities, instructions, a model of your choice (ChatGPT subscription, OpenRouter, or any OpenAI-compatible endpoint), [long-term memory](docs/agent-memory.md), [timers, reminders and a heartbeat](docs/agent-time.md), [todo lists that keep them going until the work is done](docs/agent-todos.md), a private scratchpad and read-only [Swarm Knowledge](docs/swarm-knowledge.md).
-- **Chats:** private chats with each agent, [group chats](docs/chat-and-groups.md), [agent-to-agent DMs](docs/agent-communication.md), [shared files](docs/agent-files.md), replies and reactions; each agent can also have its own [Discord bot](docs/discord.md).
+- **Chats:** private chats with each agent, [group chats](docs/chat-and-groups.md), [agent-to-agent DMs](docs/agent-communication.md), [shared files](docs/agent-files.md), replies and reactions; each agent can also have its own [Discord bot](docs/discord.md). [Push notifications](docs/notifications.md) reach your phone or computer when an agent writes to you or gets stuck.
 - **Computers:** Ubuntu GNOME desktops in [Sysbox containers](docs/computers.md), streamed to the browser, with terminals, a file browser and recordings. Agents [use them](docs/agent-computer-use.md) when assigned (anyone reads, one writes), and follow coding harnesses such as Claude Code, Codex, OpenCode and Pi through their own events.
 - **Dashboard:** a [Dashboard tab](docs/dashboard.md) with live and historical host CPU, memory, network and disks (space and I/O), computers, agents' active hours, spending and tokens over time; [organizations](docs/organizations.md) to keep groups apart, [users](docs/users.md) who each see only their own organizations, [Portal](docs/portal.md) (Ctrl/⌘+K) search and floating windows, an [activity inspector](docs/agent-activity.md), a [sign-in](docs/login.md) with known addresses and a lockdown, an [audit log](docs/audit-log.md), an [access log](docs/access-log.md) and banners for critical events. It installs as an app on desktop and phone.
 
@@ -64,7 +64,7 @@ The steps below set up the `tailnet-dual` stack: the dashboard on your Tailscale
 
 5. **Connect a model and create things.** In **Settings**, sign in with a ChatGPT subscription or add OpenRouter or an OpenAI-compatible endpoint. Then create a computer (**Computers → +**) and an agent (**Agents → +**), and assign the computer in the agent's settings.
 
-To install it as an app, use the browser's install button (Chrome, Edge) or **Add to Home Screen** (iOS Safari); this needs HTTPS the device trusts (trust the self-signed certificate on the device first, or use a public domain as below).
+To install it as an app, use the browser's install button (Chrome, Edge) or **Add to Home Screen** (iOS Safari); this needs HTTPS the device trusts (trust the self-signed certificate on the device first, or use a public domain as below). [Push notifications](docs/notifications.md) need the same, and on iPhone the Home Screen app.
 
 ### Reaching it from a public domain
 
@@ -104,7 +104,7 @@ Open http://localhost:5173 (dev servers listen on this machine only). `bun run t
 | Direction and concepts | [Vision](docs/vision.md) |
 | Sign-in, users, sessions, reverse proxies | [Login](docs/login.md) · [Users](docs/users.md) · [Audit log](docs/audit-log.md) · [Access log](docs/access-log.md) |
 | Agents | [Communication](docs/agent-communication.md) · [Memory](docs/agent-memory.md) · [Time and events](docs/agent-time.md) · [Todo lists](docs/agent-todos.md) · [Activity](docs/agent-activity.md) · [Avatars](docs/agent-avatars.md) · [Files](docs/agent-files.md) · [Sessions](docs/durable-agent-sessions.md) |
-| Chats | [Chat and groups](docs/chat-and-groups.md) · [Replies](docs/message-replies.md) · [Interruptions](docs/message-interruption.md) · [Discord](docs/discord.md) |
+| Chats | [Chat and groups](docs/chat-and-groups.md) · [Replies](docs/message-replies.md) · [Interruptions](docs/message-interruption.md) · [Discord](docs/discord.md) · [Notifications](docs/notifications.md) |
 | Computers | [Computers](docs/computers.md) · [Agent computer use](docs/agent-computer-use.md) · [Terminals](docs/persistent-terminals.md) |
 | Dashboard | [Dashboard](docs/dashboard.md) · [Organizations](docs/organizations.md) · [Portal](docs/portal.md) · [Swarm Knowledge](docs/swarm-knowledge.md) |
 | Building and running | [Development and architecture](docs/development.md) · [Rollout history](docs/history.md) · [Feature consistency review](docs/feature-consistency-review.md) |

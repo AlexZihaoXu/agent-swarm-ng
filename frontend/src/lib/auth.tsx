@@ -4,6 +4,7 @@ import { AnimatePresence, m } from 'motion/react';
 import { api } from '@/api/client';
 import { surface } from '@/lib/motion';
 import { SignIn } from '@/components/sign-in';
+import { forgetThisBrowser } from '@/lib/push';
 
 export const SESSION_KEY = ['auth', 'session'] as const;
 export type AuthSession =
@@ -71,6 +72,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
     queryClient.setQueryData(SESSION_KEY, data);
   };
   const signOut = async () => {
+    // The next person signing in on this browser must not get this one's notifications.
+    await forgetThisBrowser();
     await api.POST('/api/auth/logout').catch(() => undefined);
     switchTo({ signedIn: false, setupRequired: false });
   };

@@ -38,6 +38,8 @@ import { conversationTimeline } from '@/lib/conversation-timeline';
 import { AgentTypingStatus } from '@/components/agent-typing-status';
 import { AvatarFace, PresenceIndicator } from '@/components/typing-indicator';
 import { AgentActivityPanel } from '@/components/agent-activity-panel';
+import { onNotificationOpen, reportPresence } from '@/lib/push';
+import { useAvatarPngSync } from '@/lib/avatar-png';
 import { AgentAvatarArt } from '@/components/agent-avatar-art';
 import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 import { ChatPanel } from '@/components/chat-panel';
@@ -326,6 +328,11 @@ export function App() {
       navigate(chatAgentDmPath(route.agentId, route.peerId), { replace: true });
   }, [route.kind, route.agentId, route.peerId, navigate]);
   useGroupEvents();
+  // Push notifications (docs/notifications.md): tell the backend while this tab is in front of the person (nothing is
+  // pushed then), follow taps on notifications, and keep the agents' notification icons drawn.
+  useEffect(() => reportPresence(), []);
+  useEffect(() => onNotificationOpen(path => navigate(path)), [navigate]);
+  useAvatarPngSync(allAgents);
   const deletedGroup = useRef('');
   useEffect(() => {
     const deleted = (event: Event) => {

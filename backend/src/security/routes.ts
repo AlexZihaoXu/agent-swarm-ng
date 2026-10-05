@@ -4,11 +4,8 @@ import type { PlatformStore } from '../platform-store';
 import type { AuditLog } from '../audit/store';
 import { clientAddress } from '../auth/routes';
 import { KnownAddressError, type KnownAddresses } from './addresses';
-import type { Alerts, AlertView } from './alerts';
+import { DISK_FULL, type Alerts, type AlertView } from './alerts';
 import type { SignInGuard } from './guard';
-
-/** A disk this full raises an ongoing banner (until it is below again). */
-export const DISK_FULL = 0.9;
 
 const Message = Type.Object({ message: Type.String() });
 const Address = Type.Object({

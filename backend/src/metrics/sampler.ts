@@ -1,6 +1,10 @@
 import type { ComputerController } from '../computer-controller-client';
 import { computerStorageFolders } from '../computer-storage-routes';
 import type { PlatformStore } from '../platform-store';
+import { DISK_FULL } from '../security/alerts';
+
+/** Below this share a full disk counts as freed, and crossing DISK_FULL again notifies again. */
+const DISK_REARM = 0.88;
 import { groupDisks, type DiskMeasurement, type DiskUse } from './disks';
 import {
   cpuPercent,
@@ -32,7 +36,13 @@ export const MAX_REQUESTED_DISKS = 16;
 const PRUNE_BATCH = 500;
 
 type Log = { error(object: unknown, message: string): void };
-export type SamplerOptions = { readers?: HostReaders; log?: Log; now?: () => Date };
+export type SamplerOptions = {
+  readers?: HostReaders;
+  log?: Log;
+  now?: () => Date;
+  /** A disk crossed DISK_FULL (again only after dropping below 88%, or after a restart): notifies admin. */
+  onDiskFull?: (disk: { label: string; percent: number }) => void;
+};
 
 export class MetricsSampler {
   private readonly readers: HostReaders;
@@ -41,6 +51,7 @@ export class MetricsSampler {
   private previousCpu: CpuTimes | null = null;
   private previousIo: { at: number; io: HostIo } | null = null;
   private readonly busy = new Set<string>();
+  private readonly full = new Set<string>();
 
   constructor(
     private readonly database: PlatformStore,
@@ -50,7 +61,9 @@ export class MetricsSampler {
     this.readers = options.readers ?? procReaders;
     this.log = options.log ?? { error: (object, message) => console.error(message, object) };
     this.now = options.now ?? (() => new Date());
+    this.onDiskFull = options.onDiskFull;
   }
+  private readonly onDiskFull: SamplerOptions['onDiskFull'];
 
   /** Host CPU since the previous call and memory now. The first call only takes the CPU baseline. */
   async sampleSystem() {
@@ -176,6 +189,15 @@ export class MetricsSampler {
         total: BigInt(row.total),
       })),
     });
+    for (const row of rows) {
+      const share = row.total > 0 ? row.used / row.total : 0;
+      if (share >= DISK_FULL && !this.full.has(row.disk)) {
+        this.full.add(row.disk);
+        this.onDiskFull?.({ label: row.label, percent: Math.round(share * 100) });
+      }
+      // Told again only after it had real room: a disk hovering around 90% is not news every sample.
+      if (share < DISK_REARM) this.full.delete(row.disk);
+    }
     return rows.length;
   }
 

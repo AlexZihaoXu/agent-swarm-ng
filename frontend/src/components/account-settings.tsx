@@ -3,11 +3,15 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { useSignedIn } from '@/lib/auth';
 import { Select } from '@/components/ui/select';
+import { NotificationSettings } from '@/components/notification-settings';
 import { settingsCard, settingsInput } from '@/lib/styles';
 
 const PASSWORD_MIN = 8;
 
-/** Settings → Account: who is signed in, change the password (signs out other browsers), sign out. */
+/**
+ * Settings → Account: who is signed in, time zone, notifications, change the password (signs out other browsers),
+ * sign out.
+ */
 export function AccountSettings() {
   const id = useId();
   const { name, signOut } = useSignedIn();
@@ -59,6 +63,7 @@ export function AccountSettings() {
         </Button>
       </div>
       <TimeZoneCard />
+      <NotificationSettings />
       <form className={`${settingsCard} space-y-3`} onSubmit={change} aria-labelledby={`${id}-change`}>
         <h4 id={`${id}-change`} className="text-sm font-semibold">
           Change password

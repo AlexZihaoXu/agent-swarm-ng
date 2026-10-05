@@ -13,13 +13,39 @@ export type AlertView = {
   logs: 'signin' | 'system' | null;
 };
 
+/** A disk this full (used / total) raises an ongoing banner (until it is below again) and notifies admin. */
+export const DISK_FULL = 0.9;
+
+/** A critical event as it happens (a new banner, a lockdown, a disk filling up): for push notifications to admin. */
+export type CriticalEvent = { kind: string; title: string; detail: string };
+
 /** Stored critical events (outages, failed sign-in bursts), shown as banners until dismissed. */
 export class Alerts {
+  private readonly listeners = new Set<(event: CriticalEvent) => void>();
+
   constructor(private readonly platform: PlatformStore) {}
+
+  /** Told of each critical event as it happens (docs/notifications.md). */
+  listen(listener: (event: CriticalEvent) => void) {
+    this.listeners.add(listener);
+    return () => void this.listeners.delete(listener);
+  }
+
+  /** Tells listeners of a critical event; one that throws never affects the caller. */
+  announce(event: CriticalEvent) {
+    for (const listener of this.listeners)
+      try {
+        listener(event);
+      } catch {
+        // A notification problem is not the caller's.
+      }
+  }
 
   async raise(input: { kind: string; title: string; detail: string; startedAt: Date; endedAt?: Date | null }) {
     await this.platform.initialize();
-    return this.platform.client.alert.create({ data: { ...input, endedAt: input.endedAt ?? null } });
+    const alert = await this.platform.client.alert.create({ data: { ...input, endedAt: input.endedAt ?? null } });
+    this.announce({ kind: input.kind, title: input.title, detail: input.detail });
+    return alert;
   }
 
   /** The latest alert of a kind since a time (dismissed or not), to update instead of adding another. */

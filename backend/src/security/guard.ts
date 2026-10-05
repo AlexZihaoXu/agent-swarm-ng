@@ -74,6 +74,11 @@ export class SignInGuard {
         );
       if (!created) return;
       this.failures = [];
+      this.alerts.announce({
+        kind: 'lockdown',
+        title: 'Sign-in is locked down',
+        detail: `After ${recent.length} failed sign-ins within an hour, only trusted addresses can sign in.`,
+      });
       await this.audit.record({
         kind: 'auth.lockdown',
         outcome: 'ok',

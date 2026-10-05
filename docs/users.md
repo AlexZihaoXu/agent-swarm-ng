@@ -25,7 +25,7 @@ Every organization has one **owner** (`Organization.ownerId`). A user reaches on
 |---|---|---|
 | Agents, Chat, Computers, Portal | every organization | their organizations |
 | Dashboard | every organization, host stats | their organizations, host stats |
-| Settings → Account (password), API endpoints, ChatGPT, Discord accounts | their own | their own |
+| Settings → Account (password, time zone, notifications), API endpoints, ChatGPT, Discord accounts | their own | their own |
 | Settings → Swarm Knowledge | yes | yes |
 | Settings → Organizations | all | their own |
 | Settings → Users, Swarm, Security, Computer storage; audit and access logs; critical-event banners | yes | no |
@@ -39,6 +39,10 @@ A user's endpoint must be a **public** address, by the same policy as the agents
 ## Time zone
 
 Each person has a time zone (`User.timeZone`, Settings → Account). The dashboard sets the browser's while none is chosen. An agent uses its organization owner's: its time notes and `current_time` default to it, and its system prompt says to give the owner clock times in it (message timestamps are UTC). Without one, the platform's zone (the backend's `TZ`, UTC unless set) applies. `PATCH /api/auth/account {timeZone}` (an IANA name) sets one's own.
+
+## Notifications
+
+Each person has their own push devices and notification settings ([notifications](notifications.md)). Agent messages and problems go to the owner of the agent's (or group's) organization, so admin gets them only for organizations admin owns; critical events go to admin.
 
 ## In chats
 
