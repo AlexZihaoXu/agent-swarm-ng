@@ -5,6 +5,7 @@ services:
     volumes: !override
       - ./.local:/app/.local
       - host_net:/app/host-net:ro
+      - app_versions:/app/versions:ro
   frontend:
     environment:
       SITE_ADDRESS: ":19090"
