@@ -369,3 +369,29 @@ test('variations steer the look, Randomize reaches the extended traits, and Undo
   }
   expect([...seen].filter(item => !item.endsWith('=none')).length).toBeGreaterThan(2);
 });
+
+test('the Avatar section downloads the avatar as PNG or SVG, named after the agent', async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 900 });
+  await page.goto('/agents/avery');
+  const section = page.getByRole('region', { name: 'Avatar' });
+  await section.scrollIntoViewIfNeeded();
+  const [png] = await Promise.all([
+    page.waitForEvent('download'),
+    section.getByRole('button', { name: 'Download PNG' }).click(),
+  ]);
+  expect(png.suggestedFilename()).toBe('Avery-avatar.png');
+  const bytes = await (await png.createReadStream()).toArray();
+  const data = Buffer.concat(bytes);
+  expect(data.subarray(1, 4).toString()).toBe('PNG');
+  // 1024 × 1024 (IHDR width and height).
+  expect(data.readUInt32BE(16)).toBe(1024);
+  expect(data.readUInt32BE(20)).toBe(1024);
+  const [svg] = await Promise.all([
+    page.waitForEvent('download'),
+    section.getByRole('button', { name: 'Download SVG' }).click(),
+  ]);
+  expect(svg.suggestedFilename()).toBe('Avery-avatar.svg');
+  const text = Buffer.concat(await (await svg.createReadStream()).toArray()).toString();
+  expect(text).toMatch(/^<svg[^>]*xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+  expect(text).toContain('data-avatar-shape');
+});

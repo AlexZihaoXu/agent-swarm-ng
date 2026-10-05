@@ -22,10 +22,12 @@ import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { SectionNav } from '@/components/section-nav';
+import { renderAvatarPng, renderAvatarSvg, saveFile } from '@/lib/avatar-png';
 import {
   ChannelsIcon,
   ClockIcon,
   ComputerIcon,
+  DownloadIcon,
   HeartbeatIcon,
   InstructionsIcon,
   MemoryIcon,
@@ -328,6 +330,37 @@ export function EditAgentForm({
                   Customize how {agent.name} appears in chats and the sidebar.
                 </p>
               </div>
+              {/* Downloads what the preview shows now (unsaved changes included). */}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={async () => {
+                    const png = await renderAvatarPng(avatar, 1024);
+                    saveFile(png, `${fileStem(agent.name)}-avatar.png`);
+                  }}
+                >
+                  <DownloadIcon />
+                  Download PNG
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() =>
+                    saveFile(
+                      new Blob([renderAvatarSvg(avatar, 512)], { type: 'image/svg+xml' }),
+                      `${fileStem(agent.name)}-avatar.svg`,
+                    )
+                  }
+                >
+                  <DownloadIcon />
+                  Download SVG
+                </Button>
+              </div>
               <AgentAvatarPreview
                 name={agent.name}
                 value={avatar}
@@ -458,4 +491,14 @@ export function EditAgentForm({
 /** Opens the Agents panel's context menu from its section list, which is portalled there. */
 function openPanelMenu(slot: HTMLElement, clientX: number, clientY: number) {
   slot.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX, clientY }));
+}
+
+/** A safe file name from an agent's name ("Lobbify CTO" → "Lobbify-CTO"). */
+function fileStem(name: string) {
+  return (
+    name
+      .trim()
+      .replace(/[\\/:*?"<>|\s]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'agent'
+  );
 }

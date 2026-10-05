@@ -139,6 +139,11 @@ export const GroupAddIcon = (props: ComponentProps<'svg'>) => (
     <path d="M16 3.13a4 4 0 0 1 0 7.75M16 18h6M19 15v6" />
   </Icon>
 );
+export const DownloadIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="M12 15V3M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5" />
+  </Icon>
+);
 export const TrashIcon = (props: ComponentProps<'svg'>) => (
   <Icon {...props}>
     <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />

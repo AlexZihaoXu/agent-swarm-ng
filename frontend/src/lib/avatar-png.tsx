@@ -8,8 +8,8 @@ import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 /** Notification icons are 192 px (Android's large icon, desktop notifications). */
 export const AVATAR_PNG_SIZE = 192;
 
-/** Draws an agent's avatar (the same art as the dashboard, at rest) as a PNG. */
-export async function renderAvatarPng(avatar: AvatarAppearance, size = AVATAR_PNG_SIZE): Promise<Blob> {
+/** The agent's avatar as standalone SVG markup (the same art as the dashboard, at rest). */
+export function renderAvatarSvg(avatar: AvatarAppearance, size = AVATAR_PNG_SIZE): string {
   const host = document.createElement('div');
   host.setAttribute('aria-hidden', 'true');
   host.style.cssText = 'position:fixed;left:-10000px;top:0;width:0;height:0;overflow:hidden;pointer-events:none';
@@ -20,24 +20,42 @@ export async function renderAvatarPng(avatar: AvatarAppearance, size = AVATAR_PN
     flushSync(() => root.render(<AgentAvatarArt {...avatar} size={size} animated={false} />));
     const svg = host.querySelector('svg');
     if (!svg) throw new Error('The avatar did not render.');
-    const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml' }));
-    try {
-      const image = new Image(size, size);
-      image.src = url;
-      await image.decode();
-      const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = size;
-      canvas.getContext('2d')!.drawImage(image, 0, 0, size, size);
-      return await new Promise<Blob>((resolve, reject) =>
-        canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('No PNG.'))), 'image/png'),
-      );
-    } finally {
-      URL.revokeObjectURL(url);
-    }
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    return new XMLSerializer().serializeToString(svg);
   } finally {
     root.unmount();
     host.remove();
   }
+}
+
+/** Draws an agent's avatar as a PNG. */
+export async function renderAvatarPng(avatar: AvatarAppearance, size = AVATAR_PNG_SIZE): Promise<Blob> {
+  const url = URL.createObjectURL(new Blob([renderAvatarSvg(avatar, size)], { type: 'image/svg+xml' }));
+  try {
+    const image = new Image(size, size);
+    image.src = url;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    canvas.getContext('2d')!.drawImage(image, 0, 0, size, size);
+    return await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('No PNG.'))), 'image/png'),
+    );
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** Saves a file the person asked for (a download link, clicked). */
+export function saveFile(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /** At most this many drawn per pass, so a large swarm never stalls the dashboard. */
