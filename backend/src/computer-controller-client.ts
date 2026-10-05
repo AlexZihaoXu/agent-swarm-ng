@@ -187,7 +187,7 @@ export class HttpComputerController implements ComputerController {
     return {
       name: decodeURIComponent(response.headers.get('x-file-name') ?? '') || path.split('/').pop() || 'file',
       size,
-      stream: response.body as unknown as AsyncIterable<Uint8Array>,
+      stream: bodyOf(response),
     };
   }
   async importFile(id: string, path: string, size: number, body: AsyncIterable<Uint8Array>, signal?: AbortSignal) {
@@ -417,4 +417,49 @@ export class HttpComputerController implements ComputerController {
  * never choose its Docker endpoint. Absent URL means computers are unavailable. */
 export function computerControllerFromEnv(url = process.env.COMPUTER_CONTROLLER_URL): ComputerController | null {
   return url ? new HttpComputerController(url) : null;
+}
+
+/**
+ * A response's body as chunks, read from the moment it arrives and buffered until the caller takes them: Bun breaks a
+ * fetch body that is first read only after other work (an upload's database checks), failing with "undefined is not
+ * a function". Buffered at most the download's size (callers cap it); stopping early (return) cancels the download.
+ */
+export function bodyOf(response: Response): AsyncGenerator<Uint8Array> {
+  const reader = response.body!.getReader();
+  const chunks: Uint8Array[] = [];
+  let finished = false;
+  let failure: unknown;
+  let wake: (() => void) | undefined;
+  void (async () => {
+    try {
+      while (true) {
+        const next = await reader.read();
+        if (next.done) break;
+        chunks.push(next.value);
+        wake?.();
+      }
+    } catch (error) {
+      failure = error ?? new Error('The download failed.');
+    } finally {
+      finished = true;
+      wake?.();
+    }
+  })();
+  return (async function* () {
+    try {
+      while (true) {
+        const chunk = chunks.shift();
+        if (chunk) {
+          yield chunk;
+          continue;
+        }
+        if (failure) throw failure;
+        if (finished) return;
+        await new Promise<void>(resolve => (wake = resolve));
+        wake = undefined;
+      }
+    } finally {
+      if (!finished) await reader.cancel().catch(() => {});
+    }
+  })();
 }
