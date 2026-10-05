@@ -22,6 +22,34 @@ import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { SectionNav } from '@/components/section-nav';
+import {
+  ChannelsIcon,
+  ClockIcon,
+  ComputerIcon,
+  HeartbeatIcon,
+  InstructionsIcon,
+  MemoryIcon,
+  ModelIcon,
+  NotepadIcon,
+  OrganizationIcon,
+  SmileIcon,
+  TrashIcon,
+} from '@/components/ui/icons';
+
+/** The panel's section list shows each section with its icon (keyed by the section's aria-label). */
+const sectionIcons = {
+  Channels: <ChannelsIcon />,
+  Model: <ModelIcon />,
+  Instructions: <InstructionsIcon />,
+  Heartbeat: <HeartbeatIcon />,
+  'Time notes': <ClockIcon />,
+  Computers: <ComputerIcon />,
+  Scratchpad: <NotepadIcon />,
+  Memory: <MemoryIcon />,
+  Avatar: <SmileIcon />,
+  Organization: <OrganizationIcon />,
+  'Danger zone': <TrashIcon />,
+};
 import type { SettingsSection } from '@/lib/settings-sections';
 
 // Kibo's spacious section-form layout adapted to a left-aligned, scrollable
@@ -200,7 +228,7 @@ export function EditAgentForm({
                 openPanelMenu(sectionSlot, bounds.left + 16, bounds.top + 16);
               }}
             >
-              <SectionNav container={sectionList} />
+              <SectionNav container={sectionList} icons={sectionIcons} />
             </div>,
             sectionSlot,
           )}

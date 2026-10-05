@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type RefObject } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { m } from 'motion/react';
 import { glide } from '@/lib/motion';
 import { cn } from '@/lib/utils';
@@ -22,11 +22,14 @@ export function SectionNav({
   container,
   label = 'Jump to section',
   className,
+  icons = {},
 }: {
   /** The element whose direct `section[aria-label]` children (each with an h3) are listed. */
   container: RefObject<HTMLElement | null>;
   label?: string;
   className?: string;
+  /** An icon per section, by its aria-label. */
+  icons?: Record<string, ReactNode>;
 }) {
   const group = useId();
   const [items, setItems] = useState<Item[]>([]);
@@ -145,7 +148,7 @@ export function SectionNav({
                   jump(item);
                 }}
                 className={cn(
-                  'relative isolate flex min-h-9 items-center rounded-lg px-3 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                  'relative isolate flex min-h-9 items-center gap-2.5 rounded-lg px-3 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                   on
                     ? 'font-medium text-foreground'
                     : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
@@ -158,6 +161,11 @@ export function SectionNav({
                     transition={glide}
                     className="ao-raised absolute inset-0 -z-10 rounded-lg bg-foreground/10"
                   />
+                )}
+                {icons[item.id] && (
+                  <span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center">
+                    {icons[item.id]}
+                  </span>
                 )}
                 {item.label}
               </a>
