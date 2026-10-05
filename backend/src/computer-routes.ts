@@ -45,6 +45,8 @@ const viewSchema = Type.Object({
   keptPaths: Type.Array(Type.String()),
   // Made from an older image than the current one (Update image); null when unknown.
   outdated: Type.Union([Type.Boolean(), Type.Null()]),
+  // Running, but its own memory/CPU view (LXCFS) is broken until it restarts; null when unknown.
+  resourceViewStale: Type.Union([Type.Boolean(), Type.Null()]),
 });
 
 function view(
@@ -66,6 +68,7 @@ function view(
   return {
     ...storageOf(record),
     outdated: observed ? (observed.outdated ?? false) : null,
+    resourceViewStale: observed ? (observed.resourceViewStale ?? false) : null,
     id: record.id,
     name: record.name,
     organizationId: record.organizationId,

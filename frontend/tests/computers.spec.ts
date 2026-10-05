@@ -17,6 +17,7 @@ type Computer = {
   cacheFolder?: string | null;
   keptPaths?: string[];
   outdated?: boolean | null;
+  resourceViewStale?: boolean | null;
 };
 async function expectCentered(page: Page, dialog: ReturnType<Page['getByRole']>) {
   // Measured once its entrance (a short rise) has settled.
@@ -712,6 +713,33 @@ test('a computer’s settings show where its files are, clear its cache, and reb
   );
   expect(computers[0]).toMatchObject({ keptPaths: ['/home/agent', '/var/lib/postgresql'], outdated: false });
   await expect(page.getByText('Update available')).toHaveCount(0);
+});
+
+test('a computer whose LXCFS view went stale says to restart it', async ({ page }) => {
+  await mockComputers(page, [
+    {
+      id: 'stale',
+      name: 'Stale desk',
+      state: 'running',
+      createdAt: 0,
+      cpuPercent: 0,
+      memoryBytes: 0,
+      resourceViewStale: true,
+    },
+    {
+      id: 'fine',
+      name: 'Fine desk',
+      state: 'running',
+      createdAt: 0,
+      cpuPercent: 0,
+      memoryBytes: 0,
+      resourceViewStale: false,
+    },
+  ]);
+  await page.goto('/computers');
+  const note = page.getByText('Restart to refresh');
+  await expect(note).toHaveCount(1);
+  await expect(note).toHaveAttribute('title', /restart this computer/);
 });
 
 test('preview dissolves without the breathing brightness dip', async ({ page }) => {

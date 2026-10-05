@@ -19,6 +19,7 @@ The longer-term direction is in the [swarm vision](docs/vision.md).
 
 - x86_64 Linux with **Docker Engine** and **Docker Compose 2.24.4+**.
 - **[Sysbox](https://github.com/nestybox/sysbox)** (`sysbox-runc`): computers never fall back to a privileged container.
+- cgroup v2 and FUSE (any current distribution): the privileged `lxcfs` service shows each computer its own memory and CPUs ([LXCFS](docs/computers.md#lxcfs)).
 - A private network to reach it from: **[Tailscale](https://tailscale.com)** (recommended) or a trusted LAN. Do not expose it to the internet directly.
 - Disk space for the computer images (several GB) and each computer's files.
 - For development only: Bun 1.3.6 and Node.js 22.12+.
@@ -72,7 +73,7 @@ Behind a reverse proxy (for example Nginx Proxy Manager, optionally behind Cloud
 
 ## Operating it
 
-- **Update:** `git pull`, rebuild the images that changed (step 2 for computers), then `scripts/compose.sh tailnet-dual up -d --build`. A restart stops agent runs in progress (they end as incomplete); existing computers keep their image until you update them in their settings.
+- **Update:** `git pull`, rebuild the images that changed (step 2 for computers), then `scripts/compose.sh tailnet-dual up -d --build`. A restart stops agent runs in progress (they end as incomplete); existing computers keep their image until you update them in their settings. When the `lxcfs` service is rebuilt, `free` and `top` fail in running computers for a few seconds until the controller restores them.
 - **Data:** everything lives in `.local/` (the database, chat files, provider credentials and bot tokens, mode 0700). The backend keeps a daily copy of the database in `.local/backups/database/`; copy `.local/` off the machine regularly.
 - **Computer storage:** each computer keeps its files in a **Keep** folder (code, settings, what it installs; it survives rebuilds) and a **Cache** folder (safe to clear). By default both are Docker volumes. To use a disk of your choice, create and mark the folders on the host, then pick them in **Settings → Computer storage**:
 

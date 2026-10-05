@@ -197,6 +197,14 @@ export function ComputerCard({
               Update available
             </span>
           )}
+          {computer.resourceViewStale && (
+            <span
+              title="Its own memory and CPU figures (free, top) could not be restored after the LXCFS service restarted: restart this computer to refresh them"
+              className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-px text-[10px] font-medium text-amber-300"
+            >
+              Restart to refresh
+            </span>
+          )}
           <Button
             type="button"
             variant="ghost"

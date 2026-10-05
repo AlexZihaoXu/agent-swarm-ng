@@ -10,12 +10,14 @@ import { fileAttachment, type FileOperation } from './operator-files';
 import { terminalSockets, type TerminalSocket } from './terminal-stream';
 import { authorized } from './auth';
 import { parseExtraDisks, validateRequestedPaths } from './disks';
+import { LxcfsBinder, lxcfsEnabled } from './lxcfs';
 
 process.umask(0o077);
 const docker = new DockerApi();
+const namespace = process.env.COMPUTER_NAMESPACE ?? 'agent-swarm-ng';
 const manager = new ComputerManager(
   docker,
-  process.env.COMPUTER_NAMESPACE ?? 'agent-swarm-ng',
+  namespace,
   undefined,
   process.env.COMPUTER_IMAGE ?? 'agent-swarm-default:stage2',
   process.env.COMPUTER_EGRESS_IMAGE ?? 'agent-swarm-computer-egress:dev',
@@ -23,10 +25,16 @@ const manager = new ComputerManager(
   process.env.COMPUTER_RENDER_DEVICE ?? '',
   Number(process.env.COMPUTER_CPU_LIMIT ?? 2),
   process.env.COMPUTER_TIMEZONE ?? '',
+  new LxcfsBinder(docker, namespace, lxcfsEnabled(process.env.COMPUTER_LXCFS)),
 );
 // Boot-time reconciliation starts only our labelled computers, always after
 // their filtered egress sidecars. No model inference or agent work is replayed.
 await manager.resume();
+// After the lxcfs service restarts, running computers' LXCFS binds are dead until they are replaced in place.
+const refreshLxcfs = () =>
+  manager.refreshLxcfs().catch(error => console.error('computer-controller: LXCFS refresh failed:', String(error)));
+void refreshLxcfs();
+setInterval(refreshLxcfs, 10_000).unref();
 const terminals = terminalSockets(manager);
 // Extra host paths the operator wants on the dashboard's disk chart (.env), measured read-only.
 const extraDisks = parseExtraDisks(process.env.DASHBOARD_EXTRA_DISKS);

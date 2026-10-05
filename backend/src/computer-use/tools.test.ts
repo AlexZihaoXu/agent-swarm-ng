@@ -81,6 +81,12 @@ it('teaches the computer tools through real Knowledge entries and prompt guidanc
   }
   expect(COMPUTER_USE_GUIDANCE).toContain('low is for orientation');
   expect(COMPUTER_USE_GUIDANCE).toContain('quality:"full"');
+  // Caps (LXCFS cannot fix nproc or Chrome): the prompt, Knowledge and the tools say the same thing.
+  expect(COMPUTER_USE_GUIDANCE).toContain('make -j<cpus>, not $(nproc)');
+  expect(swarmKnowledge.read({ id: 'concepts/computers' }).text).toMatch(
+    /caps \{cpus, memoryGiB, swapGiB\}.*make -j<cpus>/s,
+  );
+  expect(swarmKnowledge.read({ id: 'practices/computer-use' }).text).toContain('make -j<cpus>');
   const actions =
     swarmKnowledge.read({ id: 'practices/desktop' }).text +
     swarmKnowledge.read({ id: 'concepts/computers/desktop' }).text;

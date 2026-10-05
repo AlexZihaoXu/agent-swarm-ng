@@ -13,6 +13,8 @@ export type ComputerObservation = {
   displayServer?: 'x11' | 'wayland';
   /** Made from an older image than the current one (Update image brings it up to date). */
   outdated?: boolean;
+  /** Its own memory/CPU view (LXCFS) could not be restored after an lxcfs restart: restarting it fixes that. */
+  resourceViewStale?: boolean;
 };
 /** One host path the controller measured for the dashboard (computer-controller/src/disks.ts). */
 export type ControllerDisk = { path: string; use: 'docker' | 'listed' | 'requested' } & (
@@ -333,6 +335,7 @@ export class HttpComputerController implements ComputerController {
         displayServer:
           item.displayServer === 'x11' || item.displayServer === 'wayland' ? item.displayServer : undefined,
         outdated: item.outdated === true,
+        resourceViewStale: item.resourceViewStale === true,
       });
     }
     return result;

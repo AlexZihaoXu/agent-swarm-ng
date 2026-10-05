@@ -1,10 +1,11 @@
 import { expect, it, vi } from 'vitest';
 import { ComputerManager, computerHostname, desktopCreateBody, desktopEnvironment } from './manager';
 import { DockerApi } from './docker-api';
+import type { LxcfsBinder } from './lxcfs';
 
 const id = '4a18018a-4689-4fa5-86ca-4dc080d41fb4';
 const name = 'Work computer';
-function fixture(renderDevice = '', timezone = '') {
+function fixture(renderDevice = '', timezone = '', lxcfs: LxcfsBinder | null = null) {
   const resources = new Map<string, unknown>();
   const request = vi.fn(async (..._args: unknown[]) => Buffer.alloc(0));
   const execute = vi.fn(async () => Buffer.alloc(0));
@@ -24,6 +25,7 @@ function fixture(renderDevice = '', timezone = '') {
     renderDevice,
     2,
     timezone,
+    lxcfs,
   );
   return { manager, resources, request, execute, docker };
 }
@@ -700,8 +702,9 @@ it('always allows stopping but never starts a computer with a stale render grant
   expect(started.request.mock.calls.filter(call => String(call[1]).includes('/start'))).toHaveLength(0);
 });
 
-it('starts a stopped computer through its filtered gateway before the desktop', async () => {
-  const { manager, resources, request } = fixture();
+it('starts a stopped computer through its filtered gateway before the desktop, then binds LXCFS', async () => {
+  const attach = vi.fn(async (_desktop: string) => {});
+  const { manager, resources, request } = fixture('', '', { attach, enabled: true } as unknown as LxcfsBinder);
   existingRunning(manager, resources);
   // Everything owned exists but is stopped.
   for (const role of ['desktop', 'egress'] as const) {
@@ -738,6 +741,29 @@ it('starts a stopped computer through its filtered gateway before the desktop', 
   // The gateway must be running before the desktop attaches to the bridge.
   expect(posts.indexOf('/containers/gateway/start')).toBeGreaterThanOrEqual(0);
   expect(posts.indexOf('/containers/desktop/start')).toBeGreaterThan(posts.indexOf('/containers/gateway/start'));
+  expect(attach).toHaveBeenCalledWith('desktop');
+});
+
+it('refreshes LXCFS only in running computers and reports a computer whose view went stale', async () => {
+  const refresh = vi.fn(async (_ids: string[]) => {});
+  const lxcfs = { enabled: true, refresh, isStale: (desktop: string) => desktop === 'desktop' };
+  const { manager, docker } = fixture('', '', lxcfs as unknown as LxcfsBinder);
+  vi.mocked(docker.json).mockImplementation(async (_method: unknown, path: unknown) =>
+    String(path).startsWith('/containers/json')
+      ? [
+          { Id: 'desktop', State: 'running', Labels: manager.names.labels(id, 'desktop', name) },
+          {
+            Id: 'off',
+            State: 'exited',
+            Labels: manager.names.labels('5a716454-9c91-4245-95b7-2e5db3b18d3f', 'desktop', name),
+          },
+        ]
+      : {},
+  );
+  await manager.refreshLxcfs();
+  expect(refresh).toHaveBeenCalledWith(['desktop']);
+  const rows = await manager.observe();
+  expect(rows.map(row => row.resourceViewStale)).toEqual([true, false]);
 });
 
 it('refuses power changes for an unknown, foreign or invalid computer before calling Docker', async () => {

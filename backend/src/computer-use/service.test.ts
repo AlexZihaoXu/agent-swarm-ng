@@ -129,6 +129,17 @@ it('separates assignments from one active holder, preserves an old claim when a 
   await f.service.use(f.b.id, 'Desk', true);
   expect((await f.service.list(f.a.id))[0].holder?.id).toBe(f.b.id);
 });
+it("tells the agent each computer's saved caps, with swap equal to memory, and nothing when unknown", async () => {
+  const f = await fixture();
+  const sized = await f.db.client.computer.create({
+    data: { name: 'Sized', requestKey: crypto.randomUUID(), state: 'running', cpuCores: 2, memoryGiB: 4 },
+  });
+  await f.service.assign(f.a.id, [f.computer.id, sized.id]);
+  const listed = await f.service.list(f.a.id);
+  expect(listed.find(c => c.id === sized.id)?.caps).toEqual({ cpus: 2, memoryGiB: 4, swapGiB: 4 });
+  expect(listed.find(c => c.id === f.computer.id)).not.toHaveProperty('caps');
+  expect(await f.service.use(f.a.id, 'Sized')).toMatchObject({ caps: { cpus: 2, memoryGiB: 4, swapGiB: 4 } });
+});
 it('saves a screenshot of the held computer without granting input allowance', async () => {
   const f = await fixture();
   await expect(f.service.snapshot(f.a.id, { kind: 'glance', quality: 'full' })).rejects.toThrow(/use_computer/);

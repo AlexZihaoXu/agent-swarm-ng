@@ -187,6 +187,13 @@ export class DockerApi {
   }
 
   async exec(container: string, command: string[], user = 'root', timeout = 19_000, maxBytes = 768 * 1024) {
+    const result = await this.execResult(container, command, user, timeout, maxBytes);
+    if (result.exitCode !== 0) throw new Error('Computer command failed.');
+    return result.stdout;
+  }
+
+  /** Runs a command to completion and returns its exit status and both streams, whatever the status. */
+  async execResult(container: string, command: string[], user = 'root', timeout = 19_000, maxBytes = 768 * 1024) {
     const created = await this.json<{ Id: string }>('POST', `/containers/${encodeURIComponent(container)}/exec`, {
       AttachStdout: true,
       AttachStderr: true,
@@ -203,7 +210,8 @@ export class DockerApi {
       timeout,
     );
     let offset = 0;
-    const stdout: Buffer[] = [];
+    const stdout: Buffer[] = [],
+      stderr: Buffer[] = [];
     while (offset < raw.length) {
       if (offset + 8 > raw.length) throw new Error('Incomplete Docker exec stream header.');
       const stream = raw[offset];
@@ -211,10 +219,10 @@ export class DockerApi {
       offset += 8;
       if (offset + length > raw.length) throw new Error('Incomplete Docker exec stream frame.');
       if (stream === 1) stdout.push(raw.subarray(offset, offset + length));
+      if (stream === 2) stderr.push(raw.subarray(offset, offset + length));
       offset += length;
     }
     const result = await this.json<{ ExitCode: number | null }>('GET', `/exec/${encodeURIComponent(created.Id)}/json`);
-    if (result.ExitCode !== 0) throw new Error('Computer command failed.');
-    return Buffer.concat(stdout);
+    return { exitCode: result.ExitCode, stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) };
   }
 }

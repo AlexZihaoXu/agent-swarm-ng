@@ -48,6 +48,7 @@ import {
   type ComputerConfiguration,
   type ComputerLimits,
 } from './computer-configuration';
+import type { LxcfsBinder } from './lxcfs';
 
 type Container = {
   Id: string;
@@ -200,6 +201,8 @@ export class ComputerManager {
     private readonly renderDevice = '',
     private readonly cpuLimit = 2,
     private readonly timezone = '',
+    /** LXCFS binds (lxcfs.ts); null leaves computers showing the host's memory and CPUs. */
+    private readonly lxcfs: LxcfsBinder | null = null,
   ) {
     this.names = new ComputerNames(namespace);
     // Only an operator-selected DRM render node, never a card/modeset device
@@ -771,6 +774,7 @@ export class ComputerManager {
       }),
     );
     await this.docker.request('POST', `${this.path('containers', computerName)}/start`);
+    await this.lxcfs?.attach(computerName);
     await this.waitDesktopReady(computerName);
     const computer = await this.container(computerName, id, 'desktop', name);
     if (!computer) throw new ResourceError(503, 'Computer container is unavailable.');
@@ -1077,6 +1081,7 @@ export class ComputerManager {
       // A host Keep/Cache folder whose disk did not mount would start an empty computer: refuse instead.
       await this.checkMountedStorage(id, desktop);
       await this.docker.request('POST', `${this.path('containers', desktop.Id)}/start`);
+      await this.lxcfs?.attach(desktop.Id);
       await this.waitDesktopReady(this.names.desktop(id));
     }
     const running = await this.container(this.names.desktop(id), id, 'desktop', name);
@@ -1132,8 +1137,10 @@ export class ComputerManager {
           await this.ensureNetwork(this.names.egressNetwork, null, 'egress-network');
           await this.ensureGateway(id, name, subnet, network);
           const latest = await this.container(this.names.desktop(id), id, 'desktop', name);
-          if (latest && !latest.State.Running)
+          if (latest && !latest.State.Running) {
             await this.docker.request('POST', `${this.path('containers', latest.Id)}/start`);
+            await this.lxcfs?.attach(latest.Id);
+          }
           const running = await this.container(this.names.desktop(id), id, 'desktop', name);
           if (running?.State.Running) await this.ensureMedia(id, name, running);
         } catch (error) {
@@ -1142,6 +1149,18 @@ export class ComputerManager {
         }
       }
     });
+  }
+
+  /** Periodic: restores LXCFS binds in running computers after the lxcfs service restarted (lxcfs.ts). */
+  private lxcfsRun?: Promise<void>;
+  async refreshLxcfs() {
+    const lxcfs = this.lxcfs;
+    if (!lxcfs?.enabled) return;
+    // One refresh at a time: a slow one is joined, never overlapped.
+    return (this.lxcfsRun ??= (async () => {
+      const rows = await this.listIds();
+      await lxcfs.refresh(rows.filter(row => row.State === 'running').map(row => row.Id));
+    })().finally(() => (this.lxcfsRun = undefined)));
   }
 
   private async listIds() {
@@ -1250,6 +1269,8 @@ export class ComputerManager {
           cpuCount,
           displayServer: inspected.displayServer ?? displayServerOf(row),
           outdated: Boolean(current?.Id && inspected.imageId && inspected.imageId !== current.Id),
+          // Its LXCFS view could not be restored after an lxcfs restart: a restart of the computer fixes it.
+          resourceViewStale: row.State === 'running' && (this.lxcfs?.isStale(row.Id) ?? false),
         };
       }),
     );

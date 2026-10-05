@@ -75,6 +75,8 @@ The loop: look, act, verify.
 3. Verify: look again at adequate detail and check the actual outcome. Dispatched input is not success.
 If an action fails partway, look before retrying; never repeat a combo blindly.
 
+Sizing: use the computer's caps from list_computers (make -j<cpus>, not $(nproc); keep parallel jobs within its memory), not host figures some tools show (concepts/computers).
+
 Choosing a surface: use files/bash for quick, bounded work (read a config, run a 20 s script), a terminal for anything long-running or interactive (servers, builds, installers, coding agents), and the desktop for GUI-only work (browsers, apps).
 
 Waiting: never sit in a turn re-checking something slow. Start it, then set a watch or timer and end your turn (practices/waiting).

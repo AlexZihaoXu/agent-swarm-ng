@@ -18,6 +18,15 @@ export interface ComputerRuntime {
   /** Resolves only once no earlier admitted input or core operation can execute, including delayed requests. */
   cancel(id: string): Promise<void>;
 }
+/**
+ * A computer's saved caps, for the agent to size work by (Knowledge concepts/computers): swap equals its memory.
+ * LXCFS makes free/top show them, but nproc, /proc/stat and Chrome may still show the host's CPUs.
+ */
+export function computerCaps(computer: { cpuCores: number | null; memoryGiB: number | null }) {
+  if (!computer.cpuCores || !computer.memoryGiB) return {};
+  return { caps: { cpus: computer.cpuCores, memoryGiB: computer.memoryGiB, swapGiB: computer.memoryGiB } };
+}
+
 export class ComputerUseError extends Error {
   constructor(
     message: string,
@@ -152,6 +161,7 @@ export class ComputerUseService {
       id: computer.id,
       name: computer.name,
       state: computer.state,
+      ...computerCaps(computer),
       holder: computer.claim?.agent ?? null,
       current: computer.claim?.agentId === agentId,
       reading: this.reading.get(agentId) === computer.id,
@@ -255,7 +265,7 @@ export class ComputerUseService {
       });
       const holder =
         occupied && occupied.agentId !== agentId ? { id: occupied.agentId, name: occupied.agent.name } : null;
-      const selected = { computerId: computer.id, name: computer.name };
+      const selected = { computerId: computer.id, name: computer.name, ...computerCaps(computer) };
       if (write) {
         if (holder)
           throw new ComputerUseError(
