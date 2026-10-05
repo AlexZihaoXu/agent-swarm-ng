@@ -43,4 +43,10 @@ COPY --from=build /app/frontend/dist /srv
 # Runtime guest sudo cannot edit this immutable client copy. Update the pinned
 # Selkies version, hashes, and trusted wrapper together on upstream upgrades.
 COPY --from=trusted-selkies-client /srv/selkies /srv/selkies
+# The commit this image was built from (scripts/compose.sh). At start it is handed to the backend through the shared
+# versions volume, so a frontend-only update is announced too (docs/notifications.md).
+ARG APP_VERSION=dev
+ARG APP_SUMMARY=
+RUN printf '{"version":"%s","summary":"%s"}\n' "$APP_VERSION" "$(printf '%s' "$APP_SUMMARY" | sed 's/["\\]//g')" > /etc/caddy/version.json
+CMD ["sh", "-c", "cp /etc/caddy/version.json /versions/frontend.json 2>/dev/null || true; exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]
 EXPOSE 80 443

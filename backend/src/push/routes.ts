@@ -34,6 +34,9 @@ const Preferences = Type.Object({
   agentProblems: Type.Boolean(),
   critical: Type.Boolean(),
   preview: Type.Boolean(),
+  swarmUpdates: Type.Boolean(),
+  swarmStarts: Type.Boolean(),
+  swarmStops: Type.Boolean(),
 });
 const IdParams = Type.Object({ id: Type.String({ minLength: 1, maxLength: 64 }) });
 

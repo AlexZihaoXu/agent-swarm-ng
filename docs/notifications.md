@@ -20,10 +20,17 @@ Delivery needs HTTPS the device trusts (a public domain, or a certificate the de
 | An agent writes in a group chat | the owner of the group's organization | group name | "Agent: text" | `/chat/groups/:id` |
 | An agent run started by your message in its private chat ends on an error before it published anything | the owner of the agent's organization | "Aether couldn't finish" | the reason in plain words | `/chat/agents/:id` |
 | Critical events: a lockdown, a failed sign-in burst, an outage, a disk over 90% full | admin | the banner's title | its detail (a sign-in burst: counts only; the names tried stay in the log) | the matching log in Settings, or the Dashboard |
+| The Swarm was updated (the backend or the frontend now runs another build) | everyone who keeps it on | "Agent Swarm updated" | "Now on `abc1234`: the commit's summary" | the Dashboard |
+| The Swarm started (not an update) | everyone who keeps it on | "Agent Swarm started" | "It is running again." | the Dashboard |
+| The Swarm is stopping | everyone who keeps it on | "Agent Swarm stopping" | "It will be back when it starts again." | the Dashboard |
 
 Never notified: messages between agents (DMs), Discord (you are already on Discord; a run you started there that fails is not reported either, nor one started by a group message, a timer or a heartbeat), your own messages, thinking, tools and other activity, heartbeats that leave no message, and runs a person (or a backend shutdown) stopped. Admin sees every organization in the dashboard but gets message pushes only for organizations they own, plus critical events.
 
 The triggers watch the backend's run event bus and critical-event listeners, never the chat path: a push that fails or is slow never delays or fails a chat message.
+
+### The Swarm's own notifications
+
+`scripts/compose.sh` stamps the backend and frontend images with the commit they were built from (`APP_VERSION`, `APP_SUMMARY`; unstamped builds are `dev` and never count as an update). The frontend's container writes its version to the shared `app_versions` volume at start; the backend compares both with the last versions it saw (`<data>/push/versions.json`): at start it says **updated** when either changed (a start that is also an update is one notification), otherwise **started**, and it looks at the frontend's version every minute, so a frontend-only update is told too. Before the backend stops it says **stopping**, waiting at most 3 seconds for the push services. These ignore presence (a restart forgets it, and a stop is worth knowing in front of the dashboard) and go to every person who keeps that kind on.
 
 ### Icons
 
@@ -43,7 +50,7 @@ Agent messages (private and group) use the agent's avatar: the dashboard draws e
 
 - **Turn on notifications on this device**, or "On for this device". On an iPhone or iPad in Safari it explains adding the app to the Home Screen first; a browser without Web Push (or without HTTPS) says so; a refused permission explains how to allow it again.
 - **Devices**: each of your devices, when it last received one, **Remove**. Removing this device also unsubscribes it in the browser.
-- **What to be told** (all on by default, per person): Agent messages, Group chats, Agent problems, Critical alerts (admin only) and **Show message text**: off, message notifications say "New message" instead of the text, so nothing of a chat shows on the lock screen.
+- **What to be told** (all on by default, per person): Agent messages, Group chats, Agent problems, Critical alerts (admin only), Swarm updates, Swarm started, Swarm stopping and **Show message text**: off, message notifications say "New message" instead of the text, so nothing of a chat shows on the lock screen.
 - **Send test notification**: to every one of your devices at once, whatever the settings and presence, except paused ones; at most one every 10 seconds.
 
 Later, maybe: muting one conversation, quiet hours.

@@ -10,6 +10,7 @@ import { backfillUsageHistory, startUsageRecording } from './usage/backfill';
 import { usageRecorder } from './usage/recorder';
 import { MetricsSampler } from './metrics/sampler';
 import { detectOutage } from './security/outage';
+import { SwarmEvents, backendVersion, readFrontendVersion } from './push/swarm-events';
 
 process.umask(0o077);
 let stopPowerWatch = () => {};
@@ -17,11 +18,20 @@ let stopSampler = () => {};
 const database = new PlatformStore();
 await database.initialize();
 const app = await buildApp({ database });
+// The Swarm's own push notifications: started, stopping, updated (docs/notifications.md).
+const swarmEvents = new SwarmEvents({
+  push: app.push,
+  dataDirectory: database.dataDirectory,
+  backend: backendVersion(),
+  frontend: readFrontendVersion(),
+  log: app.log,
+});
 // Dashboard: model usage and agent run spans are recorded from here on; earlier ones are backfilled after listen.
 startUsageRecording(database, app.log);
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, async () => {
     await app.audit.record({ kind: 'system.stop', outcome: 'ok', actor: 'system', detail: { signal } });
+    await swarmEvents.stopping();
     stopPowerWatch();
     stopSampler();
     // Usage rows still queued (up to a second's worth) go in before the database closes.
@@ -46,6 +56,7 @@ await app.audit.record({
   actor: 'system',
   detail: { runtime: `Bun ${Bun.version}`, startupMs: Math.round(performance.now()) },
 });
+void swarmEvents.started();
 // The audit log keeps a year (at most 200,000 events): pruned at start and hourly.
 const pruneAudit = () => void app.audit.prune().catch(error => app.log.error(error, 'Audit log pruning failed'));
 pruneAudit();

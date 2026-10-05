@@ -920,6 +920,10 @@ model PushPreferences {
   critical      Boolean @default(true)
   /// Off: message notifications say "New message" instead of the text.
   preview       Boolean @default(true)
+  /// The Swarm itself: updated to a new version, started, stopping.
+  swarmUpdates  Boolean @default(true)
+  swarmStarts   Boolean @default(true)
+  swarmStops    Boolean @default(true)
 }
 
 /// An agent's avatar drawn as a PNG by the dashboard, for notification icons (docs/notifications.md#icons).

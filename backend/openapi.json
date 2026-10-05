@@ -2418,6 +2418,25 @@
                       },
                       "hasApiKey": {
                         "type": "boolean"
+                      },
+                      "contextWindow": {
+                        "minimum": 1024,
+                        "maximum": 10000000,
+                        "type": "integer"
+                      },
+                      "maxOutputTokens": {
+                        "minimum": 256,
+                        "maximum": 1000000,
+                        "type": "integer"
+                      },
+                      "images": {
+                        "type": "boolean"
+                      },
+                      "reasoning": {
+                        "type": "boolean"
+                      },
+                      "detectedContextWindow": {
+                        "type": "integer"
                       }
                     }
                   }
@@ -2462,6 +2481,50 @@
                     "maxLength": 4096,
                     "pattern": "^[^\\r\\n]*$",
                     "type": "string"
+                  },
+                  "contextWindow": {
+                    "anyOf": [
+                      {
+                        "minimum": 1024,
+                        "maximum": 10000000,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "minimum": 256,
+                        "maximum": 1000000,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "images": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reasoning": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -2493,6 +2556,25 @@
                     },
                     "hasApiKey": {
                       "type": "boolean"
+                    },
+                    "contextWindow": {
+                      "minimum": 1024,
+                      "maximum": 10000000,
+                      "type": "integer"
+                    },
+                    "maxOutputTokens": {
+                      "minimum": 256,
+                      "maximum": 1000000,
+                      "type": "integer"
+                    },
+                    "images": {
+                      "type": "boolean"
+                    },
+                    "reasoning": {
+                      "type": "boolean"
+                    },
+                    "detectedContextWindow": {
+                      "type": "integer"
                     }
                   }
                 }
@@ -2625,6 +2707,24 @@
                       "type": "array",
                       "items": {
                         "type": "string"
+                      }
+                    },
+                    "details": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "contextWindow"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "contextWindow": {
+                            "type": "integer"
+                          }
+                        }
                       }
                     }
                   }
@@ -21826,7 +21926,10 @@
                     "groupChats",
                     "agentProblems",
                     "critical",
-                    "preview"
+                    "preview",
+                    "swarmUpdates",
+                    "swarmStarts",
+                    "swarmStops"
                   ],
                   "properties": {
                     "agentMessages": {
@@ -21842,6 +21945,15 @@
                       "type": "boolean"
                     },
                     "preview": {
+                      "type": "boolean"
+                    },
+                    "swarmUpdates": {
+                      "type": "boolean"
+                    },
+                    "swarmStarts": {
+                      "type": "boolean"
+                    },
+                    "swarmStops": {
                       "type": "boolean"
                     }
                   }
@@ -21874,6 +21986,15 @@
                   },
                   "preview": {
                     "type": "boolean"
+                  },
+                  "swarmUpdates": {
+                    "type": "boolean"
+                  },
+                  "swarmStarts": {
+                    "type": "boolean"
+                  },
+                  "swarmStops": {
+                    "type": "boolean"
                   }
                 },
                 "additionalProperties": false,
@@ -21894,7 +22015,10 @@
                     "groupChats",
                     "agentProblems",
                     "critical",
-                    "preview"
+                    "preview",
+                    "swarmUpdates",
+                    "swarmStarts",
+                    "swarmStops"
                   ],
                   "properties": {
                     "agentMessages": {
@@ -21910,6 +22034,15 @@
                       "type": "boolean"
                     },
                     "preview": {
+                      "type": "boolean"
+                    },
+                    "swarmUpdates": {
+                      "type": "boolean"
+                    },
+                    "swarmStarts": {
+                      "type": "boolean"
+                    },
+                    "swarmStops": {
                       "type": "boolean"
                     }
                   }
@@ -23154,7 +23287,8 @@
                           "keepFolder",
                           "cacheFolder",
                           "keptPaths",
-                          "outdated"
+                          "outdated",
+                          "resourceViewStale"
                         ],
                         "properties": {
                           "id": {
@@ -23279,6 +23413,16 @@
                             }
                           },
                           "outdated": {
+                            "anyOf": [
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "resourceViewStale": {
                             "anyOf": [
                               {
                                 "type": "boolean"
@@ -23445,7 +23589,8 @@
                     "keepFolder",
                     "cacheFolder",
                     "keptPaths",
-                    "outdated"
+                    "outdated",
+                    "resourceViewStale"
                   ],
                   "properties": {
                     "id": {
@@ -23570,6 +23715,16 @@
                       }
                     },
                     "outdated": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "resourceViewStale": {
                       "anyOf": [
                         {
                           "type": "boolean"
@@ -23607,7 +23762,8 @@
                     "keepFolder",
                     "cacheFolder",
                     "keptPaths",
-                    "outdated"
+                    "outdated",
+                    "resourceViewStale"
                   ],
                   "properties": {
                     "id": {
@@ -23732,6 +23888,16 @@
                       }
                     },
                     "outdated": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "resourceViewStale": {
                       "anyOf": [
                         {
                           "type": "boolean"
@@ -24303,7 +24469,8 @@
                     "keepFolder",
                     "cacheFolder",
                     "keptPaths",
-                    "outdated"
+                    "outdated",
+                    "resourceViewStale"
                   ],
                   "properties": {
                     "id": {
@@ -24428,6 +24595,16 @@
                       }
                     },
                     "outdated": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "resourceViewStale": {
                       "anyOf": [
                         {
                           "type": "boolean"
@@ -24621,7 +24798,8 @@
                     "keepFolder",
                     "cacheFolder",
                     "keptPaths",
-                    "outdated"
+                    "outdated",
+                    "resourceViewStale"
                   ],
                   "properties": {
                     "id": {
@@ -24746,6 +24924,16 @@
                       }
                     },
                     "outdated": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "resourceViewStale": {
                       "anyOf": [
                         {
                           "type": "boolean"

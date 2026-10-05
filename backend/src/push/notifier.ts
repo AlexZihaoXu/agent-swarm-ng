@@ -19,6 +19,13 @@ const PREFERENCE: Record<Kind, keyof Preferences> = {
   stuck: 'agentProblems',
   critical: 'critical',
 };
+/** The Swarm itself: updated, started, stopping (each person chooses which). */
+export type SwarmEvent = 'update' | 'start' | 'stop';
+const SWARM_PREFERENCE: Record<SwarmEvent, keyof Preferences> = {
+  update: 'swarmUpdates',
+  start: 'swarmStarts',
+  stop: 'swarmStops',
+};
 type Item = { kind: Kind; tag: string; title: string; text: string; url: string; icon?: string };
 type Batch = { userId: string; first: number; count: number; latest: Item; timer?: ReturnType<typeof setTimeout> };
 type Run = { agentId: string; errors: string[]; published: boolean };
@@ -187,6 +194,25 @@ export class PushNotifier {
         );
     })().catch(this.fail);
   };
+
+  /**
+   * An event of the Swarm itself, now (no batching: a stop must go out before the process ends), to every person who
+   * keeps that kind on. Presence is not checked: a restart forgets it, and a stop is worth knowing even in front of
+   * the dashboard, which is about to disconnect.
+   */
+  async swarm(event: SwarmEvent, title: string, text: string) {
+    const people = await (await this.client()).user.findMany({ where: { disabledAt: null }, select: { id: true } });
+    await Promise.all(
+      people.map(async ({ id }) => {
+        if (!(await this.deps.store.preferences(id))[SWARM_PREFERENCE[event]]) return;
+        await this.deps.sender.send(
+          id,
+          { title, body: text, tag: 'swarm', url: '/dashboard', timestamp: this.now(), renotify: true },
+          'high',
+        );
+      }),
+    );
+  }
 
   /** "Send test notification": now, to every device of the person, whatever their settings and presence. */
   test(userId: string) {

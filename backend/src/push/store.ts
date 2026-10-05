@@ -11,6 +11,9 @@ export type Preferences = {
   agentProblems: boolean;
   critical: boolean;
   preview: boolean;
+  swarmUpdates: boolean;
+  swarmStarts: boolean;
+  swarmStops: boolean;
 };
 export const DEFAULT_PREFERENCES: Preferences = {
   agentMessages: true,
@@ -18,6 +21,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   agentProblems: true,
   critical: true,
   preview: true,
+  swarmUpdates: true,
+  swarmStarts: true,
+  swarmStops: true,
 };
 
 /**

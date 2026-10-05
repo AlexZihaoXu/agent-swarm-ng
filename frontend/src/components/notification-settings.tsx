@@ -25,6 +25,9 @@ const TYPES: { key: keyof Preferences; title: string; description: string; admin
     description: 'A lockdown, failed sign-ins, an outage or a full disk.',
     admin: true,
   },
+  { key: 'swarmUpdates', title: 'Swarm updates', description: 'When the Swarm is updated to a new version.' },
+  { key: 'swarmStarts', title: 'Swarm started', description: 'When the Swarm starts again after a stop or restart.' },
+  { key: 'swarmStops', title: 'Swarm stopping', description: 'When the Swarm is about to stop or restart.' },
   {
     key: 'preview',
     title: 'Show message text',

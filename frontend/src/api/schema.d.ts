@@ -2548,6 +2548,11 @@ export interface operations {
             name: string;
             baseUrl: string;
             hasApiKey: boolean;
+            contextWindow?: number;
+            maxOutputTokens?: number;
+            images?: boolean;
+            reasoning?: boolean;
+            detectedContextWindow?: number;
           }[];
         };
       };
@@ -2567,6 +2572,10 @@ export interface operations {
           name: string;
           baseUrl: string;
           apiKey?: string;
+          contextWindow?: number | null;
+          maxOutputTokens?: number | null;
+          images?: boolean | null;
+          reasoning?: boolean | null;
         };
       };
     };
@@ -2582,6 +2591,11 @@ export interface operations {
             name: string;
             baseUrl: string;
             hasApiKey: boolean;
+            contextWindow?: number;
+            maxOutputTokens?: number;
+            images?: boolean;
+            reasoning?: boolean;
+            detectedContextWindow?: number;
           };
         };
       };
@@ -2659,6 +2673,10 @@ export interface operations {
         content: {
           'application/json': {
             models: string[];
+            details?: {
+              id: string;
+              contextWindow: number;
+            }[];
           };
         };
       };
@@ -7335,6 +7353,9 @@ export interface operations {
             agentProblems: boolean;
             critical: boolean;
             preview: boolean;
+            swarmUpdates: boolean;
+            swarmStarts: boolean;
+            swarmStops: boolean;
           };
         };
       };
@@ -7355,6 +7376,9 @@ export interface operations {
           agentProblems?: boolean;
           critical?: boolean;
           preview?: boolean;
+          swarmUpdates?: boolean;
+          swarmStarts?: boolean;
+          swarmStops?: boolean;
         };
       };
     };
@@ -7371,6 +7395,9 @@ export interface operations {
             agentProblems: boolean;
             critical: boolean;
             preview: boolean;
+            swarmUpdates: boolean;
+            swarmStarts: boolean;
+            swarmStops: boolean;
           };
         };
       };
@@ -7948,6 +7975,7 @@ export interface operations {
               cacheFolder: string | null;
               keptPaths: string[];
               outdated: boolean | null;
+              resourceViewStale: boolean | null;
             }[];
             controllerConnected: boolean;
           };
@@ -8044,6 +8072,7 @@ export interface operations {
             cacheFolder: string | null;
             keptPaths: string[];
             outdated: boolean | null;
+            resourceViewStale: boolean | null;
           };
         };
       };
@@ -8071,6 +8100,7 @@ export interface operations {
             cacheFolder: string | null;
             keptPaths: string[];
             outdated: boolean | null;
+            resourceViewStale: boolean | null;
           };
         };
       };
@@ -8391,6 +8421,7 @@ export interface operations {
             cacheFolder: string | null;
             keptPaths: string[];
             outdated: boolean | null;
+            resourceViewStale: boolean | null;
           };
         };
       };
@@ -8487,6 +8518,7 @@ export interface operations {
             cacheFolder: string | null;
             keptPaths: string[];
             outdated: boolean | null;
+            resourceViewStale: boolean | null;
           };
         };
       };

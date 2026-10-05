@@ -370,6 +370,37 @@ describe('notifications', { timeout: 60_000 }, () => {
     }
   });
 
+  it('tells everyone who keeps it on that the Swarm updated, started or is stopping, presence or not', async () => {
+    const { database, notifier, sent, sam, store, presence } = await notifierSetup();
+    try {
+      presence.report(sam.id, 'tab', true);
+      await notifier.swarm('update', 'Agent Swarm updated', 'Now on abc1234: feat: x');
+      expect(sent.map(item => item.userId).sort()).toEqual(
+        (await database.client.user.findMany({ where: { disabledAt: null }, select: { id: true } }))
+          .map(user => user.id)
+          .sort(),
+      );
+      expect(sent.find(item => item.userId === sam.id)!.payload).toMatchObject({
+        title: 'Agent Swarm updated',
+        body: 'Now on abc1234: feat: x',
+        tag: 'swarm',
+        url: '/dashboard',
+      });
+      // Each kind is each person's own choice; disabled people get nothing.
+      sent.length = 0;
+      await store.setPreferences(sam.id, { swarmStops: false });
+      await notifier.swarm('stop', 'Agent Swarm stopping', 'Back soon.');
+      expect(sent.some(item => item.userId === sam.id)).toBe(false);
+      sent.length = 0;
+      await database.client.user.update({ where: { id: sam.id }, data: { disabledAt: new Date() } });
+      await notifier.swarm('start', 'Agent Swarm started', 'Running again.');
+      expect(sent.some(item => item.userId === sam.id)).toBe(false);
+    } finally {
+      notifier.close();
+      await database.close();
+    }
+  });
+
   it('stays quiet while the person has the dashboard in front of them', async () => {
     const { database, notifier, sent, sam, presence, settle, event, tick } = await notifierSetup();
     try {

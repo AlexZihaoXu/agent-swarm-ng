@@ -34,4 +34,10 @@ case "$stack" in
   *) echo "Unknown stack '$stack'." >&2; list >&2; exit 2;;
 esac
 # shellcheck disable=SC2086
+# Images are stamped with the commit they were built from: the Swarm tells people when it is updated (docs/notifications.md).
+if [ -z "${APP_VERSION:-}" ] && git rev-parse --short HEAD >/dev/null 2>&1; then
+  APP_VERSION=$(git rev-parse --short HEAD)
+  APP_SUMMARY=$(git log -1 --format=%s | cut -c1-120)
+  export APP_VERSION APP_SUMMARY
+fi
 exec docker compose $files "$@"

@@ -11,6 +11,9 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       target: production
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+        APP_SUMMARY: ${APP_SUMMARY:-}
     environment:
       HOST: 0.0.0.0
       PORT: "3000"
@@ -32,6 +35,8 @@ services:
       - platform_data:/app/.local
       # The host's network counters, from host-net (the backend's own /proc/net/dev is its container's).
       - host_net:/app/host-net:ro
+      # The frontend's version, for update notifications.
+      - app_versions:/app/versions:ro
     restart: unless-stopped
     logging: *logging
     networks:
@@ -106,6 +111,8 @@ services:
       COMPUTER_TIMEZONE: ${COMPUTER_TIMEZONE:-}
       # Extra host paths for the dashboard's disk chart (comma-separated, absolute), measured read-only.
       DASHBOARD_EXTRA_DISKS: ${DASHBOARD_EXTRA_DISKS:-}
+      # off: computers show the host's memory and CPUs in free/top (docs/computers.md#lxcfs). Needs the lxcfs service.
+      COMPUTER_LXCFS: ${COMPUTER_LXCFS:-on}
     init: true
     # Only this narrow internal service has the root-equivalent Docker socket.
     # It has no app database, provider credentials, or published ports.
@@ -120,6 +127,35 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+  # LXCFS (docs/computers.md#lxcfs): each computer's /proc/meminfo, cpuinfo, stat, loadavg, diskstats and
+  # /sys/devices/system/cpu/online show its own caps. The controller binds them into a computer after starting it,
+  # by running this container's lxcfs-remount (it never executes anything from the computer). Root-equivalent like
+  # the controller's Docker socket: privileged, host PID and cgroup namespaces (lxcfs finds each reader's cgroup by
+  # PID); no network. Its FUSE mount lives in a fixed host folder outside every build context, one per project.
+  lxcfs:
+    build:
+      context: ./lxcfs
+    privileged: true
+    pid: host
+    cgroup: host
+    network_mode: none
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - type: bind
+        source: ./.local/lxcfs/${COMPUTER_NAMESPACE:-agent-swarm-ng}
+        target: /host/lxcfs
+        bind:
+          propagation: rshared
+          create_host_path: true
+    restart: unless-stopped
+    logging: *logging
+    # A read through the mount: a dead FUSE connection fails it.
+    healthcheck:
+      test: ["CMD", "grep", "-q", "^MemTotal:", "/host/lxcfs/mnt/proc/meminfo"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
   frontend:
     build:
       context: .
@@ -127,6 +163,8 @@ services:
       target: production
       args:
         COMPUTER_VIEWER: ${COMPUTER_VIEWER:-on}
+        APP_VERSION: ${APP_VERSION:-dev}
+        APP_SUMMARY: ${APP_SUMMARY:-}
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
       # Addresses whose forwarded client address Caddy believes (docs/login.md); default: private and tailnet ranges.
@@ -140,6 +178,8 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+      # Its version, for the backend's update notifications.
+      - app_versions:/versions
     depends_on:
       backend:
         condition: service_healthy
@@ -172,3 +212,5 @@ volumes:
       o: "size=1m,uid=65534,gid=65534,mode=0755"
   caddy_data:
   caddy_config:
+  # The frontend image's version (written at start, read by the backend).
+  app_versions:

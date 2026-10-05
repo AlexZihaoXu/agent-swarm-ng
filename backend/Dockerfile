@@ -27,6 +27,10 @@ EXPOSE 3000
 CMD ["bun", "run", "dev"]
 
 FROM base AS production
+# The commit this image was built from (scripts/compose.sh): a change tells people the Swarm was updated.
+ARG APP_VERSION=dev
+ARG APP_SUMMARY=
+ENV APP_VERSION=$APP_VERSION APP_SUMMARY=$APP_SUMMARY
 COPY backend/assets assets
 COPY backend/src src
 COPY backend/scripts/migrate.ts backend/scripts/reset-password.ts backend/scripts/unlock.ts scripts/

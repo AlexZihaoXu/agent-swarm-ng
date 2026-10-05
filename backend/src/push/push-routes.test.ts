@@ -104,6 +104,9 @@ describe('push routes', { timeout: 120_000 }, () => {
         agentProblems: true,
         critical: true,
         preview: true,
+        swarmUpdates: true,
+        swarmStarts: true,
+        swarmStops: true,
       });
       expect(
         (await call('PATCH', '/api/push/preferences', samCookie, { preview: false, groupChats: false })).json(),
