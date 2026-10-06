@@ -128,6 +128,8 @@ bun run test:e2e
 
 Disposable development experiments, inspected external checkouts, and test outputs belong under ignored `.scratch/`; persistent app data and credentials stay in `.local/`. Playwright starts its own backend and frontend; stop existing instances on ports 3000 and 5173 first. Browser tests cover rendering, transitions, saved-history restoration/pagination, and Settings with mocked API/provider and ChatGPT device-login results. `tests/pwa.spec.ts` checks the production build's manifest, icons, signed-out service-worker registration, offline shell and Chromium installability (it builds into `.scratch/pwa-dist` and serves it on port 4317); real-device install (Android, iOS) and the update prompt still need production-browser validation.
 
+The README's screenshots (`docs/images/*.webp`) come only from mock data in `frontend/tests/readme-shots.spec.ts` (demo agents, generated desktop previews), never a real deployment. Normal runs skip it; regenerate them with `README_SHOTS=1 bun run --cwd frontend test:e2e tests/readme-shots.spec.ts` and look at every image before committing.
+
 ### Windows browser launch safety
 
 The owner's security investigation reproduced one Windows failed logon (Event 4625, status `0xC000006A`) from the top-level Chrome process during a one-off Chrome startup check. The reported cause is Chromium's empty-password account probe through `LogonUser()` at startup, not a website sign-in or an attack. Child processes did not produce additional failed logons in that capture. Treat this as a finding for this Windows host, not a guarantee about every browser/version.

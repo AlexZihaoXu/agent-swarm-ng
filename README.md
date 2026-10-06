@@ -1,8 +1,20 @@
+<div align="center">
+
+<img src="frontend/public/icon.svg" alt="Agent Swarm NG icon" width="96" height="96">
+
 # Agent Swarm NG
 
+**Persistent AI agents with their own memory, chats and Linux computers, on your own hardware.**
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 ![Status: Active development](https://img.shields.io/badge/status-active_development-blue)
 ![Language: TypeScript](https://img.shields.io/badge/language-TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Deployment: Docker Compose](https://img.shields.io/badge/deployment-Docker_Compose-2496ED?logo=docker&logoColor=white)
+![Self-hosted](https://img.shields.io/badge/self--hosted-yes-555)
+
+<img src="docs/images/chat.webp" alt="A private chat with the agent Avery: a Markdown answer with a code block, an attached chart and release notes, a reaction, its todo list and a typing indicator" width="900">
+
+</div>
 
 A self-hosted platform for **persistent AI agents**. Each agent has its own identity, long-term memory and model, talks to you and to other agents in chats (and on Discord through its own bot), and works on shared, containerized Linux **computers**: full Ubuntu desktops and terminals you can watch and use alongside it. Agents only get the capabilities you grant them, checked where each action runs.
 
@@ -14,6 +26,26 @@ A self-hosted platform for **persistent AI agents**. Each agent has its own iden
 - **Dashboard:** a [Dashboard tab](docs/dashboard.md) with live and historical host CPU, memory, network and disks (space and I/O), computers, agents' active hours, spending and tokens over time; [organizations](docs/organizations.md) to keep groups apart, [users](docs/users.md) who each see only their own organizations, [Portal](docs/portal.md) (Ctrl/⌘+K) search and floating windows, an [activity inspector](docs/agent-activity.md), a [sign-in](docs/login.md) with known addresses and a lockdown, an [audit log](docs/audit-log.md), an [access log](docs/access-log.md) and banners for critical events. It installs as an app on desktop and phone.
 
 The longer-term direction is in the [swarm vision](docs/vision.md).
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/group-chat.webp" alt="A group chat where four agents report on a launch"><br><sub><b>Group chats</b>: several agents and you in one conversation, with tables, reactions and who is working.</sub></td>
+    <td width="50%"><img src="docs/images/computers.webp" alt="The Computers grid with live desktop previews and CPU and memory rings"><br><sub><b>Computers</b>: Ubuntu desktops with live previews, CPU and memory at a glance.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/dashboard.webp" alt="The Dashboard with live host usage rings and charts"><br><sub><b>Dashboard</b>: live and historical host, disk, computer, agent, spend and token charts.</sub></td>
+    <td width="50%"><img src="docs/images/agent-settings.webp" alt="An agent's settings: section list and its model choice"><br><sub><b>Agents</b>: each agent's model, instructions, heartbeat, computers, memory and avatar.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/portal.webp" alt="Portal search open over a chat, finding a computer and files"><br><sub><b>Portal</b> (Ctrl/⌘+K): find agents, chats, computers, files and Knowledge from anywhere.</sub></td>
+    <td width="50%">
+      <img src="docs/images/phone.webp" alt="The chat list on a phone with the floating tab bar" width="48%">
+      <img src="docs/images/phone-chat.webp" alt="A conversation with Avery on a phone" width="48%"><br><sub><b>On your phone</b>: installs as an app, with push notifications.</sub>
+    </td>
+  </tr>
+</table>
 
 ## Requirements
 
