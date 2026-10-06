@@ -44,9 +44,14 @@
     (() => {
       window.swarmDesktopInputEnabled = false;
       window.__swarmNativeCursor = true;
+      const mac = /Mac|iPhone|iPad/.test(navigator.platform);
       const block = event => {
         if (window.swarmDesktopInputEnabled) return;
         event.preventDefault(); event.stopImmediatePropagation();
+        // View only: the dashboard's Ctrl/Cmd+K (Portal) still works, since no key goes to the computer anyway.
+        if (event.type === 'keydown' && event.key?.toLowerCase() === 'k' && (mac ? event.metaKey : event.ctrlKey) &&
+            !event.altKey && !event.shiftKey && !event.repeat)
+          window.parent.postMessage({ type: 'swarm:portal-shortcut' }, location.origin);
       };
       for (const kind of ['keydown','keyup','keypress','beforeinput','input','paste','pointerdown','pointerup','pointermove','mousedown','mouseup','mousemove','click','dblclick','contextmenu','wheel','touchstart','touchmove','touchend','dragstart','drop']) {
         window.addEventListener(kind, block, { capture: true, passive: false });

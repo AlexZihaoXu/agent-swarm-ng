@@ -19,7 +19,7 @@ Agents, chats (private chats under `#`, groups), computers and their terminals, 
 
 A prefix typed first becomes a chip in the search box (Backspace on an empty search removes it); the empty Portal shows all six as chips to click. **Enter** pulls an agent chat, a terminal or a computer's desktop out as a floating window (on a phone, below 768 px, it opens the page), runs a command, or goes to anything else; **Shift+Enter** always goes to the page; **Esc** closes. The footer names what Enter does for the highlighted row.
 
-The shortcut is ignored while a computer has the keyboard: an xterm terminal stops its key events and the desktop is an iframe, so Ctrl+K reaches the computer (Ctrl+K deletes to the end of a shell line). Anything marked `data-keys-to-computer` is treated the same way.
+The shortcut is ignored while you control a computer: an xterm terminal stops its key events and the desktop is an iframe, so Ctrl+K reaches the computer (Ctrl+K deletes to the end of a shell line). A view-only desktop (control off) sends no key to the computer, so its trusted frame (`desktop-frame.html`) passes Ctrl/⌘+K on to the dashboard (`swarm:portal-shortcut`, heard only from the page's own frames) and Portal opens. Anything marked `data-keys-to-computer` is treated the same way.
 
 ## Floating windows
 

@@ -1067,3 +1067,31 @@ test('creates a computer and requires an exact typed name before destructive del
   await expect(page.getByRole('article', { name: 'Test machine' })).toHaveCount(0);
   expect(computers).toHaveLength(0);
 });
+
+test('a view-only desktop passes Ctrl/⌘+K to the dashboard (Portal), a controlled one keeps it', async ({ page }) => {
+  await page.route('**/assets/index-CPWh3fQ6.js', route => route.fulfill({ contentType: 'text/javascript', body: '' }));
+  await page.route('**/assets/index-D97fjY6g.css', route => route.fulfill({ contentType: 'text/css', body: '' }));
+  // The frame stands alone here, so its parent is itself: what it would tell the dashboard arrives on this window.
+  await page.goto('/desktop-frame.html');
+  await page.evaluate(() => {
+    (window as any).__relayed = 0;
+    window.addEventListener('message', event => {
+      if (event.data?.type === 'swarm:portal-shortcut') (window as any).__relayed++;
+    });
+  });
+  const relayed = () => page.evaluate(() => (window as any).__relayed as number);
+  const shortcut = process.platform === 'darwin' ? 'Meta+K' : 'Control+K';
+  await page.keyboard.press(shortcut);
+  await expect.poll(relayed).toBe(1);
+  // Other keys are not relayed.
+  await page.keyboard.press('Control+L');
+  await page.keyboard.press('k');
+  await page.waitForTimeout(100);
+  expect(await relayed()).toBe(1);
+  // In control, every key goes to the computer (Ctrl+K deletes to the end of a shell line).
+  await page.evaluate(() => window.postMessage({ type: 'swarm:desktop-input', enabled: true }, location.origin));
+  await page.waitForTimeout(50);
+  await page.keyboard.press(shortcut);
+  await page.waitForTimeout(100);
+  expect(await relayed()).toBe(1);
+});

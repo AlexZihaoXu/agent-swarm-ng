@@ -44,8 +44,8 @@ const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigat
 export const portalShortcut = isMac ? '⌘K' : 'Ctrl K';
 
 /**
- * Ctrl/⌘+K opens Portal from anywhere, except while a computer's desktop or terminal has the keyboard: those keep
- * every key (Ctrl+K deletes to the line end in a shell), and the desktop is a frame the page never hears from.
+ * Ctrl/⌘+K opens Portal from anywhere, except while you control a computer's desktop or terminal: those keep every key
+ * (Ctrl+K deletes to the line end in a shell). A view-only desktop frame relays the shortcut to the page.
  */
 export function usePortalShortcut(toggle: () => void) {
   const latest = useRef(toggle);
@@ -58,8 +58,18 @@ export function usePortalShortcut(toggle: () => void) {
       event.preventDefault();
       latest.current();
     };
+    // A view-only desktop frame passes the shortcut on (public/desktop-frame.html): only our own frames are heard.
+    const relayed = (event: MessageEvent) => {
+      if (event.origin !== location.origin || event.data?.type !== 'swarm:portal-shortcut') return;
+      const frames = [...document.querySelectorAll('iframe')].map(frame => frame.contentWindow);
+      if (event.source && frames.includes(event.source as Window)) latest.current();
+    };
     window.addEventListener('keydown', press);
-    return () => window.removeEventListener('keydown', press);
+    window.addEventListener('message', relayed);
+    return () => {
+      window.removeEventListener('keydown', press);
+      window.removeEventListener('message', relayed);
+    };
   }, []);
 }
 
