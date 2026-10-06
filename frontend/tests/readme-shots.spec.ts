@@ -988,7 +988,7 @@ test('dashboard', async ({ page }) => {
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'Dashboard', level: 2 })).toBeVisible();
   await expect(page.locator('.recharts-area-area').first()).toBeVisible();
-  await save(page, 'dashboard');
+  await save(page, 'dashboard', 680);
 });
 
 test('portal', async ({ page }) => {
