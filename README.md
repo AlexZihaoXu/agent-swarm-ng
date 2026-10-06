@@ -56,6 +56,8 @@ The longer-term direction is in the [swarm vision](docs/vision.md).
 - Disk space for the computer images (several GB) and each computer's files.
 - For development only: Bun 1.3.6 and Node.js 22.12+.
 
+Built and tested on my own Bosgame P5 mini PC (Ryzen 7 6800H, 32 GB RAM).
+
 ## Install
 
 The steps below set up the `tailnet-dual` stack: the dashboard on your Tailscale address over HTTP (port 19090) and HTTPS (port 19091, self-signed; the browser's secure context unlocks hardware video decoding). `scripts/compose.sh --list` shows the other stacks (loopback only, a private LAN, a trusted Tailscale certificate).
