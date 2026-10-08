@@ -68,7 +68,12 @@ test('removing an endpoint asks first, and explains when agents still use it', a
 });
 
 test('an agent can be renamed and moved to another model without recreating it', async ({ page }) => {
-  const agents = sampleAgents.map(agent => ({ ...structuredClone(agent), endpointId: 'ep-1', model: 'm1' }));
+  const agents = sampleAgents.map(agent => ({
+    ...structuredClone(agent),
+    endpointId: 'ep-1',
+    model: 'm1',
+    models: [{ ...agent.models[0]!, endpointId: 'ep-1', model: 'm1' }],
+  }));
   const patches: unknown[] = [];
   await page.route(/\/api\/agents(?:\?.*)?$/, route =>
     route.request().method() === 'GET' ? route.fulfill({ json: { agents, nextCursor: null } }) : route.fallback(),
@@ -90,6 +95,8 @@ test('an agent can be renamed and moved to another model without recreating it',
   await page.goto('/agents/avery');
   const model = page.getByRole('region', { name: 'Model' });
   await expect(model.getByLabel('Name')).toHaveValue('Avery');
+  // The ranked models (docs/agent-models.md): #1 opens to change its model.
+  await model.getByRole('button', { name: /^#1/ }).click();
   await expect(model.getByRole('combobox', { name: 'Model' })).toContainText('m1'); // current choice is preserved on load
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
   await expect(settings.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
@@ -100,7 +107,12 @@ test('an agent can be renamed and moved to another model without recreating it',
   await settings.getByRole('button', { name: 'Save changes' }).click();
   await expect(model.getByText('Saved. The next turn uses these settings.')).toBeVisible();
   await expect(settings.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
-  expect(patches).toEqual([{ name: 'Avery Prime', model: 'm2' }]);
+  expect(patches).toEqual([
+    {
+      name: 'Avery Prime',
+      models: [{ endpointId: 'ep-1', model: 'm2', thinkingLevel: 'off', attempts: 3, tooBig: 'skip', comeBack: 5 }],
+    },
+  ]);
   await expect(page.getByRole('combobox', { name: 'Agent' })).toContainText('Avery Prime');
 });
 

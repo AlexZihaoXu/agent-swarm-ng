@@ -76,6 +76,12 @@ test('ranks fallback models: add one, move it up with the grip, and save the lis
   await page.keyboard.press('ArrowUp');
   await expect(rows.first()).toContainText('Backup · gpt-5');
   await expect(rows.nth(1)).toContainText('Test endpoint · test-model');
+  // Moving down keeps the grip focused (React moves the row's element), and each move is announced.
+  await page.keyboard.press('ArrowDown');
+  await expect(rows.nth(1)).toContainText('Backup · gpt-5');
+  await expect(section.getByText('Moved to #2')).toBeAttached();
+  await page.keyboard.press('ArrowUp');
+  await expect(rows.first()).toContainText('Backup · gpt-5');
 
   await settings.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect.poll(() => saves).toEqual([{ models: [backup, first] }]);

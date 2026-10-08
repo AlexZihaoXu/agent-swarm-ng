@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
@@ -83,6 +83,15 @@ export function ModelChoiceList({
   const [dragging, setDragging] = useState<string | null>(null);
   const latest = useRef({ rows, onChange });
   latest.current = { rows, onChange };
+  // A moved row's focused control loses focus when React moves its element: it gets it back, and the new place is
+  // announced.
+  const refocus = useRef<HTMLElement | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  useLayoutEffect(() => {
+    const target = refocus.current;
+    refocus.current = null;
+    if (target?.isConnected && document.activeElement !== target) target.focus({ preventScroll: true });
+  }, [rows]);
 
   const move = (from: number, to: number) => {
     const current = latest.current.rows;
@@ -90,6 +99,9 @@ export function ModelChoiceList({
     const next = current.slice();
     const [row] = next.splice(from, 1);
     next.splice(to, 0, row!);
+    if (document.activeElement instanceof HTMLElement && list.current?.contains(document.activeElement))
+      refocus.current = document.activeElement;
+    setAnnouncement(`Moved to #${to + 1}`);
     latest.current.onChange(next);
     latest.current.rows = next;
   };
@@ -104,12 +116,15 @@ export function ModelChoiceList({
     setDragging(key);
     const onMove = (moved: globalThis.PointerEvent) => {
       if (moved.pointerId !== pointerId || !list.current) return;
+      // Layout positions (offsetTop ignores the rows' moving animation), relative to the list.
       const items = [...list.current.querySelectorAll<HTMLElement>(':scope > li')];
+      const y = moved.clientY - list.current.getBoundingClientRect().top;
       const index = latest.current.rows.findIndex(row => row.key === key);
-      const above = items[index - 1]?.getBoundingClientRect();
-      const below = items[index + 1]?.getBoundingClientRect();
-      if (above && moved.clientY < above.top + above.height / 2) move(index, index - 1);
-      else if (below && moved.clientY > below.top + below.height / 2) move(index, index + 1);
+      const middle = (item?: HTMLElement) => (item ? item.offsetTop + item.offsetHeight / 2 : undefined);
+      const above = middle(items[index - 1]);
+      const below = middle(items[index + 1]);
+      if (above !== undefined && y < above) move(index, index - 1);
+      else if (below !== undefined && y > below) move(index, index + 1);
     };
     const onEnd = (ended: globalThis.PointerEvent) => {
       if (ended.pointerId !== pointerId) return;
@@ -130,7 +145,10 @@ export function ModelChoiceList({
 
   return (
     <div className="space-y-2">
-      <ol ref={list} className="space-y-2" aria-label="Models in order of use">
+      <p className="sr-only" aria-live="polite">
+        {announcement}
+      </p>
+      <ol ref={list} className="relative space-y-2" aria-label="Models in order of use">
         {rows.map((row, index) => {
           const expanded = open === row.key;
           const summary = row.model
@@ -161,7 +179,7 @@ export function ModelChoiceList({
                 <button
                   type="button"
                   aria-expanded={expanded}
-                  aria-controls={`${row.key}-editor`}
+                  aria-controls={expanded ? `${row.key}-editor` : undefined}
                   onClick={() => setOpen(expanded ? null : row.key)}
                   className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1 py-2 text-left outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >

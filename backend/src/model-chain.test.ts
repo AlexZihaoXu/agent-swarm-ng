@@ -114,9 +114,9 @@ describe('model chain policy', () => {
     const { run, advance } = setup([choice('one', { comeBack: 1 }), choice('two')]);
     const walk = run();
     walk.failure(false, '401');
-    expect(walk.returnDue()).toBeUndefined();
+    expect(walk.due()).toBeUndefined();
     advance(60_000);
-    expect(walk.returnDue()).toBe(0);
+    expect(walk.due()).toBe(0);
   });
 
   it('a manual-only choice waits for the owner, and a changed list starts at #1', () => {

@@ -79,7 +79,12 @@ function chainRuntime(resolved: Resolved[], current: () => number): ModelRuntime
  * Resolves every reachable choice's model and starts this run's walk: on the agent's active choice, a higher one due
  * for its come-back try, or the next reachable one. Throws when none can be reached.
  */
-export async function prepareFallback(fallback: SessionFallback, resolve: Resolve) {
+export async function prepareFallback(
+  fallback: SessionFallback,
+  resolve: Resolve,
+  /** The conversation's size before the session exists (its saved context; the prompt and tools are estimated). */
+  before: () => number,
+) {
   const resolved: Resolved[] = await Promise.all(
     fallback.choices.map(async (prepared, index): Promise<Resolved> => {
       if (!prepared.connection) return { error: prepared.unreachable ?? 'Its connection could not be reached.' };
@@ -97,14 +102,15 @@ export async function prepareFallback(fallback: SessionFallback, resolve: Resolv
   let session: AgentSession | undefined;
   const fits = (index: number) => {
     const entry = resolved[index];
-    if (!entry || !('model' in entry) || !session) return true;
+    if (!entry || !('model' in entry)) return true;
     // Before any response reported its usage, the conversation is estimated (system prompt included).
-    const tokens =
-      session.getContextUsage()?.tokens ??
-      session.agent.state.messages.reduce(
-        (total, message) => total + estimateTokens(message),
-        estimateTokens({ role: 'user', content: session.agent.state.systemPrompt, timestamp: 0 }),
-      );
+    const tokens = !session
+      ? before()
+      : (session.getContextUsage()?.tokens ??
+        session.agent.state.messages.reduce(
+          (total, message) => total + estimateTokens(message),
+          estimateTokens({ role: 'user', content: session.agent.state.systemPrompt, timestamp: 0 }),
+        ));
     return tokens <= entry.model.contextWindow - reserveFor(entry.model.contextWindow);
   };
   const run = fallback.chains.run(
@@ -118,7 +124,7 @@ export async function prepareFallback(fallback: SessionFallback, resolve: Resolv
     fallback.emit,
   );
   const start = resolved[run.index];
-  if (start && 'error' in start && run.unreachable(start.error).action === 'fail') throw new Error(start.error);
+  if (start && 'error' in start && run.unusable(start.error).action === 'fail') throw new Error(start.error);
   fallback.run = run;
   const entry = resolved[run.index] as Extract<Resolved, { model: Tagged }>;
   return {
@@ -186,7 +192,7 @@ function installFallback(session: AgentSession, run: ChainRun, resolved: Resolve
     return entry.model;
   };
   internals._prepareRetry = async message => {
-    const decision = run.failure(isRetryableAssistantError(message), message.errorMessage || 'Unknown error');
+    let decision = run.failure(isRetryableAssistantError(message), message.errorMessage || 'Unknown error');
     if (decision.action === 'fail') return false;
     // The failed response leaves the working context (it stays in the session's history).
     const messages = session.agent.state.messages;
@@ -194,25 +200,50 @@ function installFallback(session: AgentSession, run: ChainRun, resolved: Resolve
     const controller = new AbortController();
     internals._retryAbortController = controller;
     try {
-      if (decision.action === 'retry') await sleep(decision.delayMs, controller.signal);
-      else {
+      while (decision.action === 'switch') {
         await switchTo(decision.index);
-        if (decision.compact && !(await compactToFit(session, agentId, controller.signal))) return false;
+        if (!decision.compact) break;
+        const endpointId = run.choice.endpointId;
+        const compacted = await compactToFit(session, agentId, controller.signal, endpointId).catch(error => {
+          if (controller.signal.aborted) throw error;
+          return false;
+        });
+        if (compacted) break;
+        // It could not be made to fit: on to the next model, like one that cannot be reached.
+        decision = run.unusable('The conversation could not be compacted to fit its context.');
       }
-      return !controller.signal.aborted;
+      if (decision.action === 'retry') await sleep(decision.delayMs, controller.signal);
+      return decision.action !== 'fail' && !controller.signal.aborted;
     } catch {
       return false;
     } finally {
       internals._retryAbortController = undefined;
     }
   };
+  /** A higher model whose come-back time passed gets its one try (between model calls, never mid-stream). */
+  const comeBack = async () => {
+    const due = run.due();
+    if (due === undefined) return undefined;
+    try {
+      const model = await switchTo(due);
+      run.enterDue(due);
+      return model;
+    } catch {
+      return undefined; // Its login went away meanwhile: stay on the current model.
+    }
+  };
   const next = session.agent.prepareNextTurnWithContext;
   session.agent.prepareNextTurnWithContext = async (turn, signal) => {
-    const due = run.returnDue();
     const prepared = await next?.(turn, signal);
-    if (due === undefined) return prepared;
-    const model = await switchTo(due);
+    const model = await comeBack();
+    if (!model) return prepared;
     return { ...prepared, context: prepared?.context ?? turn.context, model, thinkingLevel: session.thinkingLevel };
+  };
+  // Each new input of the run (the inbox's next batch) starts a new agent loop: its first call gets the same chance.
+  const prompt = session.prompt.bind(session);
+  session.prompt = async (text, options) => {
+    if (!session.isStreaming) await comeBack();
+    return prompt(text, options);
   };
   session.subscribe(event => {
     if (event.type !== 'message_end' || event.message.role !== 'assistant') return;
@@ -242,7 +273,7 @@ export function describeFallback(event: ChainEvent, choices: PreparedChoice[]) {
       return {
         kind: 'status' as const,
         label: 'Model fallback',
-        text: `${name(event.from)} failed (${why(event.error)}). Now using ${name(event.to)}${event.compact ? ', compacting first to fit its context' : ''}.`,
+        text: `${name(event.from)} ${event.reason ? `cannot be used: ${event.reason}` : `failed (${why(event.error)}).`} Now using ${name(event.to)}${event.compact ? ', compacting first to fit its context' : ''}.`,
       };
     case 'skip':
       return { kind: 'status' as const, label: 'Model skipped', text: `${name(event.index)}: ${event.reason}` };
@@ -258,7 +289,7 @@ export function describeFallback(event: ChainEvent, choices: PreparedChoice[]) {
       return {
         kind: 'error' as const,
         label: 'No model left',
-        text: `${name(event.index)} failed (${why(event.error)}) and no other model could be tried.`,
+        text: `${name(event.index)} ${event.reason ? `cannot be used: ${event.reason}` : `failed (${why(event.error)}).`} No other model could be tried.`,
       };
   }
 }

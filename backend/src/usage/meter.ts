@@ -86,6 +86,7 @@ export function meterSession(
           model: model?.id ?? 'unknown',
           purpose: 'compaction',
           sourceKey: null,
+          ...(tag.endpointId?.() ? { endpointId: tag.endpointId() } : {}),
         }),
       );
     }

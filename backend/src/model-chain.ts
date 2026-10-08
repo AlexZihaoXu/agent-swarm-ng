@@ -99,18 +99,18 @@ const signature = (choices: ModelChoice[]) =>
   choices.map(choice => `${choice.endpointId}\0${choice.model}\0${choice.thinkingLevel}`).join('\n');
 
 /** The agent's active choice moved: down after failures (`error`: the last one), or back up. */
-export type ChainChange = { active: number; from: number; error?: string };
+export type ChainChange = { active: number; from: number; error?: string; reason?: string };
 
 type State = { signature: string; active: number; failedAt: Map<number, number> };
 
 /** What a run did, for its activity, the run events and push (the run records them). */
 export type ChainEvent =
   | { type: 'retry'; index: number; attempt: number; attempts: number; delayMs: number; error: string }
-  | { type: 'switch'; from: number; to: number; error: string; compact: boolean }
+  | { type: 'switch'; from: number; to: number; error: string; reason?: string; compact: boolean }
   | { type: 'skip'; index: number; reason: string }
   | { type: 'probe'; index: number; from: number }
   | { type: 'recovered'; index: number; from: number }
-  | { type: 'exhausted'; index: number; error: string };
+  | { type: 'exhausted'; index: number; error: string; reason?: string };
 
 export type FailureDecision =
   { action: 'retry'; delayMs: number } | { action: 'switch'; index: number; compact: boolean } | { action: 'fail' };
@@ -126,8 +126,8 @@ export class ChainRun {
   /** A single try of a higher choice after its come-back time: no second attempt. */
   private probe = false;
   private readonly startedOn: number;
-  /** Why it last moved down the chain (a provider error, for the owner's notification). */
-  private lastError?: string;
+  /** Why it last moved down the chain, for the owner's notification: a provider error, or the platform's own reason. */
+  private lastFailure?: { error: string; reason?: string };
 
   constructor(
     private readonly chains: ModelChains,
@@ -168,17 +168,17 @@ export class ChainRun {
     this.probe = probe;
   }
 
-  /** Before a model call within the run: switch to a higher choice that is due. Returns it, if it switched. */
-  returnDue() {
-    const due = this.due();
-    if (due === undefined) return undefined;
-    this.enter(due, true);
-    return due;
+  /** Before a model call within the run: the session moved to a higher choice that came due (`due()`). */
+  enterDue(index: number) {
+    this.enter(index, true);
   }
 
-  /** The current choice cannot be reached at all (its connection failed): move on at once. */
-  unreachable(reason: string) {
-    return this.failure(false, reason);
+  /**
+   * The current choice cannot be used at all (its connection failed, or it could not be compacted into): move on at
+   * once. `reason` is the platform's own text, safe to show.
+   */
+  unusable(reason: string) {
+    return this.failure(false, reason, reason);
   }
 
   /** Whether a failed call would be tried again (on this choice or another): no state changes. */
@@ -215,8 +215,11 @@ export class ChainRun {
     return undefined;
   }
 
-  /** A model call failed. `retryable`: a transient error worth another try of the same choice. */
-  failure(retryable: boolean, error: string): FailureDecision {
+  /**
+   * A model call failed. `retryable`: a transient error worth another try of the same choice. `reason`: the platform's
+   * own explanation, shown instead of a category of `error` (a provider's text, never shown).
+   */
+  failure(retryable: boolean, error: string, reason?: string): FailureDecision {
     this.tries++;
     if (retryable && !this.probe && this.tries < this.choice.attempts) {
       const delayMs = RETRY_BASE.ms * 2 ** (this.tries - 1);
@@ -234,11 +237,11 @@ export class ChainRun {
     const from = this.index;
     const next = this.next(true);
     if (!next) {
-      this.emit({ type: 'exhausted', index: from, error });
+      this.emit({ type: 'exhausted', index: from, error, ...(reason ? { reason } : {}) });
       return { action: 'fail' };
     }
-    this.lastError = error;
-    this.emit({ type: 'switch', from, to: next.index, error, compact: next.compact });
+    this.lastFailure = { error, ...(reason ? { reason } : {}) };
+    this.emit({ type: 'switch', from, to: next.index, error, ...(reason ? { reason } : {}), compact: next.compact });
     this.enter(next.index, false);
     return { action: 'switch', ...next };
   }
@@ -255,7 +258,7 @@ export class ChainRun {
     this.chains.changed(this.agentId, {
       active: this.index,
       from,
-      ...(this.index > from ? { error: this.lastError } : {}),
+      ...(this.index > from ? this.lastFailure : {}),
     });
   }
 }

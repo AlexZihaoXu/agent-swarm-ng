@@ -185,7 +185,7 @@ export class PushNotifier {
         kind: 'stuck',
         tag: `model:${agentId}`,
         title: `${agent.name} switched to model #${active + 1}`,
-        text: `Its #1 model failed${reason ? ` (${reason})` : ''}. It tries #1 again later; check the model connection.`,
+        text: `Its #1 model failed${reason ? ` (${reason.replace(/\.$/, '')})` : ''}. Check that model's connection.`,
         url: `/agents/${encodeURIComponent(agentId)}`,
       },
       0,

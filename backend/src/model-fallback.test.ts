@@ -10,7 +10,7 @@ import { EndpointStore } from './endpoint-store';
 let server: Server;
 let origin: string;
 let folder: string;
-const modes: Record<string, 'ok' | '401' | '503'> = { a: 'ok', b: 'ok', c: 'ok', d: 'ok' };
+const modes: Record<string, 'ok' | '401' | '503'> = { a: 'ok', b: 'ok', c: 'ok', d: 'ok', e: 'ok' };
 let calls: string[] = [];
 /** Each endpoint's last request body, as text. */
 const bodies: Record<string, string> = {};
@@ -85,6 +85,8 @@ async function testApp() {
   await store.save({ id: 'b', name: 'B', baseUrl: `${origin}/b/v1`, apiKey: 'secret-key-b' });
   // A model far too small for any conversation.
   await store.save({ id: 'c', name: 'C', baseUrl: `${origin}/c/v1`, apiKey: 'secret-key-c', contextWindow: 1024 });
+  // One a long message alone is too big for: it cannot even be compacted into.
+  await store.save({ id: 'e', name: 'E', baseUrl: `${origin}/e/v1`, apiKey: 'secret-key-e', contextWindow: 8192 });
   // One the conversation outgrows after a few long messages.
   await store.save({ id: 'd', name: 'D', baseUrl: `${origin}/d/v1`, apiKey: 'secret-key-d', contextWindow: 16384 });
   return buildApp({
@@ -236,6 +238,10 @@ describe('fallback models', () => {
       expect((await app.inject(`/api/agents/${agent.id}/activity`)).body).toContain(
         'The conversation is bigger than its context.',
       );
+      // The next run does not start on the small model either (its fit is checked before the session exists).
+      calls = [];
+      expect(published((await chat(app, agent.id)).body)).toEqual(['From b']);
+      expect(calls).toEqual(['b']);
     } finally {
       await app.close();
     }
@@ -255,12 +261,33 @@ describe('fallback models', () => {
       modes.a = '401';
       calls = [];
       expect(published((await chat(app, agent.id)).body)).toEqual(['From d']);
-      expect(calls).toEqual(['a', 'd', 'd']);
+      // The notes are more than one pass can read: two summary passes (a rolling summary), then the answer.
+      expect(calls).toEqual(['a', 'd', 'd', 'd']);
       const activity = (await app.inject(`/api/agents/${agent.id}/activity`)).body;
       expect(activity).toContain('compacting first to fit its context');
       // The answer was asked with the summary in place of the long notes.
       expect(bodies.d).toContain('SUMMARY OF EARLIER WORK');
       expect(bodies.d).not.toContain('Notes 0:');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('passes over a model it cannot compact into', async () => {
+    Object.assign(modes, { a: 'ok', b: 'ok', e: 'ok' });
+    calls = [];
+    const app = await testApp();
+    try {
+      const agent = await agentWith(app, [choice('a'), choice('e', { tooBig: 'compact' }), choice('b')]);
+      for (let index = 0; index < 3; index++)
+        await chat(app, agent.id, `Notes ${index}: ${'lorem ipsum '.repeat(1000)}`);
+      modes.a = '401';
+      calls = [];
+      expect(published((await chat(app, agent.id)).body)).toEqual(['From b']);
+      expect(calls).toEqual(['a', 'b']);
+      expect((await app.inject(`/api/agents/${agent.id}/activity`)).body).toContain(
+        'The conversation could not be compacted to fit its context.',
+      );
     } finally {
       await app.close();
     }

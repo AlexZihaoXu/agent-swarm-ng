@@ -258,11 +258,11 @@ export class BackgroundCompactor {
 
 /**
  * Fallback models' "compact to fit" (docs/agent-models.md): the session has just moved to a model whose context the
- * conversation does not fit. That model summarizes the older part, as much of it as it can read (the newest first;
- * anything older was summarized before, and that summary goes along), and the summary replaces it at once. Returns
- * whether it compacted.
+ * conversation does not fit. That model summarizes the older part in passes, oldest first, each as much as it can
+ * read with the summary so far (a rolling summary), and the final summary replaces the older part at once. Returns
+ * false, leaving the session as it was, when a single message is bigger than it can read.
  */
-export async function compactToFit(session: AgentSession, agentId: string, signal: AbortSignal) {
+export async function compactToFit(session: AgentSession, agentId: string, signal: AbortSignal, endpointId?: string) {
   const model = session.model;
   if (!model) return false;
   const window = model.contextWindow;
@@ -276,22 +276,9 @@ export async function compactToFit(session: AgentSession, agentId: string, signa
   const preparation = prepareBackgroundCompaction(manager.getBranch().slice(), settings);
   if (!preparation) return false;
   const text = (content: string) => estimateTokens({ role: 'user', content, timestamp: 0 });
-  // Room for what it reads: its window less the reply room, the summary prompt, the previous summary and the split
-  // turn's start.
-  let room =
-    window -
-    reserveTokens -
-    4096 -
-    (preparation.previousSummary ? text(preparation.previousSummary) : 0) -
-    preparation.turnPrefixMessages.reduce((total, item) => total + estimateTokens(item), 0);
-  const readable: typeof preparation.messagesToSummarize = [];
-  for (let index = preparation.messagesToSummarize.length - 1; index >= 0; index--) {
-    const message = preparation.messagesToSummarize[index]!;
-    const tokens = estimateTokens(message);
-    if (tokens > room) break;
-    room -= tokens;
-    readable.unshift(message);
-  }
+  // What one pass can read: the window less the reply room, the summary prompt and the summary so far.
+  const budget = (summary?: string) => window - reserveTokens - 4096 - (summary ? text(summary) : 0);
+  const prefix = preparation.turnPrefixMessages.reduce((total, item) => total + estimateTokens(item), 0);
   const request = await (
     session as unknown as {
       _getSummarizationRequestAuth(model: NonNullable<AgentSession['model']>): Promise<{
@@ -302,21 +289,47 @@ export async function compactToFit(session: AgentSession, agentId: string, signa
       }>;
     }
   )._getSummarizationRequestAuth(model);
-  const result = await compact(
-    { ...preparation, messagesToSummarize: readable },
-    request.model,
-    request.apiKey,
-    request.headers,
-    undefined,
-    signal,
-    session.thinkingLevel,
-    meterStream(session.agent.streamFunction, { agentId, purpose: 'compaction' }),
-    request.env,
-    session.settingsManager.getRetrySettings(),
-  );
-  signal.throwIfAborted();
-  const { summary, firstKeptEntryId, tokensBefore, details, usage } = result;
-  manager.appendCompaction(summary, firstKeptEntryId, tokensBefore, details, false, usage);
+  const streamFn = meterStream(session.agent.streamFunction, {
+    agentId,
+    purpose: 'compaction',
+    ...(endpointId ? { endpointId: () => endpointId } : {}),
+  });
+  const pending = preparation.messagesToSummarize.slice();
+  let rolling = preparation.previousSummary;
+  let result: CompactionResult | undefined;
+  for (;;) {
+    let room = budget(rolling);
+    const chunk: typeof pending = [];
+    while (pending.length && estimateTokens(pending[0]!) <= room) {
+      room -= estimateTokens(pending[0]!);
+      chunk.push(pending.shift()!);
+    }
+    // The last pass also reads the start of a turn the kept part cuts through.
+    const final = pending.length === 0 && prefix <= room;
+    if (!chunk.length && !final) return false;
+    result = await compact(
+      {
+        ...preparation,
+        messagesToSummarize: chunk,
+        previousSummary: rolling,
+        ...(final ? {} : { turnPrefixMessages: [], isSplitTurn: false }),
+      },
+      request.model,
+      request.apiKey,
+      request.headers,
+      undefined,
+      signal,
+      session.thinkingLevel,
+      streamFn,
+      request.env,
+      session.settingsManager.getRetrySettings(),
+    );
+    signal.throwIfAborted();
+    rolling = result.summary;
+    if (final) break;
+  }
+  const { summary, tokensBefore, details, usage } = result;
+  manager.appendCompaction(summary, preparation.firstKeptEntryId, tokensBefore, details, false, usage);
   const messages = manager.buildSessionContext().messages;
   // The failed response stays in the session's history, not in what the model reads next.
   const last = messages.at(-1) as { role?: string; stopReason?: string } | undefined;

@@ -6,6 +6,7 @@ import {
   createAgentSession,
   createExtensionRuntime,
   defineTool,
+  estimateTokens,
   ModelRuntime,
   SessionManager,
   SettingsManager,
@@ -386,6 +387,8 @@ async function createEndpointRuntime(config: ChatConfiguration) {
  * the model request is re-sent, never a tool call. Stop cancels a waiting retry. Tests shorten the delay.
  */
 export const MODEL_RETRY = { maxRetries: 3, baseDelayMs: 2000 };
+/** A rough size of the system prompt and tool schemas, for a model's fit before the session reports its usage. */
+const PROMPT_AND_TOOLS_TOKENS = 12_000;
 
 export async function createChatSession(
   config: ChatConfiguration,
@@ -407,18 +410,28 @@ export async function createChatSession(
   const untagged = additionalTools.find(tool => !accessOf(tool));
   if (untagged) throw new Error(`Tool ${untagged.name} has no access class.`);
   const chain = fallback
-    ? await prepareFallback(fallback, ({ choice, connection }) =>
-        resolveChatModel(
-          {
-            ...config,
-            model: choice.model,
-            thinkingLevel: choice.thinkingLevel,
-            baseUrl: connection.baseUrl,
-            apiKey: connection.apiKey,
-            limits: connection.limits,
-          },
-          connection.subscriptionRuntime,
-        ),
+    ? await prepareFallback(
+        fallback,
+        ({ choice, connection }) =>
+          resolveChatModel(
+            {
+              ...config,
+              model: choice.model,
+              thinkingLevel: choice.thinkingLevel,
+              baseUrl: connection.baseUrl,
+              apiKey: connection.apiKey,
+              limits: connection.limits,
+            },
+            connection.subscriptionRuntime,
+          ),
+        // Before the session exists: its saved context (or the bootstrap history), plus the prompt and tool schemas.
+        () =>
+          PROMPT_AND_TOOLS_TOKENS +
+          (restoredManager
+            ? restoredManager
+                .buildSessionContext()
+                .messages.reduce((total, message) => total + estimateTokens(message), 0)
+            : history.reduce((total, message) => total + Math.ceil(message.text.length / 4), 0)),
       )
     : undefined;
   const { model, modelRuntime } = chain ?? (await resolveChatModel(config, subscriptionRuntime));

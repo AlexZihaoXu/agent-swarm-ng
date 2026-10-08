@@ -1,3 +1,4 @@
+import type { ThinkingLevel } from '../generated/prisma/enums';
 import type { PlatformStore } from '../platform-store';
 import { CODEX_CONNECTION } from '../codex-provider';
 
@@ -107,6 +108,11 @@ export class UsageRecorder {
   private queue: UsageRow[] = [];
   private timer?: ReturnType<typeof setTimeout>;
   private flushing: Promise<void> = Promise.resolve();
+  /**
+   * The endpoint of the model an agent is on now (fallback models, docs/agent-models.md), for calls that did not say
+   * which answered; set by the app. Without it, the agent's #1.
+   */
+  endpointOf?: (agent: AgentModels) => string;
 
   constructor(
     private flushMs = 1000,
@@ -146,7 +152,7 @@ export class UsageRecorder {
     this.flushing = this.flushing.then(async () => {
       try {
         for (let start = 0; start < batch.length; start += 200)
-          await insertUsage(database, await withEndpoints(database, batch.slice(start, start + 200)));
+          await insertUsage(database, await withEndpoints(database, batch.slice(start, start + 200), this.endpointOf));
       } catch (error) {
         this.log?.error(error, 'Model usage could not be saved');
       }
@@ -156,13 +162,18 @@ export class UsageRecorder {
 }
 
 /** The saved endpoint (OpenRouter/custom) each agent uses now; the ChatGPT subscription is not an endpoint. */
-export async function withEndpoints(database: PlatformStore, rows: UsageRow[]) {
+type AgentModels = { id: string; endpointId: string; model: string; thinkingLevel: ThinkingLevel; modelChain: string };
+export async function withEndpoints(
+  database: PlatformStore,
+  rows: UsageRow[],
+  endpointOf: (agent: AgentModels) => string = agent => agent.endpointId,
+) {
   const ids = [...new Set(rows.map(row => row.agentId))];
   const agents = await database.client.agent.findMany({
     where: { id: { in: ids } },
-    select: { id: true, endpointId: true },
+    select: { id: true, endpointId: true, model: true, thinkingLevel: true, modelChain: true },
   });
-  const endpoints = new Map(agents.map(agent => [agent.id, agent.endpointId]));
+  const endpoints = new Map(agents.map(agent => [agent.id, endpointOf(agent)]));
   return rows.map(row => {
     const endpointId = row.endpointId ?? endpoints.get(row.agentId);
     return {

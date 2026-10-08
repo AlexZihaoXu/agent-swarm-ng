@@ -500,7 +500,7 @@ describe('notifications', { timeout: 60_000 }, () => {
           userId: sam.id,
           payload: expect.objectContaining({
             title: 'Aether switched to model #2',
-            body: 'Its #1 model failed (authentication, HTTP 401). It tries #1 again later; check the model connection.',
+            body: "Its #1 model failed (authentication, HTTP 401). Check that model's connection.",
             tag: `model:${aether.id}`,
             url: `/agents/${aether.id}`,
           }),

@@ -167,7 +167,10 @@ export function AgentModelSettings({
                 className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-sm"
               >
                 <span className="min-w-0 flex-1">
-                  On #{(saved.activeModel ?? 0) + 1} since #1 failed. It tries #1 again after #1&apos;s come-back time.
+                  On #{(saved.activeModel ?? 0) + 1} since #1 failed.{' '}
+                  {modelsOf(saved)[0]!.comeBack > 0
+                    ? `It tries #1 again after ${modelsOf(saved)[0]!.comeBack} minutes.`
+                    : 'It uses #1 again only when you switch back.'}
                 </span>
                 <Button type="button" variant="outline" size="sm" onClick={() => void useFirst()}>
                   Use #1 again

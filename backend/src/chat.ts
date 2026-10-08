@@ -35,6 +35,7 @@ import { TIME_NOTE_CHOICES } from './time-notes';
 import { checkMemoryCap } from './users/store';
 import { ADMIN_ID, Reach, connectionOwner, viewerOf } from './users/reach';
 import { failureReason } from './model-fallback';
+import { usageRecorder } from './usage/recorder';
 import { ATTEMPTS, chainColumns, choicesOf, COME_BACK, MAX_CHOICES, type ModelChains } from './model-chain';
 
 const Thinking = Type.Union(Object.values(ThinkingLevel).map(value => Type.Literal(value)));
@@ -223,14 +224,19 @@ export function registerChat(
   connections: Connections = new Connections(store, new Reach(database), codex),
 ) {
   const runs = new AgentRuns();
-  // Fallback models (docs/agent-models.md): the "on #2" badge and the owner's notification follow the active one.
+  // Fallback models (docs/agent-models.md): the "on #2" badge and the owner's notification follow the active one, and
+  // calls that do not say which endpoint answered are metered to the one it is on.
   connections.chains.subscribe((agentId, change) =>
     runs.modelChoice(agentId, {
       active: change.active,
       from: change.from,
-      ...(change.error ? { reason: failureReason(change.error) } : {}),
+      ...(change.reason || change.error ? { reason: change.reason ?? failureReason(change.error!) } : {}),
     }),
   );
+  usageRecorder.endpointOf = agent => {
+    const models = choicesOf(agent);
+    return models[connections.chains.active(agent.id, models)]!.endpointId;
+  };
   const streams = createRunStreams(runs);
   const broker = new DmBroker(database, store, codex, runs, computers, screenshots, files, connections);
   const channelFiles = broker.files;
@@ -641,7 +647,7 @@ export function registerChat(
       reply.header('Cache-Control', 'no-store');
       const record = await database.findAgent(request.params.id);
       if (!record) return reply.code(404).send({ message: 'Agent not found.' });
-      // "Use #1 again": its next model call starts on #1 (a run already going keeps the model it is on).
+      // "Use #1 again": its next run starts on #1 (a run already going keeps the model it is on).
       connections.chains.reset(record.id);
       return agentView(record, connections.chains);
     },
@@ -690,6 +696,7 @@ export function registerChat(
         // Delete the record before its files: if this fails the agent is still whole, and leftover images only expire from the pool.
         if (!(await database.deleteAgent(id, request.body.confirmation)))
           return reply.code(404).send({ message: 'Agent not found.' });
+        connections.chains.forget(id);
         // Its chats are gone, so their files go too.
         await channelFiles
           .deleteForAgent(
