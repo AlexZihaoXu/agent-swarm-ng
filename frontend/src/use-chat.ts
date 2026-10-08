@@ -354,6 +354,16 @@ export function useChat() {
       );
       return;
     }
+    // An agent moved along its fallback models (docs/agent-models.md): the Model section shows which one it is on.
+    if (event.type === 'model_choice' && typeof event.agentId === 'string' && Number.isInteger(event.active)) {
+      const activeModel = event.active as number;
+      setAgents(current =>
+        current.map(item =>
+          item.id === event.agentId && item.real ? { ...item, real: { ...item.real, activeModel } } : item,
+        ),
+      );
+      return;
+    }
     if (event.type === 'compaction' && typeof event.agentId === 'string') {
       const agentId = event.agentId;
       const state = event.state === 'running' || event.state === 'sleeping' ? event.state : null;

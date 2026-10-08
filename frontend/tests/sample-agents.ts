@@ -68,6 +68,17 @@ export const sampleAgents: RealAgent[] = samples.map(agent => ({
   endpointId: 'test-endpoint',
   model: 'test-model',
   thinkingLevel: 'off',
+  models: [
+    {
+      endpointId: 'test-endpoint',
+      model: 'test-model',
+      thinkingLevel: 'off',
+      attempts: 3,
+      tooBig: 'skip',
+      comeBack: 5,
+    },
+  ],
+  activeModel: 0,
   todos: [],
   timeNoteMinutes: 15,
   organizationId: 'personal',

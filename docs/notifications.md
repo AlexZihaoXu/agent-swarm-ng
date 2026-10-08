@@ -19,6 +19,7 @@ Delivery needs HTTPS the device trusts (a public domain, or a certificate the de
 | An agent publishes in its private chat | the owner of the agent's organization | agent name | the message as plain text (Markdown removed, ~160 characters) | `/chat/agents/:id` |
 | An agent writes in a group chat | the owner of the group's organization | group name | "Agent: text" | `/chat/groups/:id` |
 | An agent run started by your message in its private chat ends on an error before it published anything | the owner of the agent's organization | "Aether couldn't finish" | the reason in plain words | `/chat/agents/:id` |
+| An agent drops off its #1 model to a fallback ([Agent models](agent-models.md)); not again while it stays lower | the owner of the agent's organization | "Aether switched to model #2" | why #1 failed (a category, never the provider's text) | `/agents/:id` |
 | Critical events: a lockdown, a failed sign-in burst, an outage, a disk over 90% full | admin | the banner's title | its detail (a sign-in burst: counts only; the names tried stay in the log) | the matching log in Settings, or the Dashboard |
 | The Swarm was updated (the backend or the frontend now runs another build) | everyone who keeps it on | "Agent Swarm updated" | "Now on `abc1234`: the commit's summary" | the Dashboard |
 | The Swarm started (not an update) | everyone who keeps it on | "Agent Swarm started" | "It is running again." | the Dashboard |
@@ -34,7 +35,7 @@ The triggers watch the backend's run event bus and critical-event listeners, nev
 
 ### Icons
 
-Agent messages (private and group) use the agent's avatar: the dashboard draws each agent's avatar as a 192 px PNG (the same art, at rest) and uploads it (`PUT /api/agents/:id/avatar.png`) whenever the backend has none for its current look (`GET /api/push/avatars` lists those). The service worker fetches it with the session cookie, waiting at most 2.5 seconds, and falls back to the app icon; on Apple's WebKit (iPhone, iPad, Safari on a Mac), which always shows the app's icon, it does not fetch at all, so the notification always shows promptly. An upload names the look it was drawn from and is refused (409) if the avatar changed meanwhile. System notifications (agent problems, critical events, the test) use the app icon. Android shows the monochrome pebble badge (`badge-96.png`) in the status bar. iPhone and iPad always show the app's icon (Web Push cannot change it).
+Agent messages (private and group) use the agent's avatar: the dashboard draws each agent's avatar as a 192 px PNG (the same art, at rest) and uploads it (`PUT /api/agents/:id/avatar.png`) whenever the backend has none for its current look (`GET /api/push/avatars` lists those). The service worker fetches it with the session cookie, waiting at most 2.5 seconds, and falls back to the app icon; on Apple's WebKit (iPhone, iPad, Safari on a Mac), which always shows the app's icon, it does not fetch at all, so the notification always shows promptly. An upload names the look it was drawn from and is refused (409) if the avatar changed meanwhile. System notifications (agent problems and model fallbacks, critical events, the test) use the app icon. Android shows the monochrome pebble badge (`badge-96.png`) in the status bar. iPhone and iPad always show the app's icon (Web Push cannot change it).
 
 ## When not to notify
 

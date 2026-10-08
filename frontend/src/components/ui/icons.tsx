@@ -213,3 +213,24 @@ export const CheckIcon = (props: ComponentProps<'svg'>) => (
     <path d="M20 6 9 17l-5-5" />
   </Icon>
 );
+/** Fallback model rows: drag to rank, move up, remove (Lucide grip-vertical, chevron-up, x). */
+export const GripIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <circle cx="9" cy="5" r="1" />
+    <circle cx="9" cy="12" r="1" />
+    <circle cx="9" cy="19" r="1" />
+    <circle cx="15" cy="5" r="1" />
+    <circle cx="15" cy="12" r="1" />
+    <circle cx="15" cy="19" r="1" />
+  </Icon>
+);
+export const ChevronUpIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="m18 15-6-6-6 6" />
+  </Icon>
+);
+export const XIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="M18 6 6 18M6 6l12 12" />
+  </Icon>
+);

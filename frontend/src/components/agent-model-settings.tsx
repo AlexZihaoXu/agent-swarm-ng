@@ -2,8 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { noAutofill } from '@/lib/no-autofill';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/select';
-import { useModelSelection } from '@/use-model-selection';
+import { choicesOf, ModelChoiceList, modelsOf, rowsOf, type ChoiceRow } from '@/components/model-choice-list';
 import type { ChatAgent, RealAgent } from '@/use-chat';
 import type { RegisterSection } from '@/lib/settings-sections';
 import { NumberField } from '@/components/computer-resource-fields';
@@ -38,7 +37,10 @@ const memoryOf = (agent: RealAgent) =>
 const fieldClass =
   'h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:h-10';
 
-/** Name and model connection of an existing agent. Identity, history and private context are kept; the next turn uses the new choice. */
+/**
+ * Name and ranked models of an existing agent (fallback models, docs/agent-models.md). Identity, history and private
+ * context are kept; the next turn uses the new choice.
+ */
 export function AgentModelSettings({
   agent,
   onSaved,
@@ -50,10 +52,8 @@ export function AgentModelSettings({
 }) {
   const id = useId();
   const saved = agent.real;
-  const choice = useModelSelection(
-    { endpointId: saved.endpointId, model: saved.model, thinkingLevel: saved.thinkingLevel },
-    saved.organizationId,
-  );
+  const [rows, setRows] = useState<ChoiceRow[]>(() => rowsOf(modelsOf(saved)));
+  const modelsChanged = JSON.stringify(choicesOf(rows)) !== JSON.stringify(modelsOf(saved));
   const [name, setName] = useState(saved.name);
   const [memory, setMemory] = useState(() => memoryOf(saved));
   const memoryChanges = Object.fromEntries(
@@ -68,28 +68,15 @@ export function AgentModelSettings({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [status, setStatus] = useState('');
-  const endpointMissing =
-    !choice.loading && !choice.loadFailed && !choice.endpoints.some(endpoint => endpoint.id === choice.endpointId);
-  const models =
-    choice.model && !choice.models.includes(choice.model) ? [choice.model, ...choice.models] : choice.models;
-  const dirty =
-    name.trim() !== saved.name ||
-    choice.endpointId !== saved.endpointId ||
-    choice.model !== saved.model ||
-    choice.thinking !== saved.thinkingLevel ||
-    Object.keys(memoryChanges).length > 0;
-  const ready =
-    name.trim() &&
-    choice.endpointId &&
-    choice.model &&
-    (choice.levels.length === 0 || choice.levels.includes(choice.thinking));
+  const dirty = name.trim() !== saved.name || modelsChanged || Object.keys(memoryChanges).length > 0;
+  const ready = name.trim() && rows.every(row => row.endpointId && row.model);
   async function save() {
     if (busy || !dirty) return;
     if (memoryInvalid) {
       throw new Error('Fix the active context settings first.');
     }
     if (!ready) {
-      const message = 'Choose a name, endpoint and model first.';
+      const message = 'Choose a name, and an endpoint and model for every row.';
       setError(message);
       throw new Error(message);
     }
@@ -101,15 +88,14 @@ export function AgentModelSettings({
         params: { path: { id: agent.id } },
         body: {
           ...(name.trim() !== saved.name ? { name: name.trim() } : {}),
-          ...(choice.endpointId !== saved.endpointId ? { endpointId: choice.endpointId } : {}),
-          ...(choice.model !== saved.model ? { model: choice.model } : {}),
-          ...(choice.thinking !== saved.thinkingLevel ? { thinkingLevel: choice.thinking } : {}),
+          ...(modelsChanged ? { models: choicesOf(rows) } : {}),
           ...(Object.keys(memoryChanges).length ? { compaction: memoryChanges } : {}),
         },
       });
       if (!data || failure) throw new Error(failure?.message ?? 'Could not save the agent.');
       onSaved(data);
       setName(data.name);
+      setRows(rowsOf(modelsOf(data)));
       setMemory(memoryOf(data));
       setStatus('Saved. The next turn uses these settings.');
     } catch (problem) {
@@ -122,12 +108,19 @@ export function AgentModelSettings({
   const discard = () => {
     setName(saved.name);
     setMemory(memoryOf(saved));
+    setRows(rowsOf(modelsOf(saved)));
     setError('');
     setStatus('');
-    choice.chooseEndpoint(saved.endpointId);
-    choice.chooseModel(saved.model);
-    choice.setThinking(saved.thinkingLevel);
   };
+  // "Use #1 again": the next model call starts on #1.
+  async function useFirst() {
+    setError('');
+    const { data, error: failure } = await api.POST('/api/agents/{id}/models/first', {
+      params: { path: { id: agent.id } },
+    });
+    if (!data || failure) setError(failure?.message ?? 'Could not switch back to #1.');
+    else onSaved(data);
+  }
   const latest = useRef({ save, discard });
   latest.current = { save, discard };
   useEffect(() => {
@@ -144,8 +137,8 @@ export function AgentModelSettings({
       <div>
         <h3 className="text-lg font-semibold">Model</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Rename this agent or move it to another model. Its history and memory stay. Changes wait until it is not
-          responding. Use Save changes at the bottom.
+          Rename this agent or change its models. It uses #1, and moves down the list when a model fails; drag to rank
+          them. Its history and memory stay. Changes wait until it is not responding. Use Save changes at the bottom.
         </p>
       </div>
       <div className="space-y-4 rounded-lg border border-border bg-sidebar/30 ao-card p-4">
@@ -167,64 +160,29 @@ export function AgentModelSettings({
             />
           </div>
           <div className="space-y-2">
-            <label htmlFor={`${id}-endpoint`} className="block text-sm font-medium">
-              Endpoint
-            </label>
-            <Select
-              id={`${id}-endpoint`}
-              value={choice.endpointId}
-              onValueChange={value => {
-                choice.chooseEndpoint(value);
-                setStatus('');
-              }}
-              placeholder="Select a model connection"
-              options={choice.endpoints.map(endpoint => ({ value: endpoint.id, label: endpoint.name }))}
-            />
-            {endpointMissing && (
-              <p className="text-xs text-red-400">
-                This agent&apos;s endpoint no longer exists. Choose another to make it respond again.
-              </p>
+            <p className="text-sm font-medium">Models</p>
+            {(saved.activeModel ?? 0) > 0 && (
+              <div
+                role="status"
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-sm"
+              >
+                <span className="min-w-0 flex-1">
+                  On #{(saved.activeModel ?? 0) + 1} since #1 failed. It tries #1 again after #1&apos;s come-back time.
+                </span>
+                <Button type="button" variant="outline" size="sm" onClick={() => void useFirst()}>
+                  Use #1 again
+                </Button>
+              </div>
             )}
-          </div>
-          <div className="space-y-2">
-            <label htmlFor={`${id}-model`} className="block text-sm font-medium">
-              Model
-            </label>
-            <Select
-              id={`${id}-model`}
-              value={choice.model}
-              onValueChange={value => {
-                choice.chooseModel(value);
+            <ModelChoiceList
+              rows={rows}
+              onChange={next => {
+                setRows(next);
                 setStatus('');
               }}
-              disabled={!choice.endpointId || (choice.loading && models.length === 0)}
-              placeholder={choice.loading ? 'Loading models…' : 'Select a model'}
-              options={models.map(value => ({ value, label: value }))}
-            />
-          </div>
-          <div className="space-y-2">
-            <label htmlFor={`${id}-thinking`} className="block text-sm font-medium">
-              Thinking level
-            </label>
-            <Select
-              id={`${id}-thinking`}
-              value={choice.thinking}
-              disabled={choice.levels.length <= 1}
-              onValueChange={value => {
-                if (choice.levels.includes(value as RealAgent['thinkingLevel'])) {
-                  choice.setThinking(value as RealAgent['thinkingLevel']);
-                  setStatus('');
-                }
-              }}
-              options={(choice.levels.length ? choice.levels : [choice.thinking]).map(level => ({
-                value: level,
-                label:
-                  level === 'off'
-                    ? choice.levels.length <= 1
-                      ? 'Not configurable'
-                      : 'Off'
-                    : level[0].toUpperCase() + level.slice(1),
-              }))}
+              organizationId={saved.organizationId}
+              active={modelsChanged ? -1 : (saved.activeModel ?? 0)}
+              disabled={busy}
             />
           </div>
         </fieldset>
@@ -263,19 +221,6 @@ export function AgentModelSettings({
             </p>
           )}
         </fieldset>
-        {choice.error && (
-          <p role="alert" className="text-sm">
-            {choice.error}
-            {choice.loadFailed && (
-              <>
-                {' '}
-                <button type="button" onClick={choice.reload} className="cursor-pointer underline">
-                  Retry
-                </button>
-              </>
-            )}
-          </p>
-        )}
         {error && (
           <p role="alert" className="text-sm">
             {error}
