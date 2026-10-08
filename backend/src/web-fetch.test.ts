@@ -13,6 +13,7 @@ beforeAll(async () => {
     if (request.url === '/redirect') return response.writeHead(302, { location: '/' }).end();
     if (request.url === '/gzip') return response.writeHead(200, { 'content-encoding': 'gzip' }).end(gzipSync('packed'));
     if (request.url === '/slow') return response.writeHead(200).write('partial');
+    if (request.url === '/host') return response.writeHead(200).end(request.headers.host);
     let body = '';
     request.on('data', chunk => (body += chunk));
     request.on('end', () =>
@@ -42,6 +43,8 @@ describe('web worker fetch', () => {
     const posted = await fetch(new URL(`http://site.test:${port}/echo`), { method: 'POST', body: 'payload' });
     expect(await posted.text()).toBe('POST payload');
     expect(await (await fetch(`http://site.test:${port}/gzip`)).text()).toBe('packed');
+    // It connects to the checked address, and the site still gets its own name.
+    expect(await (await fetch(`http://site.test:${port}/host`)).text()).toBe(`site.test:${port}`);
   });
 
   it('keeps manual redirects manual and checks every followed hop', async () => {

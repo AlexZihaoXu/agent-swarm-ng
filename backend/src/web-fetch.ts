@@ -1,7 +1,7 @@
 import { lookup as dnsLookup } from 'node:dns/promises';
 import http from 'node:http';
 import https from 'node:https';
-import { isIP, type LookupFunction } from 'node:net';
+import { isIP } from 'node:net';
 import { pipeline, Readable, type Transform } from 'node:stream';
 import zlib from 'node:zlib';
 import { isNonPublicHost } from './web-policy';
@@ -19,27 +19,21 @@ const decoders: Record<string, () => Transform> = {
 
 /**
  * fetch() for the web worker that connects only to the addresses it just checked. Checking a name and then letting
- * global fetch resolve it again allows DNS rebinding onto internal services, so the check lives in the socket lookup.
+ * global fetch resolve it again allows DNS rebinding onto internal services, so it connects to the checked address
+ * itself. (A socket lookup hook did the same, but Bun 1.3.6, the backend image's, ignores what the hook returns.)
  */
 export function createPublicFetch({
   resolve = hostname => dnsLookup(hostname, { all: true, verbatim: true }),
   isPublic = address => !isNonPublicHost(address),
 }: Options = {}) {
-  const lookup: LookupFunction = (hostname, options, callback) => {
-    resolve(hostname)
-      .then(addresses => {
-        if (!addresses.length || addresses.some(({ address }) => !isPublic(address)))
-          throw new Error(`Blocked non-public address for ${hostname}`);
-        // A copy: Bun consumes the array it is given.
-        if (options.all)
-          callback(
-            null,
-            addresses.map(({ address, family }) => ({ address, family })),
-          );
-        else callback(null, addresses[0].address, addresses[0].family);
-      })
-      .catch(error => callback(error, ''));
-  };
+  /** The address to connect to: every address of the name must be public (one could be swapped in later). */
+  async function address(host: string) {
+    const addresses = await resolve(host);
+    if (!addresses.length || addresses.some(({ address }) => !isPublic(address)))
+      throw new TypeError(`Blocked non-public address for ${host}`);
+    // IPv4 first: a container often has no IPv6 route.
+    return (addresses.find(({ family }) => family === 4) ?? addresses[0]!).address;
+  }
 
   function send(url: URL, method: string, headers: Headers, body: Buffer | undefined, signal?: AbortSignal) {
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return Promise.reject(new TypeError('Only HTTP(S).'));
@@ -48,38 +42,51 @@ export function createPublicFetch({
     if (isIP(host) ? !isPublic(host) : isNonPublicHost(host))
       return Promise.reject(new TypeError(`Blocked non-public host ${host}`));
     if (signal?.aborted) return Promise.reject(signal.reason);
-    return new Promise<Response>((resolvePromise, reject) => {
-      const request = (url.protocol === 'https:' ? https : http).request(
-        url,
-        { method, headers: Object.fromEntries(headers), lookup },
-        response => {
-          const status = response.statusCode!;
-          const responseHeaders = new Headers();
-          for (let i = 0; i < response.rawHeaders.length; i += 2)
-            responseHeaders.append(response.rawHeaders[i], response.rawHeaders[i + 1]);
-          const empty = method === 'HEAD' || status === 204 || status === 304;
-          const encoding = String(response.headers['content-encoding'] ?? '').toLowerCase();
-          const decoder = Object.hasOwn(decoders, encoding) ? decoders[encoding] : undefined;
-          const stream: Readable = empty || !decoder ? response : pipeline(response, decoder(), () => {});
-          stream.once('close', () => signal?.removeEventListener('abort', abort));
-          if (empty) response.resume();
-          const result = new Response(empty ? null : (Readable.toWeb(stream) as unknown as ReadableStream), {
-            status,
-            statusText: response.statusMessage,
-            headers: responseHeaders,
+    const secure = url.protocol === 'https:';
+    return (isIP(host) ? Promise.resolve(host) : address(host)).then(
+      connectTo =>
+        new Promise<Response>((resolvePromise, reject) => {
+          // The connection goes to the address just checked, never to a fresh lookup of the name (no DNS rebinding). The
+          // name still goes in the Host header and TLS's server name, which the certificate is verified against.
+          const request = (secure ? https : http).request(
+            {
+              protocol: url.protocol,
+              hostname: connectTo,
+              port: url.port || (secure ? 443 : 80),
+              path: `${url.pathname}${url.search}`,
+              method,
+              headers: { ...Object.fromEntries(headers), host: url.host },
+              ...(secure && !isIP(host) ? { servername: host } : {}),
+            },
+            response => {
+              const status = response.statusCode!;
+              const responseHeaders = new Headers();
+              for (let i = 0; i < response.rawHeaders.length; i += 2)
+                responseHeaders.append(response.rawHeaders[i], response.rawHeaders[i + 1]);
+              const empty = method === 'HEAD' || status === 204 || status === 304;
+              const encoding = String(response.headers['content-encoding'] ?? '').toLowerCase();
+              const decoder = Object.hasOwn(decoders, encoding) ? decoders[encoding] : undefined;
+              const stream: Readable = empty || !decoder ? response : pipeline(response, decoder(), () => {});
+              stream.once('close', () => signal?.removeEventListener('abort', abort));
+              if (empty) response.resume();
+              const result = new Response(empty ? null : (Readable.toWeb(stream) as unknown as ReadableStream), {
+                status,
+                statusText: response.statusMessage,
+                headers: responseHeaders,
+              });
+              Object.defineProperty(result, 'url', { value: url.href });
+              resolvePromise(result);
+            },
+          );
+          const abort = () => request.destroy(signal!.reason);
+          signal?.addEventListener('abort', abort, { once: true });
+          request.once('error', error => {
+            signal?.removeEventListener('abort', abort);
+            reject(error);
           });
-          Object.defineProperty(result, 'url', { value: url.href });
-          resolvePromise(result);
-        },
-      );
-      const abort = () => request.destroy(signal!.reason);
-      signal?.addEventListener('abort', abort, { once: true });
-      request.once('error', error => {
-        signal?.removeEventListener('abort', abort);
-        reject(error);
-      });
-      request.end(body);
-    });
+          request.end(body);
+        }),
+    );
   }
 
   return async function publicFetch(input: string | URL | Request, init: RequestInit = {}) {
