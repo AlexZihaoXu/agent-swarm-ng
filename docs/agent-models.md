@@ -16,7 +16,7 @@ The list is stored with the agent: #1 in its own endpoint, model and thinking-le
 
 ## How a run walks the list
 
-A main run (a message, a heartbeat, a timer, a watch's wake-up, Discord) resolves every row's connection first; a row whose connection fails (ChatGPT signed out, an endpoint removed) is skipped at once and noted. It starts on the agent's current model, or on a higher one whose come-back time has passed (a model the conversation does not fit is not tried). Within the run, between model calls (never while one is streaming), a higher model that has come due gets **one** try: if it answers it becomes the current model again; if not, the run moves down the list from there, past models that failed recently, with no second try of it.
+A main run (a message, a heartbeat, a timer, a watch's wake-up, Discord) resolves every row's connection first; a row whose connection fails (ChatGPT signed out, an endpoint removed) is skipped at once and noted. It starts on the agent's current model, or on a higher one whose come-back time has passed (a model the conversation does not fit is not tried). Within the run, before each new input and between the model calls of one answer (never while one is streaming; a continuation the platform starts itself, such as a todo check's note, goes on with the model in use), a higher model that has come due gets **one** try: if it answers it becomes the current model again; if not, the run moves down the list from there, past models that failed recently, with no second try of it.
 
 One Pi session runs the whole turn: the platform gives it one runtime that passes each call to the runtime of the row that made the model (`backend/src/model-fallback.ts`), and takes over Pi's retry step to try again, switch model (Pi's `setModel`, recorded in the session), or give up. Every successful response makes its model the agent's current one. Where the agent is on the list is kept in memory: a backend restart starts every agent on #1 again.
 
@@ -24,7 +24,7 @@ Side calls use the model the agent is on now: todo checks, interruption and reac
 
 ## What people see
 
-- **Activity**: `Model retry`, `Model fallback`, `Model skipped`, `Model come-back try`, `Model recovered` and `No model left` notes, with the reason as a category and HTTP status (`authentication, HTTP 401`), never the provider's own error text.
+- **Activity**: `Model retry`, `Model fallback`, `Model skipped`, `Model come-back try`, `Model recovered` and `No model left` notes. A provider's failure shows as a category and HTTP status (`authentication, HTTP 401`), never its own error text; a model the platform could not use says why in the platform's own words (`cannot be used: Reconnect OpenAI Codex in Settings.`).
 - **Model section**: while the agent is on a lower model, a note says so with **Use #1 again** (`POST /api/agents/:id/models/first`; its next run starts on #1, a run already going keeps its model), and that row is marked **In use**. A `model_choice` event keeps it live.
 - **Push** (Agent problems): once when an agent drops off #1, "Aether switched to model #2", with the reason (a category, or the platform's own words such as "Reconnect OpenAI Codex in Settings."). Moving further down or back up does not notify.
 

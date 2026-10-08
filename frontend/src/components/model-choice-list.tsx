@@ -90,7 +90,12 @@ export function ModelChoiceList({
   useLayoutEffect(() => {
     const target = refocus.current;
     refocus.current = null;
-    if (target?.isConnected && document.activeElement !== target) target.focus({ preventScroll: true });
+    if (!target?.isConnected) return;
+    // "Move up" to #1 (or down to the end) is now disabled: its row's grip takes the focus instead (the browser
+    // drops focus from a disabled button only after this, so it is checked first).
+    if ((target as HTMLButtonElement).disabled)
+      target.closest('li')?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true });
+    else if (document.activeElement !== target) target.focus({ preventScroll: true });
   }, [rows]);
 
   const move = (from: number, to: number) => {
@@ -101,7 +106,8 @@ export function ModelChoiceList({
     next.splice(to, 0, row!);
     if (document.activeElement instanceof HTMLElement && list.current?.contains(document.activeElement))
       refocus.current = document.activeElement;
-    setAnnouncement(`Moved to #${to + 1}`);
+    // Alternating an invisible mark makes a repeated message ("Moved to #2" again) a change to announce.
+    setAnnouncement(current => `Moved to #${to + 1}${current.endsWith('\u200b') ? '' : '\u200b'}`);
     latest.current.onChange(next);
     latest.current.rows = next;
   };

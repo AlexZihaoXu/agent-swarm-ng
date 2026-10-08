@@ -121,3 +121,15 @@ test('shows the model in use after a fallback and switches back to #1', async ({
   await expect(section.getByText('On #2 since #1 failed')).toHaveCount(0);
   await expect(section.getByText('In use')).toHaveCount(0);
 });
+
+test('moving a row to the top from its open panel hands the focus to its grip', async ({ page }) => {
+  await mocks(page, { ...sampleAgents[0]!, models: [first, backup] });
+  await page.goto('/agents/avery');
+  const section = page.getByRole('region', { name: 'Settings for Avery' }).getByRole('region', { name: 'Model' });
+  const rows = section.getByRole('list', { name: 'Models in order of use' }).getByRole('listitem');
+  await rows.nth(1).getByRole('button', { name: /^#2/ }).click();
+  await rows.nth(1).getByRole('button', { name: 'Move up' }).click();
+  await expect(rows.first()).toContainText('Backup · gpt-5');
+  // Its Move up is disabled at #1, so the grip takes the focus rather than the page.
+  await expect(section.getByRole('button', { name: 'Move #1 (drag, or use the arrow keys)' })).toBeFocused();
+});

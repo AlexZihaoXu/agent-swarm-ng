@@ -100,6 +100,7 @@ export async function prepareFallback(
     }),
   );
   let session: AgentSession | undefined;
+  const switching: { index?: number } = {};
   const fits = (index: number) => {
     const entry = resolved[index];
     if (!entry || !('model' in entry)) return true;
@@ -130,11 +131,12 @@ export async function prepareFallback(
   return {
     model: entry.model as Model<Api>,
     thinkingLevel: fallback.choices[run.index]!.choice.thinkingLevel,
-    modelRuntime: chainRuntime(resolved, () => run.index),
+    // A switch in progress already answers for its target (setModel checks the target's login).
+    modelRuntime: chainRuntime(resolved, () => switching.index ?? run.index),
     /** Called once the session exists: lets the chain switch its model and take over Pi's retry. */
     install: (created: AgentSession) => {
       session = created;
-      installFallback(created, run, resolved, fallback.agentId);
+      installFallback(created, run, resolved, fallback.agentId, switching);
     },
   };
 }
@@ -166,7 +168,13 @@ const sleep = (ms: number, signal: AbortSignal) =>
  * context overflow stays Pi's (it compacts). Before each model call within a run, a higher choice that is due gets
  * its one try. Every successful response makes its choice the agent's active one.
  */
-function installFallback(session: AgentSession, run: ChainRun, resolved: Resolved[], agentId: string) {
+function installFallback(
+  session: AgentSession,
+  run: ChainRun,
+  resolved: Resolved[],
+  agentId: string,
+  switching: { index?: number },
+) {
   const internals = session as unknown as RetryInternals;
   const handled = (message: AssistantMessage) =>
     message.stopReason === 'error' && !isContextOverflow(message, session.model?.contextWindow ?? 0);
@@ -179,7 +187,12 @@ function installFallback(session: AgentSession, run: ChainRun, resolved: Resolve
   };
   const switchTo = async (index: number) => {
     const entry = resolved[index] as Extract<Resolved, { model: Tagged }>;
-    await session.setModel(entry.model);
+    switching.index = index;
+    try {
+      await session.setModel(entry.model);
+    } finally {
+      switching.index = undefined;
+    }
     session.setThinkingLevel(run.choices[index]!.thinkingLevel);
     const window = entry.model.contextWindow;
     session.settingsManager.applyOverrides({

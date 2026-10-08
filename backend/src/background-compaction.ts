@@ -278,7 +278,6 @@ export async function compactToFit(session: AgentSession, agentId: string, signa
   const text = (content: string) => estimateTokens({ role: 'user', content, timestamp: 0 });
   // What one pass can read: the window less the reply room, the summary prompt and the summary so far.
   const budget = (summary?: string) => window - reserveTokens - 4096 - (summary ? text(summary) : 0);
-  const prefix = preparation.turnPrefixMessages.reduce((total, item) => total + estimateTokens(item), 0);
   const request = await (
     session as unknown as {
       _getSummarizationRequestAuth(model: NonNullable<AgentSession['model']>): Promise<{
@@ -294,26 +293,9 @@ export async function compactToFit(session: AgentSession, agentId: string, signa
     purpose: 'compaction',
     ...(endpointId ? { endpointId: () => endpointId } : {}),
   });
-  const pending = preparation.messagesToSummarize.slice();
-  let rolling = preparation.previousSummary;
-  let result: CompactionResult | undefined;
-  for (;;) {
-    let room = budget(rolling);
-    const chunk: typeof pending = [];
-    while (pending.length && estimateTokens(pending[0]!) <= room) {
-      room -= estimateTokens(pending[0]!);
-      chunk.push(pending.shift()!);
-    }
-    // The last pass also reads the start of a turn the kept part cuts through.
-    const final = pending.length === 0 && prefix <= room;
-    if (!chunk.length && !final) return false;
-    result = await compact(
-      {
-        ...preparation,
-        messagesToSummarize: chunk,
-        previousSummary: rolling,
-        ...(final ? {} : { turnPrefixMessages: [], isSplitTurn: false }),
-      },
+  const result = await summarizeInPasses(preparation, budget, prepared =>
+    compact(
+      prepared,
       request.model,
       request.apiKey,
       request.headers,
@@ -323,11 +305,12 @@ export async function compactToFit(session: AgentSession, agentId: string, signa
       streamFn,
       request.env,
       session.settingsManager.getRetrySettings(),
-    );
-    signal.throwIfAborted();
-    rolling = result.summary;
-    if (final) break;
-  }
+    ).then(result => {
+      signal.throwIfAborted();
+      return result;
+    }),
+  );
+  if (!result) return false;
   const { summary, tokensBefore, details, usage } = result;
   manager.appendCompaction(summary, preparation.firstKeptEntryId, tokensBefore, details, false, usage);
   const messages = manager.buildSessionContext().messages;
@@ -336,4 +319,40 @@ export async function compactToFit(session: AgentSession, agentId: string, signa
   session.agent.state.messages =
     last?.role === 'assistant' && last.stopReason === 'error' ? messages.slice(0, -1) : messages;
   return true;
+}
+
+/**
+ * Summarizes `preparation` in passes, oldest first: each pass reads as much as `budget(summary so far)` allows, with
+ * the summary so far, and the last also reads the start of a turn the kept part cuts through. Returns the last
+ * pass's result, or undefined when a single message (or that turn start) is bigger than a pass can read.
+ */
+export async function summarizeInPasses(
+  preparation: Preparation,
+  budget: (summary?: string) => number,
+  summarize: (preparation: Preparation) => Promise<CompactionResult>,
+) {
+  const prefix = preparation.turnPrefixMessages.reduce((total, item) => total + estimateTokens(item), 0);
+  const pending = preparation.messagesToSummarize.slice();
+  let rolling = preparation.previousSummary;
+  for (;;) {
+    let room = budget(rolling);
+    const chunk: typeof pending = [];
+    while (pending.length && estimateTokens(pending[0]!) <= room) {
+      room -= estimateTokens(pending[0]!);
+      chunk.push(pending.shift()!);
+    }
+    const final = pending.length === 0 && prefix <= room;
+    if (!chunk.length && !final) return undefined;
+    // Pi summarizes the history (and keeps the summary so far) only when a pass has history to read: a last pass
+    // left with only the split turn's start reads it as history instead.
+    const prefixAsHistory = final && !chunk.length;
+    const result = await summarize({
+      ...preparation,
+      messagesToSummarize: prefixAsHistory ? preparation.turnPrefixMessages : chunk,
+      previousSummary: rolling,
+      ...(final && !prefixAsHistory ? {} : { turnPrefixMessages: [], isSplitTurn: false }),
+    });
+    rolling = result.summary;
+    if (final) return result;
+  }
 }
