@@ -22,7 +22,12 @@ it('trusted frame starts input-locked and gates keys, pointer and shortcut messa
       handlers.set(name, [...(handlers.get(name) ?? []), handler]);
     },
   };
-  const context = { window, location: { origin: 'http://dashboard' }, document: { activeElement: { blur() {} } } };
+  const context = {
+    window,
+    navigator: { platform: 'Linux x86_64' },
+    location: { origin: 'http://dashboard' },
+    document: { activeElement: { blur() {} } },
+  };
   for (const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))
     if (
       (match[1].includes('swarmDesktopInputEnabled') || match[1].includes('const shortcuts')) &&
