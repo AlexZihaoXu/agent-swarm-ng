@@ -61,7 +61,13 @@ type Allowance = { token: string; until: number; remaining: number };
 const TERMINAL_ALLOWANCE = { seconds: 90, combos: 5 };
 type TerminalAllowance = Allowance & { session: string };
 /** The operation running on a computer; a read-only one (list/view/status/screens, file reads) is short. */
-type Active = { abort: AbortController; finished: Promise<unknown>; readOnly?: boolean };
+type Active = {
+  abort: AbortController;
+  finished: Promise<unknown>;
+  readOnly?: boolean;
+  /** The agent whose own file or shell work this is: its next call queues behind it (fallback: see performCore). */
+  queuedBy?: string;
+};
 
 /** One backend owns admission; SQL uniqueness also protects against duplicate claims. */
 export class ComputerUseService {
@@ -107,11 +113,12 @@ export class ComputerUseService {
    * Another operation holds the computer: a short read is waited for (so dashboard polling and previews never
    * make an agent's call fail); anything else is refused as before.
    */
-  private waitForReads(computerId: string, refusal: string, patient = false) {
+  private waitForReads(computerId: string, refusal: string, patient = false, agentId?: string) {
     const active = this.active.get(computerId);
     if (!active) return undefined;
-    // A watch's look is never urgent: it waits out any operation instead of failing.
-    if (active.readOnly || patient)
+    // A watch's look is never urgent: it waits out any operation instead of failing. An agent's own queued work
+    // waits for its earlier call; a person's operation still refuses it.
+    if (active.readOnly || patient || (agentId !== undefined && active.queuedBy === agentId))
       return active.finished.then(
         () => undefined,
         () => undefined,
@@ -547,6 +554,8 @@ export class ComputerUseService {
       request,
       signal,
       retain,
+      false,
+      true,
     );
     const input = request as { kind?: string; operation?: string; session?: string };
     if (input.kind === 'terminal' && input.operation === 'delete' && input.session && !receipt.error) {
@@ -662,6 +671,12 @@ export class ComputerUseService {
     signal?: AbortSignal,
     retain?: (result: CoreReceipt) => Promise<void>,
     patient = false,
+    /**
+     * The agent's own file and shell work: a call made while its earlier call runs waits its turn instead of failing,
+     * so a batch of parallel calls (several writes at once) runs one after another, in the order given. Behind a
+     * person's operation it is still refused.
+     */
+    queued = false,
   ): Promise<CoreReceipt> {
     const admitted = await this.exclusive(async () => {
       signal?.throwIfAborted();
@@ -676,6 +691,7 @@ export class ComputerUseService {
         claim.computerId,
         'Another computer operation is executing; wait for its result.',
         patient || isReading(claim),
+        queued ? agentId : undefined,
       );
       if (waiting) return { waiting };
       const driver = this.driver();
@@ -714,12 +730,17 @@ export class ComputerUseService {
         signal?.removeEventListener('abort', stop);
         this.active.delete(claim.computerId);
       });
-      this.active.set(claim.computerId, { abort, finished, readOnly: isReadOnly(request) });
+      this.active.set(claim.computerId, {
+        abort,
+        finished,
+        readOnly: isReadOnly(request),
+        ...(queued && agentId ? { queuedBy: agentId } : {}),
+      });
       return { finished };
     });
     if ('waiting' in admitted) {
       await admitted.waiting;
-      return this.performCore(resolve, request, signal, retain, patient);
+      return this.performCore(resolve, request, signal, retain, patient, queued);
     }
     return admitted.finished;
   }

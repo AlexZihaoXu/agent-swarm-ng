@@ -83,6 +83,28 @@ it('core tools never grant GUI allowance; mutating core work invalidates it', as
   await f.service.core(f.a.id, { kind: 'bash' });
   await expect(f.service.run(f.a.id, {})).rejects.toThrow(/look/i);
 });
+it("runs an agent's parallel core calls one after another, in the order given, instead of refusing them", async () => {
+  const f = await fixture();
+  await f.service.use(f.a.id, 'Desk', true);
+  const order: string[] = [];
+  let running = 0,
+    most = 0;
+  f.runtime.prepareCore = async (_id, request) => request;
+  f.runtime.core = async (_id, request) => {
+    most = Math.max(most, ++running);
+    await new Promise(resolve => setTimeout(resolve, 5));
+    order.push((request as { path: string }).path);
+    running--;
+    return { started: true, settled: true, result: { type: 'text', text: 'written' } };
+  };
+  const paths = ['a.json', 'b.ts', 'c.ts', 'a.json', 'd.md'];
+  const results = await Promise.all(paths.map(path => f.service.core(f.a.id, { kind: 'write', path })));
+  expect(results.every(result => !result.error)).toBe(true);
+  expect(order).toEqual(paths);
+  expect(most).toBe(1);
+  // Another agent cannot queue onto it: without the claim its write is refused.
+  await expect(f.service.core(f.b.id, { kind: 'write', path: 'x' })).rejects.toThrow(/use_computer/);
+});
 it('joins active core work before transfer, and unknown cancellation retains the claim', async () => {
   const f = await fixture();
   await f.service.use(f.a.id, 'Desk', true);
