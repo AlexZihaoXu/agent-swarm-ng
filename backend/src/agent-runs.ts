@@ -194,6 +194,20 @@ export class AgentRuns {
       channelId: `scratch:${agentId}`,
     });
   }
+  /**
+   * An agent's model moved along its fallback chain (docs/agent-models.md): `active` is the one it is on now; `reason`
+   * why it left `from` (a category, never the provider's text). Dashboards show it; push tells the owner.
+   */
+  modelChoice(agentId: string, change: { active: number; from: number; reason?: string }) {
+    this.broadcast({
+      type: 'model_choice',
+      ...change,
+      eventId: crypto.randomUUID(),
+      runId: 'platform',
+      agentId,
+      channelId: 'platform',
+    });
+  }
   /** An agent's todo list changed (todo_write): dashboards show it live (docs/agent-todos.md). */
   todos(agentId: string, todos: unknown[]) {
     this.broadcast({

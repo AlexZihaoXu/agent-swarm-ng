@@ -17959,6 +17959,8 @@
                           "endpointId",
                           "model",
                           "thinkingLevel",
+                          "models",
+                          "activeModel",
                           "id",
                           "channelId",
                           "createdAt",
@@ -18267,6 +18269,108 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "models": {
+                            "type": "array",
+                            "items": {
+                              "additionalProperties": false,
+                              "type": "object",
+                              "required": [
+                                "endpointId",
+                                "model",
+                                "thinkingLevel",
+                                "attempts",
+                                "tooBig",
+                                "comeBack"
+                              ],
+                              "properties": {
+                                "endpointId": {
+                                  "minLength": 1,
+                                  "maxLength": 100,
+                                  "type": "string"
+                                },
+                                "model": {
+                                  "minLength": 1,
+                                  "maxLength": 512,
+                                  "type": "string"
+                                },
+                                "thinkingLevel": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "off"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "minimal"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "low"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "medium"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "high"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "xhigh"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "max"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "attempts": {
+                                  "minimum": 1,
+                                  "maximum": 5,
+                                  "type": "integer"
+                                },
+                                "tooBig": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "skip"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "compact"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "comeBack": {
+                                  "minimum": 0,
+                                  "maximum": 60,
+                                  "type": "integer"
+                                }
+                              }
+                            }
+                          },
+                          "activeModel": {
+                            "type": "integer"
                           },
                           "id": {
                             "type": "string"
@@ -19128,6 +19232,8 @@
                     "endpointId",
                     "model",
                     "thinkingLevel",
+                    "models",
+                    "activeModel",
                     "id",
                     "channelId",
                     "createdAt",
@@ -19436,6 +19542,108 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "required": [
+                          "endpointId",
+                          "model",
+                          "thinkingLevel",
+                          "attempts",
+                          "tooBig",
+                          "comeBack"
+                        ],
+                        "properties": {
+                          "endpointId": {
+                            "minLength": 1,
+                            "maxLength": 100,
+                            "type": "string"
+                          },
+                          "model": {
+                            "minLength": 1,
+                            "maxLength": 512,
+                            "type": "string"
+                          },
+                          "thinkingLevel": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "off"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "minimal"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "low"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "medium"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "high"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "xhigh"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "max"
+                                ]
+                              }
+                            ]
+                          },
+                          "attempts": {
+                            "minimum": 1,
+                            "maximum": 5,
+                            "type": "integer"
+                          },
+                          "tooBig": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "skip"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "compact"
+                                ]
+                              }
+                            ]
+                          },
+                          "comeBack": {
+                            "minimum": 0,
+                            "maximum": 60,
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "activeModel": {
+                      "type": "integer"
                     },
                     "id": {
                       "type": "string"
@@ -20667,6 +20875,107 @@
                   "instructions": {
                     "maxLength": 20000,
                     "type": "string"
+                  },
+                  "models": {
+                    "minItems": 1,
+                    "maxItems": 5,
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "endpointId",
+                        "model",
+                        "thinkingLevel",
+                        "attempts",
+                        "tooBig",
+                        "comeBack"
+                      ],
+                      "properties": {
+                        "endpointId": {
+                          "minLength": 1,
+                          "maxLength": 100,
+                          "type": "string"
+                        },
+                        "model": {
+                          "minLength": 1,
+                          "maxLength": 512,
+                          "type": "string"
+                        },
+                        "thinkingLevel": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "off"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "minimal"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "low"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "medium"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "high"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "xhigh"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "max"
+                              ]
+                            }
+                          ]
+                        },
+                        "attempts": {
+                          "minimum": 1,
+                          "maximum": 5,
+                          "type": "integer"
+                        },
+                        "tooBig": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "skip"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "compact"
+                              ]
+                            }
+                          ]
+                        },
+                        "comeBack": {
+                          "minimum": 0,
+                          "maximum": 60,
+                          "type": "integer"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -20698,6 +21007,8 @@
                     "endpointId",
                     "model",
                     "thinkingLevel",
+                    "models",
+                    "activeModel",
                     "id",
                     "channelId",
                     "createdAt",
@@ -21006,6 +21317,108 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "required": [
+                          "endpointId",
+                          "model",
+                          "thinkingLevel",
+                          "attempts",
+                          "tooBig",
+                          "comeBack"
+                        ],
+                        "properties": {
+                          "endpointId": {
+                            "minLength": 1,
+                            "maxLength": 100,
+                            "type": "string"
+                          },
+                          "model": {
+                            "minLength": 1,
+                            "maxLength": 512,
+                            "type": "string"
+                          },
+                          "thinkingLevel": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "off"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "minimal"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "low"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "medium"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "high"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "xhigh"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "max"
+                                ]
+                              }
+                            ]
+                          },
+                          "attempts": {
+                            "minimum": 1,
+                            "maximum": 5,
+                            "type": "integer"
+                          },
+                          "tooBig": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "skip"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "compact"
+                                ]
+                              }
+                            ]
+                          },
+                          "comeBack": {
+                            "minimum": 0,
+                            "maximum": 60,
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "activeModel": {
+                      "type": "integer"
                     },
                     "id": {
                       "type": "string"
@@ -21706,6 +22119,984 @@
             }
           },
           "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/models/first": {
+      "post": {
+        "operationId": "useFirstModel",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "endpointId",
+                    "model",
+                    "thinkingLevel",
+                    "models",
+                    "activeModel",
+                    "id",
+                    "channelId",
+                    "createdAt",
+                    "lastMessage",
+                    "compaction",
+                    "heartbeat",
+                    "instructions",
+                    "organizationId",
+                    "timeNoteMinutes",
+                    "todos"
+                  ],
+                  "properties": {
+                    "name": {
+                      "minLength": 1,
+                      "maxLength": 80,
+                      "type": "string"
+                    },
+                    "endpointId": {
+                      "minLength": 1,
+                      "maxLength": 100,
+                      "type": "string"
+                    },
+                    "model": {
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "type": "string"
+                    },
+                    "thinkingLevel": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "off"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "minimal"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "low"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "medium"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "high"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "xhigh"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "max"
+                          ]
+                        }
+                      ]
+                    },
+                    "avatar": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "shape",
+                            "color",
+                            "seed"
+                          ],
+                          "properties": {
+                            "shape": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "pebble"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "squircle"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "gumdrop"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "triangle"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "bean"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "pear"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "capsule"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "diamond"
+                                  ]
+                                }
+                              ]
+                            },
+                            "color": {
+                              "minLength": 7,
+                              "maxLength": 7,
+                              "pattern": "^#[0-9a-fA-F]{6}$",
+                              "type": "string"
+                            },
+                            "eyeStyle": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "pill"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "round"
+                                  ]
+                                }
+                              ]
+                            },
+                            "seed": {
+                              "minimum": 0,
+                              "maximum": 2147483647,
+                              "type": "integer"
+                            },
+                            "stretch": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "taper": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "wobble": {
+                              "minimum": 0,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "eyeSize": {
+                              "minimum": 0.75,
+                              "maximum": 1.35,
+                              "type": "number"
+                            },
+                            "eyeGap": {
+                              "minimum": -1,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "mouth": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "smile"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "flat"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "open"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "cat"
+                                  ]
+                                }
+                              ]
+                            },
+                            "marking": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "cheeks"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "spots"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "belly"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "stripe"
+                                  ]
+                                }
+                              ]
+                            },
+                            "accent": {
+                              "minLength": 7,
+                              "maxLength": 7,
+                              "pattern": "^#[0-9a-fA-F]{6}$",
+                              "type": "string"
+                            },
+                            "accessory": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "none"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "antenna"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "sprout"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "bow"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "halo"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "glasses"
+                                  ]
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "required": [
+                          "endpointId",
+                          "model",
+                          "thinkingLevel",
+                          "attempts",
+                          "tooBig",
+                          "comeBack"
+                        ],
+                        "properties": {
+                          "endpointId": {
+                            "minLength": 1,
+                            "maxLength": 100,
+                            "type": "string"
+                          },
+                          "model": {
+                            "minLength": 1,
+                            "maxLength": 512,
+                            "type": "string"
+                          },
+                          "thinkingLevel": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "off"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "minimal"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "low"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "medium"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "high"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "xhigh"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "max"
+                                ]
+                              }
+                            ]
+                          },
+                          "attempts": {
+                            "minimum": 1,
+                            "maximum": 5,
+                            "type": "integer"
+                          },
+                          "tooBig": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "skip"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "compact"
+                                ]
+                              }
+                            ]
+                          },
+                          "comeBack": {
+                            "minimum": 0,
+                            "maximum": 60,
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "activeModel": {
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "channelId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "lastMessage": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "sequence",
+                            "channelId",
+                            "role",
+                            "text",
+                            "timestamp",
+                            "replyTo"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "sequence": {
+                              "type": "integer"
+                            },
+                            "channelId": {
+                              "type": "string"
+                            },
+                            "role": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "user"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "assistant"
+                                  ]
+                                }
+                              ]
+                            },
+                            "text": {
+                              "type": "string"
+                            },
+                            "timestamp": {
+                              "type": "number"
+                            },
+                            "replyTo": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "id",
+                                    "role",
+                                    "text"
+                                  ],
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "role": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "user"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "assistant"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "files": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "channelKey",
+                                  "name",
+                                  "mime",
+                                  "kind",
+                                  "size",
+                                  "status",
+                                  "uploader",
+                                  "messageKind",
+                                  "messageId",
+                                  "createdAt"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "channelKey": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "mime": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "image"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "video"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "text"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "pdf"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "other"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "scratch"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "size": {
+                                    "type": "integer"
+                                  },
+                                  "status": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "available"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "deleted"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "uploader": {
+                                    "type": "object",
+                                    "required": [
+                                      "kind",
+                                      "id",
+                                      "name"
+                                    ],
+                                    "properties": {
+                                      "kind": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "human"
+                                            ]
+                                          },
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "agent"
+                                            ]
+                                          },
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "discord"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      "id": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  },
+                                  "messageKind": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "chat"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "dm"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "group"
+                                        ]
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "messageId": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "createdAt": {
+                                    "type": "string"
+                                  },
+                                  "deleted": {
+                                    "type": "object",
+                                    "required": [
+                                      "by",
+                                      "at"
+                                    ],
+                                    "properties": {
+                                      "by": {
+                                        "type": "object",
+                                        "required": [
+                                          "kind",
+                                          "id",
+                                          "name"
+                                        ],
+                                        "properties": {
+                                          "kind": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "human"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "agent"
+                                                ]
+                                              },
+                                              {
+                                                "type": "string",
+                                                "enum": [
+                                                  "discord"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "id": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string"
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          },
+                                          "name": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      },
+                                      "at": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "scratch": {
+                                    "type": "object",
+                                    "required": [
+                                      "agentId",
+                                      "path"
+                                    ],
+                                    "properties": {
+                                      "agentId": {
+                                        "type": "string"
+                                      },
+                                      "path": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "author": {
+                              "type": "object",
+                              "required": [
+                                "userId",
+                                "name"
+                              ],
+                              "properties": {
+                                "userId": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "compaction": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "atPercent",
+                        "idleMinutes",
+                        "idlePercent"
+                      ],
+                      "properties": {
+                        "atPercent": {
+                          "minimum": 20,
+                          "maximum": 90,
+                          "type": "integer"
+                        },
+                        "idleMinutes": {
+                          "minimum": 0,
+                          "maximum": 1440,
+                          "description": "0 turns idle compaction off.",
+                          "type": "integer"
+                        },
+                        "idlePercent": {
+                          "minimum": 10,
+                          "maximum": 90,
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "heartbeat": {
+                      "type": "object",
+                      "allOf": [
+                        {
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "enabled",
+                            "minutes",
+                            "from",
+                            "to",
+                            "checklist"
+                          ],
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "minutes": {
+                              "minimum": 5,
+                              "maximum": 1440,
+                              "type": "integer"
+                            },
+                            "from": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    ""
+                                  ]
+                                },
+                                {
+                                  "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            "to": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    ""
+                                  ]
+                                },
+                                {
+                                  "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            "checklist": {
+                              "maxLength": 4000,
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "timeZone"
+                          ],
+                          "properties": {
+                            "timeZone": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "instructions": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "timeNoteMinutes": {
+                      "type": "integer"
+                    },
+                    "todos": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "content",
+                          "status"
+                        ],
+                        "properties": {
+                          "content": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "pending"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "in_progress"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "completed"
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
             "description": "Default Response",
             "content": {
               "application/json": {

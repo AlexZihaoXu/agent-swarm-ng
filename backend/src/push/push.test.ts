@@ -488,6 +488,36 @@ describe('notifications', { timeout: 60_000 }, () => {
     }
   });
 
+  it('tells the owner once when an agent drops off its #1 model', async () => {
+    const { database, notifier, sent, sam, aether, settle, event } = await notifierSetup();
+    try {
+      notifier.observe(
+        event('model_choice', { active: 1, from: 0, reason: 'authentication, HTTP 401' }, 'platform', aether.id),
+      );
+      await settle();
+      expect(sent).toEqual([
+        expect.objectContaining({
+          userId: sam.id,
+          payload: expect.objectContaining({
+            title: 'Aether switched to model #2',
+            body: 'Its #1 model failed (authentication, HTTP 401). It tries #1 again later; check the model connection.',
+            tag: `model:${aether.id}`,
+            url: `/agents/${aether.id}`,
+          }),
+        }),
+      ]);
+      sent.length = 0;
+      // Moving further down, or back up, is not news.
+      notifier.observe(event('model_choice', { active: 2, from: 1 }, 'platform', aether.id));
+      notifier.observe(event('model_choice', { active: 0, from: 2 }, 'platform', aether.id));
+      await settle();
+      expect(sent).toEqual([]);
+    } finally {
+      notifier.close();
+      await database.close();
+    }
+  });
+
   it('sends critical events to admin only', async () => {
     const { database, notifier, sent, store, settle } = await notifierSetup();
     try {

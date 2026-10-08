@@ -30,6 +30,8 @@ export type UsageRow = {
   cost: number;
   /** `entry:<agentId>:<entryId>` for a message of the agent's saved session (shared with the backfill), else null. */
   sourceKey: string | null;
+  /** The endpoint that answered, when known (a fallback model's); else the agent's own (withEndpoints). */
+  endpointId?: string;
 };
 
 type Log = { error: (detail: unknown, message?: string) => void };
@@ -58,7 +60,10 @@ export function usageRow(
  * Inserts rows, skipping those whose sourceKey is already saved (SQLite's createMany cannot skip duplicates). A row
  * written meanwhile by the other writer (live recording vs. backfill) only costs a per-row retry, never a double count.
  */
-export async function insertUsage(database: PlatformStore, rows: (UsageRow & { endpointId: string | null })[]) {
+export async function insertUsage(
+  database: PlatformStore,
+  rows: (Omit<UsageRow, 'endpointId'> & { endpointId: string | null })[],
+) {
   if (!rows.length) return 0;
   const client = database.client;
   const keys = rows.flatMap(row => (row.sourceKey ? [row.sourceKey] : []));
@@ -159,7 +164,7 @@ export async function withEndpoints(database: PlatformStore, rows: UsageRow[]) {
   });
   const endpoints = new Map(agents.map(agent => [agent.id, agent.endpointId]));
   return rows.map(row => {
-    const endpointId = endpoints.get(row.agentId);
+    const endpointId = row.endpointId ?? endpoints.get(row.agentId);
     return {
       ...row,
       endpointId: endpointId && endpointId !== CODEX_CONNECTION && row.provider !== 'openai-codex' ? endpointId : null,

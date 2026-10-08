@@ -1,3 +1,4 @@
+import { ConnectionError } from './chat-connection';
 import { TerminalWatcher } from './computer-use/terminal-watcher';
 import { AgentTimers } from './agent-timers';
 import { createTimeTools } from './time-tools';
@@ -459,8 +460,8 @@ export class DmBroker {
       const decision = await decide(
         {
           name: agent.name,
-          model: agent.model,
-          thinkingLevel: agent.thinkingLevel,
+          model: connection.choice.model,
+          thinkingLevel: connection.choice.thinkingLevel,
           baseUrl: connection.baseUrl,
           apiKey: connection.apiKey,
           limits: connection.limits,
@@ -899,7 +900,11 @@ export class DmBroker {
     // The owner's time zone (docs/users.md#time-zone): times for them are told and taken in it.
     const owner = await this.organizations.owner(agent.organizationId);
     const zone = owner?.timeZone || platformZone();
-    const connection = await this.connections.forAgent(agent, context.signal);
+    // Every ranked model's connection (docs/agent-models.md): the run starts on the first one it can use.
+    const chain = await this.connections.forChain(agent, context.signal);
+    const reachable = chain.find(item => item.connection);
+    if (!reachable) throw new ConnectionError(400, chain[0]!.unreachable!);
+    const connection = reachable.connection!;
     const human = await this.database.context(
       channel.id,
       incoming.source ? undefined : incoming.id,
@@ -1008,8 +1013,8 @@ ${preview.text}`
       context,
       {
         name: agent.name,
-        model: agent.model,
-        thinkingLevel: agent.thinkingLevel,
+        model: reachable.choice.model,
+        thinkingLevel: reachable.choice.thinkingLevel,
         baseUrl: connection.baseUrl,
         apiKey: connection.apiKey,
         limits: connection.limits,
@@ -1148,6 +1153,11 @@ ${preview.text}`
         ...(branch ? [createNoteTool(branch)] : []),
       ],
       {
+        fallback: {
+          chains: this.connections.chains,
+          choices: chain,
+          secrets: chain.flatMap(item => [item.connection?.apiKey ?? '', item.connection?.accessKey ?? '']),
+        },
         sessionStore: this.sessions,
         timeNotes: {
           zone,
@@ -1338,8 +1348,8 @@ ${preview.text}`
       const session = await createChatSession(
         {
           name: agent.name,
-          model: agent.model,
-          thinkingLevel: agent.thinkingLevel,
+          model: connection.choice.model,
+          thinkingLevel: connection.choice.thinkingLevel,
           baseUrl: connection.baseUrl,
           apiKey: connection.apiKey,
           limits: connection.limits,
@@ -1411,8 +1421,8 @@ ${preview.text}`
         deep: this.deep,
         config: {
           name: agent.name,
-          model: agent.model,
-          thinkingLevel: agent.thinkingLevel,
+          model: connection.choice.model,
+          thinkingLevel: connection.choice.thinkingLevel,
           baseUrl: connection.baseUrl,
           apiKey: connection.apiKey,
           limits: connection.limits,

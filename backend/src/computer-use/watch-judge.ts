@@ -254,8 +254,8 @@ export function createWatchJudge(deps: {
       const { model, modelRuntime } = await resolveChatModel(
         {
           name: agent.name,
-          model: agent.model,
-          thinkingLevel: agent.thinkingLevel,
+          model: connection.choice.model,
+          thinkingLevel: connection.choice.thinkingLevel,
           baseUrl: connection.baseUrl,
           apiKey: connection.apiKey,
           limits: connection.limits,
@@ -270,7 +270,7 @@ export function createWatchJudge(deps: {
       const verdict = await judgeWatch({
         model,
         modelRuntime,
-        thinkingLevel: agent.thinkingLevel,
+        thinkingLevel: connection.choice.thinkingLevel,
         channelId: channel.id,
         fork,
         tools: input.tools(model.input.includes('image')),

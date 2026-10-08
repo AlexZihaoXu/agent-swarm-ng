@@ -104,6 +104,8 @@ model Agent {
   endpointId          String
   model               String
   thinkingLevel       ThinkingLevel
+  /// Fallback models (docs/agent-models.md): #1's options and the ranked fallbacks with theirs (JSON; model-chain.ts).
+  modelChain          String               @default("{}")
   /// Background compaction during work starts at this share of the context window (percent).
   compactAtPercent    Int                  @default(65)
   /// After this many idle minutes (0 = never), compact if the context is at least idleCompactPercent full.

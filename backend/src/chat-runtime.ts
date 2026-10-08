@@ -36,6 +36,7 @@ import { memoryGuidance } from './memory/guidance';
 import { neutralizeLabels } from './message-text';
 import type { EndpointLimits } from './endpoint-store';
 import { detectedLimits } from './endpoint-detection';
+import { prepareFallback, type SessionFallback } from './model-fallback';
 
 export type Channel = { id: string; kind: 'platform-chat' | 'agent-dm'; agentId: string };
 export type AgentMessageSource = {
@@ -399,13 +400,31 @@ export async function createChatSession(
   additionalTools: AgentTool[] = [],
   subscriptionRuntime?: ModelRuntime,
   restoredManager?: SessionManager,
+  /** A main run walks the agent's fallback chain (docs/agent-models.md); `config`'s own model is then unused. */
+  fallback?: SessionFallback,
 ) {
   // Fail closed: every granted tool declares what it does (tool-access.ts), which heartbeats and help rely on.
   const untagged = additionalTools.find(tool => !accessOf(tool));
   if (untagged) throw new Error(`Tool ${untagged.name} has no access class.`);
-  const { model, modelRuntime } = await resolveChatModel(config, subscriptionRuntime);
+  const chain = fallback
+    ? await prepareFallback(fallback, ({ choice, connection }) =>
+        resolveChatModel(
+          {
+            ...config,
+            model: choice.model,
+            thinkingLevel: choice.thinkingLevel,
+            baseUrl: connection.baseUrl,
+            apiKey: connection.apiKey,
+            limits: connection.limits,
+          },
+          connection.subscriptionRuntime,
+        ),
+      )
+    : undefined;
+  const { model, modelRuntime } = chain ?? (await resolveChatModel(config, subscriptionRuntime));
+  const thinkingLevel = chain?.thinkingLevel ?? config.thinkingLevel;
   const levels = model.reasoning ? getSupportedThinkingLevels(model) : ['off'];
-  if (!levels.includes(config.thinkingLevel)) throw new Error('Unsupported thinking level');
+  if (!levels.includes(thinkingLevel)) throw new Error('Unsupported thinking level');
 
   const sendMessage = defineTool({
     name: 'send_message',
@@ -556,7 +575,7 @@ export async function createChatSession(
   const { session } = await createAgentSession({
     model,
     modelRuntime,
-    thinkingLevel: config.thinkingLevel,
+    thinkingLevel,
     noTools: 'all',
     tools: [...granted, help].map(tool => tool.name),
     customTools: [...granted, help],
@@ -581,5 +600,6 @@ export async function createChatSession(
     session.dispose();
     throw new Error('Unsafe chat session configuration');
   }
+  chain?.install(session);
   return session;
 }

@@ -9,7 +9,11 @@ const mocks = vi.hoisted(() => ({ evaluate: vi.fn(), connection: vi.fn() }));
 vi.mock('./reaction-triage', () => ({ evaluateReaction: mocks.evaluate }));
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.connection.mockResolvedValue({ baseUrl: 'http://mock.invalid/v1', apiKey: 'mock-secret' });
+  mocks.connection.mockResolvedValue({
+    baseUrl: 'http://mock.invalid/v1',
+    apiKey: 'mock-secret',
+    choice: { model: 'mock-model', thinkingLevel: 'off' },
+  });
 });
 async function fixture() {
   const db = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));

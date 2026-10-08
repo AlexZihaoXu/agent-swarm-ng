@@ -121,6 +121,7 @@ export const RULES: Record<string, Rule> = {
   'PATCH /api/agents/:id': agent,
   'DELETE /api/agents/:id': agent,
   'POST /api/agents/:id/stop': agent,
+  'POST /api/agents/:id/models/first': agent,
   'GET /api/agents/:id/activity': agent,
   'GET /api/agents/:id/activity/entry': agent,
   'GET /api/agents/:id/scratch': agent,

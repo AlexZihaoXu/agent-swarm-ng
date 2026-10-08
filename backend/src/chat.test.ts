@@ -12,6 +12,7 @@ import { EndpointStore } from './endpoint-store';
 import { CodexProvider, CODEX_CONNECTION } from './codex-provider';
 import { getModels } from '@earendil-works/pi-ai/compat';
 import { createChatSession, MODEL_RETRY, modelCapabilities } from './chat-runtime';
+import { DEFAULT_OPTIONS } from './model-chain';
 import { ActivityStore } from './activity-store';
 
 type RequestBody = {
@@ -1149,8 +1150,8 @@ describe('Pi chat and platform channel boundary', () => {
       try {
         const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
         const response = await app.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent) });
-        // A permanent failure is retried (the model request only), then reported.
-        expect(captured).toHaveLength(mode === 'http-error' ? 1 + MODEL_RETRY.maxRetries : 1);
+        // A failure is tried again (the model request only) up to the model's attempts, then reported.
+        expect(captured).toHaveLength(mode === 'http-error' ? DEFAULT_OPTIONS.attempts : 1);
         expect(response.body).toContain('"type":"error"');
         expect(JSON.stringify(channelEvents(response.body))).not.toContain('PRIVATE');
         expect(response.body).not.toContain('!literal-key-$NOT_AN_ENV_LOOKUP');

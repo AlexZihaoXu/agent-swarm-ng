@@ -10,6 +10,8 @@ export type UsageTag = {
    * backfill uses for the same saved entry, so one message is never counted twice.
    */
   saved?: boolean;
+  /** The endpoint of the model in use (fallback models, docs/agent-models.md), read when each call completes. */
+  endpointId?: () => string | undefined;
 };
 
 type Message = {
@@ -35,6 +37,7 @@ export function recordMessage(message: Message, tag: UsageTag, sourceKey: string
       model: message.model ?? 'unknown',
       purpose: purposeOf(tag),
       sourceKey,
+      ...(tag.endpointId?.() ? { endpointId: tag.endpointId() } : {}),
     }),
   );
 }
@@ -56,6 +59,7 @@ export function meterSession(
       // The session appends the message to its manager right after notifying listeners (same tick): its entry ID is
       // known one microtask later.
       const purpose = purposeOf(tag);
+      const endpointId = tag.endpointId?.();
       queueMicrotask(() => {
         const entries = session.sessionManager.getEntries();
         let id: string | undefined;
@@ -66,7 +70,11 @@ export function meterSession(
             break;
           }
         }
-        recordMessage(message, { ...tag, purpose }, id ? `entry:${tag.agentId}:${id}` : null);
+        recordMessage(
+          message,
+          { ...tag, purpose, endpointId: () => endpointId },
+          id ? `entry:${tag.agentId}:${id}` : null,
+        );
       });
     } else if (event.type === 'compaction_end' && event.result?.usage) {
       const model = session.model;

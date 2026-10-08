@@ -1,3 +1,4 @@
+import { ownChainOnly } from '../model-chain';
 import type { PlatformStore } from '../platform-store';
 import { hashPassword } from '../auth/sessions';
 import { ADMIN_ID } from './reach';
@@ -144,12 +145,23 @@ export class Users {
     if (!user) throw new UserError('User not found.', 404);
     if (user.role === 'admin') throw new UserError('The admin account cannot be deleted.', 403);
     const ended = await client.userSession.findMany({ where: { userId: id }, select: { tokenHash: true } });
+    const chains = await client.agent.findMany({
+      where: { organization: { ownerId: id } },
+      select: { id: true, modelChain: true },
+    });
     await client.$transaction([
       // Their agents' endpoints were theirs: cleared, so none runs on admin's endpoint of the same name unasked.
       client.agent.updateMany({
         where: { organization: { ownerId: id }, endpointId: { not: 'provider:openai-codex' } },
         data: { endpointId: '' },
       }),
+      // So were their fallback models' (docs/agent-models.md).
+      ...chains.map(agent =>
+        client.agent.update({
+          where: { id: agent.id },
+          data: { modelChain: ownChainOnly(agent.modelChain, 'provider:openai-codex') },
+        }),
+      ),
       client.organization.updateMany({ where: { ownerId: id }, data: { ownerId: ADMIN_ID } }),
       client.discordAccount.deleteMany({ where: { userId: id } }),
       client.user.delete({ where: { id } }),

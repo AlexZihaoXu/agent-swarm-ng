@@ -916,6 +916,22 @@ export interface paths {
     patch: operations['updateChatAgent'];
     trace?: never;
   };
+  '/api/agents/{id}/models/first': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['useFirstModel'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/chat': {
     parameters: {
       query?: never;
@@ -6621,6 +6637,15 @@ export interface operations {
                 accent?: string;
                 accessory?: 'none' | 'antenna' | 'sprout' | 'bow' | 'halo' | 'glasses';
               } | null;
+              models: {
+                endpointId: string;
+                model: string;
+                thinkingLevel: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+                attempts: number;
+                tooBig: 'skip' | 'compact';
+                comeBack: number;
+              }[];
+              activeModel: number;
               id: string;
               channelId: string;
               createdAt: number;
@@ -6759,6 +6784,15 @@ export interface operations {
               accent?: string;
               accessory?: 'none' | 'antenna' | 'sprout' | 'bow' | 'halo' | 'glasses';
             } | null;
+            models: {
+              endpointId: string;
+              model: string;
+              thinkingLevel: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+              attempts: number;
+              tooBig: 'skip' | 'compact';
+              comeBack: number;
+            }[];
+            activeModel: number;
             id: string;
             channelId: string;
             createdAt: number;
@@ -7048,6 +7082,14 @@ export interface operations {
           };
           timeNoteMinutes?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 10 | 12 | 15 | 20 | 30 | 60;
           instructions?: string;
+          models?: {
+            endpointId: string;
+            model: string;
+            thinkingLevel: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+            attempts: number;
+            tooBig: 'skip' | 'compact';
+            comeBack: number;
+          }[];
         };
       };
     };
@@ -7078,6 +7120,15 @@ export interface operations {
               accent?: string;
               accessory?: 'none' | 'antenna' | 'sprout' | 'bow' | 'halo' | 'glasses';
             } | null;
+            models: {
+              endpointId: string;
+              model: string;
+              thinkingLevel: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+              attempts: number;
+              tooBig: 'skip' | 'compact';
+              comeBack: number;
+            }[];
+            activeModel: number;
             id: string;
             channelId: string;
             createdAt: number;
@@ -7187,6 +7238,139 @@ export interface operations {
       };
       /** @description Default Response */
       503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+    };
+  };
+  useFirstModel: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            name: string;
+            endpointId: string;
+            model: string;
+            thinkingLevel: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+            avatar?: {
+              shape: 'pebble' | 'squircle' | 'gumdrop' | 'triangle' | 'bean' | 'pear' | 'capsule' | 'diamond';
+              color: string;
+              eyeStyle?: 'pill' | 'round';
+              seed: number;
+              stretch?: number;
+              taper?: number;
+              wobble?: number;
+              eyeSize?: number;
+              eyeGap?: number;
+              mouth?: 'none' | 'smile' | 'flat' | 'open' | 'cat';
+              marking?: 'none' | 'cheeks' | 'spots' | 'belly' | 'stripe';
+              accent?: string;
+              accessory?: 'none' | 'antenna' | 'sprout' | 'bow' | 'halo' | 'glasses';
+            } | null;
+            models: {
+              endpointId: string;
+              model: string;
+              thinkingLevel: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+              attempts: number;
+              tooBig: 'skip' | 'compact';
+              comeBack: number;
+            }[];
+            activeModel: number;
+            id: string;
+            channelId: string;
+            createdAt: number;
+            lastMessage: {
+              id: string;
+              sequence: number;
+              channelId: string;
+              role: 'user' | 'assistant';
+              text: string;
+              timestamp: number;
+              replyTo: {
+                id: string;
+                role: 'user' | 'assistant';
+                text: string;
+              } | null;
+              files?: {
+                id: string;
+                channelKey: string;
+                name: string;
+                mime: string;
+                kind: 'image' | 'video' | 'text' | 'pdf' | 'other' | 'scratch';
+                size: number;
+                status: 'available' | 'deleted';
+                uploader: {
+                  kind: 'human' | 'agent' | 'discord';
+                  id: string | null;
+                  name: string;
+                };
+                messageKind: 'chat' | 'dm' | 'group' | null;
+                messageId: string | null;
+                createdAt: string;
+                deleted?: {
+                  by: {
+                    kind: 'human' | 'agent' | 'discord';
+                    id: string | null;
+                    name: string;
+                  };
+                  at: string | null;
+                };
+                scratch?: {
+                  agentId: string;
+                  path: string;
+                };
+              }[];
+              author?: {
+                userId: string;
+                name: string;
+              };
+            } | null;
+            compaction: {
+              atPercent: number;
+              /** @description 0 turns idle compaction off. */
+              idleMinutes: number;
+              idlePercent: number;
+            };
+            heartbeat: {
+              enabled: boolean;
+              minutes: number;
+              from: '' | string;
+              to: '' | string;
+              checklist: string;
+            } & {
+              timeZone: string;
+            };
+            instructions: string;
+            organizationId: string;
+            timeNoteMinutes: number;
+            todos: {
+              content: string;
+              status: 'pending' | 'in_progress' | 'completed';
+            }[];
+          };
+        };
+      };
+      /** @description Default Response */
+      404: {
         headers: {
           [name: string]: unknown;
         };

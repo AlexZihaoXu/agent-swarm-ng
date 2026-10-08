@@ -63,6 +63,8 @@ export class PlatformStore {
       endpointId: string;
       model: string;
       thinkingLevel: AgentInput['thinkingLevel'];
+      /** Fallback models: #1's options and the ranked rest (model-chain.ts chainColumns). */
+      modelChain?: string;
       compactAtPercent?: number;
       idleCompactMinutes?: number;
       idleCompactPercent?: number;

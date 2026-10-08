@@ -107,6 +107,11 @@ export class PushNotifier {
       ).catch(this.fail);
       return;
     }
+    // Fallback models (docs/agent-models.md): told once when an agent drops off its #1, not on every later switch.
+    if (event.type === 'model_choice' && event.from === 0 && Number(event.active) > 0) {
+      void this.fallback(event.agentId, Number(event.active), String(event.reason ?? '')).catch(this.fail);
+      return;
+    }
     if (event.runId === 'platform') return;
     if (event.type === 'run_queued' || event.type === 'run_started') this.run(event);
     else if (event.type === 'error') this.run(event).errors.push(String(event.message ?? ''));
@@ -165,6 +170,23 @@ export class PushNotifier {
         title: `${agent.name} couldn’t finish`,
         text: plainText(reason) || 'Its run ended on an error.',
         url: `/chat/agents/${encodeURIComponent(agentId)}`,
+      },
+      0,
+    );
+  }
+
+  private async fallback(agentId: string, active: number, reason: string) {
+    const agent = await (await this.client()).agent.findUnique({ where: { id: agentId }, select: { name: true } });
+    const owner = await this.deps.reach.ownerOfAgent(agentId);
+    if (!agent || !owner) return;
+    this.queue(
+      owner,
+      {
+        kind: 'stuck',
+        tag: `model:${agentId}`,
+        title: `${agent.name} switched to model #${active + 1}`,
+        text: `Its #1 model failed${reason ? ` (${reason})` : ''}. It tries #1 again later; check the model connection.`,
+        url: `/agents/${encodeURIComponent(agentId)}`,
       },
       0,
     );

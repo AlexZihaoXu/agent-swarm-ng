@@ -153,8 +153,8 @@ export class ReactionCoordinator {
           evaluateReaction(
             {
               name: agent.name,
-              model: agent.model,
-              thinkingLevel: agent.thinkingLevel,
+              model: connection.choice.model,
+              thinkingLevel: connection.choice.thinkingLevel,
               baseUrl: connection.baseUrl,
               apiKey: connection.apiKey,
               limits: connection.limits,

@@ -6,6 +6,9 @@ import { isPublicUrl } from './public-address';
 import { databaseFile } from '../database-location';
 import type { EndpointStore } from '../endpoint-store';
 import { ADMIN_ID, type Reach } from './reach';
+import { choicesOf, ModelChains, type ModelChoice } from '../model-chain';
+
+type ChainAgent = Parameters<typeof choicesOf>[0] & { id: string };
 
 /**
  * Model connections belong to people (docs/users.md#model-connections): their API endpoints and their ChatGPT login.
@@ -36,10 +39,14 @@ export class Connections {
     return (await this.reach.ownerOfAgent(agentId)) ?? ADMIN_ID;
   }
 
-  async forAgent(agent: { id: string; endpointId: string }, signal: AbortSignal) {
-    const owner = await this.ownerOfAgent(agent.id);
+  /** Each agent's place in its fallback chain (docs/agent-models.md). */
+  readonly chains = new ModelChains();
+
+  /** One endpoint of the agent's organization owner, checked like every turn's. */
+  async forEndpoint(agentId: string, endpointId: string, signal: AbortSignal) {
+    const owner = await this.ownerOfAgent(agentId);
     const connection = await resolveChatConnection(
-      agent.endpointId,
+      endpointId,
       await this.endpoints.readFor(owner),
       this.codex(owner),
       signal,
@@ -49,6 +56,35 @@ export class Connections {
     if (owner !== ADMIN_ID && !connection.subscriptionRuntime && !(await isPublicUrl(new URL(connection.baseUrl))))
       throw new ConnectionError(400, 'This endpoint no longer points at a public address. Check it in Settings.');
     return connection;
+  }
+
+  /**
+   * The model the agent is on now, with its connection: forks and side calls (triage, checks, sleep, watches) use it.
+   * Its main turns walk the whole chain (forChain).
+   */
+  async forAgent(agent: ChainAgent, signal: AbortSignal) {
+    const choices = choicesOf(agent);
+    const choice = choices[this.chains.active(agent.id, choices)]!;
+    return { ...(await this.forEndpoint(agent.id, choice.endpointId, signal)), choice };
+  }
+
+  /** Every choice's connection, or why it cannot be reached (a choice that fails here is skipped at once). */
+  async forChain(agent: ChainAgent, signal: AbortSignal) {
+    const choices = choicesOf(agent);
+    const settled = await Promise.allSettled(
+      choices.map(choice => this.forEndpoint(agent.id, choice.endpointId, signal)),
+    );
+    signal.throwIfAborted();
+    return choices.map((choice: ModelChoice, index) => {
+      const result = settled[index]!;
+      return result.status === 'fulfilled'
+        ? { choice, connection: result.value }
+        : {
+            choice,
+            unreachable:
+              result.reason instanceof ConnectionError ? result.reason.message : 'Its connection could not be reached.',
+          };
+    });
   }
 
   /** A deleted person's endpoints and ChatGPT login go with them. */

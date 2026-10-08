@@ -255,3 +255,72 @@ export class BackgroundCompactor {
     return Object.fromEntries(this.published);
   }
 }
+
+/**
+ * Fallback models' "compact to fit" (docs/agent-models.md): the session has just moved to a model whose context the
+ * conversation does not fit. That model summarizes the older part, as much of it as it can read (the newest first;
+ * anything older was summarized before, and that summary goes along), and the summary replaces it at once. Returns
+ * whether it compacted.
+ */
+export async function compactToFit(session: AgentSession, agentId: string, signal: AbortSignal) {
+  const model = session.model;
+  if (!model) return false;
+  const window = model.contextWindow;
+  const reserveTokens = Math.min(16384, Math.max(1024, Math.floor(window / 4)));
+  const settings = {
+    enabled: true,
+    reserveTokens,
+    keepRecentTokens: Math.min(20000, Math.max(512, Math.floor(window / 4))),
+  };
+  const manager = session.sessionManager;
+  const preparation = prepareBackgroundCompaction(manager.getBranch().slice(), settings);
+  if (!preparation) return false;
+  const text = (content: string) => estimateTokens({ role: 'user', content, timestamp: 0 });
+  // Room for what it reads: its window less the reply room, the summary prompt, the previous summary and the split
+  // turn's start.
+  let room =
+    window -
+    reserveTokens -
+    4096 -
+    (preparation.previousSummary ? text(preparation.previousSummary) : 0) -
+    preparation.turnPrefixMessages.reduce((total, item) => total + estimateTokens(item), 0);
+  const readable: typeof preparation.messagesToSummarize = [];
+  for (let index = preparation.messagesToSummarize.length - 1; index >= 0; index--) {
+    const message = preparation.messagesToSummarize[index]!;
+    const tokens = estimateTokens(message);
+    if (tokens > room) break;
+    room -= tokens;
+    readable.unshift(message);
+  }
+  const request = await (
+    session as unknown as {
+      _getSummarizationRequestAuth(model: NonNullable<AgentSession['model']>): Promise<{
+        model: NonNullable<AgentSession['model']>;
+        apiKey?: string;
+        headers?: Record<string, string>;
+        env?: Record<string, string>;
+      }>;
+    }
+  )._getSummarizationRequestAuth(model);
+  const result = await compact(
+    { ...preparation, messagesToSummarize: readable },
+    request.model,
+    request.apiKey,
+    request.headers,
+    undefined,
+    signal,
+    session.thinkingLevel,
+    meterStream(session.agent.streamFunction, { agentId, purpose: 'compaction' }),
+    request.env,
+    session.settingsManager.getRetrySettings(),
+  );
+  signal.throwIfAborted();
+  const { summary, firstKeptEntryId, tokensBefore, details, usage } = result;
+  manager.appendCompaction(summary, firstKeptEntryId, tokensBefore, details, false, usage);
+  const messages = manager.buildSessionContext().messages;
+  // The failed response stays in the session's history, not in what the model reads next.
+  const last = messages.at(-1) as { role?: string; stopReason?: string } | undefined;
+  session.agent.state.messages =
+    last?.role === 'assistant' && last.stopReason === 'error' ? messages.slice(0, -1) : messages;
+  return true;
+}

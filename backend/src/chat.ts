@@ -34,6 +34,8 @@ import { parseTodos } from './todos';
 import { TIME_NOTE_CHOICES } from './time-notes';
 import { checkMemoryCap } from './users/store';
 import { ADMIN_ID, Reach, connectionOwner, viewerOf } from './users/reach';
+import { failureReason } from './model-fallback';
+import { ATTEMPTS, chainColumns, choicesOf, COME_BACK, MAX_CHOICES, type ModelChains } from './model-chain';
 
 const Thinking = Type.Union(Object.values(ThinkingLevel).map(value => Type.Literal(value)));
 const Selection = Type.Object(
@@ -87,9 +89,28 @@ const Heartbeat = Type.Object(
   },
   { additionalProperties: false },
 );
+/** One ranked model (fallback models, docs/agent-models.md): #1 is the agent's own endpoint, model and thinking. */
+const ModelChoice = Type.Object(
+  {
+    endpointId: Selection.properties.endpointId,
+    model: Selection.properties.model,
+    thinkingLevel: Thinking,
+    /** Tries before moving on to the next model (errors that cannot succeed move on at once). */
+    attempts: Type.Integer({ minimum: ATTEMPTS.min, maximum: ATTEMPTS.max }),
+    /** When the conversation is bigger than this model's context: skip it, or compact first and use it. */
+    tooBig: Type.Union([Type.Literal('skip'), Type.Literal('compact')]),
+    /** Minutes after it failed before the next call tries it once again; 0: only "Use #1 again". */
+    comeBack: Type.Integer({ minimum: COME_BACK.min, maximum: COME_BACK.max }),
+  },
+  { additionalProperties: false },
+);
 const Agent = Type.Object(
   {
     ...Selection.properties,
+    /** Its ranked models, #1 first (fallback models). */
+    models: Type.Array(ModelChoice),
+    /** The one it is on now (0 is #1): a lower one after a failure, until #1 works again. */
+    activeModel: Type.Integer(),
     avatar: Type.Optional(Type.Union([AvatarSchema, Type.Null()])),
     id: Type.String(),
     channelId: Type.String(),
@@ -152,10 +173,14 @@ const messageView = (message: Awaited<ReturnType<PlatformStore['appendMessage']>
 });
 function agentView(
   agent: NonNullable<Awaited<ReturnType<PlatformStore['findAgent']>>>,
+  chains: ModelChains,
   files?: Map<string, FileView[]>,
 ) {
   const channel = agent.channels[0];
+  const models = choicesOf(agent);
   return {
+    models,
+    activeModel: chains.active(agent.id, models),
     id: agent.id,
     avatar: agent.avatar ? (JSON.parse(agent.avatar) as AgentAvatar) : null,
     createdAt: agent.createdAt.getTime(),
@@ -198,6 +223,14 @@ export function registerChat(
   connections: Connections = new Connections(store, new Reach(database), codex),
 ) {
   const runs = new AgentRuns();
+  // Fallback models (docs/agent-models.md): the "on #2" badge and the owner's notification follow the active one.
+  connections.chains.subscribe((agentId, change) =>
+    runs.modelChoice(agentId, {
+      active: change.active,
+      from: change.from,
+      ...(change.error ? { reason: failureReason(change.error) } : {}),
+    }),
+  );
   const streams = createRunStreams(runs);
   const broker = new DmBroker(database, store, codex, runs, computers, screenshots, files, connections);
   const channelFiles = broker.files;
@@ -380,7 +413,10 @@ export function registerChat(
         'chat',
         page.agents.flatMap(agent => (agent.channels[0].messages[0] ? [agent.channels[0].messages[0].id] : [])),
       );
-      return { agents: page.agents.map(agent => agentView(agent, files)), nextCursor: page.nextCursor };
+      return {
+        agents: page.agents.map(agent => agentView(agent, connections.chains, files)),
+        nextCursor: page.nextCursor,
+      };
     },
   );
   app.get<{ Params: { channelId: string }; Querystring: { before?: number; limit?: number; around?: string } }>(
@@ -471,7 +507,10 @@ export function registerChat(
       if (!organizationId) return reply.code(404).send({ message: 'Organization not found.' });
       const problem = await checkSelection(input, (await connections.reach.ownerOf(organizationId)) ?? ADMIN_ID);
       if (problem) return reply.code(problem.status).send({ message: problem.message });
-      return agentView(await database.createAgent({ ...input, name: input.name.trim(), organizationId }));
+      return agentView(
+        await database.createAgent({ ...input, name: input.name.trim(), organizationId }),
+        connections.chains,
+      );
     },
   );
 
@@ -482,6 +521,7 @@ export function registerChat(
       heartbeat?: Partial<Static<typeof Heartbeat>>;
       timeNoteMinutes?: number;
       instructions?: string;
+      models?: Static<typeof ModelChoice>[];
     };
   }>(
     '/api/agents/:id',
@@ -500,6 +540,8 @@ export function registerChat(
             /** Minutes per clock window with one time note while working (0: off; docs/agent-time.md#time-notes). */
             timeNoteMinutes: Type.Optional(Type.Union(TIME_NOTE_CHOICES.map(value => Type.Literal(value)))),
             instructions: Type.Optional(Type.String({ maxLength: 20000 })),
+            /** The whole ranked list, #1 first (replaces endpointId, model and thinkingLevel; docs/agent-models.md). */
+            models: Type.Optional(Type.Array(ModelChoice, { minItems: 1, maxItems: MAX_CHOICES })),
           },
           { additionalProperties: false, minProperties: 1 },
         ),
@@ -524,24 +566,36 @@ export function registerChat(
       try {
         const record = await database.findAgent(id);
         if (!record) return reply.code(404).send({ message: 'Agent not found.' });
-        const next = {
-          name: (request.body.name ?? record.name).trim(),
-          endpointId: request.body.endpointId ?? record.endpointId,
-          model: request.body.model ?? record.model,
-          thinkingLevel: request.body.thinkingLevel ?? record.thinkingLevel,
-        };
-        if (!next.name) return reply.code(400).send({ message: 'Choose a name.' });
-        if (
-          next.endpointId !== record.endpointId ||
-          next.model !== record.model ||
-          next.thinkingLevel !== record.thinkingLevel
-        ) {
-          const problem = await checkSelection(next, await connections.ownerOfAgent(id));
+        const body = request.body;
+        if (body.models && (body.endpointId || body.model || body.thinkingLevel))
+          return reply.code(400).send({ message: 'Send the ranked models or one model, not both.' });
+        const current = choicesOf(record);
+        const models = body.models ?? [
+          {
+            ...current[0]!,
+            endpointId: body.endpointId ?? record.endpointId,
+            model: body.model ?? record.model,
+            thinkingLevel: body.thinkingLevel ?? record.thinkingLevel,
+          },
+          ...current.slice(1),
+        ];
+        const key = (choice: { endpointId: string; model: string; thinkingLevel: string }) =>
+          `${choice.endpointId}\0${choice.model}\0${choice.thinkingLevel}`;
+        if (new Set(models.map(key)).size !== models.length)
+          return reply.code(400).send({ message: 'Each model can be in the list once.' });
+        const name = (body.name ?? record.name).trim();
+        if (!name) return reply.code(400).send({ message: 'Choose a name.' });
+        // Only a newly added model is checked: one already saved may be waiting for its connection to come back.
+        const saved = new Set(current.map(key));
+        const owner = await connections.ownerOfAgent(id);
+        for (const choice of models.filter(choice => !saved.has(key(choice)))) {
+          const problem = await checkSelection(choice, owner);
           if (problem)
             return reply.code(problem.status === 404 ? 400 : problem.status).send({ message: problem.message });
-          // A summary being written for the old model is not applied to the new one.
-          broker.forgetCompaction(id);
         }
+        // A summary being written for the old model is not applied to the new one.
+        if (key(models[0]!) !== key(current[0]!)) broker.forgetCompaction(id);
+        const next = { name, ...chainColumns(models) };
         const policy = request.body.compaction ?? {};
         const beat = request.body.heartbeat ?? {};
         const from = beat.from ?? record.heartbeatFrom,
@@ -564,12 +618,32 @@ export function registerChat(
             heartbeatChecklist: beat.checklist?.trim() ?? record.heartbeatChecklist,
             timeNoteMinutes: request.body.timeNoteMinutes ?? record.timeNoteMinutes,
           }),
+          connections.chains,
         );
       } catch {
         return reply.code(503).send({ message: 'Could not update the agent. Try again.' });
       } finally {
         active.delete(id);
       }
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/agents/:id/models/first',
+    {
+      schema: {
+        operationId: 'useFirstModel',
+        params: Type.Object({ id: Type.String({ minLength: 1, maxLength: 100 }) }),
+        response: { 200: Agent, 404: ErrorResponse },
+      },
+    },
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      const record = await database.findAgent(request.params.id);
+      if (!record) return reply.code(404).send({ message: 'Agent not found.' });
+      // "Use #1 again": its next model call starts on #1 (a run already going keeps the model it is on).
+      connections.chains.reset(record.id);
+      return agentView(record, connections.chains);
     },
   );
 
@@ -676,10 +750,12 @@ export function registerChat(
       try {
         const record = await database.findAgent(agentId);
         if (!record) return reply.code(404).send({ message: 'Agent not found.' });
-        const agent = agentView(record);
+        const agent = agentView(record, connections.chains);
         if (await database.findMessage(clientMessageId))
           return reply.code(409).send({ message: 'This message was already received. Reload the channel history.' });
-        await connections.forAgent(agent, controller.signal);
+        // Any reachable model will do: the run walks the agent's fallback chain (docs/agent-models.md).
+        const chain = await connections.forChain(record, controller.signal);
+        if (chain.every(item => item.unreachable)) throw new ConnectionError(400, chain[0]!.unreachable!);
         controller.signal.throwIfAborted();
         const fileTarget = { channelKey: chatKey(agent.channelId), uploader: { kind: 'human' as const } };
         await channelFiles.attachable(fileIds, fileTarget);

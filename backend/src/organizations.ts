@@ -1,3 +1,4 @@
+import { ownChainOnly } from './model-chain';
 import type { PlatformStore } from './platform-store';
 import type { Viewer } from './users/reach';
 
@@ -145,7 +146,12 @@ export class Organizations {
     if (kind === 'agent') {
       const agent = await db.agent.findUnique({
         where: { id },
-        select: { organizationId: true, endpointId: true, organization: { select: { ownerId: true } } },
+        select: {
+          organizationId: true,
+          endpointId: true,
+          modelChain: true,
+          organization: { select: { ownerId: true } },
+        },
       });
       if (!agent) throw new OrganizationError('Agent not found.', 404);
       if (agent.organizationId === to) return { dropped, moved: false };
@@ -192,6 +198,10 @@ export class Organizations {
             organizationId: to,
             ...(agent.organization.ownerId !== target.ownerId && agent.endpointId !== 'provider:openai-codex'
               ? { endpointId: '' }
+              : {}),
+            // Its fallback models on the old owner's endpoints go too (docs/agent-models.md).
+            ...(agent.organization.ownerId !== target.ownerId
+              ? { modelChain: ownChainOnly(agent.modelChain, 'provider:openai-codex') }
               : {}),
           },
         }),

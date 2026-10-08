@@ -27,6 +27,8 @@ import type { ActivityStore } from './activity-store';
 import { forkBasis, type ForkBasis } from './computer-use/watch-judge';
 import { CUE_LIMITS, inputReminder, knowledgeReminder, toolReminder, type CueRecall } from './memory/cues';
 import { meterSession } from './usage/meter';
+import type { ModelChains } from './model-chain';
+import { describeFallback, type PreparedChoice, type SessionFallback } from './model-fallback';
 
 /** Knowledge tools and help are never cues (their results are Knowledge already). */
 const KNOWLEDGE_TOOLS = new Set(['list_knowledge', 'search_knowledge', 'read_knowledge', 'help']);
@@ -34,6 +36,11 @@ import { MEMORY_TOOL_NAMES } from './memory/tools';
 import { lastNightNote, SAVE_BEFORE_FORGETTING } from './memory/guidance';
 
 export type InboxHooks = {
+  /**
+   * Fallback models (docs/agent-models.md): the run walks the agent's ranked choices. `secrets`: every choice's keys,
+   * kept out of activity like the first one's.
+   */
+  fallback?: { chains: ModelChains; choices: PreparedChoice[]; secrets: string[] };
   prepare?: (messages: ChannelMessage[]) => Promise<ChannelMessage[]>;
   complete?: (messages: ChannelMessage[], failed: boolean) => Promise<void>;
   sessionStore?: AgentSessionStore;
@@ -133,6 +140,16 @@ export async function runChat(
     const restored = await hooks.sessionStore?.load(channel.agentId);
     const manager = hooks.sessionStore ? (restored ?? SessionManager.inMemory()) : undefined;
     phase = 'creating agent session';
+    for (const secret of hooks.fallback?.secrets ?? []) activity.protect(secret);
+    const fallback: SessionFallback | undefined = hooks.fallback && {
+      chains: hooks.fallback.chains,
+      agentId: channel.agentId,
+      choices: hooks.fallback.choices,
+      emit: event => {
+        const note = describeFallback(event, hooks.fallback!.choices);
+        activity.record(note.kind, note.label, note.text);
+      },
+    };
     session = await createChatSession(
       config,
       restored ? [] : history,
@@ -151,12 +168,14 @@ export async function runChat(
       [...historyTools, ...web.tools],
       subscriptionRuntime,
       manager,
+      fallback,
     );
     // Model usage of every response (the dashboard): an unpromoted heartbeat's calls are its own purpose.
     meterSession(session, {
       agentId: channel.agentId,
       purpose: () => (promoted ? 'turn' : 'heartbeat'),
       saved: Boolean(hooks.sessionStore),
+      ...(fallback?.run ? { endpointId: () => fallback.run!.choice.endpointId } : {}),
     });
     if (hooks.sessionStore && !restored && session.sessionManager.getEntries().length)
       await hooks.sessionStore.save(channel.agentId, session.sessionManager);
@@ -472,7 +491,7 @@ export async function runChat(
         try {
           decision = await checkTodos({
             main,
-            thinkingLevel: config.thinkingLevel,
+            thinkingLevel: main.thinkingLevel,
             channelId: channel.id,
             todos,
             reads,
