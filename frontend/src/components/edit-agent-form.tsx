@@ -16,6 +16,7 @@ import { AgentModelSettings } from '@/components/agent-model-settings';
 import { AgentInstructionsSettings } from '@/components/agent-instructions-settings';
 import { AgentHeartbeatSettings } from '@/components/agent-heartbeat-settings';
 import { AgentTimeNoteSettings } from '@/components/agent-time-note-settings';
+import { AgentTimerSettings } from '@/components/agent-timer-settings';
 import { defaultAvatar, sameAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 import type { ChatAgent, RealAgent } from '@/use-chat';
 import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
@@ -26,6 +27,7 @@ import { renderAvatarPng, renderAvatarSvg, saveFile } from '@/lib/avatar-png';
 import {
   ChannelsIcon,
   ClockIcon,
+  AlarmIcon,
   ComputerIcon,
   DownloadIcon,
   HeartbeatIcon,
@@ -45,6 +47,7 @@ const sectionIcons = {
   Instructions: <InstructionsIcon />,
   Heartbeat: <HeartbeatIcon />,
   'Time notes': <ClockIcon />,
+  Timers: <AlarmIcon />,
   Computers: <ComputerIcon />,
   Scratchpad: <NotepadIcon />,
   Memory: <MemoryIcon />,
@@ -310,6 +313,13 @@ export function EditAgentForm({
                 key={`time-notes:${agent.id}`}
                 agent={{ ...agent, real: agent.real }}
                 onSaved={onModelSaved}
+                register={register}
+              />
+            )}
+            {agent.real && (
+              <AgentTimerSettings
+                key={`timers:${agent.id}`}
+                agent={{ ...agent, real: agent.real }}
                 register={register}
               />
             )}

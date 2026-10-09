@@ -208,6 +208,16 @@ export class AgentRuns {
       channelId: 'platform',
     });
   }
+  /** An agent's timers or reminders changed (set, cancelled, fired, edited by its owner): settings refresh. */
+  timersChanged(agentId: string) {
+    this.broadcast({
+      type: 'timers_updated',
+      eventId: crypto.randomUUID(),
+      runId: 'platform',
+      agentId,
+      channelId: 'platform',
+    });
+  }
   /** An agent's todo list changed (todo_write): dashboards show it live (docs/agent-todos.md). */
   todos(agentId: string, todos: unknown[]) {
     this.broadcast({

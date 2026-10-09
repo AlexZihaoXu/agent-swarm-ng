@@ -131,6 +131,8 @@ export const RULES: Record<string, Rule> = {
   'GET /api/agents/:id/avatar.png': agent,
   'PUT /api/agents/:id/avatar.png': agent,
   'GET /api/agents/:id/settings': agent,
+  'GET /api/agents/:id/timers': agent,
+  'PUT /api/agents/:id/timers': agent,
   'PATCH /api/agents/:id/settings': agent,
   'GET /api/agents/:id/memory': agent,
   'DELETE /api/agents/:id/memory': agent,

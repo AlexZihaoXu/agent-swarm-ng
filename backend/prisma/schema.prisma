@@ -158,6 +158,7 @@ model Agent {
   computerClaim       ComputerClaim?
   computerNotices     ComputerNotice[]
   timers              AgentTimer[]
+  pendingTimerEvents  PendingTimerEvent[]
   watches             ComputerWatch[]
   scratchFiles        ScratchFile[]
   recordings          AgentRecording[]
@@ -241,6 +242,20 @@ model ComputerWatch {
 }
 
 // An agent's own timer (fires once) or repeating reminder. Firing wakes the agent with a platform event.
+/// A timer or reminder firing not yet seen by its agent: saved with the firing, removed once a turn processed it, and
+/// delivered again (marked so) after a restart (agent-timers.ts).
+model PendingTimerEvent {
+  id        String   @id
+  agentId   String
+  kind      String
+  text      String
+  human     Boolean  @default(false)
+  createdAt DateTime @default(now())
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+}
+
 model AgentTimer {
   id          String    @id @default(uuid())
   agentId     String

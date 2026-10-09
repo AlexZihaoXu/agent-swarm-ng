@@ -35,6 +35,7 @@ import { TIME_NOTE_CHOICES } from './time-notes';
 import { checkMemoryCap } from './users/store';
 import { ADMIN_ID, Reach, connectionOwner, viewerOf } from './users/reach';
 import { failureReason } from './model-fallback';
+import { registerTimerRoutes } from './timer-routes';
 import { usageRecorder } from './usage/recorder';
 import { ATTEMPTS, chainColumns, choicesOf, COME_BACK, MAX_CHOICES, type ModelChains } from './model-chain';
 
@@ -270,6 +271,9 @@ export function registerChat(
   };
   registerActivityRoutes(app, database, broker.activity);
   registerScratchRoutes(app, database, broker.scratch);
+  registerTimerRoutes(app, database, broker.timers, (agentId, text) =>
+    broker.deliverPlatformEvent(agentId, 'timer', text, true),
+  );
   registerMemoryRoutes(app, database, broker.memory, broker.sleeper, broker.settings);
   registerOrganizationRoutes(app, broker.organizations, async (computerId, organizationId) => {
     await database.initialize();

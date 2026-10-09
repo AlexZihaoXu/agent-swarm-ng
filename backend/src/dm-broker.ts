@@ -179,8 +179,11 @@ export class DmBroker {
     this.scratch = new Scratchpad(database, this.settings);
     this.scratch.onActivity = ({ agentId, ...detail }) => runs.scratchActivity(agentId, detail);
     this.files.onDeleted = file => runs.fileDeleted(file);
-    this.timers = new AgentTimers(database, (agentId, kind, text, human) =>
-      this.deliverPlatformEvent(agentId, kind, text, human),
+    this.timers = new AgentTimers(
+      database,
+      (agentId, kind, text, human, eventId) => this.deliverPlatformEvent(agentId, kind, text, human, eventId),
+      undefined,
+      agentId => this.runs.timersChanged(agentId),
     );
     if (computers)
       computers.onTerminalInput = ({ agentId, active, ...where }) =>
@@ -536,8 +539,10 @@ export class DmBroker {
     platform: 'timer' | 'reminder' | 'computer',
     text: string,
     human: boolean,
+    /** The event's message id (a timer firing's saved PendingTimerEvent), so its turn can mark it seen. */
+    eventId?: string,
   ) {
-    return Boolean(await this.platformRun(agentId, platform, text, human));
+    return Boolean(await this.platformRun(agentId, platform, text, human, eventId));
   }
   /** A watch's wake-up; `handled` settles when the turn that received it has ended (repeating watches wait). */
   private async wakeForWatch(agentId: string, text: string, human: boolean) {
@@ -549,8 +554,9 @@ export class DmBroker {
     platform: 'timer' | 'reminder' | 'computer',
     text: string,
     human: boolean,
+    eventId?: string,
   ) {
-    const event = await this.platformInput(agentId, platform, text, human);
+    const event = await this.platformInput(agentId, platform, text, human, eventId);
     if (!event) return null;
     const { input, channelId, id } = event;
     return (
@@ -566,13 +572,14 @@ export class DmBroker {
     platform: NonNullable<AgentMessageSource['platform']>,
     text: string,
     human: boolean,
+    eventId?: string,
   ) {
     if (this.closing || this.deleting.has(agentId)) return null;
     await this.ready();
     const agent = await this.database.findAgent(agentId);
     if (!agent) return null;
     const channelId = agent.channels[0].id;
-    const id = crypto.randomUUID();
+    const id = eventId ?? crypto.randomUUID();
     const input: ChannelMessage = {
       role: 'user',
       id,
@@ -1274,6 +1281,15 @@ ${preview.text}`
           return admitted;
         },
         complete: async (messages, failed) => {
+          // Timer firings a finished turn saw are done; a failed turn's stay, delivered again after a restart.
+          if (!failed && !context.signal.aborted)
+            await this.timers
+              .seen(
+                messages.flatMap(message =>
+                  message.source?.platform === 'timer' || message.source?.platform === 'reminder' ? [message.id!] : [],
+                ),
+              )
+              .catch(() => {});
           for (const message of messages)
             if (message.source && !message.source.reaction && !message.source.platform) {
               const status = context.signal.aborted ? 'cancelled' : failed ? 'failed' : 'completed';

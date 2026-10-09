@@ -232,6 +232,7 @@ export const test = base.extend({
       });
     });
     await page.route('**/api/agents/*/stop', route => route.fulfill({ json: { stopped: true } }));
+    await page.route('**/api/agents/*/timers', route => route.fulfill({ json: { timers: [] } }));
     await page.route('**/api/model-endpoints*', route => route.fulfill({ json: [] }));
     await page.route(/\/api\/providers\/openai-codex(?:\/login)?$/, route =>
       route.fulfill({ json: { connected: false, models: [], login: { state: 'idle' } } }),

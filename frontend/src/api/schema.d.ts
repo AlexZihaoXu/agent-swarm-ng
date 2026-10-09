@@ -532,6 +532,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/agents/{id}/timers': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listAgentTimers'];
+    put: operations['changeAgentTimers'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/agents/{id}/memory': {
     parameters: {
       query?: never;
@@ -4264,6 +4280,120 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
+      /** @description Default Response */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+      /** @description Default Response */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+    };
+  };
+  listAgentTimers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            timers: {
+              id: string;
+              kind: 'timer' | 'reminder';
+              note: string;
+              nextAt: string;
+              everySeconds?: number;
+              fired?: number;
+              total?: number | 'unlimited';
+              createdAt: string;
+            }[];
+          };
+        };
+      };
+      /** @description Default Response */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+    };
+  };
+  changeAgentTimers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          changes: {
+            id: string;
+            /** @enum {boolean} */
+            cancel?: true;
+            note?: string;
+            /** Format: date-time */
+            nextAt?: string;
+            everySeconds?: number;
+            total?: number | null;
+          }[];
+        };
+      };
+    };
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            timers: {
+              id: string;
+              kind: 'timer' | 'reminder';
+              note: string;
+              nextAt: string;
+              everySeconds?: number;
+              fired?: number;
+              total?: number | 'unlimited';
+              createdAt: string;
+            }[];
+          };
+        };
+      };
       /** @description Default Response */
       400: {
         headers: {

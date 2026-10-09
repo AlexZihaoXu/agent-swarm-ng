@@ -28,6 +28,7 @@ const RULES: Record<string, Rule> = {
   'PATCH /api/agents/:id': { kind: 'agent.update', target: 'agent', section: 'agent' },
   'DELETE /api/agents/:id': { kind: 'agent.delete', target: 'agent' },
   'PATCH /api/agents/:id/settings': { kind: 'agent.update', target: 'agent', section: 'settings' },
+  'PUT /api/agents/:id/timers': { kind: 'agent.update', target: 'agent', section: 'timers' },
   'PUT /api/agents/:id/computers': { kind: 'agent.update', target: 'agent', section: 'computers' },
   'PATCH /api/agents/:id/discord': { kind: 'agent.update', target: 'agent', section: 'discord' },
   'PUT /api/agents/:id/discord/token': { kind: 'agent.update', target: 'agent', section: 'discord bot connected' },

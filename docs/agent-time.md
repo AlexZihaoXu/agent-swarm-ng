@@ -18,7 +18,13 @@ A firing wakes the agent with a **platform event**: a third kind of input next t
 
 ## Durability
 
-Timers and reminders are rows in the platform database (`AgentTimer`), committed with `synchronous=FULL` before the tool returns, so they survive backend restarts and power loss; the containers restart on boot. On start the scheduler fires whatever came due while the platform was down, once, saying how late it is. Reminder occurrences that were missed are counted toward `times` rather than replayed. A firing is committed before it is delivered, so it is never delivered twice (at most once). Deleting an agent deletes its timers.
+Timers and reminders are rows in the platform database (`AgentTimer`), committed with `synchronous=FULL` before the tool returns, so they survive backend restarts and power loss; the containers restart on boot. On start the scheduler fires whatever came due while the platform was down, once, saying how late it is. Reminder occurrences that were missed are counted toward `times` rather than replayed. A firing is committed before it is delivered, so the scheduler never fires it twice. Deleting an agent deletes its timers.
+
+A firing is also saved, in the same transaction, as a `PendingTimerEvent` (the platform event's message id), and removed once a turn that received it has finished. Delivery hands the event to the in-memory run queue, so a firing whose agent had not seen it when the platform stopped (a crash, a restart, power loss) is delivered again at the next start, marked `[Delivered again: this timer fired at …, but the platform restarted before you saw it.]`. A turn that failed keeps it for the next start. Every firing therefore reaches its agent at least once; the marked re-delivery is the only repeat.
+
+## Owner changes
+
+Agents → agent → **Timers** lists the agent's timers and reminders with their next time and, for reminders, how often they fired (live: `timers_updated` events). The owner can cancel one, or change its note, next time, interval (minutes) or times in all, checked like the agent's own (`GET`/`PUT /api/agents/:id/timers`, audited as `agent.update` · timers, all or nothing). Saving first asks, in a dialog, to confirm that the agent will be told; after saving it gets one platform note, with the owner's authority, listing each change ("Cancelled your timer …", "Changed your reminder …: next at …"), in its next turn or, if it is working, as a new input.
 
 ## Computer events
 

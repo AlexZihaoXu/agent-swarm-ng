@@ -27,9 +27,27 @@ type Row = {
   human: boolean;
   createdAt: Date;
 };
-export type Deliver = (agentId: string, kind: TimerKind, text: string, human: boolean) => Promise<boolean>;
+/** Hands a firing to its agent as a platform event whose message id is `eventId` (its PendingTimerEvent row). */
+export type Deliver = (
+  agentId: string,
+  kind: TimerKind,
+  text: string,
+  human: boolean,
+  eventId: string,
+) => Promise<boolean>;
 
 export class TimerError extends Error {}
+/** One owner change to a timer or reminder (cancel, or any of the rest). */
+export type TimerChange = {
+  id: string;
+  cancel?: boolean;
+  note?: string;
+  /** ISO time of the next firing. */
+  nextAt?: string;
+  everySeconds?: number;
+  /** Times in all (reminders); null: until cancelled. */
+  total?: number | null;
+};
 
 /** What an agent sees about one of its timers. */
 export function timerView(row: Row) {
@@ -49,6 +67,10 @@ export function timerView(row: Row) {
  * returns), so they survive restarts and power loss: on start the scheduler picks up what is pending, and anything
  * that came due while the platform was down fires once, saying how late it is. One scheduler handle always points
  * at the next due row; a firing is committed before it is delivered, so an event is never delivered twice.
+ *
+ * A firing is also saved as a PendingTimerEvent in the same transaction, removed once a turn processed it (`seen`).
+ * Delivery hands the event to an in-memory run queue, so one still pending at start (the platform stopped before
+ * the agent saw it) is delivered again, saying so: an agent always hears about every firing.
  */
 export class AgentTimers {
   private handle?: ReturnType<typeof setTimeout>;
@@ -59,10 +81,33 @@ export class AgentTimers {
     private database: PlatformStore,
     private deliver: Deliver,
     private now = () => Date.now(),
+    /** An agent's timers changed (set, cancelled, fired, edited by its owner): dashboards refresh their list. */
+    private changed: (agentId: string) => void = () => {},
   ) {}
 
   start() {
+    void this.redeliver().catch(() => {});
     this.wake();
+  }
+  /** Firings the platform stopped before their agents saw: delivered again, once per start. */
+  private async redeliver() {
+    await this.database.initialize();
+    const pending = await this.database.client.pendingTimerEvent.findMany({ orderBy: { createdAt: 'asc' } });
+    for (const event of pending) {
+      if (this.closed) return;
+      const text = `[Delivered again: this ${event.kind} fired at ${event.createdAt.toISOString()}, but the platform restarted before you saw it.]\n${event.text}`;
+      const delivered = await this.deliver(event.agentId, event.kind as TimerKind, text, event.human, event.id).catch(
+        () => false,
+      );
+      if (!delivered && !(await this.database.findAgent(event.agentId)))
+        await this.database.client.pendingTimerEvent.deleteMany({ where: { agentId: event.agentId } });
+    }
+  }
+  /** A turn processed these platform events: those that were timer firings are done. */
+  async seen(eventIds: string[]) {
+    if (!eventIds.length) return;
+    await this.database.initialize();
+    await this.database.client.pendingTimerEvent.deleteMany({ where: { id: { in: eventIds } } });
   }
   close() {
     this.closed = true;
@@ -126,6 +171,7 @@ export class AgentTimers {
       },
     });
     this.wake();
+    this.changed(agentId);
     return timerView(row);
   }
   async list(agentId: string) {
@@ -137,7 +183,78 @@ export class AgentTimers {
     await this.database.initialize();
     const { count } = await this.database.client.agentTimer.deleteMany({ where: { agentId, id } });
     this.wake();
+    if (count) this.changed(agentId);
     return count > 0;
+  }
+
+  /**
+   * The owner's changes from the agent's settings (docs/agent-time.md#owner-changes): cancel, or set a new note, next
+   * time, interval or total. Checked like the agent's own, all or nothing. Returns what changed, in words, for the
+   * notice the agent gets (empty: nothing changed).
+   */
+  async edit(agentId: string, changes: TimerChange[]) {
+    await this.database.initialize();
+    const rows = new Map(
+      (await this.database.client.agentTimer.findMany({ where: { agentId } })).map(row => [row.id, row]),
+    );
+    const now = this.now();
+    const said: string[] = [];
+    // Prisma's queries are lazy: they run together, in one transaction, below.
+    const writes: ReturnType<PlatformStore['client']['agentTimer']['deleteMany']>[] = [];
+    for (const change of changes) {
+      const row = rows.get(change.id);
+      if (!row) throw new TimerError('That timer or reminder no longer exists (it fired or was cancelled). Reload.');
+      const label = `${row.kind} ${row.id}${row.note ? ` ("${row.note}")` : ''}`;
+      if (change.cancel) {
+        said.push(`Cancelled your ${label}.`);
+        writes.push(this.database.client.agentTimer.deleteMany({ where: { id: row.id } }));
+        continue;
+      }
+      const data: { note?: string; nextAt?: Date; intervalMs?: number; total?: number | null } = {};
+      const parts: string[] = [];
+      if (change.note !== undefined && change.note.trim() !== row.note) {
+        const note = change.note.trim();
+        if (note.length > TIMER_NOTE_MAX) throw new TimerError(`A note is limited to ${TIMER_NOTE_MAX} characters.`);
+        if (!note && row.kind === 'reminder') throw new TimerError('A reminder needs a note saying what it is for.');
+        data.note = note;
+        parts.push(`note now "${note}"`);
+      }
+      if (change.nextAt !== undefined && Date.parse(change.nextAt) !== row.nextAt.getTime()) {
+        const at = Date.parse(change.nextAt);
+        if (!Number.isFinite(at) || at < now + 1000 || at > now + MAX_DELAY_SECONDS * 1000)
+          throw new TimerError('Choose a next time from now to 30 days ahead.');
+        data.nextAt = new Date(at);
+        parts.push(`next at ${data.nextAt.toISOString()}`);
+      }
+      if (row.kind === 'reminder') {
+        const every = change.everySeconds ?? row.intervalMs! / 1000;
+        if (change.everySeconds !== undefined && change.everySeconds * 1000 !== row.intervalMs) {
+          if (!Number.isFinite(every) || every < MIN_REMINDER_SECONDS || every > MAX_DELAY_SECONDS)
+            throw new TimerError(`A reminder repeats every ${MIN_REMINDER_SECONDS} to ${MAX_DELAY_SECONDS} seconds.`);
+          data.intervalMs = Math.round(every * 1000);
+          parts.push(`every ${every}s`);
+        }
+        if (change.total !== undefined && change.total !== row.total) {
+          if (change.total !== null && (!Number.isInteger(change.total) || change.total <= row.fired))
+            throw new TimerError(`It has fired ${row.fired} time(s): its total must be more than that, or unlimited.`);
+          data.total = change.total;
+          parts.push(change.total === null ? 'repeats until cancelled' : `${change.total} times in all`);
+        }
+        const total = data.total === undefined ? row.total : data.total;
+        if (every < FAST_REMINDER_SECONDS && (total === null || total > MAX_FAST_REMINDER_TIMES))
+          throw new TimerError(
+            `A reminder more often than every ${FAST_REMINDER_SECONDS} seconds needs a total of at most ${MAX_FAST_REMINDER_TIMES}.`,
+          );
+      }
+      if (!parts.length) continue;
+      said.push(`Changed your ${label}: ${parts.join(', ')}.`);
+      writes.push(this.database.client.agentTimer.updateMany({ where: { id: row.id }, data }));
+    }
+    if (!writes.length) return [];
+    await this.database.client.$transaction(writes);
+    this.wake();
+    this.changed(agentId);
+    return said;
   }
 
   /** Re-aims the scheduler at the next due row; serialised so two passes never fire the same row. */
@@ -180,18 +297,28 @@ export class AgentTimers {
     const missed = row.intervalMs ? Math.floor(late / row.intervalMs) : 0;
     const index = row.fired + missed + 1;
     const final = row.total !== null && index >= row.total;
-    if (final) await this.database.client.agentTimer.deleteMany({ where: { id: row.id } });
-    else
-      await this.database.client.agentTimer.update({
-        where: { id: row.id },
-        data: {
-          fired: index,
-          lastFiredAt: new Date(now),
-          nextAt: new Date(row.nextAt.getTime() + (missed + 1) * row.intervalMs!),
-        },
-      });
     const text = eventText(row, { now, late, missed, index: Math.min(index, row.total ?? index), final });
-    const delivered = await this.deliver(row.agentId, row.kind as TimerKind, text, row.human).catch(() => false);
+    const eventId = crypto.randomUUID();
+    const client = this.database.client;
+    await client.$transaction([
+      final
+        ? client.agentTimer.deleteMany({ where: { id: row.id } })
+        : client.agentTimer.updateMany({
+            where: { id: row.id },
+            data: {
+              fired: index,
+              lastFiredAt: new Date(now),
+              nextAt: new Date(row.nextAt.getTime() + (missed + 1) * row.intervalMs!),
+            },
+          }),
+      client.pendingTimerEvent.create({
+        data: { id: eventId, agentId: row.agentId, kind: row.kind, text, human: row.human },
+      }),
+    ]);
+    this.changed(row.agentId);
+    const delivered = await this.deliver(row.agentId, row.kind as TimerKind, text, row.human, eventId).catch(
+      () => false,
+    );
     // An agent that no longer exists (or cannot run) drops its timers.
     if (!delivered && !(await this.database.findAgent(row.agentId)))
       await this.database.client.agentTimer.deleteMany({ where: { agentId: row.agentId } });

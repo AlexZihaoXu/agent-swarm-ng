@@ -908,3 +908,16 @@ it('does not apply the short peer deadline to a human-authored group message, bu
     await f.close();
   }
 }, 60000);
+it('a timer firing stays saved until the turn that received it has finished', async () => {
+  const f = await fixture();
+  try {
+    await f.broker.timers.create(f.a.id, { kind: 'timer', delaySeconds: 1, note: 'check in', human: true });
+    // (agent-timers.test.ts shows it is saved when it fires; here the real turn clears it.)
+    await vi.waitFor(async () => expect(await f.database.client.agentTimer.count()).toBe(0), { timeout: 10000 });
+    await vi.waitFor(() => expect(JSON.stringify(f.captured)).toContain('check in'), { timeout: 10000 });
+    await f.idle();
+    await vi.waitFor(async () => expect(await f.database.client.pendingTimerEvent.count()).toBe(0));
+  } finally {
+    await f.close();
+  }
+}, 30000);

@@ -354,6 +354,11 @@ export function useChat() {
       );
       return;
     }
+    // An agent's timers changed (it set or cancelled one, one fired, its owner edited them): the Timers section reloads.
+    if (event.type === 'timers_updated' && typeof event.agentId === 'string') {
+      window.dispatchEvent(new CustomEvent('swarm-timers-updated', { detail: event.agentId }));
+      return;
+    }
     // An agent moved along its fallback models (docs/agent-models.md): the Model section shows which one it is on.
     if (event.type === 'model_choice' && typeof event.agentId === 'string' && Number.isInteger(event.active)) {
       const activeModel = event.active as number;

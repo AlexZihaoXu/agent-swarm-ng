@@ -12,6 +12,7 @@ export function ConfirmDialog({
   confirmLabel,
   busyLabel,
   onConfirm,
+  tone = 'danger',
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -20,6 +21,8 @@ export function ConfirmDialog({
   confirmLabel: string;
   busyLabel: string;
   onConfirm: () => Promise<void>;
+  /** 'info': an ordinary confirmation (the owner is told what happens next), not a destructive one. */
+  tone?: 'danger' | 'info';
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -76,7 +79,11 @@ export function ConfirmDialog({
                 type="submit"
                 variant="outline"
                 size="sm"
-                className="min-h-11 border-red-500/50 text-red-400 hover:bg-red-500/10 sm:min-h-0"
+                className={
+                  tone === 'danger'
+                    ? 'min-h-11 border-red-500/50 text-red-400 hover:bg-red-500/10 sm:min-h-0'
+                    : 'min-h-11 sm:min-h-0'
+                }
                 disabled={busy}
               >
                 {busy ? busyLabel : confirmLabel}

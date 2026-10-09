@@ -240,3 +240,10 @@ export const PencilIcon = (props: ComponentProps<'svg'>) => (
     <path d="m15 5 4 4M5 15 16 4a2.8 2.8 0 0 1 4 4L9 19l-5 1z" />
   </Icon>
 );
+/** Timers (Lucide alarm-clock). */
+export const AlarmIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <circle cx="12" cy="13" r="8" />
+    <path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3" />
+  </Icon>
+);
