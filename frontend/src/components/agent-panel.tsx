@@ -9,6 +9,7 @@ import type { ChatAgent, RealAgent } from '@/use-chat';
 import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { dialogOverlay } from '@/lib/styles';
 import { RenameDialog } from '@/components/rename-dialog';
+import { PanelResizeHandle, SIDEBAR_WIDTH, usePanelWidth } from '@/components/panel-resize';
 import { PencilIcon } from '@/components/ui/icons';
 import { renameAgent } from '@/lib/rename';
 
@@ -44,6 +45,7 @@ export function AgentPanel({
   // Every width shows the agent's settings behind the dialog, so closing returns to them.
   const close = () => onNavigate(route.agentId ? agentPath(route.agentId) : '/agents');
   const panelRef = useRef<HTMLElement>(null);
+  const sidebar = usePanelWidth('sidebar', SIDEBAR_WIDTH);
   const returnFocus = useRef<HTMLElement | null>(null);
 
   return (
@@ -60,6 +62,7 @@ export function AgentPanel({
               ref={panelRef}
               aria-label="Agents"
               tabIndex={0}
+              style={sidebar.style}
               className={`${className} outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring`}
               onContextMenuCapture={event => {
                 const card = (event.target as HTMLElement).closest<HTMLElement>('[data-agent-id]');
@@ -87,6 +90,7 @@ export function AgentPanel({
               }}
             >
               {children}
+              <PanelResizeHandle panel={sidebar} side="right" label="Resize the agents panel" />
             </aside>
           </ContextMenu.Trigger>
           <ContextMenu.Portal>

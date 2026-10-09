@@ -892,7 +892,7 @@ export function App() {
                 navigate(agentPath(real.id));
               }}
               // Phones: a bar over the settings; wider screens: a side panel.
-              className="flex w-full shrink-0 flex-col border-b border-border bg-sidebar md:min-h-0 md:w-72 md:border-b-0 md:border-r"
+              className="flex w-full shrink-0 flex-col border-b border-border bg-sidebar md:relative md:min-h-0 md:w-[min(var(--panel-width),40vw)] md:border-b-0 md:border-r"
             >
               {/* Which agent, then (wide screens) its settings' sections, which the editor fills in. */}
               <>

@@ -1,3 +1,4 @@
+import { PanelResizeHandle, SIDEBAR_WIDTH, usePanelWidth } from '@/components/panel-resize';
 import { RenameDialog } from '@/components/rename-dialog';
 import { PencilIcon } from '@/components/ui/icons';
 import { renameAgent, renameGroup } from '@/lib/rename';
@@ -87,6 +88,7 @@ export function ChatPanel({
   const { name: me } = useSignedIn();
   const client = useQueryClient();
   const [search, setSearch] = useState('');
+  const sidebar = usePanelWidth('sidebar', SIDEBAR_WIDTH);
   const [renaming, setRenaming] = useState<
     { kind: 'dm'; agent: ChatAgent } | { kind: 'group'; group: GroupChat } | null
   >(null);
@@ -155,8 +157,9 @@ export function ChatPanel({
             ref={panelRef}
             aria-label="Chats"
             tabIndex={0}
+            style={sidebar.style}
             className={cn(
-              'phone-list-enter min-h-0 w-full shrink-0 flex-col border-border bg-sidebar pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:flex md:w-72 md:border-r md:pb-0',
+              'phone-list-enter min-h-0 w-full shrink-0 flex-col border-border bg-sidebar pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:relative md:flex md:w-[min(var(--panel-width),40vw)] md:border-r md:pb-0',
               mobile ? 'hidden' : 'flex',
             )}
             onContextMenuCapture={event => {
@@ -270,6 +273,7 @@ export function ChatPanel({
                 </Button>
               )}
             </div>
+            <PanelResizeHandle panel={sidebar} side="right" label="Resize the chat list" />
           </aside>
         </ContextMenu.Trigger>
         <ContextMenu.Portal>

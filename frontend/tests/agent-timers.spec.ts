@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 
 test('shows the agent’s timers and saves the owner’s changes after saying the agent will be told', async ({ page }) => {
   const now = Date.now();
-  let timers = [
+  let timers: Record<string, unknown>[] = [
     {
       id: 't1',
       kind: 'timer',
