@@ -29,6 +29,7 @@ import { ChatFilesDialog } from '@/components/chat-files-dialog';
 import { ConversationMoreMenu, MessageSearchButton } from '@/components/message-search';
 import { groupFilesKey, messagePreview } from '@/lib/chat-files';
 import { useAttachments } from '@/lib/use-attachments';
+import { useFileDrop } from '@/components/file-drop-zone';
 import { useSignedIn } from '@/lib/auth';
 import { humanName } from '@/lib/people';
 
@@ -80,6 +81,8 @@ export function GroupConversation({
   const [filesOpen, setFilesOpen] = useState(false);
   const filesOpener = useRef<HTMLElement | null>(null);
   const attachments = useAttachments(groupFilesKey(groupId));
+  // Files dropped anywhere on the conversation attach, not only on the input bar.
+  const fileDrop = useFileDrop(attachments);
   const viewport = useRef<HTMLDivElement>(null);
   const loadOlder = () => {
     setLoadingOlder(true);
@@ -175,8 +178,9 @@ export function GroupConversation({
   return (
     <section
       aria-label={`Group conversation: ${name}`}
+      {...fileDrop.handlers}
       className={cn(
-        'phone-detail-enter min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none md:flex',
+        'phone-detail-enter relative min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none md:flex',
         searchOpen && 'lg:mr-96',
         mobile ? 'flex' : 'hidden',
       )}
@@ -361,6 +365,7 @@ export function GroupConversation({
           }}
         />
       </div>
+      {fileDrop.overlay}
     </section>
   );
 }

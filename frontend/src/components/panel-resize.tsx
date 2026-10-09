@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { cn } from '@/lib/utils';
 
 type Bounds = { min: number; max: number; initial: number };
@@ -7,7 +7,12 @@ export const SIDEBAR_WIDTH: Bounds = { min: 224, max: 480, initial: 288 };
 export const ACTIVITY_WIDTH: Bounds = { min: 320, max: 760, initial: 384 };
 
 /** A side panel's width, remembered in this browser (a convenience: none stored still works). */
-export function usePanelWidth(key: string, bounds: Bounds) {
+export function usePanelWidth(
+  key: string,
+  bounds: Bounds,
+  /** Also publish the width as this CSS variable on the page (for what makes room for the panel). */
+  pageVariable?: string,
+) {
   const clamp = (value: number) => Math.round(Math.min(bounds.max, Math.max(bounds.min, value)));
   const [width, setWidth] = useState(() => {
     try {
@@ -24,6 +29,9 @@ export function usePanelWidth(key: string, bounds: Bounds) {
       localStorage.setItem(`panel-width:${key}`, String(next));
     } catch {}
   };
+  useEffect(() => {
+    if (pageVariable) document.documentElement.style.setProperty(pageVariable, `${width}px`);
+  }, [pageVariable, width]);
   return { width, set, bounds, style: { '--panel-width': `${width}px` } as CSSProperties };
 }
 

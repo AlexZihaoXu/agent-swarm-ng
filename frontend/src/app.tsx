@@ -48,6 +48,7 @@ import { ChatComposer } from '@/components/chat-composer';
 import { ChatFilesDialog } from '@/components/chat-files-dialog';
 import { chatFilesKey, dmFilesKey, messagePreview } from '@/lib/chat-files';
 import { useAttachments } from '@/lib/use-attachments';
+import { useFileDrop } from '@/components/file-drop-zone';
 import { groupQuery, useGroupEvents } from '@/use-groups';
 import {
   ConversationMoreMenu,
@@ -467,6 +468,8 @@ export function App() {
   const appUpdate = useAppUpdate();
   const draft = drafts[agent.channelId] ?? '';
   const attachments = useAttachments(agent.real ? chatFilesKey(agent.channelId) : undefined);
+  // Files dropped anywhere on the conversation (not only the input bar), when it has one for the human.
+  const fileDrop = useFileDrop(agent.real && conversationPeer === 'you' ? attachments : undefined);
   // Sent files leave the composer once the server confirms their message; a failed send keeps them to retry.
   const confirmed = conversations[agent.channelId];
   useEffect(() => {
@@ -1026,9 +1029,11 @@ export function App() {
           ) : agents.length > 0 ? (
             <section
               aria-label={`Conversation with ${agent.name}`}
+              {...fileDrop.handlers}
               className={cn(
-                'phone-detail-enter min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none md:flex',
-                (activityOpen || searchOpen) && 'lg:mr-96',
+                'phone-detail-enter relative min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 motion-reduce:transition-none md:flex',
+                // Room for the activity panel at its (resizable) width, or the search panel.
+                activityOpen ? 'lg:mr-[min(var(--activity-width,24rem),calc(100vw-24rem))]' : searchOpen && 'lg:mr-96',
                 mobileConversation ? 'flex' : 'hidden',
               )}
             >
@@ -1433,6 +1438,7 @@ export function App() {
                   )}
                 </div>
               )}
+              {fileDrop.overlay}
             </section>
           ) : (
             <section aria-label="No agent selected" className="hidden min-w-0 flex-1 md:flex">

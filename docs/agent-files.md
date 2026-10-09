@@ -43,7 +43,7 @@ Private chats, groups and agent-to-agent DMs can carry files: at most **10 per m
 
 ### Dashboard
 
-- **Composer:** the paperclip (or drag and drop onto the box, or paste) attaches files. Each uploads immediately with progress (`XMLHttpRequest`, so progress is visible); × removes one; Send waits for uploads.
+- **Composer:** the paperclip (or paste, or drag and drop anywhere on a private or group conversation) attaches files. While files are dragged over the conversation it dims and a dashed frame says how many and of what kinds (from the browser's drag data: image, PDF, archive, text …) and how many more fit in the message. Each uploads immediately with progress (`XMLHttpRequest`, so progress is visible); × removes one; Send waits for uploads.
 - **Messages** (Discord-style): images as a grid that opens the [image viewer](#image-viewer); text files (HTML ones with **View**, the [HTML viewer](#html-viewer)) as a highlighted preview (lazy highlight.js) with a name and size bar, Expand, and a download link on the name; other files (and PDFs) as a card with an icon, the name as a download link and the size; deleted files as "Deleted by … · date".
 - **Files dialog:** the folder icon in the header of a private chat, an agent-to-agent DM view and a group. It searches by name, sorts by name, type, size or sent date, downloads, and deletes one or several files after confirmation. The footer shows the channel's total and the swarm storage use.
 

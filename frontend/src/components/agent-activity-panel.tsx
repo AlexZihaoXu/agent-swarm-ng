@@ -432,7 +432,7 @@ export function AgentActivityPanel({
   expandActivity: History['expandActivity'];
   retryActivity: History['retryActivity'];
 }) {
-  const activityWidth = usePanelWidth('activity', ACTIVITY_WIDTH);
+  const activityWidth = usePanelWidth('activity', ACTIVITY_WIDTH, '--activity-width');
   const [wide, setWide] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
   const contextUsage = history.contextUsage[agent.id];
   const usageLine = contextUsage?.text.split('\n')[0];

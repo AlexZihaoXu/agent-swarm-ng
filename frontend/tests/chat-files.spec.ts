@@ -351,3 +351,41 @@ test('a cut-off text preview fades out and says how much more there is', async (
   await expect(page.getByLabel('Preview of log.txt')).toContainText('line 40');
   await expect(more).toHaveCount(0);
 });
+
+test('files dropped anywhere on the conversation attach, with a frame saying how many and of what kinds', async ({
+  page,
+}) => {
+  const uploads: string[] = [];
+  await page.route(/\/api\/files\?.*$/, async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const name = new URL(route.request().url()).searchParams.get('name')!;
+    uploads.push(name);
+    await route.fulfill({
+      status: 201,
+      json: file(`f-${name}`, name, 'other', { messageKind: null, messageId: null }),
+    });
+  });
+  await page.goto('/chat/agents/avery');
+  const conversation = page.getByRole('region', { name: 'Conversation with Avery' });
+  const history = conversation.getByRole('list', { name: 'Messages' });
+  await expect(history).toBeVisible();
+  const transfer = await page.evaluateHandle(() => {
+    const data = new DataTransfer();
+    data.items.add(new File(['%PDF'], 'lab.pdf', { type: 'application/pdf' }));
+    data.items.add(new File(['PK'], 'starter.zip', { type: 'application/zip' }));
+    return data;
+  });
+  // Over the messages, not the input bar.
+  await history.dispatchEvent('dragenter', { dataTransfer: transfer });
+  await history.dispatchEvent('dragover', { dataTransfer: transfer });
+  await expect(conversation.getByText('Drop 2 files to attach')).toBeVisible();
+  await expect(conversation.getByText('PDF · archive')).toBeVisible();
+  // Leaving hides it; coming back and dropping attaches both.
+  await history.dispatchEvent('dragleave', { dataTransfer: transfer });
+  await expect(conversation.getByText('Drop 2 files to attach')).toHaveCount(0);
+  await history.dispatchEvent('dragenter', { dataTransfer: transfer });
+  await history.dispatchEvent('drop', { dataTransfer: transfer });
+  await expect(conversation.getByText('Drop 2 files to attach')).toHaveCount(0);
+  await expect(conversation.getByRole('list', { name: 'Files to send' }).getByRole('listitem')).toHaveCount(2);
+  await expect.poll(() => uploads.sort()).toEqual(['lab.pdf', 'starter.zip']);
+});
