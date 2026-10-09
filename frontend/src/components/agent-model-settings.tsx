@@ -55,6 +55,8 @@ export function AgentModelSettings({
   const [rows, setRows] = useState<ChoiceRow[]>(() => rowsOf(modelsOf(saved)));
   const modelsChanged = JSON.stringify(choicesOf(rows)) !== JSON.stringify(modelsOf(saved));
   const [name, setName] = useState(saved.name);
+  // Renamed elsewhere (the agent's menu): the field follows.
+  useEffect(() => setName(saved.name), [saved.name]);
   const [memory, setMemory] = useState(() => memoryOf(saved));
   const memoryChanges = Object.fromEntries(
     memoryFields.flatMap(field =>

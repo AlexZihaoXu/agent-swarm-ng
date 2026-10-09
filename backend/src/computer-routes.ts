@@ -5,7 +5,7 @@ import { SwarmSettingsStore } from './swarm-settings';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import type { PlatformStore } from './platform-store';
-import { ComputerStore, ComputerStoreError, storageOf, type ComputerSettings } from './computer-store';
+import { ComputerStore, ComputerStoreError, controllerName, storageOf, type ComputerSettings } from './computer-store';
 import { computerStorageFolders } from './computer-storage-routes';
 import { ControllerError, type ComputerController, type ComputerObservation } from './computer-controller-client';
 import type { ComputerUseService } from './computer-use/service';
@@ -288,7 +288,7 @@ export function registerComputerRoutes(
         // Its recordings end with it (their folders are deleted too); their agents are told.
         use?.recordings?.dropComputer(record.id);
         if ((await use?.holders())?.some(holder => holder.computerId === record.id)) await use?.forceRelease(record.id);
-        await controller.remove(record.id, record.name, storageOf(record));
+        await controller.remove(record.id, controllerName(record), storageOf(record));
         if (!(await store.finalizeDelete(record.id, record.name)) && (await store.get(record.id)))
           return unavailable(reply);
         // A concurrent, identically confirmed deletion may already have removed
@@ -334,7 +334,7 @@ export function registerComputerRoutes(
         const updated = await store.setDesiredState(record.id, desired);
         if (request.body.action === 'start') {
           try {
-            await controller.start(record.id, record.name);
+            await controller.start(record.id, controllerName(record));
           } catch (error) {
             // A refused start (its Keep/Cache disk is missing, say) leaves the computer off: say so, so it can still
             // be rebuilt or have its cache cleared. An unreachable controller may still start it: keep the intent.
@@ -345,11 +345,33 @@ export function registerComputerRoutes(
         } else {
           // Recordings on it are saved before it goes (its /tmp, where they are cut, does not survive).
           await use?.recordings?.stopComputer(record.id, 'the computer was turned off').catch(() => {});
-          await controller.stop(record.id, record.name);
+          await controller.stop(record.id, controllerName(record));
         }
         return reply
           .code(202)
           .send({ accepted: true, action: request.body.action, desiredState: updated.desiredState });
+      } catch (error) {
+        return failure(reply, error);
+      }
+    },
+  );
+  // A new name for people and agents (agents pick computers by name); its containers keep their original label.
+  app.put<{ Params: { id: string }; Body: { name: string } }>(
+    '/api/computers/:id/name',
+    {
+      schema: {
+        operationId: 'renameComputer',
+        params: idParams,
+        body: Type.Object({ name: Type.String({ minLength: 1, maxLength: 80 }) }, { additionalProperties: false }),
+        response: { 200: viewSchema, ...errors },
+      },
+    },
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      try {
+        const updated = await store.rename(request.params.id, request.body.name);
+        const observed = controller ? await controller.observe().catch(() => undefined) : undefined;
+        return view(updated, observed?.get(updated.id));
       } catch (error) {
         return failure(reply, error);
       }
@@ -392,7 +414,7 @@ export function registerComputerRoutes(
         }
         const capped = await checkMemoryCap(platform, record.organizationId, request.body.memoryGiB, record.id);
         if (capped) throw new ComputerStoreError('invalid', capped);
-        await controller.updateResources(record.id, record.name, request.body);
+        await controller.updateResources(record.id, controllerName(record), request.body);
         const updated = await store.updateResources(record.id, request.body);
         const observed = await controller.observe();
         return view(updated, observed.get(record.id));
@@ -452,7 +474,7 @@ export function registerComputerRoutes(
           memoryGiB: request.body.memoryGiB,
           timezone: request.body.timezone,
         };
-        await controller.replaceStopped(record.id, record.name, settings, {
+        await controller.replaceStopped(record.id, controllerName(record), settings, {
           ...(request.body.image ? { image: request.body.image } : {}),
           ...(request.body.keptPaths ? { keptPaths: request.body.keptPaths } : {}),
         });

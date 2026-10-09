@@ -194,6 +194,7 @@ export const RULES: Record<string, Rule> = {
   'POST /api/computers/:id/power': computer,
   'GET /api/computers/:id/preview': computer,
   'PATCH /api/computers/:id/settings': computer,
+  'PUT /api/computers/:id/name': computer,
   'POST /api/computers/:id/settings/replacement': computer,
   'GET /api/computers/:id/storage': computer,
   'POST /api/computers/:id/cache/clear': computer,

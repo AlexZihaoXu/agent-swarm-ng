@@ -1241,7 +1241,7 @@ describe('Pi chat and platform channel boundary', () => {
     // Two real 1.5-second debounce windows plus SDK/SQLite restart I/O need
     // headroom on shared CI runners; all persistence assertions remain intact.
   }, 15000);
-  it('edits name, model and thinking level in place, keeps history, and refuses invalid choices or edits during a turn', async () => {
+  it('edits name, model and thinking level in place, keeps history, and refuses invalid choices or model edits during a turn', async () => {
     behavior = 'tool';
     captured = [];
     const app = await testApp();
@@ -1289,13 +1289,18 @@ describe('Pi chat and platform channel boundary', () => {
         payload: sent,
       });
       expect(started.statusCode).toBe(202);
-      expect(
-        (await app.inject({ method: 'PATCH', url: `/api/agents/${agent.id}`, payload: { name: 'Mid turn' } }))
-          .statusCode,
-      ).toBe(409);
       await vi.waitFor(async () => expect(captured.length).toBeGreaterThan(0), { timeout: 8000 });
       expect(captured[0].model).toBe('other-model');
       expect(String(captured[0].messages[0]?.content)).toContain('You are Renamed agent.');
+      // During a turn a rename is accepted (the running turn keeps the name it started with); a model change is not.
+      expect(
+        (await app.inject({ method: 'PATCH', url: `/api/agents/${agent.id}`, payload: { name: 'Mid turn' } }))
+          .statusCode,
+      ).toBe(200);
+      expect(
+        (await app.inject({ method: 'PATCH', url: `/api/agents/${agent.id}`, payload: { model: 'test-model' } }))
+          .statusCode,
+      ).toBe(409);
       await app.inject({
         method: 'POST',
         url: `/api/agents/${agent.id}/stop`,

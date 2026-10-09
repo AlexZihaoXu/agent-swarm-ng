@@ -16,6 +16,32 @@ export function storageOf(record: Pick<Computer, 'keepFolder' | 'cacheFolder' | 
   return { keepFolder: record.keepFolder, cacheFolder: record.cacheFolder, keptPaths };
 }
 
+const validName = (raw: string) => {
+  const name = raw.trim();
+  if (!name || name.length > 80 || /[\u0000-\u001f\u007f]/.test(name))
+    throw new ComputerStoreError('invalid', 'Computer name must be 1–80 printable characters.');
+  return name;
+};
+/**
+ * Names are how an operator confirms a deletion and how agents pick a computer, so keep them unambiguous. SQLite has
+ * no case-insensitive index here, so compare the bounded roster.
+ */
+async function nameFree(
+  tx: { computer: { findMany(args: object): Promise<{ id: string; name: string }[]> } },
+  name: string,
+  except?: string,
+) {
+  const taken = await tx.computer.findMany({ select: { id: true, name: true } });
+  if (
+    taken.some(
+      record => record.id !== except && record.name.toLocaleLowerCase('en-US') === name.toLocaleLowerCase('en-US'),
+    )
+  )
+    throw new ComputerStoreError('conflict', 'That computer name is already in use. Choose another name.');
+}
+/** The name the controller knows a computer's containers by (their label; never renamed). */
+export const controllerName = (record: { name: string; labelName?: string | null }) => record.labelName || record.name;
+
 export class ComputerStoreError extends Error {
   constructor(
     readonly code: 'missing' | 'confirmation' | 'conflict' | 'invalid',
@@ -37,9 +63,7 @@ export class ComputerStore {
     organizationId?: string,
   ) {
     await this.platform.initialize();
-    const name = rawName.trim();
-    if (!name || name.length > 80 || /[\u0000-\u001f\u007f]/.test(name))
-      throw new ComputerStoreError('invalid', 'Computer name must be 1–80 printable characters.');
+    const name = validName(rawName);
     if (
       settings &&
       (!Number.isInteger(settings.cpuCores) ||
@@ -66,15 +90,11 @@ export class ComputerStore {
       const computer = await this.platform.client.$transaction(async tx => {
         if ((await tx.computer.count()) >= 100)
           throw new ComputerStoreError('conflict', 'Computer record limit reached. Delete unused computers first.');
-        // Names are how an operator confirms a deletion, so keep them unambiguous.
-        // SQLite has no case-insensitive index here, so compare the bounded roster.
-        const taken = await tx.computer.findMany({ select: { name: true } });
-        if (taken.some(record => record.name.toLocaleLowerCase('en-US') === name.toLocaleLowerCase('en-US'))) {
-          throw new ComputerStoreError('conflict', 'That computer name is already in use. Choose another name.');
-        }
+        await nameFree(tx, name);
         return tx.computer.create({
           data: {
             name,
+            labelName: name,
             requestKey,
             ...(settings ?? {}),
             ...(storage ?? {}),
@@ -162,6 +182,22 @@ export class ComputerStore {
         take: 100,
       })
     ).map(record => record.id);
+  }
+
+  /** A new name for the dashboard and agents; its containers keep the label they were created with (labelName). */
+  async rename(id: string, rawName: string) {
+    await this.platform.initialize();
+    const name = validName(rawName);
+    return this.platform.client.$transaction(async tx => {
+      const record = await tx.computer.findUnique({ where: { id } });
+      if (!record || record.state === 'deleting') throw new ComputerStoreError('missing', 'Computer not found.');
+      await nameFree(tx, name, id);
+      return tx.computer.update({
+        where: { id },
+        // A computer from before renaming keeps its original name for the controller.
+        data: { name, labelName: controllerName(record) },
+      });
+    });
   }
 
   async get(id: string) {

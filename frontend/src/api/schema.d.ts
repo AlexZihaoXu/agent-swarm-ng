@@ -1188,6 +1188,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/computers/{id}/name': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put: operations['renameComputer'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/computers/{id}/settings': {
     parameters: {
       query?: never;
@@ -8689,6 +8705,97 @@ export interface operations {
             accepted: boolean;
             action: string;
             desiredState: string;
+          };
+        };
+      };
+      /** @description Default Response */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+      /** @description Default Response */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+      /** @description Default Response */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+      /** @description Default Response */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            message: string;
+          };
+        };
+      };
+    };
+  };
+  renameComputer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Default Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+            name: string;
+            organizationId: string;
+            state: string;
+            createdAt: number;
+            cpuCores: number | null;
+            memoryGiB: number | null;
+            timezone: string | null;
+            cpuPercent: number | null;
+            memoryBytes: number | null;
+            memoryLimitBytes: number | null;
+            cpuCount: number | null;
+            portalFree: boolean | null;
+            keepFolder: string | null;
+            cacheFolder: string | null;
+            keptPaths: string[];
+            outdated: boolean | null;
+            resourceViewStale: boolean | null;
           };
         };
       };

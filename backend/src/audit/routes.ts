@@ -21,6 +21,7 @@ const RULES: Record<string, Rule> = {
   'DELETE /api/users/:id': { kind: 'user.delete', target: 'user' },
   'POST /api/computers': { kind: 'computer.create', target: 'computer' },
   'PATCH /api/computers/:id/settings': { kind: 'computer.update', target: 'computer', section: 'settings' },
+  'PUT /api/computers/:id/name': { kind: 'computer.update', target: 'computer', section: 'name' },
   'POST /api/computers/:id/settings/replacement': { kind: 'computer.update', target: 'computer', section: 'rebuilt' },
   'DELETE /api/computers/:id': { kind: 'computer.delete', target: 'computer' },
   'POST /api/agents': { kind: 'agent.create', target: 'agent' },

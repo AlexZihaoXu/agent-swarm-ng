@@ -45,6 +45,9 @@ model Computer {
   sequence       Int                  @id @default(autoincrement())
   id             String               @unique @default(uuid())
   name           String
+  /// The name it was created with: its containers carry it as an immutable label, so the controller is always given
+  /// this one; `name` can be renamed. Empty for none recorded (then `name`).
+  labelName      String               @default("")
   requestKey     String               @unique
   state          String               @default("creating")
   desiredState   String               @default("running")

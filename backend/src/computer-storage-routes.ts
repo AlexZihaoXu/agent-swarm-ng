@@ -1,7 +1,7 @@
 import { Type } from '@sinclair/typebox';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ControllerError, type ComputerController } from './computer-controller-client';
-import { ComputerStore } from './computer-store';
+import { ComputerStore, controllerName } from './computer-store';
 import type { PlatformStore } from './platform-store';
 
 /**
@@ -111,7 +111,7 @@ export function registerComputerStorageRoutes(
       if (!record || record.state === 'deleting') return reply.code(404).send({ message: 'Computer not found.' });
       if (!controller?.storageUsage) return failed(reply, null);
       try {
-        return await controller.storageUsage(record.id, record.name);
+        return await controller.storageUsage(record.id, controllerName(record));
       } catch (error) {
         return failed(reply, error);
       }
@@ -135,7 +135,7 @@ export function registerComputerStorageRoutes(
         return reply.code(409).send({ message: 'Power off this computer before clearing its cache.' });
       if (!controller?.clearCache) return failed(reply, null);
       try {
-        await controller.clearCache(record.id, record.name);
+        await controller.clearCache(record.id, controllerName(record));
         return { cleared: true };
       } catch (error) {
         return failed(reply, error);

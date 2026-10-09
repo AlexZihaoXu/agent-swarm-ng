@@ -1,5 +1,5 @@
 import type { ComputerController } from './computer-controller-client';
-import type { ComputerStore } from './computer-store';
+import { controllerName, type ComputerStore } from './computer-store';
 
 /**
  * Re-apply the operator's power intent after a backend or controller restart.
@@ -26,7 +26,8 @@ export async function reconcileStoppedComputers(store: ComputerStore, controller
   for (const id of ids) {
     if (observed.get(id)?.status !== 'running') continue;
     try {
-      await controller.stop(id, (await store.get(id))?.name ?? '');
+      const record = await store.get(id);
+      await controller.stop(id, record ? controllerName(record) : '');
       summary.stopped += 1;
     } catch {
       summary.failed += 1;

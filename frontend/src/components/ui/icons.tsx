@@ -234,3 +234,9 @@ export const XIcon = (props: ComponentProps<'svg'>) => (
     <path d="M18 6 6 18M6 6l12 12" />
   </Icon>
 );
+/** Rename (Lucide pencil). */
+export const PencilIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="m15 5 4 4M5 15 16 4a2.8 2.8 0 0 1 4 4L9 19l-5 1z" />
+  </Icon>
+);

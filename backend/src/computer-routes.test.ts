@@ -276,6 +276,34 @@ it('powers a computer off and on, remembering the operator intent', async () => 
   }
 });
 
+it('renames a computer for people and agents, while its containers keep the name they were created with', async () => {
+  const { app, calls } = await fixture();
+  try {
+    const create = (name: string) =>
+      app.inject({ method: 'POST', url: '/api/computers', payload: { name, requestKey: crypto.randomUUID() } });
+    const id = (await create('Old desk')).json().id as string;
+    await create('Other desk');
+    const rename = (name: string) => app.inject({ method: 'PUT', url: `/api/computers/${id}/name`, payload: { name } });
+    expect((await rename('  Studio  ')).json()).toMatchObject({ id, name: 'Studio' });
+    // Unambiguous, like a new computer's name (case-insensitive), and printable.
+    expect((await rename('other DESK')).statusCode).toBe(409);
+    expect((await rename('bad\u0007name')).statusCode).toBe(400);
+    expect(
+      (await app.inject({ method: 'PUT', url: '/api/computers/missing/name', payload: { name: 'X' } })).statusCode,
+    ).toBe(404);
+    const listed = (await app.inject({ method: 'GET', url: '/api/computers' })).json().computers;
+    expect(listed.map((computer: { name: string }) => computer.name)).toContain('Studio');
+    // The controller still knows it by the label on its containers.
+    await app.inject({ method: 'POST', url: `/api/computers/${id}/power`, payload: { action: 'stop' } });
+    expect(calls).toContain(`stop:${id}:Old desk`);
+    // Renamed twice, still the original label.
+    await rename('Studio 2');
+    await app.inject({ method: 'POST', url: `/api/computers/${id}/power`, payload: { action: 'start' } });
+    expect(calls).toContain(`start:${id}:Old desk`);
+  } finally {
+    await app.close();
+  }
+});
 it('refuses an unknown power action, an unknown computer, and one still being created', async () => {
   const { app, calls, database } = await fixture();
   try {

@@ -26,6 +26,7 @@ import type { ComputerAgentState } from './computer-control';
 import { computerPath } from '@/lib/dashboard-location';
 import { computersQuery } from '@/lib/computers-query';
 import { dialogOverlay } from '@/lib/styles';
+import { RenameDialog } from './rename-dialog';
 type ComputerList = { computers: Computer[] };
 
 function MenuIcon({ path, label }: { path: string; label: string }) {
@@ -180,6 +181,7 @@ export function ComputersPanel({
   const [powerBusy, setPowerBusy] = useState(false);
   const [powerError, setPowerError] = useState('');
   const [powerOffTarget, setPowerOffTarget] = useState<Computer | null>(null);
+  const [renameTarget, setRenameTarget] = useState<Computer | null>(null);
   const holders = useQuery({
     queryKey: ['computer-control'],
     enabled: powerOffTarget !== null,
@@ -579,7 +581,14 @@ export function ComputersPanel({
               <ContextMenu.Content
                 className="context-menu-content phone-menu-targets z-50 min-w-56 rounded-lg border border-border bg-background p-1 text-sm ao-top shadow-lg"
                 onCloseAutoFocus={event => {
-                  if (createOpen || selected !== null || settingsComputer !== null || filesOpen || terminalsOpen)
+                  if (
+                    createOpen ||
+                    selected !== null ||
+                    settingsComputer !== null ||
+                    filesOpen ||
+                    terminalsOpen ||
+                    renameTarget !== null
+                  )
                     event.preventDefault();
                 }}
               >
@@ -663,6 +672,14 @@ export function ComputersPanel({
                         label="Settings"
                       />
                       Settings
+                    </ContextMenu.Item>
+                    <ContextMenu.Item
+                      disabled={!menuTarget}
+                      onSelect={() => setRenameTarget(menuTarget)}
+                      className="flex items-center gap-2 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-muted data-[disabled]:opacity-50"
+                    >
+                      <MenuIcon path="m15 5 4 4M5 15 16 4a2.8 2.8 0 0 1 4 4L9 19l-5 1z" label="Rename" />
+                      Rename
                     </ContextMenu.Item>
                     <ContextMenu.Separator className="my-1 h-px bg-border" />
                     <div className="px-3 pb-1 pt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -887,6 +904,25 @@ export function ComputersPanel({
           </ComputerDialog>
         )}
       </Dialog.Root>
+      <RenameDialog
+        open={renameTarget !== null}
+        onOpenChange={open => {
+          if (!open) setRenameTarget(null);
+        }}
+        title="Rename computer"
+        label="Computer name"
+        current={renameTarget?.name ?? ''}
+        description="Agents pick computers by name, so they use the new one from now on. Programs and files are not affected."
+        onRename={async name => {
+          if (!renameTarget) return;
+          const { error } = await api.PUT('/api/computers/{id}/name', {
+            params: { path: { id: renameTarget.id } },
+            body: { name },
+          });
+          if (error) throw new Error(error.message ?? 'Could not rename the computer.');
+          refresh();
+        }}
+      />
       <ConfirmDialog
         open={powerOffTarget !== null}
         onOpenChange={open => {

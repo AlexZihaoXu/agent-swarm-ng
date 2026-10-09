@@ -839,6 +839,7 @@ export function App() {
           {activeTab === 'chat' ? (
             <ChatPanel
               route={route}
+              onRenamed={applyAgent}
               onNavigate={navigate}
               agents={agents}
               conversations={conversations}
@@ -870,6 +871,7 @@ export function App() {
             <AgentPanel
               agents={agents}
               route={route}
+              onRenamed={applyAgent}
               // Creating replaces the editor: unsaved settings ask first, as with any other way out.
               onNavigate={path => (path === '/agents/new' ? leave(() => navigate(path)) : navigate(path))}
               onDeleted={() => {

@@ -1,3 +1,6 @@
+import { RenameDialog } from '@/components/rename-dialog';
+import { PencilIcon } from '@/components/ui/icons';
+import { renameAgent, renameGroup } from '@/lib/rename';
 import { GroupAddIcon } from '@/components/ui/icons';
 import { useOrganizations } from '@/lib/organizations';
 import { useEffect, useRef, useState } from 'react';
@@ -52,6 +55,7 @@ export function ChatPanel({
   onAgent,
   onViewAgent,
   onGroup,
+  onRenamed,
   mobile,
   agentsLoading,
   agentsFailed,
@@ -72,6 +76,7 @@ export function ChatPanel({
   onAgent: (id: string, real?: RealAgent) => void;
   onViewAgent: (id: string, real?: RealAgent) => void;
   onGroup: (group: GroupChat) => void;
+  onRenamed: (agent: RealAgent) => void;
   mobile: boolean;
   agentsLoading: boolean;
   agentsFailed: boolean;
@@ -82,6 +87,9 @@ export function ChatPanel({
   const { name: me } = useSignedIn();
   const client = useQueryClient();
   const [search, setSearch] = useState('');
+  const [renaming, setRenaming] = useState<
+    { kind: 'dm'; agent: ChatAgent } | { kind: 'group'; group: GroupChat } | null
+  >(null);
   const [context, setContext] = useState<{ kind: 'dm'; agent: ChatAgent } | { kind: 'group'; group: GroupChat } | null>(
     null,
   );
@@ -268,7 +276,7 @@ export function ChatPanel({
           <ContextMenu.Content
             className="context-menu-content phone-menu-targets z-50 min-w-48 rounded-lg border border-border bg-background p-1 ao-top shadow-lg"
             onCloseAutoFocus={event => {
-              if (route.kind === 'group-edit' || route.kind === 'group-new') event.preventDefault();
+              if (route.kind === 'group-edit' || route.kind === 'group-new' || renaming) event.preventDefault();
             }}
           >
             <ContextMenu.Item
@@ -305,6 +313,15 @@ export function ChatPanel({
                   <path d="M4 5h16v12H8l-4 3V5z" />
                 </svg>
                 Open chat
+              </ContextMenu.Item>
+            )}
+            {context && (
+              <ContextMenu.Item
+                onSelect={() => setRenaming(context)}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted"
+              >
+                <PencilIcon />
+                {context.kind === 'group' ? 'Rename group chat' : 'Rename agent'}
               </ContextMenu.Item>
             )}
             {context?.kind === 'group' && (
@@ -378,6 +395,29 @@ export function ChatPanel({
           </ContextMenu.Content>
         </ContextMenu.Portal>
       </ContextMenu.Root>
+      <RenameDialog
+        open={renaming !== null}
+        onOpenChange={open => {
+          if (!open) setRenaming(null);
+        }}
+        title={renaming?.kind === 'group' ? 'Rename group chat' : 'Rename agent'}
+        label={renaming?.kind === 'group' ? 'Group name' : 'Agent name'}
+        current={renaming?.kind === 'group' ? renaming.group.name : (renaming?.agent.name ?? '')}
+        description={
+          renaming?.kind === 'group'
+            ? 'Its members and messages stay.'
+            : 'Its history, memory and settings stay. It is told its new name from its next turn.'
+        }
+        onRename={async name => {
+          if (renaming?.kind === 'group')
+            await renameGroup(
+              renaming.group.id,
+              name,
+              renaming.group.members.map(member => member.id),
+            );
+          else if (renaming) onRenamed(await renameAgent(renaming.agent.id, name));
+        }}
+      />
     </>
   );
 }

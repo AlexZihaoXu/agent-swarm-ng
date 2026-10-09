@@ -563,9 +563,9 @@ export function registerChat(
       if (closing) return reply.code(503).send({ message: 'The backend is shutting down.' });
       // The same short lock as deletion: a turn in flight already captured its model and name. The compaction
       // policy alone can change at any time (it is read when the next summary starts).
-      // Instructions too: the next turn reads them; a running turn keeps the ones it started with.
+      // Instructions and the name too: the next turn reads them; a running turn keeps the ones it started with.
       const identity = Object.keys(request.body).some(
-        key => !['compaction', 'instructions', 'heartbeat', 'timeNoteMinutes'].includes(key),
+        key => !['compaction', 'instructions', 'heartbeat', 'timeNoteMinutes', 'name'].includes(key),
       );
       if (active.has(id) || (identity && runs.has(id)))
         return reply
