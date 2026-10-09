@@ -13,6 +13,20 @@ import { detectOutage } from './security/outage';
 import { SwarmEvents, backendVersion, readFrontendVersion } from './push/swarm-events';
 
 process.umask(0o077);
+// A stream that closed early (a browser leaving a video, a dropped connection) is not a platform fault, but Bun can
+// raise it with no listener, which ended the whole backend. Only that error is kept from stopping it, logged with its
+// stack so its source can be found; any other uncaught error still stops the backend as before.
+const closedEarly = (error: unknown) => (error as { code?: unknown } | null)?.code === 'ERR_STREAM_PREMATURE_CLOSE';
+const uncaught = (error: unknown) => {
+  if (closedEarly(error)) {
+    console.error('Ignored a stream that closed early:', error instanceof Error ? error.stack : error);
+    return;
+  }
+  console.error(error);
+  process.exit(1);
+};
+process.on('uncaughtException', uncaught);
+process.on('unhandledRejection', uncaught);
 let stopPowerWatch = () => {};
 let stopSampler = () => {};
 const database = new PlatformStore();
