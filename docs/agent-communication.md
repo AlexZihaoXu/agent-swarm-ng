@@ -35,7 +35,7 @@ They use the same admission, 1.5-second debounce, temporary full-context interru
 
 New runs restore the receiving agent's private, compaction-aware Pi working session across human, group, and agent-thread conversations; agents without a checkpoint bootstrap once from bounded recent saved context. This gives the recipient its own normal working context, rather than an isolated DM-only session. It does **not** automatically transfer the sender’s private context. Peer content is task data, not human-owner authority or a permission change. Only explicit publication tools send anything out.
 
-`send_message` uses the incoming thread’s reply channel for peer replies. A batch containing only peer inputs cannot publish into the private human channel. Human requests retain their normal acknowledgment/final-answer behavior. Peer inputs do not automatically trigger acknowledgment/thank-you loops.
+`send_message` uses the incoming thread’s reply channel for peer replies. A batch containing only peer inputs cannot publish into the private human channel, unless every input answers work the owner asked for: a DM or group chain the agent began while working on its owner's own request (from their private chat or an emoji reaction) is marked `origin: 'owner'` (`DmChain.origin`), and the replies in it may report back to the owner there. Chains begun on the agent's own initiative (heartbeats, timers, watches, Discord, other agents) stay in their reply channel. Human requests retain their normal acknowledgment/final-answer behavior. Peer inputs do not automatically trigger acknowledgment/thank-you loops.
 
 ## Tools and limits
 

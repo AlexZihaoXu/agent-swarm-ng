@@ -93,13 +93,14 @@ export class SwarmStore {
     });
     if (!budget.count) throw new SwarmError('limit', 'The communication chain stopped or reached its message limit.');
   }
-  async beginChain(rootAgentId: string, id: string) {
+  /** `origin: 'owner'`: begun while the agent worked on its owner's own request (it may report back to them). */
+  async beginChain(rootAgentId: string, id: string, origin: 'agent' | 'owner' = 'agent') {
     await this.store.initialize();
     if (!(await this.store.client.agent.findUnique({ where: { id: rootAgentId }, select: { id: true } })))
       throw new SwarmError('missing', 'Agent not found.');
     const chain = await this.store.client.dmChain.upsert({
       where: { id },
-      create: { id, rootAgentId, remaining: DM_CHAIN_LIMIT },
+      create: { id, rootAgentId, origin, remaining: DM_CHAIN_LIMIT },
       update: {},
     });
     if (chain.rootAgentId !== rootAgentId || chain.cancelled)

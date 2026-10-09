@@ -17,6 +17,8 @@ async function fixture(
   gate?: Promise<void>,
   reactionGate?: Promise<void>,
   computers?: (database: Awaited<ReturnType<typeof prepareDatabase>>) => ComputerUseService,
+  /** A, given B's answer, reports it in its own private chat (allowed only for work its owner asked for). */
+  report = false,
 ) {
   const captured: Body[] = [];
   let peerTarget = '';
@@ -38,14 +40,16 @@ async function fixture(
     const incoming = JSON.stringify(body.messages.filter(message => message.role === 'user').at(-1));
     const lastUserIndex = body.messages.reduce((last, message, index) => (message.role === 'user' ? index : last), -1);
     const hasTool = body.messages.slice(lastUserIndex + 1).some(message => message.role === 'tool');
+    const reporting = report && dm && !hasTool && incoming.includes('answer') && system.startsWith('You are A.');
     const publish =
-      reactionTriage || reactionInput
+      reporting || reactionTriage || reactionInput
         ? !hasTool
         : group
           ? !hasTool && lastInput.includes('Source is the human owner')
           : !dm || (!hasTool && (loop || incoming.includes('question')));
-    const channelId =
-      dm || group || reactionInput
+    const channelId = reporting
+      ? system.match(/(?:current channel is|channel is) ([^.]+)\./)?.[1]
+      : dm || group || reactionInput
         ? lastInput.match(/reply channel: ([^.]+)\./)?.[1]
         : system.match(/(?:current channel is|channel is) ([^.]+)\./)?.[1];
     const name = reactionTriage
@@ -67,11 +71,13 @@ async function fixture(
             ? { recipientId: peerTarget, text: 'question' }
             : {
                 channelId,
-                text: group
-                  ? `Group answer by ${system.startsWith('You are A.') ? 'A' : 'B'}`
-                  : dm
-                    ? 'answer'
-                    : 'Human reply',
+                text: reporting
+                  ? 'Report for the owner'
+                  : group
+                    ? `Group answer by ${system.startsWith('You are A.') ? 'A' : 'B'}`
+                    : dm
+                      ? 'answer'
+                      : 'Human reply',
                 ...(lastInput.includes('Reply reference probe')
                   ? { replyToMessageId: lastInput.match(/message: ([\w-]+)/)?.[1] }
                   : {}),
@@ -640,6 +646,29 @@ it('delivers source-labelled agent threads through the normal inbox and queues u
     await f.close();
   }
 }, 20000);
+it("reports peers' answers to the owner only for work the owner asked for", async () => {
+  for (const origin of ['owner', undefined] as const) {
+    const f = await fixture(false, undefined, undefined, undefined, true);
+    try {
+      startRun(
+        f.runs,
+        { agentId: f.a.id, channelId: f.a.channels[0].id, clientMessageId: crypto.randomUUID() },
+        async context => {
+          await f.broker.send(f.a.id, f.b.id, 'question', 'send', context, undefined, undefined, [], origin);
+        },
+      );
+      await f.idle();
+      const reports = await f.database.client.message.count({
+        where: { channelId: f.a.channels[0].id, text: 'Report for the owner' },
+      });
+      // A's DMs for the owner's own request may report back; ones it began on its own may not.
+      expect([origin, reports]).toEqual([origin, origin === 'owner' ? 1 : 0]);
+      expect((await f.database.client.dmChain.findFirst())?.origin).toBe(origin ?? 'agent');
+    } finally {
+      await f.close();
+    }
+  }
+}, 40000);
 it('bounds an automatic reply loop with one shared eight-message chain', async () => {
   const f = await fixture(true);
   try {

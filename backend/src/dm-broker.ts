@@ -636,6 +636,8 @@ export class DmBroker {
     inheritedChain?: string,
     replyToId?: string,
     fileIds: string[] = [],
+    /** The run works on the owner's own request: a chain it starts may report back to the owner. */
+    origin?: 'owner',
   ): Promise<DmReceipt> {
     context.signal.throwIfAborted();
     if (this.closing || this.deleting.has(senderId) || this.deleting.has(recipientId))
@@ -658,7 +660,7 @@ export class DmBroker {
           { once: true },
         );
       }
-      await this.store.beginChain(senderId, chainId);
+      await this.store.beginChain(senderId, chainId, origin);
     }
     context.signal.throwIfAborted();
     const { message, duplicate } = await this.store.send({
@@ -765,6 +767,16 @@ export class DmBroker {
     }
     return publication;
   }
+  /** Every input of the turn answers a chain this agent began on its owner's own request (origin 'owner'). */
+  private async answersOwner(agentId: string, sources: AgentMessageSource[]) {
+    const chainIds = [...new Set(sources.map(source => source.chainId))];
+    if (!sources.length || chainIds.some(id => !id)) return false;
+    const chains = await this.database.client.dmChain.findMany({
+      where: { id: { in: chainIds }, rootAgentId: agentId, origin: 'owner', cancelled: false },
+      select: { id: true },
+    });
+    return chains.length === chainIds.length;
+  }
   async sendGroup(
     agentId: string,
     groupId: string,
@@ -774,6 +786,7 @@ export class DmBroker {
     inheritedChain?: string,
     replyToId?: string,
     fileIds: string[] = [],
+    origin?: 'owner',
   ) {
     context.signal.throwIfAborted();
     if (this.closing || this.deleting.has(agentId)) throw new Error('Group delivery is unavailable.');
@@ -783,7 +796,7 @@ export class DmBroker {
     await this.files.attachable(fileIds, { ...upload, messageId: retried?.id });
     const chainId = inheritedChain ?? context.runId;
     if (!inheritedChain) {
-      await this.store.beginChain(agentId, chainId);
+      await this.store.beginChain(agentId, chainId, origin);
       if (!this.linked.has(context.signal)) {
         this.linked.add(context.signal);
         context.signal.addEventListener(
@@ -982,7 +995,17 @@ ${preview.text}`
       this.store,
       agentId,
       (recipientId, text, callId, replyToId, fileIds) =>
-        this.send(agentId, recipientId, text, callId, context, chainFor(recipientId), replyToId, fileIds),
+        this.send(
+          agentId,
+          recipientId,
+          text,
+          callId,
+          context,
+          chainFor(recipientId),
+          replyToId,
+          fileIds,
+          humanBatch ? 'owner' : undefined,
+        ),
       this.files,
     );
     const computerTools =
@@ -1042,6 +1065,7 @@ ${preview.text}`
                 humanBatch ? undefined : (sources.find(source => source.channelId === channelId)?.chainId ?? inherited),
                 replyToId,
                 fileIds,
+                humanBatch ? 'owner' : undefined,
               ),
             );
           const source = threads.get(channelId);
@@ -1056,6 +1080,7 @@ ${preview.text}`
               chainFor(source.agentId),
               replyToId,
               fileIds,
+              humanBatch ? 'owner' : undefined,
             ),
           );
         },
@@ -1063,7 +1088,9 @@ ${preview.text}`
       history,
       incoming,
       async (text, replyToId, fileIds = []) => {
-        if (!humanAuthority)
+        // Replies to work the owner asked for (agents answering the DMs or group posts this agent sent while working on
+        // the owner's own request) may report back to them; anything else stays in its own reply channel.
+        if (!humanAuthority && !(await this.answersOwner(agentId, sources)))
           throw new Error(
             'This turn did not come from your owner’s private chat, so you cannot post there now. Reply in the input’s own reply channel (discord_send_message for Discord, the group or agent thread otherwise), or stay silent; your owner reads your private chat when they write to you.',
           );
