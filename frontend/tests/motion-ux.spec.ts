@@ -102,6 +102,7 @@ const sectionNames = [
   'Instructions',
   'Heartbeat',
   'Time notes',
+  'Timers',
   'Computers',
   'Scratchpad',
   'Memory',
