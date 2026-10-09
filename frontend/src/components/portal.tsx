@@ -1,3 +1,5 @@
+import { ComputerFileBrowser } from './computer-file-browser';
+import type { Computer } from './computer-card';
 import { useOrganizations } from '@/lib/organizations';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -138,6 +140,9 @@ export function Portal({
   onStop: (channelId: string) => void;
 }) {
   const [prefix, setPrefix] = useState<PortalPrefix | undefined>();
+  // A computer's file browser opened from Portal outlives Portal itself.
+  const [filesOf, setFilesOf] = useState<Computer | null>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
   const [text, setText] = useState('');
   const [selected, setSelected] = useState('');
   const [phone, setPhone] = useState(false);
@@ -253,6 +258,18 @@ export function Portal({
         subtitle: computer.state === 'running' ? 'Running' : computer.state,
         path: computerPath(computer.id),
         float: { kind: 'computer', computerId: computer.id },
+      });
+    for (const computer of running)
+      out.push({
+        id: `command:files:${computer.id}`,
+        kind: 'command',
+        title: `Files on ${computer.name}`,
+        subtitle: 'Browse its files',
+        keywords: ['file browser', 'files', 'download', computer.name],
+        run: () => {
+          setFilesOf(computer);
+          setFilesOpen(true);
+        },
       });
     running.slice(0, 20).forEach((computer, index) => {
       for (const session of terminals[index]?.data?.sessions ?? [])
@@ -370,107 +387,118 @@ export function Portal({
   const action = current ? (phone && current.float ? 'go to' : enterAction(current)) : 'open';
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="portal-scrim fixed inset-0 z-50 motion-safe:data-[state=open]:animate-[fade-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[fade-out_120ms_ease-in]" />
-        <Dialog.Content
-          aria-describedby={undefined}
-          onKeyDown={keys}
-          className="portal-glass fixed left-1/2 top-[max(0.75rem,12dvh)] z-50 flex max-h-[min(75dvh,32rem)] w-[calc(100%-1.5rem)] max-w-xl -translate-x-1/2 origin-top flex-col overflow-hidden rounded-2xl border border-white/10 shadow-2xl shadow-black/60 motion-safe:data-[state=open]:animate-[portal-in_200ms_cubic-bezier(0.22,1,0.36,1)] motion-safe:data-[state=closed]:animate-[portal-out_120ms_ease-in]"
-        >
-          <Dialog.Title className="sr-only">Portal</Dialog.Title>
-          <Command
-            label="Portal"
-            shouldFilter={false}
-            value={current?.id ?? ''}
-            onValueChange={setSelected}
-            loop
-            className="flex min-h-0 flex-1 flex-col"
+    <>
+      <Dialog.Root open={open} onOpenChange={onOpenChange}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="portal-scrim fixed inset-0 z-50 motion-safe:data-[state=open]:animate-[fade-in_160ms_ease-out] motion-safe:data-[state=closed]:animate-[fade-out_120ms_ease-in]" />
+          <Dialog.Content
+            aria-describedby={undefined}
+            onKeyDown={keys}
+            className="portal-glass fixed left-1/2 top-[max(0.75rem,12dvh)] z-50 flex max-h-[min(75dvh,32rem)] w-[calc(100%-1.5rem)] max-w-xl -translate-x-1/2 origin-top flex-col overflow-hidden rounded-2xl border border-white/10 shadow-2xl shadow-black/60 motion-safe:data-[state=open]:animate-[portal-in_200ms_cubic-bezier(0.22,1,0.36,1)] motion-safe:data-[state=closed]:animate-[portal-out_120ms_ease-in]"
           >
-            <div className="flex items-center gap-2 border-b border-white/10 px-4">
-              <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
-              {prefix && (
-                <button
-                  type="button"
-                  onClick={() => setPrefix(undefined)}
-                  aria-label={`Searching ${prefix.label}; remove`}
-                  className="flex shrink-0 items-center gap-1 rounded-md bg-white/10 px-2 py-0.5 text-xs font-medium outline-none hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span className="font-mono text-muted-foreground">{prefix.prefix}</span>
-                  {prefix.label}
-                </button>
-              )}
-              <Command.Input
-                autoFocus
-                value={text}
-                onValueChange={type}
-                placeholder={prefix ? `Search ${prefix.label.toLowerCase()}…` : 'Open, go to or run anything…'}
-                className="h-14 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-sm"
-              />
-            </div>
-            {!prefix && !text && (
-              <div className="flex flex-wrap gap-1.5 border-b border-white/10 px-3 py-2.5" aria-label="Search in">
-                {PREFIXES.map(item => (
+            <Dialog.Title className="sr-only">Portal</Dialog.Title>
+            <Command
+              label="Portal"
+              shouldFilter={false}
+              value={current?.id ?? ''}
+              onValueChange={setSelected}
+              loop
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <div className="flex items-center gap-2 border-b border-white/10 px-4">
+                <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
+                {prefix && (
                   <button
-                    key={item.prefix}
                     type="button"
-                    onClick={() => setPrefix(item)}
-                    className="flex min-h-8 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 text-xs outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+                    onClick={() => setPrefix(undefined)}
+                    aria-label={`Searching ${prefix.label}; remove`}
+                    className="flex shrink-0 items-center gap-1 rounded-md bg-white/10 px-2 py-0.5 text-xs font-medium outline-none hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span className="font-mono text-muted-foreground">{item.prefix}</span>
-                    {item.label}
+                    <span className="font-mono text-muted-foreground">{prefix.prefix}</span>
+                    {prefix.label}
                   </button>
-                ))}
+                )}
+                <Command.Input
+                  autoFocus
+                  value={text}
+                  onValueChange={type}
+                  placeholder={prefix ? `Search ${prefix.label.toLowerCase()}…` : 'Open, go to or run anything…'}
+                  className="h-14 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-sm"
+                />
               </div>
-            )}
-            <Command.List ref={list} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5">
-              <Command.Empty className="px-3 py-8 text-center text-sm text-muted-foreground">
-                {files.isFetching || knowledge.isFetching ? 'Searching…' : 'Nothing found.'}
-              </Command.Empty>
-              {results.map(group => (
-                <Command.Group
-                  key={group.kind}
-                  heading={group.heading}
-                  className="py-1 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-muted-foreground"
-                >
-                  {group.items.map(item => {
-                    const agent = item.kind === 'agent' ? agents.find(a => `agent:${a.id}` === item.id) : undefined;
-                    return (
-                      <Command.Item
-                        key={item.id}
-                        value={item.id}
-                        data-portal-id={item.id}
-                        onSelect={() => enter(item)}
-                        className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-sm outline-none select-none transition-colors duration-100 data-[selected=true]:bg-white/10 motion-reduce:transition-none sm:min-h-10"
-                      >
-                        <span className="flex size-6 shrink-0 items-center justify-center text-muted-foreground">
-                          {agent ? (
-                            <AgentAvatarArt {...(agent.avatar ?? defaultAvatar(agent.id))} size={22} />
-                          ) : (
-                            icons[item.kind]
-                          )}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate">{item.title}</span>
-                          {item.subtitle && (
-                            <span className="block truncate text-xs text-muted-foreground">{item.subtitle}</span>
-                          )}
-                        </span>
-                      </Command.Item>
-                    );
-                  })}
-                </Command.Group>
-              ))}
-            </Command.List>
-          </Command>
-          <footer className="flex shrink-0 items-center gap-4 border-t border-white/10 px-4 py-2 text-[11px] text-muted-foreground max-sm:hidden">
-            <Hint keys="↵">{action}</Hint>
-            {current?.path && action !== 'go to' && <Hint keys="⇧↵">go to</Hint>}
-            <Hint keys="esc">close</Hint>
-          </footer>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+              {!prefix && !text && (
+                <div className="flex flex-wrap gap-1.5 border-b border-white/10 px-3 py-2.5" aria-label="Search in">
+                  {PREFIXES.map(item => (
+                    <button
+                      key={item.prefix}
+                      type="button"
+                      onClick={() => setPrefix(item)}
+                      className="flex min-h-8 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 text-xs outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+                    >
+                      <span className="font-mono text-muted-foreground">{item.prefix}</span>
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <Command.List ref={list} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5">
+                <Command.Empty className="px-3 py-8 text-center text-sm text-muted-foreground">
+                  {files.isFetching || knowledge.isFetching ? 'Searching…' : 'Nothing found.'}
+                </Command.Empty>
+                {results.map(group => (
+                  <Command.Group
+                    key={group.kind}
+                    heading={group.heading}
+                    className="py-1 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-muted-foreground"
+                  >
+                    {group.items.map(item => {
+                      const agent = item.kind === 'agent' ? agents.find(a => `agent:${a.id}` === item.id) : undefined;
+                      return (
+                        <Command.Item
+                          key={item.id}
+                          value={item.id}
+                          data-portal-id={item.id}
+                          onSelect={() => enter(item)}
+                          className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-sm outline-none select-none transition-colors duration-100 data-[selected=true]:bg-white/10 motion-reduce:transition-none sm:min-h-10"
+                        >
+                          <span className="flex size-6 shrink-0 items-center justify-center text-muted-foreground">
+                            {agent ? (
+                              <AgentAvatarArt {...(agent.avatar ?? defaultAvatar(agent.id))} size={22} />
+                            ) : (
+                              icons[item.kind]
+                            )}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">{item.title}</span>
+                            {item.subtitle && (
+                              <span className="block truncate text-xs text-muted-foreground">{item.subtitle}</span>
+                            )}
+                          </span>
+                        </Command.Item>
+                      );
+                    })}
+                  </Command.Group>
+                ))}
+              </Command.List>
+            </Command>
+            <footer className="flex shrink-0 items-center gap-4 border-t border-white/10 px-4 py-2 text-[11px] text-muted-foreground max-sm:hidden">
+              <Hint keys="↵">{action}</Hint>
+              {current?.path && action !== 'go to' && <Hint keys="⇧↵">go to</Hint>}
+              <Hint keys="esc">close</Hint>
+            </footer>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+      {filesOf && (
+        <ComputerFileBrowser
+          key={filesOf.id}
+          computer={filesOf}
+          open={filesOpen}
+          connected={filesOf.state === 'running'}
+          onOpenChange={setFilesOpen}
+        />
+      )}
+    </>
   );
 }
 

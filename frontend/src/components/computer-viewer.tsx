@@ -9,10 +9,12 @@ import { TerminalWorkspace } from './computer-terminals';
 import { ComputerSwitcher } from './computer-switcher';
 import { FloatingTerminal } from './floating-terminal';
 import { FloatingChat } from './floating-chat';
+import { ComputerFileBrowser } from './computer-file-browser';
 import type { ChatAgent } from '@/use-chat';
 import {
   ChevronDownIcon,
   ComputerIcon,
+  FolderIcon,
   KeyboardIcon,
   LockIcon,
   SoundOffIcon,
@@ -128,6 +130,8 @@ export function ComputerViewer({
   // audio only on secure (HTTPS) pages, so on a plain-HTTP dashboard the toggle explains instead of failing silently.
   const [soundOn, setSoundOn] = useState(false);
   const soundAvailable = typeof window !== 'undefined' && window.isSecureContext;
+  // The same read-only file browser as the Computers grid's menu, from the desktop or terminal view.
+  const [filesOpen, setFilesOpen] = useState(false);
   useEffect(() => {
     iframeRef.current?.contentWindow?.postMessage(
       { type: 'swarm:desktop-audio', enabled: soundOn },
@@ -409,6 +413,19 @@ export function ComputerViewer({
             className={`size-11 shrink-0 p-0 md:size-8 ${soundAvailable ? '' : 'opacity-50'}`}
           >
             {soundOn ? <SoundOnIcon /> : <SoundOffIcon />}
+          </Button>
+        )}
+        {running && (
+          <Button
+            type="button"
+            variant={filesOpen ? 'default' : 'outline'}
+            size="sm"
+            aria-label="File browser"
+            title="Browse this computer’s files"
+            onClick={() => setFilesOpen(true)}
+            className="size-11 shrink-0 p-0 md:size-8"
+          >
+            <FolderIcon />
           </Button>
         )}
         {running && view === 'desktop' && !setupOpen && (
@@ -695,6 +712,15 @@ export function ComputerViewer({
         </AnimatePresence>
         {onOpenComputer && <ComputerSwitcher currentId={id} onOpen={onOpenComputer} />}
       </div>
+      {running && (
+        <ComputerFileBrowser
+          key={id}
+          computer={computer}
+          open={filesOpen}
+          connected={running}
+          onOpenChange={setFilesOpen}
+        />
+      )}
     </section>
   );
 }
