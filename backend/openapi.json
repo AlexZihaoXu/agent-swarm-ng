@@ -18365,6 +18365,16 @@
                                   "minimum": 0,
                                   "maximum": 60,
                                   "type": "integer"
+                                },
+                                "contextWindow": {
+                                  "minimum": 1024,
+                                  "maximum": 10000000,
+                                  "type": "integer"
+                                },
+                                "maxOutputTokens": {
+                                  "minimum": 256,
+                                  "maximum": 1000000,
+                                  "type": "integer"
                                 }
                               }
                             }
@@ -19637,6 +19647,16 @@
                           "comeBack": {
                             "minimum": 0,
                             "maximum": 60,
+                            "type": "integer"
+                          },
+                          "contextWindow": {
+                            "minimum": 1024,
+                            "maximum": 10000000,
+                            "type": "integer"
+                          },
+                          "maxOutputTokens": {
+                            "minimum": 256,
+                            "maximum": 1000000,
                             "type": "integer"
                           }
                         }
@@ -20973,6 +20993,16 @@
                           "minimum": 0,
                           "maximum": 60,
                           "type": "integer"
+                        },
+                        "contextWindow": {
+                          "minimum": 1024,
+                          "maximum": 10000000,
+                          "type": "integer"
+                        },
+                        "maxOutputTokens": {
+                          "minimum": 256,
+                          "maximum": 1000000,
+                          "type": "integer"
                         }
                       }
                     }
@@ -21412,6 +21442,16 @@
                           "comeBack": {
                             "minimum": 0,
                             "maximum": 60,
+                            "type": "integer"
+                          },
+                          "contextWindow": {
+                            "minimum": 1024,
+                            "maximum": 10000000,
+                            "type": "integer"
+                          },
+                          "maxOutputTokens": {
+                            "minimum": 256,
+                            "maximum": 1000000,
                             "type": "integer"
                           }
                         }
@@ -22572,6 +22612,16 @@
                           "comeBack": {
                             "minimum": 0,
                             "maximum": 60,
+                            "type": "integer"
+                          },
+                          "contextWindow": {
+                            "minimum": 1024,
+                            "maximum": 10000000,
+                            "type": "integer"
+                          },
+                          "maxOutputTokens": {
+                            "minimum": 256,
+                            "maximum": 1000000,
                             "type": "integer"
                           }
                         }

@@ -1,4 +1,5 @@
 import type { ThinkingLevel } from './generated/prisma/enums';
+import { LIMIT_RANGES } from './endpoint-store';
 
 /**
  * Fallback models (docs/agent-models.md): an agent's ranked model choices. #1 is the agent's own endpoint, model and
@@ -11,6 +12,10 @@ export type ChoiceOptions = {
   tooBig: 'skip' | 'compact';
   /** Minutes after it failed before the next call tries it again (once); 0: only when the owner switches back. */
   comeBack: number;
+  /** The owner's cap on this model's context window (tokens); unset: the model's (or its endpoint's) own. */
+  contextWindow?: number;
+  /** The owner's cap on one reply (tokens, thinking included); unset: the model's own, or a quarter of the window. */
+  maxOutputTokens?: number;
 };
 export type ModelChoice = { endpointId: string; model: string; thinkingLevel: ThinkingLevel } & ChoiceOptions;
 
@@ -24,14 +29,30 @@ export const RETRY_BASE = { ms: 2000 };
 const clamp = (value: unknown, { min, max }: { min: number; max: number }, fallback: number) =>
   typeof value === 'number' && Number.isInteger(value) ? Math.min(max, Math.max(min, value)) : fallback;
 
+/** A saved token cap, kept only when it is a whole number in the endpoint limits' range. */
+const cap = (value: unknown, range: { minimum: number; maximum: number }) =>
+  typeof value === 'number' && Number.isInteger(value) && value >= range.minimum && value <= range.maximum
+    ? value
+    : undefined;
+
 function optionsOf(raw: unknown): ChoiceOptions {
   const value = (raw && typeof raw === 'object' ? raw : {}) as Partial<ChoiceOptions>;
+  const contextWindow = cap(value.contextWindow, LIMIT_RANGES.contextWindow);
+  const maxOutputTokens = cap(value.maxOutputTokens, LIMIT_RANGES.maxOutputTokens);
   return {
     attempts: clamp(value.attempts, ATTEMPTS, DEFAULT_OPTIONS.attempts),
     tooBig: value.tooBig === 'compact' ? 'compact' : 'skip',
     comeBack: clamp(value.comeBack, COME_BACK, DEFAULT_OPTIONS.comeBack),
+    ...(contextWindow ? { contextWindow } : {}),
+    ...(maxOutputTokens ? { maxOutputTokens } : {}),
   };
 }
+
+/** A choice's token caps, for its model's configuration (chat-runtime resolveChatModel). */
+export const capsOf = ({ contextWindow, maxOutputTokens }: Partial<ChoiceOptions>) => ({
+  ...(contextWindow ? { contextWindow } : {}),
+  ...(maxOutputTokens ? { maxOutputTokens } : {}),
+});
 
 type Stored = { primary?: Partial<ChoiceOptions>; fallbacks?: Partial<ModelChoice>[] };
 
@@ -77,7 +98,12 @@ export function choicesOf(agent: {
 export function chainColumns(choices: ModelChoice[]) {
   const [first, ...rest] = choices;
   if (!first) throw new Error('An agent needs at least one model.');
-  const options = ({ attempts, tooBig, comeBack }: ChoiceOptions) => ({ attempts, tooBig, comeBack });
+  const options = ({ attempts, tooBig, comeBack, ...caps }: ChoiceOptions) => ({
+    attempts,
+    tooBig,
+    comeBack,
+    ...capsOf(caps),
+  });
   return {
     endpointId: first.endpointId,
     model: first.model,

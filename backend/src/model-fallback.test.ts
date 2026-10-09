@@ -293,6 +293,28 @@ describe('fallback models', () => {
     }
   });
 
+  it('sends each model its own reply cap, and sizes it by its own context cap', async () => {
+    Object.assign(modes, { a: '401', b: 'ok' });
+    calls = [];
+    const app = await testApp();
+    try {
+      const agent = await agentWith(app, [
+        choice('a', { contextWindow: 50_000 }),
+        choice('b', { maxOutputTokens: 1234, contextWindow: 100_000 }),
+      ]);
+      expect(agent.models).toMatchObject([
+        { contextWindow: 50_000 },
+        { maxOutputTokens: 1234, contextWindow: 100_000 },
+      ]);
+      expect(published((await chat(app, agent.id)).body)).toEqual(['From b']);
+      expect(JSON.parse(bodies.b!)).toMatchObject({ max_tokens: 1234 });
+      // A window cap alone never raises the reply length above the model's own (8,192 on this endpoint by default).
+      expect(JSON.parse(bodies.a!)).toMatchObject({ max_tokens: 8192 });
+    } finally {
+      await app.close();
+    }
+  });
+
   it('refuses a model listed twice', async () => {
     const app = await testApp();
     try {

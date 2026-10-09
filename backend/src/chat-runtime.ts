@@ -38,6 +38,7 @@ import { neutralizeLabels } from './message-text';
 import type { EndpointLimits } from './endpoint-store';
 import { detectedLimits } from './endpoint-detection';
 import { prepareFallback, type SessionFallback } from './model-fallback';
+import { capsOf } from './model-chain';
 
 export type Channel = { id: string; kind: 'platform-chat' | 'agent-dm'; agentId: string };
 export type AgentMessageSource = {
@@ -85,6 +86,9 @@ export type ChatConfiguration = {
   apiKey?: string;
   /** The endpoint's own model settings (Settings → model connections); unused for the subscription and OpenRouter. */
   limits?: EndpointLimits;
+  /** The owner's caps for this model in the agent's list (docs/agent-models.md), over any of the above. */
+  contextWindow?: number;
+  maxOutputTokens?: number;
   channel: Channel;
   /** Whether this turn is a heartbeat (help says what a class means there). */
   heartbeat?: () => boolean;
@@ -270,7 +274,22 @@ export async function resolveChatModel(config: ChatConfiguration, subscriptionRu
     ? { model: subscriptionRuntime.getModel('openai-codex', config.model), modelRuntime: subscriptionRuntime }
     : await createEndpointRuntime(config);
   if (!model) throw new Error('Unknown subscription model');
-  return { model, modelRuntime };
+  return { model: withCaps(model, config), modelRuntime };
+}
+
+/**
+ * The owner's caps for a model (docs/agent-models.md). A smaller context window alone also brings the reply length
+ * down to the default for that window when the model's own would not leave room.
+ */
+export function withCaps(model: Model<Api>, { contextWindow, maxOutputTokens }: ChatConfiguration) {
+  if (!contextWindow && !maxOutputTokens) return model;
+  const window = contextWindow ?? model.contextWindow;
+  const maxTokens =
+    maxOutputTokens ??
+    (contextWindow
+      ? Math.min(model.maxTokens, Math.max(4096, Math.min(32768, Math.floor(window / 4))))
+      : model.maxTokens);
+  return { ...model, contextWindow: window, maxTokens };
 }
 
 async function createEndpointRuntime(config: ChatConfiguration) {
@@ -421,6 +440,7 @@ export async function createChatSession(
               baseUrl: connection.baseUrl,
               apiKey: connection.apiKey,
               limits: connection.limits,
+              ...capsOf(choice),
             },
             connection.subscriptionRuntime,
           ),

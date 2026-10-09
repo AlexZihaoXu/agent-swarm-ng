@@ -70,10 +70,16 @@ export function AgentModelSettings({
     [status, setStatus] = useState('');
   const dirty = name.trim() !== saved.name || modelsChanged || Object.keys(memoryChanges).length > 0;
   const ready = name.trim() && rows.every(row => row.endpointId && row.model);
+  const capsInvalid = rows.some(row => row.invalid);
   async function save() {
     if (busy || !dirty) return;
     if (memoryInvalid) {
       throw new Error('Fix the active context settings first.');
+    }
+    if (capsInvalid) {
+      const message = 'Fix the token caps first: whole numbers in range, or empty for the model’s own.';
+      setError(message);
+      throw new Error(message);
     }
     if (!ready) {
       const message = 'Choose a name, and an endpoint and model for every row.';

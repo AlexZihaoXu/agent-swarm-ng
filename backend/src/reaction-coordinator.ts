@@ -1,3 +1,4 @@
+import { capsOf } from './model-chain';
 import type { PlatformStore } from './platform-store';
 import type { EndpointStore } from './endpoint-store';
 import type { Connections } from './users/connections';
@@ -155,6 +156,7 @@ export class ReactionCoordinator {
               name: agent.name,
               model: connection.choice.model,
               thinkingLevel: connection.choice.thinkingLevel,
+              ...capsOf(connection.choice),
               baseUrl: connection.baseUrl,
               apiKey: connection.apiKey,
               limits: connection.limits,

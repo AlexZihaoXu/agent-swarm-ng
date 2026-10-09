@@ -6,7 +6,7 @@ import { registerOrganizationRoutes } from './organization-routes';
 import { registerScratchRoutes } from './scratch-routes';
 import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
-import { EndpointStore } from './endpoint-store';
+import { EndpointStore, LIMIT_RANGES } from './endpoint-store';
 import { PlatformStore } from './platform-store';
 import { ThinkingLevel } from './generated/prisma/enums';
 import { endpointCapabilities } from './chat-runtime';
@@ -102,6 +102,9 @@ const ModelChoice = Type.Object(
     tooBig: Type.Union([Type.Literal('skip'), Type.Literal('compact')]),
     /** Minutes after it failed before the next call tries it once again; 0: only "Use #1 again". */
     comeBack: Type.Integer({ minimum: COME_BACK.min, maximum: COME_BACK.max }),
+    /** The owner's caps for this model (tokens); absent: the model's (or its endpoint's) own. */
+    contextWindow: Type.Optional(Type.Integer(LIMIT_RANGES.contextWindow)),
+    maxOutputTokens: Type.Optional(Type.Integer(LIMIT_RANGES.maxOutputTokens)),
   },
   { additionalProperties: false },
 );

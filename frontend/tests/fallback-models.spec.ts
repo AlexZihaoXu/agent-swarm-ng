@@ -133,3 +133,27 @@ test('moving a row to the top from its open panel hands the focus to its grip', 
   // Its Move up is disabled at #1, so the grip takes the focus rather than the page.
   await expect(section.getByRole('button', { name: 'Move #1 (drag, or use the arrow keys)' })).toBeFocused();
 });
+
+test('caps a model’s context window and reply length, refusing a typo until it is fixed', async ({ page }) => {
+  await mocks(page);
+  const saves: { models?: unknown[] }[] = [];
+  await page.route('**/api/agents/avery', route => {
+    if (route.request().method() !== 'PATCH') return route.fallback();
+    const body = route.request().postDataJSON();
+    saves.push(body);
+    return route.fulfill({ json: { ...sampleAgents[0], models: body.models, activeModel: 0 } });
+  });
+  await page.goto('/agents/avery');
+  const settings = page.getByRole('region', { name: 'Settings for Avery' });
+  const section = settings.getByRole('region', { name: 'Model' });
+  await section.getByRole('button', { name: /^#1/ }).click();
+  await section.getByLabel('Context window (tokens)').fill('131,072');
+  await section.getByLabel('Max reply length (tokens)').fill('12x');
+  await expect(section.getByText('Enter a whole number from 256 to 1,000,000.')).toBeVisible();
+  await settings.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(section.getByRole('alert')).toContainText('Fix the token caps first');
+  expect(saves).toHaveLength(0);
+  await section.getByLabel('Max reply length (tokens)').fill('16384');
+  await settings.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect.poll(() => saves).toEqual([{ models: [{ ...first, contextWindow: 131_072, maxOutputTokens: 16_384 }] }]);
+});

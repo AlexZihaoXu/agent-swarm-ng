@@ -8,9 +8,11 @@ import { ChevronDownIcon, ChevronUpIcon, GripIcon, PlusIcon, XIcon } from '@/com
 import { codexConnection, useModelSelection, type ModelEndpoint } from '@/use-model-selection';
 import type { RealAgent } from '@/use-chat';
 import { cn } from '@/lib/utils';
+import { CONTEXT_RANGE, parseTokens, REPLY_RANGE, TokenField } from '@/components/token-field';
 
 export type ModelChoice = RealAgent['models'][number];
-export type ChoiceRow = ModelChoice & { key: string };
+/** A row being edited: `invalid` while a typed token cap is not a valid number (it is not saved then). */
+export type ChoiceRow = ModelChoice & { key: string; invalid?: boolean };
 type Thinking = RealAgent['thinkingLevel'];
 
 /** Bounds the backend enforces too (docs/agent-models.md). */
@@ -31,7 +33,8 @@ export const modelsOf = (agent: Pick<RealAgent, 'endpointId' | 'model' | 'thinki
     : [{ ...NEW_CHOICE, endpointId: agent.endpointId, model: agent.model, thinkingLevel: agent.thinkingLevel }];
 export const rowsOf = (models: ModelChoice[]): ChoiceRow[] =>
   models.map(model => ({ ...model, key: crypto.randomUUID() }));
-export const choicesOf = (rows: ChoiceRow[]): ModelChoice[] => rows.map(({ key: _key, ...choice }) => choice);
+export const choicesOf = (rows: ChoiceRow[]): ModelChoice[] =>
+  rows.map(({ key: _key, invalid: _invalid, ...choice }) => choice);
 
 const thinkingLabel = (level: Thinking) => (level === 'off' ? 'Off' : level[0]!.toUpperCase() + level.slice(1));
 
@@ -111,7 +114,7 @@ export function ModelChoiceList({
     latest.current.onChange(next);
     latest.current.rows = next;
   };
-  const update = (key: string, patch: Partial<ModelChoice>) =>
+  const update = (key: string, patch: Partial<ChoiceRow>) =>
     onChange(rows.map(row => (row.key === key ? { ...row, ...patch } : row)));
 
   // Dragging a grip: the row trades places with a neighbour once the pointer passes that neighbour's middle.
@@ -303,7 +306,7 @@ function ChoiceEditor({
   last: boolean;
   organizationId: string;
   disabled: boolean;
-  onChange: (patch: Partial<ModelChoice>) => void;
+  onChange: (patch: Partial<ChoiceRow>) => void;
 }) {
   const id = useId();
   const choice = useModelSelection(
@@ -311,6 +314,20 @@ function ChoiceEditor({
     organizationId,
   );
   const [attempts, setAttempts] = useState(String(row.attempts));
+  const [context, setContext] = useState(row.contextWindow ? String(row.contextWindow) : '');
+  const [reply, setReply] = useState(row.maxOutputTokens ? String(row.maxOutputTokens) : '');
+  const parsedContext = parseTokens(context, CONTEXT_RANGE);
+  const parsedReply = parseTokens(reply, REPLY_RANGE);
+  // A typed cap reports up as soon as it is a valid number (or empty: the model's own); until then the row is invalid.
+  const caps = (nextContext: string, nextReply: string) => {
+    const contextWindow = parseTokens(nextContext, CONTEXT_RANGE);
+    const maxOutputTokens = parseTokens(nextReply, REPLY_RANGE);
+    onChange({
+      contextWindow: Number.isNaN(contextWindow) ? row.contextWindow : contextWindow,
+      maxOutputTokens: Number.isNaN(maxOutputTokens) ? row.maxOutputTokens : maxOutputTokens,
+      invalid: Number.isNaN(contextWindow) || Number.isNaN(maxOutputTokens),
+    });
+  };
   // The pickers report up as they settle (a new endpoint clears its model; a model picks its thinking level).
   useEffect(() => {
     if (choice.endpointId !== row.endpointId || choice.model !== row.model || choice.thinking !== row.thinkingLevel)
@@ -413,6 +430,34 @@ function ChoiceEditor({
             />
           </div>
         )}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TokenField
+          id={`${id}-context`}
+          label="Context window (tokens)"
+          value={context}
+          onChange={value => {
+            setContext(value);
+            caps(value, reply);
+          }}
+          invalid={Number.isNaN(parsedContext)}
+          range={CONTEXT_RANGE}
+          placeholder="The model's own"
+          help="A cap on how much it reads at once. Empty: the model's (or its endpoint's) own."
+        />
+        <TokenField
+          id={`${id}-reply`}
+          label="Max reply length (tokens)"
+          value={reply}
+          onChange={value => {
+            setReply(value);
+            caps(context, value);
+          }}
+          invalid={Number.isNaN(parsedReply)}
+          range={REPLY_RANGE}
+          placeholder="The model's own"
+          help="The longest single reply, thinking included. Empty: the model's own."
+        />
       </div>
       {choice.error && (
         <p role="alert" className="text-sm">

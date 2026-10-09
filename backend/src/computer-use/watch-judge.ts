@@ -1,3 +1,4 @@
+import { capsOf } from '../model-chain';
 import {
   createAgentSession,
   SessionManager,
@@ -256,6 +257,7 @@ export function createWatchJudge(deps: {
           name: agent.name,
           model: connection.choice.model,
           thinkingLevel: connection.choice.thinkingLevel,
+          ...capsOf(connection.choice),
           baseUrl: connection.baseUrl,
           apiKey: connection.apiKey,
           limits: connection.limits,

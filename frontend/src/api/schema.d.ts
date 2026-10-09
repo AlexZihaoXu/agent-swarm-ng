@@ -6644,6 +6644,8 @@ export interface operations {
                 attempts: number;
                 tooBig: 'skip' | 'compact';
                 comeBack: number;
+                contextWindow?: number;
+                maxOutputTokens?: number;
               }[];
               activeModel: number;
               id: string;
@@ -6791,6 +6793,8 @@ export interface operations {
               attempts: number;
               tooBig: 'skip' | 'compact';
               comeBack: number;
+              contextWindow?: number;
+              maxOutputTokens?: number;
             }[];
             activeModel: number;
             id: string;
@@ -7089,6 +7093,8 @@ export interface operations {
             attempts: number;
             tooBig: 'skip' | 'compact';
             comeBack: number;
+            contextWindow?: number;
+            maxOutputTokens?: number;
           }[];
         };
       };
@@ -7127,6 +7133,8 @@ export interface operations {
               attempts: number;
               tooBig: 'skip' | 'compact';
               comeBack: number;
+              contextWindow?: number;
+              maxOutputTokens?: number;
             }[];
             activeModel: number;
             id: string;
@@ -7293,6 +7301,8 @@ export interface operations {
               attempts: number;
               tooBig: 'skip' | 'compact';
               comeBack: number;
+              contextWindow?: number;
+              maxOutputTokens?: number;
             }[];
             activeModel: number;
             id: string;

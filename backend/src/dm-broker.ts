@@ -1,3 +1,4 @@
+import { capsOf } from './model-chain';
 import { ConnectionError } from './chat-connection';
 import { TerminalWatcher } from './computer-use/terminal-watcher';
 import { AgentTimers } from './agent-timers';
@@ -462,6 +463,7 @@ export class DmBroker {
           name: agent.name,
           model: connection.choice.model,
           thinkingLevel: connection.choice.thinkingLevel,
+          ...capsOf(connection.choice),
           baseUrl: connection.baseUrl,
           apiKey: connection.apiKey,
           limits: connection.limits,
@@ -1350,6 +1352,7 @@ ${preview.text}`
           name: agent.name,
           model: connection.choice.model,
           thinkingLevel: connection.choice.thinkingLevel,
+          ...capsOf(connection.choice),
           baseUrl: connection.baseUrl,
           apiKey: connection.apiKey,
           limits: connection.limits,
@@ -1423,6 +1426,7 @@ ${preview.text}`
           name: agent.name,
           model: connection.choice.model,
           thinkingLevel: connection.choice.thinkingLevel,
+          ...capsOf(connection.choice),
           baseUrl: connection.baseUrl,
           apiKey: connection.apiKey,
           limits: connection.limits,

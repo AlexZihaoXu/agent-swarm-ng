@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { withCaps } from './chat-runtime';
 import { chainColumns, choicesOf, ModelChains, RETRY_BASE, type ChainEvent, type ModelChoice } from './model-chain';
 
 const choice = (model: string, options: Partial<ModelChoice> = {}): ModelChoice => ({
@@ -26,6 +27,15 @@ describe('model chain storage', () => {
     const columns = chainColumns(choices);
     expect(columns).toMatchObject({ endpointId: 'e-one', model: 'one', thinkingLevel: 'off' });
     expect(choicesOf(columns)).toEqual(choices);
+  });
+
+  it("keeps each model's token caps, and drops one out of range", () => {
+    const choices = [choice('one', { contextWindow: 100_000 }), choice('two', { maxOutputTokens: 8192 })];
+    expect(choicesOf(chainColumns(choices))).toEqual(choices);
+    const modelChain = JSON.stringify({ primary: { contextWindow: 12, maxOutputTokens: 4096.5 } });
+    expect(choicesOf({ endpointId: 'e', model: 'm', thinkingLevel: 'off', modelChain })[0]).not.toHaveProperty(
+      'contextWindow',
+    );
   });
 
   it('reads an agent saved before fallbacks as one choice with the default options', () => {
@@ -131,5 +141,25 @@ describe('model chain policy', () => {
     expect(run().index).toBe(0);
     first.failure(false, '401');
     expect(chains.active('a', [choice('three'), ...choices])).toBe(0);
+  });
+});
+
+describe('model caps', () => {
+  const model = { contextWindow: 272_000, maxTokens: 128_000 } as Parameters<typeof withCaps>[0];
+  const config = (caps: object) =>
+    ({ name: 'A', model: 'm', thinkingLevel: 'off', baseUrl: '', channel: {}, ...caps }) as never;
+  it('a smaller window brings a long reply limit down to that window’s default; a reply cap wins', () => {
+    expect(withCaps(model, config({}))).toBe(model);
+    expect(withCaps(model, config({ contextWindow: 40_000 }))).toMatchObject({
+      contextWindow: 40_000,
+      maxTokens: 10_000,
+    });
+    expect(withCaps(model, config({ contextWindow: 40_000, maxOutputTokens: 2000 }))).toMatchObject({
+      maxTokens: 2000,
+    });
+    expect(withCaps(model, config({ maxOutputTokens: 64_000 }))).toMatchObject({
+      contextWindow: 272_000,
+      maxTokens: 64_000,
+    });
   });
 });
