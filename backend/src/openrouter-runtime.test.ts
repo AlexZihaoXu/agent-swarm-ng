@@ -96,6 +96,14 @@ it.each(['chat', 'messages'] as const)(
       const request = requests[0];
       expect(request.url).toBe(OPENROUTER_URL + (api === 'chat' ? '/chat/completions' : '/messages?beta=true'));
       expect(new Headers(request.init.headers).get('authorization')).toBe('Bearer !literal-$NOT_ENV');
+      // OpenRouter names the app from these: this platform, not Pi's coding CLI.
+      const sent = new Headers(request.init.headers);
+      expect([sent.get('x-openrouter-title'), sent.get('x-title'), sent.get('http-referer')]).toEqual([
+        'Agent Swarm NG (Pi)',
+        'Agent Swarm NG (Pi)',
+        'https://github.com/AlexZihaoXu/agent-swarm-ng',
+      ]);
+      expect(sent.get('x-openrouter-categories')).toBeNull();
       expect(request.init.redirect).toBe('error');
       expect(JSON.stringify(request)).not.toContain('developer-secret');
       if (api === 'chat') expect(request.body.reasoning).toMatchObject({ effort: 'low' });
