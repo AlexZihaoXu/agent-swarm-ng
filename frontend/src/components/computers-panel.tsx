@@ -27,6 +27,7 @@ import { computerPath } from '@/lib/dashboard-location';
 import { computersQuery } from '@/lib/computers-query';
 import { dialogOverlay } from '@/lib/styles';
 import { RenameDialog } from './rename-dialog';
+import type { CardAgent } from './computer-card';
 type ComputerList = { computers: Computer[] };
 
 function MenuIcon({ path, label }: { path: string; label: string }) {
@@ -191,15 +192,25 @@ export function ComputersPanel({
       return data?.holders ?? [];
     },
   });
-  // Who is recording which computer (a red Rec badge on its card).
-  const recordings = useQuery({
-    queryKey: ['computer-recordings'],
+  // Who holds, reads and records each computer: its card shows their avatars and a red Rec badge.
+  const control = useQuery({
+    queryKey: ['computer-control-cards'],
     refetchInterval: 5000,
     queryFn: async ({ signal }) => {
       const { data } = await api.GET('/api/computers/control', { signal });
-      return data?.recordings ?? [];
+      return data ?? { holders: [], readers: [], recordings: [] };
     },
   });
+  const recordings = { data: control.data?.recordings };
+  const presence = (agent: { id: string; name: string }): CardAgent => {
+    const listed = agentState?.agents.find(item => item.id === agent.id);
+    return {
+      ...agent,
+      avatar: listed?.avatar,
+      working: Boolean(listed && agentState?.busy[listed.channelId]),
+      ready: Boolean(listed && agentState?.connected),
+    };
+  };
   const [menuTarget, setMenuTarget] = useState<Computer | null>(null);
   const [filesTarget, setFilesTarget] = useState<Computer | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
@@ -571,6 +582,13 @@ export function ComputersPanel({
                         recording={(recordings.data ?? [])
                           .filter(item => item.computerId === computer.id)
                           .map(item => item.agent.name)}
+                        holder={(() => {
+                          const holder = control.data?.holders.find(item => item.computerId === computer.id);
+                          return holder ? presence(holder.agent) : undefined;
+                        })()}
+                        readers={(control.data?.readers ?? [])
+                          .filter(item => item.computerId === computer.id)
+                          .map(item => presence(item.agent))}
                       />
                     ))}
                   </div>

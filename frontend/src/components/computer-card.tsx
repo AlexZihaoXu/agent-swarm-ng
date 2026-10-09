@@ -4,6 +4,15 @@ import { Button } from '@/components/ui/button';
 import { advanceFrames, settleFrames, type PreviewLayer } from '@/lib/computer-preview-frames';
 import { UsageDial } from './usage-dial';
 import type { paths } from '@/api/schema';
+import { useQuery } from '@tanstack/react-query';
+import { terminalSessionsQuery } from '@/lib/computer-terminals';
+import { TerminalIcon } from '@/components/ui/icons';
+import { AgentAvatar } from './chat-identity';
+import { defaultAvatar } from '@/lib/agent-avatar';
+import type { AvatarAppearance } from '@/lib/agent-avatar';
+
+/** An agent on a computer, for its card: who (avatar only) and whether it is working now. */
+export type CardAgent = { id: string; name: string; avatar?: AvatarAppearance; working: boolean; ready: boolean };
 
 export type Computer =
   paths['/api/computers']['get']['responses'][200]['content']['application/json']['computers'][number];
@@ -20,11 +29,16 @@ export function ComputerCard({
   index = 0,
   onOpen,
   recording = [],
+  holder,
+  readers = [],
 }: {
   computer: Computer;
   canManage: boolean;
   /** Agents recording this computer now (start_recording). */
   recording?: string[];
+  /** The agent holding it (write), and those only reading it: avatars with their status dot. */
+  holder?: CardAgent;
+  readers?: CardAgent[];
   /** Position in the grid, for the entrance cascade. */
   index?: number;
   onOpen: (computer: Computer) => void;
@@ -37,6 +51,13 @@ export function ComputerCard({
   const running = computer.state === 'running';
   const stopped = computer.state === 'exited';
   const polling = running && visible && pageVisible;
+  // Open terminals, for the chip beside the status: refreshed while the card is on screen (Portal shares the list).
+  const terminals = useQuery({
+    ...terminalSessionsQuery(computer.id),
+    enabled: polling && canManage,
+    refetchInterval: 10_000,
+  });
+  const openTerminals = running ? (terminals.data?.sessions.filter(session => session.alive).length ?? 0) : 0;
 
   useEffect(() => {
     const observer = new IntersectionObserver(entries => setVisible(Boolean(entries[0]?.isIntersecting)), {
@@ -171,7 +192,66 @@ export function ComputerCard({
             {!running ? 'Desktop offline' : failed ? 'Preview unavailable' : 'Loading preview…'}
           </div>
         )}
-        <span className="absolute bottom-2 left-2 rounded-md bg-black/75 px-2 py-1 text-xs text-white">{status}</span>
+        <span className="absolute bottom-2 left-2 flex items-center gap-1.5">
+          <span className="flex items-center gap-1.5 rounded-md bg-black/75 px-2 py-1 text-xs text-white">
+            {running && <span aria-hidden="true" className="size-2 rounded-full bg-emerald-400" />}
+            {status}
+          </span>
+          {openTerminals > 0 && (
+            <span
+              title={`${openTerminals} terminal${openTerminals === 1 ? '' : 's'} open`}
+              aria-label={`${openTerminals} terminal${openTerminals === 1 ? '' : 's'} open`}
+              className="flex items-center gap-1 rounded-md bg-black/75 px-2 py-1 text-xs tabular-nums text-white"
+            >
+              <TerminalIcon className="size-3.5" />
+              {openTerminals}
+            </span>
+          )}
+        </span>
+        {(holder || readers.length > 0) && (
+          // Bottom right: the holder alone, then the readers grouped (like a shared document's viewers).
+          <span className="absolute bottom-2 right-2 flex items-center gap-1.5">
+            {holder && (
+              <span
+                role="img"
+                aria-label={`${holder.name} is using it${holder.working ? ', working' : ''}`}
+                title={`${holder.name} is using it`}
+                className="relative flex rounded-full bg-black/75 p-0.5"
+              >
+                <AgentAvatar
+                  initials={holder.name.slice(0, 2).toUpperCase()}
+                  avatar={holder.avatar ?? defaultAvatar(holder.id)}
+                  ready={holder.ready}
+                  working={holder.working}
+                />
+              </span>
+            )}
+            {readers.length > 0 && (
+              <span
+                role="img"
+                aria-label={`Viewing: ${readers.map(reader => reader.name).join(', ')}`}
+                title={`Viewing: ${readers.map(reader => reader.name).join(', ')}`}
+                className="flex items-center -space-x-2 rounded-full bg-black/75 p-0.5"
+              >
+                {readers.slice(0, 3).map(reader => (
+                  <span key={reader.id} className="relative flex rounded-full ring-2 ring-black/75">
+                    <AgentAvatar
+                      initials={reader.name.slice(0, 2).toUpperCase()}
+                      avatar={reader.avatar ?? defaultAvatar(reader.id)}
+                      ready={reader.ready}
+                      working={reader.working}
+                    />
+                  </span>
+                ))}
+                {readers.length > 3 && (
+                  <span className="relative flex size-7 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-white ring-2 ring-black/75">
+                    +{readers.length - 3}
+                  </span>
+                )}
+              </span>
+            )}
+          </span>
+        )}
         {recording.length > 0 && (
           <span
             role="status"
