@@ -5,6 +5,32 @@ import type { RealAgent } from '@/use-chat';
 type Thinking = RealAgent['thinkingLevel'];
 export type ModelEndpoint = { id: string; name: string; baseUrl: string };
 export const codexConnection = 'provider:openai-codex';
+/** A ChatGPT account's connection: the first `provider:openai-codex`, each added one `provider:openai-codex:<id>`. */
+export const isCodexConnection = (id: string) => id === codexConnection || id.startsWith(`${codexConnection}:`);
+
+/**
+ * The owner's model connections for an agent: each signed-in ChatGPT account (its own connection, named by its
+ * email), then their API endpoints. `codexModels` holds each account's models.
+ */
+export async function loadConnections(query: { organizationId?: string }, signal: AbortSignal) {
+  const [{ data, error }, { data: codex }] = await Promise.all([
+    api.GET('/api/model-endpoints', { params: { query }, signal }),
+    api.GET('/api/providers/openai-codex/accounts', { params: { query }, signal }),
+  ]);
+  const accounts = (codex?.accounts ?? []).filter(account => account.connected);
+  return {
+    failed: Boolean(error && !data),
+    endpoints: [
+      ...accounts.map(account => ({
+        id: account.endpointId,
+        name: `OpenAI Codex (ChatGPT)${account.email ? ` · ${account.email}` : ''}`,
+        baseUrl: '',
+      })),
+      ...(data ?? []),
+    ] as ModelEndpoint[],
+    codexModels: Object.fromEntries(accounts.map(account => [account.endpointId, account.models])),
+  };
+}
 
 /**
  * Endpoint -> model -> thinking level choices, shared by agent creation and editing.
@@ -20,7 +46,7 @@ export function useModelSelection(
   const [endpoints, setEndpoints] = useState<ModelEndpoint[]>([]);
   const [endpointId, setEndpointId] = useState(initial?.endpointId ?? '');
   const [models, setModels] = useState<string[]>([]);
-  const [codexModels, setCodexModels] = useState<string[]>([]);
+  const [codexModels, setCodexModels] = useState<Record<string, string[]>>({});
   const [model, setModel] = useState(initial?.model ?? '');
   const [levels, setLevels] = useState<Thinking[]>([]);
   const [thinking, setThinking] = useState<Thinking>(initial?.thinkingLevel ?? 'off');
@@ -35,18 +61,12 @@ export function useModelSelection(
     setLoading(true);
     setLoadFailed(false);
     setError('');
-    void Promise.all([
-      api.GET('/api/model-endpoints', { params: { query: owner }, signal: controller.signal }),
-      api.GET('/api/providers/openai-codex', { params: { query: owner }, signal: controller.signal }),
-    ])
-      .then(([{ data, error: endpointError }, { data: codex }]) => {
+    void loadConnections(owner, controller.signal)
+      .then(({ failed, endpoints, codexModels }) => {
         if (controller.signal.aborted) return;
-        if (endpointError && !data) setLoadFailed(true);
-        setCodexModels(codex?.connected ? codex.models : []);
-        setEndpoints([
-          ...(codex?.connected ? [{ id: codexConnection, name: 'OpenAI Codex (ChatGPT)', baseUrl: '' }] : []),
-          ...(data ?? []),
-        ]);
+        if (failed) setLoadFailed(true);
+        setCodexModels(codexModels);
+        setEndpoints(endpoints);
         setLoading(false);
       })
       .catch(() => {
@@ -65,8 +85,8 @@ export function useModelSelection(
     setError('');
     const endpoint = endpoints.find(item => item.id === endpointId);
     if (!endpoint) return;
-    if (endpoint.id === codexConnection) {
-      setModels(codexModels);
+    if (isCodexConnection(endpoint.id)) {
+      setModels(codexModels[endpoint.id] ?? []);
       setLoading(false);
       return;
     }

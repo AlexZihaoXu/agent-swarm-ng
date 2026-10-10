@@ -1,4 +1,4 @@
-import { CODEX_CONNECTION, type CodexProvider } from './codex-provider';
+import { codexAccountOf, type CodexProvider } from './codex-provider';
 import { limitsOf, type SavedEndpoint } from './endpoint-store';
 export class ConnectionError extends Error {
   constructor(
@@ -8,7 +8,10 @@ export class ConnectionError extends Error {
     super(message);
   }
 }
-/** An agent's model connection from its organization owner's endpoints and ChatGPT login (users/connections.ts). */
+/**
+ * An agent's model connection from its organization owner's endpoints and ChatGPT logins (users/connections.ts): for a
+ * ChatGPT connection id, `codex` is the account it names.
+ */
 export async function resolveChatConnection(
   endpointId: string,
   endpoints: SavedEndpoint[],
@@ -17,7 +20,7 @@ export async function resolveChatConnection(
 ) {
   // Cleared when it moved to another owner (docs/users.md): it waits for a model from its new owner's connections.
   if (!endpointId) throw new ConnectionError(400, 'Choose a model for this agent in its settings.');
-  const subscription = endpointId === CODEX_CONNECTION;
+  const subscription = codexAccountOf(endpointId) !== undefined;
   if (subscription && !(await codex.status()).connected)
     throw new ConnectionError(400, 'Reconnect OpenAI Codex in Settings.');
   const endpoint = subscription

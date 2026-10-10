@@ -6,18 +6,59 @@ import { databaseFile } from './database-location';
 
 export const CODEX_PROVIDER = 'openai-codex';
 export const CODEX_CONNECTION = 'provider:openai-codex';
+/** At most this many ChatGPT accounts per person (the first one included). */
+export const MAX_CODEX_ACCOUNTS = 5;
+export const CODEX_ACCOUNT_PATTERN = /^[0-9a-f]{8}$/;
+/**
+ * A person's ChatGPT accounts are separate connections (docs/users.md#model-connections): the first is
+ * `provider:openai-codex` (account ''), each one added after it `provider:openai-codex:<account>`.
+ */
+export const codexConnectionId = (account = '') => (account ? `${CODEX_CONNECTION}:${account}` : CODEX_CONNECTION);
+/** The ChatGPT account a connection id names ('' for the first), or undefined when it is not a ChatGPT one. */
+export function codexAccountOf(endpointId: string) {
+  if (endpointId === CODEX_CONNECTION) return '';
+  const account = endpointId.startsWith(`${CODEX_CONNECTION}:`) ? endpointId.slice(CODEX_CONNECTION.length + 1) : '';
+  return CODEX_ACCOUNT_PATTERN.test(account) ? account : undefined;
+}
 export type CodexLogin = {
   state: 'idle' | 'starting' | 'waiting' | 'connected' | 'error';
   userCode?: string;
   verificationUri?: string;
   message?: string;
 };
+/** Who a login is, from its access token's claims (shown on its card; never the token). */
+export type CodexIdentity = { email?: string; plan?: string; user?: string };
 
-/** A person's ChatGPT login files beside the database: admin keeps the original names (docs/users.md). */
-export const codexFiles = (ownerId: string) =>
-  ownerId === 'admin'
-    ? { auth: 'openai-auth.json', models: 'openai-models.json' }
-    : { auth: `openai-auth-${ownerId}.json`, models: `openai-models-${ownerId}.json` };
+/**
+ * A person's ChatGPT login files beside the database: admin keeps the original names (docs/users.md); an account added
+ * after the first adds `.<account>`.
+ */
+export const codexFiles = (ownerId: string, account = '') => {
+  const name = (kind: string) =>
+    `openai-${kind}${ownerId === 'admin' ? '' : `-${ownerId}`}${account ? `.${account}` : ''}.json`;
+  return { auth: name('auth'), models: name('models') };
+};
+
+/** The profile claims of a ChatGPT access token (a JWT); nothing when it cannot be read. */
+export function identityOf(accessToken: string | undefined): CodexIdentity {
+  try {
+    const claims = JSON.parse(Buffer.from(accessToken!.split('.')[1]!, 'base64url').toString()) as Record<
+      string,
+      Record<string, unknown> | undefined
+    >;
+    const profile = claims['https://api.openai.com/profile'];
+    const auth = claims['https://api.openai.com/auth'];
+    const text = (value: unknown) => (typeof value === 'string' && value ? value : undefined);
+    const user = text(auth?.chatgpt_account_user_id) ?? text(auth?.chatgpt_user_id);
+    return {
+      ...(text(profile?.email) ? { email: text(profile?.email) } : {}),
+      ...(text(auth?.chatgpt_plan_type) ? { plan: text(auth?.chatgpt_plan_type) } : {}),
+      ...(user ? { user } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
 
 export class CodexProvider {
   private runtimePromise?: Promise<ModelRuntime>;
@@ -26,6 +67,8 @@ export class CodexProvider {
   private refreshing?: Promise<void>;
   private refreshAfter = 0;
   private pending?: { controller: AbortController; work: Promise<void> };
+  /** Refuses a sign-in (its message) after it completes, e.g. an account already signed in on another card. */
+  refuse?: (identity: CodexIdentity) => Promise<string | undefined>;
   constructor(
     private factory = async (files = codexFiles('admin')) => {
       const directory = dirname(databaseFile());
@@ -39,9 +82,23 @@ export class CodexProvider {
     },
   ) {}
 
-  /** The login of another person (its own files). */
-  static forOwner(ownerId: string) {
-    return new CodexProvider(() => new CodexProvider().factory(codexFiles(ownerId)));
+  /** The login of another person, or another of their accounts (its own files). */
+  static forOwner(ownerId: string, account = '') {
+    return new CodexProvider(() => new CodexProvider().factory(codexFiles(ownerId, account)));
+  }
+
+  /** Who is signed in (empty when nobody is, or the token cannot be read). */
+  async identity(): Promise<CodexIdentity> {
+    try {
+      const runtime = await this.runtime();
+      const signedIn = (await runtime.listCredentials()).some(
+        item => item.providerId === CODEX_PROVIDER && item.type === 'oauth',
+      );
+      if (!signedIn) return {};
+      return identityOf((await runtime.getAuth(CODEX_PROVIDER, { signal: AbortSignal.timeout(15000) }))?.auth.apiKey);
+    } catch {
+      return {};
+    }
   }
 
   runtime() {
@@ -79,8 +136,11 @@ export class CodexProvider {
         .then(items => items.some(item => item.providerId === CODEX_PROVIDER && item.type === 'oauth'));
     if (await signedIn()) await this.refreshModels();
     const connected = !this.disconnecting && (await signedIn());
+    const { email, plan } = connected ? await this.identity() : {};
     return {
       connected,
+      ...(email ? { email } : {}),
+      ...(plan ? { plan } : {}),
       models: connected ? runtime.getModels(CODEX_PROVIDER).map(model => model.id) : [],
       login: this.login,
     };
@@ -119,7 +179,13 @@ export class CodexProvider {
           },
         }),
       )
-      .then(() => {
+      .then(async () => {
+        const refused = this.refuse && (await this.refuse(await this.identity()));
+        if (refused) {
+          await (await this.runtime()).logout(CODEX_PROVIDER);
+          this.login = { state: 'error', message: refused };
+          return;
+        }
         this.refreshAfter = 0;
         this.login = { state: 'connected' };
       })

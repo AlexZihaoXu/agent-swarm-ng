@@ -237,9 +237,30 @@ export const test = base.extend({
     await page.route(/\/api\/providers\/openai-codex(?:\/login)?$/, route =>
       route.fulfill({ json: { connected: false, models: [], login: { state: 'idle' } } }),
     );
+    await page.route(/\/api\/providers\/openai-codex\/accounts(?:\?.*)?$/, route =>
+      route.fulfill({ json: codexAccounts([{ connected: false, models: [] }]) }),
+    );
     await use(page);
   },
 });
+
+/** A ChatGPT accounts listing (the first account, then added ones with ids a0000001, a0000002, …). */
+export function codexAccounts(
+  accounts: { connected: boolean; models: string[]; email?: string; plan?: string; login?: object }[],
+) {
+  return {
+    accounts: accounts.map((account, index) => {
+      const id = index ? `a000000${index}` : '';
+      return {
+        account: id,
+        endpointId: id ? `provider:openai-codex:${id}` : 'provider:openai-codex',
+        login: { state: 'idle' },
+        ...account,
+      };
+    }),
+    max: 5,
+  };
+}
 
 /** An agent's option in the Agents panel's open picker, by its exact name. */
 export function agentOption(page: import('@playwright/test').Page, name: string) {

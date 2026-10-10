@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { test, expect, type Page } from './fixtures';
+import { test, expect, codexAccounts, type Page } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
 // The README's screenshots (docs/images/), drawn from test-only mock data: never the live site, a real database or a
@@ -848,6 +848,9 @@ async function mockAll(page: Page) {
   );
   await page.route(/\/api\/providers\/openai-codex(?:\/login)?(?:\?.*)?$/, route =>
     route.fulfill({ json: { connected: true, models: ['gpt-5.5', 'gpt-5.5-mini'], login: { state: 'idle' } } }),
+  );
+  await page.route(/\/api\/providers\/openai-codex\/accounts(?:\?.*)?$/, route =>
+    route.fulfill({ json: codexAccounts([{ connected: true, models: ['gpt-5.5', 'gpt-5.5-mini'] }]) }),
   );
   await page.route('**/api/agents/model-capabilities*', route =>
     route.fulfill({ json: { thinkingLevels: ['off', 'low', 'medium', 'high'], reasoning: true } }),

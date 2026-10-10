@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { NumberField } from '@/components/computer-resource-fields';
 import { ChevronDownIcon, ChevronUpIcon, GripIcon, PlusIcon, XIcon } from '@/components/ui/icons';
-import { codexConnection, useModelSelection, type ModelEndpoint } from '@/use-model-selection';
+import { isCodexConnection, loadConnections, useModelSelection, type ModelEndpoint } from '@/use-model-selection';
 import type { RealAgent } from '@/use-chat';
 import { cn } from '@/lib/utils';
 import { CONTEXT_RANGE, parseTokens, REPLY_RANGE, TokenField } from '@/components/token-field';
@@ -43,23 +43,16 @@ function useEndpointNames(organizationId: string) {
   const [endpoints, setEndpoints] = useState<ModelEndpoint[]>([]);
   useEffect(() => {
     const controller = new AbortController();
-    const query = { organizationId };
-    void Promise.all([
-      api.GET('/api/model-endpoints', { params: { query }, signal: controller.signal }),
-      api.GET('/api/providers/openai-codex', { params: { query }, signal: controller.signal }),
-    ])
-      .then(([{ data }, { data: codex }]) => {
-        if (controller.signal.aborted) return;
-        setEndpoints([
-          ...(codex?.connected ? [{ id: codexConnection, name: 'OpenAI Codex (ChatGPT)', baseUrl: '' }] : []),
-          ...(data ?? []),
-        ]);
+    void loadConnections({ organizationId }, controller.signal)
+      .then(({ endpoints }) => {
+        if (!controller.signal.aborted) setEndpoints(endpoints);
       })
       .catch(() => {});
     return () => controller.abort();
   }, [organizationId]);
   return (id: string) =>
-    endpoints.find(endpoint => endpoint.id === id)?.name ?? (id === codexConnection ? 'ChatGPT' : 'Removed endpoint');
+    endpoints.find(endpoint => endpoint.id === id)?.name ??
+    (isCodexConnection(id) ? 'ChatGPT (signed out)' : 'Removed endpoint');
 }
 
 /**

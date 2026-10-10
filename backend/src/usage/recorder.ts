@@ -1,6 +1,6 @@
 import type { ThinkingLevel } from '../generated/prisma/enums';
 import type { PlatformStore } from '../platform-store';
-import { CODEX_CONNECTION } from '../codex-provider';
+import { codexAccountOf } from '../codex-provider';
 
 /** What a model call was for (the dashboard's breakdown). */
 export type UsagePurpose =
@@ -178,7 +178,8 @@ export async function withEndpoints(
     const endpointId = row.endpointId ?? endpoints.get(row.agentId);
     return {
       ...row,
-      endpointId: endpointId && endpointId !== CODEX_CONNECTION && row.provider !== 'openai-codex' ? endpointId : null,
+      endpointId:
+        endpointId && codexAccountOf(endpointId) === undefined && row.provider !== 'openai-codex' ? endpointId : null,
     };
   });
 }

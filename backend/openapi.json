@@ -33717,9 +33717,9 @@
         }
       }
     },
-    "/api/providers/openai-codex": {
+    "/api/providers/openai-codex/accounts": {
       "get": {
-        "operationId": "getCodexProvider",
+        "operationId": "listCodexAccounts",
         "parameters": [
           {
             "schema": {
@@ -33739,6 +33739,602 @@
                 "schema": {
                   "type": "object",
                   "required": [
+                    "accounts",
+                    "max"
+                  ],
+                  "properties": {
+                    "accounts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "account",
+                          "endpointId",
+                          "connected",
+                          "models",
+                          "login"
+                        ],
+                        "properties": {
+                          "account": {
+                            "type": "string"
+                          },
+                          "endpointId": {
+                            "type": "string"
+                          },
+                          "connected": {
+                            "type": "boolean"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "plan": {
+                            "type": "string"
+                          },
+                          "models": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "login": {
+                            "type": "object",
+                            "required": [
+                              "state"
+                            ],
+                            "properties": {
+                              "state": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "idle"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "starting"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "waiting"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "connected"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "error"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "userCode": {
+                                "type": "string"
+                              },
+                              "verificationUri": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "max": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "addCodexAccount",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "accounts",
+                    "max"
+                  ],
+                  "properties": {
+                    "accounts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "account",
+                          "endpointId",
+                          "connected",
+                          "models",
+                          "login"
+                        ],
+                        "properties": {
+                          "account": {
+                            "type": "string"
+                          },
+                          "endpointId": {
+                            "type": "string"
+                          },
+                          "connected": {
+                            "type": "boolean"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "plan": {
+                            "type": "string"
+                          },
+                          "models": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "login": {
+                            "type": "object",
+                            "required": [
+                              "state"
+                            ],
+                            "properties": {
+                              "state": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "idle"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "starting"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "waiting"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "connected"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "error"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "userCode": {
+                                "type": "string"
+                              },
+                              "verificationUri": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "max": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/providers/openai-codex/accounts/{account}": {
+      "delete": {
+        "operationId": "removeCodexAccount",
+        "parameters": [
+          {
+            "schema": {
+              "pattern": "^[0-9a-f]{8}$",
+              "type": "string"
+            },
+            "in": "path",
+            "name": "account",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "accounts",
+                    "max"
+                  ],
+                  "properties": {
+                    "accounts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "account",
+                          "endpointId",
+                          "connected",
+                          "models",
+                          "login"
+                        ],
+                        "properties": {
+                          "account": {
+                            "type": "string"
+                          },
+                          "endpointId": {
+                            "type": "string"
+                          },
+                          "connected": {
+                            "type": "boolean"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "plan": {
+                            "type": "string"
+                          },
+                          "models": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "login": {
+                            "type": "object",
+                            "required": [
+                              "state"
+                            ],
+                            "properties": {
+                              "state": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "idle"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "starting"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "waiting"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "connected"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "error"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "userCode": {
+                                "type": "string"
+                              },
+                              "verificationUri": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "max": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/providers/openai-codex": {
+      "get": {
+        "operationId": "getCodexProvider",
+        "parameters": [
+          {
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "organizationId",
+            "required": false
+          },
+          {
+            "schema": {
+              "pattern": "^([0-9a-f]{8})?$",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "account",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
                     "connected",
                     "models",
                     "login"
@@ -33746,6 +34342,12 @@
                   "properties": {
                     "connected": {
                       "type": "boolean"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "plan": {
+                      "type": "string"
                     },
                     "models": {
                       "type": "array",
@@ -33810,6 +34412,42 @@
             }
           },
           "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
             "description": "Default Response",
             "content": {
               "application/json": {
@@ -33849,6 +34487,17 @@
       },
       "delete": {
         "operationId": "disconnectCodexProvider",
+        "parameters": [
+          {
+            "schema": {
+              "pattern": "^([0-9a-f]{8})?$",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "account",
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",
@@ -33864,6 +34513,12 @@
                   "properties": {
                     "connected": {
                       "type": "boolean"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "plan": {
+                      "type": "string"
                     },
                     "models": {
                       "type": "array",
@@ -33928,6 +34583,42 @@
             }
           },
           "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
             "description": "Default Response",
             "content": {
               "application/json": {
@@ -33981,6 +34672,17 @@
             }
           }
         },
+        "parameters": [
+          {
+            "schema": {
+              "pattern": "^([0-9a-f]{8})?$",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "account",
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",
@@ -33996,6 +34698,12 @@
                   "properties": {
                     "connected": {
                       "type": "boolean"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "plan": {
+                      "type": "string"
                     },
                     "models": {
                       "type": "array",
@@ -34060,6 +34768,42 @@
             }
           },
           "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
             "description": "Default Response",
             "content": {
               "application/json": {
@@ -34099,6 +34843,17 @@
       },
       "delete": {
         "operationId": "cancelCodexLogin",
+        "parameters": [
+          {
+            "schema": {
+              "pattern": "^([0-9a-f]{8})?$",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "account",
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",
@@ -34114,6 +34869,12 @@
                   "properties": {
                     "connected": {
                       "type": "boolean"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "plan": {
+                      "type": "string"
                     },
                     "models": {
                       "type": "array",
@@ -34178,6 +34939,42 @@
             }
           },
           "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
             "description": "Default Response",
             "content": {
               "application/json": {

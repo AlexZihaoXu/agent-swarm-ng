@@ -1,6 +1,7 @@
 import { unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { CodexProvider, codexFiles } from '../codex-provider';
+import { CodexProvider, codexAccountOf, codexFiles } from '../codex-provider';
+import { CodexAccounts } from '../codex-accounts';
 import { ConnectionError, resolveChatConnection } from '../chat-connection';
 import { isPublicUrl } from './public-address';
 import { databaseFile } from '../database-location';
@@ -22,16 +23,57 @@ export class Connections {
     readonly endpoints: EndpointStore,
     readonly reach: Reach,
     adminCodex: CodexProvider,
-    private readonly makeCodex: (ownerId: string) => CodexProvider = CodexProvider.forOwner,
+    private readonly makeCodex: (ownerId: string, account: string) => CodexProvider = CodexProvider.forOwner,
+    readonly codexAccounts = new CodexAccounts(),
   ) {
-    this.codexes.set(ADMIN_ID, adminCodex);
+    this.adopt(ADMIN_ID, '', adminCodex);
   }
 
-  /** A person's ChatGPT login. */
-  codex(ownerId: string) {
-    let codex = this.codexes.get(ownerId);
-    if (!codex) this.codexes.set(ownerId, (codex = this.makeCodex(ownerId)));
+  private adopt(ownerId: string, account: string, codex: CodexProvider) {
+    // One ChatGPT account signed in on two of a person's cards would only share its limits: refused.
+    codex.refuse = async ({ user }) => {
+      if (!user) return undefined;
+      for (const other of await this.codexAccountsOf(ownerId))
+        if (other !== account && (await this.codex(ownerId, other).identity()).user === user)
+          return 'This ChatGPT account is already connected on another card. Sign in with a different account.';
+      return undefined;
+    };
+    this.codexes.set(`${ownerId}/${account}`, codex);
     return codex;
+  }
+
+  /** A person's ChatGPT login: their first account (''), or one they added. */
+  codex(ownerId: string, account = '') {
+    return this.codexes.get(`${ownerId}/${account}`) ?? this.adopt(ownerId, account, this.makeCodex(ownerId, account));
+  }
+
+  /** A person's ChatGPT accounts, first one ('') first. */
+  async codexAccountsOf(ownerId: string) {
+    return ['', ...(await this.codexAccounts.readFor(ownerId))];
+  }
+
+  /** The login a ChatGPT connection id names, or undefined when it is not one of the person's. */
+  async codexFor(ownerId: string, endpointId: string) {
+    const account = codexAccountOf(endpointId);
+    if (account === undefined || !(await this.codexAccountsOf(ownerId)).includes(account)) return undefined;
+    return this.codex(ownerId, account);
+  }
+
+  /** Forgets one added account: signed out, its files deleted. */
+  async removeCodexAccount(ownerId: string, account: string) {
+    if (!account || !(await this.codexAccounts.remove(ownerId, account))) return false;
+    await this.dropCodex(ownerId, account);
+    return true;
+  }
+
+  private async dropCodex(ownerId: string, account: string) {
+    const key = `${ownerId}/${account}`;
+    const codex = this.codexes.get(key);
+    this.codexes.delete(key);
+    await codex?.disconnect().catch(() => undefined);
+    const directory = dirname(databaseFile());
+    const files = codexFiles(ownerId, account);
+    for (const name of [files.auth, files.models]) await unlink(join(directory, name)).catch(() => undefined);
   }
 
   /** Whose connections an agent uses: its organization's owner. */
@@ -45,10 +87,13 @@ export class Connections {
   /** One endpoint of the agent's organization owner, checked like every turn's. */
   async forEndpoint(agentId: string, endpointId: string, signal: AbortSignal) {
     const owner = await this.ownerOfAgent(agentId);
+    const codex = await this.codexFor(owner, endpointId);
+    if (codexAccountOf(endpointId) !== undefined && !codex)
+      throw new ConnectionError(404, 'This ChatGPT account was removed from Settings.');
     const connection = await resolveChatConnection(
       endpointId,
       await this.endpoints.readFor(owner),
-      this.codex(owner),
+      codex ?? this.codex(owner),
       signal,
     );
     // A user's endpoint must still point at the public internet (its name could have been re-pointed since it was
@@ -87,14 +132,10 @@ export class Connections {
     });
   }
 
-  /** A deleted person's endpoints and ChatGPT login go with them. */
+  /** A deleted person's endpoints and ChatGPT logins go with them. */
   async forgetOwner(ownerId: string) {
-    const codex = this.codexes.get(ownerId);
-    this.codexes.delete(ownerId);
-    await codex?.disconnect().catch(() => undefined);
-    const directory = dirname(databaseFile());
-    const files = codexFiles(ownerId);
-    for (const name of [files.auth, files.models]) await unlink(join(directory, name)).catch(() => undefined);
+    for (const account of ['', ...(await this.codexAccounts.removeOwner(ownerId))])
+      await this.dropCodex(ownerId, account);
     await this.endpoints.removeOwner(ownerId);
   }
 

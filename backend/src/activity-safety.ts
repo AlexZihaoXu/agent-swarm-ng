@@ -85,15 +85,17 @@ export function providerFailure(message?: string) {
     ? 'context limit'
     : /insufficient[_ -]?quota|quota exceeded/i.test(message ?? '')
       ? 'quota'
-      : /rate[_ -]?limit|too many requests/i.test(message ?? '') || status === '429'
-        ? 'rate limit'
-        : /invalid[_ -]?(?:api[_ -]?)?key|invalid_grant|unauthorized|authentication|token.*expired|refresh.*failed/i.test(
-              message ?? '',
-            ) || status === '401'
-          ? 'authentication'
-          : status === '403'
-            ? 'access denied'
-            : 'provider request';
+      : /usage[_ -]?limit/i.test(message ?? '')
+        ? 'usage limit'
+        : /rate[_ -]?limit|too many requests/i.test(message ?? '') || status === '429'
+          ? 'rate limit'
+          : /invalid[_ -]?(?:api[_ -]?)?key|invalid_grant|unauthorized|authentication|token.*expired|refresh.*failed/i.test(
+                message ?? '',
+              ) || status === '401'
+            ? 'authentication'
+            : status === '403'
+              ? 'access denied'
+              : 'provider request';
   return {
     summary: 'The provider request failed. Check the model connection.',
     category,

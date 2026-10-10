@@ -10,7 +10,7 @@ import { EndpointStore, LIMIT_RANGES } from './endpoint-store';
 import { PlatformStore } from './platform-store';
 import { ThinkingLevel } from './generated/prisma/enums';
 import { endpointCapabilities } from './chat-runtime';
-import { CodexProvider, CODEX_CONNECTION } from './codex-provider';
+import { CodexProvider, codexAccountOf } from './codex-provider';
 import { AgentRuns } from './agent-runs';
 import { createRunStreams } from './run-streams';
 import { AvatarSchema, type AgentAvatar } from './agent-avatar';
@@ -386,8 +386,10 @@ export function registerChat(
       reply.header('Cache-Control', 'no-store');
       try {
         const owner = await connectionOwner(connections.reach, viewerOf(request), request.query.organizationId);
-        if (request.query.endpointId === CODEX_CONNECTION)
-          return await connections.codex(owner).capabilities(request.query.model);
+        if (request.query.endpointId && codexAccountOf(request.query.endpointId) !== undefined) {
+          const codex = await connections.codexFor(owner, request.query.endpointId);
+          return codex ? await codex.capabilities(request.query.model) : { thinkingLevels: [], reasoning: false };
+        }
         const endpoint = (await store.readFor(owner)).find(row => row.id === request.query.endpointId);
         return await endpointCapabilities(request.query.model, endpoint);
       } catch {
@@ -467,17 +469,13 @@ export function registerChat(
     /** Whose connections the agent will use: its organization's owner. */
     owner: string,
   ): Promise<{ status: 400 | 404; message: string } | null> {
-    const codex = connections.codex(owner);
-    const endpoint =
-      input.endpointId === CODEX_CONNECTION
-        ? undefined
-        : (await store.readFor(owner)).find(row => row.id === input.endpointId);
+    const subscription = codexAccountOf(input.endpointId) !== undefined;
+    const codex = subscription ? await connections.codexFor(owner, input.endpointId) : undefined;
+    if (subscription && !codex) return { status: 404, message: 'This ChatGPT account was removed from Settings.' };
+    const endpoint = subscription ? undefined : (await store.readFor(owner)).find(row => row.id === input.endpointId);
     let capabilities;
     try {
-      capabilities =
-        input.endpointId === CODEX_CONNECTION
-          ? await codex.capabilities(input.model)
-          : await endpointCapabilities(input.model, endpoint);
+      capabilities = codex ? await codex.capabilities(input.model) : await endpointCapabilities(input.model, endpoint);
     } catch {
       return {
         status: 400,
@@ -486,7 +484,7 @@ export function registerChat(
     }
     if (!capabilities.thinkingLevels.includes(input.thinkingLevel))
       return { status: 400, message: 'Choose a name and a supported thinking level.' };
-    if (input.endpointId === CODEX_CONNECTION) {
+    if (codex) {
       try {
         const status = await codex.status();
         if (!status.connected || !status.models.includes(input.model))
