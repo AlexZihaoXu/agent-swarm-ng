@@ -76,7 +76,7 @@ Generated TypeScript types do not provide client-side runtime validation; add th
 
 ## Local setup
 
-Requires Bun 1.3.6 and Node.js 22.12+ (Vite/test tooling).
+Requires Bun 1.3.14 and Node.js 22.12+ (Vite/test tooling).
 
 ```sh
 bun install --frozen-lockfile

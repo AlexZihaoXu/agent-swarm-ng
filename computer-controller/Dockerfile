@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.6
+FROM oven/bun:1.3.14
 WORKDIR /app
 COPY computer-controller/src computer-controller/src
 COPY templates/default/security/chromium-seccomp.json templates/default/security/chromium-seccomp.json

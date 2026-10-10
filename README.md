@@ -54,7 +54,7 @@ The longer-term direction is in the [swarm vision](docs/vision.md).
 - cgroup v2 and FUSE (any current distribution): the privileged `lxcfs` service shows each computer its own memory and CPUs ([LXCFS](docs/computers.md#lxcfs)).
 - A private network to reach it from: **[Tailscale](https://tailscale.com)** (recommended) or a trusted LAN. Do not expose it to the internet directly.
 - Disk space for the computer images (several GB) and each computer's files.
-- For development only: Bun 1.3.6 and Node.js 22.12+.
+- For development only: Bun 1.3.14 and Node.js 22.12+.
 
 Built and tested on my own Bosgame P5 mini PC (Ryzen 7 6800H, 32 GB RAM).
 

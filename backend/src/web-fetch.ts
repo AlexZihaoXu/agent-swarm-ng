@@ -20,7 +20,7 @@ const decoders: Record<string, () => Transform> = {
 /**
  * fetch() for the web worker that connects only to the addresses it just checked. Checking a name and then letting
  * global fetch resolve it again allows DNS rebinding onto internal services, so it connects to the checked address
- * itself. (A socket lookup hook did the same, but Bun 1.3.6, the backend image's, ignores what the hook returns.)
+ * itself. (A socket lookup hook did the same, but Bun 1.3.6 ignored what the hook returns.)
  */
 export function createPublicFetch({
   resolve = hostname => dnsLookup(hostname, { all: true, verbatim: true }),
