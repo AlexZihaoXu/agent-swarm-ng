@@ -92,7 +92,7 @@ export type ChatConfiguration = {
   channel: Channel;
   /** Whether this turn is a heartbeat (help says what a class means there). */
   heartbeat?: () => boolean;
-  /** The owner's own instructions for this agent (Agents → agent → Instructions), last in its system prompt. */
+  /** The owner's own instructions for this agent (Agent settings → Instructions), last in its system prompt. */
   instructions?: string;
   /** The agent's memory index (rebuilt when it sleeps), shown with the memory guidance when memory tools are granted. */
   memoryIndex?: string;

@@ -50,7 +50,7 @@ function changeOf(timer: Timer, draft: Draft): Change | null {
 }
 
 /**
- * Agents → agent → Timers (docs/agent-time.md#owner-changes): the timers and reminders the agent set, with their
+ * Agent settings → Timers (docs/agent-time.md#owner-changes): the timers and reminders the agent set, with their
  * next time, kept across restarts. The owner may change or cancel them; Save first says the agent will be told, and
  * after saving it is (a platform note in its next turn). The list follows the agent's own changes live.
  */

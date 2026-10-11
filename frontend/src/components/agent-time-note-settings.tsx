@@ -10,7 +10,7 @@ const label = (minutes: number) =>
   minutes === 0 ? 'Off' : minutes === 60 ? 'Every hour' : `Every ${minutes} minute${minutes === 1 ? '' : 's'}`;
 
 /**
- * Agents → agent → Time notes (docs/agent-time.md#time-notes): while it works, the agent is told the current time
+ * Agent settings → Time notes (docs/agent-time.md#time-notes): while it works, the agent is told the current time
  * once per clock-aligned window, before its next model call, never interrupting. Same section composition as
  * Heartbeat; saved with the page's Save changes.
  */

@@ -1,6 +1,6 @@
 # Agent models and fallbacks
 
-Each agent has a ranked list of up to **five models** (Agents → agent → **Model**). It uses #1; when a model fails, it moves down the list, and it comes back up when the higher model works again. Only models the owner put in the list are ever used: there is no automatic fallback to anything else, paid API or not.
+Each agent has a ranked list of up to **five models** (Agent settings → **Model**). It uses #1; when a model fails, it moves down the list, and it comes back up when the higher model works again. Only models the owner put in the list are ever used: there is no automatic fallback to anything else, paid API or not.
 
 ## The list
 

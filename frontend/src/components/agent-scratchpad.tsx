@@ -10,7 +10,7 @@ import { fileSize } from '@/lib/computer-files';
 import { useScratchRevision } from '@/lib/scratch-writers';
 
 /**
- * Agents → agent → Scratchpad: a read-only look at the agent's scratch files, laid out like the computer File
+ * Agent settings → Scratchpad: a read-only look at the agent's scratch files, laid out like the computer File
  * browser (breadcrumbs, a list, a text preview). The human changes files by asking the agent. It refreshes when
  * the agent writes.
  */

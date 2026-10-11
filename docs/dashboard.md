@@ -51,4 +51,4 @@ The history backfill (run spans from the activity archive, usage from saved sess
 
 ## Phone layout
 
-With five tabs, phones get a floating bottom capsule of icons (each tab at least 44 px wide and tall; the names are for screen readers) and a slim top bar with the organization switcher and Portal; both hide in detail views (a conversation, the desktop viewer), which have their own back links. Agents is not a detail view: its agent picker sits above the settings, under the top bar. Wider screens keep one header row: organization, tabs, Portal.
+With four tabs (Dashboard, Chat, Computers, Settings; agents are managed from Chat, see [chat and groups](chat-and-groups.md)), phones get a floating bottom capsule of icons (each tab at least 44 px wide and tall; the names are for screen readers) and a slim top bar with the organization switcher and Portal; both hide in detail views (a conversation, the desktop viewer), which have their own back links. An agent's settings open full screen over its chat. Wider screens keep one header row: organization, tabs, Portal.

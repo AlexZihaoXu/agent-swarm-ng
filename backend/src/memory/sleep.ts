@@ -35,7 +35,7 @@ type Sleeper = {
 };
 /**
  * Whether an agent is in its off hours: outside its active hours when its heartbeat is on and has them, otherwise
- * inside its sleep window (Agents → agent → Memory; 03:00–05:00 by default). Server time zone, like the heartbeat.
+ * inside its sleep window (Agent settings → Memory; 03:00–05:00 by default). Server time zone, like the heartbeat.
  */
 export function offHours(
   agent: Pick<Sleeper, 'heartbeatEnabled' | 'heartbeatFrom' | 'heartbeatTo' | 'sleepFrom' | 'sleepTo'>,

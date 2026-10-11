@@ -235,7 +235,9 @@ export function createDiscordWriteTools(context: DiscordWriteContext): AgentTool
         async execute(_call, { userId }) {
           const account = await store.who(userId, agentId);
           if (!account && !(await store.canDm(agentId, userId)))
-            throw new Error('Your owner has not put this person on your DM list (Agents → you → Channels → Discord).');
+            throw new Error(
+              'Your owner has not put this person on your DM list (your agent settings → Channels → Discord).',
+            );
           const dm = (await call(() => bot(context).api.users.createDM(userId))) as APIChannel;
           const recipient = 'recipients' in dm ? dm.recipients?.[0]?.username : undefined;
           const name = account?.name ?? recipient ?? 'someone';

@@ -8,19 +8,10 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatSkeleton, EdgeSkeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import {
-  AgentAddIcon,
-  AgentsIcon,
-  ChatIcon,
-  ComputerIcon,
-  DashboardIcon,
-  PlusIcon,
-  SettingsIcon,
-} from '@/components/ui/icons';
+import { AgentAddIcon, ChatIcon, ComputerIcon, DashboardIcon, PlusIcon, SettingsIcon } from '@/components/ui/icons';
 import { JumpToLatest } from '@/components/jump-to-latest';
 import { useMessageWindow } from '@/lib/use-message-window';
-import { AgentPanel } from '@/components/agent-panel';
-import { EditAgentForm } from '@/components/edit-agent-form';
+import { AgentFormDialogs, AgentSettingsDialog } from '@/components/agent-dialogs';
 import { AgentAvatar, AgentName, CompactionCue } from '@/components/chat-identity';
 import { cn } from '@/lib/utils';
 import { useChat, type ChatAgent } from '@/use-chat';
@@ -63,7 +54,6 @@ import { OrganizationSwitcher } from '@/components/organization-switcher';
 import { useOrganizations } from '@/lib/organizations';
 import { PortalWindows } from '@/components/portal-windows';
 import type { ComputerAgentState } from '@/components/computer-control';
-import { AgentPicker } from '@/components/agent-picker';
 import {
   agentDmPath,
   agentPath,
@@ -254,7 +244,7 @@ export function App() {
     if (activeTab === 'settings') setSettingsSeen(true);
   }, [activeTab]);
   // Tab content enters from the side its tab sits on (see .tab-enter).
-  const tabOrder = ['dashboard', 'agents', 'chat', 'computers', 'settings'];
+  const tabOrder = ['dashboard', 'chat', 'computers', 'settings'];
   const previousTab = useRef(activeTab);
   const tabShift = useRef(0);
   if (previousTab.current !== activeTab) {
@@ -262,33 +252,17 @@ export function App() {
     previousTab.current = activeTab;
   }
   const pendingTabPath = useRef('');
-  const focusAgentsAfterDelete = useRef(false);
-  useEffect(() => {
-    if (!focusAgentsAfterDelete.current || route.tab !== 'agents' || route.kind === 'not-found') return;
-    const frame = requestAnimationFrame(() => {
-      const panel = document.querySelector<HTMLElement>('aside[aria-label="Agents"]');
-      if (panel) {
-        panel.focus();
-        focusAgentsAfterDelete.current = false;
-      }
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [route.kind, agents.length]);
   const changeTab = (value: string) => {
     const target =
-      value === 'agents'
-        ? selectedId
-          ? agentPath(selectedId)
-          : '/agents'
-        : value === 'chat'
-          ? !isPhone && selectedId
-            ? chatAgentPath(selectedId)
-            : '/chat'
-          : value === 'computers'
-            ? '/computers'
-            : value === 'dashboard'
-              ? '/dashboard'
-              : '/settings';
+      value === 'chat'
+        ? !isPhone && selectedId
+          ? chatAgentPath(selectedId)
+          : '/chat'
+        : value === 'computers'
+          ? '/computers'
+          : value === 'dashboard'
+            ? '/dashboard'
+            : '/settings';
     // Compare with the address itself: navigation renders as a transition, so during a quick second click the
     // rendered tab can still be the old one and would swallow the click.
     const current = parseDashboardPath(window.location.pathname).tab;
@@ -302,10 +276,11 @@ export function App() {
     pendingTabPath.current = '';
   }, [location.pathname]);
   useEffect(() => {
-    if (route.kind === 'root') navigate('/agents', { replace: true });
-    // Agents always shows one agent's settings (phones too: the picker is above them); Chat lists on phones.
-    else if (!agentsLoading && agents[0] && (route.kind === 'agents-list' || (!isPhone && route.kind === 'chat-list')))
-      navigate(route.kind === 'chat-list' ? chatAgentPath(agents[0].id) : agentPath(agents[0].id), { replace: true });
+    // Agents have no page of their own (their settings open over Chat): the start and `/agents` go to Chat, which
+    // opens the first agent's chat on wider screens and lists the chats on phones.
+    if (route.kind === 'root' || route.kind === 'agents-list') navigate('/chat', { replace: true });
+    else if (!agentsLoading && agents[0] && !isPhone && route.kind === 'chat-list')
+      navigate(chatAgentPath(agents[0].id), { replace: true });
   }, [route.kind, isPhone, agentsLoading, agents, navigate]);
   useEffect(() => {
     if (
@@ -329,8 +304,7 @@ export function App() {
   }, [route.agentId, allAgents]);
   useEffect(() => {
     if (!route.agentId || agents.some(item => item.id === route.agentId)) return;
-    if (allAgents.some(item => item.id === route.agentId))
-      navigate(route.tab === 'chat' ? '/chat' : '/agents', { replace: true });
+    if (allAgents.some(item => item.id === route.agentId)) navigate('/chat', { replace: true });
   }, [organization]);
   // Old Agents peer bookmarks now open their conversation in Chat.
   useEffect(() => {
@@ -356,8 +330,6 @@ export function App() {
   useEffect(() => {
     if (selectedGroup && deletedGroup.current === selectedGroup) navigate('/chat', { replace: true });
   }, [selectedGroup, navigate]);
-  // Where the agent editor lists its sections on wide screens: the Agents panel, under the picker.
-  const [sectionSlot, setSectionSlot] = useState<HTMLDivElement | null>(null);
   const [activityOpen, setActivityOpen] = useState(false);
   // Message search (docs/chat-and-groups.md#search): one panel for the Chat tab, docked where Activity docks; the
   // two take turns.
@@ -742,14 +714,14 @@ export function App() {
       <main className="p-8">
         Page not found.{' '}
         <a
-          href="/agents"
+          href="/chat"
           className="underline"
           onClick={event => {
             event.preventDefault();
-            navigate('/agents');
+            navigate('/chat');
           }}
         >
-          Return to agents
+          Return to chat
         </a>
       </main>
     );
@@ -787,7 +759,7 @@ export function App() {
             <Tabs.List
               aria-label="Main navigation"
               ref={tabList}
-              className="relative isolate grid h-14 w-full grid-cols-5 items-center px-1.5 md:flex md:h-9 md:w-auto md:gap-0.5 md:rounded-lg md:bg-muted md:p-1"
+              className="relative isolate grid h-14 w-full grid-cols-4 items-center px-1.5 md:flex md:h-9 md:w-auto md:gap-0.5 md:rounded-lg md:bg-muted md:p-1"
             >
               <span
                 aria-hidden="true"
@@ -799,7 +771,6 @@ export function App() {
               {(
                 [
                   ['Dashboard', DashboardIcon],
-                  ['Agents', AgentsIcon],
                   ['Chat', ChatIcon],
                   ['Computers', ComputerIcon],
                   ['Settings', SettingsIcon],
@@ -830,185 +801,39 @@ export function App() {
           </header>
         )}
 
-        <Tabs.Content
-          key={activeTab === 'chat' ? 'chat' : 'agents'}
-          value={activeTab === 'chat' ? 'chat' : 'agents'}
-          className={cn(
-            'tab-enter min-h-0 flex-1 outline-none data-[state=active]:flex',
-            // Phones stack the Agents picker over the settings.
-            activeTab === 'agents' && 'max-md:flex-col',
-          )}
-        >
-          {activeTab === 'chat' ? (
-            <ChatPanel
-              route={route}
-              onRenamed={applyAgent}
-              onNavigate={navigate}
-              agents={agents}
-              conversations={conversations}
-              busy={busy}
-              compactions={compactions}
-              typingIn={typingIn}
-              selectedAgent={agent.id}
-              selectedGroup={selectedGroup}
-              mobile={mobileConversation}
-              agentsLoading={agentsLoading}
-              agentsFailed={agentsFailed}
-              agentsCursor={agentsCursor}
-              loadAgents={loadAgents}
-              onPrefetchAgent={item => void loadHistory(item)}
-              onAgent={(id, real) => {
-                if (real && !agents.some(agent => agent.id === id)) addAgent(real, false);
-                navigate(chatAgentPath(id));
-              }}
-              onViewAgent={(id, real) => {
-                if (real && !agents.some(agent => agent.id === id)) addAgent(real, false);
-                navigate(agentPath(id));
-              }}
-              onGroup={group => {
-                navigate(chatGroupPath(group.id));
-                setActivityOpen(false);
-              }}
-            />
-          ) : (
-            <AgentPanel
-              agents={agents}
-              route={route}
-              onRenamed={applyAgent}
-              // Creating replaces the editor: unsaved settings ask first, as with any other way out.
-              onNavigate={path => (path === '/agents/new' ? leave(() => navigate(path)) : navigate(path))}
-              onDeleted={() => {
-                focusAgentsAfterDelete.current = true;
-                navigate('/agents');
-              }}
-              onDelete={async (target, confirmation) => {
-                await deleteAgent(target, confirmation);
-                setReplyTargets(current => {
-                  const next = { ...current };
-                  delete next[target.channelId];
-                  return next;
-                });
-                if (agent.id === target.id) setActivityOpen(false);
-              }}
-              onCreated={real => {
-                addAgent(real);
-                navigate(agentPath(real.id));
-              }}
-              // Phones: a bar over the settings; wider screens: a side panel.
-              className="flex w-full shrink-0 flex-col border-b border-border bg-sidebar md:relative md:min-h-0 md:w-[min(var(--panel-width),40vw)] md:border-b-0 md:border-r"
-            >
-              {/* Which agent, then (wide screens) its settings' sections, which the editor fills in. */}
-              <>
-                <div
-                  className="flex items-center gap-2 border-border p-3 md:border-b md:p-4"
-                  data-agent-id={agent.id || undefined}
-                >
-                  <div className="min-w-0 flex-1">
-                    <AgentPicker
-                      agents={agents}
-                      status={
-                        agent.id ? (
-                          <Avatar
-                            initials={agent.initials}
-                            avatar={agent.avatar}
-                            ready={Boolean(agent.real)}
-                            typing={typingIn(agent.channelId, agent.channelId)}
-                            working={busy[agent.channelId]}
-                            compaction={compactions[agent.id]}
-                          />
-                        ) : undefined
-                      }
-                      selected={agent.id ? agent : undefined}
-                      onSelect={id => leave(() => navigate(agentPath(id)))}
-                      more={
-                        agentsLoading || agentsFailed || agentsCursor !== null
-                          ? {
-                              label: agentsLoading
-                                ? 'Loading agents…'
-                                : agentsFailed
-                                  ? 'Retry loading agents'
-                                  : 'Load more agents',
-                              busy: agentsLoading,
-                              load: () => void loadAgents(agentsCursor ?? undefined),
-                            }
-                          : undefined
-                      }
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="size-12 shrink-0 p-0 text-lg"
-                    aria-label="Create new agent"
-                    title="Create new agent"
-                    onClick={() => leave(() => navigate('/agents/new'))}
-                  >
-                    <AgentAddIcon className="size-5" />
-                  </Button>
-                </div>
-                {!agents.length && !agentsLoading && !agentsFailed && agentsCursor === null && (
-                  // Phones show the page's own empty state right below.
-                  <p role="status" className="px-6 py-4 text-xs text-muted-foreground max-md:hidden">
-                    No agents yet. Use + to create one.
-                  </p>
-                )}
-                {/* A failed first page is retried in plain sight, not only from inside the picker. */}
-                {!agents.length && agentsFailed && (
-                  <div className="px-3 pb-3 md:px-4 md:pb-0 md:pt-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      disabled={agentsLoading}
-                      onClick={() => void loadAgents()}
-                    >
-                      Retry loading agents
-                    </Button>
-                  </div>
-                )}
-                {!isPhone && (
-                  <div
-                    ref={setSectionSlot}
-                    data-agent-id={agent.id || undefined}
-                    className="min-h-0 flex-1 overflow-y-auto p-3"
-                  />
-                )}
-              </>
-            </AgentPanel>
-          )}
+        <Tabs.Content value="chat" className="tab-enter min-h-0 flex-1 outline-none data-[state=active]:flex">
+          <ChatPanel
+            route={route}
+            onRenamed={applyAgent}
+            onNavigate={navigate}
+            agents={agents}
+            conversations={conversations}
+            busy={busy}
+            compactions={compactions}
+            typingIn={typingIn}
+            selectedAgent={agent.id}
+            selectedGroup={selectedGroup}
+            mobile={mobileConversation}
+            agentsLoading={agentsLoading}
+            agentsFailed={agentsFailed}
+            agentsCursor={agentsCursor}
+            loadAgents={loadAgents}
+            onPrefetchAgent={item => void loadHistory(item)}
+            onAgent={(id, real) => {
+              if (real && !agents.some(agent => agent.id === id)) addAgent(real, false);
+              navigate(chatAgentPath(id));
+            }}
+            onAgentSettings={(id, real) => {
+              if (real && !agents.some(agent => agent.id === id)) addAgent(real, false);
+              navigate(agentPath(id));
+            }}
+            onGroup={group => {
+              navigate(chatGroupPath(group.id));
+              setActivityOpen(false);
+            }}
+          />
 
-          {activeTab === 'agents' ? (
-            agent.id && route.kind !== 'agent-dm' && route.kind !== 'agent-new' ? (
-              <EditAgentForm
-                key={agent.id}
-                agent={agent}
-                route={route}
-                sectionSlot={sectionSlot}
-                onNavigate={navigate}
-                onSave={editAvatar}
-                onModelSaved={applyAgent}
-                onUnsavedChange={setUnsaved}
-              />
-            ) : (
-              <section aria-label="No agent selected" className="flex min-w-0 flex-1">
-                <Empty>
-                  <EmptyHeader>
-                    <EmptyMedia>
-                      <AgentsIcon />
-                    </EmptyMedia>
-                    <EmptyTitle>No agent selected</EmptyTitle>
-                    <EmptyDescription>Select or create an agent to configure.</EmptyDescription>
-                  </EmptyHeader>
-                  <EmptyContent>
-                    <Button type="button" className="gap-1.5" onClick={() => leave(() => navigate('/agents/new'))}>
-                      <PlusIcon />
-                      Create agent
-                    </Button>
-                  </EmptyContent>
-                </Empty>
-              </section>
-            )
-          ) : selectedGroup ? (
+          {selectedGroup ? (
             <GroupConversation
               key={selectedGroup}
               groupId={selectedGroup}
@@ -1517,6 +1342,33 @@ export function App() {
         </Tabs.Content>
       </Tabs.Root>
 
+      {/* Agents' settings, creation and deletion open over Chat (docs/chat-and-groups.md). */}
+      <AgentSettingsDialog
+        agent={route.agentId ? agents.find(item => item.id === route.agentId) : undefined}
+        route={route}
+        wide={!isPhone}
+        onClose={() => leave(() => navigate(route.agentId ? chatAgentPath(route.agentId) : '/chat'))}
+        editor={{ onNavigate: navigate, onSave: editAvatar, onModelSaved: applyAgent, onUnsavedChange: setUnsaved }}
+      />
+      <AgentFormDialogs
+        agents={agents}
+        route={route}
+        onClose={() => navigate(route.agentId ? agentPath(route.agentId) : '/chat')}
+        onCreated={real => {
+          addAgent(real);
+          navigate(chatAgentPath(real.id));
+        }}
+        onDelete={async (target, confirmation) => {
+          await deleteAgent(target, confirmation);
+          setReplyTargets(current => {
+            const next = { ...current };
+            delete next[target.channelId];
+            return next;
+          });
+          setActivityOpen(false);
+        }}
+        onDeleted={() => navigate('/chat')}
+      />
       <Portal
         open={portalOpen}
         onOpenChange={setPortalOpen}

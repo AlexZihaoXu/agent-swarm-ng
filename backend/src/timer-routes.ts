@@ -29,7 +29,7 @@ const Change = Type.Object(
 );
 
 /**
- * The owner's view of an agent's timers and reminders (Agents → agent → Timers, docs/agent-time.md#owner-changes),
+ * The owner's view of an agent's timers and reminders (Agent settings → Timers, docs/agent-time.md#owner-changes),
  * with changes saved all at once. The agent is told what changed, in its next turn, as a platform event with the
  * owner's authority (it may answer in the private chat).
  */

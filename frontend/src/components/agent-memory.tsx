@@ -40,7 +40,7 @@ const fail = (error: unknown, fallback: string) => {
 const when = (iso: string) => new Date(iso).toLocaleString();
 
 /**
- * Agents → agent → Memory: what the agent remembers long term (docs/agent-memory.md), laid out like the Scratchpad
+ * Agent settings → Memory: what the agent remembers long term (docs/agent-memory.md), laid out like the Scratchpad
  * (breadcrumbs, a list, a detail view). Type chips with counts adapt Kibo tabs-advanced-1 (Tabs with Badge Counts) to
  * the app's ChoiceChips. The owner edits, forgets, restores or erases memories, and sets when it sleeps.
  */

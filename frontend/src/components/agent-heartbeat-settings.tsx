@@ -16,7 +16,7 @@ const fieldClass =
   'h-11 w-full rounded-lg border border-border bg-sidebar px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:h-10';
 
 /**
- * Agents → agent → Heartbeat: a periodic wake-up. The agent reads freely in a branch; its first change makes it a real
+ * Agent settings → Heartbeat: a periodic wake-up. The agent reads freely in a branch; its first change makes it a real
  * turn, otherwise the heartbeat is dropped (it shows in Activity) and only a note the agent chose to leave is kept.
  */
 export function AgentHeartbeatSettings({

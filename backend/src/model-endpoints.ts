@@ -145,7 +145,7 @@ export function registerModelEndpoints(
       const using = await agentsUsing(request.params.id, owner);
       if (using > 0)
         return reply.code(409).send({
-          message: `${using} ${using === 1 ? 'agent uses' : 'agents use'} this endpoint. Change ${using === 1 ? 'its' : 'their'} endpoint in Agents, or delete ${using === 1 ? 'it' : 'them'}, first.`,
+          message: `${using} ${using === 1 ? 'agent uses' : 'agents use'} this endpoint. Change ${using === 1 ? 'its' : 'their'} endpoint in agent settings (right-click the agent in Chat), or delete ${using === 1 ? 'it' : 'them'}, first.`,
         });
       await store.remove(request.params.id, owner);
       return { removed: true };

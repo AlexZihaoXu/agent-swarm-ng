@@ -83,7 +83,7 @@ const view = (item: AgentMemory) => ({
 });
 
 /**
- * Agents → agent → Memory: the owner sees what an agent remembers (its index, its memories by type, what last night
+ * Agent settings → Memory: the owner sees what an agent remembers (its index, its memories by type, what last night
  * changed), edits or forgets a memory (versions kept), restores one, erases everything, sets when it sleeps when it is
  * active all day, and can let it sleep now. Trusted dashboard surface.
  */

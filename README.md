@@ -97,7 +97,7 @@ The steps below set up the `tailnet-dual` stack: the dashboard on your Tailscale
 
 4. **Set the Admin password right away.** Open `https://<tailscale-ip>:19091` (accept the self-signed certificate once) or `http://<tailscale-ip>:19090`. The first visit sets the password of the admin account, **Admin**; until you do, anyone who can reach the dashboard could set it. Admin then adds other people in Settings → Users; each sees only their own organizations ([users](docs/users.md)).
 
-5. **Connect a model and create things.** In **Settings**, sign in with a ChatGPT subscription or add OpenRouter or an OpenAI-compatible endpoint. Then create a computer (**Computers → +**) and an agent (**Agents → +**), and assign the computer in the agent's settings.
+5. **Connect a model and create things.** In **Settings**, sign in with a ChatGPT subscription or add OpenRouter or an OpenAI-compatible endpoint. Then create a computer (**Computers → +**) and an agent (right-click the **Chat** list → **Create new agent**), and assign the computer in its settings (right-click the agent → **Agent settings**).
 
 To install it as an app, use the browser's install button (Chrome, Edge) or **Add to Home Screen** (iOS Safari); this needs HTTPS the device trusts (trust the self-signed certificate on the device first, or use a public domain as below). [Push notifications](docs/notifications.md) need the same, and on iPhone the Home Screen app.
 

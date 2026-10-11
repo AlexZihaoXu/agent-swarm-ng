@@ -1,4 +1,5 @@
-export type DashboardTab = 'dashboard' | 'agents' | 'chat' | 'computers' | 'settings';
+/** Agents have no tab of their own: their `/agents/...` pages open over Chat (agent settings as a modal). */
+export type DashboardTab = 'dashboard' | 'chat' | 'computers' | 'settings';
 export type DashboardRoute = {
   tab: DashboardTab;
   kind:
@@ -46,7 +47,10 @@ export type DashboardRoute = {
 };
 
 const segment = (value: string) => encodeURIComponent(value);
+/** An agent's settings (a modal over its chat). */
 export const agentPath = (id: string) => `/agents/${segment(id)}`;
+/** Whether the route shows an agent's settings. */
+export const isAgentSettings = (route: DashboardRoute) => route.kind === 'agent' || route.kind === 'agent-edit';
 export const agentDmPath = (id: string, peerId: string) => `${agentPath(id)}/dm/${segment(peerId)}`;
 export const chatAgentPath = (id: string) => `/chat/agents/${segment(id)}`;
 export const chatAgentDmPath = (id: string, peerId: string) => `${chatAgentPath(id)}/dm/${segment(peerId)}`;
@@ -62,8 +66,8 @@ export const knowledgePath = (id?: string) =>
   id ? `/settings/knowledge/${id.split('/').map(segment).join('/')}` : '/settings/knowledge';
 
 export function parseDashboardPath(pathname: string): DashboardRoute {
-  const missing: DashboardRoute = { tab: 'agents', kind: 'not-found' };
-  if (pathname === '/') return { tab: 'agents', kind: 'root' };
+  const missing: DashboardRoute = { tab: 'chat', kind: 'not-found' };
+  if (pathname === '/') return { tab: 'chat', kind: 'root' };
   if (!pathname.startsWith('/')) return missing;
   let parts: string[];
   try {
@@ -80,23 +84,23 @@ export function parseDashboardPath(pathname: string): DashboardRoute {
   const [section, id, third, fourth, fifth, sixth, seventh] = parts;
   if (section === 'dashboard' && parts.length === 1) return { tab: 'dashboard', kind: 'dashboard' };
   if (section === 'agents') {
-    if (parts.length === 1) return { tab: 'agents', kind: 'agents-list' };
-    if (id === 'new' && parts.length === 2) return { tab: 'agents', kind: 'agent-new' };
-    if (parts.length === 2) return { tab: 'agents', kind: 'agent', agentId: id };
-    if (parts.length === 4 && third === 'dm') return { tab: 'agents', kind: 'agent-dm', agentId: id, peerId: fourth };
-    if (parts.length === 3 && third === 'delete') return { tab: 'agents', kind: 'agent-delete', agentId: id };
+    if (parts.length === 1) return { tab: 'chat', kind: 'agents-list' };
+    if (id === 'new' && parts.length === 2) return { tab: 'chat', kind: 'agent-new' };
+    if (parts.length === 2) return { tab: 'chat', kind: 'agent', agentId: id };
+    if (parts.length === 4 && third === 'dm') return { tab: 'chat', kind: 'agent-dm', agentId: id, peerId: fourth };
+    if (parts.length === 3 && third === 'delete') return { tab: 'chat', kind: 'agent-delete', agentId: id };
     if (third === 'edit') {
       if (parts.length === 4 && fourth === 'avatar')
-        return { tab: 'agents', kind: 'agent-edit', agentId: id, editorTab: 'avatar' };
+        return { tab: 'chat', kind: 'agent-edit', agentId: id, editorTab: 'avatar' };
       if (fourth === 'settings' && fifth === 'channels') {
         if (parts.length === 5)
-          return { tab: 'agents', kind: 'agent-edit', agentId: id, editorTab: 'settings', channelScreen: 'channels' };
+          return { tab: 'chat', kind: 'agent-edit', agentId: id, editorTab: 'settings', channelScreen: 'channels' };
         if (sixth === 'swarm') {
           if (parts.length === 6)
-            return { tab: 'agents', kind: 'agent-edit', agentId: id, editorTab: 'settings', channelScreen: 'swarm' };
+            return { tab: 'chat', kind: 'agent-edit', agentId: id, editorTab: 'settings', channelScreen: 'swarm' };
           if (parts.length === 8 && seventh === 'dm')
             return {
-              tab: 'agents',
+              tab: 'chat',
               kind: 'agent-edit',
               agentId: id,
               editorTab: 'settings',

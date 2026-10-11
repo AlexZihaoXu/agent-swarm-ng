@@ -81,7 +81,7 @@ const draftOf = (config: Config): Draft => ({
 });
 
 /**
- * Agents → agent → Channels → Discord: the agent's own Discord bot (token in, status out, never shown back), the
+ * Agent settings → Channels → Discord: the agent's own Discord bot (token in, status out, never shown back), the
  * invite link, and the owner's policies: which channels it may use, when undirected server messages wake it, DMs
  * from other people, catching up after an outage. Saved with the page's Save changes.
  */

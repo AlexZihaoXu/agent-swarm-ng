@@ -1,6 +1,6 @@
 import { PanelResizeHandle, SIDEBAR_WIDTH, usePanelWidth } from '@/components/panel-resize';
 import { RenameDialog } from '@/components/rename-dialog';
-import { PencilIcon } from '@/components/ui/icons';
+import { AgentAddIcon, PencilIcon, SettingsIcon, TrashIcon } from '@/components/ui/icons';
 import { renameAgent, renameGroup } from '@/lib/rename';
 import { GroupAddIcon } from '@/components/ui/icons';
 import { useOrganizations } from '@/lib/organizations';
@@ -20,7 +20,7 @@ import { defaultAvatar } from '@/lib/agent-avatar';
 import { Button } from '@/components/ui/button';
 import { GroupEditor } from '@/components/group-editor';
 import { cn } from '@/lib/utils';
-import { chatGroupPath, type DashboardRoute } from '@/lib/dashboard-location';
+import { agentPath, chatGroupPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { messagePreview } from '@/lib/chat-files';
 import { useSignedIn } from '@/lib/auth';
 import { humanName } from '@/lib/people';
@@ -54,7 +54,7 @@ export function ChatPanel({
   selectedAgent,
   selectedGroup,
   onAgent,
-  onViewAgent,
+  onAgentSettings,
   onGroup,
   onRenamed,
   mobile,
@@ -75,7 +75,7 @@ export function ChatPanel({
   selectedAgent: string;
   selectedGroup: string;
   onAgent: (id: string, real?: RealAgent) => void;
-  onViewAgent: (id: string, real?: RealAgent) => void;
+  onAgentSettings: (id: string, real?: RealAgent) => void;
   onGroup: (group: GroupChat) => void;
   onRenamed: (agent: RealAgent) => void;
   mobile: boolean;
@@ -99,7 +99,9 @@ export function ChatPanel({
   const returnFocus = useRef<HTMLElement | null>(null);
   const fromContext = useRef(false);
   useEffect(() => {
-    if (['group-new', 'group-edit', 'group-delete'].includes(route.kind) || !fromContext.current) return;
+    // Back to the row once the dialog the menu opened (a group's, or an agent's settings, creation or deletion) closes.
+    const dialogs = ['group-new', 'group-edit', 'group-delete', 'agent', 'agent-edit', 'agent-new', 'agent-delete'];
+    if (dialogs.includes(route.kind) || !fromContext.current) return;
     fromContext.current = false;
     const frame = requestAnimationFrame(() => {
       const target = returnFocus.current;
@@ -148,7 +150,7 @@ export function ChatPanel({
       else if (matches.hasNextPage) void matches.fetchNextPage();
     } else if (agentsFailed || agentsCursor !== null) void loadAgents(agentsCursor ?? undefined);
   };
-  // Match the Agents sidebar's Kibo context-menu-standard-1 composition.
+  // Kibo context-menu-standard-1 composition.
   return (
     <>
       <ContextMenu.Root>
@@ -217,7 +219,7 @@ export function ChatPanel({
             <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
               {!items.length && !loading && !failed && (
                 <p role="status" className="px-2 py-4 text-xs text-muted-foreground">
-                  {search ? 'No chats found.' : 'Create an agent in Agents or start a group chat.'}
+                  {search ? 'No chats found.' : 'Right-click here to create an agent or a group chat.'}
                 </p>
               )}
               <ul className="space-y-0.5">
@@ -280,9 +282,19 @@ export function ChatPanel({
           <ContextMenu.Content
             className="context-menu-content phone-menu-targets z-50 min-w-48 rounded-lg border border-border bg-background p-1 ao-top shadow-lg"
             onCloseAutoFocus={event => {
-              if (route.kind === 'group-edit' || route.kind === 'group-new' || renaming) event.preventDefault();
+              if (fromContext.current || renaming) event.preventDefault();
             }}
           >
+            <ContextMenu.Item
+              onSelect={() => {
+                fromContext.current = true;
+                onNavigate('/agents/new');
+              }}
+              className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted"
+            >
+              <AgentAddIcon className="size-4 shrink-0 text-muted-foreground" />
+              Create new agent
+            </ContextMenu.Item>
             <ContextMenu.Item
               onSelect={() => {
                 fromContext.current = true;
@@ -317,6 +329,18 @@ export function ChatPanel({
                   <path d="M4 5h16v12H8l-4 3V5z" />
                 </svg>
                 Open chat
+              </ContextMenu.Item>
+            )}
+            {context?.kind === 'dm' && (
+              <ContextMenu.Item
+                onSelect={() => {
+                  fromContext.current = true;
+                  onAgentSettings(context.agent.id, context.agent.real);
+                }}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted"
+              >
+                <SettingsIcon className="size-4 shrink-0" />
+                Agent settings
               </ContextMenu.Item>
             )}
             {context && (
@@ -378,22 +402,14 @@ export function ChatPanel({
             )}
             {context?.kind === 'dm' && (
               <ContextMenu.Item
-                onSelect={() => onViewAgent(context.agent.id, context.agent.real)}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted"
+                onSelect={() => {
+                  fromContext.current = true;
+                  onNavigate(`${agentPath(context.agent.id)}/delete`);
+                }}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-red-400 outline-none data-[highlighted]:bg-red-500/10"
               >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  className="size-4 shrink-0"
-                >
-                  <circle cx="12" cy="8" r="3" />
-                  <path d="M5 20v-2a7 7 0 0 1 14 0v2" />
-                </svg>
-                View in Agents
+                <TrashIcon className="size-4 shrink-0" />
+                Delete agent
               </ContextMenu.Item>
             )}
           </ContextMenu.Content>

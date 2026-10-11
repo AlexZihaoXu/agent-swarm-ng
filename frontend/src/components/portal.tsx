@@ -76,7 +76,6 @@ export function usePortalShortcut(toggle: () => void) {
 }
 
 const PAGES: { title: string; path: string; keywords?: string[] }[] = [
-  { title: 'Agents', path: '/agents' },
   { title: 'New agent', path: '/agents/new', keywords: ['create'] },
   { title: 'Chat', path: '/chat', keywords: ['conversations'] },
   { title: 'New group', path: '/chat/groups/new', keywords: ['create'] },
@@ -230,7 +229,7 @@ export function Portal({
         id: `page:agent:${agent.id}`,
         kind: 'page',
         title: `${agent.name} settings`,
-        keywords: ['agent', 'model', 'instructions', 'heartbeat'],
+        keywords: ['agent', 'model', 'instructions', 'heartbeat', 'timers', 'computers', 'discord', 'memory'],
         path: agentPath(agent.id),
       });
       if (busy[agent.channelId])

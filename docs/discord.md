@@ -10,7 +10,7 @@ What the platform needs, and nothing more:
 
 | What | Where it goes | Why |
 | --- | --- | --- |
-| The bot's **token** | Agents → agent → Channels → Discord → Bot token | The agent's bot signs in with it. Stored in `.local/discord-bots.json` (0600) on the server, never sent back to a browser, logs or activity. |
+| The bot's **token** | Agent settings → Channels → Discord → Bot token | The agent's bot signs in with it. Stored in `.local/discord-bots.json` (0600) on the server, never sent back to a browser, logs or activity. |
 | **Message Content Intent** turned on | Discord Developer Portal → your app → Bot | Without it Discord hides what people write (except DMs and mentions). The bot reports "Discord refused the Message Content intent" until it is on. |
 | The bot **added to a server** | The dashboard's "Add the bot to a server" link | Discord only shows the bot the servers it was added to. |
 | **Your Discord user ID** | Settings → Discord | Only your accounts carry your authority on Discord; everyone else is another person. |
@@ -93,7 +93,7 @@ op 3, sent again when a session identifies; `backend/src/discord/presence.ts`). 
 the agent works and idle after 10 minutes without write activity (any `w` or `rw` tool call, counted where tool calls
 are checked in the run); `idle` and `dnd` are forced until the agent changes them. There is no invisible: bots may not
 hide their presence. The text is at most 128 characters. The choice is kept in `DiscordBot` (`presenceMode`,
-`statusText`) and shown in Agents → agent → Channels → Discord beside the connection state.
+`statusText`) and shown in Agent settings → Channels → Discord beside the connection state.
 
 ## Operation
 

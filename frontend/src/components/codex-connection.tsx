@@ -12,7 +12,7 @@ const planName = (plan?: string) => (plan ? `${plan[0]!.toUpperCase()}${plan.sli
 
 /**
  * Settings → OpenAI Codex: one card per ChatGPT account (docs/users.md#model-connections). Each signed-in account is
- * its own connection for agents, so one can be another's fallback (Agents → agent → Model).
+ * its own connection for agents, so one can be another's fallback (Agent settings → Model).
  */
 export function CodexConnection() {
   const [listing, setListing] = useState<Listing>();

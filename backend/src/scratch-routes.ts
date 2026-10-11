@@ -44,7 +44,7 @@ const page = Type.Object({
 const params = Type.Object({ id: Type.String({ minLength: 1, maxLength: 64 }) });
 
 /**
- * The human's read-only view of an agent's scratchpad (Agents → agent → Scratchpad). The human changes files only
+ * The human's read-only view of an agent's scratchpad (Agent settings → Scratchpad). The human changes files only
  * by asking the agent; there is no write route. Trusted dashboard surface.
  */
 export function registerScratchRoutes(app: FastifyInstance, database: PlatformStore, pad: Scratchpad) {

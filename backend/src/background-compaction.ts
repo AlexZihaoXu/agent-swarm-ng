@@ -11,7 +11,7 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { meterStream } from './usage/meter';
 
-/** When an agent compacts its context in the background (per agent; see Agents → agent → Model). */
+/** When an agent compacts its context in the background (per agent; see Agent settings → Model). */
 export type CompactionPolicy = {
   /** During work: start a background summary once the context reaches this share of the window. */
   atPercent: number;

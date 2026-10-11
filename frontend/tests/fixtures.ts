@@ -262,14 +262,22 @@ export function codexAccounts(
   };
 }
 
-/** An agent's option in the Agents panel's open picker, by its exact name. */
-export function agentOption(page: import('@playwright/test').Page, name: string) {
-  const exact = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
-  return page.getByRole('option').filter({ has: page.locator('[data-option-label]', { hasText: exact }) });
-}
-
-/** Opens an agent's settings from the Agents panel's picker (wide screens). */
+/** Opens an agent's settings the way people do: right-click it in the chat list → Agent settings (closing the
+ * settings already open first). */
 export async function chooseAgent(page: import('@playwright/test').Page, name: string) {
-  await page.getByRole('combobox', { name: 'Agent' }).click();
-  await agentOption(page, name).click();
+  const open = page.getByRole('dialog').filter({ has: page.getByText('Agent settings', { exact: true }) });
+  if (await open.isVisible()) {
+    await open.getByRole('button', { name: 'Close agent settings' }).click();
+    await open.waitFor({ state: 'hidden' });
+  }
+  if (!(await page.getByRole('tab', { name: 'Chat' }).getAttribute('aria-selected'))?.includes('true'))
+    await page.getByRole('tab', { name: 'Chat' }).click();
+  const exact = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+  await page
+    .locator('[data-chat-kind="dm"]')
+    .filter({ has: page.getByText(exact) })
+    .first()
+    .click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Agent settings' }).click();
+  await page.getByRole('region', { name: `Settings for ${name}` }).waitFor();
 }

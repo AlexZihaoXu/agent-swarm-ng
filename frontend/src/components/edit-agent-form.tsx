@@ -21,7 +21,6 @@ import { defaultAvatar, sameAvatar, type AvatarAppearance } from '@/lib/agent-av
 import type { ChatAgent, RealAgent } from '@/use-chat';
 import { agentPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { cn } from '@/lib/utils';
-import { PageHeader } from '@/components/page-header';
 import { SectionNav } from '@/components/section-nav';
 import { renderAvatarPng, renderAvatarSvg, saveFile } from '@/lib/avatar-png';
 import {
@@ -72,7 +71,7 @@ export function EditAgentForm({
   onModelSaved: (agent: RealAgent) => void;
   onUnsavedChange: (labels: string[]) => void;
   route: DashboardRoute;
-  /** On wide screens, the Agents panel's place for the section list. */
+  /** On wide screens, the settings dialog's place for the section list. */
   sectionSlot?: HTMLElement | null;
   onNavigate: (path: string) => void;
   onSave: (agent: ChatAgent, avatar: AvatarAppearance, allowedDmAgentIds: string[]) => Promise<void>;
@@ -202,46 +201,19 @@ export function EditAgentForm({
         }}
         className="flex min-h-0 min-w-0 flex-1 flex-col"
       >
-        {/* Phones name the agent in the picker above, so the header (only a title) would just take room. */}
-        <div className="max-md:hidden">
-          <PageHeader
-            width="max-w-5xl"
-            title="Agent settings"
-            description={saved ? <p role="status">Saved.</p> : undefined}
-          />
-        </div>
+        {/* The settings dialog (agent-dialogs.tsx) names the agent in its own header. */}
         {saved && (
-          <p role="status" className="sr-only md:hidden">
+          <p role="status" className="sr-only">
             Saved.
           </p>
         )}
-        {/* Wider screens list the sections in the Agents panel; phones scroll the page alone. */}
-        {sectionSlot &&
-          createPortal(
-            // A portal's React events bubble to this form, not the panel: hand right-clicks to the panel's menu.
-            <div
-              onContextMenu={event => {
-                event.preventDefault();
-                event.stopPropagation();
-                openPanelMenu(sectionSlot, event.clientX, event.clientY);
-              }}
-              // The menu key and Shift+F10 too, as the panel itself handles them.
-              onKeyDown={event => {
-                if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
-                event.preventDefault();
-                const bounds = (event.target as HTMLElement).getBoundingClientRect();
-                openPanelMenu(sectionSlot, bounds.left + 16, bounds.top + 16);
-              }}
-            >
-              <SectionNav container={sectionList} icons={sectionIcons} />
-            </div>,
-            sectionSlot,
-          )}
+        {/* Wider screens list the sections beside the settings; phones scroll the page alone. */}
+        {sectionSlot && createPortal(<SectionNav container={sectionList} icons={sectionIcons} />, sectionSlot)}
         <ScrollArea label="Agent editor" viewportTabIndex={-1} className="min-h-0 flex-1">
           {/* Phones: the settings scroll on under the floating navigation (glass), the last one clearing it. */}
           <div
             ref={sectionList}
-            className="settings-stagger mx-auto w-full max-w-5xl space-y-8 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6 md:px-6 md:pb-8"
+            className="settings-stagger mx-auto w-full max-w-5xl space-y-8 px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-6 md:px-6 md:pb-8"
           >
             <section aria-label="Channels" className="space-y-4">
               <div>
@@ -430,8 +402,7 @@ export function EditAgentForm({
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={surface}
-              // Phones: above the floating navigation.
-              className="shrink-0 overflow-hidden border-t border-border max-md:mb-[calc(4.5rem+env(safe-area-inset-bottom))]"
+              className="shrink-0 overflow-hidden border-t border-border max-md:pb-[env(safe-area-inset-bottom)]"
             >
               <div className="mx-auto w-full max-w-5xl px-4 py-3 md:px-6 md:py-4">
                 {loadError ? (
@@ -496,11 +467,6 @@ export function EditAgentForm({
       </form>
     </section>
   );
-}
-
-/** Opens the Agents panel's context menu from its section list, which is portalled there. */
-function openPanelMenu(slot: HTMLElement, clientX: number, clientY: number) {
-  slot.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX, clientY }));
 }
 
 /** A safe file name from an agent's name ("Lobbify CTO" → "Lobbify-CTO"). */

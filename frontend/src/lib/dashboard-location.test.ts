@@ -14,7 +14,7 @@ import {
 
 describe('dashboard paths', () => {
   it('resolves stable tabs and nested conversations', () => {
-    expect(parseDashboardPath('/')).toMatchObject({ kind: 'root', tab: 'agents' });
+    expect(parseDashboardPath('/')).toMatchObject({ kind: 'root', tab: 'chat' });
     expect(parseDashboardPath('/agents')).toMatchObject({ kind: 'agents-list' });
     expect(parseDashboardPath(agentPath('avery'))).toMatchObject({ kind: 'agent', agentId: 'avery' });
     expect(parseDashboardPath(agentDmPath('avery', 'morgan'))).toMatchObject({

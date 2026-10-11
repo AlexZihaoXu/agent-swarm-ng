@@ -112,7 +112,7 @@ export class DmBroker {
   readonly cues: CueRecall;
   /** Each agent's sleep: memory reorganised in its off hours, beside its work (never pausing it). */
   readonly sleeper: SleepScheduler;
-  /** Each agent's heartbeat (Agents → agent → Heartbeat), started when due and the agent is idle. */
+  /** Each agent's heartbeat (Agent settings → Heartbeat), started when due and the agent is idle. */
   readonly heartbeats: HeartbeatScheduler;
   private reactionCoordinator: ReactionCoordinator;
   private starting?: Promise<void>;

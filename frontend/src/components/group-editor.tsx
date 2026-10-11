@@ -203,7 +203,9 @@ export function GroupEditor({
               onOpenChange={setPicking}
               title="Add agents"
               placeholder="Search agents…"
-              empty={options.isPending ? 'Loading agents…' : 'No agents found. Create agents in the Agents tab.'}
+              empty={
+                options.isPending ? 'Loading agents…' : 'No agents found. Right-click the chat list → Create new agent.'
+              }
               status={`${selected.size} of 16 chosen`}
               search={{ value: search, onChange: setSearch }}
             >

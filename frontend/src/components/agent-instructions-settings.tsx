@@ -8,7 +8,7 @@ import type { RegisterSection } from '@/lib/settings-sections';
 const LIMIT = 20000;
 
 /**
- * Agents → agent → Instructions: the owner's own instructions for this agent, written in a rich-text editor (Kibo
+ * Agent settings → Instructions: the owner's own instructions for this agent, written in a rich-text editor (Kibo
  * UI's Editor) and kept as Markdown. They come last in the agent's system prompt from its next turn. Saving warns,
  * in plain words, that the next reply re-reads everything once (the model's prompt cache no longer matches).
  */
