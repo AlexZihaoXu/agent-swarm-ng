@@ -26,7 +26,7 @@ test('computer assignments save separately and restore after refresh', async ({ 
     }
     return route.fulfill({ json: { computers: ids.map(() => ({ ...desk, holder: null, current: false })) } });
   });
-  await page.goto('/agents');
+  await page.goto('/agents/avery');
   const assignment = page.getByRole('region', { name: 'Computers', exact: true });
   await expect(assignment.getByRole('checkbox', { name: desk.name })).toBeVisible();
   await assignment.getByRole('checkbox', { name: desk.name }).check();

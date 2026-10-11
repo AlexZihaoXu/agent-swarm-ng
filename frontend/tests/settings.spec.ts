@@ -29,7 +29,7 @@ test('unsaved endpoint form tests models and clears on refresh', async ({ page }
   await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toContainText('2 models');
   await page.getByText('View models', { exact: true }).click();
   await expect(page.getByText('local-chat', { exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: 'Agents', exact: true }).click();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByRole('tab', { name: 'Settings' }).click();
   await expect(key).toHaveValue('test-only-key');
   expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain('test-only-key');

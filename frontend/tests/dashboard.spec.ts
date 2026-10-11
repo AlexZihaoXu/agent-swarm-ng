@@ -1,35 +1,37 @@
 import { test, expect, chooseAgent } from './fixtures';
 import { defaultAvatar } from '../src/lib/agent-avatar';
 
-test('saved agents keep the sidebar and open inline settings; Chat owns messages', async ({ page }) => {
+test('agents live in Chat: its list opens their settings as a modal; Chat owns messages', async ({ page }) => {
   await page.goto('/');
   // The page behind the panes is the bars' colour (iOS shows it behind the status bar); the panes paint their own.
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(21, 21, 21)');
   await expect(page.getByRole('tablist', { name: 'Main navigation' }).getByRole('tab')).toHaveText([
     'Dashboard',
-    'Agents',
     'Chat',
     'Computers',
     'Settings',
   ]);
-  await expect(page.getByRole('tab', { name: 'Agents', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('region', { name: 'Settings for Avery' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Create new agent' })).toBeVisible();
-  await expect(page.getByRole('form', { name: 'Message composer' })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Chat', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByLabel('Message Avery')).toBeVisible();
   await chooseAgent(page, 'Morgan');
-  await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  const settings = page.getByRole('dialog').filter({ has: page.getByRole('region', { name: 'Settings for Morgan' }) });
+  await expect(settings).toBeVisible();
+  await expect(settings).toHaveCSS('animation-name', 'dialog-in');
+  await expect(settings.getByRole('heading', { name: 'Morgan' })).toBeVisible();
+  await expect(settings.getByRole('navigation', { name: 'Jump to section' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(settings).toHaveCount(0);
   await expect(page.getByLabel('Message Morgan')).toBeVisible();
 });
 
-test('agent panel context menu opens the creation form', async ({ page }) => {
+test('chat list context menu opens the creation form', async ({ page }) => {
   await page.goto('/');
-  await page
-    .getByRole('complementary', { name: 'Agents', exact: true })
-    .click({ button: 'right', position: { x: 50, y: 350 } });
+  const list = page.getByRole('complementary', { name: 'Chats', exact: true });
+  await list.click({ button: 'right', position: { x: 50, y: 500 } });
   const create = page.getByRole('menuitem', { name: 'Create new agent' });
   await expect(create).toBeVisible();
   await expect(create).toHaveCSS('cursor', 'pointer');
+  await expect(page.getByRole('menuitem', { name: 'Agent settings' })).toHaveCount(0);
   await create.click();
   const dialog = page.getByRole('dialog', { name: 'Create new agent' });
   await expect(dialog).toBeVisible();
@@ -38,18 +40,35 @@ test('agent panel context menu opens the creation form', async ({ page }) => {
   await expect(dialog.getByRole('button', { name: 'Create agent', exact: true })).toBeDisabled();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(dialog).not.toBeVisible();
-  await page.getByRole('combobox', { name: 'Agent' }).click();
-  await expect(page.getByRole('option')).toHaveCount(4);
+  await expect(list.locator('[data-chat-kind="dm"]')).toHaveCount(4);
+});
+
+test('an agent’s menu in the chat list offers its settings, rename and delete', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-chat-kind="dm"]').filter({ hasText: 'Riley' }).click({ button: 'right' });
+  await expect(page.getByRole('menuitem')).toHaveText([
+    /Create new agent$/,
+    /Create group chat$/,
+    /Open chat$/,
+    /Agent settings$/,
+    /Rename agent$/,
+    /Delete agent$/,
+  ]);
+  await page.getByRole('menuitem', { name: 'Delete agent' }).click();
+  await expect(page).toHaveURL(/\/agents\/riley\/delete$/);
+  await expect(page.getByRole('dialog', { name: 'Delete agent' })).toBeVisible();
 });
 
 test('agent context menu and placeholder support keyboard dismissal and focus return', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  const panel = page.getByRole('complementary', { name: 'Agents', exact: true });
+  await expect(page).toHaveURL(/\/chat\/agents\/avery$/);
+  const panel = page.getByRole('complementary', { name: 'Chats', exact: true });
   await panel.focus();
   await page.keyboard.press('Shift+F10');
   await expect(page.getByRole('menuitem', { name: 'Create new agent' })).toBeVisible();
-  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Home');
+  await expect(page.getByRole('menuitem', { name: 'Create new agent' })).toHaveAttribute('data-highlighted', '');
   await page.keyboard.press('Enter');
   await expect(page.getByRole('dialog', { name: 'Create new agent' })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCSS('animation-name', 'none');
@@ -276,37 +295,6 @@ test('chat scrollbar appears during scrolling and fades away when idle', async (
   await expect(thumb).not.toBeVisible();
 });
 
-test('agent search filters names and handles no matches', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('combobox', { name: 'Agent' }).click();
-  const search = page.getByPlaceholder('Search agents…');
-  await expect(search).toBeVisible();
-  await search.fill('  MOR  ');
-  await expect(page.getByRole('option')).toHaveCount(1);
-  await expect(page.getByRole('option')).toContainText('Morgan');
-  await search.fill('unknown');
-  await expect(page.getByText('No matches')).toBeVisible();
-  await search.fill('');
-  await expect(page.getByRole('option')).toHaveCount(4);
-  await expect(page.getByRole('form', { name: 'Message composer' })).toHaveCount(0);
-});
-
-test('phone agent search filters the picker and handles no matches', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/agents');
-  await page.getByRole('combobox', { name: 'Agent' }).click();
-  const search = page.getByPlaceholder('Search agents…');
-  await expect(search).toHaveCSS('font-size', '16px');
-  await search.fill('  MOR  ');
-  await expect(page.getByRole('option')).toHaveCount(1);
-  await expect(page.getByRole('option')).toContainText('Morgan');
-  await search.fill('unknown');
-  await expect(page.getByText('No matches')).toBeVisible();
-  await search.fill('');
-  await expect(page.getByRole('option')).toHaveCount(4);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-});
-
 test('navigation is centered with a moving indicator and pointer cursors', async ({ page }) => {
   await page.goto('/');
   const indicator = page.getByTestId('tab-indicator');
@@ -316,8 +304,6 @@ test('navigation is centered with a moving indicator and pointer cursors', async
   const width = await page.evaluate(() => window.innerWidth);
   expect(Math.abs(box!.x + box!.width / 2 - width / 2)).toBeLessThan(2);
   await expect(tabs.getByRole('tab', { name: 'Settings' })).toHaveCSS('cursor', 'pointer');
-  await expect(page.getByRole('combobox', { name: 'Agent' })).toHaveCSS('cursor', 'pointer');
-  await expect(page.getByRole('button', { name: 'Create new agent' })).toHaveCSS('cursor', 'pointer');
   await expect(indicator).toHaveCSS('transition-property', /\btransform\b/);
   const initial = await indicator.boundingBox();
   await tabs.getByRole('tab', { name: 'Settings' }).click();
@@ -328,28 +314,30 @@ test('navigation is centered with a moving indicator and pointer cursors', async
 
 test('settings is reachable with keyboard-accessible tabs', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('tab', { name: 'Agents', exact: true }).focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Chat', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/\/chat\/agents\/avery$/);
+  await page.getByRole('tab', { name: 'Chat', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'Computers' })).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'Settings' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'API endpoints' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Agents', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Settings for Avery' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await expect(page.getByLabel('Message Avery')).toBeVisible();
 });
 
-test('mobile moves between agents with the picker, inline settings and no overflow', async ({ page }) => {
+test('phones open an agent’s settings full screen from the chat list, without overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await chooseAgent(page, 'Riley');
-  await expect(page.getByRole('region', { name: 'Settings for Riley' })).toBeVisible();
+  const settings = page.getByRole('dialog').filter({ has: page.getByRole('region', { name: 'Settings for Riley' }) });
+  await expect(settings).toBeVisible();
+  // Once it has opened (it scales in), it fills the screen.
+  await expect.poll(async () => (await settings.boundingBox())!.width).toBe(390);
+  expect((await settings.boundingBox())!.height).toBe(844);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await chooseAgent(page, 'Avery');
-  await expect(page.getByRole('region', { name: 'Settings for Avery' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Create new agent' })).toBeVisible();
+  await settings.getByRole('button', { name: 'Close agent settings' }).click();
+  await expect(page.getByLabel('Message Riley')).toBeVisible();
 });
 
 test('time labels open each stretch of messages more than five minutes after the one before', async ({ page }) => {

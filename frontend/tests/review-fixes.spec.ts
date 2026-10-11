@@ -1,12 +1,14 @@
-import { test, expect, chooseAgent, type Page } from './fixtures';
+import { test, expect, openCreateAgent, type Page } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
-test('Agents offers a visible New agent button and a Delete action on the settings page', async ({ page }) => {
-  await page.goto('/agents/avery');
-  await page.getByRole('button', { name: 'Create new agent' }).click();
+test('the chat list creates agents, and the settings page offers Delete', async ({ page }) => {
+  await page.goto('/chat/agents/avery');
+  await openCreateAgent(page);
   await expect(page).toHaveURL(/\/agents\/new$/);
   await expect(page.getByRole('dialog').getByText('Create new agent', { exact: true }).first()).toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(page).toHaveURL(/\/chat\/agents\/avery$/);
+  await page.goto('/agents/avery');
   await page.getByRole('button', { name: /^Delete Avery/ }).click();
   await expect(page).toHaveURL(/\/agents\/avery\/delete$/);
   const dialog = page.getByRole('dialog', { name: 'Delete agent' });
@@ -14,7 +16,7 @@ test('Agents offers a visible New agent button and a Delete action on the settin
   await expect(dialog.getByRole('button', { name: /^Delete agent$/ })).toBeDisabled(); // still requires the exact name
 });
 
-test('Agents search asks the server, so agents beyond the loaded page are found', async ({ page }) => {
+test('chat search asks the server, so agents beyond the loaded page are found', async ({ page }) => {
   const hidden = { ...structuredClone(sampleAgents[0]), id: 'zed', name: 'Zed Farfetched', channelId: 'zed' };
   const searches: string[] = [];
   await page.route(/\/api\/agents(?:\?.*)?$/, route => {
@@ -26,17 +28,14 @@ test('Agents search asks the server, so agents beyond the loaded page are found'
   await page.route('**/api/channels/zed/messages*', route =>
     route.fulfill({ json: { messages: [], nextCursor: null } }),
   );
-  await page.goto('/agents/avery');
-  await page.getByRole('combobox', { name: 'Agent' }).click();
-  const zed = page.getByRole('option').filter({ hasText: 'Zed Farfetched' });
-  await expect(page.getByRole('option')).toHaveCount(sampleAgents.length);
+  await page.goto('/chat/agents/avery');
+  const zed = page.getByRole('button', { name: 'Open conversation with Zed Farfetched' });
   await expect(zed).toHaveCount(0);
-  await page.getByPlaceholder('Search agents…').fill('Zed');
+  await page.getByLabel('Search chats').fill('Zed');
   await expect(zed).toBeVisible();
-  await expect(page.getByRole('option')).toHaveCount(1);
   expect(searches).toContain('Zed');
   await zed.click();
-  await expect(page).toHaveURL(/\/agents\/zed$/);
+  await expect(page).toHaveURL(/\/chat\/agents\/zed$/);
 });
 
 test('removing an endpoint asks first, and explains when agents still use it', async ({ page }) => {
@@ -48,7 +47,10 @@ test('removing an endpoint asks first, and explains when agents still use it', a
     if (attempts === 1)
       return route.fulfill({
         status: 409,
-        json: { message: '2 agents use this endpoint. Change their endpoint in Agents, or delete them, first.' },
+        json: {
+          message:
+            '2 agents use this endpoint. Change their endpoint in agent settings (right-click the agent in Chat), or delete them, first.',
+        },
       });
     endpoints = [];
     return route.fulfill({ json: { removed: true } });
@@ -113,7 +115,7 @@ test('an agent can be renamed and moved to another model without recreating it',
       models: [{ endpointId: 'ep-1', model: 'm2', thinkingLevel: 'off', attempts: 3, tooBig: 'skip', comeBack: 5 }],
     },
   ]);
-  await expect(page.getByRole('combobox', { name: 'Agent' })).toContainText('Avery Prime');
+  await expect(page.getByRole('dialog').getByRole('heading', { name: 'Avery Prime' })).toBeVisible();
 });
 
 async function groupPage(page: Page, stops: { agentId: string; body: unknown }[]) {
@@ -237,8 +239,8 @@ test('one Save covers every section, and leaving with unsaved changes asks first
   await settings.getByRole('checkbox', { name: 'Desk' }).check();
   await settings.getByLabel('Name').fill('Avery Two');
   await expect(settings.getByText('Unsaved: Model, Computers')).toBeVisible();
-  // Leaving asks first; keep editing changes nothing.
-  await chooseAgent(page, 'Morgan');
+  // Closing asks first; keep editing changes nothing.
+  await page.getByRole('button', { name: 'Close agent settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Discard unsaved changes?' });
   await expect(dialog).toContainText('Model, Computers');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
@@ -252,10 +254,10 @@ test('one Save covers every section, and leaving with unsaved changes asks first
   await expect(settings.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   // With nothing unsaved, navigation is immediate; with new edits, Discard and leave goes ahead.
   await settings.getByLabel('Name').fill('Changed again');
-  await chooseAgent(page, 'Morgan');
+  await page.getByRole('button', { name: 'Close agent settings' }).click();
   await page
     .getByRole('dialog', { name: 'Discard unsaved changes?' })
     .getByRole('button', { name: 'Discard and leave' })
     .click();
-  await expect(page).toHaveURL(/\/agents\/morgan$/);
+  await expect(page).toHaveURL(/\/chat\/agents\/avery$/);
 });

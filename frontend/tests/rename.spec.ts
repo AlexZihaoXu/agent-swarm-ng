@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test, expect, chooseAgent } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
 const rename = async (page: import('@playwright/test').Page, menu: string, label: string, name: string) => {
@@ -17,10 +17,11 @@ test('renames an agent from its menu, and the settings follow', async ({ page })
     patches.push(route.request().postDataJSON());
     return route.fulfill({ json: { ...sampleAgents[0], name: 'Avery Prime' } });
   });
-  await page.goto('/agents/avery');
-  await page.locator('aside[aria-label="Agents"] [data-agent-id="avery"]').first().click({ button: 'right' });
+  await page.goto('/chat/agents/avery');
+  await page.locator('[data-chat-kind="dm"][data-chat-id="avery"]').click({ button: 'right' });
   await rename(page, 'Rename agent', 'Agent name', 'Avery Prime');
   expect(patches).toEqual([{ name: 'Avery Prime' }]);
+  await chooseAgent(page, 'Avery Prime');
   await expect(page.getByRole('region', { name: 'Model' }).getByLabel('Name')).toHaveValue('Avery Prime');
 });
 

@@ -56,13 +56,6 @@ test('right-click menus share a surface and fade-scale from their anchor, highli
   await expect(menu).toHaveCount(0);
   await expect(bubble).toHaveCSS('box-shadow', idleShadow);
 
-  await page.getByRole('tab', { name: 'Agents', exact: true }).click();
-  await page.getByRole('complementary', { name: 'Agents' }).click({ button: 'right', position: { x: 40, y: 350 } });
-  const agentMenu = page.getByRole('menu');
-  await expect(agentMenu).toHaveCSS('background-color', 'rgb(36, 36, 36)');
-  await expect(agentMenu).toHaveCSS('animation-name', 'dialog-in');
-  await page.keyboard.press('Escape');
-  await page.getByRole('tab', { name: 'Chat' }).click();
   await page.getByRole('complementary', { name: 'Chats' }).click({ button: 'right', position: { x: 40, y: 350 } });
   const chatMenu = page.getByRole('menu');
   await expect(chatMenu).toHaveCSS('background-color', 'rgb(36, 36, 36)');

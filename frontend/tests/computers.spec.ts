@@ -167,7 +167,7 @@ test('Computers shows a responsive screenshot-first grid with name and CPU/memor
   await page.screenshot({ path: '../.scratch/computers-grid-phone.png', animations: 'disabled' });
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.screenshot({ path: '../.scratch/computers-grid-desktop.png', animations: 'disabled' });
-  await page.getByRole('tab', { name: 'Agents' }).click();
+  await page.goto('/agents/avery');
   // Agent settings may fetch one still thumbnail per computer (refreshed every 10 s); the grid's fast polling stops.
   await page.waitForTimeout(800);
   const before = previewCount();

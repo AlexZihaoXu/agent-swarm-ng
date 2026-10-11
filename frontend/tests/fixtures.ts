@@ -281,3 +281,16 @@ export async function chooseAgent(page: import('@playwright/test').Page, name: s
   await page.getByRole('menuitem', { name: 'Agent settings' }).click();
   await page.getByRole('region', { name: `Settings for ${name}` }).waitFor();
 }
+
+/** Opens "Create new agent" the way people do: right-click the chat list → Create new agent. */
+export async function openCreateAgent(page: import('@playwright/test').Page) {
+  if (!(await page.getByRole('tab', { name: 'Chat' }).getAttribute('aria-selected'))?.includes('true'))
+    await page.getByRole('tab', { name: 'Chat' }).click();
+  const list = page.getByRole('complementary', { name: 'Chats', exact: true });
+  // Phones show the list on its own screen (not beside a conversation).
+  if (!(await list.isVisible())) await page.goto('/chat');
+  const box = (await list.boundingBox())!;
+  // Empty space low in the list (above a phone's floating navigation; the menu then has no chat of its own).
+  await list.click({ button: 'right', position: { x: 24, y: box.height - 120 } });
+  await page.getByRole('menuitem', { name: 'Create new agent' }).click();
+}

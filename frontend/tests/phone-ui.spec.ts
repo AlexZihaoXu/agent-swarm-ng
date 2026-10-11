@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test, expect, openCreateAgent } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
 const size = async (element: { boundingBox: () => Promise<{ width: number; height: number } | null> }) =>
@@ -9,12 +9,8 @@ for (const width of [320, 390])
     await page.setViewportSize({ width, height: 640 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
-    for (const label of ['Agents', 'Chat', 'Computers', 'Settings'])
+    for (const label of ['Dashboard', 'Chat', 'Computers', 'Settings'])
       expect((await size(page.getByRole('tab', { name: label }))).height).toBeGreaterThanOrEqual(44);
-    // Agents keeps its picker and + at the top, finger-sized.
-    expect((await size(page.getByRole('combobox', { name: 'Agent' }))).height).toBeGreaterThanOrEqual(44);
-    expect((await size(page.getByRole('button', { name: 'Create new agent' }))).width).toBeGreaterThanOrEqual(44);
-    await page.getByRole('tab', { name: 'Chat' }).click();
     expect((await size(page.getByRole('button', { name: 'Create group chat' }))).width).toBeGreaterThanOrEqual(44);
     await expect(page.getByLabel('Search chats')).toHaveCSS('font-size', '16px');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
@@ -117,19 +113,16 @@ test('phone agent creation and editing expose reachable form and permission cont
   await page.setViewportSize({ width: 320, height: 640 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  // The Agents bar above the settings keeps its context menu.
-  const panel = page.getByRole('complementary', { name: 'Agents' });
-  await expect(page.getByRole('combobox', { name: 'Agent' })).toContainText('Avery');
-  const bar = (await panel.boundingBox())!;
-  await panel.click({ button: 'right', position: { x: bar.width - 70, y: bar.height / 2 } });
-  await page.getByRole('menuitem', { name: 'Create new agent' }).click();
+  // The chat list's menu (a long press on a phone) creates agents.
+  await openCreateAgent(page);
   await expect(page.getByLabel('Agent name')).toHaveCSS('font-size', '16px');
   expect((await size(page.getByLabel('Agent name'))).height).toBeGreaterThanOrEqual(44);
   expect((await size(page.getByRole('button', { name: 'Avatar', exact: true }))).height).toBeGreaterThanOrEqual(44);
   expect((await size(page.getByRole('button', { name: 'Randomize' }))).height).toBeGreaterThanOrEqual(44);
   expect((await size(page.getByLabel('Avatar color'))).height).toBeGreaterThanOrEqual(44);
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
-  await expect(page).toHaveURL(/\/agents\/avery$/);
+  await expect(page).toHaveURL(/\/chat$/);
+  await page.goto('/agents/avery');
   const editor = page.getByRole('region', { name: 'Settings for Avery' });
   await expect(editor).toBeVisible();
   await expect(editor.getByRole('tablist', { name: 'Agent editor sections' })).toHaveCount(0);

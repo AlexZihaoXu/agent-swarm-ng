@@ -1,8 +1,6 @@
 import { test, expect } from './fixtures';
 
-test('Agents opens selected agent settings directly, keeps Avatar inline, and has no Edit context action', async ({
-  page,
-}) => {
+test('an agent link opens its settings in one scroll, Avatar included, over its chat', async ({ page }) => {
   await page.goto('/agents/avery');
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
   await expect(settings).toBeVisible();
@@ -10,13 +8,8 @@ test('Agents opens selected agent settings directly, keeps Avatar inline, and ha
   await expect(settings.getByRole('heading', { name: 'Channels' })).toBeVisible();
   await expect(settings.getByRole('checkbox', { name: 'Morgan' })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('agents-settings-desktop.png'), animations: 'disabled' });
+  // The chat behind the modal is out of reach until it closes.
   await expect(page.getByRole('form', { name: 'Message composer' })).toHaveCount(0);
-  await expect(page.getByRole('dialog', { name: 'Edit agent' })).toHaveCount(0);
-  // The panel's picker area carries the selected agent, so its menu acts on Avery.
-  await page.locator('aside[aria-label="Agents"] [data-agent-id="avery"]').first().click({ button: 'right' });
-  await expect(page.getByRole('menuitem', { name: 'Edit agent' })).toHaveCount(0);
-  await expect(page.getByRole('menuitem', { name: 'Delete agent' })).toBeVisible();
-  await page.keyboard.press('Escape');
   await settings.getByRole('region', { name: 'Agent editor' }).evaluate(element => {
     element.scrollTop = element.scrollHeight;
   });
@@ -25,7 +18,7 @@ test('Agents opens selected agent settings directly, keeps Avatar inline, and ha
   await page.reload();
   await expect(settings.getByRole('heading', { name: 'Channels' })).toBeVisible();
   await expect(settings.getByRole('heading', { name: 'Avatar' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await page.getByRole('button', { name: 'Close agent settings' }).click();
   await expect(page.getByRole('form', { name: 'Message composer' })).toBeVisible();
 });
 
@@ -56,7 +49,7 @@ test('Save and Discard appear only while avatar or permission changes are unsave
   await expect(discard).toHaveCount(0);
 });
 
-test('inline avatar and DM grants save together, and Discard restores unsaved changes without leaving Agents', async ({
+test('inline avatar and DM grants save together, and Discard restores unsaved changes without leaving the settings', async ({
   page,
 }) => {
   const updates: Array<{ avatar: { shape: string }; allowedDmAgentIds: string[] }> = [];
@@ -85,19 +78,14 @@ test('inline avatar and DM grants save together, and Discard restores unsaved ch
   await expect(page).toHaveURL(/\/agents\/avery$/);
 });
 
-test('phone Agents opens inline settings under the picker, while legacy peer links move to Chat', async ({ page }) => {
+test('phones show agent settings full screen, while legacy peer links move to Chat', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
-  await page.goto('/agents');
-  await expect(page).toHaveURL(/\/agents\/avery$/);
+  await page.goto('/agents/avery');
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
   await expect(settings).toBeVisible();
   await expect(settings.getByRole('checkbox', { name: 'Morgan' })).toBeVisible();
-  const panel = page.getByRole('complementary', { name: 'Agents' });
-  await expect(panel.getByRole('combobox', { name: 'Agent' })).toContainText('Avery');
-  await expect(page.getByRole('button', { name: 'Back to agents' })).toHaveCount(0);
-  expect((await settings.boundingBox())!.y).toBeGreaterThanOrEqual(
-    (await panel.boundingBox())!.y + (await panel.boundingBox())!.height - 1,
-  );
+  const dialog = page.getByRole('dialog').filter({ has: settings });
+  expect((await dialog.boundingBox())!.width).toBe(320);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath('agents-settings-phone.png'), animations: 'disabled' });
   await page.goto('/agents/avery/dm/morgan');

@@ -1,12 +1,9 @@
-import { test, expect, type Page } from './fixtures';
+import { test, expect, chooseAgent, openCreateAgent, type Page } from './fixtures';
 import { avatarShapes, eyePath, eyePoses, defaultAvatar } from '../src/lib/agent-avatar';
 import { projectEye } from '../src/lib/avatar-perspective';
 async function openCreate(page: Page) {
   await page.goto('/');
-  await page
-    .getByRole('complementary', { name: 'Agents', exact: true })
-    .click({ button: 'right', position: { x: 40, y: 360 } });
-  await page.getByRole('menuitem', { name: 'Create new agent' }).click();
+  await openCreateAgent(page);
   await expect(page.getByRole('dialog', { name: 'Create new agent' })).toBeVisible();
 }
 /** Picks a choice: chips and swatches are radio groups; the look preview is a combobox. */
@@ -228,10 +225,10 @@ test('existing agents can edit and persist appearance without changing their cha
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/chat/agents/avery');
   const beforeMessages = await page.getByRole('list', { name: 'Messages' }).innerText();
-  await page.getByRole('tab', { name: 'Agents', exact: true }).click();
+  await chooseAgent(page, 'Avery');
   const settings = page.getByRole('region', { name: 'Settings for Avery' });
-  // Wide screens show the selected agent's avatar in the Agents panel's picker.
-  const card = page.getByRole('combobox', { name: 'Agent' });
+  // The settings dialog shows the agent's avatar in its header.
+  const card = page.getByRole('dialog').locator('header');
   await settings.getByRole('heading', { name: 'Avatar' }).scrollIntoViewIfNeeded();
   await settings.getByRole('button', { name: 'Preview Triangle', exact: true }).click();
   await select(page, 'Avatar color', 'Apricot');
@@ -239,8 +236,9 @@ test('existing agents can edit and persist appearance without changing their cha
   const seed = await previewArt(page).getAttribute('data-avatar-seed');
   await settings.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(settings.getByRole('status')).toContainText('Saved');
-  await expect(card.locator('[data-avatar-shape]')).toHaveAttribute('data-avatar-seed', seed!);
-  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  // The header cross-fades to the saved look: the newest face is the last.
+  await expect(card.locator('[data-avatar-shape]').last()).toHaveAttribute('data-avatar-seed', seed!);
+  await page.keyboard.press('Escape');
   const header = page
     .getByRole('region', { name: 'Conversation with Avery' })
     .getByTestId('chat-avatar')
@@ -252,7 +250,7 @@ test('existing agents can edit and persist appearance without changing their cha
   await page.reload();
   await expect(header).toHaveAttribute('data-avatar-shape', 'triangle');
   await expect(header.locator('path').first()).toHaveAttribute('fill', '#f7ad51');
-  await page.getByRole('tab', { name: 'Agents', exact: true }).click();
+  await chooseAgent(page, 'Avery');
   await settings.getByRole('heading', { name: 'Avatar' }).scrollIntoViewIfNeeded();
   await settings.getByRole('button', { name: 'Randomize', exact: true }).click();
   await page.route('**/api/agents/avery/settings', route =>
@@ -265,7 +263,7 @@ test('existing agents can edit and persist appearance without changing their cha
   await expect(settings.getByRole('button', { name: 'Save changes', exact: true })).toBeVisible();
   await settings.getByRole('button', { name: 'Discard changes', exact: true }).click();
   await expect(settings.getByRole('button', { name: 'Save changes', exact: true })).toHaveCount(0);
-  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await page.keyboard.press('Escape');
   await expect(header).toHaveAttribute('data-avatar-seed', seed!);
 });
 
@@ -306,7 +304,8 @@ test('creation sends appearance but never the preview state', async ({ page }) =
   await select(page, 'Endpoint', 'Fixture');
   await select(page, 'Model', 'test-model');
   await page.getByRole('button', { name: 'Create agent', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Settings for New avatar' })).toBeVisible();
+  // A new agent opens its chat.
+  await expect(page.getByRole('region', { name: 'Conversation with New avatar' })).toBeVisible();
   expect(created?.avatar).toMatchObject({
     shape: 'bean',
     eyeStyle: 'round',
@@ -317,20 +316,18 @@ test('creation sends appearance but never the preview state', async ({ page }) =
     stretch: 0.2,
   });
   expect(created?.avatar).not.toHaveProperty('state');
-  const sidebar = page.getByRole('combobox', { name: 'Agent' }).locator('[data-avatar-state]');
-  await expect(page.getByRole('combobox', { name: 'Agent' })).toContainText('New avatar');
+  const row = page.locator('[data-chat-kind="dm"]').filter({ hasText: 'New avatar' });
+  const sidebar = row.locator('[data-avatar-state]').first();
   await expect(sidebar).toHaveAttribute('data-avatar-state', 'idle');
   await expect(sidebar).toHaveAttribute('data-mouth', 'smile');
-  // The picker's 32px avatar (with its live state) is large enough to keep its accessory.
-  await expect(sidebar).toHaveAttribute('data-accessory', 'antenna');
 });
 
 test('mobile inline avatar settings scroll without overflow and unsaved changes discard', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 780 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/agents');
-  // Phones show the selected agent (with its avatar) in the picker above its settings.
-  const card = page.getByRole('combobox', { name: 'Agent' });
+  await page.goto('/agents/avery');
+  // The settings dialog (full screen on phones) shows the agent with its avatar in its header.
+  const card = page.getByRole('dialog').locator('header');
   const original = defaultAvatar('avery');
   await expect(card).toContainText('Avery');
   const settings = page.getByRole('region', { name: 'Settings for Avery' });

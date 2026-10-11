@@ -1,4 +1,4 @@
-import { test, expect, codexAccounts } from './fixtures';
+import { test, expect, codexAccounts, openCreateAgent } from './fixtures';
 
 test('Settings supports ChatGPT device sign-in, cancellation, connection, and disconnect', async ({ page }) => {
   await page.route('**/api/model-endpoints*', route => route.fulfill({ json: [] }));
@@ -71,10 +71,7 @@ test('connected Codex is available for agent creation without an API endpoint', 
     });
   });
   await page.goto('/');
-  await page
-    .getByRole('complementary', { name: 'Agents', exact: true })
-    .click({ button: 'right', position: { x: 40, y: 360 } });
-  await page.getByRole('menuitem', { name: 'Create new agent' }).click();
+  await openCreateAgent(page);
   await page.getByLabel('Agent name', { exact: true }).fill('Codex agent');
   await page.getByLabel('Endpoint', { exact: true }).click();
   await page.getByRole('option', { name: 'OpenAI Codex (ChatGPT)' }).click();
@@ -82,7 +79,7 @@ test('connected Codex is available for agent creation without an API endpoint', 
   await page.getByRole('option', { name: 'test-codex', exact: true }).click();
   await expect(page.getByLabel('Thinking level')).toContainText('Medium');
   await page.getByRole('button', { name: 'Create agent', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Settings for Codex agent' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Conversation with Codex agent' })).toBeVisible();
 });
 
 test('each ChatGPT account is its own card and its own connection for agents', async ({ page }) => {
@@ -118,10 +115,7 @@ test('each ChatGPT account is its own card and its own connection for agents', a
     route.fulfill({ json: { thinkingLevels: ['low', 'medium'], reasoning: true } }),
   );
   await page.goto('/');
-  await page
-    .getByRole('complementary', { name: 'Agents', exact: true })
-    .click({ button: 'right', position: { x: 40, y: 360 } });
-  await page.getByRole('menuitem', { name: 'Create new agent' }).click();
+  await openCreateAgent(page);
   await page.getByLabel('Endpoint', { exact: true }).click();
   await expect(page.getByRole('option', { name: 'OpenAI Codex (ChatGPT) · first@example.com' })).toBeVisible();
   await page.getByRole('option', { name: 'OpenAI Codex (ChatGPT) · second@example.com' }).click();

@@ -237,8 +237,8 @@ test('an unknown page offers an in-app link back', async ({ page }) => {
   await page.goto('/nowhere');
   const loads: string[] = [];
   page.on('load', () => loads.push('reload'));
-  await page.getByRole('link', { name: 'Return to agents' }).click();
-  await expect(page).toHaveURL(/\/agents/);
+  await page.getByRole('link', { name: 'Return to chat' }).click();
+  await expect(page).toHaveURL(/\/chat/);
   expect(loads).toHaveLength(0); // client-side navigation, not a full reload
 });
 
@@ -248,8 +248,8 @@ test('Settings, Computers and Knowledge load on demand and still work', async ({
     const path = new URL(response.url()).pathname;
     if (/\/src\/components\/(settings|computers-panel|knowledge-browser)\.tsx/.test(path)) scripts.push(path);
   });
-  await page.goto('/agents/avery');
-  await expect(page.getByRole('combobox', { name: 'Agent' })).toContainText('Avery');
+  await page.goto('/chat/agents/avery');
+  await expect(page.getByLabel('Message Avery')).toBeVisible();
   expect(scripts).toEqual([]); // nothing from the other tabs was fetched for the first screen
   const initial = scripts.length;
   await page.getByRole('tab', { name: 'Settings' }).click();

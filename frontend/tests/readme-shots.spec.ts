@@ -970,7 +970,7 @@ test('group chat', async ({ page }) => {
 
 test('agent settings', async ({ page }) => {
   await page.goto('/agents/avery');
-  await expect(page.getByRole('combobox', { name: 'Agent' })).toContainText('Avery');
+  await expect(page.getByRole('region', { name: 'Settings for Avery' })).toBeVisible();
   await page
     .getByRole('link', { name: 'Model' })
     .or(page.getByRole('button', { name: 'Model', exact: true }))

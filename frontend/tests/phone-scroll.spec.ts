@@ -69,9 +69,7 @@ test.describe('phone touch scrolling', () => {
     await expect.poll(() => viewport.evaluate(el => el.scrollTop)).toBeLessThan(readingPosition + 30);
   });
 
-  test('agent settings, the agent picker, chat list and Settings still accept native vertical swipes', async ({
-    page,
-  }) => {
+  test('agent settings, the chat list and Settings still accept native vertical swipes', async ({ page }) => {
     const agents = Array.from({ length: 30 }, (_, index) => ({
       ...sampleAgents[0],
       id: `peer-${index}`,
@@ -88,12 +86,10 @@ test.describe('phone touch scrolling', () => {
       await swipeUp(page, bounds.x + bounds.width / 2, bounds.y + Math.min(320, bounds.height - 80));
       await expect.poll(() => scroller.evaluate(el => el.scrollTop)).toBeGreaterThan(30);
     };
-    // Agents: the settings page, then the picker's own list.
+    // An agent's settings (full screen), then the chat list.
+    await page.goto('/agents/peer-0');
     await swipes(page.getByRole('region', { name: 'Agent editor' }));
-    await page.getByRole('combobox', { name: 'Agent' }).click();
-    await swipes(page.locator('[cmdk-list]'));
-    await page.keyboard.press('Escape');
-    await page.getByRole('tab', { name: 'Chat' }).click();
+    await page.goto('/chat');
     await swipes(page.getByRole('complementary', { name: 'Chats' }).locator('[class*="overflow-y-auto"]').first());
     await page.getByRole('tab', { name: 'Settings' }).click();
     for (let index = 0; index < 3; index++) await page.getByRole('button', { name: 'Add endpoint' }).click();

@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 
-test('agent configuration keeps its width, centers inside the main pane, and scrolls without tabs', async ({
+test('agent configuration keeps its width, centers inside the settings dialog, and scrolls without tabs', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1920, height: 900 });
@@ -15,7 +15,6 @@ test('agent configuration keeps its width, centers inside the main pane, and scr
   await expect(avatar).toBeVisible();
   const paneBox = (await pane.boundingBox())!,
     sectionBox = (await pane.getByRole('region', { name: 'Channels' }).boundingBox())!;
-  expect(sectionBox.x - paneBox.x).toBeGreaterThan(200);
   expect(Math.abs(sectionBox.x + sectionBox.width / 2 - paneBox.x - paneBox.width / 2)).toBeLessThan(3);
   await expect(pane.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   expect((await avatar.boundingBox())!.y).toBeGreaterThan((await channels.boundingBox())!.y);
@@ -38,9 +37,7 @@ test('legacy avatar links land at the scroll section and phone controls remain r
   await expect(pane.getByRole('heading', { name: 'Avatar', exact: true })).toBeVisible();
   await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(100);
   await expect(pane.getByRole('button', { name: 'Preview Triangle' })).toBeVisible();
-  // Phones keep the picker and + above the settings, not a Back button.
-  await expect(page.getByRole('combobox', { name: 'Agent' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Back to agents' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Close agent settings' })).toBeVisible();
   await expect(pane.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   await pane.getByRole('button', { name: 'Preview Triangle' }).click();
   await expect(pane.getByRole('button', { name: 'Save changes' })).toBeVisible();

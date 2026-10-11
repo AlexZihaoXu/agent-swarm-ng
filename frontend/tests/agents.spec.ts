@@ -1,4 +1,4 @@
-import { test, expect, type Page } from './fixtures';
+import { test, expect, type Page, openCreateAgent } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
 const real = {
@@ -40,11 +40,7 @@ test.beforeEach(async ({ page }) => {
 
 async function configure(page: Page, model = 'test-model') {
   await page.goto('/');
-  await page
-    .getByRole('complementary', { name: 'Agents', exact: true })
-    // The panel's padding: on phones the panel is only a bar over the settings.
-    .click({ button: 'right', position: { x: 4, y: 4 } });
-  await page.getByRole('menuitem', { name: 'Create new agent' }).click();
+  await openCreateAgent(page);
   await page.getByLabel('Agent name', { exact: true }).fill(real.name);
   await page.getByLabel('Endpoint', { exact: true }).click();
   await page.getByRole('option', { name: 'Test endpoint', exact: true }).click();

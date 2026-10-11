@@ -89,20 +89,16 @@ test('agent pages and history failures can be retried without duplicate cards or
       ? route.fulfill({ status: 503, json: { message: 'Unavailable' } })
       : route.fulfill({ json: { messages: messages.slice(-1), nextCursor: null } }),
   );
-  await page.goto('/agents');
-  await expect(page.getByRole('button', { name: 'Retry loading agents' })).toBeVisible();
+  await page.goto('/chat');
+  await expect(page.getByRole('button', { name: 'Retry loading chats' })).toBeVisible();
   failAgents = false;
-  await page.getByRole('button', { name: 'Retry loading agents' }).click();
-  // Wide screens page through agents in the picker's list.
-  await page.getByRole('combobox', { name: 'Agent' }).click();
-  await page.getByRole('button', { name: 'Load more agents' }).click();
-  const option = (name: string) =>
-    page.getByRole('option').filter({ has: page.locator('[data-option-label]', { hasText: new RegExp(`^${name}$`) }) });
-  await expect(option('Second saved agent')).toHaveCount(1);
-  await expect(page.getByRole('option')).toHaveCount(2);
-  await option('Saved agent').click();
-  await expect(page.getByRole('region', { name: 'Settings for Saved agent' })).toBeVisible();
-  await page.getByRole('tablist', { name: 'Main navigation' }).getByRole('tab', { name: 'Chat' }).click();
+  await page.getByRole('button', { name: 'Retry loading chats' }).click();
+  // The chat list pages through agents.
+  await page.getByRole('button', { name: 'Load more chats' }).click();
+  const rows = page.locator('[data-chat-kind="dm"]');
+  await expect(rows.filter({ hasText: 'Second saved agent' })).toHaveCount(1);
+  await expect(rows).toHaveCount(2);
+  await page.getByRole('button', { name: 'Open conversation with Saved agent' }).click();
   await expect(page.getByRole('button', { name: 'Retry loading messages' })).toBeVisible();
   await page.getByLabel('Message Saved agent').fill('Draft');
   await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();

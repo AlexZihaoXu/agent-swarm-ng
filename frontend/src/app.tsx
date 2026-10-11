@@ -252,6 +252,19 @@ export function App() {
     previousTab.current = activeTab;
   }
   const pendingTabPath = useRef('');
+  // After deleting an agent, focus goes to the chat list (its row is gone, and the list remounts on the way).
+  const focusChatsAfterDelete = useRef(false);
+  useEffect(() => {
+    if (!focusChatsAfterDelete.current || route.kind === 'not-found' || route.kind === 'agent-delete') return;
+    let frame = requestAnimationFrame(function focus() {
+      const panel = document.querySelector<HTMLElement>('aside[aria-label="Chats"]');
+      if (panel && !document.querySelector('[role="dialog"]')) {
+        panel.focus();
+        focusChatsAfterDelete.current = false;
+      } else frame = requestAnimationFrame(focus);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [route.kind, agents.length]);
   const changeTab = (value: string) => {
     const target =
       value === 'chat'
@@ -1353,7 +1366,16 @@ export function App() {
       <AgentFormDialogs
         agents={agents}
         route={route}
-        onClose={() => navigate(route.agentId ? agentPath(route.agentId) : '/chat')}
+        // Back where it was opened from: the chat list, or the agent's settings (its Delete button).
+        onClose={() =>
+          navigate(
+            typeof location.state?.returnTo === 'string' && location.state.returnTo.startsWith('/')
+              ? location.state.returnTo
+              : route.agentId
+                ? agentPath(route.agentId)
+                : '/chat',
+          )
+        }
         onCreated={real => {
           addAgent(real);
           navigate(chatAgentPath(real.id));
@@ -1367,7 +1389,10 @@ export function App() {
           });
           setActivityOpen(false);
         }}
-        onDeleted={() => navigate('/chat')}
+        onDeleted={() => {
+          focusChatsAfterDelete.current = true;
+          navigate('/chat');
+        }}
       />
       <Portal
         open={portalOpen}

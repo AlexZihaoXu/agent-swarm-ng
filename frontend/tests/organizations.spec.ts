@@ -31,23 +31,18 @@ test('the switcher scopes the dashboard to one organization and agents move betw
         : { dropped: ['DM with Morgan: no longer allowed'], moved: false },
     });
   });
-  await page.goto('/agents');
-  // Wide screens list the agents in the Agents panel's picker.
-  const picker = page.getByRole('combobox', { name: 'Agent' });
-  const option = (name: string) => page.getByRole('option').filter({ hasText: name });
-  await picker.click();
+  await page.goto('/chat');
+  // The chat list shows the organization's agents.
+  const option = (name: string) => page.locator('[data-chat-kind="dm"]').filter({ hasText: name });
   await expect(option('Riley')).toBeVisible();
   await expect(option('Avery')).toBeVisible();
-  await page.keyboard.press('Escape');
   const switcher = page.getByRole('button', { name: 'Organization: All organizations' }).filter({ visible: true });
   await expect(switcher).toContainText('4 agents · 0 computers');
   await switcher.click();
   await page.getByRole('menuitem', { name: /^Lab / }).click();
   await expect(page.getByRole('button', { name: 'Organization: Lab' }).filter({ visible: true })).toBeVisible();
-  await picker.click();
   await expect(option('Riley')).toBeVisible();
   await expect(option('Avery')).toHaveCount(0);
-  await page.keyboard.press('Escape');
   // The address names the organization shown: it stays across in-app navigation and a reload.
   await expect(page).toHaveURL(/[?&]org=lab(&|$)/);
   await page.getByRole('tab', { name: 'Chat' }).filter({ visible: true }).first().click();

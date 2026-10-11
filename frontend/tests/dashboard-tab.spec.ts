@@ -216,7 +216,7 @@ for (const width of [320, 390]) {
     // A floating capsule across the width, inset 16px from each edge (icons only; the names are for screen readers).
     expect(box.width).toBeGreaterThanOrEqual(width - 36);
     expect(box.y + box.height).toBeGreaterThan(780 - 80);
-    for (const tab of ['Dashboard', 'Agents', 'Chat', 'Computers', 'Settings']) {
+    for (const tab of ['Dashboard', 'Chat', 'Computers', 'Settings']) {
       const item = nav.getByRole('tab', { name: tab });
       await expect(item).toBeVisible();
       const size = (await item.boundingBox())!;
@@ -231,7 +231,6 @@ for (const width of [320, 390]) {
     expect(overflow).toBeLessThanOrEqual(0);
     await page.screenshot({ path: `../.scratch/shots/dashboard-phone-${width}.png` });
     for (const [tab, url] of [
-      ['Agents', /\/agents\/[^/]+$/], // Agents opens an agent on phones too
       ['Chat', /\/chat$/],
       ['Computers', /\/computers$/],
       ['Settings', /\/settings$/],

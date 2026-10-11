@@ -121,7 +121,7 @@ test('an agent’s Discord bot: paste a token, choose channels and when they wak
   await expect(list.getByText('#design')).toHaveCount(0);
   await expect(section.getByText('Channels it may use · 1 of 3')).toBeVisible();
   await section.getByRole('button', { name: 'Add channels' }).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = page.getByRole('dialog').filter({ has: page.getByPlaceholder('Search servers and channels…') });
   await dialog.getByPlaceholder('Search servers and channels…').fill('des');
   await expect(dialog.getByRole('option', { name: '#general' })).toHaveCount(0);
   await dialog.getByRole('option', { name: '#design' }).click();

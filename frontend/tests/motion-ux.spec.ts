@@ -115,15 +115,14 @@ test('agent settings offer jump links that follow the reader and land each headi
   await page.setViewportSize({ width: 1280, height: 700 });
   await page.goto('/agents/avery');
   const pane = page.getByRole('region', { name: 'Settings for Avery' });
-  // Wide screens list the sections down the Agents panel, under the picker, not in the editor.
-  const panel = page.getByRole('complementary', { name: 'Agents', exact: true });
-  const nav = panel.getByRole('navigation', { name: 'Jump to section' });
+  // Wide screens list the sections down the settings dialog's left side, beside the editor.
+  const dialog = page.getByRole('dialog').filter({ has: pane });
+  const nav = dialog.getByRole('navigation', { name: 'Jump to section' });
   await expect(nav.getByRole('link')).toHaveText(sectionNames);
   await expect(pane.getByRole('navigation', { name: 'Jump to section' })).toHaveCount(0);
-  const picker = (await panel.getByRole('combobox', { name: 'Agent' }).boundingBox())!;
   const first = (await nav.getByRole('link').first().boundingBox())!;
   const second = (await nav.getByRole('link').nth(1).boundingBox())!;
-  expect(first.y).toBeGreaterThan(picker.y + picker.height);
+  expect(first.x + first.width).toBeLessThanOrEqual((await pane.boundingBox())!.x + 1);
   expect(second.y).toBeGreaterThan(first.y); // a vertical list
   expect(Math.abs(second.x - first.x)).toBeLessThan(2);
   await expect(pane).not.toContainText('Name, model, channels');

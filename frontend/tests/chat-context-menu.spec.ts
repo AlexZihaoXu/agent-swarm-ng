@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
-test('Chat sidebar context menu creates and edits groups, and navigates from agent DMs', async ({ page }) => {
+test('Chat sidebar context menu creates and edits groups, and opens an agent’s settings', async ({ page }) => {
   let group = {
     id: 'team',
     name: 'Research',
@@ -50,12 +50,15 @@ test('Chat sidebar context menu creates and edits groups, and navigates from age
   const dm = page.getByRole('button', { name: 'Open conversation with Morgan' });
   await dm.focus();
   await page.keyboard.press('Shift+F10');
-  await expect(page.getByRole('menuitem', { name: 'View in Agents' })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'View in Agents' }).locator('svg')).toHaveCount(1);
+  await expect(page.getByRole('menuitem', { name: 'Agent settings' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Agent settings' }).locator('svg')).toHaveCount(1);
   await expect(page.getByRole('menuitem', { name: 'Edit group chat' })).toHaveCount(0);
-  await page.getByRole('menuitem', { name: 'View in Agents' }).click();
-  await expect(page.getByRole('tab', { name: 'Agents' })).toHaveAttribute('data-state', 'active');
+  await page.getByRole('menuitem', { name: 'Agent settings' }).click();
+  await expect(page).toHaveURL(/\/agents\/morgan$/);
   await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
+  // Closing it returns focus to the agent's row.
+  await page.keyboard.press('Escape');
+  await expect(dm).toBeFocused();
 });
 
 test('Chat sidebar context menu can create a group from an empty list', async ({ page }) => {

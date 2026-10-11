@@ -102,12 +102,21 @@ export function ChatPanel({
     // Back to the row once the dialog the menu opened (a group's, or an agent's settings, creation or deletion) closes.
     const dialogs = ['group-new', 'group-edit', 'group-delete', 'agent', 'agent-edit', 'agent-new', 'agent-delete'];
     if (dialogs.includes(route.kind) || !fromContext.current) return;
-    fromContext.current = false;
-    const frame = requestAnimationFrame(() => {
+    // A closing dialog keeps its focus trap until its animation ends: wait for it to go (at most half a second).
+    let frame = 0,
+      waited = 0;
+    const restore = () => {
+      if (document.querySelector('[role="dialog"]') && waited++ < 30) {
+        frame = requestAnimationFrame(restore);
+        return;
+      }
+      // Done only once focus moves: a redirect meanwhile (/chat → the first agent) runs this again.
+      fromContext.current = false;
       const target = returnFocus.current;
       if (target?.isConnected && target.getClientRects().length) target.focus();
       else panelRef.current?.focus();
-    });
+    };
+    frame = requestAnimationFrame(restore);
     return () => cancelAnimationFrame(frame);
   }, [route.kind]);
   const groups = useGroups(search.trim());
@@ -218,9 +227,19 @@ export function ChatPanel({
             />
             <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
               {!items.length && !loading && !failed && (
-                <p role="status" className="px-2 py-4 text-xs text-muted-foreground">
-                  {search ? 'No chats found.' : 'Right-click here to create an agent or a group chat.'}
-                </p>
+                <div className="space-y-3 px-2 py-4">
+                  <p role="status" className="text-xs text-muted-foreground">
+                    {search
+                      ? 'No chats found.'
+                      : 'No agents yet. Create one here, or right-click the list for agents and group chats.'}
+                  </p>
+                  {!search && !agents.length && (
+                    <Button type="button" size="sm" className="gap-1.5" onClick={() => onNavigate('/agents/new')}>
+                      <AgentAddIcon className="size-4" />
+                      Create agent
+                    </Button>
+                  )}
+                </div>
               )}
               <ul className="space-y-0.5">
                 {items.map(item => {
@@ -288,7 +307,7 @@ export function ChatPanel({
             <ContextMenu.Item
               onSelect={() => {
                 fromContext.current = true;
-                onNavigate('/agents/new');
+                onNavigate('/agents/new', { state: { returnTo: window.location.pathname } });
               }}
               className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted"
             >
@@ -404,7 +423,9 @@ export function ChatPanel({
               <ContextMenu.Item
                 onSelect={() => {
                   fromContext.current = true;
-                  onNavigate(`${agentPath(context.agent.id)}/delete`);
+                  onNavigate(`${agentPath(context.agent.id)}/delete`, {
+                    state: { returnTo: window.location.pathname },
+                  });
                 }}
                 className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-red-400 outline-none data-[highlighted]:bg-red-500/10"
               >

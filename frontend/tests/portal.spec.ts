@@ -47,7 +47,7 @@ async function mocks(page: Page) {
 test('Ctrl+K opens Portal, prefixes narrow it, Enter floats and Shift+Enter goes to the page', async ({ page }) => {
   await mocks(page);
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/agents/avery');
+  await page.goto('/chat/agents/avery');
   // The app (and its shortcut) mounts once the sign-in check answers.
   await expect(page.getByRole('button', { name: 'Open Portal' })).toBeVisible();
   await page.keyboard.press('Control+k');
@@ -129,7 +129,7 @@ test('Ctrl+K opens Portal, prefixes narrow it, Enter floats and Shift+Enter goes
 
 test('keys inside a focused terminal stay with the computer', async ({ page }) => {
   await mocks(page);
-  await page.goto('/agents/avery');
+  await page.goto('/chat/agents/avery');
   // The app (and its shortcut) mounts once the sign-in check answers.
   await expect(page.getByRole('button', { name: 'Open Portal' })).toBeVisible();
   await page.keyboard.press('Control+k');

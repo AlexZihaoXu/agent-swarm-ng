@@ -1,38 +1,44 @@
 import { test, expect, chooseAgent } from './fixtures';
 
 // Route destinations are stable URLs, not serialized chat text or API keys.
-test('main tabs and selected agent survive refresh and browser history', async ({ page }) => {
+test('main tabs and the agent settings modal survive refresh and browser history', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveURL(/\/agents\/avery$/);
+  await expect(page).toHaveURL(/\/chat\/agents\/avery$/);
   await chooseAgent(page, 'Morgan');
   await expect(page).toHaveURL(/\/agents\/morgan$/);
   await page.reload();
   await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
+  // Closing the settings shows the agent's chat behind them.
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveURL(/\/chat\/agents\/morgan$/);
+  await expect(page.getByRole('region', { name: 'Conversation with Morgan' })).toBeVisible();
   await page.getByRole('tablist', { name: 'Main navigation' }).getByRole('tab', { name: 'Settings' }).click();
   await expect(page).toHaveURL(/\/settings$/);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await page.goBack();
+  await expect(page).toHaveURL(/\/chat\/agents\/morgan$/);
+  await page.goBack();
   await expect(page).toHaveURL(/\/agents\/morgan$/);
   await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
 });
 
-test('switching Agents and Chat keeps the selected agent on desktop; phones list chats but keep Agents on an agent', async ({
+test('there is no Agents tab: /agents opens Chat, and an agent link opens its settings over its chat', async ({
   page,
 }) => {
   const path = () => new URL(page.url()).pathname;
+  await page.goto('/agents');
+  await expect.poll(path).toBe('/chat/agents/avery');
+  await expect(page.getByRole('tab', { name: 'Chat', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Agents', exact: true })).toHaveCount(0);
   await page.goto('/agents/morgan');
-  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close agent settings' }).click();
   await expect.poll(path).toBe('/chat/agents/morgan');
-  // Straight back, before the Chat view has necessarily finished rendering: the click must not be lost.
-  await page.getByRole('tab', { name: 'Agents', exact: true }).click();
-  await expect.poll(path).toBe('/agents/morgan');
   await page.setViewportSize({ width: 320, height: 700 });
-  await page.goto('/chat');
+  await page.goto('/agents');
+  await expect.poll(path).toBe('/chat');
   await expect(page.getByRole('complementary', { name: 'Chats' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Agents', exact: true }).click();
-  await expect.poll(path).toMatch(/^\/agents\/[^/]+$/);
-  await expect(page.getByRole('combobox', { name: 'Agent' })).toBeVisible();
 });
 
 test('Settings endpoint editor can be bookmarked without placing unsaved keys in the URL', async ({ page }) => {
@@ -54,17 +60,16 @@ test('Settings endpoint editor can be bookmarked without placing unsaved keys in
   await expect(page.getByRole('heading', { name: 'Local' })).toBeVisible();
 });
 
-test('phone agent location and agent-to-agent conversation restore from a direct path', async ({ page }) => {
+test('phone agent settings restore from a direct path and close to the agent’s chat', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/agents/morgan');
   await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'Agent' })).toContainText('Morgan');
-  await chooseAgent(page, 'Avery');
-  await expect(page.getByRole('region', { name: 'Settings for Avery' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close agent settings' }).click();
+  await expect(page).toHaveURL(/\/chat\/agents\/morgan$/);
+  await expect(page.getByRole('region', { name: 'Conversation with Morgan' })).toBeVisible();
   await page.goBack();
-  await expect(page).toHaveURL(/\/agents\/morgan$/);
   await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
 });
 
@@ -151,7 +156,7 @@ test('agent create and delete dialogs reopen by path without preserving destruct
   await page.reload();
   await expect(page.getByRole('dialog', { name: 'Create new agent' })).toBeVisible();
   await page.getByRole('dialog', { name: 'Create new agent' }).getByRole('button', { name: 'Cancel' }).click();
-  await expect(page).toHaveURL(/\/agents\/avery$/);
+  await expect(page).toHaveURL(/\/chat\/agents\/avery$/);
   await page.goto('/agents/morgan/delete');
   await expect(page.getByRole('dialog', { name: 'Delete agent' })).toBeVisible();
   await page.getByLabel('Confirm agent name').fill('Morgan');
