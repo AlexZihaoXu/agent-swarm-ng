@@ -1,4 +1,5 @@
 import { menuAnchorX } from '@/lib/menu-anchor';
+import { useTouchHold } from '@/lib/use-touch-hold';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import * as Popover from '@radix-ui/react-popover';
@@ -110,13 +111,7 @@ export function MessageReactions({
     [pickerOpen, setPickerOpen] = useState(false);
   const replyChosen = useRef(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const touchHold = useRef<{ x: number; y: number; timer: number } | null>(null);
-  const suppressTouchClick = useRef(false);
-  const clearTouchHold = () => {
-    if (touchHold.current) window.clearTimeout(touchHold.current.timer);
-    touchHold.current = null;
-  };
-  useEffect(() => () => clearTouchHold(), []);
+  const touchHold = useTouchHold(menuAnchorX);
   useLayoutEffect(() => {
     const menu = menuRef.current;
     if (!menuOpen || !menu || !window.matchMedia('(max-width: 639px)').matches) return;
@@ -194,52 +189,7 @@ export function MessageReactions({
           if (!open) setMobileChoices(false);
         }}
       >
-        <ContextMenu.Trigger
-          asChild
-          onPointerDown={event => {
-            clearTouchHold();
-            if (event.pointerType !== 'touch' || !event.isPrimary) return;
-            suppressTouchClick.current = false;
-            const { clientX: x, clientY: y } = event;
-            const trigger = event.currentTarget;
-            // Radix cancels its 700ms hold on *any* pointermove. A small finger drift
-            // is not a scroll: open the same context menu after a tolerant hold.
-            touchHold.current = {
-              x,
-              y,
-              timer: window.setTimeout(() => {
-                touchHold.current = null;
-                suppressTouchClick.current = true;
-                trigger.dispatchEvent(
-                  new MouseEvent('contextmenu', {
-                    bubbles: true,
-                    cancelable: true,
-                    button: 2,
-                    clientX: menuAnchorX(x),
-                    clientY: y,
-                  }),
-                );
-              }, 550),
-            };
-          }}
-          onPointerMove={event => {
-            if (
-              touchHold.current &&
-              event.pointerType === 'touch' &&
-              Math.hypot(event.clientX - touchHold.current.x, event.clientY - touchHold.current.y) > 12
-            )
-              clearTouchHold();
-          }}
-          onPointerUp={clearTouchHold}
-          onPointerCancel={clearTouchHold}
-          onContextMenu={clearTouchHold}
-          onClickCapture={event => {
-            if (!suppressTouchClick.current) return;
-            suppressTouchClick.current = false;
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-        >
+        <ContextMenu.Trigger asChild {...touchHold}>
           {children}
         </ContextMenu.Trigger>
         <ContextMenu.Portal>

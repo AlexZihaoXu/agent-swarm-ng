@@ -40,7 +40,7 @@ test('all silhouettes move; randomization is stable and preserves the state prev
   await expect(sample.locator('[data-slot="online-indicator"]')).toHaveCSS('width', '10px');
   await select(page, 'State preview', 'Typing');
   await expect(sample.locator('[data-slot="typing-badge"]')).toHaveCSS('width', '24px');
-  await expect(sample.locator('[data-slot="presence-cutout"]')).toHaveCSS('width', '28px');
+  await expect(sample.locator('[data-slot="avatar-face"]')).toHaveAttribute('data-cutout-width', '28');
   await select(page, 'State preview', 'Working');
   // Leaving typing, the fading fill stays a pill (it flashed as a square).
   const badge = sample.locator('[data-slot="online-indicator"]');

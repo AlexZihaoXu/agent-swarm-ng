@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 export function TypingDots({ compact = false, className }: { compact?: boolean; className?: string }) {
@@ -41,39 +41,42 @@ export function AvatarFace({
   working?: boolean;
   size?: IndicatorSize;
 }) {
-  const id = useId();
   const { width, height } = indicatorDimensions(size, typing);
   const center = avatarSize - 4;
   const visible = ready || typing || working;
+  const cutout = {
+    x: center - width / 2 - 2,
+    y: center - height / 2 - 2,
+    width: width + 4,
+    height: height + 4,
+    rx: height / 2 + 2,
+  };
+  // The face, with a rounded hole where the presence indicator sits. A self-contained image, not a reference to an
+  // SVG <mask> in the page: iOS Safari loses such references once the list is hidden and shown, masking it all.
+  const mask = `url("data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${avatarSize}" height="${avatarSize}"><mask id="m"><rect width="100%" height="100%" fill="white"/><rect x="${cutout.x}" y="${cutout.y}" width="${cutout.width}" height="${cutout.height}" rx="${cutout.rx}" fill="black"/></mask><rect width="100%" height="100%" mask="url(#m)"/></svg>`,
+  )}")`;
+  const maskSize = `${avatarSize}px ${avatarSize}px`;
   return (
-    <>
-      {visible && (
-        <svg aria-hidden="true" width="0" height="0" className="pointer-events-none absolute">
-          <defs>
-            <mask id={id} maskUnits="userSpaceOnUse" x="0" y="0" width={avatarSize} height={avatarSize}>
-              <rect width={avatarSize} height={avatarSize} fill="white" />
-              <rect
-                data-slot="presence-cutout"
-                x={center - width / 2 - 2}
-                y={center - height / 2 - 2}
-                width={width + 4}
-                height={height + 4}
-                rx={height / 2 + 2}
-                fill="black"
-                className="transition-[x,y,width,height,rx] duration-150 motion-reduce:transition-none"
-              />
-            </mask>
-          </defs>
-        </svg>
-      )}
-      <span
-        data-slot="avatar-face"
-        className="absolute inset-0"
-        style={visible ? { maskImage: `url(#${id})` } : undefined}
-      >
-        {children}
-      </span>
-    </>
+    <span
+      data-slot="avatar-face"
+      data-cutout-width={visible ? cutout.width : undefined}
+      className="absolute inset-0"
+      style={
+        visible
+          ? {
+              maskImage: mask,
+              WebkitMaskImage: mask,
+              maskSize,
+              WebkitMaskSize: maskSize,
+              maskRepeat: 'no-repeat',
+              WebkitMaskRepeat: 'no-repeat',
+            }
+          : undefined
+      }
+    >
+      {children}
+    </span>
   );
 }
 

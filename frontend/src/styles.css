@@ -530,7 +530,8 @@
 }
 
 @media (hover: none) and (pointer: coarse) {
-  .message-context-target {
+  .message-context-target,
+  .touch-menu-target {
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;

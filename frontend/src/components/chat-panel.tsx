@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { agentPath, chatGroupPath, type DashboardRoute } from '@/lib/dashboard-location';
 import { messagePreview } from '@/lib/chat-files';
 import { useSignedIn } from '@/lib/auth';
+import { useTouchHold } from '@/lib/use-touch-hold';
 import { humanName } from '@/lib/people';
 
 function GroupAvatar({ group }: { group: GroupChat }) {
@@ -98,6 +99,7 @@ export function ChatPanel({
   const panelRef = useRef<HTMLElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const fromContext = useRef(false);
+  const touchHold = useTouchHold();
   useEffect(() => {
     // Back to the row once the dialog the menu opened (a group's, or an agent's settings, creation or deletion) closes.
     const dialogs = ['group-new', 'group-edit', 'group-delete', 'agent', 'agent-edit', 'agent-new', 'agent-delete'];
@@ -173,6 +175,8 @@ export function ChatPanel({
               'phone-list-enter min-h-0 w-full shrink-0 flex-col border-border bg-sidebar pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:relative md:flex md:w-[min(var(--panel-width),40vw)] md:border-r md:pb-0',
               mobile ? 'hidden' : 'flex',
             )}
+            // A long press on a phone opens the same menu as a right-click.
+            {...touchHold}
             onContextMenuCapture={event => {
               const row = (event.target as HTMLElement).closest<HTMLElement>('[data-chat-kind][data-chat-id]');
               const item = items.find(item => item.kind === row?.dataset.chatKind && item.id === row?.dataset.chatId);

@@ -45,7 +45,8 @@ export function ConversationRow({
         onPointerEnter={onPrefetch}
         onFocus={onPrefetch}
         className={cn(
-          'relative isolate flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none transition-[background-color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.985] motion-reduce:active:scale-100',
+          // A long press opens the chat list's menu (agent settings and more), not text selection.
+          'touch-menu-target relative isolate flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none transition-[background-color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.985] motion-reduce:active:scale-100',
           !selected && 'hover:bg-foreground/5',
         )}
       >

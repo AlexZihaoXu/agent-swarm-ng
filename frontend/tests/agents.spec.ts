@@ -273,7 +273,7 @@ test('typing is channel-scoped and clears when the tool publishes', async ({ pag
   await expect(badge).toHaveCSS('width', '20px');
   await expect(badge).toHaveCSS('height', '10px');
   await expect(badge).toHaveCSS('box-shadow', 'none');
-  await expect(avatar.locator('[data-slot="presence-cutout"]')).toHaveCSS('width', '24px');
+  await expect(avatar.locator('[data-slot="avatar-face"]')).toHaveAttribute('data-cutout-width', '24');
   const pillBox = (await badge.boundingBox())!;
   expect(pillBox.x + pillBox.width / 2).toBeCloseTo(dotBox.x + dotBox.width / 2, 1);
   expect(pillBox.y + pillBox.height / 2).toBeCloseTo(dotBox.y + dotBox.height / 2, 1);

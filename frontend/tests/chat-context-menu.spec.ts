@@ -96,3 +96,38 @@ test('Chat sidebar context menu can create a group from an empty list', async ({
   await expect(page.getByRole('button', { name: 'Open group chat Planning' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Planning', exact: true })).toBeVisible();
 });
+
+test('a long press on a chat row (phones) opens its menu with Agent settings, not the chat', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/chat');
+  // By its element: once the menu is open, the list is hidden from the accessibility tree.
+  const row = page.locator('[data-chat-kind="dm"][data-chat-id="morgan"]');
+  // A touch device keeps the press from selecting text or opening the browser's callout.
+  await expect(row).toHaveClass(/touch-menu-target/);
+  const box = (await row.boundingBox())!;
+  const at = { pointerType: 'touch', isPrimary: true, button: 0, clientX: box.x + 40, clientY: box.y + 20 };
+  await row.dispatchEvent('pointerdown', at);
+  // The finger drifts a little: still a hold, not a scroll.
+  await row.dispatchEvent('pointermove', { ...at, clientX: at.clientX + 5 });
+  await expect(page.getByRole('menuitem', { name: 'Agent settings' })).toBeVisible();
+  await row.dispatchEvent('pointerup', at);
+  await row.dispatchEvent('click', at);
+  await expect(page).toHaveURL(/\/chat$/); // the press did not also open the chat
+  await page.getByRole('menuitem', { name: 'Agent settings' }).click();
+  await expect(page.getByRole('region', { name: 'Settings for Morgan' })).toBeVisible();
+});
+
+test('avatars in the chat list survive opening a chat and coming back (no masks by page reference)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/chat');
+  const face = page
+    .getByRole('button', { name: 'Open conversation with Morgan' })
+    .locator('[data-slot="avatar-face"]')
+    .first();
+  await expect(face).toHaveCSS('mask-image', /^url\("data:image\/svg\+xml/);
+  await page.getByRole('button', { name: 'Open conversation with Morgan' }).click();
+  await page.getByRole('button', { name: 'Back to chats' }).click();
+  await expect(face).toHaveCSS('mask-image', /^url\("data:image\/svg\+xml/);
+});
