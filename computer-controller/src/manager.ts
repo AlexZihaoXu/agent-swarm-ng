@@ -1304,38 +1304,72 @@ export class ComputerManager {
     const limit = Math.min(Math.max(0, Math.trunc(maxBytes) || 0), MAX_TRANSFER);
     const { container, done, archived } = await this.transferTarget(idRaw);
     try {
-      const stat = await this.docker.archive('HEAD', container, { path: archived(path) });
-      stat.resume();
-      if (stat.statusCode === 404) throw new ResourceError(404, 'Path not found.');
-      if (stat.statusCode !== 200) throw new ResourceError(400, 'Path is not available.');
-      const { size } = regularFile((stat.headers['x-docker-container-path-stat'] as string | undefined) ?? null);
-      if (size > limit) throw new ResourceError(413, 'The file is larger than the transfer limit.');
-      const response = await this.docker.archive('GET', container, { path: archived(path) });
-      if (response.statusCode !== 200) {
-        response.resume();
-        throw new ResourceError(response.statusCode === 404 ? 404 : 400, 'Path is not available.');
-      }
-      const bytes = untarFirstFile(response, limit);
+      // Docker's archive API cannot read some computers at all (Sysbox 0.7 with Docker 29: nestybox/sysbox#1017,
+      // even a missing path's 404 is not to be trusted there): then the guest itself reads the file.
+      const source =
+        (await this.archiveExport(container, archived(path), limit)) ??
+        (await this.guestExport(container, path, limit));
       let closed = false;
       // Idempotent: runs when the stream ends, fails, or is cancelled (even before it was read).
       const close = () => {
         if (closed) return;
         closed = true;
-        response.destroy();
+        source.release();
         done();
       };
       const stream = (async function* () {
         try {
-          yield* bytes;
+          yield* source.bytes;
         } finally {
           close();
         }
       })();
-      return { name, size, stream, close };
+      return { name, size: source.size, stream, close };
     } catch (error) {
       done();
       throw error;
     }
+  }
+  /** The file through Docker's archive API, or null when the API cannot read it. */
+  private async archiveExport(container: string, path: string, limit: number) {
+    const stat = await this.docker.archive('HEAD', container, { path });
+    stat.resume();
+    if (stat.statusCode !== 200) return null;
+    const { size } = regularFile((stat.headers['x-docker-container-path-stat'] as string | undefined) ?? null);
+    if (size > limit) throw new ResourceError(413, 'The file is larger than the transfer limit.');
+    const response = await this.docker.archive('GET', container, { path });
+    if (response.statusCode !== 200) {
+      response.resume();
+      return null;
+    }
+    return { size, bytes: untarFirstFile(response, limit), release: () => response.destroy() };
+  }
+  /** What the guest says a path is: a regular file and its size, or why it cannot be copied. */
+  private async guestFile(container: string, path: string) {
+    const result = await this.docker.execResult(container, ['stat', '-c', '%F/%s', '--', path], 'root', 19_000, 4096);
+    if (result.exitCode !== 0) throw new ResourceError(404, 'Path not found.');
+    const [, type, size] = /^(.*)\/(\d+)\n?$/.exec(result.stdout.toString()) ?? [];
+    if (type === 'symbolic link')
+      throw new ResourceError(400, 'This path is a symbolic link; copy the file it points to instead.');
+    if (type !== 'regular file' && type !== 'regular empty file')
+      throw new ResourceError(400, 'Path is not available.');
+    return Number(size);
+  }
+  /** The file read by the guest's root (its own paths: Keep and Cache are mounted there). */
+  private async guestExport(container: string, path: string, limit: number) {
+    const size = await this.guestFile(container, path);
+    if (size > limit) throw new ResourceError(413, 'The file is larger than the transfer limit.');
+    const run = await this.docker.pipe(container, ['cat', '--', path], 'root');
+    const bytes = (async function* () {
+      let read = 0;
+      for await (const chunk of run.output) {
+        read += chunk.length;
+        if (read > limit) throw new ResourceError(413, 'The file is larger than the transfer limit.');
+        yield chunk;
+      }
+      if ((await run.exitCode()) !== 0) throw new ResourceError(400, 'Could not read the file.');
+    })();
+    return { size, bytes, release: () => void bytes.return(undefined).catch(() => {}) };
   }
   /** Writes one file into an existing guest folder, owned by the guest user; replaces a file of the same name. */
   async importFile(idRaw: string, rawPath: string, size: number, body: AsyncIterable<Uint8Array>) {
@@ -1346,7 +1380,13 @@ export class ComputerManager {
     try {
       const folder = await this.docker.archive('HEAD', container, { path: archived(directory) });
       folder.resume();
-      if (folder.statusCode === 404)
+      // When Docker's archive API cannot see the folder (nestybox/sysbox#1017 breaks it for every path), the guest
+      // is asked, and writes the file itself.
+      const viaArchive = folder.statusCode === 200;
+      if (
+        !viaArchive &&
+        (await this.docker.execResult(container, ['test', '-d', directory], 'root', 19_000, 4096)).exitCode !== 0
+      )
         throw new ResourceError(404, 'The destination folder does not exist. Create it first.');
       // Written under a hidden temporary name, then renamed over the target only when complete: a failed or
       // cancelled copy never leaves a partial file where the old one was.
@@ -1355,27 +1395,29 @@ export class ComputerManager {
       const temporary = `${directory === '/' ? '' : directory}/${partial}`;
       const discard = () =>
         this.docker.exec(container, ['/bin/rm', '-f', '--', temporary], 'root', 10_000).catch(() => {});
-      let response;
-      try {
-        response = await this.docker.archive(
-          'PUT',
-          container,
-          // Written as the guest's root (user namespaces make tar owners unreliable), then handed to the guest user.
-          // The archive goes where the folder really lives; the guest commands below use its own paths.
-          { path: archived(directory), noOverwriteDirNonDir: 'true' },
-          tarOneFile(partial, size, body),
-        );
-      } catch (error) {
-        await discard();
-        throw error;
-      }
-      response.resume();
-      if (response.statusCode !== 200) {
-        await discard();
-        if (response.statusCode === 404)
-          throw new ResourceError(404, 'The destination folder does not exist. Create it first.');
-        throw new ResourceError(400, 'Could not write the file there.');
-      }
+      if (viaArchive) {
+        let response;
+        try {
+          response = await this.docker.archive(
+            'PUT',
+            container,
+            // Written as the guest's root (user namespaces make tar owners unreliable), then handed to the guest
+            // user. The archive goes where the folder really lives; the guest commands below use its own paths.
+            { path: archived(directory), noOverwriteDirNonDir: 'true' },
+            tarOneFile(partial, size, body),
+          );
+        } catch (error) {
+          await discard();
+          throw error;
+        }
+        response.resume();
+        if (response.statusCode !== 200) {
+          await discard();
+          if (response.statusCode === 404)
+            throw new ResourceError(404, 'The destination folder does not exist. Create it first.');
+          throw new ResourceError(400, 'Could not write the file there.');
+        }
+      } else await this.guestImport(container, temporary, size, body, discard);
       // Docker writes archive files with raw host ids, which a user-namespaced guest cannot own or chown. The
       // guest's root copies the (world-readable) partial file into a file of its own, hands that to the guest
       // user, and renames it over the target (-T: a folder of that name is refused); the partial is removed.
@@ -1402,6 +1444,38 @@ export class ComputerManager {
       return { path: target, size };
     } finally {
       done();
+    }
+  }
+  /** Writes exactly `size` bytes of `body` to a new guest file through the guest's root (`cat`). */
+  private async guestImport(
+    container: string,
+    path: string,
+    size: number,
+    body: AsyncIterable<Uint8Array>,
+    discard: () => Promise<unknown>,
+  ) {
+    let sent = 0;
+    const counted = (async function* () {
+      for await (const chunk of body) {
+        sent += chunk.length;
+        if (sent > size) throw new ResourceError(400, 'The file is larger than declared.');
+        yield chunk;
+      }
+      if (sent !== size) throw new ResourceError(400, 'The file is smaller than declared.');
+    })();
+    try {
+      const run = await this.docker.pipe(
+        container,
+        ['/bin/sh', '-c', 'umask 077 && cat > "$1"', 'swarm-import', path],
+        'root',
+        counted,
+      );
+      for await (const _ of run.output);
+      if (sent !== size || (await run.exitCode()) !== 0)
+        throw new ResourceError(400, 'Could not write the file there.');
+    } catch (error) {
+      await discard();
+      throw error;
     }
   }
   /** Operator reads neither acquire nor release agent control. One per guest, two globally. */

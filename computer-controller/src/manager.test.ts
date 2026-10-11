@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest';
+import { Readable } from 'node:stream';
 import { ComputerManager, computerHostname, desktopCreateBody, desktopEnvironment } from './manager';
 import { DockerApi } from './docker-api';
 import type { LxcfsBinder } from './lxcfs';
@@ -1011,4 +1012,79 @@ it('finds the display server from the inspected creation-time image when the lis
   });
   const rows = await manager.observe();
   expect(rows.map(row => row.displayServer)).toEqual(['x11', 'wayland', 'x11']);
+});
+
+it('copies files through the guest when Docker’s archive API cannot read the computer (nestybox/sysbox#1017)', async () => {
+  const { manager, resources, docker } = fixture();
+  existingRunning(manager, resources);
+  const failed = Object.assign(Readable.from([]), { statusCode: 500, headers: {} });
+  const archive = vi.fn(async () => failed);
+  const files = new Map<string, Buffer>([['/home/agent/out.mp4', Buffer.from('video bytes')]]);
+  const commands: string[][] = [];
+  Object.assign(docker, {
+    archive,
+    execResult: vi.fn(async (_container: string, command: string[]) => {
+      commands.push(command);
+      if (command[0] === 'stat') {
+        const file = files.get(command.at(-1)!);
+        return file
+          ? { exitCode: 0, stdout: Buffer.from(`regular file/${file.length}\n`), stderr: Buffer.alloc(0) }
+          : { exitCode: 1, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
+      }
+      return { exitCode: command.at(-1) === '/home/agent' ? 0 : 1, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
+    }),
+    pipe: vi.fn(async (_container: string, command: string[], user: string, stdin?: AsyncIterable<Uint8Array>) => {
+      commands.push([user, ...command]);
+      let output: Buffer[] = [];
+      if (command[0] === 'cat') output = [files.get(command.at(-1)!)!];
+      return {
+        output: (async function* () {
+          if (stdin) {
+            const parts: Buffer[] = [];
+            for await (const chunk of stdin) parts.push(Buffer.from(chunk));
+            files.set(command.at(-1)!, Buffer.concat(parts));
+          }
+          yield* output;
+        })(),
+        exitCode: async () => 0,
+      };
+    }),
+  });
+
+  // Out: the guest's own path (no Keep mapping), its size from the guest, its bytes from `cat`.
+  const file = await manager.exportFile(id, '/home/agent/out.mp4', 1024);
+  const parts: Buffer[] = [];
+  for await (const chunk of file.stream) parts.push(chunk);
+  expect(Buffer.concat(parts).toString()).toBe('video bytes');
+  expect(file.size).toBe(11);
+  expect(archive).toHaveBeenCalledWith('HEAD', 'desktop', { path: '/keep/root/home/agent/out.mp4' });
+  expect(commands).toContainEqual(['root', 'cat', '--', '/home/agent/out.mp4']);
+  await expect(manager.exportFile(id, '/home/agent/missing.txt', 1024)).rejects.toMatchObject({ code: 404 });
+  await expect(manager.exportFile(id, '/home/agent/out.mp4', 4)).rejects.toMatchObject({ code: 413 });
+
+  // In: written by the guest's root under a temporary name, then handed over as before.
+  const exec = vi.mocked(docker.exec);
+  await expect(
+    manager.importFile(
+      id,
+      '/home/agent/in.txt',
+      5,
+      (async function* () {
+        yield Buffer.from('hello');
+      })(),
+    ),
+  ).resolves.toEqual({ path: '/home/agent/in.txt', size: 5 });
+  const temporary = [...files.keys()].find(path => path.endsWith('.swarm-partial'))!;
+  expect(files.get(temporary)!.toString()).toBe('hello');
+  expect(exec.mock.calls.at(-1)![1]).toEqual(expect.arrayContaining([temporary, '/home/agent/in.txt']));
+  await expect(
+    manager.importFile(
+      id,
+      '/nowhere/in.txt',
+      1,
+      (async function* () {
+        yield Buffer.from('x');
+      })(),
+    ),
+  ).rejects.toMatchObject({ code: 404 });
 });

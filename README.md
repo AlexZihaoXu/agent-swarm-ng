@@ -50,7 +50,7 @@ The longer-term direction is in the [swarm vision](docs/vision.md).
 ## Requirements
 
 - x86_64 Linux with **Docker Engine** and **Docker Compose 2.24.4+**.
-- **[Sysbox](https://github.com/nestybox/sysbox)** (`sysbox-runc`): computers never fall back to a privileged container.
+- **[Sysbox](https://github.com/nestybox/sysbox)** (`sysbox-runc`): computers never fall back to a privileged container. Match it to your Docker version: see [Docker and Sysbox versions](docs/computers.md#docker-and-sysbox-versions) (Docker 29.6+ needs Sysbox **0.7.1+**).
 - cgroup v2 and FUSE (any current distribution): the privileged `lxcfs` service shows each computer its own memory and CPUs ([LXCFS](docs/computers.md#lxcfs)).
 - A private network to reach it from: **[Tailscale](https://tailscale.com)** (recommended) or a trusted LAN. Do not expose it to the internet directly.
 - Disk space for the computer images (several GB) and each computer's files.

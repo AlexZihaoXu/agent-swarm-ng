@@ -68,3 +68,51 @@ it('streams bounded stdout across frame splits, writes stdin and closes on obser
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+it('pipes input to a command, ends its input, and yields its output to the end', async () => {
+  const dir = await mkdtemp(join(process.env.SQLITE_TEST_ROOT!, 'pipe-')),
+    path = join(dir, 'docker.sock');
+  const server = http.createServer((req, res) => {
+    req.resume();
+    req.on('end', () => res.end(req.url?.endsWith('/json') ? '{"Running":false,"ExitCode":0}' : '{"Id":"pipe-exec"}'));
+  });
+  server.on('upgrade', (_req, socket) => {
+    socket.write('HTTP/1.1 101 UPGRADED\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n');
+    const input: Buffer[] = [];
+    socket.on('data', data => input.push(data));
+    // The command's output once its input ended: the input, upper-cased, in two frames (and one of stderr).
+    socket.on('end', () => {
+      const text = Buffer.concat(input).toString().toUpperCase();
+      for (const [stream, part] of [
+        [1, text.slice(0, 3)],
+        [2, 'noise'],
+        [1, text.slice(3)],
+      ] as const) {
+        const header = Buffer.alloc(8);
+        header[0] = stream;
+        header.writeUInt32BE(Buffer.byteLength(part), 4);
+        socket.write(Buffer.concat([header, Buffer.from(part)]));
+      }
+      socket.end();
+    });
+  });
+  await new Promise<void>(resolve => server.listen(path, resolve));
+  try {
+    const run = await new DockerApi(path).pipe(
+      'guest',
+      ['cat'],
+      'root',
+      (async function* () {
+        yield Buffer.from('hello ');
+        yield Buffer.from('world');
+      })(),
+    );
+    const output: Buffer[] = [];
+    for await (const chunk of run.output) output.push(chunk);
+    expect(Buffer.concat(output).toString()).toBe('HELLO WORLD');
+    expect(await run.exitCode()).toBe(0);
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    await rm(dir, { recursive: true, force: true });
+  }
+});

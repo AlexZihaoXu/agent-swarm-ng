@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { attachExec } from './docker-exec-stream';
+import { attachExec, pipeExec } from './docker-exec-stream';
 
 export class DockerApiError extends Error {
   constructor(readonly status: number) {
@@ -184,6 +184,35 @@ export class DockerApi {
     });
     if (status !== 200) throw new DockerApiError(status);
     return true;
+  }
+
+  /**
+   * Runs a command with `stdin` streamed in (optional) and its stdout streamed out (docker-exec-stream pipeExec);
+   * `exitCode` is read once the output has ended.
+   */
+  async pipe(container: string, command: string[], user: string, stdin?: AsyncIterable<Uint8Array>) {
+    const created = await this.json<{ Id: string }>('POST', `/containers/${encodeURIComponent(container)}/exec`, {
+      AttachStdin: Boolean(stdin),
+      AttachStdout: true,
+      AttachStderr: false,
+      Tty: false,
+      Cmd: command,
+      User: user,
+    });
+    return {
+      output: pipeExec(this.socketPath, created.Id, { stdin }),
+      exitCode: async () => {
+        // The output can end a moment before Docker records the exit.
+        for (let attempt = 0; ; attempt++) {
+          const state = await this.json<{ Running: boolean; ExitCode: number | null }>(
+            'GET',
+            `/exec/${encodeURIComponent(created.Id)}/json`,
+          );
+          if (!state.Running || attempt >= 40) return state.Running ? null : state.ExitCode;
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      },
+    };
   }
 
   async exec(container: string, command: string[], user = 'root', timeout = 19_000, maxBytes = 768 * 1024) {
