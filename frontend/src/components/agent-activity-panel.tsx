@@ -533,7 +533,11 @@ export function AgentActivityPanel({
         )}
         <Dialog.Content
           style={activityWidth.style}
-          className="fixed bottom-0 right-0 top-[calc(4rem+env(safe-area-inset-top))] z-50 flex w-full min-w-0 max-w-sm sm:top-14 md:w-[min(var(--panel-width),calc(100vw-24rem))] md:max-w-none flex-col border-l border-border bg-sidebar shadow-xl outline-none motion-safe:data-[state=open]:animate-[activity-in_180ms_ease-out] motion-safe:data-[state=closed]:animate-[activity-out_140ms_ease-in]"
+          className={cn(
+            'fixed bottom-0 right-0 top-[calc(4rem+env(safe-area-inset-top))] flex w-full min-w-0 max-w-sm sm:top-14 md:w-[min(var(--panel-width),calc(100vw-24rem))] md:max-w-none flex-col border-l border-border bg-sidebar shadow-xl outline-none motion-safe:data-[state=open]:animate-[activity-in_180ms_ease-out] motion-safe:data-[state=closed]:animate-[activity-out_140ms_ease-in]',
+            // Docked beside the page on wide screens it is part of the page: floating windows (z-30 up) go over it.
+            wide ? 'z-20' : 'z-50',
+          )}
           onInteractOutside={event => {
             if (wide) event.preventDefault();
           }}

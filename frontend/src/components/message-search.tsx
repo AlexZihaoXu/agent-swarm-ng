@@ -443,7 +443,11 @@ export function MessageSearchPanel({
         )}
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed bottom-0 right-0 top-0 z-50 flex w-full min-w-0 flex-col border-l border-border bg-sidebar shadow-xl outline-none sm:top-14 sm:max-w-sm motion-safe:data-[state=open]:animate-[activity-in_180ms_ease-out] motion-safe:data-[state=closed]:animate-[activity-out_140ms_ease-in]"
+          className={cn(
+            'fixed bottom-0 right-0 top-0 flex w-full min-w-0 flex-col border-l border-border bg-sidebar shadow-xl outline-none sm:top-14 sm:max-w-sm motion-safe:data-[state=open]:animate-[activity-in_180ms_ease-out] motion-safe:data-[state=closed]:animate-[activity-out_140ms_ease-in]',
+            // Docked beside the page on wide screens it is part of the page: floating windows (z-30 up) go over it.
+            wide ? 'z-20' : 'z-50',
+          )}
           onInteractOutside={event => {
             if (wide) event.preventDefault();
           }}
