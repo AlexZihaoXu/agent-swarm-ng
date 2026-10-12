@@ -629,16 +629,31 @@ export async function runChat(
         async (messages, triageSignal) => {
           activity.record('status', 'Interruption triage', 'Evaluating new messages in a temporary full-context fork.');
           // One triage at a time per agent (interruption, reaction, Discord admission).
-          const decision = await triageGate(channel.agentId, () =>
-            evaluateInterruption(
-              main,
-              channel.id,
-              messages,
-              triageSignal,
-              activity.branch('Interruption triage'),
+          // Waiting behind another triage ends as soon as it is cancelled (the turn ended, or newer messages came).
+          let decision: Awaited<ReturnType<typeof evaluateInterruption>>;
+          try {
+            decision = await triageGate(
               channel.agentId,
-            ),
-          );
+              () =>
+                evaluateInterruption(
+                  main,
+                  channel.id,
+                  messages,
+                  triageSignal,
+                  activity.branch('Interruption triage'),
+                  channel.agentId,
+                ),
+              triageSignal,
+            );
+          } catch (error) {
+            if (!triageSignal.aborted) throw error;
+            activity.record(
+              'status',
+              'Triage discarded',
+              'Cancelled before its turn: the run ended or newer messages came.',
+            );
+            throw error;
+          }
           activity.record(
             'status',
             triageSignal.aborted ? 'Triage discarded' : 'Triage decision',
