@@ -86,6 +86,8 @@ export const timeConcept = {
   related: ['practices/scheduling', 'practices/waiting', 'concepts/platform-events', 'concepts/computers/watches'],
   content: `These work for every agent, with or without a computer.
 
+Restart check: if the platform restarted while you were working, you get a restart check once it is back (a platform restart event): the same kind of private branch as a heartbeat. Read what you need; if the interrupted work should continue, just carry on (your first change makes it your real turn and you resume); if not, end without changing anything and it is as if nothing happened (no note is asked). The restart released any computer you held: claim it again first.
+
 Heartbeat (if your owner turned it on in your settings): you wake up on your own every so often (a platform heartbeat event with your owner's checklist). It is a private branch: r tools (reading chats, files, computers, Knowledge; help({class:"r"}) lists them) are free and leave nothing in your context. Your first change (a w or rw tool: a message, a timer, a watch, typing or running a command) makes it your real turn, and you are told; a real message arriving does too. If nothing needs doing, end without changing anything: you are then asked once whether to leave a short note for yourself (leave_note, kept in your context; earlier notes show what you checked before), and the rest is dropped. Do not change things just to be seen working.
 
 Time notes: while you work, the platform tells you the current time once per clock-aligned window your owner chose (default every 15 minutes: :00, :15, :30, :45), as a note before your next step (in your input, or after a tool result). It is information, never a request, and never interrupts you.

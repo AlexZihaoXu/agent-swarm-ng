@@ -186,7 +186,7 @@ it('restores latest context outside the page and marks only active runs interrup
     await store.interruptActive();
     expect(await store.fragment(agent.id, 'run:run-status', 0, 2)).toMatchObject({
       label: 'Run interrupted',
-      text: expect.stringContaining('not resumed'),
+      text: expect.stringContaining('Backend restarted during this run'),
     });
     await store.interruptActive();
     expect(await db.client.activity.count()).toBe(38);

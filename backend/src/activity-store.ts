@@ -1,4 +1,5 @@
 import type { PlatformStore } from './platform-store';
+import type { InterruptedWork } from './heartbeat';
 import type { ActivityEntry } from './agent-activity';
 
 export const ACTIVITY_CHUNK_SIZE = 6000;
@@ -154,6 +155,45 @@ export class ActivityStore {
       state: outcome === 'queued' ? 'active' : outcome,
     });
   }
+  /**
+   * Real work a restart is about to interrupt, one per agent (its latest): runs whose status is still active and that
+   * were real turns, not a heartbeat or restart check that never changed anything (docs/agent-time.md#restart-checks).
+   * Read before interruptActive.
+   */
+  async interruptedWork(): Promise<InterruptedWork[]> {
+    await this.database.initialize();
+    const active = await this.database.client.activity.findMany({
+      where: { state: 'active', kind: 'status' },
+      orderBy: { sequence: 'desc' },
+      select: { agentId: true, runId: true, channelId: true, label: true, timestamp: true },
+    });
+    const work = new Map<string, InterruptedWork>();
+    for (const row of active) {
+      if (work.has(row.agentId)) continue;
+      if (row.label !== 'Run active') {
+        const promoted = await this.database.client.activity.count({
+          where: {
+            agentId: row.agentId,
+            runId: row.runId,
+            label: { in: ['Heartbeat promoted', 'Restart check: resuming'] },
+          },
+        });
+        if (!promoted) continue;
+      }
+      const last = await this.database.client.activity.aggregate({
+        where: { agentId: row.agentId, runId: row.runId },
+        _max: { timestamp: true },
+      });
+      work.set(row.agentId, {
+        agentId: row.agentId,
+        runId: row.runId,
+        channelId: row.channelId,
+        startedAt: row.timestamp,
+        lastAt: last._max.timestamp ?? row.timestamp,
+      });
+    }
+    return [...work.values()];
+  }
   async interruptActive() {
     await this.database.initialize();
     await this.database.client.activity.updateMany({
@@ -161,7 +201,7 @@ export class ActivityStore {
       data: {
         state: 'interrupted',
         label: 'Run interrupted',
-        text: 'Backend restarted during this run. Work was not resumed; partial activity remains unfinished.',
+        text: 'Backend restarted during this run; partial activity remains unfinished.',
         revision: { increment: 1 },
       },
     });

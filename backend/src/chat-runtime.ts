@@ -51,7 +51,7 @@ export type AgentMessageSource = {
   human?: boolean;
   reaction?: boolean;
   /** A platform event for this agent (its own timer or reminder, or a computer event), not a message. */
-  platform?: 'timer' | 'reminder' | 'computer' | 'heartbeat';
+  platform?: 'timer' | 'reminder' | 'computer' | 'heartbeat' | 'restart';
   /**
    * A batch of Discord messages: where they were written. Authors are labelled in the text by the platform (bodies
    * neutralized there). `unseen`: messages of the channel the batch does not show (unset for a reaction). Trust is

@@ -82,7 +82,14 @@ import { createHarnessListenerTools } from './computer-use/harness-listener-tool
 import { AgentRecordings } from './computer-use/recordings';
 import { createRecordingTools } from './computer-use/recording-tools';
 import type { AgentTool } from './tool-access';
-import { createNoteTool, heartbeatPrompt, HeartbeatScheduler, type HeartbeatBranch } from './heartbeat';
+import {
+  createNoteTool,
+  heartbeatPrompt,
+  HeartbeatScheduler,
+  restartPrompt,
+  type HeartbeatBranch,
+  type InterruptedWork,
+} from './heartbeat';
 
 type Job = {
   senderId: string;
@@ -604,6 +611,30 @@ export class DmBroker {
       { provisional: true },
     );
   }
+  /**
+   * A restart check (docs/agent-time.md#restart-checks): after a restart cut the agent's work short, a heartbeat-like
+   * branch of its session in which it decides whether to resume. Resuming is its first change, which makes the branch
+   * its real turn; otherwise the branch is dropped and nothing is kept. It may answer in the private chat when the
+   * interrupted work was there.
+   */
+  async startRestartCheck(work: InterruptedWork) {
+    const agent = await this.database.findAgent(work.agentId);
+    if (!agent) return;
+    const own = agent.channels[0]?.id === work.channelId;
+    const where = own
+      ? 'your private chat with your owner'
+      : work.channelId.startsWith('discord:')
+        ? `Discord channel ${work.channelId}`
+        : `channel ${work.channelId}`;
+    const event = await this.platformInput(work.agentId, 'restart', restartPrompt(work, where), own);
+    if (!event) return;
+    const { input, channelId, id } = event;
+    this.runs.enqueue(
+      { agentId: work.agentId, channelId, clientMessageId: id, inputSource: 'agent' },
+      context => this.runInbox(work.agentId, input, context, { heartbeat: true, restart: true }),
+      { provisional: true },
+    );
+  }
   async notifyHumanReaction(channelId: string, messageId: string, emoji: string) {
     await this.ready();
     return this.reactionCoordinator.offer(channelId, messageId, emoji);
@@ -614,6 +645,8 @@ export class DmBroker {
     // which retries after a failure; this only starts that attempt early.
     return (this.starting ??= (async () => {
       await this.store.cancelInterruptedDeliveries();
+      // Work the restart cut short gets a restart check (once the rest has started): the agent decides to resume it.
+      const interrupted = await this.activity.interruptedWork().catch(() => []);
       await this.activity.interruptActive();
       // Pending timers are rows: after a restart or power loss they resume here.
       this.timers.start();
@@ -629,6 +662,7 @@ export class DmBroker {
       void this.files.pruneUnsent().catch(() => {});
       this.pruning ??= setInterval(() => void this.files.pruneUnsent().catch(() => {}), 60 * 60 * 1000);
       this.pruning.unref?.();
+      for (const work of interrupted) void this.startRestartCheck(work).catch(() => {});
     })().catch(error => {
       this.starting = undefined;
       throw error;
@@ -913,7 +947,7 @@ export class DmBroker {
     agentId: string,
     incoming: ChannelMessage,
     context: RunContext,
-    options: { heartbeat?: boolean } = {},
+    options: { heartbeat?: boolean; restart?: boolean } = {},
   ) {
     await this.ready();
     const agent = await this.database.findAgent(agentId);
@@ -1033,6 +1067,7 @@ ${preview.text}`
     const held = options.heartbeat ? await this.computers?.heldState(agentId).catch(() => undefined) : undefined;
     const branch: HeartbeatBranch | undefined = options.heartbeat
       ? {
+          kind: options.restart ? 'restart' : 'heartbeat',
           claimPromotes: args =>
             Boolean(held?.claim) &&
             (args.write === false || (args.computer !== held!.claim!.id && args.computer !== held!.claim!.name)),

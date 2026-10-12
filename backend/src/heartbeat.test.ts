@@ -14,18 +14,26 @@ type Message = { role: string; content: unknown; tool_calls?: { function: { name
  * A scripted model. On a heartbeat it calls `first` (a read, or a change), then stops; asked for a note it leaves
  * one (or not). A real message is answered with send_message.
  */
-async function fixture(script: { first: 'help' | 'send_message'; note?: string; arrive?: () => void }) {
+async function fixture(script: {
+  first: 'help' | 'send_message';
+  note?: string;
+  arrive?: () => void;
+  /** Rows left by the run a restart interrupted, written before the broker starts. */
+  interrupted?: (agentId: string, channelId: string) => { label: string; state?: string }[];
+}) {
+  const asked: string[] = [];
   const server = createServer(async (request, response) => {
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);
     const body: { model: string; messages: Message[] } = JSON.parse(Buffer.concat(chunks).toString());
     const last = body.messages.at(-1)!;
     const text = JSON.stringify(last.content);
+    if (last.role === 'user') asked.push(text);
     const channel = /\[channel: ([^\]]+)\]/.exec(JSON.stringify(body.messages))?.[1];
     let call: { name: string; args: object } | undefined;
     if (last.role === 'user' && text.includes('Leave a short note for yourself'))
       call = script.note ? { name: 'leave_note', args: { text: script.note } } : undefined;
-    else if (last.role === 'user' && text.includes('Heartbeat '))
+    else if (last.role === 'user' && (text.includes('Heartbeat ') || text.includes('Restart check ')))
       call =
         script.first === 'help'
           ? { name: 'help', args: { class: 'r' } }
@@ -72,6 +80,22 @@ async function fixture(script: { first: 'help' | 'send_message'; note?: string; 
     model: 'test-model',
     thinkingLevel: 'off',
   });
+  const runId = crypto.randomUUID();
+  for (const [index, row] of (script.interrupted?.(agent.id, agent.channels[0].id) ?? []).entries())
+    await database.client.activity.create({
+      data: {
+        id: `${runId}:${index}`,
+        agentId: agent.id,
+        runId,
+        channelId: agent.channels[0].id,
+        kind: 'status',
+        label: row.label,
+        text: '',
+        timestamp: Date.now() - 60_000 + index,
+        revision: 1,
+        state: row.state,
+      },
+    });
   const runs = new AgentRuns();
   const broker = new DmBroker(database, endpoints, new CodexProvider(), runs);
   await broker.ready();
@@ -89,7 +113,10 @@ async function fixture(script: { first: 'help' | 'send_message'; note?: string; 
     await new Promise<void>(resolve => server.close(() => resolve()));
     await rm(folder, { recursive: true, force: true });
   };
-  return { database, agent, runs, broker, idle, saved, labels, close };
+  /** Until a restart check has ended (it starts just after start-up). */
+  const checked = () =>
+    vi.waitFor(async () => expect((await labels()).join('\n')).toContain('Restart check ended'), { timeout: 30000 });
+  return { database, agent, runs, broker, idle, saved, labels, close, asked, checked };
 }
 
 it('drops a quiet heartbeat from the saved context, keeping only the note it chose to leave', async () => {
@@ -250,3 +277,58 @@ it('takes a note only when a quiet heartbeat asks for one', async () => {
   branch.promoted = true;
   await expect(leave()).rejects.toThrow('only for the end of a quiet heartbeat');
 });
+
+it('after a restart, an agent cut off mid-run gets a restart check; staying idle leaves nothing behind', async () => {
+  const f = await fixture({ first: 'help', interrupted: () => [{ label: 'Run active', state: 'active' }] });
+  try {
+    await f.checked();
+    await f.idle();
+    const log = (await f.labels()).join('\n');
+    expect(log).toContain('Run interrupted');
+    expect(log).toContain('Restart check: not resuming');
+    // No note question: a restart check that changes nothing is as if it never happened.
+    expect(f.asked.join('\n')).toContain('Restart check ');
+    expect(f.asked.join('\n')).not.toContain('Leave a short note');
+    expect(await f.saved()).not.toContain('Restart check');
+    expect(await f.database.client.message.count()).toBe(0);
+  } finally {
+    await f.close();
+  }
+}, 60_000);
+
+it('a restart check that acts resumes: it becomes the real turn and is kept', async () => {
+  const f = await fixture({ first: 'send_message', interrupted: () => [{ label: 'Run active', state: 'active' }] });
+  try {
+    await f.checked();
+    await f.idle();
+    const saved = await f.saved();
+    expect(saved).toContain('the platform restarted while you were working');
+    expect(saved).toContain('This restart check is now your real turn (you called send_message)');
+    expect((await f.labels()).join('\n')).toContain('Restart check: resuming');
+    expect((await f.database.client.message.findMany()).map(message => message.text)).toEqual(['Build finished.']);
+  } finally {
+    await f.close();
+  }
+}, 60_000);
+
+it('only real work counts as interrupted: not a heartbeat that never changed anything', async () => {
+  const quiet = await fixture({ first: 'help', interrupted: () => [{ label: 'Heartbeat active', state: 'active' }] });
+  try {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    await quiet.idle();
+    expect((await quiet.labels()).join('\n')).not.toContain('Restart check');
+  } finally {
+    await quiet.close();
+  }
+  const promoted = await fixture({
+    first: 'help',
+    interrupted: () => [{ label: 'Heartbeat active', state: 'active' }, { label: 'Heartbeat promoted' }],
+  });
+  try {
+    await promoted.checked();
+    await promoted.idle();
+    expect((await promoted.labels()).join('\n')).toContain('Restart check: not resuming');
+  } finally {
+    await promoted.close();
+  }
+}, 60_000);

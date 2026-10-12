@@ -12,6 +12,11 @@ import type { PlatformStore } from './platform-store';
 export const HEARTBEAT_NOTE_MAX = 300;
 
 export type HeartbeatBranch = {
+  /**
+   * A heartbeat (the owner's periodic check, the default) or a restart check: after a platform restart cut the
+   * agent's work short, a branch in which it decides whether to resume (docs/agent-time.md#restart-checks).
+   */
+  kind?: 'heartbeat' | 'restart';
   /** Set once the branch became a real turn. */
   promoted?: boolean;
   /** Whether a use_computer call changes a claim held before the heartbeat (giving it up or switching away). */
@@ -27,10 +32,23 @@ export function heartbeatPrompt(checklist: string, now = new Date()) {
 ${checklist.trim() ? `Your owner's checklist:\n${checklist.trim()}` : 'No checklist: look over what you are responsible for (pending work, watches, timers, recent messages).'}`;
 }
 
+/** What a branch is called in the activity log: "Heartbeat" or "Restart check". */
+export const branchName = (branch: Pick<HeartbeatBranch, 'kind'>) =>
+  branch.kind === 'restart' ? 'Restart check' : 'Heartbeat';
+
+/** The interrupted run a restart check is about. */
+export type InterruptedWork = { agentId: string; runId: string; channelId: string; startedAt: number; lastAt: number };
+
+export function restartPrompt(work: InterruptedWork, where: string, now = new Date()) {
+  return `Restart check ${now.toISOString()}: the platform restarted while you were working. Your run that started at ${new Date(work.startedAt).toISOString()} (in ${where}) was cut off; its last activity was at ${new Date(work.lastAt).toISOString()}. Nothing restarts it by itself, and the restart released any computer you held (claim it again before changing it). This is a private branch: reading (r tools: your conversation above, chats, files, computers, todos) is free and leaves nothing in your context. Decide whether that work should continue now. If it should, simply carry on: your first change (a w or rw tool, e.g. sending a message or acting on a computer) makes this your real turn and you resume from there. If it was finished, is no longer needed, or should wait for someone, end without changing anything: then it is as if nothing happened.`;
+}
+
 export const HEARTBEAT_NOTE_QUESTION = `Nothing changed this heartbeat, so it will be dropped from your context. Leave a short note for yourself (it stays in your context, e.g. what you checked and when to look again)? Call leave_note({text}), or end without it.`;
 
-export function heartbeatPromotion(reason: string) {
-  return `This heartbeat is now your real turn (${reason}): everything in it stays in your context. Carry on.`;
+export function heartbeatPromotion(reason: string, kind: HeartbeatBranch['kind'] = 'heartbeat') {
+  return kind === 'restart'
+    ? `This restart check is now your real turn (${reason}): you are resuming, and everything in it stays in your context. Carry on.`
+    : `This heartbeat is now your real turn (${reason}): everything in it stays in your context. Carry on.`;
 }
 
 /** The note tool offered only at the end of a quiet heartbeat. Saving a note is not a change. */

@@ -39,8 +39,12 @@ export function describeDoing(entries: readonly ActivityEntry[], now: number) {
   const run = entries.at(-1)?.runId;
   let label: string | null = null;
   let unnamedSince: number | null = null;
+  // A restart check (docs/agent-time.md#restart-checks) says so until it resumes: what it reads is part of checking.
+  let checking = false;
   for (const entry of entries) {
     if (entry.runId !== run) continue;
+    if (entry.kind === 'status' && entry.label === 'Restart check active') checking = true;
+    if (entry.kind === 'status' && entry.label === 'Restart check: resuming') checking = false;
     if (entry.kind === 'tool_call') {
       if (entry.label === 'send_message') continue;
       const phrase = describeTool(entry.label);
@@ -50,5 +54,6 @@ export function describeDoing(entries: readonly ActivityEntry[], now: number) {
       } else unnamedSince ??= entry.timestamp;
     } else if (entry.kind === 'thinking' && label) unnamedSince ??= entry.timestamp;
   }
+  if (checking) return 'checking whether to resume after a restart';
   return label && (unnamedSince === null || now - unnamedSince < DOING_HOLD_MS) ? label : null;
 }

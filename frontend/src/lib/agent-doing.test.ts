@@ -32,4 +32,10 @@ describe('what an agent is doing', () => {
     // A new run starts fresh.
     expect(describeDoing([...entries, entry('thinking', 'Thinking', 11_000, 'run-2')], 11_100)).toBeNull();
   });
+  it('says a restart check is checking until it resumes, whatever it reads meanwhile', () => {
+    const entries = [entry('status', 'Restart check active', 0), entry('tool_call', 'read_messages', 1000)];
+    expect(describeDoing(entries, 1500)).toBe('checking whether to resume after a restart');
+    entries.push(entry('status', 'Restart check: resuming', 2000), entry('tool_call', 'use_computer', 2100));
+    expect(describeDoing(entries, 2200)).toBe('using a computer');
+  });
 });

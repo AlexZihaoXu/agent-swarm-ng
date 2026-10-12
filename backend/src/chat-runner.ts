@@ -13,7 +13,7 @@ import { timeNoteFor } from './time-notes';
 
 /** Continuations in a row a turn's todo checks may start (docs/agent-todos.md). */
 export const TODO_CONTINUATIONS = 3;
-import { HEARTBEAT_NOTE_QUESTION, heartbeatPromotion, promotes, type HeartbeatBranch } from './heartbeat';
+import { branchName, HEARTBEAT_NOTE_QUESTION, heartbeatPromotion, promotes, type HeartbeatBranch } from './heartbeat';
 import { channelInput, createChatSession, type ChatConfiguration, type ChannelMessage } from './chat-runtime';
 import { createWebTools } from './web-tools';
 import type { RunContext } from './agent-runs';
@@ -126,13 +126,14 @@ export async function runChat(
   let promoted = !heartbeat,
     dropped = false,
     promotionNotice: string | undefined;
+  const kind = heartbeat?.branch.kind ?? 'heartbeat';
   const abort = () => {
     void session?.abort();
   };
   const clearTyping = publicationTyping.clear;
   try {
     signal.throwIfAborted();
-    await activity.start(hooks.heartbeat ? 'Heartbeat active' : undefined);
+    await activity.start(heartbeat ? `${branchName(heartbeat.branch)} active` : undefined);
     phase = 'loading web tools';
     web = await createWebTools();
     signal.throwIfAborted();
@@ -173,7 +174,7 @@ export async function runChat(
     // Model usage of every response (the dashboard): an unpromoted heartbeat's calls are its own purpose.
     meterSession(session, {
       agentId: channel.agentId,
-      purpose: () => (promoted ? 'turn' : 'heartbeat'),
+      purpose: () => (promoted ? 'turn' : kind === 'restart' ? 'triage' : 'heartbeat'),
       saved: Boolean(hooks.sessionStore),
       ...(fallback?.run ? { endpointId: () => fallback.run!.choice.endpointId } : {}),
     });
@@ -202,7 +203,9 @@ export async function runChat(
       if (heartbeat) heartbeat.branch.promoted = true;
       // Now it is real work: the run counts as active time from its start.
       active?.();
-      activity.record('status', 'Heartbeat promoted', `It became a real turn: ${reason}.`);
+      if (kind === 'restart') {
+        activity.record('status', 'Restart check: resuming', `It resumes its interrupted work: ${reason}.`);
+      } else activity.record('status', 'Heartbeat promoted', `It became a real turn: ${reason}.`);
       queueCheckpoint();
       return true;
     };
@@ -239,14 +242,14 @@ export async function runChat(
         return {
           ...result,
           content: [
-            { type: 'text' as const, text: heartbeatPromotion(`you called ${context.toolCall.name}`) },
+            { type: 'text' as const, text: heartbeatPromotion(`you called ${context.toolCall.name}`, kind) },
             ...content,
           ],
         };
       };
       // A real message arriving makes the heartbeat a real turn: that message is answered in it.
       inbox.onAdd = () => {
-        if (promote('a new message arrived')) promotionNotice = heartbeatPromotion('a new message arrived');
+        if (promote('a new message arrived')) promotionNotice = heartbeatPromotion('a new message arrived', kind);
       };
     }
     // Time notes: the current time once per clock window, stacked before the next model call (never interrupting).
@@ -547,8 +550,7 @@ export async function runChat(
       if (hooks.prepare) batch.messages = await hooks.prepare(batch.messages);
       if (!batch.messages.length) continue;
       // A real message (even one that arrived before the heartbeat started) makes it a real turn before it is read.
-      if (heartbeat && batch.messages.some(item => item.source?.platform !== 'heartbeat'))
-        promote('a new message arrived');
+      if (heartbeat && batch.messages.some(item => item.source?.platform !== kind)) promote('a new message arrived');
       const peerOnly = batch.messages.every(item => item.source);
       published = 0;
       finalPublished = false;
@@ -601,8 +603,15 @@ export async function runChat(
             );
           }
           await todoGate(peerOnly);
-          // A quiet heartbeat asks once for a note before it is dropped.
-          if (heartbeat && !promoted && !signal.aborted && !inbox.hasPending() && stopReason() !== 'error') {
+          // A quiet heartbeat asks once for a note before it is dropped (a restart check leaves nothing).
+          if (
+            heartbeat &&
+            kind === 'heartbeat' &&
+            !promoted &&
+            !signal.aborted &&
+            !inbox.hasPending() &&
+            stopReason() !== 'error'
+          ) {
             heartbeat.branch.asking = true;
             await main.sendCustomMessage(
               { customType: 'heartbeat-note', display: false, content: HEARTBEAT_NOTE_QUESTION },
@@ -730,13 +739,20 @@ export async function runChat(
     // Dropped (also after a failure or Stop): nothing of it is kept but its note, and what it claimed is given back.
     if (heartbeat && !promoted) {
       dropped = true;
-      activity.record(
-        'status',
-        'Heartbeat dropped',
-        heartbeat.branch.note
-          ? `Nothing changed. Note kept in its context: ${heartbeat.branch.note}`
-          : 'Nothing changed; nothing was kept in its context.',
-      );
+      if (kind === 'restart') {
+        activity.record(
+          'status',
+          'Restart check: not resuming',
+          'It decided not to resume; nothing was kept in its context, as if the check never happened.',
+        );
+      } else
+        activity.record(
+          'status',
+          'Heartbeat dropped',
+          heartbeat.branch.note
+            ? `Nothing changed. Note kept in its context: ${heartbeat.branch.note}`
+            : 'Nothing changed; nothing was kept in its context.',
+        );
       await heartbeat.dropped(heartbeat.branch.note).catch(() => {});
       // Reminders shown in the dropped branch left with it.
       hooks.memory?.cues.reset(channel.agentId);
@@ -753,7 +769,11 @@ export async function runChat(
     else session?.dispose();
     await web?.close();
     try {
-      await activity.finish(signal.aborted, runFailed || activityFailed, hooks.heartbeat ? 'Heartbeat' : undefined);
+      await activity.finish(
+        signal.aborted,
+        runFailed || activityFailed,
+        heartbeat ? branchName(heartbeat.branch) : undefined,
+      );
     } catch {
       emit({ type: 'error', message: 'Operator activity could not be saved. Published messages remain in chat.' });
     }
