@@ -420,8 +420,8 @@ test('a long select list inside a dialog scrolls with the mouse wheel or trackpa
   await configure(page);
   await page.getByLabel('Model', { exact: true }).click();
   const list = page.getByRole('listbox');
-  const box = (await list.boundingBox())!;
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  // Hovering waits for the popup to settle where it opens, then the wheel scrolls it.
+  await list.hover();
   await page.mouse.wheel(0, 400);
   await expect.poll(() => list.evaluate(element => element.scrollTop)).toBeGreaterThan(100);
 });

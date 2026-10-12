@@ -67,8 +67,13 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
         A Pi agent with saved platform-chat history. It can research the public web and read Swarm Knowledge. It has no
         computer, file, or command access until you assign a computer in its settings.
       </Dialog.Description>
-      <fieldset disabled={creating} className="mt-5 min-w-0 space-y-4">
-        <div className="space-y-2">
+      {/* Wide screens: the agent's name and model on the left, its avatar beside them; phones: one column, the
+          avatar under the name. */}
+      <fieldset
+        disabled={creating}
+        className="mt-6 grid min-w-0 gap-y-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] md:grid-rows-[repeat(5,auto)_1fr] md:gap-x-8"
+      >
+        <div className="space-y-2 md:col-start-1">
           <label htmlFor={`${id}-name`} className="block text-sm font-medium">
             Agent name
           </label>
@@ -83,8 +88,10 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
             placeholder="Name your agent"
           />
         </div>
-        <AgentAvatarPreview name={name} value={avatar} onChange={setAvatar} disabled={creating} />
-        <div className="space-y-2">
+        <div className="min-w-0 md:col-start-2 md:row-span-6 md:row-start-1">
+          <AgentAvatarPreview name={name} value={avatar} onChange={setAvatar} disabled={creating} />
+        </div>
+        <div className="space-y-2 md:col-start-1">
           <label htmlFor={`${id}-endpoint`} className="block text-sm font-medium">
             Endpoint
           </label>
@@ -101,7 +108,7 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
             <p className="text-xs text-muted-foreground">Connect ChatGPT or save an API endpoint in Settings first.</p>
           )}
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2 md:col-start-1">
           <label htmlFor={`${id}-model`} className="block text-sm font-medium">
             Model
           </label>
@@ -115,7 +122,7 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
             options={models.map(value => ({ value, label: value }))}
           />
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2 md:col-start-1">
           <label htmlFor={`${id}-thinking`} className="block text-sm font-medium">
             Thinking level
           </label>
@@ -143,7 +150,9 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
               : 'Pi model capabilities; reasoning support depends on the selected provider.'}
           </p>
         </div>
-        <OrganizationField value={organization.value} onChange={organization.setValue} disabled={creating} />
+        <div className="md:col-start-1">
+          <OrganizationField value={organization.value} onChange={organization.setValue} disabled={creating} />
+        </div>
       </fieldset>
       {error && (
         <p role="alert" className="mt-4 text-sm">
@@ -158,7 +167,7 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
           )}
         </p>
       )}
-      <p className="mt-4 text-xs text-muted-foreground">
+      <p className="mt-6 text-xs text-muted-foreground">
         Agent and chat history are saved locally. Drafts and internal activity clear on refresh. Only channel-tool
         messages are shown.
       </p>

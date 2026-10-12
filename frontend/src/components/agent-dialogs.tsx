@@ -8,6 +8,7 @@ import { AgentAvatar } from '@/components/chat-identity';
 import { XIcon } from '@/components/ui/icons';
 import { useRetained } from '@/lib/use-retained';
 import { dialogOverlay } from '@/lib/styles';
+import { cn } from '@/lib/utils';
 import { isAgentSettings, type DashboardRoute } from '@/lib/dashboard-location';
 import type { ChatAgent, RealAgent } from '@/use-chat';
 
@@ -115,10 +116,14 @@ export function AgentFormDialogs({
         <Dialog.Content
           // Where focus goes next is the chat list's (back to the row it was opened from, or the list).
           onCloseAutoFocus={event => event.preventDefault()}
-          className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-h-[90dvh] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-background ao-card p-2 shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_200ms_cubic-bezier(0.22,1,0.36,1)] motion-safe:data-[state=closed]:animate-[dialog-out_130ms_ease-in]"
+          className={cn(
+            'fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-h-[90dvh] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-background ao-card p-2 shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_200ms_cubic-bezier(0.22,1,0.36,1)] motion-safe:data-[state=closed]:animate-[dialog-out_130ms_ease-in]',
+            // Creating is wider where there is room (the avatar beside the fields); deleting stays a small dialog.
+            shownDelete ? 'max-w-md' : 'max-w-md md:max-w-4xl',
+          )}
         >
           <ScrollArea label="Agent editor" viewportTabIndex={-1} viewportClassName="max-h-[calc(90dvh-1rem)]">
-            <div className="p-4">
+            <div className={shownDelete ? 'p-4' : 'p-4 md:p-6'}>
               {shownDelete ? (
                 <DeleteAgentForm
                   key={shownDelete.id}
