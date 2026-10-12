@@ -644,6 +644,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["exportAgent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reviewAgent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/review/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["removeUnresolvedLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resumeAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organizations": {
         parameters: {
             query?: never;
@@ -1663,6 +1727,22 @@ export interface paths {
         put?: never;
         post: operations["connectCodexProvider"];
         delete: operations["cancelCodexLogin"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["importAgent"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4886,6 +4966,169 @@ export interface operations {
             };
         };
     };
+    exportAgent: {
+        parameters: {
+            query?: {
+                parts?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    reviewAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        paused: boolean;
+                        problems: {
+                            section: "model" | "links" | "discord";
+                            row?: number;
+                            kind?: "computers" | "dmPeers" | "groups";
+                            id?: string;
+                            name?: string;
+                            message: string;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    removeUnresolvedLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    kind: "computers" | "dmPeers" | "groups";
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        paused: boolean;
+                        problems: {
+                            section: "model" | "links" | "discord";
+                            row?: number;
+                            kind?: "computers" | "dmPeers" | "groups";
+                            id?: string;
+                            name?: string;
+                            message: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    resumeAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        paused: boolean;
+                        problems: {
+                            section: "model" | "links" | "discord";
+                            row?: number;
+                            kind?: "computers" | "dmPeers" | "groups";
+                            id?: string;
+                            name?: string;
+                            message: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                        problems: {
+                            section: "model" | "links" | "discord";
+                            row?: number;
+                            kind?: "computers" | "dmPeers" | "groups";
+                            id?: string;
+                            name?: string;
+                            message: string;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
     listOrganizations: {
         parameters: {
             query?: never;
@@ -6846,6 +7089,7 @@ export interface operations {
                             };
                             instructions: string;
                             organizationId: string;
+                            paused: boolean;
                             timeNoteMinutes: number;
                             todos: {
                                 content: string;
@@ -6995,6 +7239,7 @@ export interface operations {
                         };
                         instructions: string;
                         organizationId: string;
+                        paused: boolean;
                         timeNoteMinutes: number;
                         todos: {
                             content: string;
@@ -7335,6 +7580,7 @@ export interface operations {
                         };
                         instructions: string;
                         organizationId: string;
+                        paused: boolean;
                         timeNoteMinutes: number;
                         todos: {
                             content: string;
@@ -7503,6 +7749,7 @@ export interface operations {
                         };
                         instructions: string;
                         organizationId: string;
+                        paused: boolean;
                         timeNoteMinutes: number;
                         todos: {
                             content: string;
@@ -11648,6 +11895,159 @@ export interface operations {
             };
             /** @description Default Response */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    importAgent: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        agent: {
+                            name: string;
+                            endpointId: string;
+                            model: string;
+                            thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+                            avatar?: {
+                                shape: "pebble" | "squircle" | "gumdrop" | "triangle" | "bean" | "pear" | "capsule" | "diamond";
+                                color: string;
+                                eyeStyle?: "pill" | "round";
+                                seed: number;
+                                stretch?: number;
+                                taper?: number;
+                                wobble?: number;
+                                eyeSize?: number;
+                                eyeGap?: number;
+                                mouth?: "none" | "smile" | "flat" | "open" | "cat";
+                                marking?: "none" | "cheeks" | "spots" | "belly" | "stripe";
+                                accent?: string;
+                                accessory?: "none" | "antenna" | "sprout" | "bow" | "halo" | "glasses";
+                            } | null;
+                            models: {
+                                endpointId: string;
+                                model: string;
+                                thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+                                attempts: number;
+                                tooBig: "skip" | "compact";
+                                comeBack: number;
+                                contextWindow?: number;
+                                maxOutputTokens?: number;
+                            }[];
+                            activeModel: number;
+                            id: string;
+                            channelId: string;
+                            createdAt: number;
+                            lastMessage: {
+                                id: string;
+                                sequence: number;
+                                channelId: string;
+                                role: "user" | "assistant";
+                                text: string;
+                                timestamp: number;
+                                replyTo: {
+                                    id: string;
+                                    role: "user" | "assistant";
+                                    text: string;
+                                } | null;
+                                files?: {
+                                    id: string;
+                                    channelKey: string;
+                                    name: string;
+                                    mime: string;
+                                    kind: "image" | "video" | "text" | "pdf" | "other" | "scratch";
+                                    size: number;
+                                    status: "available" | "deleted";
+                                    uploader: {
+                                        kind: "human" | "agent" | "discord";
+                                        id: string | null;
+                                        name: string;
+                                    };
+                                    messageKind: "chat" | "dm" | "group" | null;
+                                    messageId: string | null;
+                                    createdAt: string;
+                                    deleted?: {
+                                        by: {
+                                            kind: "human" | "agent" | "discord";
+                                            id: string | null;
+                                            name: string;
+                                        };
+                                        at: string | null;
+                                    };
+                                    scratch?: {
+                                        agentId: string;
+                                        path: string;
+                                    };
+                                }[];
+                                author?: {
+                                    userId: string;
+                                    name: string;
+                                };
+                            } | null;
+                            compaction: {
+                                atPercent: number;
+                                /** @description 0 turns idle compaction off. */
+                                idleMinutes: number;
+                                idlePercent: number;
+                            };
+                            heartbeat: {
+                                enabled: boolean;
+                                minutes: number;
+                                from: "" | string;
+                                to: "" | string;
+                                checklist: string;
+                            } & {
+                                timeZone: string;
+                            };
+                            instructions: string;
+                            organizationId: string;
+                            paused: boolean;
+                            timeNoteMinutes: number;
+                            todos: {
+                                content: string;
+                                status: "pending" | "in_progress" | "completed";
+                            }[];
+                        };
+                        skipped: {
+                            dms: number;
+                            links: number;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

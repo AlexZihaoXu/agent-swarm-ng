@@ -108,6 +108,7 @@ const sectionNames = [
   'Memory',
   'Avatar',
   'Organization',
+  'Export',
   'Delete agent',
 ];
 

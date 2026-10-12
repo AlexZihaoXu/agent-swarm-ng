@@ -118,7 +118,7 @@ export class HeartbeatScheduler {
     this.ticking = true;
     try {
       const agents = await this.database.client.agent.findMany({
-        where: { heartbeatEnabled: true },
+        where: { heartbeatEnabled: true, paused: false },
         select: { id: true, heartbeatMinutes: true, heartbeatFrom: true, heartbeatTo: true, heartbeatChecklist: true },
         take: 500,
       });

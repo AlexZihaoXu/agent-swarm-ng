@@ -12,6 +12,7 @@ import { AgentAddIcon, ChatIcon, ComputerIcon, DashboardIcon, PlusIcon, Settings
 import { JumpToLatest } from '@/components/jump-to-latest';
 import { useMessageWindow } from '@/lib/use-message-window';
 import { AgentFormDialogs, AgentSettingsDialog } from '@/components/agent-dialogs';
+import { MessageToasts } from '@/components/message-toasts';
 import { AgentAvatar, AgentName, CompactionCue } from '@/components/chat-identity';
 import { cn } from '@/lib/utils';
 import { useChat, type ChatAgent } from '@/use-chat';
@@ -836,6 +837,10 @@ export function App() {
               if (real && !agents.some(agent => agent.id === id)) addAgent(real, false);
               navigate(chatAgentPath(id));
             }}
+            onImported={real => {
+              addAgent(real, false);
+              navigate(agentPath(real.id));
+            }}
             onAgentSettings={(id, real) => {
               if (real && !agents.some(agent => agent.id === id)) addAgent(real, false);
               navigate(agentPath(id));
@@ -1203,7 +1208,18 @@ export function App() {
                 )}
               </ScrollArea>
 
-              {conversationPeer === 'you' ? (
+              {conversationPeer === 'you' && agent.real?.paused ? (
+                // Imported and not yet reviewed (docs/agent-export.md): nothing can be sent until it is resumed.
+                <div
+                  role="status"
+                  className="mx-auto flex w-full max-w-4xl shrink-0 flex-wrap items-center justify-center gap-3 border-t border-border px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 text-sm text-muted-foreground sm:py-3"
+                >
+                  <span>{agent.name} is paused until you review its settings and resume it.</span>
+                  <Button type="button" size="sm" variant="outline" onClick={() => navigate(agentPath(agent.id))}>
+                    Review settings
+                  </Button>
+                </div>
+              ) : conversationPeer === 'you' ? (
                 <div className="mx-auto w-full max-w-4xl shrink-0 pl-[calc(1.5rem+env(safe-area-inset-left))] pr-[calc(1.5rem+env(safe-area-inset-right))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:px-5 sm:pb-3">
                   <div className="w-full">
                     <div className="mb-1 flex h-5 min-w-0 items-center px-2">
@@ -1355,6 +1371,8 @@ export function App() {
         </Tabs.Content>
       </Tabs.Root>
 
+      {/* New messages elsewhere: a toast at the top that opens them (docs/notifications.md#toasts). */}
+      <MessageToasts agents={allAgents} onNavigate={path => navigate(path)} />
       {/* Agents' settings, creation and deletion open over Chat (docs/chat-and-groups.md). */}
       <AgentSettingsDialog
         agent={route.agentId ? agents.find(item => item.id === route.agentId) : undefined}

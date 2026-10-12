@@ -71,6 +71,8 @@ export class SleepScheduler {
     try {
       const now = this.now();
       const agents = await this.database.client.agent.findMany({
+        // A paused agent (imported, not reviewed) does not sleep either.
+        where: { paused: false },
         select: {
           id: true,
           heartbeatEnabled: true,

@@ -198,6 +198,11 @@ export class DiscordConnections implements DiscordConnectionControl {
     const token = await this.tokens.get(agentId);
     if (!current()) return;
     if (!token) return void this.live.delete(agentId);
+    if (await this.store.paused(agentId)) {
+      connection.status = { state: 'error', message: 'The agent is paused until its settings are reviewed.' };
+      connection.fatal = true;
+      return;
+    }
     connection.status = { state: 'connecting' };
     const rest = new REST({
       version: '10',

@@ -89,13 +89,20 @@ export class AgentTimers {
     void this.redeliver().catch(() => {});
     this.wake();
   }
-  /** Firings the platform stopped before their agents saw: delivered again, once per start. */
-  private async redeliver() {
+  /**
+   * Firings the platform stopped before their agents saw: delivered again, once per start, and for one agent when it
+   * is resumed (a paused agent's firings wait: docs/agent-export.md).
+   */
+  async redeliver(agentId?: string) {
     await this.database.initialize();
-    const pending = await this.database.client.pendingTimerEvent.findMany({ orderBy: { createdAt: 'asc' } });
+    const pending = await this.database.client.pendingTimerEvent.findMany({
+      where: agentId ? { agentId } : {},
+      orderBy: { createdAt: 'asc' },
+    });
     for (const event of pending) {
       if (this.closed) return;
-      const text = `[Delivered again: this ${event.kind} fired at ${event.createdAt.toISOString()}, but the platform restarted before you saw it.]\n${event.text}`;
+      const why = agentId ? 'you were paused then' : 'the platform restarted before you saw it';
+      const text = `[Delivered again: this ${event.kind} fired at ${event.createdAt.toISOString()}, but ${why}.]\n${event.text}`;
       const delivered = await this.deliver(event.agentId, event.kind as TimerKind, text, event.human, event.id).catch(
         () => false,
       );

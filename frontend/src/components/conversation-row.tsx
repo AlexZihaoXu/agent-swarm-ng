@@ -18,6 +18,7 @@ export function ConversationRow({
   previewPrefix = '',
   selectionGroup,
   onPrefetch,
+  dimmed = false,
 }: {
   data: Record<`data-${string}`, string>;
   label: string;
@@ -32,6 +33,8 @@ export function ConversationRow({
   selectionGroup: string;
   /** Warm the conversation before a click (hover or keyboard focus). */
   onPrefetch?: () => void;
+  /** Grayed out: a paused agent (imported, not yet reviewed). */
+  dimmed?: boolean;
 }) {
   return (
     // `layout="position"` lets a conversation that moves to the top slide there instead of jumping.
@@ -47,6 +50,7 @@ export function ConversationRow({
         className={cn(
           // A long press opens the chat list's menu (agent settings and more), not text selection.
           'touch-menu-target relative isolate flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none transition-[background-color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.985] motion-reduce:active:scale-100',
+          dimmed && 'opacity-55',
           !selected && 'hover:bg-foreground/5',
         )}
       >

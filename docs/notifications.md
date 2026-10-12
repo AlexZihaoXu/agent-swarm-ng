@@ -45,6 +45,10 @@ Agent messages (private and group) use the agent's avatar: the dashboard draws e
 - **Full disks** notify when a disk crosses 90%, and again only after it fell below 88% (or the backend restarted).
 - At most 5 requests to push services run at once for one notification.
 
+## Toasts
+
+While the dashboard is in front, a new message somewhere other than the conversation open shows as a **toast** at the top instead (`frontend/src/components/message-toasts.tsx`, Kibo `sonner-position-2` + `sonner-content-2` on Sonner): an agent's private-chat message while another chat (or another tab) is open, an agent's message in a group chat that is not open, or either in another organization ("in Lab" beside the name). It shows the agent's avatar, its name and the start of the message, stacks at most three, and goes away by itself after 6 seconds (hovering pauses it). Clicking it opens the conversation, switching organization when needed. Nothing is toasted for the conversation already open (an agent's settings over its chat count as open; the address is checked as the message arrives), for a person's own messages, or while the tab is in the background (push notifications cover that). Toasts come from the dashboard's own live events (`channel_message`, a group's published `group_updated`), not from push.
+
 ## Settings
 
 **Settings → Account → Notifications** (Kibo `switch-cards-3`, like the agent's Discord settings):

@@ -584,7 +584,9 @@ export class DmBroker {
     if (this.closing || this.deleting.has(agentId)) return null;
     await this.ready();
     const agent = await this.database.findAgent(agentId);
-    if (!agent) return null;
+    // A paused agent (imported, not yet reviewed: docs/agent-export.md) gets no platform events: a timer's firing
+    // stays pending and is delivered once it is resumed.
+    if (!agent || agent.paused) return null;
     const channelId = agent.channels[0].id;
     const id = eventId ?? crypto.randomUUID();
     const input: ChannelMessage = {
@@ -685,6 +687,11 @@ export class DmBroker {
       throw new Error('DM delivery is unavailable.');
     await this.ready();
     context.signal.throwIfAborted();
+    const recipient = await this.database.client.agent.findUnique({
+      where: { id: recipientId },
+      select: { paused: true, name: true },
+    });
+    if (recipient?.paused) throw new Error(`${recipient.name} is paused until its owner reviews its settings.`);
     const upload = { channelKey: dmKey(senderId, recipientId), uploader: await this.uploader(senderId) };
     // A retried call finds its files already on the message it saved the first time.
     const retried = await this.store.delivered(`${context.runId}:${callId}`);
@@ -952,6 +959,7 @@ export class DmBroker {
     await this.ready();
     const agent = await this.database.findAgent(agentId);
     if (!agent) throw new Error('Agent no longer exists.');
+    if (agent.paused) throw new Error('This agent is paused until its owner reviews its settings.');
     const channel = { id: agent.channels[0].id, kind: 'platform-chat' as const, agentId };
     // The owner's time zone (docs/users.md#time-zone): times for them are told and taken in it.
     const owner = await this.organizations.owner(agent.organizationId);

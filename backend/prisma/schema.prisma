@@ -143,6 +143,10 @@ model Agent {
   /// What the last sleep changed, told to the agent once at its next turn ("last night").
   sleepNote           String               @default("")
   sleepNoteTold       Boolean              @default(false)
+  /// Imported and not yet reviewed (docs/agent-export.md): no runs, timers, heartbeats or Discord until resumed.
+  paused              Boolean              @default(false)
+  /// Links from an imported file that do not exist here (JSON: computers, dmPeers, groups), shown to fix or remove.
+  unresolved          String               @default("")
   createdAt           DateTime             @default(now())
   channels            Channel[]
   dmAllowed           DmGrant[]            @relation("DmSenderGrant")

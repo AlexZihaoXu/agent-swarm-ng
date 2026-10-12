@@ -49,9 +49,11 @@ test('an agent’s menu in the chat list offers its settings, rename and delete'
   await expect(page.getByRole('menuitem')).toHaveText([
     /Create new agent$/,
     /Create group chat$/,
+    /Import agent…$/,
     /Open chat$/,
     /Agent settings$/,
     /Rename agent$/,
+    /Export agent…$/,
     /Delete agent$/,
   ]);
   await page.getByRole('menuitem', { name: 'Delete agent' }).click();

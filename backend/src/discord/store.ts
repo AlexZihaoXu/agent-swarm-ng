@@ -35,6 +35,13 @@ export type DiscoveredChannel = {
 export class DiscordStore {
   constructor(private database: PlatformStore) {}
 
+  /** Imported and not yet reviewed (docs/agent-export.md): its bot stays offline until it is resumed. */
+  async paused(agentId: string) {
+    await this.database.initialize();
+    return Boolean(
+      (await this.database.client.agent.findUnique({ where: { id: agentId }, select: { paused: true } }))?.paused,
+    );
+  }
   async bot(agentId: string) {
     await this.database.initialize();
     // Reading never writes: an agent without Discord settings has the defaults.

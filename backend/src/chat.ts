@@ -36,6 +36,7 @@ import { checkMemoryCap } from './users/store';
 import { ADMIN_ID, Reach, connectionOwner, viewerOf } from './users/reach';
 import { failureReason } from './model-fallback';
 import { registerTimerRoutes } from './timer-routes';
+import { registerAgentTransferRoutes } from './agent-transfer-routes';
 import { usageRecorder } from './usage/recorder';
 import { ATTEMPTS, chainColumns, choicesOf, COME_BACK, MAX_CHOICES, type ModelChains } from './model-chain';
 
@@ -127,6 +128,8 @@ const Agent = Type.Object(
     instructions: Type.String(),
     /** Its organization (organizations.ts): it reaches only computers, agents and groups of the same one. */
     organizationId: Type.String(),
+    /** Imported and not yet reviewed (docs/agent-export.md): grayed out, nothing runs until it is resumed. */
+    paused: Type.Boolean(),
     /** Minutes per clock window with one time note while it works (0: off; docs/agent-time.md#time-notes). */
     timeNoteMinutes: Type.Integer(),
     /** Its todo list (todo_write, docs/agent-todos.md); live changes come as todos_updated events. */
@@ -195,6 +198,7 @@ function agentView(
     thinkingLevel: agent.thinkingLevel,
     instructions: agent.instructions,
     organizationId: agent.organizationId,
+    paused: agent.paused,
     todos: parseTodos(agent.todos),
     timeNoteMinutes: agent.timeNoteMinutes,
     heartbeat: {
@@ -275,6 +279,24 @@ export function registerChat(
     broker.deliverPlatformEvent(agentId, 'timer', text, true),
   );
   registerMemoryRoutes(app, database, broker.memory, broker.sleeper, broker.settings);
+  if (files && discord)
+    registerAgentTransferRoutes(
+      app,
+      database,
+      files.blobs,
+      discord.tokens,
+      connections,
+      broker.timers,
+      {
+        schema: Agent,
+        of: async id => {
+          const record = await database.findAgent(id);
+          if (!record) throw new Error('Agent not found.');
+          return agentView(record, connections.chains);
+        },
+      },
+      discord.connections,
+    );
   registerOrganizationRoutes(app, broker.organizations, async (computerId, organizationId) => {
     await database.initialize();
     const computer = await database.client.computer.findUnique({
@@ -762,6 +784,11 @@ export function registerChat(
       try {
         const record = await database.findAgent(agentId);
         if (!record) return reply.code(404).send({ message: 'Agent not found.' });
+        // Imported and not yet reviewed (docs/agent-export.md): nothing is saved or run until it is resumed.
+        if (record.paused)
+          return reply
+            .code(409)
+            .send({ message: `${record.name} is paused until you review its settings and resume it.` });
         const agent = agentView(record, connections.chains);
         if (await database.findMessage(clientMessageId))
           return reply.code(409).send({ message: 'This message was already received. Reload the channel history.' });

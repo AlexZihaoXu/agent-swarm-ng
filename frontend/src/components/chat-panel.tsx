@@ -1,6 +1,7 @@
 import { PanelResizeHandle, SIDEBAR_WIDTH, usePanelWidth } from '@/components/panel-resize';
 import { RenameDialog } from '@/components/rename-dialog';
-import { AgentAddIcon, PencilIcon, SettingsIcon, TrashIcon } from '@/components/ui/icons';
+import { AgentAddIcon, DownloadIcon, PencilIcon, SettingsIcon, TrashIcon, UploadIcon } from '@/components/ui/icons';
+import { ExportAgentDialog, ImportAgentDialog } from '@/components/agent-transfer-dialogs';
 import { renameAgent, renameGroup } from '@/lib/rename';
 import { GroupAddIcon } from '@/components/ui/icons';
 import { useOrganizations } from '@/lib/organizations';
@@ -56,6 +57,7 @@ export function ChatPanel({
   selectedGroup,
   onAgent,
   onAgentSettings,
+  onImported,
   onGroup,
   onRenamed,
   mobile,
@@ -77,6 +79,8 @@ export function ChatPanel({
   selectedGroup: string;
   onAgent: (id: string, real?: RealAgent) => void;
   onAgentSettings: (id: string, real?: RealAgent) => void;
+  /** An agent file was imported (docs/agent-export.md): the new agent, paused. */
+  onImported: (agent: RealAgent, skipped: { dms: number; links: number }) => void;
   onGroup: (group: GroupChat) => void;
   onRenamed: (agent: RealAgent) => void;
   mobile: boolean;
@@ -99,6 +103,8 @@ export function ChatPanel({
   const panelRef = useRef<HTMLElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const fromContext = useRef(false);
+  const [exporting, setExporting] = useState<ChatAgent | null>(null);
+  const [importing, setImporting] = useState(false);
   const touchHold = useTouchHold();
   useEffect(() => {
     // Back to the row once the dialog the menu opened (a group's, or an agent's settings, creation or deletion) closes.
@@ -250,8 +256,10 @@ export function ChatPanel({
                   const selected =
                     item.kind === 'group' ? item.id === selectedGroup : !selectedGroup && item.id === selectedAgent;
                   const latest = item.kind === 'dm' ? conversations[item.agent.channelId]?.at(-1) : undefined;
-                  const preview =
-                    item.kind === 'group'
+                  const paused = item.kind === 'dm' && item.agent.real?.paused === true;
+                  const preview = paused
+                    ? 'Paused · review its settings to resume it'
+                    : item.kind === 'group'
                       ? `${item.group.lastMessage ? `${item.group.lastMessage.role === 'user' ? humanName(item.group.lastMessage.authorName, me) : item.group.lastMessage.authorName}: ${messagePreview(item.group.lastMessage.text, item.group.lastMessage.files)}` : ''}`
                       : latest
                         ? messagePreview(latest.text, latest.files)
@@ -277,7 +285,7 @@ export function ChatPanel({
                             initials={item.agent.initials}
                             avatar={item.agent.avatar}
                             size="md"
-                            ready={Boolean(item.agent.real)}
+                            ready={Boolean(item.agent.real) && !paused}
                             working={busy[item.agent.channelId]}
                             typing={typingIn(item.agent.channelId, item.agent.channelId)}
                             compaction={compactions[item.agent.id]}
@@ -286,7 +294,8 @@ export function ChatPanel({
                       }
                       name={item.name}
                       time={listTime(item.timestamp)}
-                      previewPrefix={item.kind === 'dm' && latest?.author === 'user' ? 'You: ' : ''}
+                      previewPrefix={item.kind === 'dm' && latest?.author === 'user' && !paused ? 'You: ' : ''}
+                      dimmed={paused}
                       preview={preview}
                     />
                   );
@@ -333,6 +342,13 @@ export function ChatPanel({
               </span>
               Create group chat
             </ContextMenu.Item>
+            <ContextMenu.Item
+              onSelect={() => setImporting(true)}
+              className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted"
+            >
+              <UploadIcon className="size-4 shrink-0 text-muted-foreground" />
+              Import agent…
+            </ContextMenu.Item>
             {context && (
               <ContextMenu.Item
                 onSelect={() =>
@@ -373,6 +389,15 @@ export function ChatPanel({
               >
                 <PencilIcon />
                 {context.kind === 'group' ? 'Rename group chat' : 'Rename agent'}
+              </ContextMenu.Item>
+            )}
+            {context?.kind === 'dm' && context.agent.real && (
+              <ContextMenu.Item
+                onSelect={() => setExporting(context.agent)}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted"
+              >
+                <DownloadIcon className="size-4 shrink-0" />
+                Export agent…
               </ContextMenu.Item>
             )}
             {context?.kind === 'group' && (
@@ -440,6 +465,24 @@ export function ChatPanel({
           </ContextMenu.Content>
         </ContextMenu.Portal>
       </ContextMenu.Root>
+      {exporting && (
+        <ExportAgentDialog
+          key={exporting.id}
+          agent={exporting}
+          open
+          onOpenChange={open => {
+            if (!open) setExporting(null);
+          }}
+        />
+      )}
+      <ImportAgentDialog
+        open={importing}
+        onOpenChange={setImporting}
+        onImported={(agent, skipped) => {
+          setImporting(false);
+          onImported(agent, skipped);
+        }}
+      />
       <RenameDialog
         open={renaming !== null}
         onOpenChange={open => {

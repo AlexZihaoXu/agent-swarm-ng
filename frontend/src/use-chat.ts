@@ -1,4 +1,5 @@
 import { recordScratchActivity } from '@/lib/scratch-writers';
+import { announceMessage } from '@/lib/message-toasts';
 import { recordTerminalActivity } from '@/lib/terminal-typists';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
@@ -9,7 +10,7 @@ import { createNotificationSound } from '@/lib/notification-sound';
 import { useRunEvents } from '@/use-run-events';
 import { defaultAvatar, type AvatarAppearance } from '@/lib/agent-avatar';
 import { randomUuid } from '@/lib/random-uuid';
-import { chatFiles, isChatFile, replaceFile } from '@/lib/chat-files';
+import { chatFiles, isChatFile, messagePreview, replaceFile } from '@/lib/chat-files';
 import { useActivityHistory } from '@/use-activity-history';
 import { clockTime } from '@/lib/format-time';
 
@@ -480,8 +481,18 @@ export function useChat() {
         event.message?.role === 'assistant' &&
         typeof event.message.id === 'string' &&
         !remember(knownMessages.current, `group:${event.groupId}:${event.message.id}`)
-      )
+      ) {
         notification.current?.play();
+        announceMessage({
+          kind: 'group',
+          id: event.message.id,
+          groupId: event.groupId,
+          authorId: typeof event.message.authorId === 'string' ? event.message.authorId : null,
+          authorName: typeof event.message.authorName === 'string' ? event.message.authorName : 'An agent',
+          authorAvatar: event.message.authorAvatar ?? null,
+          text: messagePreview(String(event.message.text ?? ''), chatFiles(event.message.files)),
+        });
+      }
       return;
     }
     const channel = event.channelId ?? event.entry?.channelId;
@@ -565,7 +576,16 @@ export function useChat() {
           });
       }
       const duplicate = remember(knownMessages.current, `${channel}:${event.id}`);
-      if (event.type === 'channel_message' && !duplicate) void notification.current?.play();
+      if (event.type === 'channel_message' && !duplicate) {
+        void notification.current?.play();
+        if (typeof event.agentId === 'string')
+          announceMessage({
+            kind: 'agent',
+            id: event.id,
+            agentId: event.agentId,
+            text: messagePreview(event.text, chatFiles(event.files)),
+          });
+      }
       const reference = event.replyTo;
       const replyTo: ChatMessage['replyTo'] =
         reference &&

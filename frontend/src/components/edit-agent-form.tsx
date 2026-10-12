@@ -7,6 +7,8 @@ import { createPortal } from 'react-dom';
 import { surface } from '@/lib/motion';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
+import { ExportAgentDialog } from '@/components/agent-transfer-dialogs';
+import { AgentReviewBanner } from '@/components/agent-review-banner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentAvatarPreview } from '@/components/agent-avatar-preview';
 import { AgentChannelSettings } from '@/components/agent-channel-settings';
@@ -52,6 +54,7 @@ const sectionIcons = {
   Memory: <MemoryIcon />,
   Avatar: <SmileIcon />,
   Organization: <OrganizationIcon />,
+  Export: <DownloadIcon />,
   'Danger zone': <TrashIcon />,
 };
 import type { SettingsSection } from '@/lib/settings-sections';
@@ -81,6 +84,7 @@ export function EditAgentForm({
   const [allowed, setAllowed] = useState<string[]>([]),
     [savedAllowed, setSavedAllowed] = useState<string[]>([]);
   const [known, setKnown] = useState<{ id: string; name: string }[]>([]);
+  const [exporting, setExporting] = useState(false);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [saved, setSaved] = useState(false);
@@ -215,6 +219,7 @@ export function EditAgentForm({
             ref={sectionList}
             className="settings-stagger mx-auto w-full max-w-5xl space-y-8 px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-6 md:px-6 md:pb-8"
           >
+            {agent.real && <AgentReviewBanner agent={agent.real} onResumed={onModelSaved} />}
             <section aria-label="Channels" className="space-y-4">
               <div>
                 <h3 className="text-lg font-semibold">Channels</h3>
@@ -372,6 +377,27 @@ export function EditAgentForm({
                     onMoved={organizationId => onModelSaved({ ...agent.real!, organizationId })}
                   />
                 </div>
+              </section>
+            )}
+            {agent.real && (
+              <section aria-label="Export" className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold">Export</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Save {agent.name} as one file, with everything inside it, to import on this or another Agent Swarm.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11 gap-1.5 sm:min-h-0"
+                  onClick={() => setExporting(true)}
+                >
+                  <DownloadIcon className="size-4" />
+                  Export {agent.name}…
+                </Button>
+                <ExportAgentDialog agent={agent} open={exporting} onOpenChange={setExporting} />
               </section>
             )}
             <section aria-label="Danger zone" className="space-y-4">

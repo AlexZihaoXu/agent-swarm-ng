@@ -122,6 +122,12 @@ export const RULES: Record<string, Rule> = {
   'POST /api/agents': 'scoped',
   'GET /api/agents/model-capabilities': 'scoped',
   'PATCH /api/agents/:id': agent,
+  // Agents as files (docs/agent-export.md): import into an organization the person reaches.
+  'GET /api/agents/:id/export': agent,
+  'POST /api/agents/import': (request, reach, viewer) => reach.organization(viewer, query(request, 'organizationId')),
+  'GET /api/agents/:id/review': agent,
+  'POST /api/agents/:id/review/remove': agent,
+  'POST /api/agents/:id/resume': agent,
   'DELETE /api/agents/:id': agent,
   'POST /api/agents/:id/stop': agent,
   'POST /api/agents/:id/models/first': agent,

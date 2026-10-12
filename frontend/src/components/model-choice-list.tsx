@@ -40,7 +40,7 @@ const thinkingLabel = (level: Thinking) => (level === 'off' ? 'Off' : level[0]!.
 
 /** The owner's model connections, for the collapsed rows' names (the open row loads its own lists). */
 function useEndpointNames(organizationId: string) {
-  const [endpoints, setEndpoints] = useState<ModelEndpoint[]>([]);
+  const [endpoints, setEndpoints] = useState<ModelEndpoint[] | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     void loadConnections({ organizationId }, controller.signal)
@@ -50,9 +50,12 @@ function useEndpointNames(organizationId: string) {
       .catch(() => {});
     return () => controller.abort();
   }, [organizationId]);
-  return (id: string) =>
-    endpoints.find(endpoint => endpoint.id === id)?.name ??
+  const name = (id: string) =>
+    endpoints?.find(endpoint => endpoint.id === id)?.name ??
     (isCodexConnection(id) ? 'ChatGPT (signed out)' : 'Removed endpoint');
+  /** A row whose provider is not one of the owner's connections (e.g. an imported agent's): shown in red. */
+  const missing = (id: string) => endpoints !== null && !endpoints.some(endpoint => endpoint.id === id);
+  return { name, missing };
 }
 
 /**
@@ -74,7 +77,7 @@ export function ModelChoiceList({
   disabled: boolean;
 }) {
   const [open, setOpen] = useState<string | null>(null);
-  const endpointName = useEndpointNames(organizationId);
+  const { name: endpointName, missing: providerMissing } = useEndpointNames(organizationId);
   const list = useRef<HTMLOListElement>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const latest = useRef({ rows, onChange });
@@ -156,6 +159,7 @@ export function ModelChoiceList({
           const summary = row.model
             ? `${endpointName(row.endpointId)} · ${row.model} · ${thinkingLabel(row.thinkingLevel)}`
             : 'Choose a model';
+          const broken = Boolean(row.model) && providerMissing(row.endpointId);
           return (
             <m.li
               key={row.key}
@@ -163,6 +167,7 @@ export function ModelChoiceList({
               transition={{ type: 'spring', stiffness: 520, damping: 40 }}
               className={cn(
                 'rounded-lg border border-border bg-background/60',
+                broken && 'border-red-500/60 bg-red-500/5',
                 dragging === row.key && 'relative z-10 ao-raised',
               )}
             >
@@ -202,6 +207,11 @@ export function ModelChoiceList({
                   />
                 </button>
               </div>
+              {broken && (
+                <p className="px-3 pb-2 text-xs text-red-400 sm:px-4">
+                  This provider does not exist here. Open the row and switch to one of your connections.
+                </p>
+              )}
               <AnimatePresence initial={false}>
                 {expanded && (
                   <m.div
