@@ -157,7 +157,8 @@ export class ActivityStore {
   }
   /**
    * Real work a restart is about to interrupt, one per agent (its latest): runs whose status is still active and that
-   * were real turns, not a heartbeat or restart check that never changed anything (docs/agent-time.md#restart-checks).
+   * were real turns or a promoted heartbeat, or a restart check still deciding (its work is still undecided); not a
+   * heartbeat that never changed anything (docs/agent-time.md#restart-checks).
    * Read before interruptActive.
    */
   async interruptedWork(): Promise<InterruptedWork[]> {
@@ -170,7 +171,8 @@ export class ActivityStore {
     const work = new Map<string, InterruptedWork>();
     for (const row of active) {
       if (work.has(row.agentId)) continue;
-      if (row.label !== 'Run active') {
+      // A restart check still deciding counts too: the work it was about is still undecided.
+      if (row.label !== 'Run active' && row.label !== 'Restart check active') {
         const promoted = await this.database.client.activity.count({
           where: {
             agentId: row.agentId,

@@ -332,3 +332,14 @@ it('only real work counts as interrupted: not a heartbeat that never changed any
     await promoted.close();
   }
 }, 60_000);
+
+it('a restart while a restart check was still deciding asks again', async () => {
+  const f = await fixture({ first: 'help', interrupted: () => [{ label: 'Restart check active', state: 'active' }] });
+  try {
+    await f.checked();
+    await f.idle();
+    expect((await f.labels()).join('\n')).toContain('Restart check: not resuming');
+  } finally {
+    await f.close();
+  }
+}, 60_000);
