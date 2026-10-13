@@ -38,6 +38,8 @@ export type Seen = {
   content: string;
   createdAt: Date;
   addressed: boolean;
+  /** Aimed at the agent itself (a DM, a mention or a reply to it), the only wake in "only when mentioned" channels. */
+  aimed: boolean;
   replyTo?: { id: string; author: string; text: string };
   attachments: { name: string; size: number }[];
   /** Shown beside the message: "edited", "sent while you were offline". */
@@ -192,6 +194,7 @@ export class DiscordIntake {
     const place = await this.place(agentId, data, role);
     if (!place) return;
     const reference = data.referenced_message as APIMessage | null | undefined;
+    const aimed = place.dm || data.mentions.some(user => user.id === botUserId) || reference?.author?.id === botUserId;
     const seen: Seen = {
       id: data.id,
       channelId: data.channel_id,
@@ -202,11 +205,8 @@ export class DiscordIntake {
       ...(account?.role === 'agent' && account.agentId ? { authorAgentId: account.agentId } : {}),
       content: data.content,
       createdAt: new Date(data.timestamp),
-      addressed:
-        role === 'owner' ||
-        place.dm ||
-        data.mentions.some(user => user.id === botUserId) ||
-        reference?.author?.id === botUserId,
+      addressed: role === 'owner' || aimed,
+      aimed,
       ...(reference
         ? {
             replyTo: {
@@ -232,7 +232,7 @@ export class DiscordIntake {
           authorBot: seen.authorBot,
           content: seen.content,
           replyToId: reference?.id ?? null,
-          mentionsBot: seen.addressed && !place.dm && role !== 'owner',
+          mentionsBot: aimed && !place.dm,
           attachments: seen.attachments.length ? JSON.stringify(seen.attachments) : null,
           createdAt: seen.createdAt,
         },
@@ -269,6 +269,7 @@ export class DiscordIntake {
       content: `Your poll ended. See the results with discord_read_poll(${JSON.stringify({ channelId: `discord:${data.channel_id}`, messageId: pollId })}).`,
       createdAt: new Date(data.timestamp),
       addressed: true,
+      aimed: true,
       attachments: [],
     });
   }
@@ -312,6 +313,7 @@ export class DiscordIntake {
       content: data.content,
       createdAt: row.createdAt,
       addressed: true,
+      aimed: channel.kind === 'dm' || row.mentionsBot,
       attachments: [],
       note: 'edited',
     });
@@ -554,7 +556,11 @@ export class DiscordIntake {
     // mention, reply) and "every message" channels go straight to a turn (which may stay silent; an agent at work
     // gets them in its running turn, where interruption triage applies). Untargeted chatter costs nothing in
     // "only when mentioned" channels and one cheap, visible check in "when it seems relevant" ones.
-    let admitted = batch.lane === 'owner' || addressed || admission === 'all';
+    // In "only when mentioned" channels the owner too wakes it only by a mention or a reply to it.
+    let admitted =
+      admission === 'mention' && channel.kind !== 'dm'
+        ? batch.messages.some(message => message.aimed)
+        : batch.lane === 'owner' || addressed || admission === 'all';
     if (!admitted && admission === 'check' && this.deps.evaluate) {
       const evaluate = this.deps.evaluate;
       admitted = (await triageGate(agentId, () => evaluate(agentId, channelId, notice.text))) === 'admit';

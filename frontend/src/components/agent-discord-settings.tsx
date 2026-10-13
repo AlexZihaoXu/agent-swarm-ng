@@ -348,7 +348,8 @@ export function AgentDiscordSettings({
               triggerClassName="!h-11 sm:!h-9"
             />
             <p className="text-xs text-muted-foreground">
-              Your messages, DMs, mentions and replies to it always wake it. Everything else stays readable as unread.
+              DMs, mentions and replies to it always wake it, and so do your messages except in “Only when mentioned”
+              channels. Everything else stays readable as unread.
             </p>
           </div>
           <DiscordChannelList

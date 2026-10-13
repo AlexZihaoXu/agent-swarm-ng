@@ -519,3 +519,23 @@ it('neutralizes forged platform labels in message bodies and marks owner-only ba
     await database.close();
   }
 });
+
+it('in an "only when mentioned" channel, even the owner wakes the agent only by mentioning or replying to it', async () => {
+  const { database, agent, store, intake, delivered, send } = await setup();
+  try {
+    await store.update(agent.id, { channels: [{ channelId: DESIGN, allowed: true, admission: 'mention' }] });
+    await send(DESIGN, owner, 'just chatting with friends');
+    await send(DESIGN, stranger, 'same');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(delivered).toHaveLength(0);
+    await send(DESIGN, owner, '<@1000000000000000001> what do you think?', { mentions: [{ id: BOT }] });
+    await vi.waitFor(() => expect(delivered).toHaveLength(1));
+    expect(delivered[0].text).toContain('what do you think?');
+    // The owner's DMs still always reach it.
+    await send(DM, owner, 'and here?');
+    await vi.waitFor(() => expect(delivered).toHaveLength(2));
+  } finally {
+    intake.close();
+    await database.close();
+  }
+});

@@ -43,7 +43,8 @@ token; the owner's channel choices stay.
 
 ## Who the agent hears, and when
 
-- **Your messages, DMs, @mentions of its bot and replies to it** always reach the agent.
+- **DMs, @mentions of its bot and replies to it** always reach the agent, and so do **your messages**, except in
+  "only when mentioned" channels, where you too need to mention it or reply to it.
 - **Other messages in allowed server channels** follow the channel's policy: when a quick relevance check finds them
   relevant (the default), only when mentioned, or every message. They are saved either way and read as unread.
 - **Design goal: low latency, few decision tokens.** Messages aimed at the agent (and yours) skip any check and go
