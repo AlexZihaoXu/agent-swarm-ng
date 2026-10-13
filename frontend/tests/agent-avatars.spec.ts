@@ -65,7 +65,8 @@ test('all silhouettes move; randomization is stable and preserves the state prev
 });
 
 test('disclosure, shape and eye changes transition; the modal scrollbar is inset', async ({ page }) => {
-  await page.setViewportSize({ width: 1200, height: 1100 });
+  // The avatar folds away on phones; wide screens keep it open beside the fields.
+  await page.setViewportSize({ width: 400, height: 2000 });
   await openCreate(page);
   const toggle = page.getByRole('button', { name: 'Avatar', exact: true });
   const content = page.locator('[data-slot="avatar-disclosure"]');
@@ -192,6 +193,7 @@ test('direction previews turn the face in depth without rotating the eyelid clos
 });
 
 test('motion pauses offscreen, hidden, collapsed and for reduced motion; keyboard controls work', async ({ page }) => {
+  await page.setViewportSize({ width: 400, height: 900 });
   await openCreate(page);
   const art = previewArt(page);
   await page.getByRole('button', { name: 'Preview Bean', exact: true }).focus();
@@ -391,4 +393,23 @@ test('the Avatar section downloads the avatar as PNG or SVG, named after the age
   const text = Buffer.concat(await (await svg.createReadStream()).toArray()).toString();
   expect(text).toMatch(/^<svg[^>]*xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
   expect(text).toContain('data-avatar-shape');
+});
+
+test('wide screens keep the avatar open on the left, its preview pinned while its column scrolls', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCreate(page);
+  await expect(page.getByRole('button', { name: 'Avatar', exact: true })).toHaveCount(0);
+  const column = page.getByRole('region', { name: 'Avatar', exact: true });
+  const fields = page.getByRole('region', { name: 'Agent details', exact: true });
+  expect((await column.boundingBox())!.x).toBeLessThan((await fields.boundingBox())!.x);
+  const card = page.locator('[data-slot="avatar-preview-card"]');
+  const top = (await column.boundingBox())!.y;
+  await column.evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect.poll(() => column.evaluate(element => element.scrollTop)).toBeGreaterThan(200);
+  // Still in view at the top of its column; the fields did not move.
+  expect(Math.abs((await card.boundingBox())!.y - top)).toBeLessThan(2);
+  expect(await fields.evaluate(element => element.scrollTop)).toBe(0);
+  await expect(page.getByLabel('Agent name')).toBeInViewport();
 });

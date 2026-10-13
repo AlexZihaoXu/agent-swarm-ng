@@ -5,6 +5,7 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { AgentAvatarPreview } from '@/components/agent-avatar-preview';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { randomizeAvatar } from '@/lib/agent-avatar';
 import type { RealAgent } from '@/use-chat';
 import { useModelSelection } from '@/use-model-selection';
@@ -26,6 +27,7 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
   const [createError, setCreateError] = useState('');
   const error = createError || choice.error;
   const creation = useRef<AbortController | null>(null);
+  const wide = useWide();
   useEffect(() => () => creation.current?.abort(), []);
 
   async function create() {
@@ -55,104 +57,170 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
     }
   }
 
-  return (
-    <form
-      onSubmit={event => {
-        event.preventDefault();
-        void create();
-      }}
-    >
+  const avatarEditor = (
+    <AgentAvatarPreview
+      name={name}
+      value={avatar}
+      onChange={setAvatar}
+      disabled={creating}
+      collapsible={!wide}
+      pinned={wide}
+    />
+  );
+  const header = (
+    <>
       <Dialog.Title className="text-lg font-semibold">Create new agent</Dialog.Title>
       <Dialog.Description className="mt-2 text-sm leading-relaxed text-muted-foreground">
         A Pi agent with saved platform-chat history. It can research the public web and read Swarm Knowledge. It has no
         computer, file, or command access until you assign a computer in its settings.
       </Dialog.Description>
-      {/* Wide screens: the agent's name and model on the left, its avatar beside them; phones: one column, the
-          avatar under the name. */}
-      <fieldset
-        disabled={creating}
-        className="mt-6 grid min-w-0 gap-y-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] md:grid-rows-[repeat(5,auto)_1fr] md:gap-x-8"
-      >
-        <div className="space-y-2 md:col-start-1">
-          <label htmlFor={`${id}-name`} className="block text-sm font-medium">
-            Agent name
-          </label>
-          <input
-            id={`${id}-name`}
-            required
-            maxLength={80}
-            value={name}
-            onChange={event => setName(event.target.value)}
-            className={fieldClass}
-            {...noAutofill}
-            placeholder="Name your agent"
-          />
-        </div>
-        <div className="min-w-0 md:col-start-2 md:row-span-6 md:row-start-1">
-          <AgentAvatarPreview name={name} value={avatar} onChange={setAvatar} disabled={creating} />
-        </div>
-        <div className="space-y-2 md:col-start-1">
-          <label htmlFor={`${id}-endpoint`} className="block text-sm font-medium">
-            Endpoint
-          </label>
-          <Select
-            id={`${id}-endpoint`}
-            required
-            disabled={creating || endpoints.length === 0}
-            value={endpointId}
-            onValueChange={choice.chooseEndpoint}
-            placeholder="Select a model connection"
-            options={endpoints.map(endpoint => ({ value: endpoint.id, label: endpoint.name }))}
-          />
-          {!loading && !choice.loadFailed && endpoints.length === 0 && (
-            <p className="text-xs text-muted-foreground">Connect ChatGPT or save an API endpoint in Settings first.</p>
-          )}
-        </div>
-        <div className="space-y-2 md:col-start-1">
-          <label htmlFor={`${id}-model`} className="block text-sm font-medium">
-            Model
-          </label>
-          <Select
-            id={`${id}-model`}
-            required
-            disabled={creating || loading || models.length === 0}
-            value={model}
-            onValueChange={choice.chooseModel}
-            placeholder={loading && endpointId ? 'Loading models…' : 'Select a model'}
-            options={models.map(value => ({ value, label: value }))}
-          />
-        </div>
-        <div className="space-y-2 md:col-start-1">
-          <label htmlFor={`${id}-thinking`} className="block text-sm font-medium">
-            Thinking level
-          </label>
-          <Select
-            id={`${id}-thinking`}
-            value={thinking}
-            disabled={creating || levels.length <= 1}
-            onValueChange={value => {
-              if (levels.includes(value as RealAgent['thinkingLevel']))
-                choice.setThinking(value as RealAgent['thinkingLevel']);
-            }}
-            options={(levels.length ? levels : ['off']).map(level => ({
-              value: level,
-              label:
-                level === 'off'
-                  ? levels.length <= 1
-                    ? 'Not configurable'
-                    : 'Off'
-                  : level[0].toUpperCase() + level.slice(1),
-            }))}
-          />
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {levels.length <= 1
-              ? 'Configurable thinking is unsupported or not verified for this model.'
-              : 'Pi model capabilities; reasoning support depends on the selected provider.'}
+    </>
+  );
+  const fields = (
+    <>
+      <div className="space-y-2">
+        <label htmlFor={`${id}-name`} className="block text-sm font-medium">
+          Agent name
+        </label>
+        <input
+          id={`${id}-name`}
+          required
+          maxLength={80}
+          value={name}
+          onChange={event => setName(event.target.value)}
+          className={fieldClass}
+          {...noAutofill}
+          placeholder="Name your agent"
+        />
+      </div>
+      {!wide && avatarEditor}
+      <div className="space-y-2">
+        <label htmlFor={`${id}-endpoint`} className="block text-sm font-medium">
+          Endpoint
+        </label>
+        <Select
+          id={`${id}-endpoint`}
+          required
+          disabled={creating || endpoints.length === 0}
+          value={endpointId}
+          onValueChange={choice.chooseEndpoint}
+          placeholder="Select a model connection"
+          options={endpoints.map(endpoint => ({ value: endpoint.id, label: endpoint.name }))}
+        />
+        {!loading && !choice.loadFailed && endpoints.length === 0 && (
+          <p className="text-xs text-muted-foreground">Connect ChatGPT or save an API endpoint in Settings first.</p>
+        )}
+      </div>
+      <div className="space-y-2">
+        <label htmlFor={`${id}-model`} className="block text-sm font-medium">
+          Model
+        </label>
+        <Select
+          id={`${id}-model`}
+          required
+          disabled={creating || loading || models.length === 0}
+          value={model}
+          onValueChange={choice.chooseModel}
+          placeholder={loading && endpointId ? 'Loading models…' : 'Select a model'}
+          options={models.map(value => ({ value, label: value }))}
+        />
+      </div>
+      <div className="space-y-2">
+        <label htmlFor={`${id}-thinking`} className="block text-sm font-medium">
+          Thinking level
+        </label>
+        <Select
+          id={`${id}-thinking`}
+          value={thinking}
+          disabled={creating || levels.length <= 1}
+          onValueChange={value => {
+            if (levels.includes(value as RealAgent['thinkingLevel']))
+              choice.setThinking(value as RealAgent['thinkingLevel']);
+          }}
+          options={(levels.length ? levels : ['off']).map(level => ({
+            value: level,
+            label:
+              level === 'off'
+                ? levels.length <= 1
+                  ? 'Not configurable'
+                  : 'Off'
+                : level[0].toUpperCase() + level.slice(1),
+          }))}
+        />
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {levels.length <= 1
+            ? 'Configurable thinking is unsupported or not verified for this model.'
+            : 'Pi model capabilities; reasoning support depends on the selected provider.'}
+        </p>
+      </div>
+      <div>
+        <OrganizationField value={organization.value} onChange={organization.setValue} disabled={creating} />
+      </div>
+    </>
+  );
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    void create();
+  };
+  // Wide screens: the avatar on the left (always open, its preview pinned at the top of its column) and the fields on
+  // the right, each column scrolling on its own; phones: one column, the avatar (collapsible) under the name.
+  if (wide)
+    return (
+      <form onSubmit={submit} className="flex h-[min(46rem,calc(90dvh-4rem))] flex-col">
+        {header}
+        <fieldset
+          disabled={creating}
+          className="mt-5 grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-x-6"
+        >
+          <ScrollArea label="Avatar" viewportTabIndex={-1} className="min-h-0" viewportClassName="pr-3">
+            <p className="mb-2 text-sm font-medium">Avatar</p>
+            {avatarEditor}
+          </ScrollArea>
+          <ScrollArea label="Agent details" viewportTabIndex={-1} className="min-h-0" viewportClassName="px-1 pr-3">
+            <div className="space-y-4 pb-1">
+              {fields}
+              <p className="text-xs text-muted-foreground">
+                Agent and chat history are saved locally. Drafts and internal activity clear on refresh. Only
+                channel-tool messages are shown.
+              </p>
+            </div>
+          </ScrollArea>
+        </fieldset>
+        {error && (
+          <p role="alert" className="mt-4 text-sm">
+            {error}
+            {choice.loadFailed && (
+              <>
+                {' '}
+                <button type="button" onClick={choice.reload} className="cursor-pointer underline">
+                  Retry
+                </button>
+              </>
+            )}
           </p>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <Dialog.Close asChild>
+            <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-0">
+              Cancel
+            </Button>
+          </Dialog.Close>
+          <Button
+            type="submit"
+            size="sm"
+            className="min-h-11 sm:min-h-0"
+            disabled={creating || !name.trim() || !model || !levels.includes(thinking) || !organization.ready}
+          >
+            {creating ? 'Creating…' : 'Create agent'}
+          </Button>
         </div>
-        <div className="md:col-start-1">
-          <OrganizationField value={organization.value} onChange={organization.setValue} disabled={creating} />
-        </div>
+      </form>
+    );
+  return (
+    <form onSubmit={submit}>
+      {header}
+      <fieldset disabled={creating} className="mt-6 min-w-0 space-y-4">
+        {fields}
       </fieldset>
       {error && (
         <p role="alert" className="mt-4 text-sm">
@@ -188,4 +256,16 @@ export function CreateAgentForm({ onCreated }: { onCreated: (agent: RealAgent) =
       </div>
     </form>
   );
+}
+
+/** Wide enough for the two-column layout (Tailwind `md`), following the window. */
+function useWide() {
+  const [wide, setWide] = useState(() => window.matchMedia('(min-width: 768px)').matches);
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 768px)');
+    const change = () => setWide(query.matches);
+    query.addEventListener('change', change);
+    return () => query.removeEventListener('change', change);
+  }, []);
+  return wide;
 }
