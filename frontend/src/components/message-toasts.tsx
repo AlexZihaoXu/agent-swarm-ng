@@ -74,6 +74,13 @@ export function MessageToasts({
           const agent = agents.find(candidate => candidate.id === item.agentId);
           if (!agent) return;
           const organization = agent.real?.organizationId;
+          // A floating chat with it on screen (Portal's, or the desktop viewer's) counts as open too.
+          if (
+            [...document.querySelectorAll<HTMLElement>('[data-floating-chat]')].some(
+              element => element.dataset.floatingChat === agent.id && element.getClientRects().length > 0,
+            )
+          )
+            return;
           // Not the chat already open (its settings over it count as open).
           if (
             route.agentId === agent.id &&

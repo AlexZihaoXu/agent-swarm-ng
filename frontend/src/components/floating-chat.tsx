@@ -165,6 +165,7 @@ export function FloatingChat({
             animate={{ opacity: 1, scale: 1, transition: { ...glide, opacity: { duration: 0.16 } } }}
             exit={{ opacity: 0, scale: 0.12, transition: { duration: 0.2, ease: [0.4, 0, 1, 1] } }}
             data-floating-window
+            data-floating-chat={agent.id}
             data-focused={layer.focused ? '' : undefined}
             className={`fixed flex flex-col overflow-hidden rounded-xl border bg-background transition-[border-color,box-shadow] duration-200 ${layer.focused ? 'border-white/15 shadow-2xl shadow-black/60' : 'border-white/[0.08] ao-top shadow-lg shadow-black/40'}`}
             onPointerDownCapture={() => raiseWindow(windowId)}

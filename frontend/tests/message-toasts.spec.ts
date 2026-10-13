@@ -81,3 +81,26 @@ test('a group message toasts with its group, unless that group is open', async (
   await page.waitForTimeout(500);
   await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Second note.' })).toHaveCount(0);
 });
+
+test('a floating chat with the agent counts as viewing it: no toast', async ({ page }) => {
+  await page.goto('/chat/agents/avery');
+  await expect(page.getByRole('button', { name: 'Open Portal' })).toBeVisible();
+  await page.keyboard.press('Control+k');
+  const portal = page.getByRole('dialog', { name: 'Portal' });
+  await portal.getByRole('combobox').fill('@morg');
+  await expect(portal.getByRole('option', { name: /Morgan/, selected: true })).toBeVisible();
+  await portal.getByRole('combobox').press('Enter');
+  await expect(page.getByRole('region', { name: 'Chat with Morgan' })).toBeVisible();
+  await emit(page, {
+    type: 'channel_message',
+    agentId: 'morgan',
+    channelId: 'morgan',
+    runId: 'r9',
+    id: 'm-floating',
+    text: 'Seen in the window.',
+    timestamp: Date.now(),
+  });
+  await expect(page.getByRole('region', { name: 'Chat with Morgan' })).toContainText('Seen in the window.');
+  await page.waitForTimeout(500);
+  await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
+});
