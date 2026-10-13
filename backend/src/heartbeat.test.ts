@@ -116,7 +116,7 @@ async function fixture(script: {
   /** Until a restart check has ended (it starts just after start-up). */
   const checked = () =>
     vi.waitFor(async () => expect((await labels()).join('\n')).toContain('Restart check ended'), { timeout: 30000 });
-  return { database, agent, runs, broker, idle, saved, labels, close, asked, checked };
+  return { database, agent, runs, broker, idle, saved, labels, close, asked, checked, endpoints };
 }
 
 it('drops a quiet heartbeat from the saved context, keeping only the note it chose to leave', async () => {
@@ -340,6 +340,42 @@ it('a restart while a restart check was still deciding asks again', async () => 
     await f.idle();
     expect((await f.labels()).join('\n')).toContain('Restart check: not resuming');
   } finally {
+    await f.close();
+  }
+}, 60_000);
+
+it('a clean shutdown (a deploy) notes the work it stops, and the next start gives it a restart check', async () => {
+  const f = await fixture({ first: 'help' });
+  const runs = new AgentRuns();
+  let next: DmBroker | undefined;
+  try {
+    const row = {
+      agentId: f.agent.id,
+      runId: crypto.randomUUID(),
+      channelId: f.agent.channels[0].id,
+      kind: 'status',
+      text: '',
+      timestamp: Date.now(),
+      revision: 1,
+    };
+    await f.database.client.activity.create({
+      data: { ...row, id: `${row.runId}:run-status`, label: 'Run active', state: 'active' },
+    });
+    await f.broker.noteShutdown();
+    // The shutdown stops it cleanly: nothing active is left for the next start to find.
+    await f.database.client.activity.updateMany({
+      where: { runId: row.runId },
+      data: { state: 'stopped', label: 'Run ended' },
+    });
+    next = new DmBroker(f.database, f.endpoints, new CodexProvider(), runs);
+    await next.ready();
+    await f.checked();
+    await vi.waitFor(() => expect(runs.snapshot()).toHaveLength(0), { timeout: 30000 });
+    expect((await f.labels()).join('\n')).toContain('Restart check: not resuming');
+  } finally {
+    next?.close();
+    await runs.shutdown();
+    await next?.settled();
     await f.close();
   }
 }, 60_000);

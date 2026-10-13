@@ -333,6 +333,8 @@ export function registerChat(
   );
   app.addHook('preClose', async () => {
     closing = true;
+    // What is running now gets a restart check on the next start (docs/agent-time.md#restart-checks).
+    await broker.noteShutdown();
     broker.close();
     for (const item of preparing.values()) item.controller.abort();
     streams.close();

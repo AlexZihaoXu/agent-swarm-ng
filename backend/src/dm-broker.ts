@@ -31,6 +31,7 @@ import { evaluateReaction } from './reaction-triage';
 import type { ComputerController } from './computer-controller-client';
 import { BlobStore } from './files/blob-store';
 import { join } from 'node:path';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import type { AgentRuns, RunContext, RunEvent } from './agent-runs';
 import type { PlatformStore } from './platform-store';
 import type { EndpointStore } from './endpoint-store';
@@ -613,6 +614,33 @@ export class DmBroker {
       { provisional: true },
     );
   }
+  private shutdownNote() {
+    return join(this.database.dataDirectory, 'restart-checks.json');
+  }
+  /**
+   * Before a shutdown stops the runs: the real work it is about to cut short, kept for the next start's restart
+   * checks (a clean stop leaves no active run to find, unlike a crash).
+   */
+  async noteShutdown() {
+    const work = await this.activity.interruptedWork().catch(() => []);
+    if (work.length) await writeFile(this.shutdownNote(), JSON.stringify(work), { mode: 0o600 }).catch(() => {});
+  }
+  private async takeShutdownNote(): Promise<InterruptedWork[]> {
+    const file = this.shutdownNote();
+    const saved = await readFile(file, 'utf8')
+      .then(text => JSON.parse(text) as unknown)
+      .catch(() => []);
+    await rm(file, { force: true }).catch(() => {});
+    return Array.isArray(saved)
+      ? saved.filter(
+          (item): item is InterruptedWork =>
+            Boolean(item) &&
+            ['agentId', 'runId', 'channelId'].every(key => typeof item[key] === 'string') &&
+            typeof item.startedAt === 'number' &&
+            typeof item.lastAt === 'number',
+        )
+      : [];
+  }
   /**
    * A restart check (docs/agent-time.md#restart-checks): after a restart cut the agent's work short, a heartbeat-like
    * branch of its session in which it decides whether to resume. Resuming is its first change, which makes the branch
@@ -648,7 +676,11 @@ export class DmBroker {
     return (this.starting ??= (async () => {
       await this.store.cancelInterruptedDeliveries();
       // Work the restart cut short gets a restart check (once the rest has started): the agent decides to resume it.
-      const interrupted = await this.activity.interruptedWork().catch(() => []);
+      // A crash leaves it active; a shutdown (a deploy) stopped it cleanly and noted it first (noteShutdown).
+      const interrupted = mergeWork(
+        await this.activity.interruptedWork().catch(() => []),
+        await this.takeShutdownNote(),
+      );
       await this.activity.interruptActive();
       // Pending timers are rows: after a restart or power loss they resume here.
       this.timers.start();
@@ -1578,4 +1610,12 @@ ${preview.text}`
     await Promise.all([...this.jobs.values()].map(job => job.cleanup));
     await Promise.all(this.cancelling.values());
   }
+}
+
+/** One restart check per agent: its latest interrupted work, from a crash or a shutdown's note. */
+function mergeWork(...lists: InterruptedWork[][]) {
+  const latest = new Map<string, InterruptedWork>();
+  for (const work of lists.flat())
+    if ((latest.get(work.agentId)?.lastAt ?? -1) < work.lastAt) latest.set(work.agentId, work);
+  return [...latest.values()];
 }
