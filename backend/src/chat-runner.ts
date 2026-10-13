@@ -724,6 +724,8 @@ export async function runChat(
       JSON.stringify({
         phase,
         checkpointFailed: Boolean(checkpointFailure),
+        // The platform's own reason (never provider text), so a session that will not save says why.
+        ...(checkpointFailure instanceof Error ? { checkpointError: checkpointFailure.message.slice(0, 200) } : {}),
         activityFailed,
         cancelled: signal.aborted,
       }),

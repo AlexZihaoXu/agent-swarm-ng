@@ -1,53 +1,36 @@
 import { expect, it } from 'vitest';
-import { join } from 'node:path';
-import { SessionManager } from '@earendil-works/pi-coding-agent';
-import { AgentSessionStore } from '../agent-session-store';
-import { prepareDatabase } from '../test-database';
-import { ScreenshotPool } from './image-pool';
-it('keeps image bytes only in disk pool and restores valid Pi checkpoints after image expiry', async () => {
-  const db = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
-  const pool = new ScreenshotPool(join(db.dataDirectory, 'computer-screenshots'));
-  const store = new AgentSessionStore(db);
-  const agent = await db.createAgent({ name: 'Vision', endpointId: 'mock', model: 'test', thinkingLevel: 'off' });
-  try {
-    const bytes = Buffer.from('screenshot-unique-bytes');
-    const ref = await pool.put(agent.id, {
-      data: bytes,
-      mimeType: 'image/png',
-      width: 2,
-      height: 2,
-      bounds: [0, 0, 999, 999],
-    });
-    const session = SessionManager.inMemory();
-    session.appendMessage({
+import type { SessionEntry } from '@earendil-works/pi-coding-agent';
+import { withoutScreenshotBytes } from './session-images';
+
+const result = (toolName: string, details: object) =>
+  ({
+    type: 'message',
+    id: 'e1',
+    parentId: null,
+    timestamp: new Date().toISOString(),
+    message: {
       role: 'toolResult',
-      toolCallId: 'look',
-      toolName: 'glance',
-      timestamp: 1,
-      isError: false,
+      toolCallId: 'c1',
+      toolName,
       content: [
-        {
-          type: 'text',
-          text: JSON.stringify({ ...ref, note: 'Image copy may expire; take a fresh look if not attached.' }),
-        },
-        { type: 'image', mimeType: 'image/png', data: bytes.toString('base64') },
+        { type: 'text', text: '{"path":"wallpapers/01.jpg","kind":"image"}' },
+        { type: 'image', data: 'A'.repeat(900_000), mimeType: 'image/jpeg' },
       ],
-      details: { computerImage: ref },
-    });
-    await store.save(agent.id, session);
-    const persisted = await db.client.agentSessionEntry.findFirst({ where: { agentId: agent.id } });
-    expect(persisted?.payload).not.toContain(bytes.toString('base64'));
-    let restored = (await store.load(agent.id))!;
-    expect(JSON.stringify(restored.getEntries())).toContain(bytes.toString('base64'));
-    await store.save(agent.id, restored);
-    await pool.removeAgent(agent.id);
-    restored = (await store.load(agent.id))!;
-    expect(JSON.stringify(restored.getEntries())).not.toContain(bytes.toString('base64'));
-    restored.appendMessage({ role: 'user', content: 'Continue', timestamp: 2 });
-    await store.save(agent.id, restored);
-    expect((await store.load(agent.id))?.getEntries()).toHaveLength(2);
-  } finally {
-    await pool.removeAgent(agent.id);
-    await db.close();
+      details,
+      isError: false,
+      timestamp: Date.now(),
+    },
+  }) as unknown as SessionEntry;
+
+it('keeps no pooled image bytes in a checkpoint, whichever platform tool pooled it (scratch_read too)', () => {
+  const reference = { computerImage: { id: 'img-1', agentId: 'agent-1', mimeType: 'image/jpeg' } };
+  for (const tool of ['scratch_read', 'glance', 'read_file']) {
+    const saved = withoutScreenshotBytes(result(tool, reference));
+    const content = (saved as { message: { content: { type: string }[] } }).message.content;
+    expect(content.map(block => block.type)).toEqual(['text']);
+    expect(JSON.stringify(saved).length).toBeLessThan(2000);
   }
+  // Without a pooled reference the image is all there is: kept.
+  const inline = withoutScreenshotBytes(result('scratch_read', {}));
+  expect((inline as { message: { content: unknown[] } }).message.content).toHaveLength(2);
 });

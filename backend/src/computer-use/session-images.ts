@@ -1,13 +1,13 @@
 import type { SessionEntry } from '@earendil-works/pi-coding-agent';
 import type { ScreenshotPool, ScreenshotReference } from './image-pool';
 
+/**
+ * The pooled image a tool result refers to. Any platform tool that pools an image says so in its details (glance,
+ * look_at, read, terminal_view, read_file, scratch_read, stop_recording …); only platform code sets details, never
+ * the model. A tool missing from a fixed list once kept a whole image in the checkpoint, which then refused to save.
+ */
 function reference(entry: SessionEntry): ScreenshotReference | null {
-  if (
-    entry.type !== 'message' ||
-    entry.message.role !== 'toolResult' ||
-    !['glance', 'look_at', 'read', 'terminal_view', 'read_file', 'stop_recording'].includes(entry.message.toolName)
-  )
-    return null;
+  if (entry.type !== 'message' || entry.message.role !== 'toolResult') return null;
   const details = entry.message.details as { computerImage?: ScreenshotReference } | undefined;
   const image = details?.computerImage;
   return image && typeof image.id === 'string' && typeof image.agentId === 'string' ? image : null;
