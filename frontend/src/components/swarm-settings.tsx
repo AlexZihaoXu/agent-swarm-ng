@@ -32,6 +32,12 @@ const groups: { title: string; description: string; keys: Key[] }[] = [
       'Failed sign-ins in an hour (from any address) that lock sign-in down: only trusted addresses (Settings → Security) can sign in then. Signed-in browsers keep working.',
     keys: ['lockdownFailures'],
   },
+  {
+    title: 'Request limits',
+    description:
+      'Dashboard API requests a minute per signed-in person and per client address (a burst of this many, refilled at this rate). Beyond that requests are refused until the allowance refills. Takes effect within 10 seconds.',
+    keys: ['rateLimitPerPerson', 'rateLimitPerAddress'],
+  },
 ];
 
 /** Settings → Swarm: operator-wide limits, stored by the backend (not environment variables). */

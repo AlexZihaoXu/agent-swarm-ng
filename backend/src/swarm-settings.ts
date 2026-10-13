@@ -33,6 +33,10 @@ export const swarmSettingBounds = {
     label: 'Lock down after failed sign-ins in an hour (0: never)',
     unit: '',
   },
+  // Request limits (docs/login.md#request-limits): a burst of this many, refilled at this many a minute. The busiest
+  // dashboard minute seen was ~700 requests (computer previews), so the defaults leave ample room.
+  rateLimitPerPerson: { min: 1200, max: 600000, default: 3600, label: 'Requests a minute per person', unit: '' },
+  rateLimitPerAddress: { min: 1200, max: 600000, default: 7200, label: 'Requests a minute per address', unit: '' },
 } as const;
 export type SwarmSettingKey = keyof typeof swarmSettingBounds;
 export type SwarmSettings = Record<SwarmSettingKey, number>;

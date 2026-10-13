@@ -101,9 +101,10 @@ export async function buildApp({
   app.decorate('audit', audit);
   const addresses = new KnownAddresses(platform);
   const alerts = new Alerts(platform);
-  const guard = new SignInGuard(platform, addresses, new SwarmSettingsStore(platform), audit, alerts);
+  const settings = new SwarmSettingsStore(platform);
+  const guard = new SignInGuard(platform, addresses, settings, audit, alerts);
   app.decorate('alerts', alerts);
-  const sessions = registerAuth(app, new Accounts(platform), { requireLogin, audit, guard });
+  const sessions = registerAuth(app, new Accounts(platform), { requireLogin, audit, guard, settings });
   app.decorate('watchSession', sessions.watch);
   app.decorate('endSessions', sessions.end);
   const endpoints = endpointStore ?? new EndpointStore();

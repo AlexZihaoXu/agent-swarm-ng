@@ -5,6 +5,8 @@ import type { AuditLog } from '../audit/store';
 import type { SignInGuard } from '../security/guard';
 import { viewerOf } from '../users/reach';
 import { canonicalTimeZone } from '../time-notes';
+import { defaultSwarmSettings, type SwarmSettingsStore } from '../swarm-settings';
+import { RateLimiter } from './rate-limit';
 import {
   Accounts,
   PASSWORD_MAX,
@@ -28,6 +30,10 @@ const MAX_PER_ACCOUNT = 100;
 /** Password hashing is deliberately slow: at most this many run at once, so a burst cannot exhaust the CPU. */
 const MAX_HASHING = 4;
 const MAX_TRACKED = 10_000;
+/** Not request-rate limited: Caddy's desktop check runs on every desktop request by design, and health is a probe. */
+const UNLIMITED = new Set(['/api/health', '/api/auth/check']);
+/** How long Settings → Swarm's request limits are reused before being read again. */
+const LIMITS_TTL = 10_000;
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -244,7 +250,12 @@ function crossOrigin(request: FastifyRequest) {
 export function registerAuth(
   app: FastifyInstance,
   accounts: Accounts,
-  { requireLogin, audit, guard }: { requireLogin: boolean; audit?: AuditLog; guard?: SignInGuard },
+  {
+    requireLogin,
+    audit,
+    guard,
+    settings,
+  }: { requireLogin: boolean; audit?: AuditLog; guard?: SignInGuard; settings?: SwarmSettingsStore },
 ) {
   const failures = new Failures();
   const streams = new SessionStreams(accounts);
@@ -310,13 +321,46 @@ export function registerAuth(
   const busy = (reply: FastifyReply) =>
     reply.header('retry-after', '2').code(429).send({ message: 'The dashboard is busy. Try again in a moment.' });
 
+  // Request rate limits (docs/login.md#request-limits): per client address before the session lookup, so a flood is
+  // cheap to refuse, and per signed-in person after it. A stream (events, a WebSocket) counts once, when it opens.
+  const perAddress = new RateLimiter(MAX_TRACKED);
+  const perPerson = new RateLimiter(MAX_TRACKED);
+  let limits = { address: defaultSwarmSettings.rateLimitPerAddress, person: defaultSwarmSettings.rateLimitPerPerson };
+  let limitsAt = -Infinity;
+  let reading: Promise<void> | undefined;
+  const currentLimits = async () => {
+    if (settings && Date.now() - limitsAt > LIMITS_TTL) {
+      reading ??= settings
+        .get()
+        .then(saved => void (limits = { address: saved.rateLimitPerAddress, person: saved.rateLimitPerPerson }))
+        .catch(() => {})
+        .finally(() => {
+          limitsAt = Date.now();
+          reading = undefined;
+        });
+      await reading;
+    }
+    return limits;
+  };
+  const tooMany = (reply: FastifyReply, wait: number) =>
+    reply
+      .header('retry-after', String(wait))
+      .code(429)
+      .send({ message: `Too many requests. Slow down and try again in ${wait} s.` });
+
   app.addHook('onRequest', async (request, reply) => {
     const path = request.url.split('?')[0]!;
     const upgrade = (request.headers.upgrade ?? '').toLowerCase() === 'websocket';
     if ((!SAFE_METHODS.has(request.method) || upgrade) && crossOrigin(request))
       return reply.code(403).send({ message: 'Requests from another site are not allowed.' });
+    const limited = !UNLIMITED.has(path);
+    const limit = limited ? await currentLimits() : limits;
+    const addressWait = limited ? perAddress.take(clientAddress(request), limit.address) : 0;
+    if (addressWait) return tooMany(reply, addressWait);
     const signedIn = await accounts.session(sessionToken(request));
     if (signedIn) request.signedIn = signedIn;
+    const personWait = limited && signedIn ? perPerson.take(signedIn.userId, limit.person) : 0;
+    if (personWait) return tooMany(reply, personWait);
     if (requireLogin && !signedIn && !PUBLIC.has(path)) {
       reply.header('cache-control', 'no-store');
       return reply.code(401).send({ message: 'Sign in first.' });

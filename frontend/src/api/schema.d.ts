@@ -3701,6 +3701,8 @@ export interface operations {
                             memoryMaxChars: number;
                             memoryMaxCount: number;
                             lockdownFailures: number;
+                            rateLimitPerPerson: number;
+                            rateLimitPerAddress: number;
                         };
                         bounds: {
                             maxComputers: {
@@ -3837,6 +3839,20 @@ export interface operations {
                                 unit: string;
                             };
                             lockdownFailures: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            rateLimitPerPerson: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            rateLimitPerAddress: {
                                 min: number;
                                 max: number;
                                 default: number;
@@ -3879,6 +3895,8 @@ export interface operations {
                     memoryMaxChars?: number;
                     memoryMaxCount?: number;
                     lockdownFailures?: number;
+                    rateLimitPerPerson?: number;
+                    rateLimitPerAddress?: number;
                 };
             };
         };
@@ -3911,6 +3929,8 @@ export interface operations {
                             memoryMaxChars: number;
                             memoryMaxCount: number;
                             lockdownFailures: number;
+                            rateLimitPerPerson: number;
+                            rateLimitPerAddress: number;
                         };
                         bounds: {
                             maxComputers: {
@@ -4047,6 +4067,20 @@ export interface operations {
                                 unit: string;
                             };
                             lockdownFailures: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            rateLimitPerPerson: {
+                                min: number;
+                                max: number;
+                                default: number;
+                                label: string;
+                                unit: string;
+                            };
+                            rateLimitPerAddress: {
                                 min: number;
                                 max: number;
                                 default: number;

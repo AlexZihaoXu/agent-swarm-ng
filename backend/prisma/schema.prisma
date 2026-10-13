@@ -536,6 +536,9 @@ model SwarmSettings {
   memoryMaxCount           Int      @default(1000)
   /// Failed sign-ins (from any address) within an hour that lock the dashboard down (0: never).
   lockdownFailures         Int      @default(20)
+  /// API requests a minute (burst and refill) per signed-in person and per client address (docs/login.md).
+  rateLimitPerPerson       Int      @default(3600)
+  rateLimitPerAddress      Int      @default(7200)
   /// Host folders new computers keep their files in (Settings → Computers → Storage); null = Docker volumes.
   computerKeepFolder       String?
   computerCacheFolder      String?

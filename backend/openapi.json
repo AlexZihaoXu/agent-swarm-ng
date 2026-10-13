@@ -5249,7 +5249,9 @@
                         "memoryIndexMaxChars",
                         "memoryMaxChars",
                         "memoryMaxCount",
-                        "lockdownFailures"
+                        "lockdownFailures",
+                        "rateLimitPerPerson",
+                        "rateLimitPerAddress"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -5310,6 +5312,12 @@
                           "type": "integer"
                         },
                         "lockdownFailures": {
+                          "type": "integer"
+                        },
+                        "rateLimitPerPerson": {
+                          "type": "integer"
+                        },
+                        "rateLimitPerAddress": {
                           "type": "integer"
                         }
                       }
@@ -5336,7 +5344,9 @@
                         "memoryIndexMaxChars",
                         "memoryMaxChars",
                         "memoryMaxCount",
-                        "lockdownFailures"
+                        "lockdownFailures",
+                        "rateLimitPerPerson",
+                        "rateLimitPerAddress"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -5853,6 +5863,60 @@
                           }
                         },
                         "lockdownFailures": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "rateLimitPerPerson": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "rateLimitPerAddress": {
                           "type": "object",
                           "required": [
                             "min",
@@ -5956,6 +6020,12 @@
                   },
                   "lockdownFailures": {
                     "type": "integer"
+                  },
+                  "rateLimitPerPerson": {
+                    "type": "integer"
+                  },
+                  "rateLimitPerAddress": {
+                    "type": "integer"
                   }
                 },
                 "additionalProperties": false,
@@ -5998,7 +6068,9 @@
                         "memoryIndexMaxChars",
                         "memoryMaxChars",
                         "memoryMaxCount",
-                        "lockdownFailures"
+                        "lockdownFailures",
+                        "rateLimitPerPerson",
+                        "rateLimitPerAddress"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -6059,6 +6131,12 @@
                           "type": "integer"
                         },
                         "lockdownFailures": {
+                          "type": "integer"
+                        },
+                        "rateLimitPerPerson": {
+                          "type": "integer"
+                        },
+                        "rateLimitPerAddress": {
                           "type": "integer"
                         }
                       }
@@ -6085,7 +6163,9 @@
                         "memoryIndexMaxChars",
                         "memoryMaxChars",
                         "memoryMaxCount",
-                        "lockdownFailures"
+                        "lockdownFailures",
+                        "rateLimitPerPerson",
+                        "rateLimitPerAddress"
                       ],
                       "properties": {
                         "maxComputers": {
@@ -6602,6 +6682,60 @@
                           }
                         },
                         "lockdownFailures": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "rateLimitPerPerson": {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "default",
+                            "label",
+                            "unit"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "default": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "rateLimitPerAddress": {
                           "type": "object",
                           "required": [
                             "min",
