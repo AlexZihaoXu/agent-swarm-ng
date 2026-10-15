@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import { registerSearchRoutes } from './search/routes';
 import swagger from '@fastify/swagger';
 import websocket from '@fastify/websocket';
@@ -52,6 +52,18 @@ import { Presence } from './push/presence';
 import { PushNotifier } from './push/notifier';
 import { registerPushRoutes } from './push/routes';
 
+/**
+ * An unexpected failure is logged and answered with a fixed message: its own text (a stack, a query, a path) never
+ * reaches the browser. Request errors (validation, a too-large body…) keep Fastify's own 4xx answers.
+ */
+export function hideServerErrors(app: FastifyInstance) {
+  app.setErrorHandler((error: { statusCode?: number }, request, reply) => {
+    if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) return reply.send(error);
+    request.log.error({ err: error }, 'request failed');
+    return reply.code(500).send({ message: 'Something went wrong on the server. Try again.' });
+  });
+}
+
 export async function buildApp({
   fetcher,
   endpointStore,
@@ -75,6 +87,7 @@ export async function buildApp({
   pushTransport?: PushTransport;
 } = {}) {
   const app = Fastify({ logger: true });
+  hideServerErrors(app);
   const hostAllowed = allowedHosts();
   // Runs for every route, including WebSocket upgrades.
   app.addHook('onRequest', async (request, reply) => {

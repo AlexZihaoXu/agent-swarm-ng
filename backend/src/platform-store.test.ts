@@ -162,3 +162,16 @@ describe('Prisma SQLite platform records', () => {
     }
   });
 });
+
+it("finds a message by id only in the channel asked about, never another agent's", async () => {
+  const store = await prepareDatabase(join(folder, `${crypto.randomUUID()}.db`));
+  try {
+    const mine = await store.createAgent(config);
+    const theirs = await store.createAgent({ ...config, name: 'Other' });
+    const message = await store.appendMessage(theirs.channels[0].id, 'user', 'Private');
+    expect(await store.findMessage(message.id, theirs.channels[0].id)).toMatchObject({ text: 'Private' });
+    expect(await store.findMessage(message.id, mine.channels[0].id)).toBeNull();
+  } finally {
+    await store.close();
+  }
+});

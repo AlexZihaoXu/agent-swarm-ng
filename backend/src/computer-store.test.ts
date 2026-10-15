@@ -19,6 +19,11 @@ describe('computer identity and lifecycle', () => {
       const again = await computers.reserve('Design machine', key);
       expect(again).toMatchObject({ computer: { id: first.computer.id }, created: false });
       await expect(computers.reserve('Different name', key)).rejects.toThrow('different name');
+      // Another organization's retry of the same key never gets this computer.
+      const other = await database.client.organization.create({ data: { name: 'Other' } });
+      await expect(computers.reserve('Design machine', key, undefined, undefined, other.id)).rejects.toThrow(
+        'already used',
+      );
       expect((await computers.list()).map(item => item.id)).toEqual([first.computer.id]);
       expect(await database.client.agent.count()).toBe(0);
       expect(await computers.markRunning(first.computer.id)).toBe(true);

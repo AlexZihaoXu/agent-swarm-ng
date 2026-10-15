@@ -195,9 +195,10 @@ export class PlatformStore {
       });
     });
   }
-  async findMessage(id: string) {
+  /** A message of this channel (another channel's message with the same id is none of its business). */
+  async findMessage(id: string, channelId: string) {
     await this.initialize();
-    return this.client.message.findUnique({ where: { id } });
+    return this.client.message.findFirst({ where: { id, channelId } });
   }
   async context(channelId: string, excludeMessageId?: string, pendingAfterSequence?: number) {
     await this.initialize();

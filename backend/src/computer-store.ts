@@ -85,7 +85,7 @@ export class ComputerStore {
       }
     }
     const existing = await this.platform.client.computer.findUnique({ where: { requestKey } });
-    if (existing) return { computer: this.sameRequest(existing, name, settings), created: false };
+    if (existing) return { computer: this.sameRequest(existing, name, settings, organizationId), created: false };
     try {
       const computer = await this.platform.client.$transaction(async tx => {
         if ((await tx.computer.count()) >= 100)
@@ -107,13 +107,22 @@ export class ComputerStore {
       // Two simultaneous HTTP retries may race on the unique operation key.
       const raced = await this.platform.client.computer.findUnique({ where: { requestKey } });
       if (!raced) throw error;
-      return { computer: this.sameRequest(raced, name, settings), created: false };
+      return { computer: this.sameRequest(raced, name, settings, organizationId), created: false };
     }
   }
 
   private sameRequest<
-    T extends { name: string; cpuCores?: number | null; memoryGiB?: number | null; timezone?: string | null },
-  >(computer: T, name: string, settings?: ComputerSettings) {
+    T extends {
+      name: string;
+      organizationId: string;
+      cpuCores?: number | null;
+      memoryGiB?: number | null;
+      timezone?: string | null;
+    },
+  >(computer: T, name: string, settings?: ComputerSettings, organizationId?: string) {
+    // A request key is answered only in the organization it was used in (another's computer is not revealed).
+    if (computer.organizationId !== (organizationId ?? 'personal'))
+      throw new ComputerStoreError('conflict', 'This create request key is already used. Use a new one.');
     if (computer.name !== name)
       throw new ComputerStoreError('conflict', 'This create request was used with a different name.');
     if (

@@ -793,7 +793,7 @@ export function registerChat(
             .code(409)
             .send({ message: `${record.name} is paused until you review its settings and resume it.` });
         const agent = agentView(record, connections.chains);
-        if (await database.findMessage(clientMessageId))
+        if (await database.findMessage(clientMessageId, record.channels[0]!.id))
           return reply.code(409).send({ message: 'This message was already received. Reload the channel history.' });
         // Any reachable model will do: the run walks the agent's fallback chain (docs/agent-models.md).
         const chain = await connections.forChain(record, controller.signal);
