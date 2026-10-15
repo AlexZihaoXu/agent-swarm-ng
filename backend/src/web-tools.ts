@@ -6,9 +6,31 @@ import { fileURLToPath } from 'node:url';
 import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { databaseFile } from './database-location';
 import { validateWebCall, webConfig, webEnvironment, webToolNames } from './web-policy';
+import { neutralizeLabels } from './message-text';
 
 type Result = Awaited<ReturnType<ToolDefinition['execute']>>;
 type Descriptor = Pick<ToolDefinition, 'name' | 'label' | 'description' | 'parameters'>;
+
+/**
+ * A web tool's result as the model reads it: every text part says it is untrusted web content and from where, and
+ * no line of it can pose as one of the platform's own labels.
+ */
+export function labelWebResult(name: string, args: unknown, result: Result): Result {
+  const input = (args ?? {}) as { url?: unknown; urls?: unknown; query?: unknown };
+  const target = [input.url, input.urls, input.query].find(value => value !== undefined);
+  const source =
+    `${name}${target === undefined ? '' : ` ${typeof target === 'string' ? target : JSON.stringify(target)}`}`
+      .replace(/[[\]\p{Cc}\u2028\u2029]+/gu, ' ')
+      .slice(0, 300);
+  return {
+    ...result,
+    content: result.content.map(part =>
+      part.type === 'text'
+        ? { ...part, text: `[untrusted web content from ${source}]\n${neutralizeLabels(part.text)}` }
+        : part,
+    ),
+  };
+}
 
 export async function createWebTools() {
   const root = join(dirname(databaseFile()), 'web-turns');
@@ -94,7 +116,7 @@ export async function createWebTools() {
           const timer = setTimeout(abort, 60000);
           signal?.addEventListener('abort', abort, { once: true });
           try {
-            return await new Promise<Result>((resolveResult, reject) => {
+            const result = await new Promise<Result>((resolveResult, reject) => {
               pending.set(id, { resolve: resolveResult, reject });
               child.send({ id, name: descriptor.name, args }, error => {
                 if (error) {
@@ -103,6 +125,7 @@ export async function createWebTools() {
                 }
               });
             });
+            return labelWebResult(descriptor.name, args, result);
           } finally {
             clearTimeout(timer);
             signal?.removeEventListener('abort', abort);
