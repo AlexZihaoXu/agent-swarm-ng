@@ -68,6 +68,17 @@ export function jsonPart(name: string, value: unknown, lines = false): ArchivePa
 }
 
 export class ArchiveError extends Error {}
+/**
+ * What JSON is read from an agent file: a JSON part whole, a small JSON Lines part whole (bytes and rows), a large one
+ * in batches (rows), and any one line. Far above what real agents export, far below what would exhaust memory.
+ */
+export const JSON_LIMITS = {
+  json: 8 * 1024 * 1024,
+  lines: 64 * 1024 * 1024,
+  lineRows: 100_000,
+  streamRows: 500_000,
+  line: 16 * 1024 * 1024,
+};
 
 const bounded = (limit: number, message: string) => {
   let total = 0;
@@ -91,9 +102,14 @@ export class OpenedArchive {
 
   /**
    * Reads a gzip'd tar from `source`: at most `maxCompressed` bytes in, `maxSize` bytes once decompressed, and only
-   * plain files with safe names (anything else is refused).
+   * plain files with safe names (anything else is refused). `tooLarge` is the message when it unpacks to more.
    */
-  static async open(source: AsyncIterable<Uint8Array>, maxCompressed: number, maxSize: number) {
+  static async open(
+    source: AsyncIterable<Uint8Array>,
+    maxCompressed: number,
+    maxSize: number,
+    tooLarge = 'The file unpacks to more than allowed.',
+  ) {
     const folder = await mkdtemp(join(tmpdir(), 'swarm-agent-import-'));
     const file = join(folder, 'archive.tar');
     try {
@@ -101,7 +117,7 @@ export class OpenedArchive {
         source,
         bounded(maxCompressed, 'The file is larger than allowed.'),
         createGunzip(),
-        bounded(maxSize, 'The file unpacks to more than allowed.'),
+        bounded(maxSize, tooLarge),
         createWriteStream(file, { mode: 0o600 }),
       ).catch(error => {
         throw error instanceof ArchiveError ? error : new ArchiveError('This is not an agent file.');
@@ -117,7 +133,13 @@ export class OpenedArchive {
         const name = block.toString('ascii', 0, 100).replace(/\0.*$/s, '');
         const type = String.fromCharCode(block[156]!);
         const length = parseInt(block.toString('ascii', 124, 136).replace(/\0.*$/s, '').trim() || '0', 8);
-        if (!NAME.test(name) || name.includes('..') || (type !== '0' && type !== '\0') || !Number.isSafeInteger(length))
+        if (
+          !NAME.test(name) ||
+          name.includes('..') ||
+          (type !== '0' && type !== '\0') ||
+          !Number.isSafeInteger(length) ||
+          length < 0
+        )
           throw new ArchiveError('This agent file has an entry it should not have.');
         if (parts.has(name)) throw new ArchiveError('This agent file repeats an entry.');
         offset += BLOCK;
@@ -135,8 +157,8 @@ export class OpenedArchive {
   has(name: string) {
     return this.parts.has(name);
   }
-  /** A part's bytes, refused above `maxBytes` (JSON parts are read whole). */
-  async bytes(name: string, maxBytes = 256 * 1024 * 1024) {
+  /** A part's bytes, refused above `maxBytes`. */
+  async bytes(name: string, maxBytes: number) {
     const part = this.parts.get(name);
     if (!part) throw new ArchiveError(`This agent file has no ${name}.`);
     if (part.size > maxBytes) throw new ArchiveError(`${name} is larger than allowed.`);
@@ -146,21 +168,70 @@ export class OpenedArchive {
   }
   async json<T>(name: string): Promise<T> {
     try {
-      return JSON.parse((await this.bytes(name)).toString('utf8')) as T;
+      return JSON.parse((await this.bytes(name, JSON_LIMITS.json)).toString('utf8')) as T;
     } catch (error) {
       if (error instanceof ArchiveError) throw error;
       throw new ArchiveError(`${name} in this agent file is not valid.`);
     }
   }
-  /** A JSON Lines part (missing: none). */
+  /** A small JSON Lines part, all its rows at once (missing: none). */
   async lines<T>(name: string): Promise<T[]> {
-    if (!this.has(name)) return [];
-    const text = (await this.bytes(name)).toString('utf8');
-    try {
-      return text ? text.split('\n').map(line => JSON.parse(line) as T) : [];
-    } catch {
-      throw new ArchiveError(`${name} in this agent file is not valid.`);
+    const part = this.parts.get(name);
+    if (part && part.size > JSON_LIMITS.lines) throw new ArchiveError(`${name} is larger than allowed.`);
+    const rows: T[] = [];
+    for await (const row of this.rows<T>(name, JSON_LIMITS.lineRows)) rows.push(row);
+    return rows;
+  }
+  /**
+   * A large JSON Lines part in batches (at most `size` rows or 32 MiB of lines each), parsed line by line so the
+   * whole part is never in memory at once (missing: none).
+   */
+  async *batches<T>(name: string, size = 200) {
+    let batch: T[] = [];
+    let bytes = 0;
+    for await (const row of this.rows<T>(name, JSON_LIMITS.streamRows, length => (bytes += length))) {
+      batch.push(row);
+      if (batch.length >= size || bytes >= 32 * 1024 * 1024) {
+        yield batch;
+        batch = [];
+        bytes = 0;
+      }
     }
+    if (batch.length) yield batch;
+  }
+  /** A JSON Lines part's rows one at a time: lines of at most 16 MiB, at most `maxRows` of them. */
+  private async *rows<T>(name: string, maxRows: number, measured?: (length: number) => void): AsyncGenerator<T> {
+    if (!this.has(name)) return;
+    let count = 0;
+    const parse = (line: Buffer) => {
+      if (++count > maxRows) throw new ArchiveError(`${name} has more rows than allowed.`);
+      measured?.(line.byteLength);
+      try {
+        return JSON.parse(line.toString('utf8')) as T;
+      } catch {
+        throw new ArchiveError(`${name} in this agent file is not valid.`);
+      }
+    };
+    let pending: Buffer[] = [];
+    let pendingSize = 0;
+    for await (const chunk of this.stream(name) as AsyncIterable<Buffer>) {
+      let start = 0;
+      for (let end = chunk.indexOf(10); end >= 0; end = chunk.indexOf(10, start)) {
+        const line = pending.length
+          ? Buffer.concat([...pending, chunk.subarray(start, end)])
+          : chunk.subarray(start, end);
+        pending = [];
+        pendingSize = 0;
+        start = end + 1;
+        if (line.byteLength) yield parse(line);
+      }
+      if (start < chunk.byteLength) {
+        pending.push(chunk.subarray(start));
+        pendingSize += chunk.byteLength - start;
+        if (pendingSize > JSON_LIMITS.line) throw new ArchiveError(`${name} has a line larger than allowed.`);
+      }
+    }
+    if (pendingSize) yield parse(Buffer.concat(pending));
   }
   /** A part as a stream (large files). */
   stream(name: string) {

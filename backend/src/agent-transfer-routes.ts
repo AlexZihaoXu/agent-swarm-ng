@@ -1,9 +1,12 @@
+import { statfs } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { Readable } from 'node:stream';
 import { createGzip } from 'node:zlib';
 import { Type, type Static, type TSchema } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
 import type { PlatformStore } from './platform-store';
-import type { BlobStore } from './files/blob-store';
+import type { FileStore } from './files/store';
+import type { Scratchpad } from './scratchpad';
 import type { DiscordTokenStore } from './discord/token-store';
 import type { DiscordConnections } from './discord/connections';
 import type { Connections } from './users/connections';
@@ -13,8 +16,15 @@ import { DEFAULT_INCLUDES, exportAgent, type ExportIncludes } from './agent-expo
 import { importAgent } from './agent-import';
 import { agentProblems, removeUnresolved } from './agent-review';
 
-/** The largest agent file accepted (compressed), and what it may unpack to. */
-export const IMPORT_LIMITS = { compressed: 4 * 1024 ** 3, unpacked: 16 * 1024 ** 3 };
+/**
+ * The largest agent file accepted (compressed), what it may unpack to, and the disk space an unpack always leaves
+ * free (it may unpack to no more than the free space minus this).
+ */
+export const IMPORT_LIMITS = { compressed: 4 * 1024 ** 3, unpacked: 16 * 1024 ** 3, keepFree: 2 * 1024 ** 3 };
+const freeBytes = async (path: string) => {
+  const stats = await statfs(path);
+  return stats.bavail * stats.bsize;
+};
 const PARTS = Object.keys(DEFAULT_INCLUDES) as (keyof ExportIncludes)[];
 const error = Type.Object({ message: Type.String() });
 const params = Type.Object({ id: Type.String({ minLength: 1, maxLength: 64 }) });
@@ -44,8 +54,8 @@ const fileName = (name: string) =>
 export function registerAgentTransferRoutes(
   app: FastifyInstance,
   database: PlatformStore,
-  blobs: BlobStore,
-  tokens: DiscordTokenStore,
+  /** Where an import stores the agent's files and scratchpad (their usual checks), and its bot token. */
+  stores: { files: FileStore; scratch: Scratchpad; tokens: DiscordTokenStore },
   connections: Connections,
   timers: AgentTimers,
   /** The dashboard's view of an agent (chat.ts), returned for the imported one. */
@@ -71,7 +81,7 @@ export function registerAgentTransferRoutes(
       const includes = Object.fromEntries(
         PARTS.map(part => [part, chosen ? chosen.includes(part) : DEFAULT_INCLUDES[part]]),
       ) as ExportIncludes;
-      const exported = await exportAgent(database, blobs, tokens, request.params.id, includes);
+      const exported = await exportAgent(database, stores.files.blobs, stores.tokens, request.params.id, includes);
       if (!exported) return reply.code(404).send({ message: 'Agent not found.' });
       request.audit && (request.audit.targetName = exported.name);
       const name = fileName(exported.name);
@@ -84,6 +94,7 @@ export function registerAgentTransferRoutes(
   );
 
   // The file streams as the raw request body.
+  let importing = false;
   void app.register(async scoped => {
     scoped.removeAllContentTypeParsers();
     scoped.addContentTypeParser('*', (_request, payload, done) => done(null, payload));
@@ -103,6 +114,7 @@ export function registerAgentTransferRoutes(
             }),
             400: error,
             404: error,
+            409: error,
           },
         },
       },
@@ -113,26 +125,38 @@ export function registerAgentTransferRoutes(
           where: { id: request.query.organizationId },
         });
         if (!organization) return reply.code(404).send({ message: 'Organization not found.' });
+        // One import at a time across the swarm: each unpacks to a temporary file.
+        if (importing)
+          return reply.code(409).send({ message: 'Another agent import is running. Try again when it finishes.' });
+        importing = true;
         let archive: OpenedArchive | undefined;
+        let imported: Awaited<ReturnType<typeof importAgent>>;
         try {
+          const room = (await freeBytes(tmpdir())) - IMPORT_LIMITS.keepFree;
+          if (room <= 0) throw new ArchiveError('There is not enough free disk space to import an agent.');
           archive = await OpenedArchive.open(
             request.body as AsyncIterable<Uint8Array>,
             IMPORT_LIMITS.compressed,
-            IMPORT_LIMITS.unpacked,
+            Math.min(IMPORT_LIMITS.unpacked, room),
+            room < IMPORT_LIMITS.unpacked
+              ? 'The file unpacks to more than the free disk space allows.'
+              : 'The file unpacks to more than allowed.',
           );
-          const { agentId, skipped } = await importAgent(database, blobs, tokens, archive, organization.id);
-          const agent = await database.client.agent.findUniqueOrThrow({
-            where: { id: agentId },
-            select: { name: true },
-          });
-          if (request.audit) request.audit.targetName = agent.name;
-          return reply.code(201).send({ agent: await view.of(agentId), skipped });
+          imported = await importAgent(database, stores, archive, organization.id);
         } catch (caught) {
           if (caught instanceof ArchiveError) return reply.code(400).send({ message: caught.message });
           throw caught;
         } finally {
+          // Released before the reply, so the next import may start as soon as this one is answered.
           await archive?.close();
+          importing = false;
         }
+        const agent = await database.client.agent.findUniqueOrThrow({
+          where: { id: imported.agentId },
+          select: { name: true },
+        });
+        if (request.audit) request.audit.targetName = agent.name;
+        return reply.code(201).send({ agent: await view.of(imported.agentId), skipped: imported.skipped });
       },
     );
   });
@@ -142,7 +166,7 @@ export function registerAgentTransferRoutes(
     { schema: { operationId: 'reviewAgent', params, response: { 200: Review } } },
     async request => {
       await database.initialize();
-      return agentProblems(database, connections, tokens, request.params.id);
+      return agentProblems(database, connections, stores.tokens, request.params.id);
     },
   );
 
@@ -166,7 +190,7 @@ export function registerAgentTransferRoutes(
       await database.initialize();
       if (!(await removeUnresolved(database, request.params.id, request.body.kind, request.body.id)))
         return reply.code(404).send({ message: 'That link is not listed.' });
-      return agentProblems(database, connections, tokens, request.params.id);
+      return agentProblems(database, connections, stores.tokens, request.params.id);
     },
   );
 
@@ -182,13 +206,13 @@ export function registerAgentTransferRoutes(
     },
     async (request, reply) => {
       await database.initialize();
-      const review = await agentProblems(database, connections, tokens, request.params.id);
+      const review = await agentProblems(database, connections, stores.tokens, request.params.id);
       if (review.problems.length)
         return reply.code(409).send({ message: 'Fix the settings shown in red first.', problems: review.problems });
       await database.client.agent.update({ where: { id: request.params.id }, data: { paused: false } });
       // What waited while it was paused: its timers' firings, and its Discord bot.
       void timers.redeliver(request.params.id).catch(() => {});
-      if (discord && (await tokens.get(request.params.id))) void discord.restart(request.params.id);
+      if (discord && (await stores.tokens.get(request.params.id))) void discord.restart(request.params.id);
       return { paused: false, problems: [] };
     },
   );

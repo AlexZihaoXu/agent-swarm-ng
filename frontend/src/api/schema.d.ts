@@ -12091,6 +12091,17 @@ export interface operations {
                     };
                 };
             };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
         };
     };
 }
