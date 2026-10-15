@@ -85,3 +85,34 @@ describe('OpenAI-compatible endpoint connection test', () => {
     expect(response.body).not.toContain('test-secret');
   });
 });
+
+it("tests a user's endpoint through the address-pinned fetch, admin's through the plain one", async () => {
+  const Fastify = (await import('fastify')).default;
+  const { registerModelEndpoints } = await import('./model-endpoints');
+  const { EndpointStore } = await import('./endpoint-store');
+  const { join } = await import('node:path');
+  const plain = vi.fn().mockResolvedValue(Response.json({ data: [{ id: 'plain' }] }));
+  const pinned = vi.fn().mockResolvedValue(Response.json({ data: [{ id: 'pinned' }] }));
+  const app = Fastify();
+  let admin = false;
+  app.addHook('onRequest', async request => {
+    request.signedIn = { userId: admin ? 'admin' : 'sam', name: 'Someone', admin } as never;
+  });
+  registerModelEndpoints(
+    app,
+    plain as unknown as typeof fetch,
+    new EndpointStore(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.json`)),
+    undefined,
+    undefined,
+    pinned as unknown as typeof fetch,
+  );
+  try {
+    const test = () =>
+      app.inject({ method: 'POST', url: '/api/model-endpoints/test', payload: { baseUrl: 'https://1.1.1.1/v1' } });
+    expect((await test()).json()).toEqual({ models: ['pinned'] });
+    admin = true;
+    expect((await test()).json()).toEqual({ models: ['plain'] });
+  } finally {
+    await app.close();
+  }
+});

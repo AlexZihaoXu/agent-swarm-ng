@@ -37,6 +37,7 @@ import { memoryGuidance } from './memory/guidance';
 import { neutralizeLabels } from './message-text';
 import type { EndpointLimits } from './endpoint-store';
 import { detectedLimits } from './endpoint-detection';
+import { publicFetch } from './web-fetch';
 import { prepareFallback, type SessionFallback } from './model-fallback';
 import { capsOf } from './model-chain';
 
@@ -86,6 +87,8 @@ export type ChatConfiguration = {
   apiKey?: string;
   /** The endpoint's own model settings (Settings → model connections); unused for the subscription and OpenRouter. */
   limits?: EndpointLimits;
+  /** A user's endpoint: model calls go only to public addresses, pinned at connect time (web-fetch.ts publicFetch). */
+  publicOnly?: boolean;
   /** The owner's caps for this model in the agent's list (docs/agent-models.md), over any of the above. */
   contextWindow?: number;
   maxOutputTokens?: number;
@@ -309,13 +312,16 @@ async function createEndpointRuntime(config: ChatConfiguration) {
     ? capabilitiesFor(known)
     : await endpointCapabilities(config.model, { ...config.limits, baseUrl: config.baseUrl });
   if (!capabilities.thinkingLevels.includes(config.thinkingLevel)) throw new Error('Unsupported thinking level');
+  const send = config.publicOnly ? publicFetch : fetch;
   const base = new URL(config.baseUrl);
   if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash)
     throw new Error('Invalid endpoint');
   const baseUrl = base.toString().replace(/\/+$/, '');
   // After a restart nobody has listed this endpoint's models yet: ask it once for the size its model reports.
   if (!openrouter && config.limits?.contextWindow === undefined)
-    await detectedLimits.lookup(baseUrl, config.model, config.apiKey).catch(() => undefined);
+    await detectedLimits
+      .lookup(baseUrl, config.model, config.apiKey, config.publicOnly ? publicFetch : undefined)
+      .catch(() => undefined);
   const limits = endpointModelLimits(config.model, baseUrl, config.limits, known);
   const model: Model<Api> = openrouter
     ? known!
@@ -358,7 +364,7 @@ async function createEndpointRuntime(config: ChatConfiguration) {
         for (const [name, value] of Object.entries(OPENROUTER_APP)) headers.set(name, value);
         headers.delete('X-OpenRouter-Categories');
       }
-      return fetch(input, { ...init, headers, redirect: 'error' });
+      return send(input, { ...init, headers, redirect: 'error' });
     },
     { preconnect: fetch.preconnect },
   );
@@ -452,6 +458,7 @@ export async function createChatSession(
               baseUrl: connection.baseUrl,
               apiKey: connection.apiKey,
               limits: connection.limits,
+              publicOnly: connection.publicOnly,
               ...capsOf(choice),
             },
             connection.subscriptionRuntime,

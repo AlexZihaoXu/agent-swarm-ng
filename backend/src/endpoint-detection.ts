@@ -83,14 +83,14 @@ class DetectedLimits {
    * the models yet): a server-side GET {base}/models like the Settings listing (no redirects, bounded, 3 s), with the
    * endpoint's key as a bearer token. Any failure leaves it unknown; the endpoint is not asked again for 5 minutes.
    */
-  async lookup(baseUrl: string, model: string, apiKey?: string) {
+  async lookup(baseUrl: string, model: string, apiKey?: string, fetcher = this.fetcher) {
     const known = this.contextWindow(baseUrl, model);
     if (known !== undefined) return known;
     const endpoint = normalized(baseUrl);
     const previous = this.asked.get(endpoint);
     if (previous?.pending) await previous.pending;
     else if (!previous || this.now() - previous.at >= RECHECK_MS) {
-      const pending = this.fetchSizes(endpoint, apiKey).finally(() => {
+      const pending = this.fetchSizes(endpoint, apiKey, fetcher).finally(() => {
         this.asked.set(endpoint, { at: this.now() });
       });
       this.asked.set(endpoint, { at: this.now(), pending });
@@ -100,9 +100,9 @@ class DetectedLimits {
     return this.contextWindow(baseUrl, model);
   }
 
-  private async fetchSizes(endpoint: string, apiKey?: string) {
+  private async fetchSizes(endpoint: string, apiKey: string | undefined, fetcher: typeof fetch) {
     try {
-      const response = await this.fetcher(`${endpoint}/models`, {
+      const response = await fetcher(`${endpoint}/models`, {
         method: 'GET',
         redirect: 'error',
         signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),

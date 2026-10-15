@@ -36,7 +36,7 @@ API endpoints (and their keys), the ChatGPT logins and the Discord accounts that
 
 A person may sign in up to **five ChatGPT accounts**, one card each in **Settings → OpenAI Codex** (**Add ChatGPT account**; an added card can be removed, the first only disconnected). Each card shows the account's email and plan, read from its login. Each account is its own connection (the first `provider:openai-codex`, an added one `provider:openai-codex:<account>`, listed in `.local/openai-accounts.json`): agents choose a model on a particular account, so another account's model can be a fallback in the agent's list for when one fails or reaches its usage limit ([Agent models](agent-models.md)). One ChatGPT account cannot be signed in on two cards. A removed account's rows are skipped as unreachable until the owner changes them; a move to another owner keeps only rows on the first account.
 
-A user's endpoint must be a **public** address, by the same policy as the agents' web tools (`web-policy.ts`): loopback, private, link-local, tailnet, multicast and single-label or internal names (the platform's own Docker services) are refused, checked when it is tested and saved and again on every turn (a name re-pointed at a private address refuses the turn until it is fixed in Settings; the check resolves before the model call, not at connect time). Admin's endpoints may point anywhere, such as a model server on the LAN.
+A user's endpoint must be a **public** address, by the same policy as the agents' web tools (`web-policy.ts`): loopback, private, link-local, tailnet, multicast and single-label or internal names (the platform's own Docker services) are refused, checked when it is tested and saved and again on every turn (a name re-pointed at a private address refuses the turn until it is fixed in Settings). Its test and model calls connect only to an address checked at that moment (`web-fetch.ts` `publicFetch`), never to a second lookup of the name, so a name cannot be re-pointed between the check and the call. Admin's endpoints may point anywhere, such as a model server on the LAN.
 
 ## Time zone
 
@@ -60,7 +60,7 @@ A human message records who wrote it. Each agent's system prompt names its owner
 
 ## Limits
 
-Computer names are unique across everyone, so a user can learn that a name is taken. A user's endpoint address is checked when it is tested and saved, not on every model call. Several people sharing one organization, and per-user limits besides RAM (CPU, computer count, storage), are not implemented.
+Computer names are unique across everyone, so a user can learn that a name is taken. Several people sharing one organization, and per-user limits besides RAM (CPU, computer count, storage), are not implemented.
 
 ## Audit
 

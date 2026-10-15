@@ -261,6 +261,7 @@ export function createWatchJudge(deps: {
           baseUrl: connection.baseUrl,
           apiKey: connection.apiKey,
           limits: connection.limits,
+          publicOnly: connection.publicOnly,
           channel,
         },
         connection.subscriptionRuntime,

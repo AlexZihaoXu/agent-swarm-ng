@@ -120,3 +120,9 @@ export function createPublicFetch({
     }
   };
 }
+
+/**
+ * The address-pinned fetch for a user's model endpoint (docs/users.md#model-connections): its name was checked to be
+ * public, and every request connects to an address checked again at that moment, never to a fresh lookup.
+ */
+export const publicFetch = createPublicFetch() as typeof fetch;

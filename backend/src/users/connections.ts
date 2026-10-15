@@ -98,9 +98,11 @@ export class Connections {
     );
     // A user's endpoint must still point at the public internet (its name could have been re-pointed since it was
     // saved, docs/users.md#model-connections): checked again on every turn.
-    if (owner !== ADMIN_ID && !connection.subscriptionRuntime && !(await isPublicUrl(new URL(connection.baseUrl))))
+    const publicOnly = owner !== ADMIN_ID && !connection.subscriptionRuntime;
+    if (publicOnly && !(await isPublicUrl(new URL(connection.baseUrl))))
       throw new ConnectionError(400, 'This endpoint no longer points at a public address. Check it in Settings.');
-    return connection;
+    // Its model calls then connect only to the address they check (no DNS rebinding between check and call).
+    return { ...connection, publicOnly };
   }
 
   /**

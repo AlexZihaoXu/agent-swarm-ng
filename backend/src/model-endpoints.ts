@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import { EndpointStore, endpointView, LIMIT_RANGES, type SavedEndpoint } from './endpoint-store';
 import { detectedLimits } from './endpoint-detection';
+import { publicFetch } from './web-fetch';
 import { readModelCatalog } from './model-catalog';
 import { isOpenRouter, openRouterCatalog } from './openrouter';
 import { isPublicUrl } from './users/public-address';
@@ -36,6 +37,8 @@ export function registerModelEndpoints(
   /** Agents of this person's organizations on this endpoint. */
   agentsUsing: (endpointId: string, ownerId: string) => Promise<number> = async () => 0,
   reach?: Reach,
+  /** A user's endpoint is tested through the address-pinned fetch (no DNS rebinding after the check). */
+  publicFetcher: typeof fetch = publicFetch,
 ) {
   // A person's own endpoints (docs/users.md): admin choosing a model in Sam's organization reads Sam's.
   const ownerFor = (request: FastifyRequest, organizationId?: string) =>
@@ -193,7 +196,7 @@ export function registerModelEndpoints(
         const sameUrl =
           saved && parseBaseUrl(saved.baseUrl).toString() === parseBaseUrl(request.body.baseUrl).toString();
         const apiKey = request.body.apiKey?.trim() ?? (sameUrl ? saved.apiKey : undefined);
-        const response = await fetcher(url, {
+        const response = await (viewerOf(request).admin ? fetcher : publicFetcher)(url, {
           method: 'GET',
           redirect: 'error',
           signal,

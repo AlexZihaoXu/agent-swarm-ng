@@ -9,7 +9,13 @@ import { providerFailure } from './activity-safety';
 /** One choice's connection (users/connections.ts forChain), or why it cannot be reached. */
 export type PreparedChoice = {
   choice: ModelChoice;
-  connection?: { baseUrl: string; apiKey?: string; limits?: EndpointLimits; subscriptionRuntime?: ModelRuntime };
+  connection?: {
+    baseUrl: string;
+    apiKey?: string;
+    limits?: EndpointLimits;
+    subscriptionRuntime?: ModelRuntime;
+    publicOnly?: boolean;
+  };
   unreachable?: string;
 };
 /** A main run's fallback chain (docs/agent-models.md). `run` is set once the session is created. */

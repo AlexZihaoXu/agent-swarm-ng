@@ -160,6 +160,7 @@ export class ReactionCoordinator {
               baseUrl: connection.baseUrl,
               apiKey: connection.apiKey,
               limits: connection.limits,
+              publicOnly: connection.publicOnly,
               channel,
             },
             history,
