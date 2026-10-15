@@ -28,6 +28,7 @@ import { Routes } from 'discord-api-types/v10';
 import { runDecisionFork } from './decision-fork';
 import type { ModelRuntime, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { evaluateReaction } from './reaction-triage';
+import { parseAvatar } from './agent-avatar';
 import type { ComputerController } from './computer-controller-client';
 import { BlobStore } from './files/blob-store';
 import { join } from 'node:path';
@@ -203,7 +204,7 @@ export class DmBroker {
                 ...where,
                 active,
                 name: agent.name,
-                avatar: agent.avatar ? JSON.parse(agent.avatar) : null,
+                avatar: parseAvatar(agent.avatar),
               });
           })
           .catch(() => {});

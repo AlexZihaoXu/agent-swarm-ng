@@ -2,7 +2,7 @@ import { viewerOf } from './users/reach';
 import { AroundParam } from './search/schema';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
-import { AvatarSchema } from './agent-avatar';
+import { AvatarSchema, parseAvatar } from './agent-avatar';
 import { SwarmError } from './swarm-store';
 import type { DmBroker } from './dm-broker';
 import { groupMessageView } from './group-message';
@@ -82,7 +82,7 @@ function groupView(
     members: group.members.map(({ agent }) => ({
       id: agent.id,
       name: agent.name,
-      avatar: agent.avatar ? JSON.parse(agent.avatar) : null,
+      avatar: parseAvatar(agent.avatar),
       channelId: agent.channels[0].id,
     })),
     lastMessage: group.lastMessage ? groupMessageView(group.lastMessage) : null,

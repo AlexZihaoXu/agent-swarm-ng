@@ -5,6 +5,7 @@ import { EndpointStore } from './endpoint-store';
 import { prepareDatabase } from './test-database';
 import { PlatformStore } from './platform-store';
 import { pathToFileURL } from 'node:url';
+import { parseAvatar } from './agent-avatar';
 
 it('saves avatar identity at creation and edits only appearance, surviving reopen', async () => {
   const file = join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`);
@@ -104,4 +105,14 @@ it('accepts the extended traits within range and rejects anything outside them',
     { sparkle: true },
   ])
     expect(Value.Check(AvatarSchema, { ...base, ...bad })).toBe(false);
+});
+
+it('reads a bad stored avatar as none, so it can never break a list', () => {
+  expect(parseAvatar('{"shape":"bean","color":"#55bea9","seed":42}')).toEqual({
+    shape: 'bean',
+    color: '#55bea9',
+    seed: 42,
+  });
+  for (const stored of [null, '', '{not json', '"bean"', '{"shape":"blob","color":"#55bea9","seed":42}'])
+    expect(parseAvatar(stored)).toBeNull();
 });

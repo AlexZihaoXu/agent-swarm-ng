@@ -13,7 +13,9 @@ import { endpointCapabilities } from './chat-runtime';
 import { CodexProvider, codexAccountOf } from './codex-provider';
 import { AgentRuns } from './agent-runs';
 import { createRunStreams } from './run-streams';
-import { AvatarSchema, type AgentAvatar } from './agent-avatar';
+import { AvatarSchema, parseAvatar } from './agent-avatar';
+import { COMPACTION_RANGES } from './background-compaction';
+import { HEARTBEAT_CHECKLIST_MAX, HEARTBEAT_MINUTES } from './heartbeat';
 import { resolveChatConnection, ConnectionError } from './chat-connection';
 import { DmBroker } from './dm-broker';
 import { DiscordPresence } from './discord/presence';
@@ -74,9 +76,9 @@ const Cursor = Type.Union([Type.Integer(), Type.Null()]);
 /** Background compaction (see background-compaction.ts): during work at atPercent; when idle, after idleMinutes at idlePercent. */
 const Compaction = Type.Object(
   {
-    atPercent: Type.Integer({ minimum: 20, maximum: 90 }),
-    idleMinutes: Type.Integer({ minimum: 0, maximum: 1440, description: '0 turns idle compaction off.' }),
-    idlePercent: Type.Integer({ minimum: 10, maximum: 90 }),
+    atPercent: Type.Integer(COMPACTION_RANGES.atPercent),
+    idleMinutes: Type.Integer({ ...COMPACTION_RANGES.idleMinutes, description: '0 turns idle compaction off.' }),
+    idlePercent: Type.Integer(COMPACTION_RANGES.idlePercent),
   },
   { additionalProperties: false },
 );
@@ -85,10 +87,10 @@ const Clock = Type.Union([Type.Literal(''), Type.String({ pattern: '^([01][0-9]|
 const Heartbeat = Type.Object(
   {
     enabled: Type.Boolean(),
-    minutes: Type.Integer({ minimum: 5, maximum: 1440 }),
+    minutes: Type.Integer(HEARTBEAT_MINUTES),
     from: Clock,
     to: Clock,
-    checklist: Type.String({ maxLength: 4000 }),
+    checklist: Type.String({ maxLength: HEARTBEAT_CHECKLIST_MAX }),
   },
   { additionalProperties: false },
 );
@@ -190,7 +192,7 @@ function agentView(
     models,
     activeModel: chains.active(agent.id, models),
     id: agent.id,
-    avatar: agent.avatar ? (JSON.parse(agent.avatar) as AgentAvatar) : null,
+    avatar: parseAvatar(agent.avatar),
     createdAt: agent.createdAt.getTime(),
     name: agent.name,
     endpointId: agent.endpointId,
@@ -283,8 +285,7 @@ export function registerChat(
     registerAgentTransferRoutes(
       app,
       database,
-      files.blobs,
-      discord.tokens,
+      { files, scratch: broker.scratch, tokens: discord.tokens },
       connections,
       broker.timers,
       {

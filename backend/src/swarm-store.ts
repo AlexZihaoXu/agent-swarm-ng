@@ -1,6 +1,6 @@
 import { historyAround } from './history-around';
 import type { PlatformStore } from './platform-store';
-import { encodeAvatar, type AgentAvatar } from './agent-avatar';
+import { encodeAvatar, parseAvatar, type AgentAvatar } from './agent-avatar';
 import { liveChainWhere } from './communication-policy';
 
 export const DM_CHAIN_LIMIT = 8;
@@ -9,6 +9,12 @@ const pending = ['queued', 'running'];
 export const dmReplyInclude = {
   replyTo: { select: { id: true, text: true, senderId: true, sender: { select: { name: true } } } },
 } as const;
+/**
+ * The status of an agent DM brought in with an imported agent (agent-import.ts): history only, never delivered and
+ * never recovered as a publication. Imports before this status wrote 'delivered'.
+ */
+export const IMPORTED_DM = 'imported';
+export const IMPORTED_DM_STATUSES = [IMPORTED_DM, 'delivered'];
 export const dmConversationId = (a: string, b: string) => `dm:${[a, b].sort().join(':')}`;
 export class SwarmError extends Error {
   constructor(
@@ -33,7 +39,7 @@ export class SwarmStore {
     });
     if (!agent) throw new SwarmError('missing', 'Agent not found.');
     return {
-      avatar: agent.avatar ? (JSON.parse(agent.avatar) as AgentAvatar) : null,
+      avatar: parseAvatar(agent.avatar),
       allowedDmAgents: agent.dmAllowed.map(grant => grant.recipient),
     };
   }

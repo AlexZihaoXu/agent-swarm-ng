@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { createHash } from 'node:crypto';
 import { Type, type Static } from '@sinclair/typebox';
-import { AvatarSchema } from '../agent-avatar';
+import { AvatarSchema, parseAvatar } from '../agent-avatar';
 import { viewerOf } from '../users/reach';
 import type { PlatformStore } from '../platform-store';
 import type { PushNotifier } from './notifier';
@@ -302,7 +302,7 @@ export function registerPushRoutes(
           .filter(agent => agent.avatarImage?.source !== (agent.avatar ?? ''))
           .map(agent => ({
             id: agent.id,
-            avatar: agent.avatar ? JSON.parse(agent.avatar) : null,
+            avatar: parseAvatar(agent.avatar),
             look: lookOf(agent.avatar),
           })),
       };

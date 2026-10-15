@@ -1,7 +1,7 @@
 import { Type } from '@sinclair/typebox';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { PlatformStore } from './platform-store';
-import { ScratchError, type Scratchpad } from './scratchpad';
+import { SCRATCH_IMAGE_TYPES, ScratchError, type Scratchpad } from './scratchpad';
 import { TextError } from './text-page';
 
 const error = Type.Object({ message: Type.String() });
@@ -113,11 +113,12 @@ export function registerScratchRoutes(app: FastifyInstance, database: PlatformSt
     (request, reply) =>
       guard(reply, request.params.id, async () => {
         const row = await pad.content(request.params.id, request.query.path);
-        if (!row.mime || !row.data) throw new ScratchError(`"${row.path}" is not an image.`);
+        if (!row.mime || !row.data || !SCRATCH_IMAGE_TYPES.includes(row.mime))
+          throw new ScratchError(`"${row.path}" is not an image.`);
         return reply
           .header('Content-Type', row.mime)
           .header('X-Content-Type-Options', 'nosniff')
-          .header('Content-Security-Policy', "default-src 'none'")
+          .header('Content-Security-Policy', "default-src 'none'; sandbox")
           .send(Buffer.from(row.data));
       }),
   );

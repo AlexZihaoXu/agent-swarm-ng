@@ -1,4 +1,5 @@
 import { Type, type Static } from '@sinclair/typebox';
+import { Value } from '@sinclair/typebox/value';
 export const AvatarSchema = Type.Object(
   {
     shape: Type.Union(
@@ -33,3 +34,13 @@ export const encodeAvatar = (avatar: AgentAvatar) =>
     color: avatar.color.toLowerCase(),
     ...(avatar.accent ? { accent: avatar.accent.toLowerCase() } : {}),
   });
+/** A stored avatar, or null when it is missing or not a valid one (a bad stored value never breaks a list). */
+export function parseAvatar(stored: unknown): AgentAvatar | null {
+  if (typeof stored !== 'string' || !stored) return null;
+  try {
+    const avatar: unknown = JSON.parse(stored);
+    return Value.Check(AvatarSchema, avatar) ? avatar : null;
+  } catch {
+    return null;
+  }
+}

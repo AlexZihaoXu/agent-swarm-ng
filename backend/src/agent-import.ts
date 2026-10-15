@@ -1,10 +1,25 @@
 import { randomUUID } from 'node:crypto';
 import type { PlatformStore } from './platform-store';
-import type { BlobStore } from './files/blob-store';
+import { FileError, type FileStore } from './files/store';
+import { detectFile, fileName } from './files/file-kind';
+import { ScratchError, type Scratchpad } from './scratchpad';
 import { DISCORD_TOKEN, type DiscordTokenStore } from './discord/token-store';
 import { ArchiveError, type OpenedArchive } from './agent-archive';
 import { AGENT_FILE_FORMAT, AGENT_FILE_VERSION, type ExportIncludes } from './agent-export';
-import { dmConversationId } from './swarm-store';
+import { dmConversationId, IMPORTED_DM } from './swarm-store';
+import { encodeAvatar, parseAvatar } from './agent-avatar';
+import { COMPACTION_RANGES } from './background-compaction';
+import { HEARTBEAT_CHECKLIST_MAX, HEARTBEAT_MINUTES } from './heartbeat';
+import { TIME_NOTE_CHOICES, TIME_NOTE_DEFAULT } from './time-notes';
+import {
+  FAST_REMINDER_SECONDS,
+  MAX_ACTIVE_TIMERS,
+  MAX_DELAY_SECONDS,
+  MAX_FAST_REMINDER_TIMES,
+  MIN_REMINDER_SECONDS,
+  TIMER_NOTE_MAX,
+} from './agent-timers';
+import { swarmSettingBounds } from './swarm-settings';
 
 /** The links an imported agent had that do not exist here (Agent.unresolved): shown in its settings to fix. */
 export type Unresolved = {
@@ -32,6 +47,15 @@ const text = (value: unknown, fallback = '') => (typeof value === 'string' ? val
 const number = (value: unknown, fallback: number) =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 const integer = (value: unknown, fallback: number) => Math.trunc(number(value, fallback));
+/** A whole number within the bounds the settings routes enforce. */
+const within = (value: unknown, fallback: number, range: { minimum: number; maximum: number }) =>
+  Math.min(range.maximum, Math.max(range.minimum, integer(value, fallback)));
+const CLOCK = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+const clock = (value: unknown, fallback: string) => {
+  const parsed = text(value, fallback);
+  return parsed === '' || CLOCK.test(parsed) ? parsed : fallback;
+};
+const FILE_KINDS = ['image', 'video', 'text', 'pdf', 'other', 'scratch'];
 const bool = (value: unknown, fallback: boolean) => (typeof value === 'boolean' ? value : fallback);
 const date = (value: unknown, fallback = new Date()) => {
   const parsed = typeof value === 'string' || typeof value === 'number' ? new Date(value) : fallback;
@@ -53,11 +77,11 @@ async function insert<T>(rows: T[], write: (batch: T[]) => Promise<unknown>) {
  */
 export async function importAgent(
   database: PlatformStore,
-  blobs: BlobStore,
-  tokens: DiscordTokenStore,
+  stores: { files: FileStore; scratch: Scratchpad; tokens: DiscordTokenStore },
   archive: OpenedArchive,
   organizationId: string,
 ) {
+  const { files: fileStore, scratch, tokens } = stores;
   const client = database.client;
   const manifest = await archive.json<Manifest>('manifest.json');
   if (manifest.format !== AGENT_FILE_FORMAT) throw new ArchiveError('This is not an agent file.');
@@ -95,25 +119,28 @@ export async function importAgent(
       id: agentId,
       organizationId,
       name: text(settings.name, text(manifest.agent?.name, 'Imported agent')).slice(0, 80) || 'Imported agent',
-      avatar: typeof settings.avatar === 'string' ? settings.avatar : null,
+      // Settings are kept as they were, within what the settings routes accept.
+      avatar: parseAvatar(settings.avatar) && encodeAvatar(parseAvatar(settings.avatar)!),
       endpointId: text(settings.endpointId),
       model: text(settings.model),
       thinkingLevel: (LEVELS.includes(thinking) ? thinking : 'off') as never,
       modelChain: text(settings.modelChain, '{}'),
-      compactAtPercent: integer(settings.compactAtPercent, 65),
-      idleCompactMinutes: integer(settings.idleCompactMinutes, 30),
-      idleCompactPercent: integer(settings.idleCompactPercent, 50),
+      compactAtPercent: within(settings.compactAtPercent, 65, COMPACTION_RANGES.atPercent),
+      idleCompactMinutes: within(settings.idleCompactMinutes, 30, COMPACTION_RANGES.idleMinutes),
+      idleCompactPercent: within(settings.idleCompactPercent, 50, COMPACTION_RANGES.idlePercent),
       instructions: text(settings.instructions),
       heartbeatEnabled: bool(settings.heartbeatEnabled, false),
-      heartbeatMinutes: integer(settings.heartbeatMinutes, 30),
-      heartbeatFrom: text(settings.heartbeatFrom),
-      heartbeatTo: text(settings.heartbeatTo),
-      heartbeatChecklist: text(settings.heartbeatChecklist),
+      heartbeatMinutes: within(settings.heartbeatMinutes, 30, HEARTBEAT_MINUTES),
+      heartbeatFrom: clock(settings.heartbeatFrom, ''),
+      heartbeatTo: clock(settings.heartbeatTo, ''),
+      heartbeatChecklist: text(settings.heartbeatChecklist).slice(0, HEARTBEAT_CHECKLIST_MAX),
       todos: text(settings.todos, '[]'),
-      timeNoteMinutes: integer(settings.timeNoteMinutes, 15),
+      timeNoteMinutes: (TIME_NOTE_CHOICES as readonly number[]).includes(settings.timeNoteMinutes as number)
+        ? (settings.timeNoteMinutes as number)
+        : TIME_NOTE_DEFAULT,
       memoryIndex: text(settings.memoryIndex),
-      sleepFrom: text(settings.sleepFrom, '03:00'),
-      sleepTo: text(settings.sleepTo, '05:00'),
+      sleepFrom: clock(settings.sleepFrom, '03:00'),
+      sleepTo: clock(settings.sleepTo, '05:00'),
       sleptAt: optionalDate(settings.sleptAt),
       sleptPosition: integer(settings.sleptPosition, 0),
       sleepNote: text(settings.sleepNote),
@@ -159,13 +186,19 @@ export async function importAgent(
       }),
     );
 
-    // Agent-to-agent DMs, where the other agent exists here.
+    // Agent-to-agent DMs: only its own (exactly one side is the agent), with an agent here in the same organization.
     const dms = await archive.lines<Row>('dm-messages.jsonl');
-    const peerIds = new Set(dms.map(dm => text(dm.senderId === oldAgentId ? dm.recipientId : dm.senderId)));
+    const peerOf = (dm: Row) =>
+      (dm.senderId === oldAgentId) !== (dm.recipientId === oldAgentId)
+        ? text(dm.senderId === oldAgentId ? dm.recipientId : dm.senderId)
+        : '';
+    const peerIds = new Set(dms.map(peerOf).filter(Boolean));
     const present = new Set(
-      (await client.agent.findMany({ where: { id: { in: [...peerIds] } }, select: { id: true } })).map(row => row.id),
+      (await client.agent.findMany({ where: { id: { in: [...peerIds] }, organizationId }, select: { id: true } })).map(
+        row => row.id,
+      ),
     );
-    const keptDms = dms.filter(dm => present.has(text(dm.senderId === oldAgentId ? dm.recipientId : dm.senderId)));
+    const keptDms = dms.filter(dm => present.has(peerOf(dm)));
     skipped.dms = dms.length - keptDms.length;
     for (const dm of keptDms) if (!chains.has(text(dm.chainId))) chains.set(text(dm.chainId), randomUUID());
     for (const chain of chains.values())
@@ -186,7 +219,8 @@ export async function importAgent(
             replyToId: replyTo ?? null,
             chainId: chains.get(text(dm.chainId))!,
             deliveryKey: randomUUID(),
-            status: 'delivered',
+            // Imported, never delivered here: a peer's recovered publications skip these (agent-session-store.ts).
+            status: IMPORTED_DM,
             createdAt: date(dm.createdAt),
           };
         }),
@@ -197,83 +231,94 @@ export async function importAgent(
     const keyOf = (old: string) => {
       if (old.startsWith('chat:')) return `chat:${ids.get(old.slice(5)) ?? channels[0]!.id}`;
       if (old.startsWith('dm:')) {
-        const [a, b] = old.slice(3).split(':');
-        const pair = [a === oldAgentId ? agentId : a, b === oldAgentId ? agentId : b];
-        return present.has(pair[0] === agentId ? pair[1]! : pair[0]!) ? dmConversationId(pair[0]!, pair[1]!) : null;
+        const [a = '', b = ''] = old.slice(3).split(':');
+        if ((a === oldAgentId) === (b === oldAgentId)) return null;
+        const peer = a === oldAgentId ? b : a;
+        return present.has(peer) ? dmConversationId(agentId, peer) : null;
       }
       return null;
     };
     for (const file of files) {
       const key = keyOf(text(file.channelKey));
-      const blobId = text(file.blobId);
-      let blob: string | null = null;
-      if (blobId && archive.has(`files/${blobId}`)) {
-        const stored = await blobs.put(archive.stream(`files/${blobId}`), Number.MAX_SAFE_INTEGER);
-        if (stored.id === blobId) {
-          blob = stored.id;
-          await client.fileBlob.upsert({
-            where: { id: blob },
-            create: { id: blob, size: stored.size },
-            update: {},
-          });
-        }
-      }
       if (!key) continue;
+      const blobId = text(file.blobId);
       const uploaderIsAgent = file.uploaderId === oldAgentId;
+      const row = {
+        id: ids.get(text(file.id))!,
+        channelKey: key,
+        messageKind: typeof file.messageKind === 'string' ? file.messageKind : null,
+        messageId: ids.get(text(file.messageId)) ?? null,
+        uploaderKind: text(file.uploaderKind, 'human'),
+        uploaderId: uploaderIsAgent ? agentId : typeof file.uploaderId === 'string' ? file.uploaderId : null,
+        uploaderName: text(file.uploaderName),
+        status: text(file.status, 'available') === 'deleted' ? 'deleted' : 'available',
+        deletedByKind: typeof file.deletedByKind === 'string' ? file.deletedByKind : null,
+        deletedById: typeof file.deletedById === 'string' ? rewrite(file.deletedById) : null,
+        deletedByName: typeof file.deletedByName === 'string' ? file.deletedByName : null,
+        deletedAt: optionalDate(file.deletedAt),
+        createdAt: date(file.createdAt),
+      };
+      // Bytes are stored like an upload: the size limit and storage budget apply, the type is detected again.
+      if (blobId && row.status === 'available' && archive.has(`files/${blobId}`)) {
+        try {
+          await fileStore.restore(archive.stream(`files/${blobId}`), text(file.name, 'file'), row);
+        } catch (error) {
+          if (error instanceof FileError)
+            throw new ArchiveError(`A file of this agent cannot be stored: ${error.message}`);
+          throw error;
+        }
+        continue;
+      }
+      // Without its bytes it is a tombstone (a deleted file, or a live scratch preview, which does not carry over).
+      const kind = text(file.kind, 'other');
       await client.channelFile.create({
         data: {
-          id: ids.get(text(file.id))!,
-          channelKey: key,
-          messageKind: typeof file.messageKind === 'string' ? file.messageKind : null,
-          messageId: ids.get(text(file.messageId)) ?? null,
-          uploaderKind: text(file.uploaderKind, 'human'),
-          uploaderId: uploaderIsAgent ? agentId : typeof file.uploaderId === 'string' ? file.uploaderId : null,
-          uploaderName: text(file.uploaderName),
-          name: text(file.name, 'file'),
-          mime: text(file.mime, 'application/octet-stream'),
-          kind: text(file.kind, 'other'),
-          size: integer(file.size, 0),
-          blobId: blob,
-          status: blob ? text(file.status, 'available') : 'deleted',
-          deletedByKind: typeof file.deletedByKind === 'string' ? file.deletedByKind : null,
-          deletedById: typeof file.deletedById === 'string' ? rewrite(file.deletedById) : null,
-          deletedByName: typeof file.deletedByName === 'string' ? file.deletedByName : null,
-          deletedAt: optionalDate(file.deletedAt),
-          scratchAgentId: file.scratchAgentId === oldAgentId ? agentId : null,
-          scratchPath: typeof file.scratchPath === 'string' ? file.scratchPath : null,
-          createdAt: date(file.createdAt),
+          ...row,
+          name: fileName(text(file.name, 'file')),
+          mime: 'application/octet-stream',
+          kind: FILE_KINDS.includes(kind) ? kind : 'other',
+          size: Math.max(0, integer(file.size, 0)),
+          blobId: null,
+          status: 'deleted',
         },
       });
     }
 
-    // The live context: its entries, with every old id rewritten.
+    // The live context: its entries, with every old id rewritten. What it published is already in it or in the
+    // history brought along, so its publication cursors start after everything here (none is recovered again).
     if (archive.has('session.json')) {
       const session = await archive.json<Row>('session.json');
-      const entries = await archive.lines<Row>('session-entries.jsonl');
+      const [message, dm, group] = await Promise.all([
+        client.message.aggregate({ _max: { sequence: true } }),
+        client.dmMessage.aggregate({ _max: { sequence: true } }),
+        client.groupMessage.aggregate({ _max: { sequence: true } }),
+      ]);
       await client.agentSession.create({
         data: {
           agentId,
           sessionId: rewrite(text(session.sessionId, randomUUID())),
           header: rewrite(text(session.header)),
-          entryCount: entries.length,
+          entryCount: 0,
           activeStart: integer(session.activeStart, 0),
           leafId: typeof session.leafId === 'string' ? session.leafId : null,
-          privateCursor: integer(session.privateCursor, 0),
-          dmCursor: integer(session.dmCursor, 0),
-          groupCursor: integer(session.groupCursor, 0),
+          privateCursor: message._max.sequence ?? 0,
+          dmCursor: dm._max.sequence ?? 0,
+          groupCursor: group._max.sequence ?? 0,
         },
       });
-      await insert(entries, batch =>
-        client.agentSessionEntry.createMany({
-          data: batch.map((entry, index) => ({
+      let entryCount = 0;
+      for await (const batch of archive.batches<Row>('session-entries.jsonl')) {
+        await client.agentSessionEntry.createMany({
+          data: batch.map(entry => ({
             agentId,
-            position: integer(entry.position, index),
+            position: integer(entry.position, entryCount++),
             entryId: text(entry.entryId, randomUUID()),
             parentId: typeof entry.parentId === 'string' ? entry.parentId : null,
             payload: rewrite(text(entry.payload)),
           })),
-        }),
-      );
+        });
+      }
+      await client.agentSession.update({ where: { agentId }, data: { entryCount } });
     }
 
     // Memories (with their versions and provenance), timers, scratchpad, recent emojis.
@@ -306,22 +351,36 @@ export async function importAgent(
         },
       });
     const timers = await archive.json<{ timers?: Row[]; pending?: Row[] }>('timers.json').catch(() => ({}) as never);
-    for (const timer of timers.timers ?? [])
+    // Within what setting a timer allows: at most 25, 30 days ahead, reminders every 10 s or more (bounded times
+    // when faster than every 5 minutes).
+    for (const timer of (Array.isArray(timers.timers) ? timers.timers : []).slice(0, MAX_ACTIVE_TIMERS)) {
+      const reminder = timer.kind === 'reminder';
+      const every = within(timer.intervalMs, 60_000, {
+        minimum: MIN_REMINDER_SECONDS * 1000,
+        maximum: MAX_DELAY_SECONDS * 1000,
+      });
+      const total = timer.total == null ? null : Math.max(1, integer(timer.total, 1));
+      const nextAt = date(timer.nextAt);
       await client.agentTimer.create({
         data: {
           agentId,
-          kind: text(timer.kind, 'timer'),
-          note: text(timer.note),
-          nextAt: date(timer.nextAt),
-          intervalMs: timer.intervalMs == null ? null : integer(timer.intervalMs, 60_000),
-          total: timer.total == null ? null : integer(timer.total, 1),
-          fired: integer(timer.fired, 0),
+          kind: reminder ? 'reminder' : 'timer',
+          note: text(timer.note).slice(0, TIMER_NOTE_MAX),
+          nextAt: new Date(Math.min(nextAt.getTime(), Date.now() + MAX_DELAY_SECONDS * 1000)),
+          intervalMs: reminder ? every : null,
+          total: !reminder
+            ? 1
+            : every < FAST_REMINDER_SECONDS * 1000
+              ? Math.min(total ?? MAX_FAST_REMINDER_TIMES, MAX_FAST_REMINDER_TIMES)
+              : total,
+          fired: Math.max(0, integer(timer.fired, 0)),
           lastFiredAt: optionalDate(timer.lastFiredAt),
           human: bool(timer.human, false),
           createdAt: date(timer.createdAt),
         },
       });
-    for (const event of timers.pending ?? [])
+    }
+    for (const event of (Array.isArray(timers.pending) ? timers.pending : []).slice(0, MAX_ACTIVE_TIMERS))
       await client.pendingTimerEvent.create({
         data: {
           id: randomUUID(),
@@ -332,19 +391,20 @@ export async function importAgent(
           createdAt: date(event.createdAt),
         },
       });
+    // The scratchpad through its own checks (paths, image types, Settings → Swarm limits).
+    const scratchImageMax = swarmSettingBounds.scratchFileMaxKb.max * 1024;
     for (const row of await archive.lines<Row>('scratch.jsonl')) {
-      const data = typeof row.data === 'string' && archive.has(row.data) ? await archive.bytes(row.data) : null;
-      await client.scratchFile.create({
-        data: {
-          agentId,
-          path: text(row.path, `imported-${randomUUID()}`),
-          content: text(row.content),
-          data,
-          mime: typeof row.mime === 'string' ? row.mime : null,
-          size: integer(row.size, data?.byteLength ?? 0),
-          createdAt: date(row.createdAt),
-        },
-      });
+      const path = text(row.path, `imported-${randomUUID()}`);
+      try {
+        if (typeof row.data === 'string' && archive.has(row.data)) {
+          const data = await archive.bytes(row.data, scratchImageMax);
+          await scratch.writeImage(agentId, path, data, detectFile(path, data.subarray(0, 8192)).mime);
+        } else await scratch.write(agentId, path, text(row.content));
+      } catch (error) {
+        if (error instanceof ScratchError)
+          throw new ArchiveError(`Its scratchpad cannot be brought over: ${error.message}`);
+        throw error;
+      }
     }
     const emojis = await archive.json<Row[]>('emojis.json').catch(() => [] as Row[]);
     if (Array.isArray(emojis) && emojis.length)
@@ -398,9 +458,8 @@ export async function importAgent(
       const token = text(discord.token);
       if (token && DISCORD_TOKEN.test(token)) await tokens.set(agentId, token);
     }
-    const discordMessages = await archive.lines<Row>('discord-messages.jsonl');
-    await insert(discordMessages, batch =>
-      client.discordMessage.createMany({
+    for await (const batch of archive.batches<Row>('discord-messages.jsonl'))
+      await client.discordMessage.createMany({
         data: batch.map(row => ({
           agentId,
           id: text(row.id, randomUUID()),
@@ -418,13 +477,11 @@ export async function importAgent(
           editedAt: optionalDate(row.editedAt),
           deletedAt: optionalDate(row.deletedAt),
         })),
-      }),
-    );
+      });
 
     // Activity: its runs keep their entries, under new run ids.
-    const activity = await archive.lines<Row>('activity.jsonl');
-    await insert(activity, batch =>
-      client.activity.createMany({
+    for await (const batch of archive.batches<Row>('activity.jsonl'))
+      await client.activity.createMany({
         data: batch.map(row => {
           const run = fresh(row.runId);
           return {
@@ -446,8 +503,7 @@ export async function importAgent(
                 : ((row.state as string | null) ?? null),
           };
         }),
-      }),
-    );
+      });
 
     // Links: by id where they exist here, in the same organization; the rest stay unresolved.
     const unresolved: Unresolved = { computers: [], dmPeers: [], groups: [] };
@@ -485,7 +541,13 @@ export async function importAgent(
     skipped.links = unresolved.computers.length + unresolved.dmPeers.length + unresolved.groups.length;
     await client.agent.update({ where: { id: agentId }, data: { unresolved: JSON.stringify(unresolved) } });
   } catch (error) {
-    // Nothing half-imported is left behind (everything above cascades from the agent).
+    // Nothing half-imported is left behind (everything above cascades from the agent, but its files).
+    await fileStore
+      .deleteForAgent(
+        agentId,
+        channels.map(channel => channel.id),
+      )
+      .catch(() => {});
     await client.agent.delete({ where: { id: agentId } }).catch(() => {});
     await client.dmChain.deleteMany({ where: { id: { in: [...chains.values()] } } }).catch(() => {});
     await tokens.remove(agentId).catch(() => {});

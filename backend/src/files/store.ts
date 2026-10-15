@@ -1,4 +1,5 @@
 import type { PlatformStore } from '../platform-store';
+import type { Prisma } from '../generated/prisma/client';
 import type { SwarmSettingsStore } from '../swarm-settings';
 import { channelAccess, type Actor } from './access';
 import { BlobStore, FileTooLargeError } from './blob-store';
@@ -106,51 +107,18 @@ export class FileStore {
     const access = await channelAccess(this.database, input.channelKey, actor);
     if (!access.exists) throw new FileError('That channel does not exist.', 404);
     if (!access.post) throw new FileError('You cannot post files in that channel.', 403);
-    const usage = await this.usage();
-    if (usage.full)
-      throw new FileError('File storage is full. Delete files or raise the limit in Settings → Swarm.', 507);
-    let stored;
-    try {
-      stored = await this.blobs.stage(input.source, usage.maxFileBytes);
-    } catch (error) {
-      if (error instanceof FileTooLargeError)
-        throw new FileError(`Files are at most ${Math.round(usage.maxFileBytes / MB)} MB (Settings → Swarm).`, 413);
-      throw error;
-    }
     const name = fileName(input.name);
-    const { kind, mime } = detectFile(name, stored.head);
-    // Publishing bytes and registering them is one step against cleanup, so a blob is never removed between.
-    const row = await this.exclusive(async () => {
-      try {
-        const known = await this.database.client.fileBlob.findUnique({ where: { id: stored.id } });
-        if (!known && (await this.usage()).bytes + stored.size > usage.budgetBytes)
-          throw new FileError('File storage is full. Delete files or raise the limit in Settings → Swarm.', 507);
-        await this.blobs.commit(stored);
-      } catch (error) {
-        await this.blobs.discard(stored);
-        throw error;
-      }
-      return this.database.client.$transaction(async tx => {
-        await tx.fileBlob.upsert({
-          where: { id: stored.id },
-          create: { id: stored.id, size: stored.size },
-          update: {},
-        });
-        return tx.channelFile.create({
-          data: {
-            channelKey: input.channelKey,
-            uploaderKind: input.uploader.kind,
-            uploaderId: input.uploader.kind === 'agent' ? input.uploader.id : null,
-            uploaderName: input.uploader.kind === 'agent' ? input.uploader.name : 'You',
-            name,
-            mime,
-            kind,
-            size: stored.size,
-            blobId: stored.id,
-          },
-        });
-      });
-    });
+    const row = await this.store(input.source, name, (tx, file) =>
+      tx.channelFile.create({
+        data: {
+          channelKey: input.channelKey,
+          uploaderKind: input.uploader.kind,
+          uploaderId: input.uploader.kind === 'agent' ? input.uploader.id : null,
+          uploaderName: input.uploader.kind === 'agent' ? input.uploader.name : 'You',
+          ...file,
+        },
+      }),
+    );
     return fileView(row);
   }
 
@@ -176,20 +144,63 @@ export class FileStore {
       },
     });
     if (existing?.status === 'available') return fileView(existing);
+    const name = fileName(input.name);
+    const row = await this.store(input.source, name, (tx, file) =>
+      tx.channelFile.create({
+        data: {
+          channelKey: input.channelKey,
+          messageKind: input.messageKind,
+          messageId: input.messageId,
+          uploaderKind: input.uploader.kind,
+          uploaderId: input.uploader.id,
+          uploaderName: input.uploader.name,
+          ...file,
+        },
+      }),
+    );
+    return fileView(row);
+  }
+
+  /**
+   * A file of an agent brought in from an agent file (docs/agent-export.md): stored like an upload (the same size
+   * limit and storage budget, its kind and type detected again, its name cleaned); `row` is the rest of its record.
+   */
+  async restore(
+    source: AsyncIterable<Uint8Array>,
+    rawName: string,
+    row: Omit<Prisma.ChannelFileUncheckedCreateInput, 'name' | 'mime' | 'kind' | 'size' | 'blobId'>,
+  ) {
+    await this.database.initialize();
+    return fileView(
+      await this.store(source, fileName(rawName), (tx, file) => tx.channelFile.create({ data: { ...row, ...file } })),
+    );
+  }
+
+  /**
+   * Stages bytes against the size limit and storage budget, then publishes them and saves their file row (`create`,
+   * given its name, type, size and blob) as one step against cleanup, so a blob is never removed between.
+   */
+  private async store(
+    source: AsyncIterable<Uint8Array> | Uint8Array,
+    name: string,
+    create: (
+      tx: Prisma.TransactionClient,
+      file: { name: string; mime: string; kind: string; size: number; blobId: string },
+    ) => Promise<Row>,
+  ) {
     const usage = await this.usage();
     if (usage.full)
       throw new FileError('File storage is full. Delete files or raise the limit in Settings → Swarm.', 507);
     let stored;
     try {
-      stored = await this.blobs.stage(input.source, usage.maxFileBytes);
+      stored = await this.blobs.stage(source, usage.maxFileBytes);
     } catch (error) {
       if (error instanceof FileTooLargeError)
         throw new FileError(`Files are at most ${Math.round(usage.maxFileBytes / MB)} MB (Settings → Swarm).`, 413);
       throw error;
     }
-    const name = fileName(input.name);
     const { kind, mime } = detectFile(name, stored.head);
-    const row = await this.exclusive(async () => {
+    return this.exclusive(async () => {
       try {
         const known = await this.database.client.fileBlob.findUnique({ where: { id: stored.id } });
         if (!known && (await this.usage()).bytes + stored.size > usage.budgetBytes)
@@ -205,24 +216,9 @@ export class FileStore {
           create: { id: stored.id, size: stored.size },
           update: {},
         });
-        return tx.channelFile.create({
-          data: {
-            channelKey: input.channelKey,
-            messageKind: input.messageKind,
-            messageId: input.messageId,
-            uploaderKind: input.uploader.kind,
-            uploaderId: input.uploader.id,
-            uploaderName: input.uploader.name,
-            name,
-            mime,
-            kind,
-            size: stored.size,
-            blobId: stored.id,
-          },
-        });
+        return create(tx, { name, mime, kind, size: stored.size, blobId: stored.id });
       });
     });
-    return fileView(row);
   }
 
   /**

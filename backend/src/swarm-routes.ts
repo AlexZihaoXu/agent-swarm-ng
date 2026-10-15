@@ -3,7 +3,7 @@ import { AroundParam } from './search/schema';
 import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
 import { messageText } from './message-text';
-import { AvatarSchema } from './agent-avatar';
+import { AvatarSchema, parseAvatar } from './agent-avatar';
 import { SwarmError, type SwarmStore } from './swarm-store';
 import type { PlatformStore } from './platform-store';
 import { dmReply } from './reply-preview';
@@ -131,7 +131,7 @@ export function registerSwarmRoutes(
         peers: peers.map(peer => ({
           id: peer.id,
           name: peer.name,
-          avatar: peer.avatar ? JSON.parse(peer.avatar) : null,
+          avatar: parseAvatar(peer.avatar),
           channelId: peer.channels[0].id,
         })),
         nextCursor: page.nextCursor,
@@ -181,7 +181,7 @@ export function registerSwarmRoutes(
           conversationId: message.conversationId,
           senderId: message.senderId,
           senderName: message.sender.name,
-          senderAvatar: message.sender.avatar ? JSON.parse(message.sender.avatar) : null,
+          senderAvatar: parseAvatar(message.sender.avatar),
           preview: messageText(message.text, 0, 320).text + (message.text.length > 320 ? '…' : ''),
           status: message.status,
           timestamp: message.createdAt.getTime(),

@@ -5,6 +5,9 @@ import { Readable } from 'node:stream';
 import { createGzip } from 'node:zlib';
 import { prepareDatabase } from './test-database';
 import { BlobStore } from './files/blob-store';
+import { FileStore } from './files/store';
+import { Scratchpad } from './scratchpad';
+import { SwarmSettingsStore } from './swarm-settings';
 import { DiscordTokenStore } from './discord/token-store';
 import { EndpointStore } from './endpoint-store';
 import { CodexProvider } from './codex-provider';
@@ -29,7 +32,13 @@ async function setup() {
   const endpoints = new EndpointStore(join(folder, 'endpoints.json'));
   await endpoints.save({ id: 'mine', name: 'Mine', baseUrl: 'http://127.0.0.1:1/v1' });
   const connections = new Connections(endpoints, new Reach(database), new CodexProvider());
-  return { database, blobs, tokens, connections };
+  const settings = new SwarmSettingsStore(database);
+  const stores = {
+    files: new FileStore(database, blobs, settings),
+    scratch: new Scratchpad(database, settings),
+    tokens,
+  };
+  return { database, blobs, tokens, connections, stores };
 }
 
 /** Exports an agent and opens the file again, as an import would. */
@@ -45,7 +54,7 @@ async function roundTrip(
 }
 
 it('carries everything inside an agent to a new, paused agent, with its ids rewritten even in its context', async () => {
-  const { database, blobs, tokens, connections } = await setup();
+  const { database, blobs, tokens, connections, stores } = await setup();
   try {
     const source = await database.createAgent({
       name: 'Aether',
@@ -110,7 +119,7 @@ it('carries everything inside an agent to a new, paused agent, with its ids rewr
     const archive = await roundTrip(database, blobs, tokens, source.id);
     // The bot token stays out unless asked for.
     expect(JSON.stringify(await archive.json('discord.json'))).not.toContain('aaaaaaaa');
-    const { agentId, skipped } = await importAgent(database, blobs, tokens, archive, 'personal');
+    const { agentId, skipped } = await importAgent(database, stores, archive, 'personal');
     await archive.close();
 
     expect(agentId).not.toBe(source.id);
@@ -154,7 +163,7 @@ it('carries everything inside an agent to a new, paused agent, with its ids rewr
 });
 
 it('keeps links that do not exist here as unresolved, to remove; the token travels only when chosen', async () => {
-  const { database, blobs, tokens, connections } = await setup();
+  const { database, blobs, tokens, connections, stores } = await setup();
   try {
     const peer = await database.createAgent({ name: 'Peer', endpointId: 'mine', model: 'm', thinkingLevel: 'off' });
     const source = await database.createAgent({ name: 'Solo', endpointId: 'mine', model: 'm', thinkingLevel: 'off' });
@@ -163,7 +172,7 @@ it('keeps links that do not exist here as unresolved, to remove; the token trave
     const archive = await roundTrip(database, blobs, tokens, source.id, { ...DEFAULT_INCLUDES, discordToken: true });
     // As if the peer were not on this swarm: it is deleted before the import.
     await database.client.agent.delete({ where: { id: peer.id } });
-    const { agentId, skipped } = await importAgent(database, blobs, tokens, archive, 'personal');
+    const { agentId, skipped } = await importAgent(database, stores, archive, 'personal');
     await archive.close();
     expect(skipped.links).toBe(1);
     expect(await tokens.get(agentId)).toBe('aaaaaaaaaaaaaaaaaaaaaaaa.bbbbbb.cccccccccccccccccccccccccc');

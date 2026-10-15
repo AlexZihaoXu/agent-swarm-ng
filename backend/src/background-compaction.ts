@@ -21,6 +21,12 @@ export type CompactionPolicy = {
   idlePercent: number;
 };
 export const DEFAULT_COMPACTION_POLICY: CompactionPolicy = { atPercent: 65, idleMinutes: 30, idlePercent: 50 };
+/** The settings' allowed values (idleMinutes 0 turns idle compaction off). */
+export const COMPACTION_RANGES = {
+  atPercent: { minimum: 20, maximum: 90 },
+  idleMinutes: { minimum: 0, maximum: 1440 },
+  idlePercent: { minimum: 10, maximum: 90 },
+} as const;
 export type CompactionState = 'running' | 'sleeping';
 type Preparation = Parameters<typeof compact>[0];
 type CompactionSettings = Preparation['settings'];

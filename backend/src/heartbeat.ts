@@ -10,6 +10,9 @@ import type { PlatformStore } from './platform-store';
  * the agent may choose to leave for itself, which is appended to its saved context.
  */
 export const HEARTBEAT_NOTE_MAX = 300;
+/** Minutes between heartbeats, and the longest checklist. */
+export const HEARTBEAT_MINUTES = { minimum: 5, maximum: 1440 } as const;
+export const HEARTBEAT_CHECKLIST_MAX = 4000;
 
 export type HeartbeatBranch = {
   /**

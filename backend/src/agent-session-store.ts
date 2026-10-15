@@ -8,6 +8,7 @@ import {
 import type { PlatformStore } from './platform-store';
 import type { Prisma } from './generated/prisma/client';
 import { messageText } from './message-text';
+import { IMPORTED_DM_STATUSES } from './swarm-store';
 import { join } from 'node:path';
 import { ScreenshotPool } from './computer-use/image-pool';
 import { hydrateScreenshot, withoutScreenshotBytes } from './computer-use/session-images';
@@ -102,7 +103,8 @@ export class AgentSessionStore {
         take: RECENT_PUBLICATIONS + 1,
       }),
       this.database.client.dmMessage.findMany({
-        where: { senderId: agentId, sequence: { gt: record.dmCursor } },
+        // Imported rows are copies of a conversation, never this agent's own unsaved publications.
+        where: { senderId: agentId, sequence: { gt: record.dmCursor }, status: { notIn: IMPORTED_DM_STATUSES } },
         orderBy: { sequence: 'desc' },
         take: RECENT_PUBLICATIONS + 1,
       }),

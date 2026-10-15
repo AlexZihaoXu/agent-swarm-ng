@@ -213,6 +213,19 @@ it('lets the dashboard browse an agent’s scratchpad read-only', async () => {
       (await app.inject(`/api/agents/${agent.id}/scratch/image?path=${encodeURIComponent('drafts/report.md')}`))
         .statusCode,
     ).toBe(400);
+    expect(image.headers['content-security-policy']).toContain('sandbox');
+    // A stored row of another type (only an old or forged one could be) is never served as a document.
+    await database.client.scratchFile.create({
+      data: {
+        agentId: agent.id,
+        path: 'page.html',
+        content: '',
+        data: Buffer.from('<script>'),
+        mime: 'text/html',
+        size: 8,
+      },
+    });
+    expect((await app.inject(`/api/agents/${agent.id}/scratch/image?path=page.html`)).statusCode).toBe(400);
     // No way to change it from the dashboard.
     expect((await app.inject({ method: 'POST', url: `/api/agents/${agent.id}/scratch`, payload: {} })).statusCode).toBe(
       404,
