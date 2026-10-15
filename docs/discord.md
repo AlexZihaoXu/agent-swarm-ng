@@ -70,7 +70,7 @@ token; the owner's channel choices stay.
   channel waiting its turn keeps one batch, and a channel revoked meanwhile never reaches the agent.
 - **Edits, deletions, reactions:** a message still waiting is updated or dropped; an addressed message edited within 5
   minutes of the agent having it wakes it again, marked "(edited)"; reactions to the agent's own messages go through
-  reaction triage (each person's emoji on a message at most once in 10 minutes). The end of a poll it started wakes it.
+  reaction triage (each person's emoji on a message at most once in 10 minutes, and anyone but you at most 5 reactions in 10 minutes). The end of a poll it started wakes it.
 - **Outages:** short drops resume without losing events. After a restart or a long disconnect, DMs, mentions and your
   messages missed meanwhile (up to 50 per channel or thread) arrive once, marked "sent while you were offline" (a
   setting). Nothing else is replayed.

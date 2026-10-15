@@ -37,6 +37,16 @@ export function messageText(text: string, offset = 0, limit = 1000) {
  * event header), a Discord author line ("12:00:00 · […]") or "+N more messages". Such a line gets a leading backslash
  * (after any indentation or invisible characters), so it reads as quoted text, never as the platform's own.
  */
+/**
+ * Untrusted text put inside one of the platform's own bracketed labels (a Discord place, a web source): on one line,
+ * without brackets that could close the label or open another, and bounded.
+ */
+export function labelText(text: string, max = 200) {
+  return text
+    .replace(/[[\]［］\p{Cc}\s]+/gu, ' ')
+    .trim()
+    .slice(0, max);
+}
 export function neutralizeLabels(text: string) {
   return text.replace(
     // Indentation and any invisible or format character (bidi controls, zero-width, tags…) may precede it, and

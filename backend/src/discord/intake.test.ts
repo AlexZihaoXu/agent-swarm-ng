@@ -359,6 +359,16 @@ it('follows edits and deletions, wakes on reactions to its own messages and on i
     expect(reactions[0]).toContain('reacted 👍 to your message 1400000000000000001: "Deployed."');
     await vi.waitFor(() => expect(delivered).toHaveLength(3));
     expect(delivered[2].source).toMatchObject({ human: true, channelId: `discord:${DM}` });
+    // Anyone else's reactions reach triage a few times per ten minutes at most (each costs a model call).
+    for (const name of ['😀', '😁', '😂', '🤣', '😃', '😄', '😅'])
+      await event(GatewayDispatchEvents.MessageReactionAdd, {
+        user_id: STRANGER,
+        channel_id: DM,
+        message_id: '1400000000000000001',
+        message_author_id: BOT,
+        emoji: { id: null, name },
+      });
+    expect(reactions).toHaveLength(7);
     // The end of its own poll wakes it.
     await store.recordOwn(agent.id, {
       id: '1400000000000000002',

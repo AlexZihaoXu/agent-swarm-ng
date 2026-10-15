@@ -70,6 +70,8 @@ export type IntakeDeps = {
 const EDIT_WINDOW_MS = 5 * 60_000;
 /** One person's reaction (one emoji) to one message goes to reaction triage at most once in this time. */
 const REACTION_WINDOW_MS = 10 * 60_000;
+/** Reactions one person (not the owner) may send to reaction triage per agent in that time: model calls are not free. */
+const REACTIONS_PER_PERSON = 5;
 const LANES: Lane[] = ['owner', 'others'];
 const laneOf = (message: Seen): Lane => (message.role === 'owner' ? 'owner' : 'others');
 const newestOf = (messages: Seen[]) => messages.reduce((a, b) => (BigInt(b.id) > BigInt(a.id) ? b : a));
@@ -98,6 +100,8 @@ export class DiscordIntake {
   private queues = new Map<string, Batch[]>();
   private pumping = new Set<string>();
   private reactions = new Map<string, number>();
+  /** When each person's recent reactions went to triage, per agent (`agent:user`). */
+  private reactors = new Map<string, number[]>();
   /** Per channel: when someone last spoke, and when the current burst began. */
   private activity = new Map<string, { last: number; burst: number }>();
   private closed = false;
@@ -361,6 +365,17 @@ export class DiscordIntake {
     if (this.reactions.has(once)) return;
     this.reactions.set(once, now);
     const account = await this.store.who(data.user_id, agentId);
+    if (account?.role !== 'owner') {
+      for (const [key, times] of this.reactors) {
+        const recent = times.filter(at => now - at <= REACTION_WINDOW_MS);
+        if (recent.length) this.reactors.set(key, recent);
+        else this.reactors.delete(key);
+      }
+      const person = `${agentId}:${data.user_id}`;
+      const recent = this.reactors.get(person) ?? [];
+      if (recent.length >= REACTIONS_PER_PERSON) return;
+      this.reactors.set(person, [...recent, now]);
+    }
     const own = await this.database.client.discordMessage.findUnique({
       where: { agentId_id: { agentId, id: data.message_id } },
     });

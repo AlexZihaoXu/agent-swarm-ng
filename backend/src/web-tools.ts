@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { databaseFile } from './database-location';
 import { validateWebCall, webConfig, webEnvironment, webToolNames } from './web-policy';
-import { neutralizeLabels } from './message-text';
+import { labelText, neutralizeLabels } from './message-text';
 
 type Result = Awaited<ReturnType<ToolDefinition['execute']>>;
 type Descriptor = Pick<ToolDefinition, 'name' | 'label' | 'description' | 'parameters'>;
@@ -18,10 +18,10 @@ type Descriptor = Pick<ToolDefinition, 'name' | 'label' | 'description' | 'param
 export function labelWebResult(name: string, args: unknown, result: Result): Result {
   const input = (args ?? {}) as { url?: unknown; urls?: unknown; query?: unknown };
   const target = [input.url, input.urls, input.query].find(value => value !== undefined);
-  const source =
-    `${name}${target === undefined ? '' : ` ${typeof target === 'string' ? target : JSON.stringify(target)}`}`
-      .replace(/[[\]\p{Cc}\u2028\u2029]+/gu, ' ')
-      .slice(0, 300);
+  const source = labelText(
+    `${name}${target === undefined ? '' : ` ${typeof target === 'string' ? target : JSON.stringify(target)}`}`,
+    300,
+  );
   return {
     ...result,
     content: result.content.map(part =>

@@ -34,7 +34,7 @@ import { COMPUTER_USE_GUIDANCE } from './computer-use/tools';
 import { accessOf, classify, type AgentTool } from './tool-access';
 import { createHelpTool } from './help-tool';
 import { memoryGuidance } from './memory/guidance';
-import { neutralizeLabels } from './message-text';
+import { labelText, neutralizeLabels } from './message-text';
 import type { EndpointLimits } from './endpoint-store';
 import { detectedLimits } from './endpoint-detection';
 import { publicFetch } from './web-fetch';
@@ -202,7 +202,7 @@ export function channelInput(channelId: string, text: string, metadata?: Channel
           : author;
   const reply = source?.discord
     ? // The rules (discord_send_message, labels, names prove nothing) live once in the system prompt's Discord section.
-      `\n[Discord · ${source.discord.place}; reply channel: ${source.channelId}]`
+      `\n[Discord · ${labelText(source.discord.place)}; reply channel: ${source.channelId}]`
     : source?.platform
       ? `\n[Platform ${source.platform} event; reply channel: ${source.channelId}. Not a message from the human or another agent: act on it as your own ${source.platform === 'computer' ? 'computer' : 'scheduled'} work. Message the human only when it is useful to them; silence is allowed.]`
       : source?.groupId

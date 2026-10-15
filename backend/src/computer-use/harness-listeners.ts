@@ -42,6 +42,11 @@ const PENDING_MAX = 50;
  */
 const MESSAGE_GAP_MS = 10_000;
 const MESSAGE_HOUR_MAX = 30;
+/** Every other event that wakes the agent: at most this many an hour per listener (a busy harness stays well under). */
+const EVENT_HOUR_MAX = 120;
+/** An event's time (the guest's clock) is believed within this window around the backend's; others are dropped. */
+const LINE_PAST_MS = 24 * 3600_000;
+const LINE_FUTURE_MS = 10 * 60_000;
 const ASSIGNMENT_CHECK_MS = 30_000;
 /**
  * A session that ends this way is over: Claude Code prompt_input_exit or logout, Codex other, Pi quit. A /clear, resume,
@@ -85,6 +90,8 @@ type Listener = {
   lastAt?: number;
   /** When its recent harness messages were taken (backend time, the last hour). */
   messages: number[];
+  /** When its other recent events were taken (backend time, the last hour). */
+  wakes: number[];
 };
 type Follower = {
   key: string;
@@ -125,17 +132,17 @@ export function describe(line: Line) {
     case 'finished':
       return `${where} finished its turn${line.text ? `: ${quote(line.text)}` : '.'}`;
     case 'permission':
-      return `${where} asks permission for ${line.text || 'a tool'}. Answer in the terminal (terminal_view it, then choose).`;
+      return `${where} asks permission for ${line.text ? quote(line.text) : 'a tool'}. Answer in the terminal (terminal_view it, then choose).`;
     case 'question':
       return `${where} is waiting for an answer${line.text ? `: ${quote(line.text)}` : '.'}`;
     case 'idle':
       return `${where} has been waiting for input for about a minute.`;
     case 'failure':
-      return `${where} stopped on an error: ${line.text || 'unknown'}.`;
+      return `${where} stopped on an error: ${quote(line.text || 'unknown')}.`;
     case 'session_start':
-      return `${where} started a session (${line.text || 'startup'}).`;
+      return `${where} started a session (${quote(line.text || 'startup')}).`;
     case 'session_end':
-      return `${where} ended its session (${line.text || 'exit'}).`;
+      return `${where} ended its session (${quote(line.text || 'exit')}).`;
     case 'message':
       return `${where} says: ${quote(line.text)}`;
   }
@@ -198,6 +205,7 @@ export class HarnessListeners {
           createdAt: this.now(),
           fired: 0,
           messages: [],
+          wakes: [],
         };
     this.listeners.set(listener.id, listener);
     this.timer ??= setInterval(() => void this.checkAssignments(), ASSIGNMENT_CHECK_MS);
@@ -352,12 +360,15 @@ export class HarnessListeners {
       return;
     }
     if (!line?.terminal?.id || !LISTENER_EVENTS.includes(line.event)) return;
+    // The guest writes the time: only a plausible one moves `since` (a far-future one would hide every later event).
+    const now = this.now();
+    if (!Number.isSafeInteger(line.t) || line.t < now - LINE_PAST_MS || line.t > now + LINE_FUTURE_MS) return;
     const key = `${line.t}:${line.terminal.id}:${line.event}`;
     if (follower.seen.has(key)) return;
     follower.seen.add(key);
     if (follower.seen.size > 500) follower.seen.delete(follower.seen.values().next().value!);
-    follower.since = Math.max(follower.since, Number(line.t) || 0);
-    if (line.event === 'message' && !this.messageAllowed(follower, line)) {
+    follower.since = Math.max(follower.since, line.t);
+    if (!this.allowed(follower, line)) {
       follower.dropped++;
       return;
     }
@@ -377,21 +388,30 @@ export class HarnessListeners {
     }, BATCH_MS);
   }
 
-  /** At most one harness message per 10 s and 30 an hour for the listener of its terminal (by the backend's clock). */
-  private messageAllowed(follower: Follower, line: Line) {
+  /**
+   * Whether an event may wake the agent, by the backend's clock and for the listener of its terminal: a harness
+   * message at most once per 10 s and 30 times an hour, any other event at most 120 times an hour.
+   */
+  private allowed(follower: Follower, line: Line) {
     const listener = this.forAgent(follower.agentId).find(
       item =>
         item.computerId === follower.computerId &&
         item.terminalId === line.terminal.id &&
-        item.events.includes('message'),
+        item.events.includes(line.event),
     );
     if (!listener) return true; // nobody wants it: the wake-up leaves it out
     const now = this.now();
-    listener.messages = listener.messages.filter(at => now - at < 3600_000);
-    const last = listener.messages.at(-1);
-    if ((last !== undefined && now - last < MESSAGE_GAP_MS) || listener.messages.length >= MESSAGE_HOUR_MAX)
+    const message = line.event === 'message';
+    const times = (message ? listener.messages : listener.wakes).filter(at => now - at < 3600_000);
+    if (message) listener.messages = times;
+    else listener.wakes = times;
+    const last = times.at(-1);
+    if (
+      (message && last !== undefined && now - last < MESSAGE_GAP_MS) ||
+      times.length >= (message ? MESSAGE_HOUR_MAX : EVENT_HOUR_MAX)
+    )
       return false;
-    listener.messages.push(now);
+    times.push(now);
     return true;
   }
 
@@ -424,7 +444,7 @@ export class HarnessListeners {
       ...shown.map(line => `- ${iso(line.t).slice(11, 19)} ${describe(line)}`),
       ...(dropped
         ? [
-            `${dropped} more message${dropped === 1 ? ' from the harness was' : 's from the harness were'} dropped (rate limit).`,
+            `${dropped} more event${dropped === 1 ? ' from the harness was' : 's from the harness were'} dropped (rate limit).`,
           ]
         : []),
       ...ended.map(
