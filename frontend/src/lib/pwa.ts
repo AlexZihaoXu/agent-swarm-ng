@@ -11,7 +11,24 @@ const setNeedRefresh = (value: boolean) => {
   listeners.forEach(listener => listener());
 };
 
-const updateServiceWorker = registerSW({ onNeedRefresh: () => setNeedRefresh(true) });
+/** How often an open app looks for a new version. */
+const CHECK_MS = 60_000;
+
+const updateServiceWorker = registerSW({
+  onNeedRefresh: () => setNeedRefresh(true),
+  // Browsers look for a new service worker only when a page loads, which an installed app left open (or resumed
+  // from the background) never does: look every minute and whenever it comes back to the front.
+  onRegisteredSW: (_url, registration) => {
+    if (!registration) return;
+    const check = () => {
+      if (!registration.installing && navigator.onLine) registration.update().catch(() => {});
+    };
+    setInterval(check, CHECK_MS);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') check();
+    });
+  },
+});
 
 /** Whether a new version is waiting, and how to apply (reload) or dismiss it. */
 export function useAppUpdate() {
