@@ -103,7 +103,7 @@ export class Reach {
   /**
    * A channel or event key: a private chat's channel id, `chat:<channelId>`, `group:<id>`, `dm:<a>:<b>`,
    * `discord:<id>` (reachable when one of the person's agents uses it), `computer:<id>`, `scratch:<agentId>`,
-   * `files:<channel key>`.
+   * `files:<channel key>`, `tickets:<organizationId>`.
    */
   async channel(viewer: Viewer, key: string | null | undefined): Promise<boolean> {
     if (!key) return false;
@@ -113,6 +113,7 @@ export class Reach {
     if (kind === 'files') return this.channel(viewer, id);
     if (kind === 'computer') return this.computer(viewer, id);
     if (kind === 'scratch') return this.agent(viewer, id);
+    if (kind === 'tickets') return this.organization(viewer, id);
     if (rest.length && ['chat', 'group', 'dm', 'discord'].includes(kind!)) {
       const parsed = parseChannelKey(key);
       if (!parsed) return false;

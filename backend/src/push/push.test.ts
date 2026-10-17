@@ -518,6 +518,35 @@ describe('notifications', { timeout: 60_000 }, () => {
     }
   });
 
+  it('tells the owner when someone else moves a ticket to In review, without the title when previews are off', async () => {
+    const { database, notifier, sent, sam, samOrg, settle, event, store } = await notifierSetup();
+    try {
+      const review = { key: 'SAM-3', title: 'Draft the spec', by: 'Morgan' };
+      notifier.observe(event('tickets_updated', { organizationId: samOrg.id, number: 3, review }, 'platform', 'human'));
+      // An ordinary change (or the owner's own move: the store sends no review then) is not news.
+      notifier.observe(event('tickets_updated', { organizationId: samOrg.id, number: 4 }, 'platform', 'human'));
+      await settle();
+      expect(sent).toEqual([
+        expect.objectContaining({
+          userId: sam.id,
+          payload: expect.objectContaining({
+            title: `Morgan · ${samOrg.name}`,
+            body: 'Moved SAM-3 “Draft the spec” to In review.',
+            url: `/tickets/SAM-3?org=${samOrg.id}`,
+          }),
+        }),
+      ]);
+      sent.length = 0;
+      await store.setPreferences(sam.id, { preview: false });
+      notifier.observe(event('tickets_updated', { organizationId: samOrg.id, number: 3, review }, 'platform', 'human'));
+      await settle();
+      expect(sent[0]?.payload.body).toBe('Moved SAM-3 to In review.');
+    } finally {
+      notifier.close();
+      await database.close();
+    }
+  });
+
   it('sends critical events to admin only', async () => {
     const { database, notifier, sent, store, settle } = await notifierSetup();
     try {

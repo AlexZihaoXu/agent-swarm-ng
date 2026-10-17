@@ -2,10 +2,35 @@ import { Type, type Static } from '@sinclair/typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { viewerOf } from './users/reach';
 import { OrganizationError, type Organizations } from './organizations';
+import { TicketError, type Tickets } from './tickets/store';
 
 const error = Type.Object({ message: Type.String() });
+/** Tickets (docs/tickets.md): off by default; the options apply to agents, the prefix to how numbers show. */
+export const TicketSettings = Type.Object({
+  enabled: Type.Boolean(),
+  prefix: Type.String(),
+  wakeOnAssign: Type.Boolean(),
+  agentsCreate: Type.Boolean(),
+  agentsPickUp: Type.Boolean(),
+  pushOnReview: Type.Boolean(),
+});
+
 const params = Type.Object({ id: Type.String({ minLength: 1, maxLength: 64 }) });
 const name = Type.Object({ name: Type.String({ minLength: 1, maxLength: 60 }) }, { additionalProperties: false });
+const edit = Type.Object(
+  {
+    name: Type.Optional(Type.String({ minLength: 1, maxLength: 60 })),
+    tickets: Type.Optional(
+      Type.Partial(
+        Type.Object(
+          { ...TicketSettings.properties, prefix: Type.String({ maxLength: 6 }) },
+          { additionalProperties: false },
+        ),
+      ),
+    ),
+  },
+  { additionalProperties: false, minProperties: 1 },
+);
 const organization = Type.Object({
   id: Type.String(),
   name: Type.String(),
@@ -16,6 +41,7 @@ const organization = Type.Object({
   agents: Type.Integer(),
   computers: Type.Integer(),
   groups: Type.Integer(),
+  tickets: TicketSettings,
 });
 const list = Type.Object({ organizations: Type.Array(organization) });
 const move = Type.Object(
@@ -36,6 +62,7 @@ const moved = Type.Object({ dropped: Type.Array(Type.String()), moved: Type.Bool
 export function registerOrganizationRoutes(
   app: FastifyInstance,
   organizations: Organizations,
+  tickets: Tickets,
   /** Why a computer may not move into an organization (its owner's RAM cap), or null. */
   memoryCap?: (computerId: string, organizationId: string) => Promise<string | null>,
 ) {
@@ -44,7 +71,8 @@ export function registerOrganizationRoutes(
     try {
       return await work();
     } catch (caught) {
-      if (caught instanceof OrganizationError) return reply.code(caught.status).send({ message: caught.message });
+      if (caught instanceof OrganizationError || caught instanceof TicketError)
+        return reply.code(caught.status).send({ message: caught.message });
       throw caught;
     }
   };
@@ -63,19 +91,20 @@ export function registerOrganizationRoutes(
         return all(request);
       }),
   );
-  app.patch<{ Params: Static<typeof params>; Body: Static<typeof name> }>(
+  app.patch<{ Params: Static<typeof params>; Body: Static<typeof edit> }>(
     '/api/organizations/:id',
     {
       schema: {
         operationId: 'renameOrganization',
         params,
-        body: name,
+        body: edit,
         response: { 200: list, 400: error, 404: error },
       },
     },
     (request, reply) =>
       guard(reply, async () => {
-        await organizations.rename(request.params.id, request.body.name);
+        if (request.body.name !== undefined) await organizations.rename(request.params.id, request.body.name);
+        if (request.body.tickets) await tickets.updateSettings(request.params.id, request.body.tickets);
         return all(request);
       }),
   );

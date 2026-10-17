@@ -218,6 +218,21 @@ export class AgentRuns {
       channelId: 'platform',
     });
   }
+  /**
+   * A ticket of an organization changed (docs/tickets.md): its board and detail refresh; `review` (moved to In review
+   * by someone other than the owner) shows a toast and may push the owner.
+   */
+  ticketsChanged(organizationId: string, change: { number: number; deleted?: boolean; review?: object }) {
+    this.broadcast({
+      type: 'tickets_updated',
+      organizationId,
+      ...change,
+      eventId: crypto.randomUUID(),
+      runId: 'platform',
+      agentId: 'human',
+      channelId: `tickets:${organizationId}`,
+    });
+  }
   /** An agent's todo list changed (todo_write): dashboards show it live (docs/agent-todos.md). */
   todos(agentId: string, todos: unknown[]) {
     this.broadcast({

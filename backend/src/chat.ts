@@ -3,6 +3,9 @@ import { FileError, FileStore, type FileView } from './files/store';
 import { chatKey } from './files/access';
 import { registerMemoryRoutes } from './memory/routes';
 import { registerOrganizationRoutes } from './organization-routes';
+import { registerTicketRoutes } from './tickets/routes';
+import { TICKET_TOOLS, type TicketToolName } from './tickets/store';
+import { parseGrant } from './tickets/tools';
 import { registerScratchRoutes } from './scratch-routes';
 import type { FastifyInstance } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
@@ -112,6 +115,7 @@ const ModelChoice = Type.Object(
   },
   { additionalProperties: false },
 );
+const TicketTool = Type.Union(TICKET_TOOLS.map(name => Type.Literal(name)));
 const Agent = Type.Object(
   {
     ...Selection.properties,
@@ -134,6 +138,8 @@ const Agent = Type.Object(
     paused: Type.Boolean(),
     /** Minutes per clock window with one time note while it works (0: off; docs/agent-time.md#time-notes). */
     timeNoteMinutes: Type.Integer(),
+    /** The ticket tools its owner granted (docs/tickets.md); none by default. */
+    ticketTools: Type.Array(TicketTool),
     /** Its todo list (todo_write, docs/agent-todos.md); live changes come as todos_updated events. */
     todos: Type.Array(
       Type.Object({
@@ -203,6 +209,7 @@ function agentView(
     paused: agent.paused,
     todos: parseTodos(agent.todos),
     timeNoteMinutes: agent.timeNoteMinutes,
+    ticketTools: parseGrant(agent.ticketTools) as TicketToolName[],
     heartbeat: {
       enabled: agent.heartbeatEnabled,
       minutes: agent.heartbeatMinutes,
@@ -298,7 +305,8 @@ export function registerChat(
       },
       discord.connections,
     );
-  registerOrganizationRoutes(app, broker.organizations, async (computerId, organizationId) => {
+  registerTicketRoutes(app, broker.tickets, database);
+  registerOrganizationRoutes(app, broker.organizations, broker.tickets, async (computerId, organizationId) => {
     await database.initialize();
     const computer = await database.client.computer.findUnique({
       where: { id: computerId },
@@ -556,6 +564,7 @@ export function registerChat(
       compaction?: Partial<Static<typeof Compaction>>;
       heartbeat?: Partial<Static<typeof Heartbeat>>;
       timeNoteMinutes?: number;
+      ticketTools?: TicketToolName[];
       instructions?: string;
       models?: Static<typeof ModelChoice>[];
     };
@@ -575,6 +584,8 @@ export function registerChat(
             heartbeat: Type.Optional(Type.Partial(Heartbeat)),
             /** Minutes per clock window with one time note while working (0: off; docs/agent-time.md#time-notes). */
             timeNoteMinutes: Type.Optional(Type.Union(TIME_NOTE_CHOICES.map(value => Type.Literal(value)))),
+            /** The ticket tools granted (docs/tickets.md), the whole list; they apply from its next turn. */
+            ticketTools: Type.Optional(Type.Array(TicketTool, { maxItems: TICKET_TOOLS.length, uniqueItems: true })),
             instructions: Type.Optional(Type.String({ maxLength: 20000 })),
             /** The whole ranked list, #1 first (replaces endpointId, model and thinkingLevel; docs/agent-models.md). */
             models: Type.Optional(Type.Array(ModelChoice, { minItems: 1, maxItems: MAX_CHOICES })),
@@ -592,7 +603,7 @@ export function registerChat(
       // policy alone can change at any time (it is read when the next summary starts).
       // Instructions and the name too: the next turn reads them; a running turn keeps the ones it started with.
       const identity = Object.keys(request.body).some(
-        key => !['compaction', 'instructions', 'heartbeat', 'timeNoteMinutes', 'name'].includes(key),
+        key => !['compaction', 'instructions', 'heartbeat', 'timeNoteMinutes', 'ticketTools', 'name'].includes(key),
       );
       if (active.has(id) || (identity && runs.has(id)))
         return reply
@@ -653,6 +664,7 @@ export function registerChat(
             heartbeatTo: to,
             heartbeatChecklist: beat.checklist?.trim() ?? record.heartbeatChecklist,
             timeNoteMinutes: request.body.timeNoteMinutes ?? record.timeNoteMinutes,
+            ticketTools: request.body.ticketTools ? JSON.stringify(request.body.ticketTools) : record.ticketTools,
           }),
           connections.chains,
         );

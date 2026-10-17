@@ -51,6 +51,7 @@ const SETTINGS = [
   'heartbeatChecklist',
   'todos',
   'timeNoteMinutes',
+  'ticketTools',
   'memoryIndex',
   'sleepFrom',
   'sleepTo',

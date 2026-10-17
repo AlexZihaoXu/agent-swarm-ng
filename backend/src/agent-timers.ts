@@ -30,7 +30,7 @@ type Row = {
 /** Hands a firing to its agent as a platform event whose message id is `eventId` (its PendingTimerEvent row). */
 export type Deliver = (
   agentId: string,
-  kind: TimerKind,
+  kind: TimerKind | 'ticket',
   text: string,
   human: boolean,
   eventId: string,
@@ -102,10 +102,15 @@ export class AgentTimers {
     for (const event of pending) {
       if (this.closed) return;
       const why = agentId ? 'you were paused then' : 'the platform restarted before you saw it';
-      const text = `[Delivered again: this ${event.kind} fired at ${event.createdAt.toISOString()}, but ${why}.]\n${event.text}`;
-      const delivered = await this.deliver(event.agentId, event.kind as TimerKind, text, event.human, event.id).catch(
-        () => false,
-      );
+      const what = event.kind === 'ticket' ? 'ticket event arrived' : `${event.kind} fired`;
+      const text = `[Delivered again: this ${what} at ${event.createdAt.toISOString()}, but ${why}.]\n${event.text}`;
+      const delivered = await this.deliver(
+        event.agentId,
+        event.kind as TimerKind | 'ticket',
+        text,
+        event.human,
+        event.id,
+      ).catch(() => false);
       if (!delivered && !(await this.database.findAgent(event.agentId)))
         await this.database.client.pendingTimerEvent.deleteMany({ where: { agentId: event.agentId } });
     }

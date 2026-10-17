@@ -39,6 +39,74 @@ model Organization {
   agents    Agent[]
   computers Computer[]
   groups    GroupChat[]
+  /// Tickets (docs/tickets.md): a shared board of work for its people and agents, off until the owner turns it on.
+  ticketsEnabled     Boolean  @default(false)
+  /// Shown before ticket numbers (HOME-14); "" derives one from the name.
+  ticketPrefix       String   @default("")
+  /// Assigning an agent wakes it with a platform event.
+  ticketWakeOnAssign Boolean  @default(true)
+  /// Agents with ticket_create may file tickets.
+  ticketAgentsCreate Boolean  @default(true)
+  /// Agents may change unassigned tickets (and so pick one up), not only their own.
+  ticketAgentsPickUp Boolean  @default(false)
+  /// The owner is pushed when someone else moves a ticket to In review.
+  ticketPushReview   Boolean  @default(true)
+  /// The next ticket number (numbers are per organization and never reused).
+  ticketNext         Int      @default(1)
+  tickets            Ticket[]
+}
+
+/// A ticket of an organization's board (docs/tickets.md). Its title and description were written by `writer*` (the
+/// owner's text is a request; anyone else's is untrusted input for an agent).
+model Ticket {
+  sequence        Int           @id @default(autoincrement())
+  id              String        @unique @default(uuid())
+  organizationId  String
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  number          Int
+  title           String
+  description     String        @default("")
+  /// backlog | todo | progress | review | done | cancelled
+  status          String        @default("todo")
+  /// urgent | high | medium | low | none
+  priority        String        @default("none")
+  /// JSON array of short lower-case labels.
+  labels          String        @default("[]")
+  /// JSON array of links: {kind: 'computer' | 'file', id, label}.
+  links           String        @default("[]")
+  /// Assigned to the organization's owner, or to one of its agents (deleting the agent unassigns it), or nobody.
+  assigneeOwner   Boolean       @default(false)
+  assigneeAgentId String?
+  assigneeAgent   Agent?        @relation(fields: [assigneeAgentId], references: [id], onDelete: SetNull)
+  /// 'person' (a user id) or 'agent' (an agent id), with the name as it was.
+  writerKind      String
+  writerId        String
+  writerName      String
+  createdByName   String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  events          TicketEvent[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, updatedAt])
+  @@index([assigneeAgentId])
+}
+
+/// A ticket's comment or activity entry: who (a person, an agent or the platform, the name as it was) did what.
+model TicketEvent {
+  sequence   Int      @id @default(autoincrement())
+  id         String   @unique @default(uuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  /// comment | created | status | assignee | priority | labels | link | title | description | woken
+  kind       String
+  authorKind String
+  authorId   String
+  authorName String
+  text       String
+  createdAt  DateTime @default(now())
+
+  @@index([ticketId, sequence])
 }
 
 model Computer {
@@ -147,6 +215,9 @@ model Agent {
   paused              Boolean              @default(false)
   /// Links from an imported file that do not exist here (JSON: computers, dmPeers, groups), shown to fix or remove.
   unresolved          String               @default("")
+  /// The ticket tools its owner granted (JSON list of names; docs/tickets.md). None by default.
+  ticketTools         String               @default("[]")
+  tickets             Ticket[]
   createdAt           DateTime             @default(now())
   channels            Channel[]
   dmAllowed           DmGrant[]            @relation("DmSenderGrant")

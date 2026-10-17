@@ -1,3 +1,4 @@
+import { parseGrant } from './tickets/tools';
 import { randomUUID } from 'node:crypto';
 import type { PlatformStore } from './platform-store';
 import { FileError, type FileStore } from './files/store';
@@ -138,6 +139,7 @@ export async function importAgent(
       timeNoteMinutes: (TIME_NOTE_CHOICES as readonly number[]).includes(settings.timeNoteMinutes as number)
         ? (settings.timeNoteMinutes as number)
         : TIME_NOTE_DEFAULT,
+      ticketTools: JSON.stringify(parseGrant(text(settings.ticketTools, '[]'))),
       memoryIndex: text(settings.memoryIndex),
       sleepFrom: clock(settings.sleepFrom, '03:00'),
       sleepTo: clock(settings.sleepTo, '05:00'),

@@ -49,9 +49,12 @@ const EVENTS: Record<string, string> = {
   'computer.update': 'Computer settings changed',
   'computer.delete': 'Computer deleted',
   'organization.create': 'Organization created',
-  'organization.update': 'Organization renamed',
+  'organization.update': 'Organization edited',
   'organization.delete': 'Organization deleted',
   'organization.move': 'Moved into organization',
+  'ticket.create': 'Ticket created',
+  'ticket.update': 'Ticket edited',
+  'ticket.delete': 'Ticket deleted',
   'system.start': 'Platform started',
   'system.stop': 'Platform stopped',
 };
@@ -85,6 +88,7 @@ function describe(event: AuditEvent) {
   if (typeof detail.newName === 'string') parts.push(`now “${detail.newName}”`);
   if (typeof detail.moved === 'string') parts.push(detail.moved);
   if (typeof detail.memory === 'string') parts.push(`memory “${detail.memory}”`);
+  if (typeof detail.ticket === 'number') parts.push(`ticket ${detail.ticket}`);
   if (typeof detail.signal === 'string') parts.push(detail.signal);
   if (typeof detail.change === 'string') parts.push(`${detail.change}${detail.trusted ? ' (trusted)' : ''}`);
   if (typeof detail.addresses === 'string') parts.push(`from ${detail.addresses}`);

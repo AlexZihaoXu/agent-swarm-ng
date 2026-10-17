@@ -12,9 +12,11 @@ export const DEBOUNCE_MS = 3_000;
 /** …but a steady stream still notifies at least this often. */
 export const MAX_WAIT_MS = 10_000;
 
-type Kind = 'message' | 'group' | 'stuck' | 'critical';
+type Kind = 'message' | 'group' | 'stuck' | 'critical' | 'ticket';
 const PREFERENCE: Record<Kind, keyof Preferences> = {
   message: 'agentMessages',
+  // A ticket moved to In review (docs/tickets.md) is an agent telling its owner it is done: Agent messages.
+  ticket: 'agentMessages',
   group: 'groupChats',
   stuck: 'agentProblems',
   critical: 'critical',
@@ -26,7 +28,8 @@ const SWARM_PREFERENCE: Record<SwarmEvent, keyof Preferences> = {
   start: 'swarmStarts',
   stop: 'swarmStops',
 };
-type Item = { kind: Kind; tag: string; title: string; text: string; url: string; icon?: string };
+/** `hidden`: the text shown instead when the person turned Show message text off. */
+type Item = { kind: Kind; tag: string; title: string; text: string; url: string; icon?: string; hidden?: string };
 type Batch = { userId: string; first: number; count: number; latest: Item; timer?: ReturnType<typeof setTimeout> };
 type Run = { agentId: string; errors: string[]; published: boolean };
 type Log = { warn(object: object, message: string): void };
@@ -107,6 +110,14 @@ export class PushNotifier {
       ).catch(this.fail);
       return;
     }
+    // Tickets (docs/tickets.md): someone other than the owner moved one to In review (the organization's option).
+    if (event.type === 'tickets_updated' && event.review) {
+      void this.ticketReview(
+        String(event.organizationId),
+        event.review as { key: string; title: string; by: string },
+      ).catch(this.fail);
+      return;
+    }
     // Fallback models (docs/agent-models.md): told once when an agent drops off its #1, not on every later switch.
     if (event.type === 'model_choice' && event.from === 0 && Number(event.active) > 0) {
       void this.fallback(event.agentId, Number(event.active), String(event.reason ?? '')).catch(this.fail);
@@ -155,6 +166,21 @@ export class PushNotifier {
       text: plainText(`${author}: ${text}`) || `${author} sent files`,
       url: `/chat/groups/${encodeURIComponent(groupId)}`,
       icon: `/api/agents/${encodeURIComponent(authorId)}/avatar.png`,
+    });
+  }
+
+  private async ticketReview(organizationId: string, review: { key: string; title: string; by: string }) {
+    const org = await (
+      await this.client()
+    ).organization.findUnique({ where: { id: organizationId }, select: { name: true, ownerId: true } });
+    if (!org) return;
+    this.queue(org.ownerId, {
+      kind: 'ticket',
+      tag: `ticket:${organizationId}:${review.key}`,
+      title: `${review.by} · ${org.name}`,
+      text: plainText(`Moved ${review.key} “${review.title}” to In review.`),
+      hidden: `Moved ${review.key} to In review.`,
+      url: `/tickets/${encodeURIComponent(review.key)}?org=${encodeURIComponent(organizationId)}`,
     });
   }
 
@@ -278,7 +304,14 @@ export class PushNotifier {
     const chat = latest.kind === 'message' || latest.kind === 'group';
     const payload: PushPayload = {
       title: chat && count > 1 ? `${latest.title} · ${count} new messages` : latest.title,
-      body: chat && !preferences.preview ? (count > 1 ? 'New messages' : 'New message') : latest.text,
+      body:
+        chat && !preferences.preview
+          ? count > 1
+            ? 'New messages'
+            : 'New message'
+          : !preferences.preview && latest.hidden
+            ? latest.hidden
+            : latest.text,
       tag: latest.tag,
       url: latest.url,
       ...(latest.icon ? { icon: latest.icon } : {}),

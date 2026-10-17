@@ -708,6 +708,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organizations/{id}/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTickets"];
+        put?: never;
+        post: operations["createTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organizations/{id}/tickets/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTicket"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteTicket"];
+        options?: never;
+        head?: never;
+        patch: operations["updateTicket"];
+        trace?: never;
+    };
+    "/api/organizations/{id}/tickets/{number}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["commentOnTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organizations": {
         parameters: {
             query?: never;
@@ -5163,6 +5211,534 @@ export interface operations {
             };
         };
     };
+    listTickets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        settings: {
+                            enabled: boolean;
+                            prefix: string;
+                            wakeOnAssign: boolean;
+                            agentsCreate: boolean;
+                            agentsPickUp: boolean;
+                            pushOnReview: boolean;
+                        };
+                        tickets: {
+                            id: string;
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            priority: "urgent" | "high" | "medium" | "low" | "none";
+                            labels: string[];
+                            links: {
+                                kind: "computer" | "file";
+                                id: string;
+                                label: string;
+                            }[];
+                            assignee: {
+                                kind: "owner" | "agent";
+                                id: string;
+                                name: string;
+                            } | null;
+                            writer: {
+                                kind: "person" | "agent";
+                                id: string;
+                                name: string;
+                                trusted: boolean;
+                            };
+                            createdBy: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                        truncated: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    createTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                    description?: string;
+                    status?: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                    priority?: "urgent" | "high" | "medium" | "low" | "none";
+                    labels?: string[];
+                    assignee?: {
+                        /** @enum {boolean} */
+                        owner: true;
+                    } | {
+                        agentId: string;
+                    } | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ticket: {
+                            id: string;
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            priority: "urgent" | "high" | "medium" | "low" | "none";
+                            labels: string[];
+                            links: {
+                                kind: "computer" | "file";
+                                id: string;
+                                label: string;
+                            }[];
+                            assignee: {
+                                kind: "owner" | "agent";
+                                id: string;
+                                name: string;
+                            } | null;
+                            writer: {
+                                kind: "person" | "agent";
+                                id: string;
+                                name: string;
+                                trusted: boolean;
+                            };
+                            createdBy: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        } & {
+                            description: string;
+                        };
+                        events: {
+                            sequence: number;
+                            id: string;
+                            kind: string;
+                            author: {
+                                kind: "person" | "agent" | "platform";
+                                id: string;
+                                name: string;
+                            };
+                            text: string;
+                            trusted: boolean;
+                            createdAt: string;
+                        }[];
+                        olderEvents: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ticket: {
+                            id: string;
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            priority: "urgent" | "high" | "medium" | "low" | "none";
+                            labels: string[];
+                            links: {
+                                kind: "computer" | "file";
+                                id: string;
+                                label: string;
+                            }[];
+                            assignee: {
+                                kind: "owner" | "agent";
+                                id: string;
+                                name: string;
+                            } | null;
+                            writer: {
+                                kind: "person" | "agent";
+                                id: string;
+                                name: string;
+                                trusted: boolean;
+                            };
+                            createdBy: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        } & {
+                            description: string;
+                        };
+                        events: {
+                            sequence: number;
+                            id: string;
+                            kind: string;
+                            author: {
+                                kind: "person" | "agent" | "platform";
+                                id: string;
+                                name: string;
+                            };
+                            text: string;
+                            trusted: boolean;
+                            createdAt: string;
+                        }[];
+                        olderEvents: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    deleteTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deleted: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    updateTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title?: string;
+                    description?: string;
+                    status?: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                    priority?: "urgent" | "high" | "medium" | "low" | "none";
+                    labels?: string[];
+                    assignee?: {
+                        /** @enum {boolean} */
+                        owner: true;
+                    } | {
+                        agentId: string;
+                    } | null;
+                    linkComputer?: string;
+                    unlink?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ticket: {
+                            id: string;
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            priority: "urgent" | "high" | "medium" | "low" | "none";
+                            labels: string[];
+                            links: {
+                                kind: "computer" | "file";
+                                id: string;
+                                label: string;
+                            }[];
+                            assignee: {
+                                kind: "owner" | "agent";
+                                id: string;
+                                name: string;
+                            } | null;
+                            writer: {
+                                kind: "person" | "agent";
+                                id: string;
+                                name: string;
+                                trusted: boolean;
+                            };
+                            createdBy: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        } & {
+                            description: string;
+                        };
+                        events: {
+                            sequence: number;
+                            id: string;
+                            kind: string;
+                            author: {
+                                kind: "person" | "agent" | "platform";
+                                id: string;
+                                name: string;
+                            };
+                            text: string;
+                            trusted: boolean;
+                            createdAt: string;
+                        }[];
+                        olderEvents: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    commentOnTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    text: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ticket: {
+                            id: string;
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            priority: "urgent" | "high" | "medium" | "low" | "none";
+                            labels: string[];
+                            links: {
+                                kind: "computer" | "file";
+                                id: string;
+                                label: string;
+                            }[];
+                            assignee: {
+                                kind: "owner" | "agent";
+                                id: string;
+                                name: string;
+                            } | null;
+                            writer: {
+                                kind: "person" | "agent";
+                                id: string;
+                                name: string;
+                                trusted: boolean;
+                            };
+                            createdBy: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        } & {
+                            description: string;
+                        };
+                        events: {
+                            sequence: number;
+                            id: string;
+                            kind: string;
+                            author: {
+                                kind: "person" | "agent" | "platform";
+                                id: string;
+                                name: string;
+                            };
+                            text: string;
+                            trusted: boolean;
+                            createdAt: string;
+                        }[];
+                        olderEvents: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
     listOrganizations: {
         parameters: {
             query?: never;
@@ -5188,6 +5764,14 @@ export interface operations {
                             agents: number;
                             computers: number;
                             groups: number;
+                            tickets: {
+                                enabled: boolean;
+                                prefix: string;
+                                wakeOnAssign: boolean;
+                                agentsCreate: boolean;
+                                agentsPickUp: boolean;
+                                pushOnReview: boolean;
+                            };
                         }[];
                     };
                 };
@@ -5225,6 +5809,14 @@ export interface operations {
                             agents: number;
                             computers: number;
                             groups: number;
+                            tickets: {
+                                enabled: boolean;
+                                prefix: string;
+                                wakeOnAssign: boolean;
+                                agentsCreate: boolean;
+                                agentsPickUp: boolean;
+                                pushOnReview: boolean;
+                            };
                         }[];
                     };
                 };
@@ -5269,6 +5861,14 @@ export interface operations {
                             agents: number;
                             computers: number;
                             groups: number;
+                            tickets: {
+                                enabled: boolean;
+                                prefix: string;
+                                wakeOnAssign: boolean;
+                                agentsCreate: boolean;
+                                agentsPickUp: boolean;
+                                pushOnReview: boolean;
+                            };
                         }[];
                     };
                 };
@@ -5309,7 +5909,15 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    name: string;
+                    name?: string;
+                    tickets?: {
+                        enabled?: boolean;
+                        prefix?: string;
+                        wakeOnAssign?: boolean;
+                        agentsCreate?: boolean;
+                        agentsPickUp?: boolean;
+                        pushOnReview?: boolean;
+                    };
                 };
             };
         };
@@ -5330,6 +5938,14 @@ export interface operations {
                             agents: number;
                             computers: number;
                             groups: number;
+                            tickets: {
+                                enabled: boolean;
+                                prefix: string;
+                                wakeOnAssign: boolean;
+                                agentsCreate: boolean;
+                                agentsPickUp: boolean;
+                                pushOnReview: boolean;
+                            };
                         }[];
                     };
                 };
@@ -7125,6 +7741,7 @@ export interface operations {
                             organizationId: string;
                             paused: boolean;
                             timeNoteMinutes: number;
+                            ticketTools: ("ticket_list" | "ticket_read" | "ticket_create" | "ticket_update" | "ticket_comment")[];
                             todos: {
                                 content: string;
                                 status: "pending" | "in_progress" | "completed";
@@ -7275,6 +7892,7 @@ export interface operations {
                         organizationId: string;
                         paused: boolean;
                         timeNoteMinutes: number;
+                        ticketTools: ("ticket_list" | "ticket_read" | "ticket_create" | "ticket_update" | "ticket_comment")[];
                         todos: {
                             content: string;
                             status: "pending" | "in_progress" | "completed";
@@ -7496,6 +8114,7 @@ export interface operations {
                         checklist?: string;
                     };
                     timeNoteMinutes?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 10 | 12 | 15 | 20 | 30 | 60;
+                    ticketTools?: ("ticket_list" | "ticket_read" | "ticket_create" | "ticket_update" | "ticket_comment")[];
                     instructions?: string;
                     models?: {
                         endpointId: string;
@@ -7616,6 +8235,7 @@ export interface operations {
                         organizationId: string;
                         paused: boolean;
                         timeNoteMinutes: number;
+                        ticketTools: ("ticket_list" | "ticket_read" | "ticket_create" | "ticket_update" | "ticket_comment")[];
                         todos: {
                             content: string;
                             status: "pending" | "in_progress" | "completed";
@@ -7785,6 +8405,7 @@ export interface operations {
                         organizationId: string;
                         paused: boolean;
                         timeNoteMinutes: number;
+                        ticketTools: ("ticket_list" | "ticket_read" | "ticket_create" | "ticket_update" | "ticket_comment")[];
                         todos: {
                             content: string;
                             status: "pending" | "in_progress" | "completed";
@@ -12057,6 +12678,7 @@ export interface operations {
                             organizationId: string;
                             paused: boolean;
                             timeNoteMinutes: number;
+                            ticketTools: ("ticket_list" | "ticket_read" | "ticket_create" | "ticket_update" | "ticket_comment")[];
                             todos: {
                                 content: string;
                                 status: "pending" | "in_progress" | "completed";

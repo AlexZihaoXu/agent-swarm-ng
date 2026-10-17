@@ -1,6 +1,7 @@
 import { ownChainOnly } from './model-chain';
 import type { PlatformStore } from './platform-store';
 import type { Viewer } from './users/reach';
+import { prefixOf, ticketSettingsOf } from './tickets/store';
 
 /**
  * Organizations (docs/organizations.md): folders of agents, computers and group chats, kept apart. Every one of them
@@ -55,6 +56,7 @@ export class Organizations {
       agents: row._count.agents,
       computers: row._count.computers,
       groups: row._count.groups,
+      tickets: ticketSettingsOf(row),
     }));
   }
   /**
@@ -162,16 +164,24 @@ export class Organizations {
             ? `Model: now uses ${target.owner.name}'s ChatGPT login`
             : `Model endpoint: cleared (it was the old owner's); choose one of ${target.owner.name}'s after moving`,
         );
-      const [assignments, grants, memberships] = await Promise.all([
+      const [assignments, grants, memberships, tickets] = await Promise.all([
         db.computerAssignment.findMany({ where: { agentId: id }, include: { computer: true } }),
         db.dmGrant.findMany({ where: { senderId: id, recipient: outside }, include: { recipient: true } }),
         db.groupMember.findMany({ where: { agentId: id, group: outside }, include: { group: true } }),
+        // Its tickets stay with their organization (docs/tickets.md).
+        db.ticket.findMany({
+          where: { assigneeAgentId: id, organization: { id: { not: to } } },
+          include: { organization: true },
+          orderBy: { number: 'asc' },
+          take: 50,
+        }),
       ]);
       const crossing = assignments.filter(row => row.computer.organizationId !== to);
       dropped.push(
         ...crossing.map(row => `Computer ${row.computer.name}: no longer assigned`),
         ...grants.map(row => `DM with ${row.recipient.name}: no longer allowed`),
         ...memberships.map(row => `Group ${row.group.name}: no longer a member`),
+        ...tickets.map(row => `Ticket ${prefixOf(row.organization)}-${row.number}: unassigned`),
       );
       if (!apply) return { dropped, moved: false };
       if (crossing.length) {
@@ -189,6 +199,10 @@ export class Organizations {
           },
         }),
         db.groupMember.deleteMany({ where: { agentId: id, group: outside } }),
+        db.ticket.updateMany({
+          where: { assigneeAgentId: id, organizationId: { not: to } },
+          data: { assigneeAgentId: null },
+        }),
         // Again here, with the move: an assignment made meanwhile cannot survive it (tools recheck assignment).
         db.computerAssignment.deleteMany({ where: { agentId: id, computer: outside } }),
         // Another owner's endpoint is not its (an id of the same name would be someone else's key): it chooses again.

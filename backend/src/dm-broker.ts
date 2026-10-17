@@ -4,6 +4,8 @@ import { TerminalWatcher } from './computer-use/terminal-watcher';
 import { AgentTimers } from './agent-timers';
 import { createTimeTools } from './time-tools';
 import { createTodoTools, Todos } from './todos';
+import { Tickets } from './tickets/store';
+import { createTicketTools, parseGrant } from './tickets/tools';
 import { platformZone } from './time-notes';
 import { Scratchpad } from './scratchpad';
 import { createScratchTools } from './scratch-tools';
@@ -133,6 +135,8 @@ export class DmBroker {
   peerLimits = { queueTimeoutMs: 300000, executionTimeoutMs: 90000 };
   private linked = new WeakSet<AbortSignal>();
   readonly timers: AgentTimers;
+  /** Every organization's tickets (docs/tickets.md); assigning or mentioning an agent wakes it. */
+  readonly tickets: Tickets;
   /** Each agent's todo list (todo_write); the list a turn-end check last decided to stop on. */
   readonly todos: Todos;
   private readonly todoStoppedOn = new Map<string, string>();
@@ -194,6 +198,10 @@ export class DmBroker {
       undefined,
       agentId => this.runs.timersChanged(agentId),
     );
+    this.tickets = new Tickets(database, {
+      wake: (agentId, text, human, eventId) => this.deliverPlatformEvent(agentId, 'ticket', text, human, eventId),
+      changed: (organizationId, change) => this.runs.ticketsChanged(organizationId, change),
+    });
     if (computers)
       computers.onTerminalInput = ({ agentId, active, ...where }) =>
         void this.database
@@ -546,7 +554,7 @@ export class DmBroker {
   }
   async deliverPlatformEvent(
     agentId: string,
-    platform: 'timer' | 'reminder' | 'computer',
+    platform: 'timer' | 'reminder' | 'computer' | 'ticket',
     text: string,
     human: boolean,
     /** The event's message id (a timer firing's saved PendingTimerEvent), so its turn can mark it seen. */
@@ -561,7 +569,7 @@ export class DmBroker {
   }
   private async platformRun(
     agentId: string,
-    platform: 'timer' | 'reminder' | 'computer',
+    platform: 'timer' | 'reminder' | 'computer' | 'ticket',
     text: string,
     human: boolean,
     eventId?: string,
@@ -1091,6 +1099,14 @@ ${preview.text}`
         ),
       this.files,
     );
+    const ticketsOn = Boolean(
+      (
+        await this.database.client.organization.findUnique({
+          where: { id: agent.organizationId },
+          select: { ticketsEnabled: true },
+        })
+      )?.ticketsEnabled,
+    );
     const computerTools =
       this.computers && this.screenshots
         ? [
@@ -1223,6 +1239,16 @@ ${preview.text}`
         // Every agent's sense of time: current time, timers and reminders (no computer needed).
         ...createTimeTools(this.timers, agentId, () => humanAuthority, this.watches, this.recordings, zone),
         ...createTodoTools(this.todos, agentId),
+        // The ticket tools its owner granted, while its organization has tickets on (checked again on every call).
+        ...(ticketsOn
+          ? createTicketTools({
+              database: this.database,
+              tickets: this.tickets,
+              files: this.files,
+              agentId,
+              granted: parseGrant(agent.ticketTools),
+            })
+          : []),
         ...createScratchTools(this.scratch, agentId, this.screenshots),
         // An agent whose owner configured a Discord bot for it gets the Discord tools (checked again on every call).
         ...(this.discord && this.discord.connections.status(agentId).state !== 'off'
@@ -1359,12 +1385,13 @@ ${preview.text}`
           return admitted;
         },
         complete: async (messages, failed) => {
-          // Timer firings a finished turn saw are done; a failed turn's stay, delivered again after a restart.
+          // Timer firings and ticket wake-ups a finished turn saw are done; a failed turn's stay, delivered again
+          // after a restart.
           if (!failed && !context.signal.aborted)
             await this.timers
               .seen(
                 messages.flatMap(message =>
-                  message.source?.platform === 'timer' || message.source?.platform === 'reminder' ? [message.id!] : [],
+                  ['timer', 'reminder', 'ticket'].includes(message.source?.platform ?? '') ? [message.id!] : [],
                 ),
               )
               .catch(() => {});

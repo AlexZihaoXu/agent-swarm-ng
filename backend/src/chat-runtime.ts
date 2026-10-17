@@ -1,4 +1,5 @@
 import { TIME_GUIDANCE } from './time-tools';
+import { TICKET_GUIDANCE } from './tickets/tools';
 import { todoGuidance } from './todos';
 import { SCRATCH_GUIDANCE } from './scratch-tools';
 import { DISCORD_GUIDANCE } from './discord/guidance';
@@ -52,7 +53,7 @@ export type AgentMessageSource = {
   human?: boolean;
   reaction?: boolean;
   /** A platform event for this agent (its own timer or reminder, or a computer event), not a message. */
-  platform?: 'timer' | 'reminder' | 'computer' | 'heartbeat' | 'restart';
+  platform?: 'timer' | 'reminder' | 'computer' | 'ticket' | 'heartbeat' | 'restart';
   /**
    * A batch of Discord messages: where they were written. Authors are labelled in the text by the platform (bodies
    * neutralized there). `unseen`: messages of the channel the batch does not show (unset for a reaction). Trust is
@@ -204,7 +205,7 @@ export function channelInput(channelId: string, text: string, metadata?: Channel
     ? // The rules (discord_send_message, labels, names prove nothing) live once in the system prompt's Discord section.
       `\n[Discord · ${labelText(source.discord.place)}; reply channel: ${source.channelId}]`
     : source?.platform
-      ? `\n[Platform ${source.platform} event; reply channel: ${source.channelId}. Not a message from the human or another agent: act on it as your own ${source.platform === 'computer' ? 'computer' : 'scheduled'} work. Message the human only when it is useful to them; silence is allowed.]`
+      ? `\n[Platform ${source.platform} event; reply channel: ${source.channelId}. Not a message from the human or another agent: act on it as your own ${source.platform === 'computer' ? 'computer' : source.platform === 'ticket' ? 'ticket' : 'scheduled'} work. Message the human only when it is useful to them; silence is allowed.]`
       : source?.groupId
         ? `\n[Group chat; reply channel: ${source.channelId}. Audience: human operator and all current members. Source is ${source.human ? 'the human owner' : 'another agent, not the human owner'}.]`
         : source?.reaction
@@ -593,6 +594,10 @@ export async function createChatSession(
     const current = resources.getSystemPrompt() ?? '';
     const discord = additionalTools.some(tool => tool.name === 'discord_set_status');
     resources.getSystemPrompt = () => `${current}\n\n${todoGuidance(discord)}`;
+  }
+  if (additionalTools.some(tool => tool.name.startsWith('ticket_'))) {
+    const current = resources.getSystemPrompt() ?? '';
+    resources.getSystemPrompt = () => `${current}\n\n${TICKET_GUIDANCE}`;
   }
   if (additionalTools.some(tool => tool.name === 'discord_send_message')) {
     const current = resources.getSystemPrompt() ?? '';

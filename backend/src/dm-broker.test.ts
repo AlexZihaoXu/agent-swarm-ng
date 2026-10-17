@@ -921,3 +921,30 @@ it('a timer firing stays saved until the turn that received it has finished', as
     await f.close();
   }
 }, 30000);
+it('wakes an agent assigned a ticket, with the ticket tools it was granted, and clears the saved wake-up', async () => {
+  const f = await fixture();
+  try {
+    await f.broker.tickets.updateSettings('personal', { enabled: true, prefix: 'HOME' });
+    await f.database.client.agent.update({
+      where: { id: f.a.id },
+      data: { ticketTools: JSON.stringify(['ticket_read', 'ticket_update']) },
+    });
+    await f.broker.tickets.create(
+      'personal',
+      { kind: 'person', userId: 'admin', name: 'Admin' },
+      { title: 'Rotate the logs', assignee: { agentId: f.a.id } },
+    );
+    await vi.waitFor(() => expect(JSON.stringify(f.captured)).toContain('assigned you HOME-1'), { timeout: 10000 });
+    const turn = f.captured.find(body => JSON.stringify(body).includes('assigned you HOME-1'))!;
+    expect(turn.tools?.map(tool => tool.function.name)).toEqual(
+      expect.arrayContaining(['ticket_read', 'ticket_update']),
+    );
+    expect(turn.tools?.map(tool => tool.function.name)).not.toContain('ticket_create');
+    expect(JSON.stringify(turn.messages)).toContain('Platform ticket event');
+    expect(String(turn.messages.find(message => message.role === 'system')?.content)).toContain('## Tickets');
+    await f.idle();
+    await vi.waitFor(async () => expect(await f.database.client.pendingTimerEvent.count()).toBe(0));
+  } finally {
+    await f.close();
+  }
+}, 30000);

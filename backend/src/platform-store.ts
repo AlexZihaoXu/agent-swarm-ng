@@ -75,6 +75,7 @@ export class PlatformStore {
       heartbeatTo?: string;
       heartbeatChecklist?: string;
       timeNoteMinutes?: number;
+      ticketTools?: string;
     },
   ) {
     await this.initialize();

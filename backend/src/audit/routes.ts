@@ -16,6 +16,10 @@ const RULES: Record<string, Rule> = {
   'PATCH /api/organizations/:id': { kind: 'organization.update', target: 'organization' },
   'DELETE /api/organizations/:id': { kind: 'organization.delete', target: 'organization' },
   'POST /api/organizations/:id/move': { kind: 'organization.move', target: 'organization' },
+  // Tickets (docs/tickets.md): the organization, with the ticket's number; comments are content, not audited.
+  'POST /api/organizations/:id/tickets': { kind: 'ticket.create', target: 'organization' },
+  'PATCH /api/organizations/:id/tickets/:number': { kind: 'ticket.update', target: 'organization' },
+  'DELETE /api/organizations/:id/tickets/:number': { kind: 'ticket.delete', target: 'organization' },
   'POST /api/users': { kind: 'user.create', target: 'user' },
   'PATCH /api/users/:id': { kind: 'user.update', target: 'user' },
   'DELETE /api/users/:id': { kind: 'user.delete', target: 'user' },
@@ -129,7 +133,7 @@ export function registerAudit(
     const entry = request.audit;
     if (!entry || reply.statusCode === 401) return;
     const { rule } = entry;
-    const params = request.params as { id?: string; name?: string } | undefined;
+    const params = request.params as { id?: string; name?: string; number?: number } | undefined;
     const body = request.body as Record<string, unknown> | undefined;
     // A move preview changes nothing, and a retried create (the same request key answered again) made nothing new.
     if (rule.kind === 'organization.move' && body?.apply !== true) return;
@@ -150,6 +154,9 @@ export function registerAudit(
             ? { moved: `${String(body?.kind)} ${entry.movedName ? `“${entry.movedName}”` : String(body?.id)}` }
             : {}),
           ...(params?.name ? { memory: params.name } : {}),
+          ...(rule.kind.startsWith('ticket.')
+            ? { ticket: params?.number ?? (entry.response as { ticket?: { number?: number } })?.ticket?.number }
+            : {}),
           ...(rule.kind === 'agent.update' && typeof body?.name === 'string' ? { newName: body.name } : {}),
           ...(reply.statusCode >= 400 ? { status: reply.statusCode } : {}),
         },
@@ -184,7 +191,7 @@ export function registerAudit(
 
 function createdTarget(rule: Rule, body: Record<string, unknown> | undefined, response: unknown) {
   const answer = (response ?? {}) as { id?: unknown; name?: unknown; organizations?: { id: string; name: string }[] };
-  if (rule.target === 'organization') {
+  if (rule.target === 'organization' && !rule.kind.startsWith('ticket.')) {
     const name = typeof body?.name === 'string' ? body.name.trim() : undefined;
     const made = [...(answer.organizations ?? [])].reverse().find(org => org.name === name);
     return { id: made?.id, name: made?.name ?? name };

@@ -104,6 +104,13 @@ export const RULES: Record<string, Rule> = {
   'POST /api/organizations': 'signed-in',
   'PATCH /api/organizations/:id': { organization: 'id' },
   'DELETE /api/organizations/:id': { organization: 'id' },
+  // Tickets (docs/tickets.md): the organization the route names.
+  'GET /api/organizations/:id/tickets': { organization: 'id' },
+  'POST /api/organizations/:id/tickets': { organization: 'id' },
+  'GET /api/organizations/:id/tickets/:number': { organization: 'id' },
+  'PATCH /api/organizations/:id/tickets/:number': { organization: 'id' },
+  'DELETE /api/organizations/:id/tickets/:number': { organization: 'id' },
+  'POST /api/organizations/:id/tickets/:number/comments': { organization: 'id' },
   'POST /api/organizations/:id/move': async (request, reach, viewer) => {
     const { kind, id } = body(request);
     const reachable =
