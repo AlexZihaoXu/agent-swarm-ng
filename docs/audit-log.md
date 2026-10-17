@@ -14,6 +14,7 @@
 | `user.create` / `update` / `delete` | admin adding a user, setting their password, disabling them, changing their RAM cap, deleting them ([users](users.md)) | the user | changed field names (`password`, `disabled`, `memoryLimitGiB`), never values |
 | `organization.create` / `update` / `delete` / `move` | an organization made, renamed or its ticket settings changed, deleted, or something moved into it (not move previews) | the organization | changed fields; what moved |
 | `ticket.create` / `update` / `delete` | a person creating, editing or deleting a ticket ([tickets](tickets.md); comments are not audited) | the organization | the ticket's number; changed field names |
+| `ticket.state.create` / `update` / `delete` | a person adding, changing or deleting a workflow state ([tickets](tickets.md#workflow)) | the organization | changed field names |
 | `computer.create` / `update` / `delete` | a computer made (not a retried request), its settings changed or rebuilt, deleted | the computer | changed fields |
 | `agent.create` / `update` / `delete` | an agent made, edited, deleted | the agent (its name before a rename or delete) | which part (agent, settings, computers, Discord, bot connected/removed, memory edited/removed/restored/cleared, sleep window), changed field names, a new name |
 | `system.start` / `system.stop` | the backend starting (after it listens) and stopping on a signal | `system` | runtime and start-up time, signal |
