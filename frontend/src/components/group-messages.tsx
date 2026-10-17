@@ -173,6 +173,7 @@ export function GroupMessages<M extends ShownMessage>({
                     messageId={message.id}
                     reactions={reactions.data?.[message.id]}
                     onReply={onReply ? () => onReply(message) : undefined}
+                    text={message.text}
                   >
                     {content}
                   </MessageReactions>

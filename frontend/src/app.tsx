@@ -57,6 +57,7 @@ import {
   type SearchResult,
 } from '@/components/message-search';
 import { requestJump, useMessageJump } from '@/lib/message-jump';
+import { TicketScope } from '@/components/ticket-refs';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 // Portal's buttons are hidden at the owner's request (2026-10-17); Ctrl/⌘+K still opens it.
 import { Portal, usePortalShortcut } from '@/components/portal';
@@ -1201,23 +1202,25 @@ export function App() {
                       </div>
                     )}
                     {historyReady[agent.channelId] && (
-                      <ConversationMessages
-                        reactionChannel={agent.channelId}
-                        messages={history.visible}
-                        time={agent.time}
-                        agentName={agent.name}
-                        notices={inbox.messages.filter(
-                          notice =>
-                            (!history.olderHidden || notice.timestamp >= (history.visible[0]?.timestamp ?? 0)) &&
-                            (!history.newerHidden ||
-                              notice.timestamp <= (history.visible.at(-1)?.timestamp ?? Infinity)),
-                        )}
-                        onViewDm={notice => chooseConversation(notice.senderId)}
-                        onReply={message => {
-                          setReplyTargets(current => ({ ...current, [agent.channelId]: message }));
-                          requestAnimationFrame(() => inputRef.current?.focus());
-                        }}
-                      />
+                      <TicketScope organization={organizations.find(org => org.id === agent.real?.organizationId)}>
+                        <ConversationMessages
+                          reactionChannel={agent.channelId}
+                          messages={history.visible}
+                          time={agent.time}
+                          agentName={agent.name}
+                          notices={inbox.messages.filter(
+                            notice =>
+                              (!history.olderHidden || notice.timestamp >= (history.visible[0]?.timestamp ?? 0)) &&
+                              (!history.newerHidden ||
+                                notice.timestamp <= (history.visible.at(-1)?.timestamp ?? Infinity)),
+                          )}
+                          onViewDm={notice => chooseConversation(notice.senderId)}
+                          onReply={message => {
+                            setReplyTargets(current => ({ ...current, [agent.channelId]: message }));
+                            requestAnimationFrame(() => inputRef.current?.focus());
+                          }}
+                        />
+                      </TicketScope>
                     )}
                     {history.newerHidden && <EdgeSkeleton label="Loading newer messages…" />}
                   </>

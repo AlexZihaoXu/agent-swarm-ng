@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import type { operations } from '@/api/schema';
 
@@ -8,6 +8,12 @@ export type TicketBoard = operations['listTickets']['responses'][200]['content']
 export type TicketSummary = TicketBoard['tickets'][number];
 export type TicketDetail = operations['getTicket']['responses'][200]['content']['application/json'];
 export type TicketEvent = TicketDetail['events'][number];
+export type TicketChild = TicketDetail['children'][number];
+export type TicketRelation = TicketDetail['relations'][number];
+export type RelationKind = TicketRelation['kind'];
+export type TicketLink = TicketSummary['links'][number];
+/** A ticket named elsewhere (a chip): number, key, title and status. */
+export type TicketRef = operations['ticketRefs']['responses'][200]['content']['application/json']['tickets'][number];
 export type TicketStatus = TicketSummary['status'];
 export type TicketPriority = TicketSummary['priority'];
 export type TicketSettings = TicketBoard['settings'];
@@ -50,6 +56,154 @@ export const PRIORITIES: { key: TicketPriority; label: string; tone: string }[] 
   { key: 'none', label: 'No priority', tone: 'text-muted-foreground' },
 ];
 export const priorityOf = (key: TicketPriority) => PRIORITIES.find(priority => priority.key === key)!;
+/** Relations as seen from a ticket, in the order the detail lists them. */
+export const RELATIONS: { key: RelationKind; label: string }[] = [
+  { key: 'blocks', label: 'Blocks' },
+  { key: 'blocked_by', label: 'Blocked by' },
+  { key: 'related', label: 'Related to' },
+  { key: 'duplicate_of', label: 'Duplicate of' },
+  { key: 'duplicated_by', label: 'Duplicated by' },
+];
+
+/** Today, as YYYY-MM-DD, in a time zone (the person's: docs/tickets.md#due-dates). */
+export function todayIn(zone: string, now = new Date()) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now);
+  } catch {
+    return now.toISOString().slice(0, 10);
+  }
+}
+const addDays = (date: string, days: number) => {
+  const at = new Date(`${date}T00:00:00Z`);
+  at.setUTCDate(at.getUTCDate() + days);
+  return at.toISOString().slice(0, 10);
+};
+/** Due soon: today or within the next seven days. */
+export const DUE_SOON_DAYS = 7;
+/** A due date against today: past it (overdue, unless the ticket is closed), today, soon (a week) or later. */
+export function dueState(due: string | null, status: TicketStatus, today: string) {
+  if (!due) return null;
+  if (status === 'done' || status === 'cancelled') return 'closed' as const;
+  if (due < today) return 'overdue' as const;
+  if (due === today) return 'today' as const;
+  return due <= addDays(today, DUE_SOON_DAYS) ? ('soon' as const) : ('later' as const);
+}
+/** "Oct 20" (with the year when it is not this one). */
+export function dueLabel(due: string, today: string) {
+  const at = new Date(`${due}T12:00:00Z`);
+  return at.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(due.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }),
+    timeZone: 'UTC',
+  });
+}
+
+/**
+ * The Tickets tab's search, filters and sort, kept in the address (docs/tickets.md#search-and-filters) beside the
+ * organization (`org`): `q`, `status`, `assignee` (`me`, `agents`, `none` or agent ids), `priority`, `label`, `due`
+ * (`overdue`, `soon` or `none`) and the list's `sort`.
+ */
+export type TicketSort = 'manual' | 'updated' | 'priority' | 'due';
+export type TicketFilters = {
+  q: string;
+  status: TicketStatus[];
+  assignee: string[];
+  priority: TicketPriority[];
+  label: string[];
+  due: '' | 'overdue' | 'soon' | 'none';
+  sort: TicketSort;
+};
+const FILTER_KEYS = ['q', 'status', 'assignee', 'priority', 'label', 'due', 'sort'] as const;
+const listOf = (params: URLSearchParams, key: string) =>
+  (params.get(key) ?? '')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
+    .slice(0, 50);
+export function parseFilters(search: string): TicketFilters {
+  const params = new URLSearchParams(search);
+  const due = params.get('due');
+  const sort = params.get('sort');
+  return {
+    q: (params.get('q') ?? '').slice(0, 200),
+    status: listOf(params, 'status').filter(value => STATUSES.some(status => status.key === value)) as TicketStatus[],
+    assignee: listOf(params, 'assignee'),
+    priority: listOf(params, 'priority').filter(value =>
+      PRIORITIES.some(priority => priority.key === value),
+    ) as TicketPriority[],
+    label: listOf(params, 'label').map(label => label.toLowerCase()),
+    due: due === 'overdue' || due === 'soon' || due === 'none' ? due : '',
+    sort: sort === 'updated' || sort === 'priority' || sort === 'due' ? sort : 'manual',
+  };
+}
+/** The address's query with these filters (other parameters, such as the organization, kept). */
+export function filterSearch(filters: TicketFilters, current: string) {
+  const params = new URLSearchParams(current);
+  for (const key of FILTER_KEYS) params.delete(key);
+  if (filters.q.trim()) params.set('q', filters.q);
+  for (const key of ['status', 'assignee', 'priority', 'label'] as const)
+    if (filters[key].length) params.set(key, filters[key].join(','));
+  if (filters.due) params.set('due', filters.due);
+  if (filters.sort !== 'manual') params.set('sort', filters.sort);
+  const search = params.toString();
+  return search ? `?${search}` : '';
+}
+/** How many filters (search and sort aside) are on. */
+export const filterCount = (filters: TicketFilters) =>
+  filters.status.length +
+  filters.assignee.length +
+  filters.priority.length +
+  filters.label.length +
+  (filters.due ? 1 : 0);
+/** The tickets these filters keep (the search itself is the server's: `q`). */
+export function applyFilters(tickets: TicketSummary[], filters: TicketFilters, today: string) {
+  return tickets.filter(ticket => {
+    if (filters.status.length && !filters.status.includes(ticket.status)) return false;
+    if (filters.priority.length && !filters.priority.includes(ticket.priority)) return false;
+    if (filters.label.length && !filters.label.some(label => ticket.labels.includes(label))) return false;
+    if (filters.assignee.length) {
+      const who = ticket.assignee;
+      const match = filters.assignee.some(value =>
+        value === 'me'
+          ? who?.kind === 'owner'
+          : value === 'agents'
+            ? who?.kind === 'agent'
+            : value === 'none'
+              ? !who
+              : who?.kind === 'agent' && who.id === value,
+      );
+      if (!match) return false;
+    }
+    if (filters.due) {
+      const state = dueState(ticket.due, ticket.status, today);
+      if (
+        filters.due === 'none'
+          ? ticket.due
+          : filters.due === 'overdue'
+            ? state !== 'overdue'
+            : !['overdue', 'today', 'soon'].includes(state ?? '')
+      )
+        return false;
+    }
+    return true;
+  });
+}
+const PRIORITY_RANK: Record<TicketPriority, number> = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
+/** The list's order: manual (the board's), most recently updated, priority, or due date (none last). */
+export function sortTickets(tickets: TicketSummary[], sort: TicketSort) {
+  if (sort === 'manual') return tickets;
+  const sorted = [...tickets];
+  if (sort === 'updated') sorted.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  if (sort === 'priority') sorted.sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
+  if (sort === 'due') sorted.sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999'));
+  return sorted;
+}
 /** The browser event use-chat raises for a `tickets_updated` run event. */
 export const TICKETS_EVENT = 'swarm-tickets-updated';
 export type TicketsEventDetail = {
@@ -62,8 +216,8 @@ export type TicketsEventDetail = {
 const failure = (error: unknown, fallback: string) =>
   new Error((error as { message?: string } | undefined)?.message ?? fallback);
 
-/** The organization's board, kept live by `tickets_updated` events. */
-export function useTicketBoard(organizationId: string | undefined) {
+/** The organization's board (only the tickets matching `q`, when searching), kept live by `tickets_updated` events. */
+export function useTicketBoard(organizationId: string | undefined, q = '') {
   const client = useQueryClient();
   useEffect(() => {
     const changed = (event: Event) => {
@@ -76,11 +230,13 @@ export function useTicketBoard(organizationId: string | undefined) {
     return () => window.removeEventListener(TICKETS_EVENT, changed);
   }, [client, organizationId]);
   return useQuery({
-    queryKey: ['tickets', organizationId],
+    queryKey: ['tickets', organizationId, q],
     enabled: Boolean(organizationId),
+    // While a new search answers, the last board stays (no flash of an empty one).
+    placeholderData: keepPreviousData,
     queryFn: async ({ signal }) => {
       const { data, error } = await api.GET('/api/organizations/{id}/tickets', {
-        params: { path: { id: organizationId! } },
+        params: { path: { id: organizationId! }, query: q ? { q } : {} },
         signal,
       });
       if (!data) throw failure(error, 'Could not load the tickets.');
@@ -106,7 +262,7 @@ export function useTicket(organizationId: string | undefined, number: number | n
 }
 
 /** Saves a change to a ticket and puts the answer in the caches (the board refreshes from its event too). */
-export function useTicketActions(organizationId: string | undefined) {
+export function useTicketActions(organizationId: string | undefined, q = '') {
   const client = useQueryClient();
   const settle = (detail: TicketDetail) => {
     client.setQueryData(['ticket', organizationId, detail.ticket.number], detail);
@@ -130,7 +286,7 @@ export function useTicketActions(organizationId: string | undefined) {
     },
     /** A drag on the board: shown at once, saved as a status change (if any) and a place, undone if it fails. */
     move: async (number: number, status: TicketStatus, place: TicketPlace) => {
-      const key = ['tickets', organizationId];
+      const key = ['tickets', organizationId, q];
       await client.cancelQueries({ queryKey: key });
       const before = client.getQueryData<TicketBoard>(key);
       const current = before?.tickets.find(ticket => ticket.number === number);
@@ -156,6 +312,21 @@ export function useTicketActions(organizationId: string | undefined) {
         body: { text },
       });
       if (!data) throw failure(error, 'Could not post the comment.');
+      return settle(data);
+    },
+    editComment: async (number: number, commentId: string, text: string) => {
+      const { data, error } = await api.PATCH('/api/organizations/{id}/tickets/{number}/comments/{commentId}', {
+        params: { path: { id, number, commentId } },
+        body: { text },
+      });
+      if (!data) throw failure(error, 'Could not save the comment.');
+      return settle(data);
+    },
+    deleteComment: async (number: number, commentId: string) => {
+      const { data, error } = await api.DELETE('/api/organizations/{id}/tickets/{number}/comments/{commentId}', {
+        params: { path: { id, number, commentId } },
+      });
+      if (!data) throw failure(error, 'Could not delete the comment.');
       return settle(data);
     },
     remove: async (number: number) => {

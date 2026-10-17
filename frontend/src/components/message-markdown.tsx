@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -6,6 +6,7 @@ import remarkSpoiler from 'remark-inline-spoiler';
 import { toString } from 'hast-util-to-string';
 import type { Parent, PhrasingContent } from 'mdast';
 import { Button } from '@/components/ui/button';
+import { remarkTicketRefs, TicketChip, useTicketScope } from '@/components/ticket-refs';
 import 'highlight.js/styles/github-dark.css';
 import './message-markdown.css';
 
@@ -133,7 +134,13 @@ const components: Components = {
     </div>
   ),
   span: ({ node, ...props }) =>
-    node?.properties['dataSpoiler'] ? <Spoiler>{props.children}</Spoiler> : <span {...props} />,
+    node?.properties['dataSpoiler'] ? (
+      <Spoiler>{props.children}</Spoiler>
+    ) : node?.properties['dataTicketRef'] ? (
+      <TicketChip text={toString(node)} number={Number(node.properties['dataTicketRef'])} />
+    ) : (
+      <span {...props} />
+    ),
 };
 
 function InlineBlock({ children }: { children?: ReactNode }) {
@@ -209,13 +216,20 @@ export const MessageMarkdown = memo(function MessageMarkdown({
   preview?: boolean;
 }) {
   const highlight = useHighlighter(text, !preview);
+  // In a conversation of an organization with tickets on, its ticket ids become chips (docs/tickets.md#references).
+  const prefix = useTicketScope()?.prefix;
+  const refs = !preview && prefix ? prefix : '';
+  const remarkPlugins = useMemo(
+    () => [remarkGfm, remarkBreaks, remarkSpoiler, ...(refs ? [remarkTicketRefs(refs)] : [])],
+    [refs],
+  );
   const Wrapper = preview ? 'span' : 'div';
   return (
     <Wrapper className={preview ? 'message-preview' : 'message-markdown'}>
       <Markdown
         skipHtml
         urlTransform={safeUrl}
-        remarkPlugins={[remarkGfm, remarkBreaks, remarkSpoiler]}
+        remarkPlugins={remarkPlugins}
         remarkRehypeOptions={{
           handlers: {
             spoiler: (state, node) => ({

@@ -32,6 +32,8 @@ import { useAttachments } from '@/lib/use-attachments';
 import { useFileDrop } from '@/components/file-drop-zone';
 import { useSignedIn } from '@/lib/auth';
 import { humanName } from '@/lib/people';
+import { useOrganizations } from '@/lib/organizations';
+import { TicketScope } from '@/components/ticket-refs';
 
 export function GroupConversation({
   groupId,
@@ -66,6 +68,7 @@ export function GroupConversation({
   onSearch: (opener: HTMLElement) => void;
 }) {
   const { name: me } = useSignedIn();
+  const { organizations } = useOrganizations();
   const client = useQueryClient();
   const group = useQuery(groupQuery(groupId));
   useEffect(() => {
@@ -310,14 +313,16 @@ export function GroupConversation({
         {(history.data?.nextCursor != null || loadingOlder || window_.olderHidden) && (
           <EdgeSkeleton label="Loading earlier messages…" />
         )}
-        <GroupMessages
-          messages={window_.visible}
-          members={group.data?.members ?? []}
-          onReply={message => {
-            setReplyTo(message);
-            requestAnimationFrame(() => inputRef.current?.focus());
-          }}
-        />
+        <TicketScope organization={organizations.find(org => org.id === group.data?.organizationId)}>
+          <GroupMessages
+            messages={window_.visible}
+            members={group.data?.members ?? []}
+            onReply={message => {
+              setReplyTo(message);
+              requestAnimationFrame(() => inputRef.current?.focus());
+            }}
+          />
+        </TicketScope>
         {window_.newerHidden && <EdgeSkeleton label="Loading newer messages…" />}
         {history.isSuccess && !messages.length && (
           <p className="p-6 text-center text-sm text-muted-foreground">Start a conversation with this group.</p>

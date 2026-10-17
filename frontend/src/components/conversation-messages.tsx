@@ -160,6 +160,7 @@ export function ConversationMessages({
                 messageId={message.id}
                 reactions={reactions.data?.[message.id]}
                 onReply={onReply ? () => onReply(message) : undefined}
+                text={message.text}
               >
                 {bubble}
               </MessageReactions>

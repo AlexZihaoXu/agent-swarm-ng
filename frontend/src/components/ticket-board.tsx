@@ -35,6 +35,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { AssigneeAvatar } from '@/components/ticket-assignee';
 import {
   BOARD_STATUSES,
+  dueLabel,
+  dueState,
   priorityOf,
   statusOf,
   type TicketPlace,
@@ -85,10 +87,89 @@ export function Labels({ labels }: { labels: string[] }) {
   ));
 }
 
+/**
+ * A ticket's marks on a card or a list row (docs/tickets.md): "Blocked" while an open ticket blocks it, its
+ * sub-issues done of all, and its due date (amber today, red once overdue).
+ */
+export function BoardMarks({ ticket, today }: { ticket: TicketSummary; today: string }) {
+  const due = dueState(ticket.due, ticket.status, today);
+  const { done, total } = ticket.subIssues;
+  return (
+    <>
+      {ticket.blocked && (
+        <span
+          title="An open ticket blocks it"
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-red-400/40 bg-red-400/10 px-1.5 text-[11px] font-medium text-red-300"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className="size-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path d="m5.7 5.7 12.6 12.6" />
+          </svg>
+          Blocked
+        </span>
+      )}
+      {total > 0 && (
+        <span
+          title={`${done} of ${total} sub-issues done`}
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums text-muted-foreground',
+            done === total && 'text-emerald-300',
+          )}
+        >
+          <svg aria-hidden="true" viewBox="0 0 16 16" className="size-3 -rotate-90">
+            <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeOpacity="0.3" strokeWidth="2.5" />
+            <circle
+              cx="8"
+              cy="8"
+              r="6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeDasharray={`${(done / total) * 37.7} 37.7`}
+            />
+          </svg>
+          {done}/{total}
+          <span className="sr-only"> sub-issues done</span>
+        </span>
+      )}
+      {ticket.due && (
+        <span
+          title={`Due ${ticket.due}${due === 'overdue' ? ' (overdue)' : ''}`}
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground',
+            due === 'today' && 'text-amber-300',
+            due === 'overdue' && 'font-medium text-red-300',
+          )}
+        >
+          <span className="sr-only">{due === 'overdue' ? 'Overdue, was due' : 'Due'} </span>
+          {dueLabel(ticket.due, today)}
+        </span>
+      )}
+    </>
+  );
+}
+
 const cardClass =
   'flex w-full cursor-pointer touch-manipulation select-none flex-col gap-2 rounded-md border border-border bg-background p-3 text-left ao-raised outline-none transition-colors [-webkit-touch-callout:none] hover:border-foreground/25 focus-visible:ring-2 focus-visible:ring-ring';
 
-function CardBody({ ticket, agents, working }: { ticket: TicketSummary; agents: ChatAgent[]; working: Set<string> }) {
+function CardBody({
+  ticket,
+  agents,
+  working,
+  today,
+}: {
+  ticket: TicketSummary;
+  agents: ChatAgent[];
+  working: Set<string>;
+  today: string;
+}) {
   return (
     <>
       <span className="flex items-center gap-2 text-xs">
@@ -101,7 +182,8 @@ function CardBody({ ticket, agents, working }: { ticket: TicketSummary; agents: 
       <span className="text-sm leading-snug [overflow-wrap:anywhere]">{ticket.title}</span>
       <span className="flex flex-wrap items-center gap-1.5">
         <Labels labels={ticket.labels} />
-        <span className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground">
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-2 text-[11px] text-muted-foreground">
+          <BoardMarks ticket={ticket} today={today} />
           {ticket.links.length > 0 && (
             <span>
               {ticket.links.length} link{ticket.links.length === 1 ? '' : 's'}
@@ -197,12 +279,15 @@ export function Board({
   tickets,
   agents,
   working,
+  today,
   onOpen,
   onMove,
 }: {
   tickets: TicketSummary[];
   agents: ChatAgent[];
   working: Set<string>;
+  /** Today in the viewer's time zone (YYYY-MM-DD): due dates before it are overdue. */
+  today: string;
   onOpen: (ticket: TicketSummary) => void;
   onMove: (ticket: TicketSummary, status: TicketStatus, place: TicketPlace) => Promise<unknown>;
 }) {
@@ -416,7 +501,7 @@ export function Board({
                         if (!drag && Date.now() - dropped.current > CLICK_AFTER_DROP_MS) onOpen(ticket);
                       }}
                     >
-                      <CardBody ticket={ticket} agents={agents} working={working} />
+                      <CardBody ticket={ticket} agents={agents} working={working} today={today} />
                     </SortableCard>
                   ))}
                 </SortableContext>
@@ -430,7 +515,7 @@ export function Board({
           <DragOverlay dropAnimation={dropAnimation} zIndex={60}>
             {held && (
               <div className={cn(cardClass, 'ticket-lift cursor-grabbing border-primary/50 ring-2 ring-primary/60')}>
-                <CardBody ticket={held} agents={agents} working={working} />
+                <CardBody ticket={held} agents={agents} working={working} today={today} />
               </div>
             )}
           </DragOverlay>,
