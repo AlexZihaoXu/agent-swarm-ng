@@ -1,5 +1,7 @@
 import type { PlatformStore } from '../platform-store';
 import { labelText } from '../message-text';
+import { platformZone } from '../time-notes';
+import { cleanDueDate, dayStart, today } from './due';
 
 /**
  * Tickets (docs/tickets.md): a per-organization board of work for its people and agents, off until the owner turns
@@ -38,8 +40,38 @@ export const LABEL_MAX = 24;
 export const LINKS_MAX = 20;
 /** Wake-ups agents cause on one ticket (assigning each other, mentions) per hour: no endless back and forth. */
 export const AGENT_WAKES_PER_HOUR = 10;
+/** Sub-issues go at most this many levels deep (a ticket, its sub-issue, and that one's). */
+export const TICKET_LEVELS = 3;
+/** Relations of one ticket, sub-issues shown under one, references resolved in one lookup. */
+export const RELATIONS_MAX = 50;
+const CHILDREN_MAX = 100;
+export const REFS_MAX = 50;
 const LIST_MAX = 500;
 const EVENTS_PAGE = 200;
+/** Due reminders are checked at least this often (a far-off date is looked at again then). */
+const DUE_CHECK_MAX_MS = 6 * 3_600_000;
+const DUE_BATCH = 50;
+/**
+ * Relations, as seen from one ticket (docs/tickets.md#relations). Stored once each: `blocks` (from blocks to),
+ * `related` (either way) and `duplicate` (from is a duplicate of to).
+ */
+export const RELATION_KINDS = ['blocks', 'blocked_by', 'related', 'duplicate_of', 'duplicated_by'] as const;
+export type RelationKind = (typeof RELATION_KINDS)[number];
+const RELATION_WORDS: Record<RelationKind, string> = {
+  blocks: 'blocking',
+  blocked_by: 'blocked by',
+  related: 'related to',
+  duplicate_of: 'a duplicate of',
+  duplicated_by: 'duplicated by',
+};
+/** The stored row for `kind` seen from `self` towards `other`. */
+function storedRelation(kind: RelationKind, self: string, other: string) {
+  if (kind === 'blocks') return { fromId: self, toId: other, kind: 'blocks' };
+  if (kind === 'blocked_by') return { fromId: other, toId: self, kind: 'blocks' };
+  if (kind === 'duplicate_of') return { fromId: self, toId: other, kind: 'duplicate' };
+  if (kind === 'duplicated_by') return { fromId: other, toId: self, kind: 'duplicate' };
+  return { fromId: self, toId: other, kind: 'related' };
+}
 /** The tools an owner can grant an agent (Agent settings → Tickets). */
 export const TICKET_TOOLS = ['ticket_list', 'ticket_read', 'ticket_create', 'ticket_update', 'ticket_comment'] as const;
 export type TicketToolName = (typeof TICKET_TOOLS)[number];
@@ -57,7 +89,17 @@ export class TicketError extends Error {
 export type Actor = { kind: 'person'; userId: string; name: string } | { kind: 'agent'; agentId: string; name: string };
 /** The owner of the organization, one of its agents, or nobody (null). */
 export type AssigneeInput = { owner: true } | { agentId: string } | null;
-export type TicketLink = { kind: 'computer' | 'file'; id: string; label: string };
+/**
+ * A computer of the organization, a chat file, or a chat message (its conversation: a private chat `chat` with its
+ * channel and agent, or a group chat `group`), with the label shown.
+ */
+export type TicketLink = {
+  kind: 'computer' | 'file' | 'message';
+  id: string;
+  label: string;
+  conversation?: { kind: 'chat' | 'group'; id: string; agentId?: string; name: string };
+};
+export type TicketRelationInput = { kind: RelationKind; number: number };
 export type TicketSettings = {
   enabled: boolean;
   prefix: string;
@@ -74,6 +116,10 @@ export type TicketInput = {
   labels?: string[];
   assignee?: AssigneeInput;
   links?: TicketLink[];
+  /** The parent ticket's number (a sub-issue of it), or null for none. */
+  parent?: number | null;
+  /** A calendar day (YYYY-MM-DD) in the owner's time zone, or null for none. */
+  due?: string | null;
 };
 /**
  * Where a ticket lands in its (new) status's column: right below `after`, else right above `before` (ticket numbers,
@@ -83,6 +129,8 @@ export type TicketPlace = { after?: number; before?: number };
 export type TicketPatch = Partial<Omit<TicketInput, 'links'>> & {
   addLinks?: TicketLink[];
   removeLinks?: string[];
+  addRelations?: TicketRelationInput[];
+  removeRelations?: TicketRelationInput[];
   place?: TicketPlace;
 };
 /** A change, for live dashboards and push: `review` when someone other than the owner moved it to In review. */
@@ -127,7 +175,7 @@ type Org = {
   id: string;
   name: string;
   ownerId: string;
-  owner: { name: string };
+  owner: { name: string; timeZone: string };
   ticketsEnabled: boolean;
   ticketPrefix: string;
   ticketWakeOnAssign: boolean;
@@ -153,6 +201,8 @@ type Row = {
   createdByName: string;
   createdAt: Date;
   updatedAt: Date;
+  dueDate: string | null;
+  parent: { number: number; title: string; status: string } | null;
 };
 type EventRow = {
   sequence: number;
@@ -163,9 +213,21 @@ type EventRow = {
   authorName: string;
   text: string;
   createdAt: Date;
+  editedAt: Date | null;
+  deletedAt: Date | null;
+  deletedBy: string | null;
 };
 type NewEvent = { kind: string; authorKind: string; authorId: string; authorName: string; text: string };
 type Wake = { agentId: string; name: string; text: string; human: boolean };
+/** Activity for another ticket than the one being changed (a blocked ticket whose agent is woken). */
+type OtherEvent = NewEvent & { ticketId: string };
+/** What every ticket query includes for its view. */
+const INCLUDE = {
+  assigneeAgent: { select: { name: true } },
+  parent: { select: { number: true, title: true, status: true } },
+};
+type Extra = { subIssues: { done: number; total: number }; blocked: boolean };
+const NO_EXTRA: Extra = { subIssues: { done: 0, total: 0 }, blocked: false };
 
 /** A column's order: manual position, then the most recently updated (ties only happen before anyone reorders). */
 const BOARD_ORDER = [{ position: 'asc' as const }, { updatedAt: 'desc' as const }, { sequence: 'desc' as const }];
@@ -203,6 +265,10 @@ function cleanDescription(text: string) {
 
 export class Tickets {
   private readonly agentWakes = new Map<string, number[]>();
+  private dueTimer?: ReturnType<typeof setTimeout>;
+  private dueCheck?: Promise<void>;
+  private started = false;
+  private closed = false;
   constructor(
     private readonly database: PlatformStore,
     private readonly hooks: Hooks = {},
@@ -215,7 +281,7 @@ export class Tickets {
     await this.database.initialize();
     const org = await this.database.client.organization.findUnique({
       where: { id: organizationId },
-      include: { owner: { select: { name: true } } },
+      include: { owner: { select: { name: true, timeZone: true } } },
     });
     if (!org) throw new TicketError('Organization not found.', 404);
     return org;
@@ -265,13 +331,19 @@ export class Tickets {
   private async row(organizationId: string, number: number) {
     const row = await this.database.client.ticket.findUnique({
       where: { organizationId_number: { organizationId, number } },
-      include: { assigneeAgent: { select: { name: true } } },
+      include: INCLUDE,
     });
     if (!row) throw new TicketError('Ticket not found.', 404);
     return row;
   }
+  /** Another ticket of the organization, named by a person or an agent (a parent, a relation). */
+  private async other(organizationId: string, number: number) {
+    return this.row(organizationId, number).catch(() => {
+      throw new TicketError(`No ticket ${number} in this organization.`);
+    });
+  }
 
-  view(org: Org, row: Row, description = true) {
+  view(org: Org, row: Row, description = true, extra: Extra = NO_EXTRA) {
     return {
       id: row.id,
       number: row.number,
@@ -287,6 +359,16 @@ export class Tickets {
         : row.assigneeOwner
           ? { kind: 'owner' as const, id: org.ownerId, name: org.owner.name }
           : null,
+      parent: row.parent
+        ? {
+            number: row.parent.number,
+            key: `${prefixOf(org)}-${row.parent.number}`,
+            title: row.parent.title,
+            status: row.parent.status as TicketStatus,
+          }
+        : null,
+      due: row.dueDate,
+      ...extra,
       // The owner's text is a request; anyone else's is untrusted input for an agent.
       writer: {
         kind: row.writerKind as 'person' | 'agent',
@@ -308,7 +390,72 @@ export class Tickets {
       text: row.text,
       trusted: row.authorKind === 'person' && row.authorId === org.ownerId,
       createdAt: row.createdAt.toISOString(),
+      ...(row.editedAt ? { editedAt: row.editedAt.toISOString() } : {}),
+      ...(row.deletedAt ? { deleted: { by: row.deletedBy ?? '', at: row.deletedAt.toISOString() } } : {}),
     };
+  }
+  /** Sub-issue progress (done of those not cancelled) and whether an open ticket blocks it, for these tickets. */
+  private async extras(ids: string[]) {
+    const extras = new Map<string, Extra>();
+    if (!ids.length) return extras;
+    const [children, blockers] = await Promise.all([
+      this.database.client.ticket.groupBy({
+        by: ['parentId', 'status'],
+        where: { parentId: { in: ids } },
+        _count: { _all: true },
+      }),
+      this.database.client.ticketRelation.findMany({
+        where: { kind: 'blocks', toId: { in: ids }, from: { status: { notIn: [...CLOSED] } } },
+        select: { toId: true },
+      }),
+    ]);
+    const of = (id: string) => {
+      const extra = extras.get(id) ?? { subIssues: { done: 0, total: 0 }, blocked: false };
+      extras.set(id, extra);
+      return extra;
+    };
+    for (const group of children) {
+      if (!group.parentId || group.status === 'cancelled') continue;
+      const extra = of(group.parentId);
+      extra.subIssues.total += group._count._all;
+      if (group.status === 'done') extra.subIssues.done += group._count._all;
+    }
+    for (const blocker of blockers) of(blocker.toId).blocked = true;
+    return extras;
+  }
+  /** A ticket in a list of others (sub-issues, relations). */
+  private brief(org: Org, row: { number: number; title: string; status: string }) {
+    return {
+      number: row.number,
+      key: `${prefixOf(org)}-${row.number}`,
+      title: row.title,
+      status: row.status as TicketStatus,
+    };
+  }
+  /** The ticket's relations, as seen from it, in kind order then by number. */
+  private async relationsOf(org: Org, ticketId: string) {
+    const select = { select: { number: true, title: true, status: true } };
+    const rows = await this.database.client.ticketRelation.findMany({
+      where: { OR: [{ fromId: ticketId }, { toId: ticketId }] },
+      include: { from: select, to: select },
+      orderBy: { sequence: 'asc' },
+      take: RELATIONS_MAX * 2,
+    });
+    const seen = rows.map(row => {
+      const outgoing = row.fromId === ticketId;
+      const kind: RelationKind =
+        row.kind === 'blocks'
+          ? outgoing
+            ? 'blocks'
+            : 'blocked_by'
+          : row.kind === 'duplicate'
+            ? outgoing
+              ? 'duplicate_of'
+              : 'duplicated_by'
+            : 'related';
+      return { kind, ...this.brief(org, outgoing ? row.to : row.from) };
+    });
+    return seen.sort((a, b) => RELATION_KINDS.indexOf(a.kind) - RELATION_KINDS.indexOf(b.kind) || a.number - b.number);
   }
 
   async list(
@@ -326,6 +473,9 @@ export class Tickets {
     const org = await this.scope(organizationId, filter.actor);
     const take = Math.min(Math.max(filter.limit ?? LIST_MAX, 1), LIST_MAX);
     const query = filter.query?.trim();
+    // "HOME-14", "#14" or "14" also finds that ticket (another organization's prefix finds nothing by number).
+    const named = query ? /^(?:([A-Za-z][A-Za-z0-9]*)-|#)?(\d{1,9})$/.exec(query) : null;
+    const number = named && (!named[1] || named[1].toUpperCase() === prefixOf(org)) ? Number(named[2]) : undefined;
     const rows = await this.database.client.ticket.findMany({
       where: {
         organizationId,
@@ -337,17 +487,39 @@ export class Tickets {
             : filter.assignee
               ? { assigneeAgentId: filter.assignee.agentId }
               : {}),
-        ...(query ? { OR: [{ title: { contains: query } }, { description: { contains: query } }] } : {}),
+        ...(query
+          ? {
+              OR: [
+                { title: { contains: query } },
+                { description: { contains: query } },
+                ...(number ? [{ number }] : []),
+              ],
+            }
+          : {}),
       },
       orderBy: filter.order === 'board' ? BOARD_ORDER : { updatedAt: 'desc' },
       take: take + 1,
-      include: { assigneeAgent: { select: { name: true } } },
+      include: INCLUDE,
     });
+    const shown = rows.slice(0, take);
+    const extras = await this.extras(shown.map(row => row.id));
     return {
       settings: ticketSettingsOf(org),
-      tickets: rows.slice(0, take).map(row => this.view(org, row, false)),
+      tickets: shown.map(row => this.view(org, row, false, extras.get(row.id))),
       truncated: rows.length > take,
     };
+  }
+
+  /** Tickets named in a conversation (HOME-14 chips): number, key, title and status, only while tickets are on. */
+  async refs(organizationId: string, numbers: number[]) {
+    const org = await this.org(organizationId);
+    if (!org.ticketsEnabled) return [];
+    const rows = await this.database.client.ticket.findMany({
+      where: { organizationId, number: { in: [...new Set(numbers)].slice(0, REFS_MAX) } },
+      select: { number: true, title: true, status: true },
+      orderBy: { number: 'asc' },
+    });
+    return rows.map(row => this.brief(org, row));
   }
 
   /** One ticket with its newest comments and activity (at most 200, oldest first; `before` pages back). */
@@ -360,8 +532,23 @@ export class Tickets {
       orderBy: { sequence: 'desc' },
       take: take + 1,
     });
+    const [extras, children, relations] = await Promise.all([
+      this.extras([row.id]),
+      this.database.client.ticket.findMany({
+        where: { parentId: row.id },
+        orderBy: { number: 'asc' },
+        take: CHILDREN_MAX,
+        include: INCLUDE,
+      }),
+      this.relationsOf(org, row.id),
+    ]);
     return {
-      ticket: this.view(org, row),
+      ticket: this.view(org, row, true, extras.get(row.id)),
+      children: children.map(child => {
+        const { assignee } = this.view(org, child, false);
+        return { ...this.brief(org, child), assignee };
+      }),
+      relations,
       events: events
         .slice(0, take)
         .reverse()
@@ -380,8 +567,49 @@ export class Tickets {
       throw new TicketError('That assignee is not an agent of this organization.');
     return agent;
   }
+  /** A chat message of the organization as a link: a private chat with one of its agents, or one of its groups. */
+  async messageLink(organizationId: string, messageId: string): Promise<TicketLink> {
+    const db = this.database.client;
+    const chat = await db.message.findUnique({
+      where: { id: messageId },
+      select: { text: true, channelId: true, channel: { select: { agent: true } } },
+    });
+    const label = (text: string) => excerpt(oneLine(text), 80) || 'Message';
+    if (chat && chat.channel.agent.organizationId === organizationId)
+      return {
+        kind: 'message',
+        id: messageId,
+        label: label(chat.text),
+        conversation: {
+          kind: 'chat',
+          id: chat.channelId,
+          agentId: chat.channel.agent.id,
+          name: chat.channel.agent.name,
+        },
+      };
+    const group = await db.groupMessage.findUnique({
+      where: { id: messageId },
+      select: { text: true, groupId: true, group: { select: { name: true, organizationId: true } } },
+    });
+    if (group && group.group.organizationId === organizationId)
+      return {
+        kind: 'message',
+        id: messageId,
+        label: label(group.text),
+        conversation: { kind: 'group', id: group.groupId, name: group.group.name },
+      };
+    throw new TicketError('That message is not in a chat of this organization.');
+  }
+  /** Links checked where they are made: computers of the organization, existing files, its own chats' messages. */
   private async checkLinks(org: Org, links: TicketLink[]) {
+    const checked: TicketLink[] = [];
     for (const link of links) {
+      if (link.kind === 'message') {
+        // Its label and conversation come from the message itself, never from the caller.
+        checked.push(await this.messageLink(org.id, link.id));
+        continue;
+      }
+      checked.push(link);
       if (link.kind === 'computer') {
         const computer = await this.database.client.computer.findUnique({
           where: { id: link.id },
@@ -391,6 +619,73 @@ export class Tickets {
       } else if (!(await this.database.client.channelFile.findUnique({ where: { id: link.id }, select: { id: true } })))
         throw new TicketError('That file does not exist.');
     }
+    return checked;
+  }
+  /**
+   * Agents change only tickets assigned to them, or unassigned ones when the owner allows picking them up (people
+   * change any). `what` names the ticket in the refusal.
+   */
+  private mayChange(
+    org: Org,
+    row: { assigneeAgentId: string | null; assigneeOwner: boolean; assigneeAgent: { name: string } | null },
+    actor: Actor,
+    what = 'This ticket',
+  ) {
+    if (actor.kind !== 'agent') return;
+    const mine = row.assigneeAgentId === actor.agentId;
+    const unassigned = !row.assigneeAgentId && !row.assigneeOwner;
+    if (!mine && !(unassigned && org.ticketAgentsPickUp))
+      throw new TicketError(
+        unassigned
+          ? `${what} is unassigned: agents may pick up unassigned tickets only when your owner allows it. Comment with ticket_comment instead.`
+          : `${what} is assigned to ${row.assigneeAgent?.name ?? org.owner.name}: only its assignee changes it. Comment with ticket_comment instead.`,
+        403,
+      );
+  }
+  /**
+   * A parent for `ticket` (null: a new one): a ticket of the organization the actor may change, never the ticket
+   * itself or one of its sub-issues, and the whole family at most TICKET_LEVELS deep.
+   */
+  private async checkParent(org: Org, actor: Actor, ticket: { id: string } | null, number: number) {
+    const db = this.database.client;
+    const parent = await this.other(org.id, number);
+    this.mayChange(org, parent, actor, `${prefixOf(org)}-${number}`);
+    if (ticket && (parent.id === ticket.id || (await this.isBelow(parent.id, ticket.id))))
+      throw new TicketError('A ticket cannot be a sub-issue of itself or of its own sub-issue.');
+    // Levels above it (the parent and its own), and below: the ticket itself, its sub-issues, theirs.
+    let above = 1;
+    for (let id = parent.parentId; id && above <= TICKET_LEVELS; above += 1)
+      id = (await db.ticket.findUnique({ where: { id }, select: { parentId: true } }))?.parentId ?? null;
+    let levels = 1;
+    for (let layer = ticket ? [ticket.id] : []; layer.length && levels <= TICKET_LEVELS; levels += 1) {
+      layer = (
+        await db.ticket.findMany({ where: { parentId: { in: layer } }, select: { id: true }, take: CHILDREN_MAX })
+      ).map(row => row.id);
+      if (!layer.length) break;
+    }
+    if (above + levels > TICKET_LEVELS)
+      throw new TicketError('Sub-issues go at most three levels deep: a ticket, its sub-issues and theirs.');
+    return parent;
+  }
+  /** Whether `id` is below `ancestor` (its sub-issue, or theirs). */
+  private async isBelow(id: string, ancestor: string) {
+    let current: string | null = id;
+    for (let step = 0; current && step <= TICKET_LEVELS + 1; step += 1) {
+      const row: { parentId: string | null } | null = await this.database.client.ticket.findUnique({
+        where: { id: current },
+        select: { parentId: true },
+      });
+      current = row?.parentId ?? null;
+      if (current === ancestor) return true;
+    }
+    return false;
+  }
+  /** A due date, checked, with the moment its reminder fires (the day's start in the owner's time zone). */
+  private dueOf(org: Org, value: string | null) {
+    if (value === null) return { dueDate: null, dueAt: null, dueReminded: false };
+    const date = cleanDueDate(value);
+    if (!date) throw new TicketError('A due date is a day, like 2026-10-20.');
+    return { dueDate: date, dueAt: dayStart(date, org.owner.timeZone || platformZone()), dueReminded: false };
   }
   private actorWords(org: Org, actor: Actor) {
     if (actor.kind === 'agent') return `Agent ${JSON.stringify(actor.name)} (another agent, not your owner)`;
@@ -426,7 +721,109 @@ export class Tickets {
     const next = tools.includes('ticket_read')
       ? `Read it with ticket_read({"id":"${ticket.key}"}). Move it to In progress when you start, comment as you go, and move it to In review when it is done. Your owner sees the board.`
       : 'You do not have the ticket tools to read or change it; your owner grants them in Agent settings → Tickets.';
-    return `[Tickets · ${labelText(org.name, 80)}] ${this.actorWords(org, actor)} assigned you ${ticket.key} ${JSON.stringify(ticket.title)} (priority ${PRIORITY_LABEL[ticket.priority]}, ${STATUS_LABEL[ticket.status]}).\n${description}\n${next}`;
+    const due = ticket.due ? `, due ${ticket.due}` : '';
+    return `[Tickets · ${labelText(org.name, 80)}] ${this.actorWords(org, actor)} assigned you ${ticket.key} ${JSON.stringify(ticket.title)} (priority ${PRIORITY_LABEL[ticket.priority]}, ${STATUS_LABEL[ticket.status]}${due}).\n${description}\n${next}`;
+  }
+  /** What a woken agent can do next with the ticket, given the tools its owner granted. */
+  private nextStep(key: string, tools: string[], what: string) {
+    return tools.includes('ticket_read')
+      ? `Read it with ticket_read({"id":"${key}"}) and ${what}.`
+      : 'You do not have the ticket tools to read or change it; your owner grants them in Agent settings → Tickets.';
+  }
+  /**
+   * Agents whose tickets the closing of `row` unblocks (docs/tickets.md#relations): those assigned a ticket it
+   * blocked that is open and has no other open blocker. Each wake-up comes with an activity entry on that ticket.
+   */
+  private async unblocked(
+    org: Org,
+    actor: Actor,
+    row: { id: string; number: number; title: string },
+    status: TicketStatus,
+  ) {
+    const wakes: Wake[] = [];
+    const events: OtherEvent[] = [];
+    const blocked = await this.database.client.ticketRelation.findMany({
+      where: { fromId: row.id, kind: 'blocks', to: { status: { notIn: [...CLOSED] }, assigneeAgentId: { not: null } } },
+      include: { to: { include: { assigneeAgent: { select: { id: true, name: true } } } } },
+      take: RELATIONS_MAX,
+    });
+    for (const { to } of blocked) {
+      const others = await this.database.client.ticketRelation.count({
+        where: { toId: to.id, kind: 'blocks', fromId: { not: row.id }, from: { status: { notIn: [...CLOSED] } } },
+      });
+      const agent = to.assigneeAgent;
+      if (others || !agent || (actor.kind === 'agent' && !this.allowAgentWake(to.id))) continue;
+      const key = `${prefixOf(org)}-${to.number}`;
+      wakes.push({
+        agentId: agent.id,
+        name: agent.name,
+        human: actor.kind === 'person' && actor.userId === org.ownerId,
+        text: `[Tickets · ${labelText(org.name, 80)}] ${key} ${JSON.stringify(to.title)} is no longer blocked (it is assigned to you, ${STATUS_LABEL[to.status as TicketStatus]}): ${this.actorWords(org, actor)} moved its last open blocker ${prefixOf(org)}-${row.number} ${JSON.stringify(row.title)} to ${STATUS_LABEL[status]}.\n${this.nextStep(key, await this.granted(agent.id), 'carry on with it')}`,
+      });
+      events.push({
+        ticketId: to.id,
+        kind: 'woken',
+        authorKind: 'agent',
+        authorId: agent.id,
+        authorName: agent.name,
+        text: 'was woken: no longer blocked',
+      });
+    }
+    return { wakes, events };
+  }
+  /** Adds and removes relations of `row` (inside the change's transaction), returning their activity entries. */
+  private async relationChanges(org: Org, row: { id: string; number: number }, patch: TicketPatch) {
+    const db = this.database.client;
+    const key = (number: number) => `${prefixOf(org)}-${number}`;
+    const plan: { add: boolean; kind: RelationKind; number: number; stored: ReturnType<typeof storedRelation> }[] = [];
+    for (const [add, list] of [
+      [false, patch.removeRelations ?? []],
+      [true, patch.addRelations ?? []],
+    ] as const)
+      for (const { kind, number } of list) {
+        if (!RELATION_KINDS.includes(kind)) throw new TicketError('Unknown relation.');
+        if (number === row.number) throw new TicketError('A ticket cannot be related to itself.');
+        const other = await this.other(org.id, number);
+        const stored = storedRelation(kind, row.id, other.id);
+        if (add && stored.kind === 'blocks') {
+          const inverse = await db.ticketRelation.findUnique({
+            where: { fromId_toId_kind: { fromId: stored.toId, toId: stored.fromId, kind: 'blocks' } },
+          });
+          if (inverse)
+            throw new TicketError(
+              `${key(stored.toId === row.id ? row.number : number)} already blocks ${key(stored.toId === row.id ? number : row.number)}: remove that first.`,
+            );
+        }
+        plan.push({ add, kind, number, stored });
+      }
+    if (plan.some(item => item.add)) {
+      const count = await db.ticketRelation.count({ where: { OR: [{ fromId: row.id }, { toId: row.id }] } });
+      if (count + plan.filter(item => item.add).length > RELATIONS_MAX)
+        throw new TicketError(`At most ${RELATIONS_MAX} relations on one ticket.`);
+    }
+    return {
+      plan,
+      /** Applies the plan; the activity lists only what changed. */
+      apply: async (tx: Tx) => {
+        const texts: string[] = [];
+        for (const item of plan) {
+          // `related` goes either way: one row, whichever side made it.
+          const both =
+            item.stored.kind === 'related'
+              ? [item.stored, { ...item.stored, fromId: item.stored.toId, toId: item.stored.fromId }]
+              : [item.stored];
+          const existing = await tx.ticketRelation.findMany({ where: { OR: both }, select: { sequence: true } });
+          if (item.add && !existing.length) {
+            await tx.ticketRelation.create({ data: item.stored });
+            texts.push(`marked it ${RELATION_WORDS[item.kind]} ${key(item.number)}`);
+          } else if (!item.add && existing.length) {
+            await tx.ticketRelation.deleteMany({ where: { sequence: { in: existing.map(found => found.sequence) } } });
+            texts.push(`removed the relation ${RELATION_WORDS[item.kind]} ${key(item.number)}`);
+          }
+        }
+        return texts;
+      },
+    };
   }
 
   /**
@@ -461,13 +858,19 @@ export class Tickets {
 
   /**
    * Saves the ticket's changes, its events and the wake-ups together (`write` returns the ticket's id and may add
-   * events and wake-ups once it knows the number), then delivers the wake-ups.
+   * events and wake-ups once it knows the number; `others` are entries for other tickets), then delivers the wake-ups.
    */
-  private async commit(events: NewEvent[], wakes: Wake[], write: (tx: Tx) => Promise<string>) {
+  private async commit(
+    events: NewEvent[],
+    wakes: Wake[],
+    write: (tx: Tx) => Promise<string>,
+    others: OtherEvent[] = [],
+  ) {
     const delivered: (Wake & { eventId: string })[] = [];
     await this.database.client.$transaction(async tx => {
       const ticketId = await write(tx);
       if (events.length) await tx.ticketEvent.createMany({ data: events.map(event => ({ ...event, ticketId })) });
+      if (others.length) await tx.ticketEvent.createMany({ data: others });
       for (const wake of wakes) {
         const eventId = crypto.randomUUID();
         delivered.push({ ...wake, eventId });
@@ -480,6 +883,7 @@ export class Tickets {
       await (this.hooks.wake?.(wake.agentId, wake.text, wake.human, wake.eventId) ?? Promise.resolve(false)).catch(
         () => false,
       );
+    this.scheduleDue();
   }
 
   async create(organizationId: string, actor: Actor, input: TicketInput) {
@@ -493,13 +897,17 @@ export class Tickets {
     const title = cleanTitle(input.title);
     const description = cleanDescription(input.description ?? '');
     const labels = cleanLabels(input.labels ?? []);
-    const links = input.links ?? [];
-    if (links.length > LINKS_MAX) throw new TicketError(`At most ${LINKS_MAX} links.`);
-    await this.checkLinks(org, links);
+    if ((input.links ?? []).length > LINKS_MAX) throw new TicketError(`At most ${LINKS_MAX} links.`);
+    const links = await this.checkLinks(org, input.links ?? []);
     const agent = await this.checkAssignee(org, input.assignee);
     const owner = Boolean(input.assignee && 'owner' in input.assignee);
+    const parent = input.parent ? await this.checkParent(org, actor, null, input.parent) : null;
+    const due = input.due ? this.dueOf(org, input.due) : null;
     const author = this.author(actor);
     const events: NewEvent[] = [{ ...author, kind: 'created', text: 'created this' }];
+    if (parent)
+      events.push({ ...author, kind: 'parent', text: `made it a sub-issue of ${prefixOf(org)}-${parent.number}` });
+    if (due) events.push({ ...author, kind: 'due', text: `set the due date ${due.dueDate}` });
     const assigneeName = this.assigneeName(org, { owner, agent });
     if (assigneeName) events.push({ ...author, kind: 'assignee', text: `assigned ${assigneeName}` });
     let number = 0;
@@ -519,6 +927,8 @@ export class Tickets {
       writerId: author.authorId,
       writerName: actor.name,
       createdByName: actor.name,
+      parentId: parent?.id ?? null,
+      ...(due ?? {}),
     };
     const tools = agent ? await this.granted(agent.id) : [];
     await this.commit(events, wakes, async tx => {
@@ -531,7 +941,10 @@ export class Tickets {
       // New tickets go on top of their column.
       const top = await tx.ticket.aggregate({ where: { organizationId: org.id, status }, _min: { position: true } });
       const position = top._min.position === null ? 0 : top._min.position - 1;
-      const row = await tx.ticket.create({ data: { ...draft, organizationId: org.id, number, position } });
+      const row = await tx.ticket.create({
+        data: { ...draft, organizationId: org.id, number, position },
+        include: INCLUDE,
+      });
       // The wake-up names the ticket, so it is written once the number is known (still inside the transaction).
       const self = actor.kind === 'agent' && actor.agentId === agent?.id;
       if (agent && org.ticketWakeOnAssign && !self && (actor.kind === 'person' || this.allowAgentWake(row.id))) {
@@ -549,6 +962,9 @@ export class Tickets {
           authorName: agent.name,
           text: 'was woken by the assignment',
         });
+        // The assignment names its due date: an overdue one needs no reminder of its own.
+        if (due?.dueAt && due.dueAt.getTime() <= this.now())
+          await tx.ticket.update({ where: { id: row.id }, data: { dueReminded: true } });
       }
       return row.id;
     });
@@ -560,16 +976,8 @@ export class Tickets {
     const org = await this.scope(organizationId, actor, true);
     const row = await this.row(organizationId, number);
     const status = row.status as TicketStatus;
+    this.mayChange(org, row, actor);
     if (actor.kind === 'agent') {
-      const mine = row.assigneeAgentId === actor.agentId;
-      const unassigned = !row.assigneeAgentId && !row.assigneeOwner;
-      if (!mine && !(unassigned && org.ticketAgentsPickUp))
-        throw new TicketError(
-          unassigned
-            ? 'This ticket is unassigned: agents may pick up unassigned tickets only when your owner allows it. Comment with ticket_comment instead.'
-            : `This ticket is assigned to ${row.assigneeAgent?.name ?? org.owner.name}: only its assignee changes it. Comment with ticket_comment instead.`,
-          403,
-        );
       if (patch.status && CLOSED.includes(patch.status))
         throw new TicketError('Agents stop at In review: move it to In review and your owner closes it.', 403);
       if (patch.status && patch.status !== status && CLOSED.includes(status))
@@ -611,6 +1019,27 @@ export class Tickets {
         });
       }
     }
+    if (patch.parent !== undefined) {
+      const parent = patch.parent === null ? null : await this.checkParent(org, actor, row, patch.parent);
+      if ((parent?.id ?? null) !== row.parentId) {
+        data.parentId = parent?.id ?? null;
+        events.push({
+          ...author,
+          kind: 'parent',
+          text: parent
+            ? `made it a sub-issue of ${prefixOf(org)}-${parent.number}`
+            : `removed it from ${prefixOf(org)}-${row.parent?.number}`,
+        });
+      }
+    }
+    if (patch.due !== undefined && (patch.due === null ? null : (cleanDueDate(patch.due) ?? '')) !== row.dueDate) {
+      Object.assign(data, this.dueOf(org, patch.due));
+      events.push({
+        ...author,
+        kind: 'due',
+        text: patch.due === null ? 'removed the due date' : `set the due date ${data.dueDate as string}`,
+      });
+    }
     let links = json<TicketLink[]>(row.links, []);
     if (patch.removeLinks?.length) {
       for (const id of patch.removeLinks) {
@@ -620,13 +1049,17 @@ export class Tickets {
       links = links.filter(link => !patch.removeLinks!.includes(link.id));
     }
     if (patch.addLinks?.length) {
-      const added = patch.addLinks.filter(link => !links.some(item => item.id === link.id));
-      await this.checkLinks(org, added);
+      const added = await this.checkLinks(
+        org,
+        patch.addLinks.filter(link => !links.some(item => item.id === link.id)),
+      );
       links = [...links, ...added];
       if (links.length > LINKS_MAX) throw new TicketError(`At most ${LINKS_MAX} links.`);
       for (const link of added) events.push({ ...author, kind: 'link', text: `linked the ${link.kind} ${link.label}` });
     }
     if (JSON.stringify(links) !== row.links) data.links = JSON.stringify(links);
+    const relations =
+      patch.addRelations?.length || patch.removeRelations?.length ? await this.relationChanges(org, row, patch) : null;
     const wakes: Wake[] = [];
     if (patch.assignee !== undefined) {
       const agent = await this.checkAssignee(org, patch.assignee);
@@ -651,19 +1084,35 @@ export class Tickets {
             authorName: agent.name,
             text: 'was woken by the assignment',
           });
+          // The assignment names its due date: an overdue one needs no reminder of its own.
+          const dueAt = data.dueDate !== undefined ? (data.dueAt as Date | null) : row.dueAt;
+          if (dueAt && dueAt.getTime() <= this.now()) data.dueReminded = true;
         }
       }
     }
+    // Closing a ticket may unblock others: their agents are woken.
+    const closing =
+      data.status !== undefined && CLOSED.includes(data.status as TicketStatus) && !CLOSED.includes(status);
+    const unblocked = closing
+      ? await this.unblocked(org, actor, row, data.status as TicketStatus)
+      : { wakes: [], events: [] };
+    wakes.push(...unblocked.wakes);
     // A new status puts it on top of that column unless the person placed it (dragging); a reorder alone is no
     // activity and leaves updatedAt as it was.
     const placing = Boolean(patch.place) || data.status !== undefined;
-    if (!events.length && !placing) return this.get(org.id, number);
-    if (!events.length) data.updatedAt = row.updatedAt;
-    await this.commit(events, wakes, async tx => {
-      if (placing)
-        data.position = await this.placeIn(tx, org.id, (data.status as TicketStatus) ?? status, row.id, patch.place);
-      return (await tx.ticket.update({ where: { id: row.id }, data })).id;
-    });
+    if (!events.length && !placing && !relations?.plan.length) return this.get(org.id, number);
+    await this.commit(
+      events,
+      wakes,
+      async tx => {
+        if (relations) for (const text of await relations.apply(tx)) events.push({ ...author, kind: 'relation', text });
+        if (placing)
+          data.position = await this.placeIn(tx, org.id, (data.status as TicketStatus) ?? status, row.id, patch.place);
+        if (!events.length) data.updatedAt = row.updatedAt;
+        return (await tx.ticket.update({ where: { id: row.id }, data })).id;
+      },
+      unblocked.events,
+    );
     const owner = actor.kind === 'person' && actor.userId === org.ownerId;
     this.hooks.changed?.(org.id, {
       number,
@@ -671,6 +1120,13 @@ export class Tickets {
         ? { review: { key: `${prefixOf(org)}-${number}`, title: (data.title as string) ?? row.title, by: actor.name } }
         : {}),
     });
+    for (const event of unblocked.events) {
+      const other = await this.database.client.ticket.findUnique({
+        where: { id: event.ticketId },
+        select: { number: true },
+      });
+      if (other) this.hooks.changed?.(org.id, { number: other.number });
+    }
     return this.get(org.id, number);
   }
 
@@ -729,6 +1185,141 @@ export class Tickets {
     );
     this.hooks.changed?.(org.id, { number });
     return { ...(await this.get(org.id, number)), ...(notWoken.length ? { notWoken } : {}) };
+  }
+
+  /** A comment of this ticket the actor wrote (or, to delete it, the organization's owner), still there. */
+  private async ownComment(org: Org, number: number, eventId: string, actor: Actor, deleting: boolean) {
+    const ticket = await this.row(org.id, number);
+    const event = await this.database.client.ticketEvent.findUnique({ where: { id: eventId } });
+    if (!event || event.ticketId !== ticket.id || event.kind !== 'comment')
+      throw new TicketError('That is not a comment on this ticket.', 404);
+    if (event.deletedAt) throw new TicketError('This comment was deleted.', 409);
+    const own =
+      actor.kind === 'person'
+        ? event.authorKind === 'person' && event.authorId === actor.userId
+        : event.authorKind === 'agent' && event.authorId === actor.agentId;
+    const owner = actor.kind === 'person' && actor.userId === org.ownerId;
+    if (!own && !(deleting && owner))
+      throw new TicketError(`You can ${deleting ? 'delete' : 'edit'} only your own comments.`, 403);
+    return { ticket, event };
+  }
+  /** Edits one's own comment (its mentions are not woken again). */
+  async editComment(organizationId: string, number: number, eventId: string, actor: Actor, text: string) {
+    const org = await this.scope(organizationId, actor, true);
+    const { event } = await this.ownComment(org, number, eventId, actor, false);
+    const body = text.trim();
+    if (!body || body.length > COMMENT_MAX) throw new TicketError(`A comment is 1–${COMMENT_MAX} characters.`);
+    if (body !== event.text)
+      await this.database.client.ticketEvent.update({
+        where: { id: event.id },
+        data: { text: body, editedAt: new Date(this.now()) },
+      });
+    this.hooks.changed?.(org.id, { number });
+    return this.get(org.id, number);
+  }
+  /** Deletes a comment (its author, or the owner): the text goes, a tombstone says who deleted it and when. */
+  async deleteComment(organizationId: string, number: number, eventId: string, actor: Actor) {
+    const org = await this.scope(organizationId, actor, true);
+    const { event } = await this.ownComment(org, number, eventId, actor, true);
+    await this.database.client.ticketEvent.update({
+      where: { id: event.id },
+      data: { text: '', deletedAt: new Date(this.now()), deletedBy: actor.name },
+    });
+    this.hooks.changed?.(org.id, { number });
+    return this.get(org.id, number);
+  }
+
+  /**
+   * Due reminders (docs/tickets.md#due-dates): once the platform is up (after saved events were handed over again),
+   * each open ticket assigned to an agent is reminded once when its day starts, then checked again for the next.
+   */
+  start() {
+    this.started = true;
+    return this.checkDue();
+  }
+  close() {
+    this.closed = true;
+    clearTimeout(this.dueTimer);
+  }
+  private scheduleDue() {
+    if (this.started && !this.closed) void this.checkDue().catch(() => {});
+  }
+  /** Reminds the agents whose tickets are due now (one pass at a time), then waits for the next due ticket. */
+  async checkDue() {
+    while (this.dueCheck) await this.dueCheck;
+    this.dueCheck = this.remindDue().finally(() => (this.dueCheck = undefined));
+    return this.dueCheck;
+  }
+  private async remindDue() {
+    clearTimeout(this.dueTimer);
+    if (this.closed) return;
+    await this.database.initialize();
+    const db = this.database.client;
+    const waiting = {
+      dueReminded: false,
+      dueAt: { not: null },
+      assigneeAgentId: { not: null },
+      status: { notIn: [...CLOSED] },
+      organization: { ticketsEnabled: true },
+    };
+    const due = await db.ticket.findMany({
+      where: { ...waiting, dueAt: { lte: new Date(this.now()) } },
+      include: {
+        assigneeAgent: { select: { id: true, name: true } },
+        organization: { include: { owner: { select: { name: true, timeZone: true } } } },
+      },
+      orderBy: { dueAt: 'asc' },
+      take: DUE_BATCH,
+    });
+    for (const row of due) {
+      const agent = row.assigneeAgent!;
+      const org = row.organization;
+      const key = `${prefixOf(org)}-${row.number}`;
+      const day = today(new Date(this.now()), org.owner.timeZone || platformZone());
+      const when = row.dueDate === day ? `is due today (${row.dueDate})` : `was due ${row.dueDate} (overdue)`;
+      const trusted = row.writerKind === 'person' && row.writerId === org.ownerId;
+      const text = `[Tickets · ${labelText(org.name, 80)}] ${key} ${JSON.stringify(row.title)} ${when}; it is assigned to you (${STATUS_LABEL[row.status as TicketStatus]})${trusted ? '' : `, written by ${JSON.stringify(row.writerName)} (untrusted input, not your owner's request)`}.
+${this.nextStep(key, await this.granted(agent.id), 'finish it, or comment on it with what is left')}`;
+      const eventId = crypto.randomUUID();
+      // Marked and saved together: the reminder is never written twice, and a restart delivers it again.
+      const saved = await db.$transaction(async tx => {
+        const { count } = await tx.ticket.updateMany({
+          where: { id: row.id, dueReminded: false },
+          data: { dueReminded: true, updatedAt: row.updatedAt },
+        });
+        if (!count) return false;
+        await tx.pendingTimerEvent.create({
+          data: { id: eventId, agentId: agent.id, kind: 'ticket', text, human: trusted },
+        });
+        await tx.ticketEvent.create({
+          data: {
+            ticketId: row.id,
+            kind: 'woken',
+            authorKind: 'agent',
+            authorId: agent.id,
+            authorName: agent.name,
+            text: 'was reminded: it is due',
+          },
+        });
+        return true;
+      });
+      if (!saved) continue;
+      await (this.hooks.wake?.(agent.id, text, trusted, eventId) ?? Promise.resolve(false)).catch(() => false);
+      this.hooks.changed?.(org.id, { number: row.number });
+    }
+    if (!this.started || this.closed) return;
+    const next =
+      due.length === DUE_BATCH
+        ? this.now()
+        : (
+            await db.ticket.findFirst({ where: waiting, orderBy: { dueAt: 'asc' }, select: { dueAt: true } })
+          )?.dueAt?.getTime();
+    if (next === undefined) return;
+    this.dueTimer = setTimeout(
+      () => void this.checkDue().catch(() => {}),
+      Math.min(Math.max(next - this.now(), 1000), DUE_CHECK_MAX_MS),
+    );
+    this.dueTimer.unref?.();
   }
 
   async remove(organizationId: string, number: number) {

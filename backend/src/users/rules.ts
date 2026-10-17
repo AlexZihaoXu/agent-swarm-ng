@@ -111,6 +111,10 @@ export const RULES: Record<string, Rule> = {
   'PATCH /api/organizations/:id/tickets/:number': { organization: 'id' },
   'DELETE /api/organizations/:id/tickets/:number': { organization: 'id' },
   'POST /api/organizations/:id/tickets/:number/comments': { organization: 'id' },
+  'PATCH /api/organizations/:id/tickets/:number/comments/:commentId': { organization: 'id' },
+  'DELETE /api/organizations/:id/tickets/:number/comments/:commentId': { organization: 'id' },
+  // Ticket chips in the organization's conversations (docs/tickets.md#references).
+  'GET /api/organizations/:id/ticket-refs': { organization: 'id' },
   'POST /api/organizations/:id/move': async (request, reach, viewer) => {
     const { kind, id } = body(request);
     const reachable =

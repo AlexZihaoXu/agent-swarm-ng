@@ -159,4 +159,92 @@ describe('ticket routes', { timeout: 120_000 }, () => {
       await app.close();
     }
   });
+  it('resolves references, searches, relates, links messages and edits comments only within reach', async () => {
+    const { app, database, call, admin, samCookie, samOrg } = await fixture();
+    try {
+      const base = `/api/organizations/${samOrg}`;
+      await call('PATCH', base, samCookie, { tickets: { enabled: true, prefix: 'SAM' } });
+      await call('PATCH', '/api/organizations/personal', admin, { tickets: { enabled: true, prefix: 'HOME' } });
+      await call('POST', '/api/organizations/personal/tickets', admin, { title: 'Admin only' });
+      const agent = (name: string, organizationId: string) =>
+        database.createAgent({ name, endpointId: 'm', model: 'm', thinkingLevel: 'off', organizationId });
+      const message = async (agentId: string, text: string) => {
+        const channel = await database.client.channel.create({ data: { agentId } });
+        return database.client.message.create({ data: { channelId: channel.id, role: 'user', text } });
+      };
+      const [bo, rex] = [await agent('Bo', samOrg), await agent('Rex', 'personal')];
+      const asked = await message(bo.id, 'Please rotate the logs on Desk every night');
+      const made = await call('POST', `${base}/tickets`, samCookie, {
+        title: 'Rotate the logs',
+        due: '2026-11-02',
+        linkMessage: asked.id,
+      });
+      expect(made.json().ticket).toMatchObject({
+        due: '2026-11-02',
+        links: [
+          {
+            kind: 'message',
+            id: asked.id,
+            label: 'Please rotate the logs on Desk every night',
+            conversation: { kind: 'chat', agentId: bo.id, name: 'Bo' },
+          },
+        ],
+      });
+      // Another organization's message is refused.
+      const elsewhere = await message(rex.id, 'Not yours');
+      expect(
+        (await call('POST', `${base}/tickets`, samCookie, { title: 'X', linkMessage: elsewhere.id })).statusCode,
+      ).toBe(400);
+      await call('POST', `${base}/tickets`, samCookie, { title: 'Clean the cache', parent: 1 });
+      const related = await call('PATCH', `${base}/tickets/2`, samCookie, {
+        addRelations: [{ kind: 'blocks', number: 1 }],
+      });
+      expect(related.json().relations).toEqual([
+        { kind: 'blocks', number: 1, key: 'SAM-1', title: 'Rotate the logs', status: 'todo' },
+      ]);
+      const board = (await call('GET', `${base}/tickets`, samCookie)).json().tickets;
+      expect(board.find((ticket: { number: number }) => ticket.number === 1)).toMatchObject({
+        blocked: true,
+        subIssues: { done: 0, total: 1 },
+      });
+      expect((await call('GET', `${base}/tickets?q=SAM-2`, samCookie)).json().tickets).toHaveLength(1);
+
+      // References: only the organization named, and only for someone who reaches it.
+      expect((await call('GET', `${base}/ticket-refs?numbers=1,2,9`, samCookie)).json().tickets).toEqual([
+        { number: 1, key: 'SAM-1', title: 'Rotate the logs', status: 'todo' },
+        { number: 2, key: 'SAM-2', title: 'Clean the cache', status: 'todo' },
+      ]);
+      expect((await call('GET', '/api/organizations/personal/ticket-refs?numbers=1', samCookie)).statusCode).toBe(404);
+      expect((await call('GET', `${base}/ticket-refs?numbers=x`, samCookie)).statusCode).toBe(400);
+
+      // Comments: one's own to edit; deleting, one's own or (the owner) anyone's.
+      const own = (await call('POST', `${base}/tickets/1/comments`, samCookie, { text: 'Started' }))
+        .json()
+        .events.at(-1);
+      const theirs = (await call('POST', `${base}/tickets/1/comments`, admin, { text: 'From admin' }))
+        .json()
+        .events.at(-1);
+      const url = (id: string) => `${base}/tickets/1/comments/${id}`;
+      expect((await call('PATCH', url(own.id), admin, { text: 'Taken over' })).statusCode).toBe(403);
+      expect((await call('DELETE', url(own.id), admin)).statusCode).toBe(403);
+      expect(
+        (await call('PATCH', url(own.id), samCookie, { text: 'Started on Desk' })).json().events.at(-2),
+      ).toMatchObject({
+        text: 'Started on Desk',
+        editedAt: expect.any(String),
+      });
+      expect((await call('DELETE', url(theirs.id), samCookie)).json().events.at(-1)).toMatchObject({
+        text: '',
+        deleted: { by: 'Sam' },
+      });
+      expect(
+        (await call('PATCH', `/api/organizations/personal/tickets/1/comments/${own.id}`, samCookie, { text: 'x' }))
+          .statusCode,
+      ).toBe(404);
+      const audit = await database.client.auditEvent.findMany({ where: { kind: 'ticket.update', targetId: samOrg } });
+      expect(audit.map(event => JSON.parse(event.detail ?? '{}').fields)).toContainEqual(['addRelations']);
+    } finally {
+      await app.close();
+    }
+  });
 });

@@ -693,7 +693,11 @@ export class DmBroker {
       );
       await this.activity.interruptActive();
       // Pending timers are rows: after a restart or power loss they resume here.
-      this.timers.start();
+      // Ticket due reminders start once those saved events were handed over, so none is delivered twice.
+      void this.timers
+        .start()
+        .then(() => this.tickets.start())
+        .catch(() => {});
       this.heartbeats.begin();
       this.sleeper.begin();
       this.watcher?.start();
@@ -1627,6 +1631,7 @@ ${preview.text}`
     this.compactor.close();
     this.closing = true;
     this.timers.close();
+    this.tickets.close();
     this.heartbeats.close();
     this.sleeper.close();
     for (const controller of this.sleepers.values()) controller.abort();

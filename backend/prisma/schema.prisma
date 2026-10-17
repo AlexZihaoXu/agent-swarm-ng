@@ -28,86 +28,120 @@ enum MessageRole {
 /// An organization: a folder of agents, computers and group chats that are kept apart from other organizations'
 /// (assignments, DM permissions and group membership never cross it). Moving something drops its cross-org links.
 model Organization {
-  sequence  Int         @id @default(autoincrement())
-  id        String      @unique @default(uuid())
-  name      String
+  sequence           Int         @id @default(autoincrement())
+  id                 String      @unique @default(uuid())
+  name               String
   /// Its owner (docs/users.md): the only user, besides admin, who reaches it; its agents use the owner's model
   /// connections. Deleting a user hands their organizations to admin first.
-  ownerId   String      @default("admin")
-  owner     User        @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  createdAt DateTime    @default(now())
-  agents    Agent[]
-  computers Computer[]
-  groups    GroupChat[]
+  ownerId            String      @default("admin")
+  owner              User        @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  createdAt          DateTime    @default(now())
+  agents             Agent[]
+  computers          Computer[]
+  groups             GroupChat[]
   /// Tickets (docs/tickets.md): a shared board of work for its people and agents, off until the owner turns it on.
-  ticketsEnabled     Boolean  @default(false)
+  ticketsEnabled     Boolean     @default(false)
   /// Shown before ticket numbers (HOME-14); "" derives one from the name.
-  ticketPrefix       String   @default("")
+  ticketPrefix       String      @default("")
   /// Assigning an agent wakes it with a platform event.
-  ticketWakeOnAssign Boolean  @default(true)
+  ticketWakeOnAssign Boolean     @default(true)
   /// Agents with ticket_create may file tickets.
-  ticketAgentsCreate Boolean  @default(true)
+  ticketAgentsCreate Boolean     @default(true)
   /// Agents may change unassigned tickets (and so pick one up), not only their own.
-  ticketAgentsPickUp Boolean  @default(false)
+  ticketAgentsPickUp Boolean     @default(false)
   /// The owner is pushed when someone else moves a ticket to In review.
-  ticketPushReview   Boolean  @default(true)
+  ticketPushReview   Boolean     @default(true)
   /// The next ticket number (numbers are per organization and never reused).
-  ticketNext         Int      @default(1)
+  ticketNext         Int         @default(1)
   tickets            Ticket[]
 }
 
 /// A ticket of an organization's board (docs/tickets.md). Its title and description were written by `writer*` (the
 /// owner's text is a request; anyone else's is untrusted input for an agent).
 model Ticket {
-  sequence        Int           @id @default(autoincrement())
-  id              String        @unique @default(uuid())
+  sequence        Int              @id @default(autoincrement())
+  id              String           @unique @default(uuid())
   organizationId  String
-  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   number          Int
   title           String
-  description     String        @default("")
+  description     String           @default("")
   /// backlog | todo | progress | review | done | cancelled
-  status          String        @default("todo")
+  status          String           @default("todo")
   /// urgent | high | medium | low | none
-  priority        String        @default("none")
+  priority        String           @default("none")
   /// Its place in its status's column, smallest first (docs/tickets.md#order): new and re-statused tickets go on top.
-  position        Float         @default(0)
+  position        Float            @default(0)
   /// JSON array of short lower-case labels.
-  labels          String        @default("[]")
+  labels          String           @default("[]")
   /// JSON array of links: {kind: 'computer' | 'file', id, label}.
-  links           String        @default("[]")
+  links           String           @default("[]")
   /// Assigned to the organization's owner, or to one of its agents (deleting the agent unassigns it), or nobody.
-  assigneeOwner   Boolean       @default(false)
+  assigneeOwner   Boolean          @default(false)
   assigneeAgentId String?
-  assigneeAgent   Agent?        @relation(fields: [assigneeAgentId], references: [id], onDelete: SetNull)
+  assigneeAgent   Agent?           @relation(fields: [assigneeAgentId], references: [id], onDelete: SetNull)
   /// 'person' (a user id) or 'agent' (an agent id), with the name as it was.
   writerKind      String
   writerId        String
   writerName      String
   createdByName   String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
   events          TicketEvent[]
+  /// Its parent ticket (a sub-issue of it), in the same organization; deleting the parent keeps the sub-issues.
+  parentId        String?
+  parent          Ticket?          @relation("TicketParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children        Ticket[]         @relation("TicketParent")
+  /// Its due date, a calendar day (YYYY-MM-DD) as the owner set it, or null.
+  dueDate         String?
+  /// When that day starts in the owner's time zone: the assigned agent is reminded then (docs/tickets.md#due-dates).
+  dueAt           DateTime?
+  /// Whether that reminder was saved (re-armed when the date changes).
+  dueReminded     Boolean          @default(false)
+  relationsFrom   TicketRelation[] @relation("TicketRelationFrom")
+  relationsTo     TicketRelation[] @relation("TicketRelationTo")
 
   @@unique([organizationId, number])
   @@index([organizationId, updatedAt])
   @@index([organizationId, status, position])
   @@index([assigneeAgentId])
+  @@index([parentId])
+  @@index([dueReminded, dueAt])
+}
+
+/// A relation between two tickets of one organization (docs/tickets.md#relations): `blocks` (from blocks to),
+/// `related` (either way) or `duplicate` (from is a duplicate of to).
+model TicketRelation {
+  sequence  Int      @id @default(autoincrement())
+  fromId    String
+  from      Ticket   @relation("TicketRelationFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  toId      String
+  to        Ticket   @relation("TicketRelationTo", fields: [toId], references: [id], onDelete: Cascade)
+  kind      String
+  createdAt DateTime @default(now())
+
+  @@unique([fromId, toId, kind])
+  @@index([toId])
 }
 
 /// A ticket's comment or activity entry: who (a person, an agent or the platform, the name as it was) did what.
 model TicketEvent {
-  sequence   Int      @id @default(autoincrement())
-  id         String   @unique @default(uuid())
+  sequence   Int       @id @default(autoincrement())
+  id         String    @unique @default(uuid())
   ticketId   String
-  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket     Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   /// comment | created | status | assignee | priority | labels | link | title | description | woken
   kind       String
   authorKind String
   authorId   String
   authorName String
   text       String
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
+  /// A comment its author edited (the text is the new one).
+  editedAt   DateTime?
+  /// A deleted comment: its text is gone; who deleted it and when stay (a tombstone).
+  deletedAt  DateTime?
+  deletedBy  String?
 
   @@index([ticketId, sequence])
 }

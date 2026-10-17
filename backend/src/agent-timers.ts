@@ -85,9 +85,11 @@ export class AgentTimers {
     private changed: (agentId: string) => void = () => {},
   ) {}
 
+  /** Resolves once the saved events were handed over again (ticket due reminders start after that). */
   start() {
-    void this.redeliver().catch(() => {});
+    const redelivered = this.redeliver().catch(() => {});
     this.wake();
+    return redelivered;
   }
   /**
    * Firings the platform stopped before their agents saw: delivered again, once per start, and for one agent when it

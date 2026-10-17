@@ -724,6 +724,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organizations/{id}/ticket-refs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ticketRefs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organizations/{id}/tickets/{number}": {
         parameters: {
             query?: never;
@@ -754,6 +770,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/organizations/{id}/tickets/{number}/comments/{commentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteTicketComment"];
+        options?: never;
+        head?: never;
+        patch: operations["editTicketComment"];
         trace?: never;
     };
     "/api/organizations": {
@@ -5213,7 +5245,9 @@ export interface operations {
     };
     listTickets: {
         parameters: {
-            query?: never;
+            query?: {
+                q?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -5246,15 +5280,33 @@ export interface operations {
                             priority: "urgent" | "high" | "medium" | "low" | "none";
                             labels: string[];
                             links: {
-                                kind: "computer" | "file";
+                                kind: "computer" | "file" | "message";
                                 id: string;
                                 label: string;
+                                conversation?: {
+                                    kind: "chat" | "group";
+                                    id: string;
+                                    agentId?: string;
+                                    name: string;
+                                };
                             }[];
                             assignee: {
                                 kind: "owner" | "agent";
                                 id: string;
                                 name: string;
                             } | null;
+                            parent: {
+                                number: number;
+                                key: string;
+                                title: string;
+                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            } | null;
+                            due: string | null;
+                            subIssues: {
+                                done: number;
+                                total: number;
+                            };
+                            blocked: boolean;
                             writer: {
                                 kind: "person" | "agent";
                                 id: string;
@@ -5305,6 +5357,9 @@ export interface operations {
                     } | {
                         agentId: string;
                     } | null;
+                    parent?: number;
+                    due?: string | null;
+                    linkMessage?: string;
                 };
             };
         };
@@ -5325,15 +5380,33 @@ export interface operations {
                             priority: "urgent" | "high" | "medium" | "low" | "none";
                             labels: string[];
                             links: {
-                                kind: "computer" | "file";
+                                kind: "computer" | "file" | "message";
                                 id: string;
                                 label: string;
+                                conversation?: {
+                                    kind: "chat" | "group";
+                                    id: string;
+                                    agentId?: string;
+                                    name: string;
+                                };
                             }[];
                             assignee: {
                                 kind: "owner" | "agent";
                                 id: string;
                                 name: string;
                             } | null;
+                            parent: {
+                                number: number;
+                                key: string;
+                                title: string;
+                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            } | null;
+                            due: string | null;
+                            subIssues: {
+                                done: number;
+                                total: number;
+                            };
+                            blocked: boolean;
                             writer: {
                                 kind: "person" | "agent";
                                 id: string;
@@ -5346,6 +5419,26 @@ export interface operations {
                         } & {
                             description: string;
                         };
+                        children: ({
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                        } & {
+                            assignee: {
+                                kind: "owner" | "agent";
+                                id: string;
+                                name: string;
+                            } | null;
+                        })[];
+                        relations: ({
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                        } & {
+                            kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
+                        })[];
                         events: {
                             sequence: number;
                             id: string;
@@ -5358,6 +5451,11 @@ export interface operations {
                             text: string;
                             trusted: boolean;
                             createdAt: string;
+                            editedAt?: string;
+                            deleted?: {
+                                by: string;
+                                at: string;
+                            };
                         }[];
                         olderEvents: boolean;
                     };
@@ -5398,6 +5496,48 @@ export interface operations {
             };
         };
     };
+    ticketRefs: {
+        parameters: {
+            query: {
+                numbers: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tickets: {
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
     getTicket: {
         parameters: {
             query?: never;
@@ -5426,15 +5566,33 @@ export interface operations {
                             priority: "urgent" | "high" | "medium" | "low" | "none";
                             labels: string[];
                             links: {
-                                kind: "computer" | "file";
+                                kind: "computer" | "file" | "message";
                                 id: string;
                                 label: string;
+                                conversation?: {
+                                    kind: "chat" | "group";
+                                    id: string;
+                                    agentId?: string;
+                                    name: string;
+                                };
                             }[];
                             assignee: {
                                 kind: "owner" | "agent";
                                 id: string;
                                 name: string;
                             } | null;
+                            parent: {
+                                number: number;
+                                key: string;
+                                title: string;
+                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            } | null;
+                            due: string | null;
+                            subIssues: {
+                                done: number;
+                                total: number;
+                            };
+                            blocked: boolean;
                             writer: {
                                 kind: "person" | "agent";
                                 id: string;
@@ -5447,6 +5605,26 @@ export interface operations {
                         } & {
                             description: string;
                         };
+                        children: ({
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                        } & {
+                            assignee: {
+                                kind: "owner" | "agent";
+                                id: string;
+                                name: string;
+                            } | null;
+                        })[];
+                        relations: ({
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                        } & {
+                            kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
+                        })[];
                         events: {
                             sequence: number;
                             id: string;
@@ -5459,6 +5637,11 @@ export interface operations {
                             text: string;
                             trusted: boolean;
                             createdAt: string;
+                            editedAt?: string;
+                            deleted?: {
+                                by: string;
+                                at: string;
+                            };
                         }[];
                         olderEvents: boolean;
                     };
@@ -5539,6 +5722,16 @@ export interface operations {
                     } | null;
                     linkComputer?: string;
                     unlink?: string;
+                    parent?: number | null;
+                    due?: string | null;
+                    addRelations?: {
+                        kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
+                        number: number;
+                    }[];
+                    removeRelations?: {
+                        kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
+                        number: number;
+                    }[];
                     place?: {
                         after?: number;
                         before?: number;
@@ -5563,15 +5756,33 @@ export interface operations {
                             priority: "urgent" | "high" | "medium" | "low" | "none";
                             labels: string[];
                             links: {
-                                kind: "computer" | "file";
+                                kind: "computer" | "file" | "message";
                                 id: string;
                                 label: string;
+                                conversation?: {
+                                    kind: "chat" | "group";
+                                    id: string;
+                                    agentId?: string;
+                                    name: string;
+                                };
                             }[];
                             assignee: {
                                 kind: "owner" | "agent";
                                 id: string;
                                 name: string;
                             } | null;
+                            parent: {
+                                number: number;
+                                key: string;
+                                title: string;
+                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            } | null;
+                            due: string | null;
+                            subIssues: {
+                                done: number;
+                                total: number;
+                            };
+                            blocked: boolean;
                             writer: {
                                 kind: "person" | "agent";
                                 id: string;
@@ -5584,6 +5795,26 @@ export interface operations {
                         } & {
                             description: string;
                         };
+                        children: ({
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                        } & {
+                            assignee: {
+                                kind: "owner" | "agent";
+                                id: string;
+                                name: string;
+                            } | null;
+                        })[];
+                        relations: ({
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                        } & {
+                            kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
+                        })[];
                         events: {
                             sequence: number;
                             id: string;
@@ -5596,6 +5827,11 @@ export interface operations {
                             text: string;
                             trusted: boolean;
                             createdAt: string;
+                            editedAt?: string;
+                            deleted?: {
+                                by: string;
+                                at: string;
+                            };
                         }[];
                         olderEvents: boolean;
                     };
@@ -5670,15 +5906,33 @@ export interface operations {
                             priority: "urgent" | "high" | "medium" | "low" | "none";
                             labels: string[];
                             links: {
-                                kind: "computer" | "file";
+                                kind: "computer" | "file" | "message";
                                 id: string;
                                 label: string;
+                                conversation?: {
+                                    kind: "chat" | "group";
+                                    id: string;
+                                    agentId?: string;
+                                    name: string;
+                                };
                             }[];
                             assignee: {
                                 kind: "owner" | "agent";
                                 id: string;
                                 name: string;
                             } | null;
+                            parent: {
+                                number: number;
+                                key: string;
+                                title: string;
+                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            } | null;
+                            due: string | null;
+                            subIssues: {
+                                done: number;
+                                total: number;
+                            };
+                            blocked: boolean;
                             writer: {
                                 kind: "person" | "agent";
                                 id: string;
@@ -5691,6 +5945,26 @@ export interface operations {
                         } & {
                             description: string;
                         };
+                        children: ({
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                        } & {
+                            assignee: {
+                                kind: "owner" | "agent";
+                                id: string;
+                                name: string;
+                            } | null;
+                        })[];
+                        relations: ({
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                        } & {
+                            kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
+                        })[];
                         events: {
                             sequence: number;
                             id: string;
@@ -5703,6 +5977,11 @@ export interface operations {
                             text: string;
                             trusted: boolean;
                             createdAt: string;
+                            editedAt?: string;
+                            deleted?: {
+                                by: string;
+                                at: string;
+                            };
                         }[];
                         olderEvents: boolean;
                     };
@@ -5710,6 +5989,313 @@ export interface operations {
             };
             /** @description Default Response */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    deleteTicketComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                number: number;
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ticket: {
+                            id: string;
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            priority: "urgent" | "high" | "medium" | "low" | "none";
+                            labels: string[];
+                            links: {
+                                kind: "computer" | "file" | "message";
+                                id: string;
+                                label: string;
+                                conversation?: {
+                                    kind: "chat" | "group";
+                                    id: string;
+                                    agentId?: string;
+                                    name: string;
+                                };
+                            }[];
+                            assignee: {
+                                kind: "owner" | "agent";
+                                id: string;
+                                name: string;
+                            } | null;
+                            parent: {
+                                number: number;
+                                key: string;
+                                title: string;
+                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            } | null;
+                            due: string | null;
+                            subIssues: {
+                                done: number;
+                                total: number;
+                            };
+                            blocked: boolean;
+                            writer: {
+                                kind: "person" | "agent";
+                                id: string;
+                                name: string;
+                                trusted: boolean;
+                            };
+                            createdBy: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        } & {
+                            description: string;
+                        };
+                        children: ({
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                        } & {
+                            assignee: {
+                                kind: "owner" | "agent";
+                                id: string;
+                                name: string;
+                            } | null;
+                        })[];
+                        relations: ({
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                        } & {
+                            kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
+                        })[];
+                        events: {
+                            sequence: number;
+                            id: string;
+                            kind: string;
+                            author: {
+                                kind: "person" | "agent" | "platform";
+                                id: string;
+                                name: string;
+                            };
+                            text: string;
+                            trusted: boolean;
+                            createdAt: string;
+                            editedAt?: string;
+                            deleted?: {
+                                by: string;
+                                at: string;
+                            };
+                        }[];
+                        olderEvents: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    editTicketComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                number: number;
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    text: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ticket: {
+                            id: string;
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            priority: "urgent" | "high" | "medium" | "low" | "none";
+                            labels: string[];
+                            links: {
+                                kind: "computer" | "file" | "message";
+                                id: string;
+                                label: string;
+                                conversation?: {
+                                    kind: "chat" | "group";
+                                    id: string;
+                                    agentId?: string;
+                                    name: string;
+                                };
+                            }[];
+                            assignee: {
+                                kind: "owner" | "agent";
+                                id: string;
+                                name: string;
+                            } | null;
+                            parent: {
+                                number: number;
+                                key: string;
+                                title: string;
+                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            } | null;
+                            due: string | null;
+                            subIssues: {
+                                done: number;
+                                total: number;
+                            };
+                            blocked: boolean;
+                            writer: {
+                                kind: "person" | "agent";
+                                id: string;
+                                name: string;
+                                trusted: boolean;
+                            };
+                            createdBy: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        } & {
+                            description: string;
+                        };
+                        children: ({
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                        } & {
+                            assignee: {
+                                kind: "owner" | "agent";
+                                id: string;
+                                name: string;
+                            } | null;
+                        })[];
+                        relations: ({
+                            number: number;
+                            key: string;
+                            title: string;
+                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                        } & {
+                            kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
+                        })[];
+                        events: {
+                            sequence: number;
+                            id: string;
+                            kind: string;
+                            author: {
+                                kind: "person" | "agent" | "platform";
+                                id: string;
+                                name: string;
+                            };
+                            text: string;
+                            trusted: boolean;
+                            createdAt: string;
+                            editedAt?: string;
+                            deleted?: {
+                                by: string;
+                                at: string;
+                            };
+                        }[];
+                        olderEvents: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

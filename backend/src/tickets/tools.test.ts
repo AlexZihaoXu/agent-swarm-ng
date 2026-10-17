@@ -98,3 +98,42 @@ it('labels text not written by the owner as untrusted and works a ticket through
     await db.close();
   }
 });
+
+it('splits work into sub-issues, relates tickets and shows a deleted comment as a tombstone', async () => {
+  const { db, tickets, agent, grant, toolsOf } = await setup();
+  try {
+    await tickets.updateSettings('personal', { enabled: true, prefix: 'HOME' });
+    const owner = { kind: 'person' as const, userId: 'admin', name: 'Admin' };
+    const aether = await agent('Aether');
+    await grant(aether.id, TICKET_TOOLS);
+    await tickets.create('personal', owner, {
+      title: 'Release 2.0',
+      assignee: { agentId: aether.id },
+      due: '2030-01-05',
+    });
+    await tickets.create('personal', owner, { title: 'Freeze the branch' });
+    const call = toolsOf(aether.id);
+    const sub = await call('ticket_create', { title: 'Write the notes', parent_id: 'HOME-1', assignee: 'me' });
+    expect(sub.created).toMatchObject({ id: 'HOME-3', subIssueOf: 'HOME-1' });
+    expect(await call('ticket_create', { title: 'Not mine', parent_id: 'HOME-2' })).toMatchObject({
+      error: /unassigned/,
+    });
+    const related = await call('ticket_update', { id: 'HOME-1', relate: { kind: 'blocked_by', id: 'HOME-2' } });
+    expect(related.updated).toMatchObject({ blocked: true, relations: [{ kind: 'blocked_by', id: 'HOME-2' }] });
+    const comment = (await tickets.comment('personal', 1, owner, 'Scratch that')).events.at(-1)!;
+    await tickets.deleteComment('personal', 1, comment.id, owner);
+    const read = await call('ticket_read', { id: 'HOME-1' });
+    expect(read).toMatchObject({
+      due: '2030-01-05',
+      subIssues: [{ id: 'HOME-3', status: 'todo', assignee: 'you' }],
+      relations: [{ kind: 'blocked_by', id: 'HOME-2', title: 'Freeze the branch' }],
+    });
+    expect(read.events.find((event: { kind: string }) => event.kind === 'comment').text).toBe(
+      '[comment deleted by Admin]',
+    );
+    const removed = await call('ticket_update', { id: 'HOME-1', unrelate: { kind: 'blocked_by', id: 'HOME-2' } });
+    expect(removed.updated.blocked).toBeUndefined();
+  } finally {
+    await db.close();
+  }
+});
