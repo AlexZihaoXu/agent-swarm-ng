@@ -9,6 +9,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { MessageMarkdown } from '@/components/message-markdown';
 import { TicketScope } from '@/components/ticket-refs';
 import { ArchivedMark, BoardMarks, StateDot } from '@/components/ticket-board';
+import { TicketMoreMenu, ticketLink, type TicketCommands } from '@/components/ticket-menu';
 import { AssigneeAvatar, assigneeKey, assigneeOptions } from '@/components/ticket-assignee';
 import { useSignedIn } from '@/lib/auth';
 import { computersQuery } from '@/lib/computers-query';
@@ -43,7 +44,6 @@ const when = (iso: string) =>
 type Patch = {
   /** A state's id. */
   status?: string;
-  archived?: boolean;
   priority?: TicketPriority;
   labels?: string[];
   assignee?: { owner: true } | { agentId: string } | null;
@@ -54,7 +54,9 @@ type Patch = {
 /**
  * One ticket (docs/tickets.md): its parent (a breadcrumb), text (Markdown), sub-issues, relations, links, activity
  * and comments, and its properties beside them (below on a phone): status (the board's states), assignee (assigning
- * an agent wakes it), priority, due date, parent, labels, Archive / Restore. Every change saves at once. Its ids in text show as ticket chips.
+ * an agent wakes it), priority, due date, parent, labels. Copy link and the More menu (Copy link, Archive / Restore,
+ * Delete…) sit in its header; an archived one says so above its text, with Restore. Every change saves at once. Its
+ * ids in text show as ticket chips.
  */
 export function TicketDetailView({
   organization,
@@ -63,6 +65,7 @@ export function TicketDetailView({
   working,
   ownerName,
   backPath,
+  commands,
   onNavigate,
   onAddSubIssue,
 }: {
@@ -73,6 +76,8 @@ export function TicketDetailView({
   ownerName: string;
   /** The board or list (with its filters) the ticket was opened from. */
   backPath: string;
+  /** The ticket's menu commands (docs/tickets.md#archive): archive with Undo, delete after a confirmation. */
+  commands: TicketCommands;
   onNavigate: (path: string) => void;
   onAddSubIssue: (parent: { number: number; key: string; title: string }) => void;
 }) {
@@ -156,6 +161,7 @@ export function TicketDetailView({
                   </span>
                 </nav>
                 <CopyLink organizationId={organization.id} ticketKey={ticket.key} />
+                <TicketMoreMenu ticket={ticket} commands={commands} />
                 {ticket.archived && <ArchivedMark />}
                 {busyAgent && (
                   <span className="inline-flex items-center gap-1.5 text-xs text-teal-300">
@@ -164,6 +170,23 @@ export function TicketDetailView({
                   </span>
                 )}
               </div>
+              {ticket.archived && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground motion-safe:animate-[view-in_200ms_ease-out]">
+                  <span className="min-w-0 flex-1 basis-56">
+                    Archived {when(ticket.archived.at)} by {ticket.archived.by}: hidden from the board and from agents’
+                    lists. Changes keep it archived; Restore brings it back.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-9 md:min-h-7"
+                    onClick={() => void commands.setArchived(ticket, false)}
+                  >
+                    Restore
+                  </Button>
+                </div>
+              )}
               <TicketText detail={query.data} busy={busy} onSave={patch => update(patch)} />
               <SubIssues
                 detail={query.data}
@@ -206,10 +229,6 @@ export function TicketDetailView({
               error={error}
               onChange={patch => void update(patch)}
               onOpenChat={agent ? () => onNavigate(chatAgentPath(agent.id)) : undefined}
-              onDelete={async () => {
-                await actions.remove(number);
-                onNavigate(backPath);
-              }}
             />
           </div>
         </ScrollArea>
@@ -231,9 +250,8 @@ function CopyLink({ organizationId, ticketKey }: { organizationId: string; ticke
       className="ml-auto min-h-9 text-xs md:min-h-7"
       onClick={async () => {
         clearTimeout(timer.current);
-        const url = `${window.location.origin}${ticketPath(ticketKey)}?org=${encodeURIComponent(organizationId)}`;
         try {
-          await navigator.clipboard.writeText(url);
+          await navigator.clipboard.writeText(ticketLink(organizationId, ticketKey));
           setState('copied');
         } catch {
           setState('failed');
@@ -847,7 +865,6 @@ function Properties({
   error,
   onChange,
   onOpenChat,
-  onDelete,
 }: {
   detail: TicketDetail;
   organizationId: string;
@@ -857,7 +874,6 @@ function Properties({
   error: string;
   onChange: (patch: Patch) => void;
   onOpenChat?: () => void;
-  onDelete: () => Promise<void>;
 }) {
   const id = useId();
   const { ticket } = detail;
@@ -870,7 +886,6 @@ function Properties({
   const [labels, setLabels] = useState(saved);
   // Changes from elsewhere (an agent, another tab) replace the field's text.
   useEffect(() => setLabels(saved), [saved]);
-  const [deleting, setDeleting] = useState(false);
   const saveLabels = () => {
     const next = labels
       .split(',')
@@ -1032,47 +1047,12 @@ function Properties({
             Open {ticket.assignee.name}’s chat
           </Button>
         )}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-full"
-          disabled={busy}
-          onClick={() => onChange({ archived: !ticket.archived })}
-        >
-          {ticket.archived ? 'Restore from the archive' : 'Archive ticket'}
-        </Button>
-        {ticket.archived && (
-          <p className="text-[11px] text-muted-foreground">
-            Archived {when(ticket.archived.at)} by {ticket.archived.by}: hidden from the board and from agents’ lists.
-            Changes keep it archived; Restore brings it back.
-          </p>
-        )}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-full text-red-400"
-          disabled={busy}
-          onClick={() => setDeleting(true)}
-        >
-          Delete ticket
-        </Button>
       </div>
       {error && (
         <p role="alert" className="text-sm text-red-400">
           {error}
         </p>
       )}
-      <ConfirmDialog
-        open={deleting}
-        onOpenChange={setDeleting}
-        title={`Delete ${ticket.key}?`}
-        description="Its comments and activity go with it; its sub-issues stay, without a parent. To keep it out of the way, archive it instead."
-        confirmLabel="Delete"
-        busyLabel="Deleting…"
-        onConfirm={onDelete}
-      />
     </aside>
   );
 }

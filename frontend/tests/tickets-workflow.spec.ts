@@ -79,15 +79,34 @@ test('tickets workflow: a state added in the organization becomes a board column
   await expect(workflow.getByLabel('Name of QA')).toHaveCount(0);
 });
 
-test('tickets: archive and restore in the detail, hidden from the board until Show archived', async ({ page }) => {
+test('tickets: archive from the detail’s More menu and E, restore from its banner, Show archived', async ({ page }) => {
   await page.setViewportSize({ width: 1400, height: 900 });
   const { state, card } = await seededBoard(page);
   await card(2).click();
   const ticket = page.getByRole('region', { name: 'Ticket HOME-2' });
-  await ticket.getByRole('button', { name: 'Archive ticket' }).click();
+  // The side panel no longer repeats them: they live in the header's More menu.
+  await expect(ticket.getByRole('button', { name: 'Archive ticket' })).toHaveCount(0);
+  await ticket.getByRole('button', { name: 'More for HOME-2' }).click();
+  const more = page.getByRole('menu', { name: 'More for HOME-2' });
+  await expect(more.getByRole('menuitem', { name: 'Copy link' })).toBeVisible();
+  await expect(more.getByRole('menuitem', { name: 'Delete…' })).toBeVisible();
+  await more.getByRole('menuitem', { name: /^Archive/ }).click();
   await expect(ticket.getByText('Archived', { exact: true })).toBeVisible();
   expect(state.bodies.at(-1)).toEqual({ archived: true });
+  await expect(page.getByText('Archived HOME-2')).toBeVisible();
   await expect(ticket.getByText('Admin archived it')).toBeVisible();
+  // E restores the open ticket, and archives it again.
+  await expect(more).toBeHidden();
+  await page.keyboard.press('e');
+  await expect.poll(() => state.bodies.at(-1)).toEqual({ archived: false });
+  await expect(page.getByText('Restored HOME-2')).toBeVisible();
+  await expect(ticket.getByText('Archived', { exact: true })).toHaveCount(0);
+  await page.keyboard.press('e');
+  await expect.poll(() => state.bodies.at(-1)).toEqual({ archived: true });
+  // Not while typing in a field.
+  const writes = state.bodies.length;
+  await ticket.getByLabel(/^Comment/).fill('e');
+  expect(state.bodies.length).toBe(writes);
   // Back on the board it is gone, until Show archived (kept in the address).
   await ticket.getByRole('button', { name: 'Tickets' }).first().click();
   await expect(card(1)).toBeVisible();
@@ -100,10 +119,74 @@ test('tickets: archive and restore in the detail, hidden from the board until Sh
   await page.reload();
   await expect(card(2)).toContainText('Archived');
   await card(2).click();
-  await page
-    .getByRole('region', { name: 'Ticket HOME-2' })
-    .getByRole('button', { name: 'Restore from the archive' })
-    .click();
+  await ticket.getByRole('button', { name: 'Restore', exact: true }).click();
   expect(state.bodies.at(-1)).toEqual({ archived: false });
-  await expect(ticket.getByRole('button', { name: 'Archive ticket' })).toBeVisible();
+  await expect(ticket.getByRole('button', { name: 'Restore', exact: true })).toHaveCount(0);
+});
+
+test('tickets board: a card’s context menu archives with Undo, moves it, deletes it; E on a focused card', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  const { state, column, card } = await seededBoard(page);
+  // Right-click opens the card's menu, not a drag.
+  await card(2).click({ button: 'right' });
+  const menu = page.getByRole('menu', { name: 'Actions for HOME-2' });
+  await expect(menu.getByRole('menuitem', { name: 'Open' })).toBeVisible();
+  await expect(page.locator('.ticket-lift')).toHaveCount(0);
+  await menu.getByRole('menuitem', { name: /^Archive/ }).click();
+  await expect(card(2)).toHaveCount(0);
+  await expect.poll(() => state.bodies.at(-1)).toEqual({ archived: true });
+  await expect(page.getByText('Archived HOME-2')).toBeVisible();
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(card(2)).toBeVisible();
+  expect(state.bodies.at(-1)).toEqual({ archived: false });
+  await expect(page.getByText('Restored HOME-2')).toBeVisible();
+
+  // Move to: the organization's states, the current one marked.
+  await card(1).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move to' }).click();
+  await expect(page.getByRole('menuitemradio', { name: 'Todo' })).toBeChecked();
+  await expect(page.getByRole('menuitemradio', { name: 'Cancelled' })).toBeVisible();
+  await page.screenshot({ path: '../.scratch/tickets-card-menu.png' });
+  await page.getByRole('menuitemradio', { name: 'In progress' }).click();
+  await expect(column('In progress').getByRole('button', { name: /^HOME-1\b/ })).toBeVisible();
+  expect(state.bodies.at(-1)).toEqual({ status: 'progress' });
+  expect(state.events.get(1)!.at(-1)).toMatchObject({ text: 'moved it Todo → In progress' });
+
+  // From the keyboard: Shift+F10 opens it; E archives the focused card and focus moves to the one beside it.
+  await card(3).focus();
+  await page.keyboard.press('Shift+F10');
+  const keyboardMenu = page.getByRole('menu', { name: 'Actions for HOME-3' });
+  await expect(keyboardMenu).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(keyboardMenu).toBeHidden();
+  await card(3).focus();
+  await page.keyboard.press('e');
+  await expect(card(3)).toHaveCount(0);
+  await expect.poll(() => state.bodies.at(-1)).toEqual({ archived: true });
+  await expect(card(2)).toBeFocused();
+
+  // Delete… asks first.
+  await card(2).click({ button: 'right' });
+  await page.getByRole('menu', { name: 'Actions for HOME-2' }).getByRole('menuitem', { name: 'Delete…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Delete HOME-2?' });
+  await dialog.getByRole('button', { name: 'Delete' }).click();
+  await expect(dialog).toBeHidden();
+  expect(state.bodies.at(-1)).toEqual({ DELETE: 2 });
+  await expect(card(2)).toHaveCount(0);
+});
+
+test('tickets list: a row’s menu archives it too', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  const { state, card } = await seededBoard(page);
+  await page.getByRole('radio', { name: 'List' }).click();
+  await card(1).click({ button: 'right' });
+  await page
+    .getByRole('menu', { name: 'Actions for HOME-1' })
+    .getByRole('menuitem', { name: /^Archive/ })
+    .click();
+  await expect(card(1)).toHaveCount(0);
+  await expect.poll(() => state.bodies.at(-1)).toEqual({ archived: true });
+  await expect(page.getByText('Archived HOME-1')).toBeVisible();
 });

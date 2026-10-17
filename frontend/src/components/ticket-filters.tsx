@@ -275,6 +275,7 @@ export function TicketToolbar({
 const SHORTCUTS: [string, string][] = [
   ['C', 'New ticket'],
   ['/', 'Search tickets'],
+  ['E', 'Archive or restore the open or focused ticket'],
   ['Esc', 'Close the ticket, or clear the search'],
   ['?', 'Show these shortcuts'],
 ];

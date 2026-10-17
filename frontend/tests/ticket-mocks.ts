@@ -204,6 +204,11 @@ export async function mockTickets(page: Page) {
       });
     }
     const ticket = find(number);
+    if (request.method() === 'DELETE') {
+      state.bodies.push({ DELETE: number });
+      state.tickets = state.tickets.filter(item => item !== ticket);
+      return route.fulfill({ json: { deleted: Boolean(ticket) } });
+    }
     if (request.method() === 'GET')
       return ticket
         ? route.fulfill({ json: detail(ticket) })

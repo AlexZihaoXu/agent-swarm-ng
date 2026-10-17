@@ -11,6 +11,7 @@ import { Board, BoardMarks, isWorking, Labels, StateDot, Working } from '@/compo
 import { AssigneeAvatar } from '@/components/ticket-assignee';
 import { NewTicketDialog, type NewTicketStart } from '@/components/new-ticket-dialog';
 import { ShortcutsHelp, TicketToolbar } from '@/components/ticket-filters';
+import { TicketContextMenu, useTicketCommands, type TicketCommands } from '@/components/ticket-menu';
 import { takeNewTicketDraft } from '@/components/ticket-refs';
 import { useSignedIn } from '@/lib/auth';
 import { ticketNumber, ticketPath, type DashboardRoute } from '@/lib/dashboard-location';
@@ -23,6 +24,7 @@ import {
   sortTickets,
   todayIn,
   updatedLabel,
+  useTicket,
   useTicketActions,
   useTicketBoard,
   type BoardState,
@@ -46,7 +48,8 @@ const TYPING = 'input, textarea, select, [contenteditable], [data-keys-to-comput
  * The Tickets tab (docs/tickets.md): the board of the organization in view, as columns per workflow state (Kibo
  * kanban's board/card composition, cards dragged between columns and places) or a list grouped by state in the
  * same order (Kibo list's groups), search and filters kept in the address, a ticket's detail, the New ticket dialog
- * (also opened from a chat message's menu) and the tab's keys: C new ticket, / search, Esc close or clear, ? help.
+ * (also opened from a chat message's menu), each ticket's menus (right-click, the detail's More) and the tab's keys:
+ * C new ticket, / search, E archive or restore, Esc close or clear, ? help.
  * Shown only while the organization has tickets on.
  */
 export function TicketsPanel({
@@ -80,6 +83,15 @@ export function TicketsPanel({
   const view = route.kind === 'tickets-list' ? 'list' : 'board';
   if (!number) lastBoard = { path: location.pathname, search: location.search };
   const backPath = `${lastBoard.path}${lastBoard.search}`;
+  const detail = useTicket(enabled ? organization?.id : undefined, number);
+  const { commands, dialog } = useTicketCommands({
+    organizationId: enabled ? organization?.id : undefined,
+    q: filters.q,
+    showArchived: filters.archived,
+    states: board.data?.states ?? [],
+    onNavigate,
+    onDeleted: deleted => deleted === number && onNavigate(backPath),
+  });
   const setFilters = (next: TicketFilters) =>
     navigate({ pathname: location.pathname, search: filterSearch(next, location.search) }, { replace: true });
   // "Create ticket from message…" (a chat message's menu): the dialog opens with it once its organization shows.
@@ -116,6 +128,15 @@ export function TicketsPanel({
           focusSearch.current = true;
           onNavigate(backPath);
         } else searchRef.current?.focus();
+      } else if (key === 'e' || key === 'E') {
+        // The open ticket, or the card or row with focus.
+        const focused = target?.closest<HTMLElement>('[data-ticket-number]');
+        const ticket = number
+          ? detail.data?.ticket
+          : board.data?.tickets.find(item => item.number === Number(focused?.dataset.ticketNumber));
+        if (!ticket) return;
+        event.preventDefault();
+        void commands.setArchived(ticket, !ticket.archived, { fromBoard: !number });
       } else if (key === '?') {
         event.preventDefault();
         setHelp(true);
@@ -170,6 +191,7 @@ export function TicketsPanel({
         onCreated={ticket => onNavigate(ticketPath(ticket.key))}
       />
       <ShortcutsHelp open={help} onOpenChange={setHelp} />
+      {dialog}
     </>
   );
   if (number)
@@ -182,6 +204,7 @@ export function TicketsPanel({
           working={working}
           ownerName={ownerName}
           backPath={backPath}
+          commands={commands}
           onNavigate={onNavigate}
           onAddSubIssue={parent => setCreating({ parent })}
         />
@@ -255,6 +278,7 @@ export function TicketsPanel({
           agents={agents}
           working={working}
           today={today}
+          commands={commands}
           onOpen={open}
           onMove={(ticket, state, place) => actions.move(ticket.number, state, place)}
         />
@@ -266,6 +290,7 @@ export function TicketsPanel({
           agents={agents}
           working={working}
           today={today}
+          commands={commands}
           onOpen={open}
         />
       )}
@@ -274,13 +299,17 @@ export function TicketsPanel({
   );
 }
 
-/** Kibo list: groups per state in board order (canceled ones when they have tickets), one row per ticket. */
+/**
+ * Kibo list: groups per state in board order (canceled ones when they have tickets), one row per ticket; a row's menu
+ * opens with a right-click, the context-menu key or (rows do not drag) a long press.
+ */
 function List({
   states,
   tickets,
   agents,
   working,
   today,
+  commands,
   onOpen,
 }: {
   states: BoardState[];
@@ -288,6 +317,7 @@ function List({
   agents: ChatAgent[];
   working: Set<string>;
   today: string;
+  commands: TicketCommands;
   onOpen: (ticket: TicketSummary) => void;
 }) {
   return (
@@ -311,33 +341,39 @@ function List({
                 <ul className="divide-y divide-border">
                   {rows.map(ticket => (
                     <li key={ticket.id}>
-                      <button
-                        type="button"
-                        onClick={() => onOpen(ticket)}
-                        className="grid w-full cursor-pointer grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 text-left text-sm outline-none transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 md:grid-cols-[5rem_minmax(0,1fr)_auto_5.5rem_1.5rem_5.5rem]"
-                      >
-                        <span className="font-mono text-xs text-muted-foreground">{ticket.key}</span>
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="truncate">{ticket.title}</span>
-                          {isWorking(ticket, working) && <Working />}
-                          <BoardMarks ticket={ticket} today={today} />
-                        </span>
-                        <span className="flex gap-1 max-md:hidden">
-                          <Labels labels={ticket.labels} />
-                        </span>
-                        <span className={cn('text-xs max-md:hidden', priorityOf(ticket.priority).tone)}>
-                          {ticket.priority === 'none' ? '' : priorityOf(ticket.priority).label}
-                        </span>
-                        <span className="flex justify-end">
-                          <AssigneeAvatar assignee={ticket.assignee} agents={agents} />
-                          <span className="sr-only">
-                            {ticket.assignee ? `Assigned to ${ticket.assignee.name}` : 'Unassigned'}
+                      <TicketContextMenu ticket={ticket} commands={commands} touch>
+                        <button
+                          type="button"
+                          data-ticket-number={ticket.number}
+                          onClick={() => onOpen(ticket)}
+                          className={cn(
+                            'touch-menu-target grid w-full cursor-pointer grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 text-left text-sm outline-none transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 md:grid-cols-[5rem_minmax(0,1fr)_auto_5.5rem_1.5rem_5.5rem]',
+                            commands.leaving.has(ticket.number) && 'ticket-leaving',
+                          )}
+                        >
+                          <span className="font-mono text-xs text-muted-foreground">{ticket.key}</span>
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="truncate">{ticket.title}</span>
+                            {isWorking(ticket, working) && <Working />}
+                            <BoardMarks ticket={ticket} today={today} />
                           </span>
-                        </span>
-                        <span className="text-right text-xs text-muted-foreground max-md:hidden">
-                          {updatedLabel(ticket.updatedAt)}
-                        </span>
-                      </button>
+                          <span className="flex gap-1 max-md:hidden">
+                            <Labels labels={ticket.labels} />
+                          </span>
+                          <span className={cn('text-xs max-md:hidden', priorityOf(ticket.priority).tone)}>
+                            {ticket.priority === 'none' ? '' : priorityOf(ticket.priority).label}
+                          </span>
+                          <span className="flex justify-end">
+                            <AssigneeAvatar assignee={ticket.assignee} agents={agents} />
+                            <span className="sr-only">
+                              {ticket.assignee ? `Assigned to ${ticket.assignee.name}` : 'Unassigned'}
+                            </span>
+                          </span>
+                          <span className="text-right text-xs text-muted-foreground max-md:hidden">
+                            {updatedLabel(ticket.updatedAt)}
+                          </span>
+                        </button>
+                      </TicketContextMenu>
                     </li>
                   ))}
                   {!rows.length && <li className="px-3 py-2.5 text-xs text-muted-foreground">Nothing here.</li>}

@@ -266,3 +266,38 @@ export const TicketsIcon = (props: ComponentProps<'svg'>) => (
     <path d="M8 7v7M12 7v4M16 7v9" />
   </Icon>
 );
+export const LinkIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </Icon>
+);
+export const ArchiveIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <rect width="20" height="5" x="2" y="3" rx="1" />
+    <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4" />
+  </Icon>
+);
+export const RestoreIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <rect width="20" height="5" x="2" y="3" rx="1" />
+    <path d="M4 8v11a2 2 0 0 0 2 2h2M20 8v11a2 2 0 0 1-2 2h-2M9 15l3-3 3 3M12 12v9" />
+  </Icon>
+);
+export const OpenIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="M7 7h10v10M7 17 17 7" />
+  </Icon>
+);
+export const MoveIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <path d="M5 12h14M12 5l7 7-7 7" />
+  </Icon>
+);
+export const MoreIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props} fill="currentColor" stroke="none">
+    <circle cx="5" cy="12" r="1.8" />
+    <circle cx="12" cy="12" r="1.8" />
+    <circle cx="19" cy="12" r="1.8" />
+  </Icon>
+);

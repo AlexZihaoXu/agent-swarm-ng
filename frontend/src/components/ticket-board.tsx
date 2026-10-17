@@ -33,6 +33,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { createPortal } from 'react-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AssigneeAvatar } from '@/components/ticket-assignee';
+import { TicketContextMenu, type TicketCommands } from '@/components/ticket-menu';
 import {
   dueLabel,
   dueState,
@@ -222,15 +223,20 @@ function CardBody({
   );
 }
 
-/** A card: click (or Enter) opens it; dragging it (mouse, press-and-hold, or Space and the arrows) moves it. */
+/**
+ * A card: click (or Enter) opens it; dragging it (mouse, press-and-hold, or Space and the arrows) moves it; a
+ * right-click (or the context-menu key) opens its menu, never a touch (press-and-hold is the drag).
+ */
 function SortableCard({
   ticket,
   reduced,
+  commands,
   onOpen,
   children,
 }: {
   ticket: TicketSummary;
   reduced: boolean;
+  commands: TicketCommands;
   onOpen: () => void;
   children: ReactNode;
 }) {
@@ -240,21 +246,25 @@ function SortableCard({
   });
   return (
     <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }}>
-      <button
-        ref={setActivatorNodeRef}
-        type="button"
-        {...attributes}
-        {...listeners}
-        aria-roledescription="draggable ticket"
-        onClick={onOpen}
-        className={cn(
-          cardClass,
-          // The spot it will land in: a dashed outline of the card, its text faded.
-          isDragging && 'border-dashed border-primary/60 bg-primary/5 shadow-none [&>*]:opacity-30',
-        )}
-      >
-        {children}
-      </button>
+      <TicketContextMenu ticket={ticket} commands={commands} touch={false}>
+        <button
+          ref={setActivatorNodeRef}
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-roledescription="draggable ticket"
+          data-ticket-number={ticket.number}
+          onClick={onOpen}
+          className={cn(
+            cardClass,
+            // The spot it will land in: a dashed outline of the card, its text faded.
+            isDragging && 'border-dashed border-primary/60 bg-primary/5 shadow-none [&>*]:opacity-30',
+            commands.leaving.has(ticket.number) && 'ticket-leaving',
+          )}
+        >
+          {children}
+        </button>
+      </TicketContextMenu>
     </li>
   );
 }
@@ -306,6 +316,7 @@ export function Board({
   agents,
   working,
   today,
+  commands,
   onOpen,
   onMove,
 }: {
@@ -316,6 +327,8 @@ export function Board({
   working: Set<string>;
   /** Today in the viewer's time zone (YYYY-MM-DD): due dates before it are overdue. */
   today: string;
+  /** The cards' menus (docs/tickets.md#archive). */
+  commands: TicketCommands;
   onOpen: (ticket: TicketSummary) => void;
   onMove: (ticket: TicketSummary, state: TicketState, place: TicketPlace) => Promise<unknown>;
 }) {
@@ -526,6 +539,7 @@ export function Board({
                       key={ticket.id}
                       ticket={ticket}
                       reduced={reduced}
+                      commands={commands}
                       onOpen={() => {
                         if (!drag && Date.now() - dropped.current > CLICK_AFTER_DROP_MS) onOpen(ticket);
                       }}

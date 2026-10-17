@@ -330,8 +330,11 @@ export function useTicketActions(organizationId: string | undefined, q = '', arc
       if (!data) throw failure(error, 'Could not save the change.');
       return settle(data);
     },
-    /** A drag on the board: shown at once, saved as a state change (if any) and a place, undone if it fails. */
-    move: async (number: number, state: TicketState, place: TicketPlace) => {
+    /**
+     * A drag on the board (or Move to in a ticket's menu, without a place: on top of its new column): shown at once,
+     * saved as a state change (if any) and a place, undone if it fails.
+     */
+    move: async (number: number, state: TicketState, place?: TicketPlace) => {
       const key = ['tickets', organizationId, q, archived];
       await client.cancelQueries({ queryKey: key });
       const before = client.getQueryData<TicketBoard>(key);
@@ -339,11 +342,11 @@ export function useTicketActions(organizationId: string | undefined, q = '', arc
       if (before)
         client.setQueryData<TicketBoard>(key, {
           ...before,
-          tickets: placeTicket(before.tickets, number, state, place),
+          tickets: placeTicket(before.tickets, number, state, place ?? {}),
         });
       const { data, error } = await api.PATCH('/api/organizations/{id}/tickets/{number}', {
         params: { path: { id, number } },
-        body: { ...(current?.state.id === state.id ? {} : { status: state.id }), place },
+        body: { ...(current?.state.id === state.id ? {} : { status: state.id }), ...(place ? { place } : {}) },
       });
       if (!data) {
         if (before) client.setQueryData(key, before);

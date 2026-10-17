@@ -729,10 +729,24 @@ input[data-masked='true'] {
   transform: none;
   box-shadow: none;
 }
+/* An archived card or row leaving the board (docs/tickets.md#archive): it fades and shrinks a little, then goes. */
+@keyframes ticket-leave {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+.ticket-leaving {
+  pointer-events: none;
+  animation: ticket-leave 180ms ease-in both;
+}
 @media (prefers-reduced-motion: reduce) {
   .ticket-lift {
     transform: none;
     animation: none;
     transition: none;
+  }
+  .ticket-leaving {
+    animation: none;
   }
 }

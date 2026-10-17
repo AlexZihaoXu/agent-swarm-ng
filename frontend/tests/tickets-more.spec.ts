@@ -128,6 +128,7 @@ test('tickets: C opens a new ticket, / searches, ? lists the keys, never while t
   await page.keyboard.press('Shift+?');
   const help = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
   await expect(help).toContainText('New ticket');
+  await expect(help).toContainText('Archive or restore');
   await page.keyboard.press('Escape');
   await expect(help).toBeHidden();
   // In a ticket, Escape goes back to the board.
