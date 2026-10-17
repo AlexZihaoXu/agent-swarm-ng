@@ -11438,6 +11438,20 @@
                     "minLength": 1,
                     "maxLength": 64,
                     "type": "string"
+                  },
+                  "place": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "properties": {
+                      "after": {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "before": {
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    }
                   }
                 }
               }

@@ -7,13 +7,13 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { PlusIcon, TicketsIcon } from '@/components/ui/icons';
 import { PageHeader } from '@/components/page-header';
 import { TicketDetailView } from '@/components/ticket-detail';
+import { Board, isWorking, Labels, Working } from '@/components/ticket-board';
 import { AssigneeAvatar, assigneeOptions } from '@/components/ticket-assignee';
 import { useSignedIn } from '@/lib/auth';
 import { ticketNumber, ticketPath, type DashboardRoute } from '@/lib/dashboard-location';
 import type { Organization } from '@/lib/organizations';
 import { dialogMotion, dialogOverlay, settingsInput } from '@/lib/styles';
 import {
-  BOARD_STATUSES,
   PRIORITIES,
   STATUSES,
   priorityOf,
@@ -40,9 +40,9 @@ const entering = 'motion-safe:animate-[view-in_260ms_cubic-bezier(0.22,1,0.36,1)
 
 /**
  * The Tickets tab (docs/tickets.md): the board of the organization in view, as columns per status (Kibo
- * kanban's board/card composition) or a list grouped by status (Kibo list's groups), filters, a ticket's detail and
- * the New ticket dialog. Statuses change in the detail (no drag and drop, so no extra dependency and it works the
- * same with a finger, a mouse or the keyboard). Shown only while the organization has tickets on.
+ * kanban's board/card composition, cards dragged between columns and places) or a list grouped by status in the
+ * same order (Kibo list's groups), filters, a ticket's detail and the New ticket dialog. Shown only while the
+ * organization has tickets on.
  */
 export function TicketsPanel({
   route,
@@ -62,6 +62,7 @@ export function TicketsPanel({
 }) {
   const enabled = Boolean(organization?.tickets?.enabled);
   const board = useTicketBoard(enabled ? organization?.id : undefined);
+  const actions = useTicketActions(enabled ? organization?.id : undefined);
   const { name: me } = useSignedIn();
   const [filter, setFilter] = useState<Filter>('all');
   const [creating, setCreating] = useState(false);
@@ -149,7 +150,14 @@ export function TicketsPanel({
           Loading tickets…
         </p>
       ) : view === 'board' ? (
-        <Board key="board" tickets={tickets} agents={agents} working={working} onOpen={open} />
+        <Board
+          key="board"
+          tickets={tickets}
+          agents={agents}
+          working={working}
+          onOpen={open}
+          onMove={(ticket, status, place) => actions.move(ticket.number, status, place)}
+        />
       ) : (
         <List key="list" tickets={tickets} agents={agents} working={working} onOpen={open} />
       )}
@@ -162,100 +170,6 @@ export function TicketsPanel({
         onCreated={ticket => onNavigate(ticketPath(ticket.key))}
       />
     </section>
-  );
-}
-
-function Working() {
-  return (
-    <span className="inline-flex items-center gap-1 text-[11px] text-teal-300">
-      <span aria-hidden="true" className="size-1.5 rounded-full bg-teal-300 motion-safe:animate-pulse" />
-      working
-    </span>
-  );
-}
-const isWorking = (ticket: TicketSummary, working: Set<string>) =>
-  ticket.status === 'progress' && ticket.assignee?.kind === 'agent' && working.has(ticket.assignee.id);
-function Labels({ labels }: { labels: string[] }) {
-  return labels.map(label => (
-    <span key={label} className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">
-      {label}
-    </span>
-  ));
-}
-
-/** Kibo kanban: one column per status, cards that open the ticket. Phones scroll the columns sideways. */
-function Board({
-  tickets,
-  agents,
-  working,
-  onOpen,
-}: {
-  tickets: TicketSummary[];
-  agents: ChatAgent[];
-  working: Set<string>;
-  onOpen: (ticket: TicketSummary) => void;
-}) {
-  return (
-    <div
-      className={cn(
-        'flex min-h-0 flex-1 snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4 md:snap-none md:px-6 md:pb-6',
-        entering,
-      )}
-    >
-      {BOARD_STATUSES.map(status => {
-        const cards = tickets.filter(ticket => ticket.status === status.key);
-        return (
-          <section
-            key={status.key}
-            aria-label={status.label}
-            className="flex max-h-full w-[min(18rem,82vw)] shrink-0 snap-start flex-col overflow-hidden rounded-lg border border-border bg-sidebar/30 ao-card md:w-auto md:min-w-56 md:flex-1"
-          >
-            <h3 className="flex shrink-0 items-center gap-2 p-3 text-sm font-semibold">
-              <span aria-hidden="true" className={cn('size-2 rounded-full', status.dot)} />
-              {status.label}
-              <span className="text-xs font-normal text-muted-foreground">{cards.length}</span>
-            </h3>
-            <ScrollArea label={`${status.label} tickets`} className="min-h-0 flex-1">
-              <ul className="flex flex-col gap-2 px-2 pb-2">
-                {cards.map(ticket => (
-                  <li key={ticket.id}>
-                    <button
-                      type="button"
-                      onClick={() => onOpen(ticket)}
-                      className="flex w-full cursor-pointer flex-col gap-2 rounded-md border border-border bg-background p-3 text-left ao-raised outline-none transition-colors hover:border-foreground/25 focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <span className="flex items-center gap-2 text-xs">
-                        <span className="font-mono text-muted-foreground">{ticket.key}</span>
-                        {ticket.priority !== 'none' && (
-                          <span className={priorityOf(ticket.priority).tone}>{priorityOf(ticket.priority).label}</span>
-                        )}
-                        {isWorking(ticket, working) && <Working />}
-                      </span>
-                      <span className="text-sm leading-snug [overflow-wrap:anywhere]">{ticket.title}</span>
-                      <span className="flex flex-wrap items-center gap-1.5">
-                        <Labels labels={ticket.labels} />
-                        <span className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground">
-                          {ticket.links.length > 0 && (
-                            <span>
-                              {ticket.links.length} link{ticket.links.length === 1 ? '' : 's'}
-                            </span>
-                          )}
-                          <AssigneeAvatar assignee={ticket.assignee} agents={agents} />
-                          <span className="sr-only">
-                            {ticket.assignee ? `Assigned to ${ticket.assignee.name}` : 'Unassigned'}
-                          </span>
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-                {!cards.length && <li className="px-1 py-2 text-xs text-muted-foreground">Nothing here.</li>}
-              </ul>
-            </ScrollArea>
-          </section>
-        );
-      })}
-    </div>
   );
 }
 

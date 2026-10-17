@@ -191,3 +191,44 @@ it('unassigns an agent that is deleted or moves to another organization', async 
     await db.close();
   }
 });
+
+it('keeps a manual order per status: new and re-statused tickets on top, placed ones between their neighbours', async () => {
+  const { db, tickets, owner, agent, as, changes } = await setup();
+  try {
+    await tickets.updateSettings('personal', { enabled: true, agentsPickUp: true });
+    for (const title of ['One', 'Two', 'Three', 'Four']) await tickets.create('personal', owner, { title });
+    const column = async (status: string) =>
+      (await tickets.list('personal', { order: 'board' })).tickets
+        .filter(ticket => ticket.status === status)
+        .map(ticket => ticket.number);
+    expect(await column('todo')).toEqual([4, 3, 2, 1]);
+    // Reordering alone is no activity and keeps updatedAt; others' boards still refresh.
+    const before = (await tickets.get('personal', 1)).ticket;
+    changes.length = 0;
+    const moved = await tickets.update('personal', 1, owner, { place: { after: 4 } });
+    expect(await column('todo')).toEqual([4, 1, 3, 2]);
+    expect(moved.ticket.updatedAt).toBe(before.updatedAt);
+    expect(moved.events.map(event => event.kind)).toEqual(['created']);
+    expect(changes).toEqual([{ organizationId: 'personal', number: 1 }]);
+    await tickets.update('personal', 2, owner, { place: { before: 4 } });
+    expect(await column('todo')).toEqual([2, 4, 1, 3]);
+    // A stale neighbour (no longer in that column) falls back to the other one, then the top.
+    await tickets.update('personal', 3, owner, { status: 'progress' });
+    await tickets.update('personal', 4, owner, { place: { after: 3, before: 3 } });
+    expect(await column('todo')).toEqual([4, 2, 1]);
+    // Across columns: status and place together, as one status change in the activity.
+    const across = await tickets.update('personal', 1, owner, { status: 'progress', place: { after: 3 } });
+    expect(await column('progress')).toEqual([3, 1]);
+    expect(across.events.at(-1)).toMatchObject({ kind: 'status', text: 'moved it Todo → In progress' });
+    // A status change without a place (the detail, an agent) puts it on top of its new column.
+    const bo = await agent('Bo');
+    await tickets.update('personal', 2, as(bo), { status: 'progress' });
+    expect(await column('progress')).toEqual([2, 3, 1]);
+    // Squeezing many times between the same two neighbours renumbers the column without losing the order.
+    for (let index = 0; index < 60; index += 1)
+      await tickets.update('personal', index % 2 ? 3 : 1, owner, { place: { after: 2 } });
+    expect(await column('progress')).toEqual([2, 3, 1]);
+  } finally {
+    await db.close();
+  }
+});

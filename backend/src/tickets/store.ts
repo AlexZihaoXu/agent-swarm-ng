@@ -75,7 +75,16 @@ export type TicketInput = {
   assignee?: AssigneeInput;
   links?: TicketLink[];
 };
-export type TicketPatch = Partial<Omit<TicketInput, 'links'>> & { addLinks?: TicketLink[]; removeLinks?: string[] };
+/**
+ * Where a ticket lands in its (new) status's column: right below `after`, else right above `before` (ticket numbers,
+ * the neighbours the person saw), else on top. Missing or stale neighbours fall through to the next rule.
+ */
+export type TicketPlace = { after?: number; before?: number };
+export type TicketPatch = Partial<Omit<TicketInput, 'links'>> & {
+  addLinks?: TicketLink[];
+  removeLinks?: string[];
+  place?: TicketPlace;
+};
 /** A change, for live dashboards and push: `review` when someone other than the owner moved it to In review. */
 export type TicketChange = {
   number: number;
@@ -157,6 +166,10 @@ type EventRow = {
 };
 type NewEvent = { kind: string; authorKind: string; authorId: string; authorName: string; text: string };
 type Wake = { agentId: string; name: string; text: string; human: boolean };
+
+/** A column's order: manual position, then the most recently updated (ties only happen before anyone reorders). */
+const BOARD_ORDER = [{ position: 'asc' as const }, { updatedAt: 'desc' as const }, { sequence: 'desc' as const }];
+type Tx = Parameters<Parameters<PlatformStore['client']['$transaction']>[0]>[0];
 
 const json = <T>(text: string, fallback: T): T => {
   try {
@@ -306,6 +319,8 @@ export class Tickets {
       assignee?: 'owner' | 'none' | { agentId: string };
       query?: string;
       limit?: number;
+      /** `board`: each status's manual order (the dashboard); `updated` (default): most recently updated first. */
+      order?: 'board' | 'updated';
     } = {},
   ) {
     const org = await this.scope(organizationId, filter.actor);
@@ -324,7 +339,7 @@ export class Tickets {
               : {}),
         ...(query ? { OR: [{ title: { contains: query } }, { description: { contains: query } }] } : {}),
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: filter.order === 'board' ? BOARD_ORDER : { updatedAt: 'desc' },
       take: take + 1,
       include: { assigneeAgent: { select: { name: true } } },
     });
@@ -415,14 +430,40 @@ export class Tickets {
   }
 
   /**
+   * The position for a ticket landing in `status`'s column (docs/tickets.md#order): between its neighbours, renumbering
+   * the column (without touching anyone's updatedAt) when floating point runs out of room between them.
+   */
+  private async placeIn(
+    tx: Tx,
+    organizationId: string,
+    status: TicketStatus,
+    ticketId: string,
+    place: TicketPlace = {},
+  ) {
+    const column = await tx.ticket.findMany({
+      where: { organizationId, status, NOT: { id: ticketId } },
+      orderBy: BOARD_ORDER,
+      select: { id: true, number: true, position: true },
+    });
+    const after = place.after === undefined ? -1 : column.findIndex(item => item.number === place.after);
+    const before = place.before === undefined ? -1 : column.findIndex(item => item.number === place.before);
+    const index = after >= 0 ? after + 1 : before >= 0 ? before : 0;
+    const above = column[index - 1]?.position;
+    const below = column[index]?.position;
+    if (above === undefined) return below === undefined ? 0 : below - 1;
+    if (below === undefined) return above + 1;
+    const middle = (above + below) / 2;
+    if (middle > above && middle < below) return middle;
+    for (const [at, item] of column.entries())
+      await tx.$executeRaw`UPDATE "Ticket" SET "position" = ${at < index ? at : at + 1} WHERE "id" = ${item.id}`;
+    return index;
+  }
+
+  /**
    * Saves the ticket's changes, its events and the wake-ups together (`write` returns the ticket's id and may add
    * events and wake-ups once it knows the number), then delivers the wake-ups.
    */
-  private async commit(
-    events: NewEvent[],
-    wakes: Wake[],
-    write: (tx: Parameters<Parameters<PlatformStore['client']['$transaction']>[0]>[0]) => Promise<string>,
-  ) {
+  private async commit(events: NewEvent[], wakes: Wake[], write: (tx: Tx) => Promise<string>) {
     const delivered: (Wake & { eventId: string })[] = [];
     await this.database.client.$transaction(async tx => {
       const ticketId = await write(tx);
@@ -487,7 +528,10 @@ export class Tickets {
         select: { ticketNext: true },
       });
       number = counter.ticketNext - 1;
-      const row = await tx.ticket.create({ data: { ...draft, organizationId: org.id, number } });
+      // New tickets go on top of their column.
+      const top = await tx.ticket.aggregate({ where: { organizationId: org.id, status }, _min: { position: true } });
+      const position = top._min.position === null ? 0 : top._min.position - 1;
+      const row = await tx.ticket.create({ data: { ...draft, organizationId: org.id, number, position } });
       // The wake-up names the ticket, so it is written once the number is known (still inside the transaction).
       const self = actor.kind === 'agent' && actor.agentId === agent?.id;
       if (agent && org.ticketWakeOnAssign && !self && (actor.kind === 'person' || this.allowAgentWake(row.id))) {
@@ -610,8 +654,16 @@ export class Tickets {
         }
       }
     }
-    if (!events.length) return this.get(org.id, number);
-    await this.commit(events, wakes, async tx => (await tx.ticket.update({ where: { id: row.id }, data })).id);
+    // A new status puts it on top of that column unless the person placed it (dragging); a reorder alone is no
+    // activity and leaves updatedAt as it was.
+    const placing = Boolean(patch.place) || data.status !== undefined;
+    if (!events.length && !placing) return this.get(org.id, number);
+    if (!events.length) data.updatedAt = row.updatedAt;
+    await this.commit(events, wakes, async tx => {
+      if (placing)
+        data.position = await this.placeIn(tx, org.id, (data.status as TicketStatus) ?? status, row.id, patch.place);
+      return (await tx.ticket.update({ where: { id: row.id }, data })).id;
+    });
     const owner = actor.kind === 'person' && actor.userId === org.ownerId;
     this.hooks.changed?.(org.id, {
       number,

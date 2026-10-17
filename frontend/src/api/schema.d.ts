@@ -5539,6 +5539,10 @@ export interface operations {
                     } | null;
                     linkComputer?: string;
                     unlink?: string;
+                    place?: {
+                        after?: number;
+                        before?: number;
+                    };
                 };
             };
         };

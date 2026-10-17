@@ -104,6 +104,19 @@ const Patch = Type.Object(
     linkComputer: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
     /** Removes a link by its id. */
     unlink: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+    /**
+     * Where it lands in its (new) status's column (dragging on the board): right below the ticket numbered `after`,
+     * else right above `before`, else on top.
+     */
+    place: Type.Optional(
+      Type.Object(
+        {
+          after: Type.Optional(Type.Integer({ minimum: 1 })),
+          before: Type.Optional(Type.Integer({ minimum: 1 })),
+        },
+        { additionalProperties: false },
+      ),
+    ),
   },
   { additionalProperties: false, minProperties: 1 },
 );
@@ -138,7 +151,7 @@ export function registerTicketRoutes(app: FastifyInstance, tickets: Tickets, dat
         },
       },
     },
-    (request, reply) => guard(reply, () => tickets.list(request.params.id)),
+    (request, reply) => guard(reply, () => tickets.list(request.params.id, { order: 'board' })),
   );
   app.post<{ Params: Static<typeof org>; Body: Static<typeof Create> }>(
     '/api/organizations/:id/tickets',

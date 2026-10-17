@@ -70,6 +70,8 @@ model Ticket {
   status          String        @default("todo")
   /// urgent | high | medium | low | none
   priority        String        @default("none")
+  /// Its place in its status's column, smallest first (docs/tickets.md#order): new and re-statused tickets go on top.
+  position        Float         @default(0)
   /// JSON array of short lower-case labels.
   labels          String        @default("[]")
   /// JSON array of links: {kind: 'computer' | 'file', id, label}.
@@ -89,6 +91,7 @@ model Ticket {
 
   @@unique([organizationId, number])
   @@index([organizationId, updatedAt])
+  @@index([organizationId, status, position])
   @@index([assigneeAgentId])
 }
 

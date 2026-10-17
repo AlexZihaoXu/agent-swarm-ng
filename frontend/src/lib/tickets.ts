@@ -12,6 +12,24 @@ export type TicketStatus = TicketSummary['status'];
 export type TicketPriority = TicketSummary['priority'];
 export type TicketSettings = TicketBoard['settings'];
 export type AssigneeChoice = { owner: true } | { agentId: string } | null;
+/** Where a dragged ticket lands in its column: right below `after`, else right above `before`, else on top. */
+export type TicketPlace = { after?: number; before?: number };
+
+/**
+ * The board with one ticket moved (docs/tickets.md#dragging): its new status, put next to its neighbour in the
+ * board-ordered list, so every view grouping by status shows it there.
+ */
+export function placeTicket(tickets: TicketSummary[], number: number, status: TicketStatus, place: TicketPlace) {
+  const moved = tickets.find(ticket => ticket.number === number);
+  if (!moved) return tickets;
+  const rest = tickets.filter(ticket => ticket.number !== number);
+  const at = (target: number | undefined) => rest.findIndex(ticket => ticket.number === target);
+  const after = at(place.after);
+  const before = at(place.before);
+  const top = rest.findIndex(ticket => ticket.status === status);
+  const index = after >= 0 ? after + 1 : before >= 0 ? before : top >= 0 ? top : rest.length;
+  return [...rest.slice(0, index), { ...moved, status }, ...rest.slice(index)];
+}
 
 /** In board order; Cancelled is listed, not a board column. */
 export const STATUSES: { key: TicketStatus; label: string; dot: string }[] = [
@@ -108,6 +126,28 @@ export function useTicketActions(organizationId: string | undefined) {
         body,
       });
       if (!data) throw failure(error, 'Could not save the change.');
+      return settle(data);
+    },
+    /** A drag on the board: shown at once, saved as a status change (if any) and a place, undone if it fails. */
+    move: async (number: number, status: TicketStatus, place: TicketPlace) => {
+      const key = ['tickets', organizationId];
+      await client.cancelQueries({ queryKey: key });
+      const before = client.getQueryData<TicketBoard>(key);
+      const current = before?.tickets.find(ticket => ticket.number === number);
+      if (before)
+        client.setQueryData<TicketBoard>(key, {
+          ...before,
+          tickets: placeTicket(before.tickets, number, status, place),
+        });
+      const { data, error } = await api.PATCH('/api/organizations/{id}/tickets/{number}', {
+        params: { path: { id, number } },
+        body: { ...(current?.status === status ? {} : { status }), place },
+      });
+      if (!data) {
+        if (before) client.setQueryData(key, before);
+        void client.invalidateQueries({ queryKey: key });
+        throw failure(error, 'Could not move the ticket.');
+      }
       return settle(data);
     },
     comment: async (number: number, text: string) => {

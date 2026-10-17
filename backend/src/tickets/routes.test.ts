@@ -131,4 +131,32 @@ describe('ticket routes', { timeout: 120_000 }, () => {
       await app.close();
     }
   });
+  it('saves a board drag: order within a column and a move to another, through the update route', async () => {
+    const { app, database, call, samCookie, samOrg } = await fixture();
+    try {
+      const base = `/api/organizations/${samOrg}`;
+      await call('PATCH', base, samCookie, { tickets: { enabled: true, prefix: 'SAM' } });
+      for (const title of ['One', 'Two', 'Three']) await call('POST', `${base}/tickets`, samCookie, { title });
+      const board = async () =>
+        ((await call('GET', `${base}/tickets`, samCookie)).json().tickets as { number: number; status: string }[]).map(
+          ticket => `${ticket.status}:${ticket.number}`,
+        );
+      expect(await board()).toEqual(['todo:3', 'todo:2', 'todo:1']);
+      // Within Todo: One goes between Three and Two.
+      expect((await call('PATCH', `${base}/tickets/1`, samCookie, { place: { after: 3, before: 2 } })).statusCode).toBe(
+        200,
+      );
+      expect(await board()).toEqual(['todo:3', 'todo:1', 'todo:2']);
+      // To In review, below nothing: a status change with its activity, and the review rule as from the detail.
+      const moved = await call('PATCH', `${base}/tickets/2`, samCookie, { status: 'review', place: {} });
+      expect(moved.json().events.at(-1)).toMatchObject({ kind: 'status', text: 'moved it Todo → In review' });
+      await call('PATCH', `${base}/tickets/3`, samCookie, { status: 'review', place: { after: 2 } });
+      expect(await board()).toEqual(['todo:1', 'review:2', 'review:3']);
+      expect((await call('PATCH', `${base}/tickets/1`, samCookie, { place: { after: 0 } })).statusCode).toBe(400);
+      const audit = await database.client.auditEvent.findMany({ where: { kind: 'ticket.update' } });
+      expect(audit.map(event => JSON.parse(event.detail ?? '{}').fields)).toContainEqual(['status', 'place']);
+    } finally {
+      await app.close();
+    }
+  });
 });
