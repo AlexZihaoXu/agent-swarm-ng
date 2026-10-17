@@ -24,7 +24,7 @@ test('Settings supports ChatGPT device sign-in, cancellation, connection, and di
     route.fulfill({ json: codexAccounts([status()]) }),
   );
   await page.goto('/');
-  await page.getByRole('tab', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Connect ChatGPT' }).click();
   await expect(page.getByLabel('One-time sign-in code')).toHaveValue('TEST-CODE');
   await expect(page.getByRole('link', { name: 'Open OpenAI sign-in' })).toHaveAttribute(
@@ -102,7 +102,7 @@ test('each ChatGPT account is its own card and its own connection for agents', a
     return route.fulfill({ json: { connected: true, models: [], login: { state: 'connected' } } });
   });
   await page.goto('/');
-  await page.getByRole('tab', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
   await expect(page.getByText('first@example.com · Plus plan')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Remove', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Add ChatGPT account' }).click();
@@ -124,7 +124,7 @@ test('each ChatGPT account is its own card and its own connection for agents', a
   await expect(page.getByRole('option', { name: 'test-codex', exact: true })).toHaveCount(0);
 
   await page.goto('/');
-  await page.getByRole('tab', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
   await page.getByRole('group', { name: 'ChatGPT account 2' }).getByRole('button', { name: 'Remove' }).click();
   await page.getByRole('button', { name: 'Remove account' }).click();
   await expect(page.getByRole('group', { name: 'ChatGPT account 2' })).toHaveCount(0);

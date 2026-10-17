@@ -207,7 +207,9 @@ test('a dropped live stream says it is reconnecting and dims the last readings',
 });
 
 for (const width of [320, 390]) {
-  test(`every tab is one tap away on a ${width}px phone, with the organization and Portal on top`, async ({ page }) => {
+  test(`every tab is one tap away on a ${width}px phone, with the organization and Settings on top`, async ({
+    page,
+  }) => {
     await mock(page, []);
     await page.setViewportSize({ width, height: 780 });
     await page.goto('/dashboard');
@@ -216,7 +218,7 @@ for (const width of [320, 390]) {
     // A floating capsule across the width, inset 16px from each edge (icons only; the names are for screen readers).
     expect(box.width).toBeGreaterThanOrEqual(width - 36);
     expect(box.y + box.height).toBeGreaterThan(780 - 80);
-    for (const tab of ['Dashboard', 'Chat', 'Computers', 'Settings']) {
+    for (const tab of ['Dashboard', 'Chat', 'Computers', 'Organization']) {
       const item = nav.getByRole('tab', { name: tab });
       await expect(item).toBeVisible();
       const size = (await item.boundingBox())!;
@@ -224,7 +226,9 @@ for (const width of [320, 390]) {
       expect(size.width).toBeGreaterThanOrEqual(44);
     }
     await expect(page.getByRole('button', { name: /^Organization:/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Open Portal' })).toBeVisible();
+    // Portal is hidden (2026-10-17); global settings is the gear in the top bar.
+    await expect(page.getByRole('button', { name: 'Open Portal' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
@@ -233,11 +237,13 @@ for (const width of [320, 390]) {
     for (const [tab, url] of [
       ['Chat', /\/chat$/],
       ['Computers', /\/computers$/],
-      ['Settings', /\/settings$/],
+      ['Organization', /\/organization$/],
     ] as const) {
       await nav.getByRole('tab', { name: tab }).click();
       await expect(page).toHaveURL(url);
     }
+    await page.getByRole('link', { name: 'Settings' }).click();
+    await expect(page).toHaveURL(/\/settings$/);
     await page.screenshot({ path: `../.scratch/shots/settings-phone-${width}.png` });
   });
 }

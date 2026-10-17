@@ -91,9 +91,9 @@ test.describe('phone touch scrolling', () => {
     await swipes(page.getByRole('region', { name: 'Agent editor' }));
     await page.goto('/chat');
     await swipes(page.getByRole('complementary', { name: 'Chats' }).locator('[class*="overflow-y-auto"]').first());
-    await page.getByRole('tab', { name: 'Settings' }).click();
+    await page.getByRole('link', { name: 'Settings' }).click();
     for (let index = 0; index < 3; index++) await page.getByRole('button', { name: 'Add endpoint' }).click();
-    const settings = page.getByRole('tabpanel', { name: 'Settings' });
+    const settings = page.getByRole('region', { name: 'Settings' });
     await expect.poll(() => settings.evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(300);
     const box = (await settings.boundingBox())!;
     await swipeUp(page, box.x + box.width / 2, box.y + 300);

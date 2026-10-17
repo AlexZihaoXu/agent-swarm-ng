@@ -30,8 +30,8 @@ const itemClass =
 /**
  * Which organization the dashboard shows (docs/organizations.md). Composition: Kibo dropdown-menu-profile-4
  * (Multi-Account Switcher): the current organization with its counts, a list to switch, then New organization
- * (Settings → Organizations, where they are also renamed and deleted). On a
- * phone it sits, with its name, in the slim top bar beside Portal (`bar`). Admin sees everyone's organizations
+ * (global Settings → Organizations, where they are also renamed and deleted; the one in view has its own
+ * Organization tab). On a phone it sits, with its name, in the slim top bar beside the Settings gear (`bar`). Admin sees everyone's organizations
  * (docs/users.md), in sections: yours first, then each person's under their name.
  */
 export function OrganizationSwitcher({

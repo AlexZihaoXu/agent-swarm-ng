@@ -13,8 +13,8 @@ import {
   ChatIcon,
   ComputerIcon,
   DashboardIcon,
+  OrganizationIcon,
   PlusIcon,
-  SettingsIcon,
   TicketsIcon,
 } from '@/components/ui/icons';
 import { JumpToLatest } from '@/components/jump-to-latest';
@@ -58,7 +58,9 @@ import {
 } from '@/components/message-search';
 import { requestJump, useMessageJump } from '@/lib/message-jump';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { Portal, PortalButton, usePortalShortcut } from '@/components/portal';
+// Portal is hidden at the owner's request (2026-10-17): its button and Ctrl/⌘+K are commented out below.
+// import { Portal, PortalButton, usePortalShortcut } from '@/components/portal';
+import { SettingsButton } from '@/components/settings-button';
 import { OrganizationSwitcher } from '@/components/organization-switcher';
 import { useOrganizations } from '@/lib/organizations';
 import { PortalWindows } from '@/components/portal-windows';
@@ -80,6 +82,8 @@ const loadSettings = () => import('@/components/settings');
 const loadKnowledge = () => import('@/components/knowledge-browser');
 const loadComputers = () => import('@/components/computers-panel');
 const Settings = lazy(() => loadSettings().then(module => ({ default: module.Settings })));
+const loadOrganization = () => import('@/components/organization-page');
+const OrganizationPage = lazy(() => loadOrganization().then(module => ({ default: module.OrganizationPage })));
 const KnowledgeBrowser = lazy(() => loadKnowledge().then(module => ({ default: module.KnowledgeBrowser })));
 const Dashboard = lazy(() => import('@/components/dashboard').then(module => ({ default: module.Dashboard })));
 import { AlertBanner } from '@/components/alert-banner';
@@ -235,8 +239,9 @@ export function App() {
       openConversation: target => navigate(chatAgentPath(target.id)),
     },
   };
-  const [portalOpen, setPortalOpen] = useState(false);
-  usePortalShortcut(() => setPortalOpen(value => !value));
+  // Portal hidden at the owner's request (2026-10-17): no button, and Ctrl/⌘+K no longer opens it.
+  // const [portalOpen, setPortalOpen] = useState(false);
+  // usePortalShortcut(() => setPortalOpen(value => !value));
   const [isPhone, setIsPhone] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   // Unsaved agent-settings changes: warn before leaving the page by any in-app route, or by closing the tab.
   const [unsaved, setUnsaved] = useState<string[]>([]);
@@ -257,8 +262,9 @@ export function App() {
   useEffect(() => {
     if (activeTab === 'settings') setSettingsSeen(true);
   }, [activeTab]);
-  // Tab content enters from the side its tab sits on (see .tab-enter).
-  const tabOrder = ['dashboard', 'chat', 'computers', 'tickets', 'settings'];
+  // Tab content enters from the side its tab sits on (see .tab-enter); global Settings, opened by the gear at the top
+  // right, comes from the right.
+  const tabOrder = ['dashboard', 'chat', 'computers', 'tickets', 'organization', 'settings'];
   const previousTab = useRef(activeTab);
   const tabShift = useRef(0);
   if (previousTab.current !== activeTab) {
@@ -291,7 +297,9 @@ export function App() {
             ? '/tickets'
             : value === 'dashboard'
               ? '/dashboard'
-              : '/settings';
+              : value === 'organization'
+                ? '/organization'
+                : '/settings';
     // Compare with the address itself: navigation renders as a transition, so during a quick second click the
     // rendered tab can still be the old one and would swallow the click.
     const current = parseDashboardPath(window.location.pathname).tab;
@@ -564,13 +572,16 @@ export function App() {
     void loadHistory(agent);
   }, [agent.id]);
   const tabList = useRef<HTMLDivElement>(null);
-  const [indicator, setIndicator] = useState({ left: 0, width: 0 });
+  const [indicator, setIndicator] = useState({ left: 0, width: 0, shown: true });
   useLayoutEffect(() => {
     const list = tabList.current;
     if (!list) return;
     const measure = () => {
       const active = list.querySelector<HTMLElement>('[role="tab"][data-state="active"]');
-      if (active) setIndicator({ left: active.offsetLeft, width: active.offsetWidth });
+      // Global Settings has no tab: the indicator fades out where it was.
+      setIndicator(current =>
+        active ? { left: active.offsetLeft, width: active.offsetWidth, shown: true } : { ...current, shown: false },
+      );
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -610,6 +621,7 @@ export function App() {
     () =>
       whenIdle(() => {
         void loadSettings();
+        void loadOrganization();
         void loadComputers();
         void loadKnowledge();
         void client.prefetchQuery({ ...computersQuery, staleTime: 5000 });
@@ -765,12 +777,13 @@ export function App() {
         className="flex min-h-0 flex-1 flex-col"
         style={{ '--tab-shift': `${tabShift.current}px` } as React.CSSProperties}
       >
-        {/* Phones: a slim top bar (organization, Portal) and a full-width bottom bar with every tab; detail views and
-            the desktop viewer hide both. Wider screens: one header row (organization, tabs, Portal). */}
+        {/* Phones: a slim top bar (organization, Settings) and a full-width bottom bar with every tab; detail views
+            and the desktop viewer hide both. Wider screens: one header row (organization, tabs, Settings). */}
         {!computerViewerOpen && !narrowDetail && (
           <div className="flex h-[calc(3rem+env(safe-area-inset-top))] shrink-0 items-center justify-between gap-2 border-b border-border bg-sidebar px-3 pt-[env(safe-area-inset-top)] md:hidden">
             <OrganizationSwitcher bar />
-            <PortalButton onClick={() => setPortalOpen(true)} className="h-9 w-9 justify-center px-0" />
+            {/* Portal hidden (2026-10-17): <PortalButton onClick={() => setPortalOpen(true)} className="h-9 w-9 justify-center px-0" /> */}
+            <SettingsButton active={activeTab === 'settings'} onOpen={() => changeTab('settings')} />
           </div>
         )}
         {/* Under the phone's top bar (which keeps the notch clear); when that bar is hidden, it clears the notch itself. */}
@@ -796,9 +809,13 @@ export function App() {
               <span
                 aria-hidden="true"
                 data-testid="tab-indicator"
-                className="pointer-events-none absolute inset-y-1.5 left-0 ao-raised rounded-full bg-muted md:rounded-md transition-[transform,width] duration-200 ease-out motion-reduce:transition-none md:inset-y-1 md:bg-background"
+                className="pointer-events-none absolute inset-y-1.5 left-0 ao-raised rounded-full bg-muted md:rounded-md transition-[transform,width,opacity] duration-200 ease-out motion-reduce:transition-none md:inset-y-1 md:bg-background"
                 // Measured from the active tab, so tabs can be as wide as their labels (even gaps between them).
-                style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width }}
+                style={{
+                  transform: `translateX(${indicator.left}px)`,
+                  width: indicator.width,
+                  opacity: indicator.shown ? 1 : 0,
+                }}
               />
               {(
                 [
@@ -806,7 +823,8 @@ export function App() {
                   ['Chat', ChatIcon],
                   ['Computers', ComputerIcon],
                   ...(ticketsOn ? ([['Tickets', TicketsIcon]] as const) : []),
-                  ['Settings', SettingsIcon],
+                  // The organization in view's settings; global Settings is the gear at the top right.
+                  ['Organization', OrganizationIcon],
                 ] as const
               ).map(([label, TabIcon]) => (
                 <Tabs.Trigger
@@ -827,9 +845,15 @@ export function App() {
                 </Tabs.Trigger>
               ))}
             </Tabs.List>
+            {/* Portal hidden (2026-10-17):
             <PortalButton
               onClick={() => setPortalOpen(true)}
               className="hidden md:absolute md:right-4 md:flex md:h-9"
+            /> */}
+            <SettingsButton
+              active={activeTab === 'settings'}
+              onOpen={() => changeTab('settings')}
+              className="hidden md:absolute md:right-4 md:flex"
             />
           </header>
         )}
@@ -1376,8 +1400,22 @@ export function App() {
           )}
         </Tabs.Content>
         <Tabs.Content
+          value="organization"
+          className="tab-enter min-h-0 flex-1 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none md:pb-0"
+        >
+          {activeTab === 'organization' && (
+            <Suspense fallback={loading}>
+              <OrganizationPage onNavigate={path => leave(() => navigate(path))} />
+            </Suspense>
+          )}
+        </Tabs.Content>
+        {/* Global settings: opened from the gear at the top right, so no tab names this panel. */}
+        <Tabs.Content
           value="settings"
           forceMount
+          role="region"
+          aria-labelledby={undefined}
+          aria-label="Settings"
           className={cn(
             'tab-enter min-h-0 flex-1 outline-none data-[state=inactive]:hidden',
             route.kind === 'knowledge' || route.kind === 'audit' || route.kind === 'access'
@@ -1444,6 +1482,7 @@ export function App() {
           navigate('/chat');
         }}
       />
+      {/* Portal hidden at the owner's request (2026-10-17):
       <Portal
         open={portalOpen}
         onOpenChange={setPortalOpen}
@@ -1451,7 +1490,7 @@ export function App() {
         busy={busy}
         onNavigate={path => navigate(path)}
         onStop={stop}
-      />
+      /> */}
       <PortalWindows agentState={agentState} onNavigate={path => navigate(path)} />
       <MessageSearchPanel
         open={searchOpen && canSearch}

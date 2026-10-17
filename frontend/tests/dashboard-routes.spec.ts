@@ -12,10 +12,14 @@ test('main tabs and the agent settings modal survive refresh and browser history
   await page.keyboard.press('Escape');
   await expect(page).toHaveURL(/\/chat\/agents\/morgan$/);
   await expect(page.getByRole('region', { name: 'Conversation with Morgan' })).toBeVisible();
-  await page.getByRole('tablist', { name: 'Main navigation' }).getByRole('tab', { name: 'Settings' }).click();
+  await page.getByRole('tablist', { name: 'Main navigation' }).getByRole('tab', { name: 'Organization' }).click();
+  await expect(page).toHaveURL(/\/organization$/);
+  await page.getByRole('link', { name: 'Settings' }).click();
   await expect(page).toHaveURL(/\/settings$/);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/organization$/);
   await page.goBack();
   await expect(page).toHaveURL(/\/chat\/agents\/morgan$/);
   await page.goBack();

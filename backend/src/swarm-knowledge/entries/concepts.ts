@@ -87,7 +87,7 @@ export const ticketsConcept = {
     "Your organization's board of work: tickets assigned to you wake you; you move them to In review, never Done.",
   source: 'docs/tickets.md',
   related: ['concepts/platform-events', 'concepts/tools', 'concepts/todos', 'practices/dashboard'],
-  content: `An organization's owner can turn on Tickets (organization settings): a shared board of work for its people and agents, shown in the dashboard's Tickets tab. A ticket has an id like HOME-14 (the organization's prefix and a number), a title, a description, a status (backlog, todo, progress = In progress, review = In review, done, cancelled), a priority (urgent, high, medium, low, none), labels, an assignee (your owner, an agent of the organization, or nobody), links (a computer, a chat file) and its comments and activity.
+  content: `An organization's owner can turn on Tickets (the dashboard's Organization tab → Tickets): a shared board of work for its people and agents, shown in the dashboard's Tickets tab. A ticket has an id like HOME-14 (the organization's prefix and a number), a title, a description, a status (backlog, todo, progress = In progress, review = In review, done, cancelled), a priority (urgent, high, medium, low, none), labels, an assignee (your owner, an agent of the organization, or nobody), links (a computer, a chat file) and its comments and activity.
 
 Your tools (only those your owner granted; each call is checked when it runs): ticket_list and ticket_read (r), ticket_create, ticket_update and ticket_comment (w, so they promote a heartbeat).
 

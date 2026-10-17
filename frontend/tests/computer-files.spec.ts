@@ -180,7 +180,7 @@ test('stopped computers cannot open file browser', async ({ page }) => {
   await expect(page.getByRole('menuitem', { name: 'File browser', exact: true })).toBeDisabled();
 });
 
-test('the desktop viewer and Portal open the same file browser', async ({ page }) => {
+test('the desktop viewer opens the file browser', async ({ page }) => {
   await setup(page);
   await page.keyboard.press('Escape');
   await page.route(`**/computers/${id}/desktop/**`, route =>
@@ -192,11 +192,12 @@ test('the desktop viewer and Portal open the same file browser', async ({ page }
   await expect(panel.getByRole('button', { name: 'README.md', exact: false }).first()).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);
-  // Portal (Ctrl+K anywhere): a command per running computer.
-  await page.goto('/computers');
-  await page.getByRole('article', { name: 'File desk' }).waitFor();
-  await page.keyboard.press('Control+k');
-  await page.keyboard.type('files');
-  await page.getByRole('option', { name: /Files on File desk/ }).click();
-  await expect(panel.getByRole('button', { name: 'README.md', exact: false }).first()).toBeVisible();
+  // Portal (Ctrl+K anywhere) also had a command per running computer; it is hidden at the owner's request
+  // (2026-10-17), so that half waits until it returns:
+  // await page.goto('/computers');
+  // await page.getByRole('article', { name: 'File desk' }).waitFor();
+  // await page.keyboard.press('Control+k');
+  // await page.keyboard.type('files');
+  // await page.getByRole('option', { name: /Files on File desk/ }).click();
+  // await expect(panel.getByRole('button', { name: 'README.md', exact: false }).first()).toBeVisible();
 });

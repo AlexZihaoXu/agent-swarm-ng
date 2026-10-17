@@ -6,16 +6,66 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useSignedIn } from '@/lib/auth';
 import { useOrganizations, type Organization } from '@/lib/organizations';
 
-const fieldClass =
+// Shared with the Organization tab (organization-page.tsx), which edits the one in view.
+export const organizationField =
   'h-11 min-w-0 flex-1 rounded-lg border border-border bg-sidebar px-3 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 sm:h-9 sm:text-sm';
-const describe = (org: Organization) =>
+export const describeOrganization = (org: Organization) =>
   `${org.agents} agent${org.agents === 1 ? '' : 's'} · ${org.computers} computer${org.computers === 1 ? '' : 's'} · ${org.groups} group${org.groups === 1 ? '' : 's'}`;
 const failure = (error: unknown, fallback: string) =>
   new Error((error as { message?: string } | undefined)?.message ?? fallback);
+/** Why an organization cannot be deleted now, or undefined when it can (empty, and not its owner's last one). */
+export const deleteBlocked = (org: Organization, organizations: Organization[]) =>
+  // Everyone keeps at least one organization (docs/users.md).
+  organizations.filter(item => item.ownerId === org.ownerId).length < 2
+    ? 'Everyone keeps at least one organization.'
+    : !org.agents && !org.computers && !org.groups
+      ? undefined
+      : org.agents
+        ? 'Delete its agents first.'
+        : 'Move or delete its computers and groups first.';
+export async function renameOrganization(id: string, name: string) {
+  const { data, error } = await api.PATCH('/api/organizations/{id}', {
+    params: { path: { id } },
+    body: { name: name.trim() },
+  });
+  if (!data) throw failure(error, 'Could not rename it.');
+}
+export async function deleteOrganization(id: string) {
+  const { data, error } = await api.DELETE('/api/organizations/{id}', { params: { path: { id } } });
+  if (!data) throw failure(error, 'Could not delete it.');
+}
+/** The delete confirmation both places share. */
+export function DeleteOrganizationDialog({
+  organization,
+  onClose,
+  onDeleted,
+}: {
+  organization: Organization | null;
+  onClose: () => void;
+  onDeleted: () => Promise<void>;
+}) {
+  return (
+    <ConfirmDialog
+      open={Boolean(organization)}
+      onOpenChange={open => {
+        if (!open) onClose();
+      }}
+      title={`Delete ${organization?.name ?? 'organization'}?`}
+      description="It is empty; nothing else changes."
+      confirmLabel="Delete"
+      busyLabel="Deleting…"
+      onConfirm={async () => {
+        await deleteOrganization(organization!.id);
+        await onDeleted();
+      }}
+    />
+  );
+}
 
 /**
- * Settings → Organizations: folders of agents, computers and group chats kept apart (docs/organizations.md). Create,
- * rename, or delete an empty one; things move between them from their own settings.
+ * Settings → Organizations (global): folders of agents, computers and group chats kept apart
+ * (docs/organizations.md). Create, rename, or delete an empty one; things move between them from their own settings.
+ * The organization in view is also set up in its own tab (Organization).
  */
 export function OrganizationSettings({ card }: { card: string }) {
   const id = useId();
@@ -58,11 +108,7 @@ export function OrganizationSettings({ card }: { card: string }) {
     }, 'Created. The dashboard now shows it; new agents and computers go there.');
   const rename = (org: Organization) =>
     run(async () => {
-      const { data, error } = await api.PATCH('/api/organizations/{id}', {
-        params: { path: { id: org.id } },
-        body: { name: (drafts[org.id] ?? org.name).trim() },
-      });
-      if (!data) throw failure(error, 'Could not rename it.');
+      await renameOrganization(org.id, drafts[org.id] ?? org.name);
       setDrafts(current => {
         const next = { ...current };
         delete next[org.id];
@@ -79,7 +125,7 @@ export function OrganizationSettings({ card }: { card: string }) {
         <p className="mt-1 text-sm text-muted-foreground">
           Folders for agents, computers and group chats. Different organizations are kept apart: computers are assigned,
           DMs allowed and groups formed only within one. Move things from their own settings; the switcher at the top
-          left chooses which one the dashboard shows.
+          left chooses which one the dashboard shows, and the Organization tab sets that one up (its tickets too).
         </p>
       </div>
       <div className={card}>
@@ -87,9 +133,7 @@ export function OrganizationSettings({ card }: { card: string }) {
           {organizations.map(org => {
             const draft = drafts[org.id] ?? org.name;
             const changed = draft.trim() !== org.name;
-            const empty = !org.agents && !org.computers && !org.groups;
-            // Everyone keeps at least one organization (docs/users.md).
-            const last = organizations.filter(item => item.ownerId === org.ownerId).length < 2;
+            const blocked = deleteBlocked(org, organizations);
             return (
               <li key={org.id} className="flex flex-wrap items-center gap-2 py-3 first:pt-0 last:pb-0">
                 <input
@@ -98,10 +142,12 @@ export function OrganizationSettings({ card }: { card: string }) {
                   maxLength={60}
                   disabled={busy}
                   onChange={event => setDrafts(current => ({ ...current, [org.id]: event.target.value }))}
-                  className={fieldClass}
+                  className={organizationField}
                 />
                 <span className="w-full text-xs text-muted-foreground sm:order-last">
-                  {(org.ownerName ?? me) === me ? describe(org) : `${org.ownerName}'s · ${describe(org)}`}
+                  {(org.ownerName ?? me) === me
+                    ? describeOrganization(org)
+                    : `${org.ownerName}'s · ${describeOrganization(org)}`}
                 </span>
                 {changed && (
                   <Button
@@ -118,16 +164,8 @@ export function OrganizationSettings({ card }: { card: string }) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={busy || !empty || last}
-                  title={
-                    last
-                      ? 'Everyone keeps at least one organization.'
-                      : empty
-                        ? undefined
-                        : org.agents
-                          ? 'Delete its agents first.'
-                          : 'Move or delete its computers and groups first.'
-                  }
+                  disabled={busy || Boolean(blocked)}
+                  title={blocked}
                   className="min-h-11 text-red-400 sm:min-h-0"
                   onClick={() => setDeleting(org)}
                 >
@@ -155,7 +193,7 @@ export function OrganizationSettings({ card }: { card: string }) {
             disabled={busy}
             placeholder="New organization name"
             onChange={event => setName(event.target.value)}
-            className={fieldClass}
+            className={organizationField}
           />
           <Button type="submit" size="sm" disabled={busy || !name.trim()} className="min-h-11 sm:min-h-0">
             Create organization
@@ -167,19 +205,10 @@ export function OrganizationSettings({ card }: { card: string }) {
           </p>
         )}
       </div>
-      <ConfirmDialog
-        open={Boolean(deleting)}
-        onOpenChange={open => {
-          if (!open) setDeleting(null);
-        }}
-        title={`Delete ${deleting?.name ?? 'organization'}?`}
-        description="It is empty; nothing else changes."
-        confirmLabel="Delete"
-        busyLabel="Deleting…"
-        onConfirm={async () => {
-          const target = deleting!;
-          const { data, error } = await api.DELETE('/api/organizations/{id}', { params: { path: { id: target.id } } });
-          if (!data) throw failure(error, 'Could not delete it.');
+      <DeleteOrganizationDialog
+        organization={deleting}
+        onClose={() => setDeleting(null)}
+        onDeleted={async () => {
           await refresh();
           setMessage('Deleted.');
         }}

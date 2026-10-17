@@ -46,7 +46,11 @@ describe('dashboard paths', () => {
     expect(parseDashboardPath(ticketPath('HOME-14'))).toMatchObject({ kind: 'ticket', ticketKey: 'HOME-14' });
     expect(parseDashboardPath('/tickets/HOME-x')).toMatchObject({ kind: 'not-found' });
     expect([ticketNumber('HOME-14'), ticketNumber('7'), ticketNumber('14-HOME')]).toEqual([14, 7, null]);
-    expect(parseDashboardPath('/settings')).toMatchObject({ kind: 'settings' });
+    // Global settings keep /settings; the organization in view has its own tab.
+    expect(parseDashboardPath('/settings')).toMatchObject({ kind: 'settings', tab: 'settings' });
+    expect(parseDashboardPath('/settings/knowledge')).toMatchObject({ kind: 'knowledge', tab: 'settings' });
+    expect(parseDashboardPath('/organization')).toMatchObject({ kind: 'organization', tab: 'organization' });
+    expect(parseDashboardPath('/organization/extra')).toMatchObject({ kind: 'not-found' });
   });
   it('distinguishes named editor destinations from resource IDs', () => {
     expect(parseDashboardPath('/agents/new').kind).toBe('agent-new');

@@ -9,7 +9,7 @@ test('agents live in Chat: its list opens their settings as a modal; Chat owns m
     'Dashboard',
     'Chat',
     'Computers',
-    'Settings',
+    'Organization',
   ]);
   await expect(page.getByRole('tab', { name: 'Chat', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByLabel('Message Avery')).toBeVisible();
@@ -305,24 +305,41 @@ test('navigation is centered with a moving indicator and pointer cursors', async
   const box = await tabs.boundingBox();
   const width = await page.evaluate(() => window.innerWidth);
   expect(Math.abs(box!.x + box!.width / 2 - width / 2)).toBeLessThan(2);
-  await expect(tabs.getByRole('tab', { name: 'Settings' })).toHaveCSS('cursor', 'pointer');
+  await expect(tabs.getByRole('tab', { name: 'Organization' })).toHaveCSS('cursor', 'pointer');
   await expect(indicator).toHaveCSS('transition-property', /\btransform\b/);
   const initial = await indicator.boundingBox();
-  await tabs.getByRole('tab', { name: 'Settings' }).click();
+  await tabs.getByRole('tab', { name: 'Organization' }).click();
   await expect.poll(async () => (await indicator.boundingBox())!.x).toBeGreaterThan(initial!.x + 50);
+  // Global settings has no tab: the gear at the top right is current and the indicator fades out.
+  const gear = page.getByRole('link', { name: 'Settings' });
+  await expect(gear).toHaveCSS('cursor', 'pointer');
+  const gearBox = (await gear.boundingBox())!;
+  expect(gearBox.x + gearBox.width).toBeGreaterThan(width - 40);
+  await gear.click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(gear).toHaveAttribute('aria-current', 'page');
+  await expect(indicator).toHaveCSS('opacity', '0');
+  await tabs.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await expect(gear).not.toHaveAttribute('aria-current', 'page');
+  await expect(indicator).toHaveCSS('opacity', '1');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(indicator).toHaveCSS('transition-property', 'none');
 });
 
-test('settings is reachable with keyboard-accessible tabs', async ({ page }) => {
+test('organization settings is reachable with keyboard-accessible tabs', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveURL(/\/chat\/agents\/avery$/);
   await page.getByRole('tab', { name: 'Chat', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'Computers' })).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Settings' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Organization' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/\/organization$/);
+  await expect(page.getByRole('heading', { name: 'What it holds' })).toBeVisible();
+  // The global settings gear follows the tabs in keyboard order.
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Settings' })).toBeFocused();
+  await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'API endpoints' })).toBeVisible();
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await expect(page.getByLabel('Message Avery')).toBeVisible();

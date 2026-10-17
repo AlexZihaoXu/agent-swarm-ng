@@ -82,7 +82,8 @@ test('a group message toasts with its group, unless that group is open', async (
   await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Second note.' })).toHaveCount(0);
 });
 
-test('a floating chat with the agent counts as viewing it: no toast', async ({ page }) => {
+// Portal (which opens floating chats) is hidden at the owner's request (2026-10-17); kept for when it returns.
+test.skip('a floating chat with the agent counts as viewing it: no toast', async ({ page }) => {
   await page.goto('/chat/agents/avery');
   await expect(page.getByRole('button', { name: 'Open Portal' })).toBeVisible();
   await page.keyboard.press('Control+k');

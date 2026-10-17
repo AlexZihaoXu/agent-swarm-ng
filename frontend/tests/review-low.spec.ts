@@ -252,11 +252,11 @@ test('Settings, Computers and Knowledge load on demand and still work', async ({
   await expect(page.getByLabel('Message Avery')).toBeVisible();
   expect(scripts).toEqual([]); // nothing from the other tabs was fetched for the first screen
   const initial = scripts.length;
-  await page.getByRole('tab', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
   await expect(page.getByRole('heading', { name: 'API endpoints' })).toBeVisible();
   await page.getByRole('tab', { name: 'Computers' }).click();
   await expect(page.getByRole('heading', { name: 'Computers', exact: true })).toBeVisible();
   expect(scripts.length).toBeGreaterThan(initial); // extra chunks arrived only after the tabs were opened
-  await page.getByRole('tab', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
   await expect(page.getByRole('heading', { name: 'API endpoints' })).toBeVisible();
 });

@@ -100,9 +100,10 @@ async function mockTickets(page: Page) {
 
 test('tickets: turned on for an organization, a ticket assigned to an agent, its status changed', async ({ page }) => {
   const state = await mockTickets(page);
-  await page.goto('/settings');
+  // Tickets are set up in the Organization tab (the organization in view).
+  await page.goto('/organization');
   const nav = page.getByRole('tablist', { name: 'Main navigation' });
-  await expect(nav.getByRole('tab', { name: 'Settings' })).toBeVisible();
+  await expect(nav.getByRole('tab', { name: 'Organization' })).toHaveAttribute('aria-selected', 'true');
   await expect(nav.getByRole('tab', { name: 'Tickets' })).toHaveCount(0);
 
   // Off by default; turning it on shows the options and the tab.

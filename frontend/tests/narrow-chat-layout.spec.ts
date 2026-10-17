@@ -73,12 +73,12 @@ test('the phone bottom navigation and one-row conversation headers navigate clea
   const tabs = page.getByRole('tablist', { name: 'Main navigation' });
   expect((await bounds(tabs)).y).toBeGreaterThan(760);
   expect(await tabs.locator('xpath=..').evaluate(element => getComputedStyle(element).position)).toBe('fixed');
-  // A floating capsule inset from the edges; the organization and Portal sit in the slim top bar.
+  // A floating capsule inset from the edges; the organization and the Settings gear sit in the slim top bar.
   expect(
     await tabs.locator('xpath=..').evaluate(element => parseFloat(getComputedStyle(element).borderRadius)),
   ).toBeGreaterThan(28);
   expect((await bounds(tabs)).width).toBeGreaterThanOrEqual(354);
-  expect((await bounds(page.getByRole('button', { name: 'Open Portal' }))).y).toBeLessThan(60);
+  expect((await bounds(page.getByRole('link', { name: 'Settings' }))).y).toBeLessThan(60);
   // Phones start on the chat list, with the bottom bar.
   await expect(page).toHaveURL(/\/chat$/);
   await expect(tabs).toBeVisible();
@@ -94,9 +94,9 @@ test('the phone bottom navigation and one-row conversation headers navigate clea
   await expect(page.getByRole('region', { name: 'Chat history' })).toBeVisible();
   await page.getByRole('button', { name: 'Back to chats' }).click();
   await expect(tabs).toBeVisible();
-  await page.getByRole('tab', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
   expect((await bounds(tabs)).y).toBeGreaterThan(760);
-  await page.getByRole('tabpanel', { name: 'Settings' }).evaluate(element => {
+  await page.getByRole('region', { name: 'Settings' }).evaluate(element => {
     element.scrollTop = element.scrollHeight;
   });
   const lastNote = await bounds(page.getByText('Save endpoints to keep them after restart.', { exact: false }));
@@ -125,8 +125,11 @@ test('phone navigation transitions animate only when motion is allowed', async (
   );
   await page.getByRole('button', { name: 'Back to chats' }).click();
   await expect(chats).toHaveCSS('animation-name', 'phone-list-in');
-  await page.getByRole('tab', { name: 'Settings' }).click();
-  const settings = page.getByRole('tabpanel', { name: 'Settings' });
+  await page.getByRole('tab', { name: 'Organization' }).click();
+  const organization = page.getByRole('tabpanel', { name: 'Organization' });
+  await expect(organization).toHaveCSS('animation-name', 'tab-in');
+  await page.getByRole('link', { name: 'Settings' }).click();
+  const settings = page.getByRole('region', { name: 'Settings' });
   await expect(settings).toHaveCSS('animation-name', 'tab-in');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(settings).toHaveCSS('animation-name', 'none');

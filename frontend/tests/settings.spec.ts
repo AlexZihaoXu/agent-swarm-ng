@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
 
 async function openEndpoint(page: import('@playwright/test').Page) {
   await page.goto('/');
-  await page.getByRole('tab', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Add endpoint', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill('Local model server');
   await page.getByLabel('Base URL', { exact: true }).fill('http://localhost:11434/v1');
@@ -30,11 +30,11 @@ test('unsaved endpoint form tests models and clears on refresh', async ({ page }
   await page.getByText('View models', { exact: true }).click();
   await expect(page.getByText('local-chat', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
-  await page.getByRole('tab', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
   await expect(key).toHaveValue('test-only-key');
   expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain('test-only-key');
   await page.reload();
-  await page.getByRole('tab', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
   await expect(page.getByText('No endpoints yet')).toBeVisible();
 });
 
@@ -57,7 +57,7 @@ test('saving restores endpoint metadata after refresh without exposing its key',
   await expect(page.getByRole('region', { name: 'API endpoints' })).toContainText('key saved');
   await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveAttribute('aria-expanded', 'false');
   await page.reload();
-  await page.getByRole('tab', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
   await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Local model server');
   await expect(page.getByLabel('API key', { exact: true })).toHaveAttribute(
     'placeholder',
@@ -103,7 +103,7 @@ test('model limits save with the endpoint and come back after a reload', async (
   await expect(page.getByRole('region', { name: 'API endpoints' }).getByRole('status')).toHaveText('Saved locally.');
   expect(saved).toMatchObject({ contextWindow: 131072, maxOutputTokens: 16384, images: true, reasoning: true });
   await page.reload();
-  await page.getByRole('tab', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
   await expect(context).toHaveValue('131072');
   await expect(reply).toHaveValue('16384');
   await expect(images).toHaveAttribute('aria-checked', 'true');

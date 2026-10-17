@@ -1,5 +1,9 @@
-/** Agents have no tab of their own: their `/agents/...` pages open over Chat (agent settings as a modal). */
-export type DashboardTab = 'dashboard' | 'chat' | 'computers' | 'tickets' | 'settings';
+/**
+ * Agents have no tab of their own: their `/agents/...` pages open over Chat (agent settings as a modal). `organization`
+ * is the settings of the organization in view; `settings` (global: the person and the whole swarm) is not a main tab
+ * but opens from the gear at the top right.
+ */
+export type DashboardTab = 'dashboard' | 'chat' | 'computers' | 'tickets' | 'organization' | 'settings';
 export type DashboardRoute = {
   tab: DashboardTab;
   kind:
@@ -28,6 +32,7 @@ export type DashboardRoute = {
     | 'tickets'
     | 'tickets-list'
     | 'ticket'
+    | 'organization'
     | 'settings'
     | 'knowledge'
     | 'audit'
@@ -152,6 +157,7 @@ export function parseDashboardPath(pathname: string): DashboardRoute {
     if (parts.length === 2 && id === 'list') return { tab: 'tickets', kind: 'tickets-list' };
     if (parts.length === 2 && ticketNumber(id) !== null) return { tab: 'tickets', kind: 'ticket', ticketKey: id };
   }
+  if (section === 'organization' && parts.length === 1) return { tab: 'organization', kind: 'organization' };
   if (section === 'settings') {
     if (parts.length === 1) return { tab: 'settings', kind: 'settings' };
     if (id === 'knowledge' && parts.length >= 2)

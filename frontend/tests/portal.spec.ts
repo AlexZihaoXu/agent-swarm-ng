@@ -1,6 +1,9 @@
 import { test, expect, type Page } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
+// Portal is hidden at the owner's request (2026-10-17): its button and Ctrl/⌘+K are commented out in app.tsx.
+// These stay skipped, not deleted, for when it returns.
+
 const desk = {
   id: 'c20ed85c-52d4-4f92-a8bb-e2bbb7975470',
   name: 'Shared desktop',
@@ -44,7 +47,9 @@ async function mocks(page: Page) {
   );
 }
 
-test('Ctrl+K opens Portal, prefixes narrow it, Enter floats and Shift+Enter goes to the page', async ({ page }) => {
+test.skip('Ctrl+K opens Portal, prefixes narrow it, Enter floats and Shift+Enter goes to the page', async ({
+  page,
+}) => {
   await mocks(page);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/chat/agents/avery');
@@ -127,7 +132,7 @@ test('Ctrl+K opens Portal, prefixes narrow it, Enter floats and Shift+Enter goes
   await expect(page).toHaveURL(/\/settings\/knowledge$/);
 });
 
-test('keys inside a focused terminal stay with the computer', async ({ page }) => {
+test.skip('keys inside a focused terminal stay with the computer', async ({ page }) => {
   await mocks(page);
   await page.goto('/chat/agents/avery');
   // The app (and its shortcut) mounts once the sign-in check answers.
@@ -145,7 +150,7 @@ test('keys inside a focused terminal stay with the computer', async ({ page }) =
   await expect(page.getByRole('dialog', { name: 'Portal' })).toBeVisible();
 });
 
-test('reduced transparency keeps Portal solid, and phones open pages instead of windows', async ({ page }) => {
+test.skip('reduced transparency keeps Portal solid, and phones open pages instead of windows', async ({ page }) => {
   await mocks(page);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 390, height: 800 });

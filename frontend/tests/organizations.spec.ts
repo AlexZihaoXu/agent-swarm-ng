@@ -142,3 +142,46 @@ test('Settings creates, renames and deletes organizations', async ({ page }) => 
     ]),
   );
 });
+
+test('the Organization tab sets up the organization in view, and asks which while all are shown', async ({ page }) => {
+  let state = orgs({ personal: 4, lab: 0 });
+  const calls: string[] = [];
+  await page.route(/\/api\/organizations(\/[^/]+)?$/, async route => {
+    const method = route.request().method();
+    const url = new URL(route.request().url()).pathname;
+    if (method !== 'GET') calls.push(`${method} ${url}`);
+    if (method === 'PATCH')
+      state = {
+        organizations: state.organizations.map(org =>
+          url.endsWith(`/${org.id}`) ? { ...org, name: route.request().postDataJSON().name } : org,
+        ),
+      };
+    if (method === 'DELETE') state = { organizations: state.organizations.filter(org => !url.endsWith(`/${org.id}`)) };
+    await route.fulfill({ json: state });
+  });
+  await page.goto('/organization');
+  // All organizations in view: pick one, which the switcher then shows too.
+  await expect(page.getByRole('heading', { name: 'Choose an organization' })).toBeVisible();
+  await page
+    .getByRole('list', { name: 'Organizations' })
+    .getByRole('button', { name: /Personal/ })
+    .click();
+  await expect(page).toHaveURL(/\/organization\?org=personal$/);
+  await expect(page.getByRole('button', { name: 'Organization: Personal' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Personal', level: 2 })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'What it holds' })).toContainText('Agents4');
+  // Not empty: deleting waits for its agents.
+  await expect(page.getByRole('button', { name: 'Delete Personal' })).toBeDisabled();
+  await expect(page.getByText('Delete its agents first.')).toBeVisible();
+  // The switcher's other organization: renamed, then deleted (it is empty), which goes back to asking.
+  await page.getByRole('button', { name: 'Organization: Personal' }).click();
+  await page.getByRole('menuitem', { name: /Lab/ }).click();
+  await expect(page.getByRole('heading', { name: 'Lab', level: 2 })).toBeVisible();
+  await page.getByLabel('Organization name').fill('Research');
+  await page.getByRole('button', { name: 'Rename' }).click();
+  await expect(page.getByRole('heading', { name: 'Research', level: 2 })).toBeVisible();
+  await page.getByRole('button', { name: 'Delete Research' }).click();
+  await page.getByRole('dialog', { name: 'Delete Research?' }).getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('heading', { name: 'Personal', level: 2 })).toBeVisible();
+  expect(calls).toEqual(['PATCH /api/organizations/lab', 'DELETE /api/organizations/lab']);
+});

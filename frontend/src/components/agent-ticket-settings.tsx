@@ -69,7 +69,9 @@ export function AgentTicketSettings({
         <p className="mt-1 text-sm text-muted-foreground">
           Off for every agent until you grant them. {agent.name} works only on tickets of its own organization
           {organization ? ` (${organization.name})` : ''}
-          {organization && !organization.tickets?.enabled ? ', which has tickets off for now (Settings → Tickets)' : ''}
+          {organization && !organization.tickets?.enabled
+            ? ', which has tickets off for now (Organization → Tickets)'
+            : ''}
           .
         </p>
       </div>

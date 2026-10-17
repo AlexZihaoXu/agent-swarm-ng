@@ -994,7 +994,8 @@ test('dashboard', async ({ page }) => {
   await save(page, 'dashboard', 680);
 });
 
-test('portal', async ({ page }) => {
+// Portal is hidden at the owner's request (2026-10-17); its shot is skipped until it returns.
+test.skip('portal', async ({ page }) => {
   await page.goto('/chat/agents/avery');
   await settleConversation(page);
   await page.keyboard.press('Control+k');

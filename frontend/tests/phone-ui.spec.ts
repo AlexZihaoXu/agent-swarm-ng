@@ -9,8 +9,10 @@ for (const width of [320, 390])
     await page.setViewportSize({ width, height: 640 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
-    for (const label of ['Dashboard', 'Chat', 'Computers', 'Settings'])
+    for (const label of ['Dashboard', 'Chat', 'Computers', 'Organization'])
       expect((await size(page.getByRole('tab', { name: label }))).height).toBeGreaterThanOrEqual(44);
+    // Global settings: the gear in the slim top bar.
+    await expect(page.getByRole('link', { name: 'Settings' })).toHaveCSS('cursor', 'pointer');
     expect((await size(page.getByRole('button', { name: 'Create group chat' }))).width).toBeGreaterThanOrEqual(44);
     await expect(page.getByLabel('Search chats')).toHaveCSS('font-size', '16px');
     await page.getByRole('button', { name: 'Open conversation with Avery' }).click();
@@ -37,7 +39,7 @@ for (const width of [320, 390])
       await page.screenshot({ path: test.info().outputPath('phone-reply-320.png'), animations: 'disabled' });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     await page.getByRole('button', { name: 'Back to chats' }).click();
-    await page.getByRole('tab', { name: 'Settings' }).click();
+    await page.getByRole('link', { name: 'Settings' }).click();
     expect((await size(page.getByRole('button', { name: 'Connect ChatGPT' }))).height).toBeGreaterThanOrEqual(44);
     expect((await size(page.getByRole('button', { name: 'Add endpoint' }))).height).toBeGreaterThanOrEqual(44);
     await page.getByRole('button', { name: 'Add endpoint' }).click();

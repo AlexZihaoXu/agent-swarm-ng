@@ -4,7 +4,6 @@ import { AccountSettings } from '@/components/account-settings';
 import { SecuritySettings } from '@/components/security-settings';
 import { SwarmSettings } from '@/components/swarm-settings';
 import { OrganizationSettings } from '@/components/organization-settings';
-import { TicketSettings } from '@/components/ticket-settings';
 import { ComputerStorageSettings } from '@/components/computer-storage-settings';
 import { useEffect, useId, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
@@ -569,20 +568,20 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
         title="Settings"
         description={
           admin
-            ? 'Your account, users, organizations, model connections, Knowledge, the audit log and swarm limits.'
-            : 'Your account, organizations, model connections and Knowledge.'
+            ? 'For you and the whole swarm: your account, users, security, model connections, organizations, Knowledge, the logs and swarm limits.'
+            : 'For you: your account, model connections, organizations and Knowledge.'
         }
         width="max-w-3xl"
         sticky
       />
-      {/* Users see their own account, connections, organizations and Knowledge; the rest is admin's (docs/users.md). */}
+      {/* Global settings (the gear at the top right); one organization's own are in the Organization tab. Users see
+          their own account, connections, organizations and Knowledge; the rest is admin's (docs/users.md). */}
       <div className="mx-auto w-full max-w-3xl space-y-8 px-4 pb-8 pt-6 md:px-6 md:pb-10">
         <AccountSettings />
         {admin && <UserSettings />}
         {admin && <SecuritySettings onNavigate={onNavigate} />}
         <CodexConnection />
         <OrganizationSettings card={settingsCard} />
-        <TicketSettings card={settingsCard} />
         <section aria-labelledby="knowledge-title" className="space-y-4">
           <div>
             <h3 id="knowledge-title" className="text-lg font-semibold">

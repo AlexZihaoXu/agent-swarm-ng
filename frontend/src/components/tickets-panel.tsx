@@ -76,14 +76,14 @@ export function TicketsPanel({
             <EmptyTitle>{organization ? 'Tickets are off' : 'Choose an organization'}</EmptyTitle>
             <EmptyDescription>
               {organization
-                ? `Turn on tickets for ${organization.name} in Settings → Tickets to give its people and agents a shared board.`
+                ? `Turn on tickets for ${organization.name} in Organization → Tickets to give its people and agents a shared board.`
                 : 'Tickets belong to one organization: choose it with the switcher at the top left.'}
             </EmptyDescription>
           </EmptyHeader>
           {organization && (
             <EmptyContent>
-              <Button type="button" size="sm" onClick={() => onNavigate('/settings#tickets')}>
-                Open Settings
+              <Button type="button" size="sm" onClick={() => onNavigate('/organization#tickets')}>
+                Open organization settings
               </Button>
             </EmptyContent>
           )}

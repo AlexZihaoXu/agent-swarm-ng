@@ -19,15 +19,15 @@ export const dashboardPractice = {
   ],
   content: `The dashboard is the web app the human uses. When they ask how to do something, answer with the exact labels and steps from these entries (and the URL if helpful). Do not guess at controls that are not described here; say if something does not exist.
 
-Main tabs, in order: Dashboard, Chat, Computers, Tickets (only while the organization shown has tickets on: concepts/tickets), Settings; there is no Agents tab: agents are in Chat's list, and their settings open from it (practices/dashboard/agents) (a bar at the top on a computer; a floating pill near the bottom on a phone, hidden while a conversation or detail page is open). The tab bar is hidden inside a computer's desktop viewer; the "Computers" breadcrumb goes back.
+Main tabs, in order: Dashboard, Chat, Computers, Tickets (only while the organization shown has tickets on: concepts/tickets), Organization (the settings of the organization shown: practices/dashboard/settings); there is no Agents tab: agents are in Chat's list, and their settings open from it (practices/dashboard/agents) (a bar at the top on a computer; a floating pill near the bottom on a phone, hidden while a conversation or detail page is open). The tab bar is hidden inside a computer's desktop viewer; the "Computers" breadcrumb goes back. Global Settings is not a tab: the gear button ("Settings") at the top right of the header opens it (on a phone, at the right of the slim top bar).
 
-Portal (Ctrl+K, ⌘K on a Mac, or the "Portal" search button at the top right; on a phone the round search button beside the tab pill): one search over agents, chats, computers and their terminals, pages, files (chat files and agents' scratchpads, by name), Knowledge and commands. A prefix narrows it: @ agents, # chats, : computers and terminals, / pages, > commands (new agent, new group, new computer, stop a working agent), ? Knowledge; the empty Portal shows them as chips to click. Enter pulls an agent chat, a terminal or a computer's desktop out as a floating window over any page (on a phone it opens the page); Shift+Enter goes to its page instead; Esc closes. Floating windows: drag by the title bar, resize from any edge, red light closes, yellow light minimizes into the dock at the bottom (click to bring back); they stay open when changing pages and remember where they were (not after a reload). A floating desktop starts with input locked: its lock button lets the human use it. While a computer's desktop or terminal has the keyboard, Ctrl+K goes to the computer instead; click outside it or use the button.
+Portal (the search palette that used to open with Ctrl+K or a button at the top right) is hidden for now: there is no Portal button and Ctrl+K does nothing in the dashboard. Do not send the human to it.
 
-Tickets (/tickets): turned on per organization in Settings → Tickets (with its options: waking assigned agents, agents creating tickets, agents picking up unassigned ones, a push when a ticket reaches In review, and the id prefix). The tab has a Board (one column per status) and a List, filters (All, Assigned to agents, Assigned to me) and "New ticket"; a ticket opens with its status, assignee, priority, labels, links, activity and comments. The ticket tools are granted per agent in Agent settings → Tickets.
+Tickets (/tickets): turned on per organization in the Organization tab → Tickets (with its options: waking assigned agents, agents creating tickets, agents picking up unassigned ones, a push when a ticket reaches In review, and the id prefix). The tab has a Board (one column per status) and a List, filters (All, Assigned to agents, Assigned to me) and "New ticket"; a ticket opens with its status, assignee, priority, labels, links, activity and comments. The ticket tools are granted per agent in Agent settings → Tickets.
 
-Organizations: the switcher at the top left (on a phone, the square badge left of the tab pill) shows the current organization with its counts of agents and computers; click it to switch to another one or "All organizations", or "New organization". It scopes Chat (and its agents), Computers and Portal to that organization, and new agents, computers and groups go into it (while showing all, their create dialogs ask "Organization"). The choice is per browser. Opening an agent of another organization switches to it.
+Organizations: the switcher at the top left (on a phone, the square badge left of the tab pill) shows the current organization with its counts of agents and computers; click it to switch to another one or "All organizations", or "New organization" (opens Settings → Organizations). It scopes Chat (and its agents), Computers, Tickets and the Organization tab to that organization, and new agents, computers and groups go into it (while showing all, their create dialogs ask "Organization"). The choice is per browser. Opening an agent of another organization switches to it.
 
-Addresses: /chat (conversations), /agents/<id> (an agent's settings, open over its chat), /agents/new (create an agent), /computers (computers and their viewers), /settings (model connections and the Knowledge browser, /settings/knowledge).
+Addresses: /chat (conversations), /agents/<id> (an agent's settings, open over its chat), /agents/new (create an agent), /computers (computers and their viewers), /organization (the organization shown: name, counts, tickets, delete), /settings (global: account, model connections, organizations list, the Knowledge browser at /settings/knowledge).
 
 Only the human can (agents have no tools for these): create, edit and delete agents; allow agent-to-agent DMs; assign computers to agents; create, power on/off, configure and delete computers; force release a computer; create and edit groups; connect model providers. Agents can explain how.
 
@@ -35,7 +35,7 @@ Topics:
 - practices/dashboard/agents: create an agent, its settings (DMs, model, computers, avatar), delete, the activity log.
 - practices/dashboard/computers: create, power, settings, delete; the desktop viewer, input lock, terminals, floating windows, force release, file browser.
 - practices/dashboard/chat: private chat, stopping an agent, viewing agent DMs and Discord channels, groups, reactions and replies.
-- practices/dashboard/settings: organizations, ChatGPT/Codex subscription, OpenRouter and other endpoints, the Knowledge browser.
+- practices/dashboard/settings: the Organization tab (name, tickets, delete); global Settings: organizations, ChatGPT/Codex subscription, OpenRouter and other endpoints, the Knowledge browser.
 
 Not in the app: any view of agents' timers, reminders or watches (agents list them with list_timers; reminder records can appear in a run's collapsed "Details" in the activity log); per-tool switches or system-prompt editing; theme, notification or user-account settings; uploading or deleting files through the file browser; editing Knowledge.`,
 } satisfies KnowledgeEntry;
@@ -50,9 +50,9 @@ export const dashboardAgents = {
   related: ['practices/dashboard', 'concepts/agents', 'concepts/computers', 'concepts/channels'],
   content: `There is no Agents tab: agents are listed in the Chat tab's sidebar with the group chats. Right-click an agent there (on a phone, press and hold) for Open chat, Agent settings, Rename agent and Delete agent; right-click anywhere in the list for Create new agent and Create group chat. Agent settings is where every setting of an agent is changed.
 
-Create an agent: right-click the chat list → Create new agent (or Portal → New agent, or /agents/new). The "Create new agent" dialog asks for Agent name, an optional Avatar, Endpoint (a model connection; if none exist, connect one in Settings first), Model and Thinking level, then "Create agent". A new agent can use the public web, read Swarm Knowledge, keep a private scratchpad and open files sent in its chats; it has no computer or command access until a computer is assigned.
+Create an agent: right-click the chat list → Create new agent (or /agents/new). The "Create new agent" dialog asks for Agent name, an optional Avatar, Endpoint (a model connection; if none exist, connect one in Settings first), Model and Thinking level, then "Create agent". A new agent can use the public web, read Swarm Knowledge, keep a private scratchpad and open files sent in its chats; it has no computer or command access until a computer is assigned.
 
-Agent settings (/agents/<id>; Chat → right-click the agent → Agent settings, or Portal → "<name> settings") open as a large window over the agent's chat, titled with its name and "Agent settings", with the sections' jump links on the left (a phone shows it full screen, without them; ✕ or Escape closes it). Sections in order:
+Agent settings (/agents/<id>; Chat → right-click the agent → Agent settings) open as a large window over the agent's chat, titled with its name and "Agent settings", with the sections' jump links on the left (a phone shows it full screen, without them; ✕ or Escape closes it). Sections in order:
 1. Channels: Swarm App "Allowed DMs" and Discord (below).
    Swarm App: "Allowed DMs", one checkbox per other agent (with "Find agents" search; up to 100). Allowing a DM lets both agents message each other (off by default; automated chains are limited to eight DMs). "View DM" opens their read-only conversation.
 2. Model: Name, Endpoint, Model, Thinking level, and Active context: "Compact while working at (%)" (20–90, default 65), "Compact when idle for (minutes)" (0 = never, default 30) and "…if the context is at least (%)" (default 50). Active context settings apply from the next summary, also while the agent works.
@@ -148,10 +148,12 @@ export const dashboardSettings = {
   parentId: 'practices/dashboard',
   title: 'Dashboard: settings',
   summary:
-    'Connect the ChatGPT/Codex subscription, OpenRouter or another endpoint; browse Swarm Knowledge; Swarm limits.',
+    'The Organization tab (name, tickets, delete); global Settings: ChatGPT/Codex, OpenRouter and other endpoints, organizations, Swarm Knowledge, Swarm limits.',
   source: 'frontend/src/components/settings.tsx',
   related: ['practices/dashboard', 'concepts/system'],
-  content: `Settings tab (/settings), its sections in this order.
+  content: `Organization tab (/organization): the settings of the organization the switcher shows. Its name (edit it, then Rename); what it holds (counts of agents, computers and group chats); Tickets (on/off and its options, concepts/tickets); and "Delete <name>", only when it is empty and not its owner's last. With "All organizations" shown and several of them, it asks "Choose an organization" with a list to pick one.
+
+Settings (/settings), global, for the person and the whole swarm: opened by the gear button ("Settings") at the top right of the header, not a tab. Its sections in this order.
 
 OpenAI Codex: use a ChatGPT Plus or Pro subscription without an API key. "Connect ChatGPT" shows a one-time sign-in code and an "Open OpenAI sign-in" link; enter the code there (device code sign-in may need enabling in ChatGPT → Settings → Security). Status reads Not connected, Waiting for sign-in… or Connected to ChatGPT; "Disconnect" removes it.
 
