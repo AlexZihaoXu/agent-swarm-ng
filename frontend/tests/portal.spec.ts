@@ -1,8 +1,7 @@
 import { test, expect, type Page } from './fixtures';
 import { sampleAgents } from './sample-agents';
 
-// Portal is hidden at the owner's request (2026-10-17): its button and Ctrl/⌘+K are commented out in app.tsx.
-// These stay skipped, not deleted, for when it returns.
+// Portal's buttons are hidden at the owner's request (2026-10-17); Ctrl/⌘+K opens it.
 
 const desk = {
   id: 'c20ed85c-52d4-4f92-a8bb-e2bbb7975470',
@@ -47,14 +46,14 @@ async function mocks(page: Page) {
   );
 }
 
-test.skip('Ctrl+K opens Portal, prefixes narrow it, Enter floats and Shift+Enter goes to the page', async ({
+test('Ctrl+K opens Portal, prefixes narrow it, Enter floats and Shift+Enter goes to the page', async ({
   page,
 }) => {
   await mocks(page);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/chat/agents/avery');
   // The app (and its shortcut) mounts once the sign-in check answers.
-  await expect(page.getByRole('button', { name: 'Open Portal' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Settings' }).first()).toBeVisible();
   await page.keyboard.press('Control+k');
   const portal = page.getByRole('dialog', { name: 'Portal' });
   await expect(portal).toBeVisible();
@@ -132,11 +131,11 @@ test.skip('Ctrl+K opens Portal, prefixes narrow it, Enter floats and Shift+Enter
   await expect(page).toHaveURL(/\/settings\/knowledge$/);
 });
 
-test.skip('keys inside a focused terminal stay with the computer', async ({ page }) => {
+test('keys inside a focused terminal stay with the computer', async ({ page }) => {
   await mocks(page);
   await page.goto('/chat/agents/avery');
   // The app (and its shortcut) mounts once the sign-in check answers.
-  await expect(page.getByRole('button', { name: 'Open Portal' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Settings' }).first()).toBeVisible();
   await page.keyboard.press('Control+k');
   await page.getByRole('dialog', { name: 'Portal' }).getByRole('combobox').fill(':build');
   await expect(page.getByRole('option', { name: /build-web/, selected: true })).toBeVisible();
@@ -145,17 +144,19 @@ test.skip('keys inside a focused terminal stay with the computer', async ({ page
   await terminal.locator('.xterm-helper-textarea').focus();
   await page.keyboard.press('Control+k');
   await expect(page.getByRole('dialog', { name: 'Portal' })).toBeHidden();
-  // The header button always opens it.
-  await page.getByRole('button', { name: 'Open Portal' }).click();
+  // Outside the terminal the shortcut opens it again.
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('Control+k');
   await expect(page.getByRole('dialog', { name: 'Portal' })).toBeVisible();
 });
 
-test.skip('reduced transparency keeps Portal solid, and phones open pages instead of windows', async ({ page }) => {
+test('reduced transparency keeps Portal solid, and phones open pages instead of windows', async ({ page }) => {
   await mocks(page);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto('/chat');
-  await page.getByRole('button', { name: 'Open Portal' }).click();
+  await expect(page.getByRole('link', { name: 'Settings' }).first()).toBeVisible();
+  await page.keyboard.press('Control+k');
   const portal = page.getByRole('dialog', { name: 'Portal' });
   await portal.getByRole('combobox').fill('@morg');
   await page.screenshot({ path: '../.scratch/shots/portal-phone.png' });

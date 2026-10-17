@@ -1068,8 +1068,7 @@ test('creates a computer and requires an exact typed name before destructive del
   expect(computers).toHaveLength(0);
 });
 
-// Portal (the dashboard's Ctrl/⌘+K) is hidden at the owner's request (2026-10-17); skipped until it returns.
-test.skip('a view-only desktop passes Ctrl/⌘+K to the dashboard (Portal), a controlled one keeps it', async ({
+test('a view-only desktop passes Ctrl/⌘+K to the dashboard (Portal), a controlled one keeps it', async ({
   page,
 }) => {
   await page.route('**/assets/index-CPWh3fQ6.js', route => route.fulfill({ contentType: 'text/javascript', body: '' }));

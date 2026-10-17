@@ -56,7 +56,7 @@ The main tabs are Dashboard, Chat, Computers, Tickets (while the organization in
 - **Organization** (`/organization`, a main tab) is the settings of the organization in view, the one the switcher shows, since agents, computers and groups all belong to one: its name (rename), what it holds (agents, computers, group chats), **Organization → Tickets**, and deleting it when it is empty (never its owner's last). With **All organizations** in view and several of them, it asks which one and switching to it shows its settings ([organizations](organizations.md)).
 - **Settings** (`/settings` and its pages: Knowledge, the [audit](audit-log.md) and [access](access-log.md) logs, API endpoints) is global, about the person and the whole swarm: Account, Users, Security, ChatGPT accounts, Organizations (the list: create, rename, delete), Swarm Knowledge, API endpoints, Discord accounts, Swarm limits and Computer storage. It is not a tab: the gear button (**Settings**) at the top right of the header opens it, shown as current while there; the tab indicator fades out meanwhile.
 
-[Portal](portal.md) (its header button and Ctrl/⌘+K) is hidden for now at the owner's request (2026-10-17); the computer viewer's own floating chats and terminals are unaffected.
+[Portal](portal.md) has no header button for now (owner's request, 2026-10-17); Ctrl/⌘+K still opens it.
 
 ## Phone layout
 

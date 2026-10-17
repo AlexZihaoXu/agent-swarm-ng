@@ -58,8 +58,8 @@ import {
 } from '@/components/message-search';
 import { requestJump, useMessageJump } from '@/lib/message-jump';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-// Portal is hidden at the owner's request (2026-10-17): its button and Ctrl/⌘+K are commented out below.
-// import { Portal, PortalButton, usePortalShortcut } from '@/components/portal';
+// Portal's buttons are hidden at the owner's request (2026-10-17); Ctrl/⌘+K still opens it.
+import { Portal, usePortalShortcut } from '@/components/portal';
 import { SettingsButton } from '@/components/settings-button';
 import { OrganizationSwitcher } from '@/components/organization-switcher';
 import { useOrganizations } from '@/lib/organizations';
@@ -239,9 +239,8 @@ export function App() {
       openConversation: target => navigate(chatAgentPath(target.id)),
     },
   };
-  // Portal hidden at the owner's request (2026-10-17): no button, and Ctrl/⌘+K no longer opens it.
-  // const [portalOpen, setPortalOpen] = useState(false);
-  // usePortalShortcut(() => setPortalOpen(value => !value));
+  const [portalOpen, setPortalOpen] = useState(false);
+  usePortalShortcut(() => setPortalOpen(value => !value));
   const [isPhone, setIsPhone] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   // Unsaved agent-settings changes: warn before leaving the page by any in-app route, or by closing the tab.
   const [unsaved, setUnsaved] = useState<string[]>([]);
@@ -1482,7 +1481,6 @@ export function App() {
           navigate('/chat');
         }}
       />
-      {/* Portal hidden at the owner's request (2026-10-17):
       <Portal
         open={portalOpen}
         onOpenChange={setPortalOpen}
@@ -1490,7 +1488,7 @@ export function App() {
         busy={busy}
         onNavigate={path => navigate(path)}
         onStop={stop}
-      /> */}
+      />
       <PortalWindows agentState={agentState} onNavigate={path => navigate(path)} />
       <MessageSearchPanel
         open={searchOpen && canSearch}
