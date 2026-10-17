@@ -4,7 +4,7 @@ set -eu
 
 for package in ubuntu-session gnome-shell gnome-control-center gnome-terminal nautilus \
     gnome-shell-extension-ubuntu-dock gnome-shell-extension-appindicator \
-    yaru-theme-gtk yaru-theme-icon fonts-ubuntu fonts-noto-color-emoji dbus-x11 ubuntu-settings \
+    yaru-theme-gtk yaru-theme-icon fonts-ubuntu fonts-noto-color-emoji fonts-noto-cjk fonts-noto-core dbus-x11 ubuntu-settings \
     ubuntu-wallpapers-noble librsvg2-common gir1.2-dbusmenu-gtk3-0.4; do
     test "$(dpkg-query -W -f='${Status}' "$package")" = 'install ok installed'
 done
@@ -43,5 +43,12 @@ done
 test "$(locale charmap)" = 'UTF-8'
 
 fc-match -f '%{family}' emoji | grep -q 'Noto Color Emoji'
+# Other scripts must not fall back to a font without their glyphs (boxes on screen).
+fc-match -f '%{family}' :lang=zh-cn | grep -q 'Noto Sans CJK'
+fc-match -f '%{family}' :lang=ja | grep -q 'Noto Sans CJK'
+fc-match -f '%{family}' :lang=ko | grep -q 'Noto Sans CJK'
+for lang in hi th km my am; do
+    fc-list ":lang=$lang" family | grep -q 'Noto'
+done
 gnome-shell --version
 printf 'Ubuntu GNOME package checks passed. Desktop session startup is a separate check.\n'

@@ -64,6 +64,12 @@ RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
+# Every script people and agents read or type: CJK, plus Noto's core set (Indic, Thai, Khmer, Myanmar, Ethiopic,
+# Arabic, Hebrew...). Without them those characters render as boxes. About 140 MB; its own layer keeps the cache.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends fonts-noto-cjk fonts-noto-core \
+    && rm -rf /var/lib/apt/lists/*
+
 # Managed computers add GNOME/PipeWire capture and a sudo-capable workspace.
 # Keep this after the desktop/tool layers for incremental rebuilds.
 RUN apt-get update \
