@@ -28,7 +28,7 @@ Agent settings → **Timers** lists the agent's timers and reminders with their 
 
 ## Computer events
 
-The same platform-event path carries **computer events**: while an agent holds a computer, a watcher lists that computer's terminals every 5 seconds and tells the holder when one exits (with its exit code) or is closed by someone else. The agent's own `terminal_delete` is not reported back. The agent decides whether to read the output, tell the human, or clean up; see [persistent terminals](persistent-terminals.md). Watch results (fired, timed out, failed, ended) arrive through the same `computer` kind; see [watches](agent-computer-use.md#watches).
+The same platform-event path carries **ticket events** (an assignment or an @mention, saved and delivered at least once like timer firings: [tickets](tickets.md)) and **computer events**: while an agent holds a computer, a watcher lists that computer's terminals every 5 seconds and tells the holder when one exits (with its exit code) or is closed by someone else. The agent's own `terminal_delete` is not reported back. The agent decides whether to read the output, tell the human, or clean up; see [persistent terminals](persistent-terminals.md). Watch results (fired, timed out, failed, ended) arrive through the same `computer` kind; see [watches](agent-computer-use.md#watches).
 
 ## Time notes
 

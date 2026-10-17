@@ -12,7 +12,8 @@
 | `auth.lockdown` / `auth.unlock` | sign-in locked down after failed sign-ins; lifted by a trusted sign-in, Settings → Security or the host's `unlock.ts` ([login](login.md#known-addresses-and-lockdown)) | `system`; whoever lifted it (`host` for the script) | the count and addresses tried; how it was lifted |
 | `auth.address` | a known address added, edited or removed in Settings → Security | the signed-in person; the address and its label | added/edited/removed, changed field names, trusted |
 | `user.create` / `update` / `delete` | admin adding a user, setting their password, disabling them, changing their RAM cap, deleting them ([users](users.md)) | the user | changed field names (`password`, `disabled`, `memoryLimitGiB`), never values |
-| `organization.create` / `update` / `delete` / `move` | an organization made, renamed, deleted, or something moved into it (not move previews) | the organization | changed fields; what moved |
+| `organization.create` / `update` / `delete` / `move` | an organization made, renamed or its ticket settings changed, deleted, or something moved into it (not move previews) | the organization | changed fields; what moved |
+| `ticket.create` / `update` / `delete` | a person creating, editing or deleting a ticket ([tickets](tickets.md); comments are not audited) | the organization | the ticket's number; changed field names |
 | `computer.create` / `update` / `delete` | a computer made (not a retried request), its settings changed or rebuilt, deleted | the computer | changed fields |
 | `agent.create` / `update` / `delete` | an agent made, edited, deleted | the agent (its name before a rename or delete) | which part (agent, settings, computers, Discord, bot connected/removed, memory edited/removed/restored/cleared, sleep window), changed field names, a new name |
 | `system.start` / `system.stop` | the backend starting (after it listens) and stopping on a signal | `system` | runtime and start-up time, signal |

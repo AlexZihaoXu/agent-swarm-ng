@@ -4,7 +4,7 @@ An agent can be saved as one file and brought back, here or on another Agent Swa
 
 ## Export
 
-**Export agent…** (Chat → right-click the agent, or Agent settings → **Export**) opens a dialog of switches; **Export** downloads `<name>.swarm-agent` (`GET /api/agents/:id/export?parts=…`, streamed, never buffered). Always included: every setting (the model list with its providers, thinking levels and per-model options, instructions, heartbeat, time notes, compaction, sleep window, avatar), todos, timers and timer firings not yet seen, recent emojis, and its links (assigned computers, DM permissions, group chats) by id and name. Switches, all on by default:
+**Export agent…** (Chat → right-click the agent, or Agent settings → **Export**) opens a dialog of switches; **Export** downloads `<name>.swarm-agent` (`GET /api/agents/:id/export?parts=…`, streamed, never buffered). Always included: every setting (the model list with its providers, thinking levels and per-model options, instructions, heartbeat, time notes, ticket tools, compaction, sleep window, avatar), todos, timers and timer firings not yet seen, recent emojis, and its links (assigned computers, DM permissions, group chats) by id and name. Switches, all on by default:
 
 | Switch | Carries |
 | --- | --- |

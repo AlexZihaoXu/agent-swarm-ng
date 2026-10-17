@@ -12,6 +12,8 @@ Every agent, computer and group chat belongs to exactly one organization. Existi
 
 Everything an agent can reach follows from these links (its computers, DM contacts, groups, and through them files and history), so an agent never reaches or sees another organization. Its system prompt names its own organization so it can explain why something is out of reach.
 
+An organization can also keep a board of [tickets](tickets.md) (off by default).
+
 Shared by every organization: Swarm Knowledge, Settings → Swarm limits (computer count, storage), Settings → Security and the audit and access logs. Model connections and Discord owner accounts are the organization owner's ([users](users.md#model-connections)). An agent's own memory, scratchpad, Discord bot and private chat belong to the agent and move with it. Computer containers are isolated from each other regardless of organization (see [Computers](computers.md)).
 
 ## Moving
@@ -20,7 +22,7 @@ Agents, computers and groups move from their own settings (agent settings → Or
 
 | Moving | Drops |
 |---|---|
-| an agent | its assignments to computers outside the new organization (releasing a claim it holds there), its DM permissions with agents outside it (both directions), its memberships of groups outside it |
+| an agent | its assignments to computers outside the new organization (releasing a claim it holds there), its DM permissions with agents outside it (both directions), its memberships of groups outside it, its assignment to tickets of the old organization ([tickets](tickets.md)) |
 | a computer | its assignments to agents outside the new organization (releasing their claims) |
 | a group | its members outside the new organization |
 
