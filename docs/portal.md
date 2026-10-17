@@ -1,5 +1,7 @@
 # Portal
 
+> **Hidden for now** (owner's request, 2026-10-17): the header button, the phone top bar's search button and Ctrl/⌘+K are commented out in `frontend/src/app.tsx`, and the dialog is not mounted. The code and these notes stay so it can come back. The [floating windows](#floating-windows) layer stays mounted, but only Portal opens new ones, so none open while it is hidden; the computer viewer's own floating chats and terminals are unaffected. The Settings gear took its place at the top right ([dashboard](dashboard.md#header-and-settings)).
+
 Portal is the dashboard's search-and-open palette: **Ctrl+K** (**⌘K** on macOS) or the **Portal** button in the header (on a phone, the search button at the right of the slim top bar). It is a Kibo `command-dialog-2` composition (cmdk) in frosted glass.
 
 ## What it finds

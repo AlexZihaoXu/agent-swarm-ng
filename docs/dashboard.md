@@ -1,6 +1,6 @@
 # Dashboard
 
-The **Dashboard** tab (`/dashboard`, also in Portal) shows how the platform and its agents are doing over a period: the last 12, 24, **48** (default, remembered per browser), 72 hours or a week. The period sets each chart's span and how much accumulates (spend, tokens, active hours). It refreshes every minute while open.
+The **Dashboard** tab (`/dashboard`) shows how the platform and its agents are doing over a period: the last 12, 24, **48** (default, remembered per browser), 72 hours or a week. The period sets each chart's span and how much accumulates (spend, tokens, active hours). It refreshes every minute while open.
 
 A user sees their own organizations (all of them, or one); admin any. Host stats are system-wide for everyone ([users](users.md)).
 
@@ -49,6 +49,15 @@ Events (`Alert`) can be dismissed; ongoing conditions cannot and end on their ow
 
 The history backfill (run spans from the activity archive, usage from saved sessions) runs once, in the background after start-up: when it has finished, it writes `.dashboard-backfill-v1` in the platform data folder and later starts skip it (a failed one is tried again next start). Samples (`SystemSample`, `DiskSample`, `DiskIoSample`, `ComputerSample`) are kept 14 days, usage and run spans 400 days, all pruned hourly in small batches (a deleted agent's usage still counts, as **Deleted agents**, when all organizations are shown; its run spans are no longer charted). `GET /api/dashboard?range=12h|24h|48h|72h|7d&organization=` returns everything in fixed buckets (10 min, 20 min, 30 min, 1 h, 3 h).
 
+## Header and settings
+
+The main tabs are Dashboard, Chat, Computers, Tickets (while the organization in view has [tickets](tickets.md) on) and **Organization**; agents are managed from Chat ([chat and groups](chat-and-groups.md)). Settings come in two kinds:
+
+- **Organization** (`/organization`, a main tab) is the settings of the organization in view, the one the switcher shows, since agents, computers and groups all belong to one: its name (rename), what it holds (agents, computers, group chats), **Organization → Tickets**, and deleting it when it is empty (never its owner's last). With **All organizations** in view and several of them, it asks which one and switching to it shows its settings ([organizations](organizations.md)).
+- **Settings** (`/settings` and its pages: Knowledge, the [audit](audit-log.md) and [access](access-log.md) logs, API endpoints) is global, about the person and the whole swarm: Account, Users, Security, ChatGPT accounts, Organizations (the list: create, rename, delete), Swarm Knowledge, API endpoints, Discord accounts, Swarm limits and Computer storage. It is not a tab: the gear button (**Settings**) at the top right of the header opens it, shown as current while there; the tab indicator fades out meanwhile.
+
+[Portal](portal.md) (its header button and Ctrl/⌘+K) is hidden for now at the owner's request (2026-10-17); the computer viewer's own floating chats and terminals are unaffected.
+
 ## Phone layout
 
-With four tabs (Dashboard, Chat, Computers, Settings, and Tickets while the organization in view has [tickets](tickets.md) on; agents are managed from Chat, see [chat and groups](chat-and-groups.md)), phones get a floating bottom capsule of icons (each tab at least 44 px wide and tall; the names are for screen readers) and a slim top bar with the organization switcher and Portal; both hide in detail views (a conversation, the desktop viewer), which have their own back links. An agent's settings open full screen over its chat. Wider screens keep one header row: organization, tabs, Portal.
+Phones get a floating bottom capsule of icons (each tab at least 44 px wide and tall; the names are for screen readers) and a slim top bar with the organization switcher and the Settings gear; both hide in detail views (a conversation, the desktop viewer), which have their own back links. An agent's settings open full screen over its chat. Wider screens keep one header row: organization, tabs, Settings gear.

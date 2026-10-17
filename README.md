@@ -39,7 +39,7 @@ The longer-term direction is in the [swarm vision](docs/vision.md).
     <td width="50%"><img src="docs/images/agent-settings.webp" alt="An agent's settings: section list and its model choice"><br><sub><b>Agents</b>: each agent's model, instructions, heartbeat, computers, memory and avatar.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/portal.webp" alt="Portal search open over a chat, finding a computer and files"><br><sub><b>Portal</b> (Ctrl/⌘+K): find agents, chats, computers, files and Knowledge from anywhere.</sub></td>
+    <td width="50%"><img src="docs/images/portal.webp" alt="Portal search open over a chat, finding a computer and files"><br><sub><b>Portal</b> (Ctrl/⌘+K; hidden for now): find agents, chats, computers, files and Knowledge from anywhere.</sub></td>
     <td width="50%">
       <img src="docs/images/phone.webp" alt="The chat list on a phone with the floating tab bar" width="48%">
       <img src="docs/images/phone-chat.webp" alt="A conversation with Avery on a phone" width="48%"><br><sub><b>On your phone</b>: installs as an app, with push notifications.</sub>

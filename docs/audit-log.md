@@ -1,6 +1,6 @@
 # Audit log
 
-**Settings → Audit log** (`/settings/audit`, also in Portal) lists who did what, newest first, filtered by category (Sign-in, Users, Agents, Computers, Organizations, System); admin only ([users](users.md)), 100 at a time with older events on request. Times show in the browser's zone (named) to the millisecond, as the request arrived; the exact UTC instant is in each time's tooltip. Every event is also written to the backend's server log (`audit <kind> <outcome>`).
+**Settings → Audit log** (`/settings/audit`) lists who did what, newest first, filtered by category (Sign-in, Users, Agents, Computers, Organizations, System); admin only ([users](users.md)), 100 at a time with older events on request. Times show in the browser's zone (named) to the millisecond, as the request arrived; the exact UTC instant is in each time's tooltip. Every event is also written to the backend's server log (`audit <kind> <outcome>`).
 
 ## What is recorded
 

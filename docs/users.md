@@ -27,7 +27,7 @@ Every organization has one **owner** (`Organization.ownerId`). A user reaches on
 | Dashboard | every organization, host stats | their organizations, host stats |
 | Settings → Account (password, time zone, notifications), API endpoints, ChatGPT, Discord accounts | their own | their own |
 | Settings → Swarm Knowledge | yes | yes |
-| Settings → Organizations | all | their own |
+| Settings → Organizations; the Organization tab (name, tickets, delete) | all | their own |
 | Settings → Users, Swarm, Security, Computer storage; audit and access logs; critical-event banners | yes | no |
 
 ## Model connections

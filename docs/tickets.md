@@ -4,7 +4,7 @@ An organization can keep a **board of tickets**: work for its people and agents,
 
 ## Turning it on
 
-**Settings → Tickets** (one organization at a time; the organization in view by default). Switching it on adds a **Tickets** tab; switching it off hides the tab and keeps the tickets. Options, saved at once:
+**Organization → Tickets** (the [Organization tab](dashboard.md#header-and-settings): the organization in view). Switching it on adds a **Tickets** tab; switching it off hides the tab and keeps the tickets. Options, saved at once:
 
 | Option | Default | Meaning |
 | --- | --- | --- |

@@ -1,6 +1,6 @@
 # Access log
 
-**Settings → Access log** (`/settings/access`, also in Portal; linked from Settings → Security) shows who reaches the dashboard and how: every request's client address, where it came from, the signed-in person (only when signed in; otherwise the address alone), the method and route, the status and how long it took. It is separate from the [audit log](audit-log.md), which records what people changed; this one is for looking at traffic, especially under attack.
+**Settings → Access log** (`/settings/access`; linked from Settings → Security) shows who reaches the dashboard and how: every request's client address, where it came from, the signed-in person (only when signed in; otherwise the address alone), the method and route, the status and how long it took. It is separate from the [audit log](audit-log.md), which records what people changed; this one is for looking at traffic, especially under attack.
 
 ## What it shows
 
