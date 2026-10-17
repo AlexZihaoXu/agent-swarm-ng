@@ -724,6 +724,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organizations/{id}/ticket-states": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addTicketState"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organizations/{id}/ticket-states/{stateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteTicketState"];
+        options?: never;
+        head?: never;
+        patch: operations["updateTicketState"];
+        trace?: never;
+    };
     "/api/organizations/{id}/ticket-refs": {
         parameters: {
             query?: never;
@@ -5247,6 +5279,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: string;
+                archived?: "1";
             };
             header?: never;
             path: {
@@ -5269,14 +5302,27 @@ export interface operations {
                             wakeOnAssign: boolean;
                             agentsCreate: boolean;
                             agentsPickUp: boolean;
-                            pushOnReview: boolean;
+                            archiveAfterDays: number;
                         };
+                        states: ({
+                            id: string;
+                            name: string;
+                            color: string;
+                            category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                        } & {
+                            notifyOnEnter: boolean;
+                        })[];
                         tickets: {
                             id: string;
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
                             priority: "urgent" | "high" | "medium" | "low" | "none";
                             labels: string[];
                             links: {
@@ -5299,9 +5345,19 @@ export interface operations {
                                 number: number;
                                 key: string;
                                 title: string;
-                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                                state: {
+                                    id: string;
+                                    name: string;
+                                    color: string;
+                                    category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                                };
+                                archived: boolean;
                             } | null;
                             due: string | null;
+                            archived: {
+                                at: string;
+                                by: string;
+                            } | null;
                             subIssues: {
                                 done: number;
                                 total: number;
@@ -5348,7 +5404,7 @@ export interface operations {
                 "application/json": {
                     title: string;
                     description?: string;
-                    status?: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                    status?: string;
                     priority?: "urgent" | "high" | "medium" | "low" | "none";
                     labels?: string[];
                     assignee?: {
@@ -5376,7 +5432,12 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
                             priority: "urgent" | "high" | "medium" | "low" | "none";
                             labels: string[];
                             links: {
@@ -5399,9 +5460,19 @@ export interface operations {
                                 number: number;
                                 key: string;
                                 title: string;
-                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                                state: {
+                                    id: string;
+                                    name: string;
+                                    color: string;
+                                    category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                                };
+                                archived: boolean;
                             } | null;
                             due: string | null;
+                            archived: {
+                                at: string;
+                                by: string;
+                            } | null;
                             subIssues: {
                                 done: number;
                                 total: number;
@@ -5423,7 +5494,13 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
+                            archived: boolean;
                         } & {
                             assignee: {
                                 kind: "owner" | "agent";
@@ -5435,7 +5512,13 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
+                            archived: boolean;
                         } & {
                             kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
                         })[];
@@ -5458,6 +5541,219 @@ export interface operations {
                             };
                         }[];
                         olderEvents: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    addTicketState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                    color?: "gray" | "silver" | "slate" | "red" | "orange" | "amber" | "green" | "emerald" | "teal" | "sky" | "blue" | "violet" | "pink";
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        states: ({
+                            id: string;
+                            name: string;
+                            color: string;
+                            category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                        } & {
+                            notifyOnEnter: boolean;
+                        })[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    deleteTicketState: {
+        parameters: {
+            query?: {
+                moveTo?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+                stateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        states: ({
+                            id: string;
+                            name: string;
+                            color: string;
+                            category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                        } & {
+                            notifyOnEnter: boolean;
+                        })[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    updateTicketState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                stateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    color?: "gray" | "silver" | "slate" | "red" | "orange" | "amber" | "green" | "emerald" | "teal" | "sky" | "blue" | "violet" | "pink";
+                    notifyOnEnter?: boolean;
+                    position?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        states: ({
+                            id: string;
+                            name: string;
+                            color: string;
+                            category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                        } & {
+                            notifyOnEnter: boolean;
+                        })[];
                     };
                 };
             };
@@ -5520,7 +5816,13 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
+                            archived: boolean;
                         }[];
                     };
                 };
@@ -5562,7 +5864,12 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
                             priority: "urgent" | "high" | "medium" | "low" | "none";
                             labels: string[];
                             links: {
@@ -5585,9 +5892,19 @@ export interface operations {
                                 number: number;
                                 key: string;
                                 title: string;
-                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                                state: {
+                                    id: string;
+                                    name: string;
+                                    color: string;
+                                    category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                                };
+                                archived: boolean;
                             } | null;
                             due: string | null;
+                            archived: {
+                                at: string;
+                                by: string;
+                            } | null;
                             subIssues: {
                                 done: number;
                                 total: number;
@@ -5609,7 +5926,13 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
+                            archived: boolean;
                         } & {
                             assignee: {
                                 kind: "owner" | "agent";
@@ -5621,7 +5944,13 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
+                            archived: boolean;
                         } & {
                             kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
                         })[];
@@ -5711,7 +6040,7 @@ export interface operations {
                 "application/json": {
                     title?: string;
                     description?: string;
-                    status?: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                    status?: string;
                     priority?: "urgent" | "high" | "medium" | "low" | "none";
                     labels?: string[];
                     assignee?: {
@@ -5732,6 +6061,7 @@ export interface operations {
                         kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
                         number: number;
                     }[];
+                    archived?: boolean;
                     place?: {
                         after?: number;
                         before?: number;
@@ -5752,7 +6082,12 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
                             priority: "urgent" | "high" | "medium" | "low" | "none";
                             labels: string[];
                             links: {
@@ -5775,9 +6110,19 @@ export interface operations {
                                 number: number;
                                 key: string;
                                 title: string;
-                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                                state: {
+                                    id: string;
+                                    name: string;
+                                    color: string;
+                                    category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                                };
+                                archived: boolean;
                             } | null;
                             due: string | null;
+                            archived: {
+                                at: string;
+                                by: string;
+                            } | null;
                             subIssues: {
                                 done: number;
                                 total: number;
@@ -5799,7 +6144,13 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
+                            archived: boolean;
                         } & {
                             assignee: {
                                 kind: "owner" | "agent";
@@ -5811,7 +6162,13 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
+                            archived: boolean;
                         } & {
                             kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
                         })[];
@@ -5902,7 +6259,12 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
                             priority: "urgent" | "high" | "medium" | "low" | "none";
                             labels: string[];
                             links: {
@@ -5925,9 +6287,19 @@ export interface operations {
                                 number: number;
                                 key: string;
                                 title: string;
-                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                                state: {
+                                    id: string;
+                                    name: string;
+                                    color: string;
+                                    category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                                };
+                                archived: boolean;
                             } | null;
                             due: string | null;
+                            archived: {
+                                at: string;
+                                by: string;
+                            } | null;
                             subIssues: {
                                 done: number;
                                 total: number;
@@ -5949,7 +6321,13 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
+                            archived: boolean;
                         } & {
                             assignee: {
                                 kind: "owner" | "agent";
@@ -5961,7 +6339,13 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
+                            archived: boolean;
                         } & {
                             kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
                         })[];
@@ -6047,7 +6431,12 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
                             priority: "urgent" | "high" | "medium" | "low" | "none";
                             labels: string[];
                             links: {
@@ -6070,9 +6459,19 @@ export interface operations {
                                 number: number;
                                 key: string;
                                 title: string;
-                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                                state: {
+                                    id: string;
+                                    name: string;
+                                    color: string;
+                                    category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                                };
+                                archived: boolean;
                             } | null;
                             due: string | null;
+                            archived: {
+                                at: string;
+                                by: string;
+                            } | null;
                             subIssues: {
                                 done: number;
                                 total: number;
@@ -6094,7 +6493,13 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
+                            archived: boolean;
                         } & {
                             assignee: {
                                 kind: "owner" | "agent";
@@ -6106,7 +6511,13 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
+                            archived: boolean;
                         } & {
                             kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
                         })[];
@@ -6198,7 +6609,12 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
                             priority: "urgent" | "high" | "medium" | "low" | "none";
                             labels: string[];
                             links: {
@@ -6221,9 +6637,19 @@ export interface operations {
                                 number: number;
                                 key: string;
                                 title: string;
-                                status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                                state: {
+                                    id: string;
+                                    name: string;
+                                    color: string;
+                                    category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                                };
+                                archived: boolean;
                             } | null;
                             due: string | null;
+                            archived: {
+                                at: string;
+                                by: string;
+                            } | null;
                             subIssues: {
                                 done: number;
                                 total: number;
@@ -6245,7 +6671,13 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
+                            archived: boolean;
                         } & {
                             assignee: {
                                 kind: "owner" | "agent";
@@ -6257,7 +6689,13 @@ export interface operations {
                             number: number;
                             key: string;
                             title: string;
-                            status: "backlog" | "todo" | "progress" | "review" | "done" | "cancelled";
+                            state: {
+                                id: string;
+                                name: string;
+                                color: string;
+                                category: "backlog" | "unstarted" | "started" | "completed" | "canceled";
+                            };
+                            archived: boolean;
                         } & {
                             kind: "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
                         })[];
@@ -6360,7 +6798,7 @@ export interface operations {
                                 wakeOnAssign: boolean;
                                 agentsCreate: boolean;
                                 agentsPickUp: boolean;
-                                pushOnReview: boolean;
+                                archiveAfterDays: number;
                             };
                         }[];
                     };
@@ -6405,7 +6843,7 @@ export interface operations {
                                 wakeOnAssign: boolean;
                                 agentsCreate: boolean;
                                 agentsPickUp: boolean;
-                                pushOnReview: boolean;
+                                archiveAfterDays: number;
                             };
                         }[];
                     };
@@ -6457,7 +6895,7 @@ export interface operations {
                                 wakeOnAssign: boolean;
                                 agentsCreate: boolean;
                                 agentsPickUp: boolean;
-                                pushOnReview: boolean;
+                                archiveAfterDays: number;
                             };
                         }[];
                     };
@@ -6506,7 +6944,7 @@ export interface operations {
                         wakeOnAssign?: boolean;
                         agentsCreate?: boolean;
                         agentsPickUp?: boolean;
-                        pushOnReview?: boolean;
+                        archiveAfterDays?: number;
                     };
                 };
             };
@@ -6534,7 +6972,7 @@ export interface operations {
                                 wakeOnAssign: boolean;
                                 agentsCreate: boolean;
                                 agentsPickUp: boolean;
-                                pushOnReview: boolean;
+                                archiveAfterDays: number;
                             };
                         }[];
                     };

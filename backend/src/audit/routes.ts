@@ -20,6 +20,10 @@ const RULES: Record<string, Rule> = {
   'POST /api/organizations/:id/tickets': { kind: 'ticket.create', target: 'organization' },
   'PATCH /api/organizations/:id/tickets/:number': { kind: 'ticket.update', target: 'organization' },
   'DELETE /api/organizations/:id/tickets/:number': { kind: 'ticket.delete', target: 'organization' },
+  // The workflow's states (docs/tickets.md#workflow): field names only, like any edit.
+  'POST /api/organizations/:id/ticket-states': { kind: 'ticket.state.create', target: 'organization' },
+  'PATCH /api/organizations/:id/ticket-states/:stateId': { kind: 'ticket.state.update', target: 'organization' },
+  'DELETE /api/organizations/:id/ticket-states/:stateId': { kind: 'ticket.state.delete', target: 'organization' },
   'POST /api/users': { kind: 'user.create', target: 'user' },
   'PATCH /api/users/:id': { kind: 'user.update', target: 'user' },
   'DELETE /api/users/:id': { kind: 'user.delete', target: 'user' },
@@ -154,7 +158,7 @@ export function registerAudit(
             ? { moved: `${String(body?.kind)} ${entry.movedName ? `“${entry.movedName}”` : String(body?.id)}` }
             : {}),
           ...(params?.name ? { memory: params.name } : {}),
-          ...(rule.kind.startsWith('ticket.')
+          ...(rule.kind.startsWith('ticket.') && !rule.kind.startsWith('ticket.state.')
             ? { ticket: params?.number ?? (entry.response as { ticket?: { number?: number } })?.ticket?.number }
             : {}),
           ...(rule.kind === 'agent.update' && typeof body?.name === 'string' ? { newName: body.name } : {}),
@@ -191,7 +195,9 @@ export function registerAudit(
 
 function createdTarget(rule: Rule, body: Record<string, unknown> | undefined, response: unknown) {
   const answer = (response ?? {}) as { id?: unknown; name?: unknown; organizations?: { id: string; name: string }[] };
-  if (rule.target === 'organization' && !rule.kind.startsWith('ticket.')) {
+  // Tickets and their states are named by the organization (and the ticket's number), never by their text.
+  if (rule.kind.startsWith('ticket.')) return { id: undefined, name: undefined };
+  if (rule.target === 'organization') {
     const name = typeof body?.name === 'string' ? body.name.trim() : undefined;
     const made = [...(answer.organizations ?? [])].reverse().find(org => org.name === name);
     return { id: made?.id, name: made?.name ?? name };

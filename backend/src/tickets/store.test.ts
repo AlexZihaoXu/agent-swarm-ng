@@ -35,7 +35,11 @@ it('is off until the owner turns it on, then numbers tickets per organization wi
       labels: ['Ops', 'ops'],
     });
     expect([first.ticket.key, second.ticket.key]).toEqual(['PERS-1', 'PERS-2']);
-    expect(first.ticket).toMatchObject({ title: 'Back up Keep', status: 'todo', priority: 'none' });
+    expect(first.ticket).toMatchObject({
+      title: 'Back up Keep',
+      state: { name: 'Todo', category: 'unstarted' },
+      priority: 'none',
+    });
     expect(second.ticket.labels).toEqual(['ops']);
     await tickets.updateSettings('personal', { prefix: 'home' });
     expect((await tickets.get('personal', 2)).ticket.key).toBe('HOME-2');
@@ -99,8 +103,8 @@ it('enforces what agents may do: their own organization, their own tickets, neve
     const theirs = await tickets.create('personal', owner, { title: 'Morgan’s', assignee: { agentId: morgan.id } });
     const refused = (work: Promise<unknown>, text: string) => expect(work).rejects.toThrow(text);
 
-    await refused(tickets.update('personal', mine.ticket.number, as(aether), { status: 'done' }), 'In review');
-    await refused(tickets.update('personal', mine.ticket.number, as(aether), { status: 'cancelled' }), 'In review');
+    await refused(tickets.update('personal', mine.ticket.number, as(aether), { status: 'Done' }), 'In review');
+    await refused(tickets.update('personal', mine.ticket.number, as(aether), { status: 'Cancelled' }), 'In review');
     await refused(
       tickets.update('personal', mine.ticket.number, as(aether), { assignee: { agentId: outsider.id } }),
       'not an agent of this organization',
@@ -111,24 +115,24 @@ it('enforces what agents may do: their own organization, their own tickets, neve
     await refused(tickets.create('personal', as(outsider), { title: 'Sneaky' }), 'not found');
 
     // Its own ticket: through In progress to In review, back to the owner.
-    await tickets.update('personal', mine.ticket.number, as(aether), { status: 'progress' });
+    await tickets.update('personal', mine.ticket.number, as(aether), { status: 'In progress' });
     const reviewed = await tickets.update('personal', mine.ticket.number, as(aether), {
-      status: 'review',
+      status: 'In review',
       assignee: { owner: true },
     });
-    expect(reviewed.ticket).toMatchObject({ status: 'review', assignee: { kind: 'owner' } });
+    expect(reviewed.ticket).toMatchObject({ state: { name: 'In review' }, assignee: { kind: 'owner' } });
 
     // Picking up unassigned work needs the owner's option.
     await tickets.updateSettings('personal', { agentsPickUp: true });
     await tickets.update('personal', open.ticket.number, as(aether), { assignee: { agentId: aether.id } });
     // Done is the owner's: an agent cannot reopen it either.
-    await tickets.update('personal', open.ticket.number, owner, { status: 'done' });
-    await refused(tickets.update('personal', open.ticket.number, as(aether), { status: 'todo' }), 'Done');
+    await tickets.update('personal', open.ticket.number, owner, { status: 'Done' });
+    await refused(tickets.update('personal', open.ticket.number, as(aether), { status: 'Todo' }), 'Done');
 
     await tickets.updateSettings('personal', { agentsCreate: false });
     await refused(tickets.create('personal', as(aether), { title: 'Follow-up' }), 'create');
     await tickets.updateSettings('personal', { agentsCreate: true });
-    await refused(tickets.create('personal', as(aether), { title: 'Done already', status: 'done' }), 'In review');
+    await refused(tickets.create('personal', as(aether), { title: 'Done already', status: 'Done' }), 'In review');
     const filed = await tickets.create('personal', as(aether), {
       title: 'Follow-up',
       assignee: { agentId: morgan.id },
@@ -192,42 +196,42 @@ it('unassigns an agent that is deleted or moves to another organization', async 
   }
 });
 
-it('keeps a manual order per status: new and re-statused tickets on top, placed ones between their neighbours', async () => {
+it('keeps a manual order per state: new and moved tickets on top, placed ones between their neighbours', async () => {
   const { db, tickets, owner, agent, as, changes } = await setup();
   try {
     await tickets.updateSettings('personal', { enabled: true, agentsPickUp: true });
     for (const title of ['One', 'Two', 'Three', 'Four']) await tickets.create('personal', owner, { title });
     const column = async (status: string) =>
       (await tickets.list('personal', { order: 'board' })).tickets
-        .filter(ticket => ticket.status === status)
+        .filter(ticket => ticket.state.name === status)
         .map(ticket => ticket.number);
-    expect(await column('todo')).toEqual([4, 3, 2, 1]);
+    expect(await column('Todo')).toEqual([4, 3, 2, 1]);
     // Reordering alone is no activity and keeps updatedAt; others' boards still refresh.
     const before = (await tickets.get('personal', 1)).ticket;
     changes.length = 0;
     const moved = await tickets.update('personal', 1, owner, { place: { after: 4 } });
-    expect(await column('todo')).toEqual([4, 1, 3, 2]);
+    expect(await column('Todo')).toEqual([4, 1, 3, 2]);
     expect(moved.ticket.updatedAt).toBe(before.updatedAt);
     expect(moved.events.map(event => event.kind)).toEqual(['created']);
     expect(changes).toEqual([{ organizationId: 'personal', number: 1 }]);
     await tickets.update('personal', 2, owner, { place: { before: 4 } });
-    expect(await column('todo')).toEqual([2, 4, 1, 3]);
+    expect(await column('Todo')).toEqual([2, 4, 1, 3]);
     // A stale neighbour (no longer in that column) falls back to the other one, then the top.
-    await tickets.update('personal', 3, owner, { status: 'progress' });
+    await tickets.update('personal', 3, owner, { status: 'In progress' });
     await tickets.update('personal', 4, owner, { place: { after: 3, before: 3 } });
-    expect(await column('todo')).toEqual([4, 2, 1]);
+    expect(await column('Todo')).toEqual([4, 2, 1]);
     // Across columns: status and place together, as one status change in the activity.
-    const across = await tickets.update('personal', 1, owner, { status: 'progress', place: { after: 3 } });
-    expect(await column('progress')).toEqual([3, 1]);
+    const across = await tickets.update('personal', 1, owner, { status: 'In progress', place: { after: 3 } });
+    expect(await column('In progress')).toEqual([3, 1]);
     expect(across.events.at(-1)).toMatchObject({ kind: 'status', text: 'moved it Todo → In progress' });
     // A status change without a place (the detail, an agent) puts it on top of its new column.
     const bo = await agent('Bo');
-    await tickets.update('personal', 2, as(bo), { status: 'progress' });
-    expect(await column('progress')).toEqual([2, 3, 1]);
+    await tickets.update('personal', 2, as(bo), { status: 'In progress' });
+    expect(await column('In progress')).toEqual([2, 3, 1]);
     // Squeezing many times between the same two neighbours renumbers the column without losing the order.
     for (let index = 0; index < 60; index += 1)
       await tickets.update('personal', index % 2 ? 3 : 1, owner, { place: { after: 2 } });
-    expect(await column('progress')).toEqual([2, 3, 1]);
+    expect(await column('In progress')).toEqual([2, 3, 1]);
   } finally {
     await db.close();
   }

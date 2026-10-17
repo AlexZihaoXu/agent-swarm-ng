@@ -48,7 +48,11 @@ it('declares r and w tools, offers only the granted ones and rechecks the grant 
     const call = toolsOf(aether.id);
     await grant(aether.id, ['ticket_list']);
     expect(await call('ticket_create', { title: 'Nope' })).toMatchObject({ isError: true, error: /no longer grants/ });
-    expect(await call('ticket_list', {})).toEqual({ tickets: [], isError: undefined });
+    expect(await call('ticket_list', {})).toMatchObject({
+      tickets: [],
+      isError: undefined,
+      states: expect.arrayContaining([{ name: 'In review', category: 'started' }]),
+    });
     // Tickets turned off: refused at execution too.
     await tickets.updateSettings('personal', { enabled: false });
     expect(await call('ticket_list', {})).toMatchObject({ isError: true, error: /Tickets are off/ });
@@ -72,7 +76,13 @@ it('labels text not written by the owner as untrusted and works a ticket through
       assignee: 'Aether',
       priority: 'high',
     });
-    expect(created.created).toMatchObject({ id: 'HOME-1', assignee: 'Aether', priority: 'high', status: 'todo' });
+    expect(created.created).toMatchObject({
+      id: 'HOME-1',
+      assignee: 'Aether',
+      priority: 'high',
+      status: 'Todo',
+      category: 'unstarted',
+    });
     await tickets.comment('personal', 1, { kind: 'person', userId: 'admin', name: 'Admin' }, 'Owner note');
 
     const call = toolsOf(aether.id);
@@ -82,18 +92,22 @@ it('labels text not written by the owner as untrusted and works a ticket through
     expect(read.events.at(-1)).toMatchObject({ by: 'your owner', kind: 'comment', text: 'Owner note' });
 
     expect(await call('ticket_update', { id: '1', assignee: 'Nobody Here' })).toMatchObject({ error: /No agent/ });
-    expect(await call('ticket_update', { id: 'HOME-1', status: 'done' })).toMatchObject({ isError: true });
-    const linked = await call('ticket_update', { id: 'HOME-1', status: 'progress', link: { computer: 'Dev box' } });
-    expect(linked.updated).toMatchObject({ status: 'progress', links: [{ kind: 'computer', label: 'Dev box' }] });
-    const done = await call('ticket_update', { id: 'HOME-1', status: 'review', assignee: 'owner' });
-    expect(done.updated).toMatchObject({ status: 'review', assignee: 'your owner' });
+    expect(await call('ticket_update', { id: 'HOME-1', status: 'Done' })).toMatchObject({ isError: true });
+    const linked = await call('ticket_update', { id: 'HOME-1', status: 'in progress', link: { computer: 'Dev box' } });
+    expect(linked.updated).toMatchObject({
+      status: 'In progress',
+      category: 'started',
+      links: [{ kind: 'computer', label: 'Dev box' }],
+    });
+    const done = await call('ticket_update', { id: 'HOME-1', status: 'In Review', assignee: 'owner' });
+    expect(done.updated).toMatchObject({ status: 'In review', assignee: 'your owner' });
     // No longer assigned to it: a comment is still fine, a change is not.
     expect(await call('ticket_update', { id: 'HOME-1', priority: 'low' })).toMatchObject({ error: /assigned to/ });
     expect(await call('ticket_comment', { id: 'HOME-1', text: 'Thanks' })).toMatchObject({ commented: 'HOME-1' });
     expect((await call('ticket_list', {})).tickets).toEqual([
-      expect.objectContaining({ id: 'HOME-1', status: 'review' }),
+      expect.objectContaining({ id: 'HOME-1', status: 'In review' }),
     ]);
-    expect((await call('ticket_list', { status: ['done'] })).tickets).toEqual([]);
+    expect((await call('ticket_list', { status: ['Done'] })).tickets).toEqual([]);
   } finally {
     await db.close();
   }
@@ -125,7 +139,7 @@ it('splits work into sub-issues, relates tickets and shows a deleted comment as 
     const read = await call('ticket_read', { id: 'HOME-1' });
     expect(read).toMatchObject({
       due: '2030-01-05',
-      subIssues: [{ id: 'HOME-3', status: 'todo', assignee: 'you' }],
+      subIssues: [{ id: 'HOME-3', status: 'Todo', category: 'unstarted', assignee: 'you' }],
       relations: [{ kind: 'blocked_by', id: 'HOME-2', title: 'Freeze the branch' }],
     });
     expect(read.events.find((event: { kind: string }) => event.kind === 'comment').text).toBe(

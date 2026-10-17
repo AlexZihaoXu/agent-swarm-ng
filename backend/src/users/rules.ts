@@ -115,6 +115,10 @@ export const RULES: Record<string, Rule> = {
   'DELETE /api/organizations/:id/tickets/:number/comments/:commentId': { organization: 'id' },
   // Ticket chips in the organization's conversations (docs/tickets.md#references).
   'GET /api/organizations/:id/ticket-refs': { organization: 'id' },
+  // Its workflow states (docs/tickets.md#workflow): the state is checked to be that organization's where it changes.
+  'POST /api/organizations/:id/ticket-states': { organization: 'id' },
+  'PATCH /api/organizations/:id/ticket-states/:stateId': { organization: 'id' },
+  'DELETE /api/organizations/:id/ticket-states/:stateId': { organization: 'id' },
   'POST /api/organizations/:id/move': async (request, reach, viewer) => {
     const { kind, id } = body(request);
     const reachable =

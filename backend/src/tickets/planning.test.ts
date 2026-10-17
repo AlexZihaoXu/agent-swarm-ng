@@ -37,9 +37,9 @@ it('keeps sub-issues in one organization, without cycles and at most three level
     expect(child.ticket.parent).toMatchObject({ number: 1, key: 'HOME-1', title: 'Release' });
     expect(child.events.map(event => event.text)).toContain('made it a sub-issue of HOME-1');
     await tickets.create('personal', owner, { title: 'Tag', parent: 2 });
-    await tickets.update('personal', 2, owner, { status: 'done' });
+    await tickets.update('personal', 2, owner, { status: 'Done' });
     const parent = await tickets.get('personal', 1);
-    expect(parent.children.map(item => [item.key, item.status])).toEqual([['HOME-2', 'done']]);
+    expect(parent.children.map(item => [item.key, item.state.name])).toEqual([['HOME-2', 'Done']]);
     expect((await tickets.list('personal')).tickets.find(item => item.number === 1)?.subIssues).toEqual({
       done: 1,
       total: 1,
@@ -101,9 +101,9 @@ it('relates tickets and wakes the assigned agent once the last open blocker is c
     ).rejects.toThrow('No ticket 99');
 
     // One blocker closed: still blocked, nobody woken. The last one: Aether hears, durably.
-    await tickets.update('personal', 1, owner, { status: 'done' });
+    await tickets.update('personal', 1, owner, { status: 'Done' });
     expect(wakes).toHaveLength(0);
-    await tickets.update('personal', 2, owner, { status: 'cancelled' });
+    await tickets.update('personal', 2, owner, { status: 'Cancelled' });
     expect(wakes).toHaveLength(1);
     expect(wakes[0]).toMatchObject({ agentId: aether.id, human: true });
     expect(wakes[0]!.text).toContain('HOME-3 "Ship it" is no longer blocked');
@@ -148,7 +148,7 @@ it('reminds the assigned agent once when its ticket is due, again after a restar
     expect(made.ticket.due).toBe('2026-10-20');
     await expect(tickets.update('personal', 1, owner, { due: '2026-02-30' })).rejects.toThrow('date');
     await tickets.create('personal', owner, { title: 'Closed', due: '2026-10-19', assignee: { agentId: aether.id } });
-    await tickets.update('personal', 2, owner, { status: 'done' });
+    await tickets.update('personal', 2, owner, { status: 'Done' });
     wakes.length = 0;
     await tickets.checkDue();
     expect(wakes).toHaveLength(0);

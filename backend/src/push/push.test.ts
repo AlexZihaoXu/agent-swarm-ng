@@ -518,12 +518,14 @@ describe('notifications', { timeout: 60_000 }, () => {
     }
   });
 
-  it('tells the owner when someone else moves a ticket to In review, without the title when previews are off', async () => {
+  it('tells the owner when someone else moves a ticket into a notifying state, without the title when previews are off', async () => {
     const { database, notifier, sent, sam, samOrg, settle, event, store } = await notifierSetup();
     try {
-      const review = { key: 'SAM-3', title: 'Draft the spec', by: 'Morgan' };
-      notifier.observe(event('tickets_updated', { organizationId: samOrg.id, number: 3, review }, 'platform', 'human'));
-      // An ordinary change (or the owner's own move: the store sends no review then) is not news.
+      const entered = { key: 'SAM-3', title: 'Draft the spec', by: 'Morgan', state: 'In review' };
+      notifier.observe(
+        event('tickets_updated', { organizationId: samOrg.id, number: 3, entered }, 'platform', 'human'),
+      );
+      // An ordinary change (or the owner's own move: the store sends no `entered` then) is not news.
       notifier.observe(event('tickets_updated', { organizationId: samOrg.id, number: 4 }, 'platform', 'human'));
       await settle();
       expect(sent).toEqual([
@@ -538,7 +540,9 @@ describe('notifications', { timeout: 60_000 }, () => {
       ]);
       sent.length = 0;
       await store.setPreferences(sam.id, { preview: false });
-      notifier.observe(event('tickets_updated', { organizationId: samOrg.id, number: 3, review }, 'platform', 'human'));
+      notifier.observe(
+        event('tickets_updated', { organizationId: samOrg.id, number: 3, entered }, 'platform', 'human'),
+      );
       await settle();
       expect(sent[0]?.payload.body).toBe('Moved SAM-3 to In review.');
     } finally {

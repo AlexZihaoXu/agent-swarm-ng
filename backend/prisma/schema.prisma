@@ -49,11 +49,37 @@ model Organization {
   ticketAgentsCreate Boolean     @default(true)
   /// Agents may change unassigned tickets (and so pick one up), not only their own.
   ticketAgentsPickUp Boolean     @default(false)
-  /// The owner is pushed when someone else moves a ticket to In review.
+  /// Legacy (before workflow states): copied into the In review state's `notifyOnEnter` by migration
+  /// 20261017040000_ticket_workflow and read by nothing since.
   ticketPushReview   Boolean     @default(true)
   /// The next ticket number (numbers are per organization and never reused).
   ticketNext         Int         @default(1)
+  /// Tickets closed (a completed or canceled state) this many days are archived automatically; 0 = never.
+  ticketArchiveAfterDays Int     @default(30)
   tickets            Ticket[]
+  ticketStates       TicketState[]
+}
+
+/// A workflow state of an organization's board (docs/tickets.md#workflow): a column, in one fixed category
+/// (backlog | unstarted | started | completed | canceled) that the rules go by. Names are unique per organization
+/// (case-insensitively, checked where they are set).
+model TicketState {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  /// A key of the fixed palette (gray, silver, slate, red, orange, amber, green, emerald, teal, sky, blue, violet, pink).
+  color          String
+  category       String
+  /// Its place within its category, smallest first.
+  position       Float        @default(0)
+  /// The owner is told (push or toast) when someone else moves a ticket into it.
+  notifyOnEnter  Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  tickets        Ticket[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, category, position])
 }
 
 /// A ticket of an organization's board (docs/tickets.md). Its title and description were written by `writer*` (the
@@ -66,11 +92,21 @@ model Ticket {
   number          Int
   title           String
   description     String           @default("")
-  /// backlog | todo | progress | review | done | cancelled
+  /// Legacy (before workflow states): written as the old status of its state (backlog | todo | progress | review |
+  /// done | cancelled) only so that an older version still shows something after a rollback; read by nothing.
   status          String           @default("todo")
+  /// Its workflow state (never null in practice: set on create, moved when its state is deleted).
+  stateId         String?
+  state           TicketState?     @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  /// When it entered a completed or canceled state (null while open): it is archived automatically after the
+  /// organization's ticketArchiveAfterDays.
+  closedAt        DateTime?
+  /// Archived (hidden from the board, the list and agents' ticket_list unless asked for), by whom.
+  archivedAt      DateTime?
+  archivedBy      String?
   /// urgent | high | medium | low | none
   priority        String           @default("none")
-  /// Its place in its status's column, smallest first (docs/tickets.md#order): new and re-statused tickets go on top.
+  /// Its place in its state's column, smallest first (docs/tickets.md#order): new and re-statused tickets go on top.
   position        Float            @default(0)
   /// JSON array of short lower-case labels.
   labels          String           @default("[]")
@@ -103,7 +139,8 @@ model Ticket {
 
   @@unique([organizationId, number])
   @@index([organizationId, updatedAt])
-  @@index([organizationId, status, position])
+  @@index([stateId, position])
+  @@index([organizationId, archivedAt, closedAt])
   @@index([assigneeAgentId])
   @@index([parentId])
   @@index([dueReminded, dueAt])

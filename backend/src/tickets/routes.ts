@@ -11,8 +11,10 @@ import {
   REFS_MAX,
   RELATION_KINDS,
   RELATIONS_MAX,
+  STATE_CATEGORIES,
+  STATE_COLORS,
+  STATE_NAME_MAX,
   TICKET_PRIORITIES,
-  TICKET_STATUSES,
   TITLE_MAX,
   TicketError,
   type Tickets,
@@ -31,10 +33,24 @@ const Relation = Type.Union(RELATION_KINDS.map(value => Type.Literal(value)));
 const RelationInput = Type.Object({ kind: Relation, number: Number_ }, { additionalProperties: false });
 /** A due date: a calendar day in the owner's time zone. */
 const Due = Type.Union([Type.String({ pattern: '^\\d{4}-\\d{2}-\\d{2}$' }), Type.Null()]);
-const Status = Type.Union(TICKET_STATUSES.map(value => Type.Literal(value)));
+/** A workflow state of the organization, by id or name (case-insensitive). */
+const Status = Type.String({ minLength: 1, maxLength: 64 });
+const Category = Type.Union(STATE_CATEGORIES.map(value => Type.Literal(value)));
+const Color = Type.Union(STATE_COLORS.map(value => Type.Literal(value)));
+/** A ticket's state: a column of the board, in a fixed category (docs/tickets.md#workflow). */
+const State = Type.Object({ id: Type.String(), name: Type.String(), color: Type.String(), category: Category });
+const States = Type.Object({
+  states: Type.Array(Type.Intersect([State, Type.Object({ notifyOnEnter: Type.Boolean() })])),
+});
 const Priority = Type.Union(TICKET_PRIORITIES.map(value => Type.Literal(value)));
 /** Another ticket in a list (a sub-issue, a relation, a reference). */
-const Brief = Type.Object({ number: Type.Integer(), key: Type.String(), title: Type.String(), status: Status });
+const Brief = Type.Object({
+  number: Type.Integer(),
+  key: Type.String(),
+  title: Type.String(),
+  state: State,
+  archived: Type.Boolean(),
+});
 const Labels = Type.Array(Type.String({ maxLength: LABEL_MAX * 2 }), { maxItems: LABELS_MAX * 2 });
 /** The owner, one of the organization's agents, or nobody. */
 const Assignee = Type.Union([
@@ -62,7 +78,7 @@ const Summary = Type.Object({
   /** As shown: the organization's prefix and the number (HOME-14). */
   key: Type.String(),
   title: Type.String(),
-  status: Status,
+  state: State,
   priority: Priority,
   labels: Type.Array(Type.String()),
   links: Type.Array(Link),
@@ -78,7 +94,9 @@ const Summary = Type.Object({
   parent: Type.Union([Brief, Type.Null()]),
   /** Its due date (YYYY-MM-DD, the owner's calendar day). */
   due: Type.Union([Type.String(), Type.Null()]),
-  /** Its sub-issues: done, of those not cancelled. */
+  /** Archived (hidden from the board unless asked for): when and by whom. */
+  archived: Type.Union([Type.Object({ at: Type.String(), by: Type.String() }), Type.Null()]),
+  /** Its sub-issues: completed, of those not canceled. */
   subIssues: Type.Object({ done: Type.Integer(), total: Type.Integer() }),
   /** An open ticket blocks it. */
   blocked: Type.Boolean(),
@@ -152,8 +170,10 @@ const Patch = Type.Object(
     due: Type.Optional(Due),
     addRelations: Type.Optional(Type.Array(RelationInput, { maxItems: RELATIONS_MAX })),
     removeRelations: Type.Optional(Type.Array(RelationInput, { maxItems: RELATIONS_MAX })),
+    /** Archive (true) or restore (false); other changes leave an archived ticket archived. */
+    archived: Type.Optional(Type.Boolean()),
     /**
-     * Where it lands in its (new) status's column (dragging on the board): right below the ticket numbered `after`,
+     * Where it lands in its (new) state's column (dragging on the board): right below the ticket numbered `after`,
      * else right above `before`, else on top.
      */
     place: Type.Optional(
@@ -187,24 +207,108 @@ export function registerTicketRoutes(app: FastifyInstance, tickets: Tickets, dat
     const viewer = viewerOf(request);
     return { kind: 'person' as const, userId: viewer.userId, name: viewer.name };
   };
-  app.get<{ Params: Static<typeof org>; Querystring: { q?: string } }>(
+  app.get<{ Params: Static<typeof org>; Querystring: { q?: string; archived?: '1' } }>(
     '/api/organizations/:id/tickets',
     {
       schema: {
         operationId: 'listTickets',
         params: org,
-        /** `q`: words in the title or description, or a ticket as shown (HOME-14). */
+        /** `q`: words in the title or description, or a ticket as shown (HOME-14); `archived=1`: archived ones too. */
         querystring: Type.Object(
-          { q: Type.Optional(Type.String({ maxLength: 200 })) },
+          { q: Type.Optional(Type.String({ maxLength: 200 })), archived: Type.Optional(Type.Literal('1')) },
           { additionalProperties: false },
         ),
         response: {
-          200: Type.Object({ settings: TicketSettings, tickets: Type.Array(Summary), truncated: Type.Boolean() }),
+          200: Type.Object({
+            settings: TicketSettings,
+            /** The board's workflow states, in board order (by category, then position). */
+            states: States.properties.states,
+            tickets: Type.Array(Summary),
+            truncated: Type.Boolean(),
+          }),
           404: error,
         },
       },
     },
-    (request, reply) => guard(reply, () => tickets.list(request.params.id, { order: 'board', query: request.query.q })),
+    (request, reply) =>
+      guard(reply, () =>
+        tickets.list(request.params.id, {
+          order: 'board',
+          query: request.query.q,
+          archived: request.query.archived === '1',
+        }),
+      ),
+  );
+  // The workflow editor (Organization → Tickets, docs/tickets.md#workflow): states added, changed and deleted.
+  const stateParams = Type.Object({
+    id: Type.String({ minLength: 1, maxLength: 64 }),
+    stateId: Type.String({ minLength: 1, maxLength: 64 }),
+  });
+  const StateName = Type.String({ minLength: 1, maxLength: STATE_NAME_MAX });
+  const NewState = Type.Object(
+    { name: StateName, category: Category, color: Type.Optional(Color) },
+    { additionalProperties: false },
+  );
+  const StatePatch = Type.Object(
+    {
+      name: Type.Optional(StateName),
+      color: Type.Optional(Color),
+      notifyOnEnter: Type.Optional(Type.Boolean()),
+      /** Its index within its category (dragging in the editor). */
+      position: Type.Optional(Type.Integer({ minimum: 0, maximum: 100 })),
+    },
+    { additionalProperties: false, minProperties: 1 },
+  );
+  app.post<{ Params: Static<typeof org>; Body: Static<typeof NewState> }>(
+    '/api/organizations/:id/ticket-states',
+    {
+      schema: {
+        operationId: 'addTicketState',
+        params: org,
+        body: NewState,
+        response: { 200: States, 400: error, 404: error, 409: error },
+      },
+    },
+    (request, reply) => guard(reply, async () => ({ states: await tickets.addState(request.params.id, request.body) })),
+  );
+  app.patch<{ Params: Static<typeof stateParams>; Body: Static<typeof StatePatch> }>(
+    '/api/organizations/:id/ticket-states/:stateId',
+    {
+      schema: {
+        operationId: 'updateTicketState',
+        params: stateParams,
+        body: StatePatch,
+        response: { 200: States, 400: error, 404: error, 409: error },
+      },
+    },
+    (request, reply) =>
+      guard(reply, async () => ({
+        states: await tickets.updateState(request.params.id, request.params.stateId, request.body),
+      })),
+  );
+  app.delete<{ Params: Static<typeof stateParams>; Querystring: { moveTo?: string } }>(
+    '/api/organizations/:id/ticket-states/:stateId',
+    {
+      schema: {
+        operationId: 'deleteTicketState',
+        params: stateParams,
+        /** `moveTo`: the state its tickets move to (needed when it has any). */
+        querystring: Type.Object(
+          { moveTo: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })) },
+          { additionalProperties: false },
+        ),
+        response: { 200: States, 400: error, 404: error, 409: error },
+      },
+    },
+    (request, reply) =>
+      guard(reply, async () => ({
+        states: await tickets.deleteState(
+          request.params.id,
+          request.params.stateId,
+          person(request),
+          request.query.moveTo,
+        ),
+      })),
   );
   // Ticket chips (docs/tickets.md#references): the organization's tickets named in one of its conversations.
   app.get<{ Params: Static<typeof org>; Querystring: { numbers: string } }>(

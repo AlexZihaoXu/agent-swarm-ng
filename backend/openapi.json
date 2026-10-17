@@ -10045,6 +10045,17 @@
           },
           {
             "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "in": "query",
+            "name": "archived",
+            "required": false
+          },
+          {
+            "schema": {
               "minLength": 1,
               "maxLength": 64,
               "type": "string"
@@ -10063,6 +10074,7 @@
                   "type": "object",
                   "required": [
                     "settings",
+                    "states",
                     "tickets",
                     "truncated"
                   ],
@@ -10075,7 +10087,7 @@
                         "wakeOnAssign",
                         "agentsCreate",
                         "agentsPickUp",
-                        "pushOnReview"
+                        "archiveAfterDays"
                       ],
                       "properties": {
                         "enabled": {
@@ -10093,9 +10105,84 @@
                         "agentsPickUp": {
                           "type": "boolean"
                         },
-                        "pushOnReview": {
-                          "type": "boolean"
+                        "archiveAfterDays": {
+                          "minimum": 0,
+                          "maximum": 3650,
+                          "type": "integer"
                         }
+                      }
+                    },
+                    "states": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "allOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "name",
+                              "color",
+                              "category"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "color": {
+                                "type": "string"
+                              },
+                              "category": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "backlog"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "unstarted"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "started"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "completed"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "canceled"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "notifyOnEnter"
+                            ],
+                            "properties": {
+                              "notifyOnEnter": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        ]
                       }
                     },
                     "tickets": {
@@ -10107,13 +10194,14 @@
                           "number",
                           "key",
                           "title",
-                          "status",
+                          "state",
                           "priority",
                           "labels",
                           "links",
                           "assignee",
                           "parent",
                           "due",
+                          "archived",
                           "subIssues",
                           "blocked",
                           "writer",
@@ -10134,45 +10222,59 @@
                           "title": {
                             "type": "string"
                           },
-                          "status": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "backlog"
-                                ]
+                          "state": {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "name",
+                              "color",
+                              "category"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
                               },
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "todo"
-                                ]
+                              "name": {
+                                "type": "string"
                               },
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "progress"
-                                ]
+                              "color": {
+                                "type": "string"
                               },
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "review"
-                                ]
-                              },
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "done"
-                                ]
-                              },
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "cancelled"
+                              "category": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "backlog"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "unstarted"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "started"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "completed"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "canceled"
+                                    ]
+                                  }
                                 ]
                               }
-                            ]
+                            }
                           },
                           "priority": {
                             "anyOf": [
@@ -10337,7 +10439,8 @@
                                   "number",
                                   "key",
                                   "title",
-                                  "status"
+                                  "state",
+                                  "archived"
                                 ],
                                 "properties": {
                                   "number": {
@@ -10349,45 +10452,62 @@
                                   "title": {
                                     "type": "string"
                                   },
-                                  "status": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string",
-                                        "enum": [
-                                          "backlog"
-                                        ]
+                                  "state": {
+                                    "type": "object",
+                                    "required": [
+                                      "id",
+                                      "name",
+                                      "color",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
                                       },
-                                      {
-                                        "type": "string",
-                                        "enum": [
-                                          "todo"
-                                        ]
+                                      "name": {
+                                        "type": "string"
                                       },
-                                      {
-                                        "type": "string",
-                                        "enum": [
-                                          "progress"
-                                        ]
+                                      "color": {
+                                        "type": "string"
                                       },
-                                      {
-                                        "type": "string",
-                                        "enum": [
-                                          "review"
-                                        ]
-                                      },
-                                      {
-                                        "type": "string",
-                                        "enum": [
-                                          "done"
-                                        ]
-                                      },
-                                      {
-                                        "type": "string",
-                                        "enum": [
-                                          "cancelled"
+                                      "category": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "backlog"
+                                            ]
+                                          },
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "unstarted"
+                                            ]
+                                          },
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "started"
+                                            ]
+                                          },
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "completed"
+                                            ]
+                                          },
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "canceled"
+                                            ]
+                                          }
                                         ]
                                       }
-                                    ]
+                                    }
+                                  },
+                                  "archived": {
+                                    "type": "boolean"
                                   }
                                 }
                               },
@@ -10400,6 +10520,28 @@
                             "anyOf": [
                               {
                                 "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "archived": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "at",
+                                  "by"
+                                ],
+                                "properties": {
+                                  "at": {
+                                    "type": "string"
+                                  },
+                                  "by": {
+                                    "type": "string"
+                                  }
+                                }
                               },
                               {
                                 "type": "null"
@@ -10523,44 +10665,9 @@
                     "type": "string"
                   },
                   "status": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "enum": [
-                          "backlog"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "todo"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "progress"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "review"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "done"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "cancelled"
-                        ]
-                      }
-                    ]
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "type": "string"
                   },
                   "priority": {
                     "anyOf": [
@@ -10702,13 +10809,14 @@
                             "number",
                             "key",
                             "title",
-                            "status",
+                            "state",
                             "priority",
                             "labels",
                             "links",
                             "assignee",
                             "parent",
                             "due",
+                            "archived",
                             "subIssues",
                             "blocked",
                             "writer",
@@ -10729,45 +10837,59 @@
                             "title": {
                               "type": "string"
                             },
-                            "status": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "backlog"
-                                  ]
+                            "state": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "name",
+                                "color",
+                                "category"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "todo"
-                                  ]
+                                "name": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "progress"
-                                  ]
+                                "color": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "review"
-                                  ]
-                                },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "done"
-                                  ]
-                                },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "cancelled"
+                                "category": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "backlog"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "unstarted"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "started"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "completed"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "canceled"
+                                      ]
+                                    }
                                   ]
                                 }
-                              ]
+                              }
                             },
                             "priority": {
                               "anyOf": [
@@ -10932,7 +11054,8 @@
                                     "number",
                                     "key",
                                     "title",
-                                    "status"
+                                    "state",
+                                    "archived"
                                   ],
                                   "properties": {
                                     "number": {
@@ -10944,45 +11067,62 @@
                                     "title": {
                                       "type": "string"
                                     },
-                                    "status": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "backlog"
-                                          ]
+                                    "state": {
+                                      "type": "object",
+                                      "required": [
+                                        "id",
+                                        "name",
+                                        "color",
+                                        "category"
+                                      ],
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "todo"
-                                          ]
+                                        "name": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "progress"
-                                          ]
+                                        "color": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "review"
-                                          ]
-                                        },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "done"
-                                          ]
-                                        },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "cancelled"
+                                        "category": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "backlog"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "unstarted"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "started"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "completed"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "canceled"
+                                              ]
+                                            }
                                           ]
                                         }
-                                      ]
+                                      }
+                                    },
+                                    "archived": {
+                                      "type": "boolean"
                                     }
                                   }
                                 },
@@ -10995,6 +11135,28 @@
                               "anyOf": [
                                 {
                                   "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "archived": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "at",
+                                    "by"
+                                  ],
+                                  "properties": {
+                                    "at": {
+                                      "type": "string"
+                                    },
+                                    "by": {
+                                      "type": "string"
+                                    }
+                                  }
                                 },
                                 {
                                   "type": "null"
@@ -11090,7 +11252,8 @@
                               "number",
                               "key",
                               "title",
-                              "status"
+                              "state",
+                              "archived"
                             ],
                             "properties": {
                               "number": {
@@ -11102,45 +11265,62 @@
                               "title": {
                                 "type": "string"
                               },
-                              "status": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "backlog"
-                                    ]
+                              "state": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "color",
+                                  "category"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "todo"
-                                    ]
+                                  "name": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "progress"
-                                    ]
+                                  "color": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "review"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "done"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "cancelled"
+                                  "category": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "backlog"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "unstarted"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "started"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "completed"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "canceled"
+                                        ]
+                                      }
                                     ]
                                   }
-                                ]
+                                }
+                              },
+                              "archived": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -11205,7 +11385,8 @@
                               "number",
                               "key",
                               "title",
-                              "status"
+                              "state",
+                              "archived"
                             ],
                             "properties": {
                               "number": {
@@ -11217,45 +11398,62 @@
                               "title": {
                                 "type": "string"
                               },
-                              "status": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "backlog"
-                                    ]
+                              "state": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "color",
+                                  "category"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "todo"
-                                    ]
+                                  "name": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "progress"
-                                    ]
+                                  "color": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "review"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "done"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "cancelled"
+                                  "category": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "backlog"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "unstarted"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "started"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "completed"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "canceled"
+                                        ]
+                                      }
                                     ]
                                   }
-                                ]
+                                }
+                              },
+                              "archived": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -11460,6 +11658,764 @@
         }
       }
     },
+    "/api/organizations/{id}/ticket-states": {
+      "post": {
+        "operationId": "addTicketState",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "name",
+                  "category"
+                ],
+                "properties": {
+                  "name": {
+                    "minLength": 1,
+                    "maxLength": 40,
+                    "type": "string"
+                  },
+                  "category": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "backlog"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "unstarted"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "started"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "completed"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "canceled"
+                        ]
+                      }
+                    ]
+                  },
+                  "color": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "gray"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "silver"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "slate"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "red"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "orange"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "amber"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "green"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "emerald"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "teal"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "sky"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "blue"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "violet"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "pink"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "states"
+                  ],
+                  "properties": {
+                    "states": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "allOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "name",
+                              "color",
+                              "category"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "color": {
+                                "type": "string"
+                              },
+                              "category": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "backlog"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "unstarted"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "started"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "completed"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "canceled"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "notifyOnEnter"
+                            ],
+                            "properties": {
+                              "notifyOnEnter": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organizations/{id}/ticket-states/{stateId}": {
+      "patch": {
+        "operationId": "updateTicketState",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "minProperties": 1,
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "minLength": 1,
+                    "maxLength": 40,
+                    "type": "string"
+                  },
+                  "color": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "gray"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "silver"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "slate"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "red"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "orange"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "amber"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "green"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "emerald"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "teal"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "sky"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "blue"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "violet"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "pink"
+                        ]
+                      }
+                    ]
+                  },
+                  "notifyOnEnter": {
+                    "type": "boolean"
+                  },
+                  "position": {
+                    "minimum": 0,
+                    "maximum": 100,
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "stateId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "states"
+                  ],
+                  "properties": {
+                    "states": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "allOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "name",
+                              "color",
+                              "category"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "color": {
+                                "type": "string"
+                              },
+                              "category": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "backlog"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "unstarted"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "started"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "completed"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "canceled"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "notifyOnEnter"
+                            ],
+                            "properties": {
+                              "notifyOnEnter": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteTicketState",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "moveTo",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "stateId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "states"
+                  ],
+                  "properties": {
+                    "states": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "allOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "name",
+                              "color",
+                              "category"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "color": {
+                                "type": "string"
+                              },
+                              "category": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "backlog"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "unstarted"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "started"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "completed"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "canceled"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "notifyOnEnter"
+                            ],
+                            "properties": {
+                              "notifyOnEnter": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/organizations/{id}/ticket-refs": {
       "get": {
         "operationId": "ticketRefs",
@@ -11503,7 +12459,8 @@
                           "number",
                           "key",
                           "title",
-                          "status"
+                          "state",
+                          "archived"
                         ],
                         "properties": {
                           "number": {
@@ -11515,45 +12472,62 @@
                           "title": {
                             "type": "string"
                           },
-                          "status": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "backlog"
-                                ]
+                          "state": {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "name",
+                              "color",
+                              "category"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
                               },
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "todo"
-                                ]
+                              "name": {
+                                "type": "string"
                               },
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "progress"
-                                ]
+                              "color": {
+                                "type": "string"
                               },
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "review"
-                                ]
-                              },
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "done"
-                                ]
-                              },
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "cancelled"
+                              "category": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "backlog"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "unstarted"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "started"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "completed"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "canceled"
+                                    ]
+                                  }
                                 ]
                               }
-                            ]
+                            }
+                          },
+                          "archived": {
+                            "type": "boolean"
                           }
                         }
                       }
@@ -11633,13 +12607,14 @@
                             "number",
                             "key",
                             "title",
-                            "status",
+                            "state",
                             "priority",
                             "labels",
                             "links",
                             "assignee",
                             "parent",
                             "due",
+                            "archived",
                             "subIssues",
                             "blocked",
                             "writer",
@@ -11660,45 +12635,59 @@
                             "title": {
                               "type": "string"
                             },
-                            "status": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "backlog"
-                                  ]
+                            "state": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "name",
+                                "color",
+                                "category"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "todo"
-                                  ]
+                                "name": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "progress"
-                                  ]
+                                "color": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "review"
-                                  ]
-                                },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "done"
-                                  ]
-                                },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "cancelled"
+                                "category": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "backlog"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "unstarted"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "started"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "completed"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "canceled"
+                                      ]
+                                    }
                                   ]
                                 }
-                              ]
+                              }
                             },
                             "priority": {
                               "anyOf": [
@@ -11863,7 +12852,8 @@
                                     "number",
                                     "key",
                                     "title",
-                                    "status"
+                                    "state",
+                                    "archived"
                                   ],
                                   "properties": {
                                     "number": {
@@ -11875,45 +12865,62 @@
                                     "title": {
                                       "type": "string"
                                     },
-                                    "status": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "backlog"
-                                          ]
+                                    "state": {
+                                      "type": "object",
+                                      "required": [
+                                        "id",
+                                        "name",
+                                        "color",
+                                        "category"
+                                      ],
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "todo"
-                                          ]
+                                        "name": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "progress"
-                                          ]
+                                        "color": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "review"
-                                          ]
-                                        },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "done"
-                                          ]
-                                        },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "cancelled"
+                                        "category": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "backlog"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "unstarted"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "started"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "completed"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "canceled"
+                                              ]
+                                            }
                                           ]
                                         }
-                                      ]
+                                      }
+                                    },
+                                    "archived": {
+                                      "type": "boolean"
                                     }
                                   }
                                 },
@@ -11926,6 +12933,28 @@
                               "anyOf": [
                                 {
                                   "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "archived": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "at",
+                                    "by"
+                                  ],
+                                  "properties": {
+                                    "at": {
+                                      "type": "string"
+                                    },
+                                    "by": {
+                                      "type": "string"
+                                    }
+                                  }
                                 },
                                 {
                                   "type": "null"
@@ -12021,7 +13050,8 @@
                               "number",
                               "key",
                               "title",
-                              "status"
+                              "state",
+                              "archived"
                             ],
                             "properties": {
                               "number": {
@@ -12033,45 +13063,62 @@
                               "title": {
                                 "type": "string"
                               },
-                              "status": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "backlog"
-                                    ]
+                              "state": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "color",
+                                  "category"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "todo"
-                                    ]
+                                  "name": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "progress"
-                                    ]
+                                  "color": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "review"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "done"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "cancelled"
+                                  "category": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "backlog"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "unstarted"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "started"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "completed"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "canceled"
+                                        ]
+                                      }
                                     ]
                                   }
-                                ]
+                                }
+                              },
+                              "archived": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -12136,7 +13183,8 @@
                               "number",
                               "key",
                               "title",
-                              "status"
+                              "state",
+                              "archived"
                             ],
                             "properties": {
                               "number": {
@@ -12148,45 +13196,62 @@
                               "title": {
                                 "type": "string"
                               },
-                              "status": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "backlog"
-                                    ]
+                              "state": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "color",
+                                  "category"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "todo"
-                                    ]
+                                  "name": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "progress"
-                                    ]
+                                  "color": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "review"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "done"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "cancelled"
+                                  "category": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "backlog"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "unstarted"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "started"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "completed"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "canceled"
+                                        ]
+                                      }
                                     ]
                                   }
-                                ]
+                                }
+                              },
+                              "archived": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -12375,44 +13440,9 @@
                     "type": "string"
                   },
                   "status": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "enum": [
-                          "backlog"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "todo"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "progress"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "review"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "done"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "cancelled"
-                        ]
-                      }
-                    ]
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "type": "string"
                   },
                   "priority": {
                     "anyOf": [
@@ -12628,6 +13658,9 @@
                       }
                     }
                   },
+                  "archived": {
+                    "type": "boolean"
+                  },
                   "place": {
                     "additionalProperties": false,
                     "type": "object",
@@ -12693,13 +13726,14 @@
                             "number",
                             "key",
                             "title",
-                            "status",
+                            "state",
                             "priority",
                             "labels",
                             "links",
                             "assignee",
                             "parent",
                             "due",
+                            "archived",
                             "subIssues",
                             "blocked",
                             "writer",
@@ -12720,45 +13754,59 @@
                             "title": {
                               "type": "string"
                             },
-                            "status": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "backlog"
-                                  ]
+                            "state": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "name",
+                                "color",
+                                "category"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "todo"
-                                  ]
+                                "name": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "progress"
-                                  ]
+                                "color": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "review"
-                                  ]
-                                },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "done"
-                                  ]
-                                },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "cancelled"
+                                "category": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "backlog"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "unstarted"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "started"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "completed"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "canceled"
+                                      ]
+                                    }
                                   ]
                                 }
-                              ]
+                              }
                             },
                             "priority": {
                               "anyOf": [
@@ -12923,7 +13971,8 @@
                                     "number",
                                     "key",
                                     "title",
-                                    "status"
+                                    "state",
+                                    "archived"
                                   ],
                                   "properties": {
                                     "number": {
@@ -12935,45 +13984,62 @@
                                     "title": {
                                       "type": "string"
                                     },
-                                    "status": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "backlog"
-                                          ]
+                                    "state": {
+                                      "type": "object",
+                                      "required": [
+                                        "id",
+                                        "name",
+                                        "color",
+                                        "category"
+                                      ],
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "todo"
-                                          ]
+                                        "name": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "progress"
-                                          ]
+                                        "color": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "review"
-                                          ]
-                                        },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "done"
-                                          ]
-                                        },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "cancelled"
+                                        "category": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "backlog"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "unstarted"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "started"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "completed"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "canceled"
+                                              ]
+                                            }
                                           ]
                                         }
-                                      ]
+                                      }
+                                    },
+                                    "archived": {
+                                      "type": "boolean"
                                     }
                                   }
                                 },
@@ -12986,6 +14052,28 @@
                               "anyOf": [
                                 {
                                   "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "archived": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "at",
+                                    "by"
+                                  ],
+                                  "properties": {
+                                    "at": {
+                                      "type": "string"
+                                    },
+                                    "by": {
+                                      "type": "string"
+                                    }
+                                  }
                                 },
                                 {
                                   "type": "null"
@@ -13081,7 +14169,8 @@
                               "number",
                               "key",
                               "title",
-                              "status"
+                              "state",
+                              "archived"
                             ],
                             "properties": {
                               "number": {
@@ -13093,45 +14182,62 @@
                               "title": {
                                 "type": "string"
                               },
-                              "status": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "backlog"
-                                    ]
+                              "state": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "color",
+                                  "category"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "todo"
-                                    ]
+                                  "name": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "progress"
-                                    ]
+                                  "color": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "review"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "done"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "cancelled"
+                                  "category": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "backlog"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "unstarted"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "started"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "completed"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "canceled"
+                                        ]
+                                      }
                                     ]
                                   }
-                                ]
+                                }
+                              },
+                              "archived": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -13196,7 +14302,8 @@
                               "number",
                               "key",
                               "title",
-                              "status"
+                              "state",
+                              "archived"
                             ],
                             "properties": {
                               "number": {
@@ -13208,45 +14315,62 @@
                               "title": {
                                 "type": "string"
                               },
-                              "status": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "backlog"
-                                    ]
+                              "state": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "color",
+                                  "category"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "todo"
-                                    ]
+                                  "name": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "progress"
-                                    ]
+                                  "color": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "review"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "done"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "cancelled"
+                                  "category": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "backlog"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "unstarted"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "started"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "completed"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "canceled"
+                                        ]
+                                      }
                                     ]
                                   }
-                                ]
+                                }
+                              },
+                              "archived": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -13583,13 +14707,14 @@
                             "number",
                             "key",
                             "title",
-                            "status",
+                            "state",
                             "priority",
                             "labels",
                             "links",
                             "assignee",
                             "parent",
                             "due",
+                            "archived",
                             "subIssues",
                             "blocked",
                             "writer",
@@ -13610,45 +14735,59 @@
                             "title": {
                               "type": "string"
                             },
-                            "status": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "backlog"
-                                  ]
+                            "state": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "name",
+                                "color",
+                                "category"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "todo"
-                                  ]
+                                "name": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "progress"
-                                  ]
+                                "color": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "review"
-                                  ]
-                                },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "done"
-                                  ]
-                                },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "cancelled"
+                                "category": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "backlog"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "unstarted"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "started"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "completed"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "canceled"
+                                      ]
+                                    }
                                   ]
                                 }
-                              ]
+                              }
                             },
                             "priority": {
                               "anyOf": [
@@ -13813,7 +14952,8 @@
                                     "number",
                                     "key",
                                     "title",
-                                    "status"
+                                    "state",
+                                    "archived"
                                   ],
                                   "properties": {
                                     "number": {
@@ -13825,45 +14965,62 @@
                                     "title": {
                                       "type": "string"
                                     },
-                                    "status": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "backlog"
-                                          ]
+                                    "state": {
+                                      "type": "object",
+                                      "required": [
+                                        "id",
+                                        "name",
+                                        "color",
+                                        "category"
+                                      ],
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "todo"
-                                          ]
+                                        "name": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "progress"
-                                          ]
+                                        "color": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "review"
-                                          ]
-                                        },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "done"
-                                          ]
-                                        },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "cancelled"
+                                        "category": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "backlog"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "unstarted"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "started"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "completed"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "canceled"
+                                              ]
+                                            }
                                           ]
                                         }
-                                      ]
+                                      }
+                                    },
+                                    "archived": {
+                                      "type": "boolean"
                                     }
                                   }
                                 },
@@ -13876,6 +15033,28 @@
                               "anyOf": [
                                 {
                                   "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "archived": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "at",
+                                    "by"
+                                  ],
+                                  "properties": {
+                                    "at": {
+                                      "type": "string"
+                                    },
+                                    "by": {
+                                      "type": "string"
+                                    }
+                                  }
                                 },
                                 {
                                   "type": "null"
@@ -13971,7 +15150,8 @@
                               "number",
                               "key",
                               "title",
-                              "status"
+                              "state",
+                              "archived"
                             ],
                             "properties": {
                               "number": {
@@ -13983,45 +15163,62 @@
                               "title": {
                                 "type": "string"
                               },
-                              "status": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "backlog"
-                                    ]
+                              "state": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "color",
+                                  "category"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "todo"
-                                    ]
+                                  "name": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "progress"
-                                    ]
+                                  "color": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "review"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "done"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "cancelled"
+                                  "category": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "backlog"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "unstarted"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "started"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "completed"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "canceled"
+                                        ]
+                                      }
                                     ]
                                   }
-                                ]
+                                }
+                              },
+                              "archived": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -14086,7 +15283,8 @@
                               "number",
                               "key",
                               "title",
-                              "status"
+                              "state",
+                              "archived"
                             ],
                             "properties": {
                               "number": {
@@ -14098,45 +15296,62 @@
                               "title": {
                                 "type": "string"
                               },
-                              "status": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "backlog"
-                                    ]
+                              "state": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "color",
+                                  "category"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "todo"
-                                    ]
+                                  "name": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "progress"
-                                    ]
+                                  "color": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "review"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "done"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "cancelled"
+                                  "category": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "backlog"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "unstarted"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "started"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "completed"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "canceled"
+                                        ]
+                                      }
                                     ]
                                   }
-                                ]
+                                }
+                              },
+                              "archived": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -14421,13 +15636,14 @@
                             "number",
                             "key",
                             "title",
-                            "status",
+                            "state",
                             "priority",
                             "labels",
                             "links",
                             "assignee",
                             "parent",
                             "due",
+                            "archived",
                             "subIssues",
                             "blocked",
                             "writer",
@@ -14448,45 +15664,59 @@
                             "title": {
                               "type": "string"
                             },
-                            "status": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "backlog"
-                                  ]
+                            "state": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "name",
+                                "color",
+                                "category"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "todo"
-                                  ]
+                                "name": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "progress"
-                                  ]
+                                "color": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "review"
-                                  ]
-                                },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "done"
-                                  ]
-                                },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "cancelled"
+                                "category": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "backlog"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "unstarted"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "started"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "completed"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "canceled"
+                                      ]
+                                    }
                                   ]
                                 }
-                              ]
+                              }
                             },
                             "priority": {
                               "anyOf": [
@@ -14651,7 +15881,8 @@
                                     "number",
                                     "key",
                                     "title",
-                                    "status"
+                                    "state",
+                                    "archived"
                                   ],
                                   "properties": {
                                     "number": {
@@ -14663,45 +15894,62 @@
                                     "title": {
                                       "type": "string"
                                     },
-                                    "status": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "backlog"
-                                          ]
+                                    "state": {
+                                      "type": "object",
+                                      "required": [
+                                        "id",
+                                        "name",
+                                        "color",
+                                        "category"
+                                      ],
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "todo"
-                                          ]
+                                        "name": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "progress"
-                                          ]
+                                        "color": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "review"
-                                          ]
-                                        },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "done"
-                                          ]
-                                        },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "cancelled"
+                                        "category": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "backlog"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "unstarted"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "started"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "completed"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "canceled"
+                                              ]
+                                            }
                                           ]
                                         }
-                                      ]
+                                      }
+                                    },
+                                    "archived": {
+                                      "type": "boolean"
                                     }
                                   }
                                 },
@@ -14714,6 +15962,28 @@
                               "anyOf": [
                                 {
                                   "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "archived": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "at",
+                                    "by"
+                                  ],
+                                  "properties": {
+                                    "at": {
+                                      "type": "string"
+                                    },
+                                    "by": {
+                                      "type": "string"
+                                    }
+                                  }
                                 },
                                 {
                                   "type": "null"
@@ -14809,7 +16079,8 @@
                               "number",
                               "key",
                               "title",
-                              "status"
+                              "state",
+                              "archived"
                             ],
                             "properties": {
                               "number": {
@@ -14821,45 +16092,62 @@
                               "title": {
                                 "type": "string"
                               },
-                              "status": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "backlog"
-                                    ]
+                              "state": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "color",
+                                  "category"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "todo"
-                                    ]
+                                  "name": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "progress"
-                                    ]
+                                  "color": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "review"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "done"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "cancelled"
+                                  "category": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "backlog"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "unstarted"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "started"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "completed"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "canceled"
+                                        ]
+                                      }
                                     ]
                                   }
-                                ]
+                                }
+                              },
+                              "archived": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -14924,7 +16212,8 @@
                               "number",
                               "key",
                               "title",
-                              "status"
+                              "state",
+                              "archived"
                             ],
                             "properties": {
                               "number": {
@@ -14936,45 +16225,62 @@
                               "title": {
                                 "type": "string"
                               },
-                              "status": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "backlog"
-                                    ]
+                              "state": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "color",
+                                  "category"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "todo"
-                                    ]
+                                  "name": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "progress"
-                                    ]
+                                  "color": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "review"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "done"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "cancelled"
+                                  "category": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "backlog"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "unstarted"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "started"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "completed"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "canceled"
+                                        ]
+                                      }
                                     ]
                                   }
-                                ]
+                                }
+                              },
+                              "archived": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -15254,13 +16560,14 @@
                             "number",
                             "key",
                             "title",
-                            "status",
+                            "state",
                             "priority",
                             "labels",
                             "links",
                             "assignee",
                             "parent",
                             "due",
+                            "archived",
                             "subIssues",
                             "blocked",
                             "writer",
@@ -15281,45 +16588,59 @@
                             "title": {
                               "type": "string"
                             },
-                            "status": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "backlog"
-                                  ]
+                            "state": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "name",
+                                "color",
+                                "category"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "todo"
-                                  ]
+                                "name": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "progress"
-                                  ]
+                                "color": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "review"
-                                  ]
-                                },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "done"
-                                  ]
-                                },
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "cancelled"
+                                "category": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "backlog"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "unstarted"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "started"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "completed"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "canceled"
+                                      ]
+                                    }
                                   ]
                                 }
-                              ]
+                              }
                             },
                             "priority": {
                               "anyOf": [
@@ -15484,7 +16805,8 @@
                                     "number",
                                     "key",
                                     "title",
-                                    "status"
+                                    "state",
+                                    "archived"
                                   ],
                                   "properties": {
                                     "number": {
@@ -15496,45 +16818,62 @@
                                     "title": {
                                       "type": "string"
                                     },
-                                    "status": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "backlog"
-                                          ]
+                                    "state": {
+                                      "type": "object",
+                                      "required": [
+                                        "id",
+                                        "name",
+                                        "color",
+                                        "category"
+                                      ],
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "todo"
-                                          ]
+                                        "name": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "progress"
-                                          ]
+                                        "color": {
+                                          "type": "string"
                                         },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "review"
-                                          ]
-                                        },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "done"
-                                          ]
-                                        },
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "cancelled"
+                                        "category": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "backlog"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "unstarted"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "started"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "completed"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "canceled"
+                                              ]
+                                            }
                                           ]
                                         }
-                                      ]
+                                      }
+                                    },
+                                    "archived": {
+                                      "type": "boolean"
                                     }
                                   }
                                 },
@@ -15547,6 +16886,28 @@
                               "anyOf": [
                                 {
                                   "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "archived": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "at",
+                                    "by"
+                                  ],
+                                  "properties": {
+                                    "at": {
+                                      "type": "string"
+                                    },
+                                    "by": {
+                                      "type": "string"
+                                    }
+                                  }
                                 },
                                 {
                                   "type": "null"
@@ -15642,7 +17003,8 @@
                               "number",
                               "key",
                               "title",
-                              "status"
+                              "state",
+                              "archived"
                             ],
                             "properties": {
                               "number": {
@@ -15654,45 +17016,62 @@
                               "title": {
                                 "type": "string"
                               },
-                              "status": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "backlog"
-                                    ]
+                              "state": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "color",
+                                  "category"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "todo"
-                                    ]
+                                  "name": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "progress"
-                                    ]
+                                  "color": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "review"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "done"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "cancelled"
+                                  "category": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "backlog"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "unstarted"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "started"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "completed"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "canceled"
+                                        ]
+                                      }
                                     ]
                                   }
-                                ]
+                                }
+                              },
+                              "archived": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -15757,7 +17136,8 @@
                               "number",
                               "key",
                               "title",
-                              "status"
+                              "state",
+                              "archived"
                             ],
                             "properties": {
                               "number": {
@@ -15769,45 +17149,62 @@
                               "title": {
                                 "type": "string"
                               },
-                              "status": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "backlog"
-                                    ]
+                              "state": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "color",
+                                  "category"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "todo"
-                                    ]
+                                  "name": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "progress"
-                                    ]
+                                  "color": {
+                                    "type": "string"
                                   },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "review"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "done"
-                                    ]
-                                  },
-                                  {
-                                    "type": "string",
-                                    "enum": [
-                                      "cancelled"
+                                  "category": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "backlog"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "unstarted"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "started"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "completed"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "canceled"
+                                        ]
+                                      }
                                     ]
                                   }
-                                ]
+                                }
+                              },
+                              "archived": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -16074,7 +17471,7 @@
                               "wakeOnAssign",
                               "agentsCreate",
                               "agentsPickUp",
-                              "pushOnReview"
+                              "archiveAfterDays"
                             ],
                             "properties": {
                               "enabled": {
@@ -16092,8 +17489,10 @@
                               "agentsPickUp": {
                                 "type": "boolean"
                               },
-                              "pushOnReview": {
-                                "type": "boolean"
+                              "archiveAfterDays": {
+                                "minimum": 0,
+                                "maximum": 3650,
+                                "type": "integer"
                               }
                             }
                           }
@@ -16189,7 +17588,7 @@
                               "wakeOnAssign",
                               "agentsCreate",
                               "agentsPickUp",
-                              "pushOnReview"
+                              "archiveAfterDays"
                             ],
                             "properties": {
                               "enabled": {
@@ -16207,8 +17606,10 @@
                               "agentsPickUp": {
                                 "type": "boolean"
                               },
-                              "pushOnReview": {
-                                "type": "boolean"
+                              "archiveAfterDays": {
+                                "minimum": 0,
+                                "maximum": 3650,
+                                "type": "integer"
                               }
                             }
                           }
@@ -16278,8 +17679,10 @@
                       "agentsPickUp": {
                         "type": "boolean"
                       },
-                      "pushOnReview": {
-                        "type": "boolean"
+                      "archiveAfterDays": {
+                        "minimum": 0,
+                        "maximum": 3650,
+                        "type": "integer"
                       }
                     }
                   }
@@ -16359,7 +17762,7 @@
                               "wakeOnAssign",
                               "agentsCreate",
                               "agentsPickUp",
-                              "pushOnReview"
+                              "archiveAfterDays"
                             ],
                             "properties": {
                               "enabled": {
@@ -16377,8 +17780,10 @@
                               "agentsPickUp": {
                                 "type": "boolean"
                               },
-                              "pushOnReview": {
-                                "type": "boolean"
+                              "archiveAfterDays": {
+                                "minimum": 0,
+                                "maximum": 3650,
+                                "type": "integer"
                               }
                             }
                           }
@@ -16501,7 +17906,7 @@
                               "wakeOnAssign",
                               "agentsCreate",
                               "agentsPickUp",
-                              "pushOnReview"
+                              "archiveAfterDays"
                             ],
                             "properties": {
                               "enabled": {
@@ -16519,8 +17924,10 @@
                               "agentsPickUp": {
                                 "type": "boolean"
                               },
-                              "pushOnReview": {
-                                "type": "boolean"
+                              "archiveAfterDays": {
+                                "minimum": 0,
+                                "maximum": 3650,
+                                "type": "integer"
                               }
                             }
                           }

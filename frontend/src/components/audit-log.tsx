@@ -55,6 +55,9 @@ const EVENTS: Record<string, string> = {
   'ticket.create': 'Ticket created',
   'ticket.update': 'Ticket edited',
   'ticket.delete': 'Ticket deleted',
+  'ticket.state.create': 'Ticket state added',
+  'ticket.state.update': 'Ticket state edited',
+  'ticket.state.delete': 'Ticket state deleted',
   'system.start': 'Platform started',
   'system.stop': 'Platform stopped',
 };

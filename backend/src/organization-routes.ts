@@ -2,7 +2,7 @@ import { Type, type Static } from '@sinclair/typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { viewerOf } from './users/reach';
 import { OrganizationError, type Organizations } from './organizations';
-import { TicketError, type Tickets } from './tickets/store';
+import { ARCHIVE_DAYS_MAX, TicketError, type Tickets } from './tickets/store';
 
 const error = Type.Object({ message: Type.String() });
 /** Tickets (docs/tickets.md): off by default; the options apply to agents, the prefix to how numbers show. */
@@ -12,7 +12,8 @@ export const TicketSettings = Type.Object({
   wakeOnAssign: Type.Boolean(),
   agentsCreate: Type.Boolean(),
   agentsPickUp: Type.Boolean(),
-  pushOnReview: Type.Boolean(),
+  /** Closed tickets are archived after this many days in a completed or canceled state; 0 = never. */
+  archiveAfterDays: Type.Integer({ minimum: 0, maximum: ARCHIVE_DAYS_MAX }),
 });
 
 const params = Type.Object({ id: Type.String({ minLength: 1, maxLength: 64 }) });

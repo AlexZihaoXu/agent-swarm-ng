@@ -15,7 +15,8 @@ export const MAX_WAIT_MS = 10_000;
 type Kind = 'message' | 'group' | 'stuck' | 'critical' | 'ticket';
 const PREFERENCE: Record<Kind, keyof Preferences> = {
   message: 'agentMessages',
-  // A ticket moved to In review (docs/tickets.md) is an agent telling its owner it is done: Agent messages.
+  // A ticket moved into a notifying state like In review (docs/tickets.md) is usually an agent telling its owner it
+  // is done: Agent messages.
   ticket: 'agentMessages',
   group: 'groupChats',
   stuck: 'agentProblems',
@@ -110,11 +111,11 @@ export class PushNotifier {
       ).catch(this.fail);
       return;
     }
-    // Tickets (docs/tickets.md): someone other than the owner moved one to In review (the organization's option).
-    if (event.type === 'tickets_updated' && event.review) {
-      void this.ticketReview(
+    // Tickets (docs/tickets.md): someone other than the owner moved one into a state that notifies (notifyOnEnter).
+    if (event.type === 'tickets_updated' && event.entered) {
+      void this.ticketEntered(
         String(event.organizationId),
-        event.review as { key: string; title: string; by: string },
+        event.entered as { key: string; title: string; by: string; state: string },
       ).catch(this.fail);
       return;
     }
@@ -169,7 +170,10 @@ export class PushNotifier {
     });
   }
 
-  private async ticketReview(organizationId: string, review: { key: string; title: string; by: string }) {
+  private async ticketEntered(
+    organizationId: string,
+    review: { key: string; title: string; by: string; state: string },
+  ) {
     const org = await (
       await this.client()
     ).organization.findUnique({ where: { id: organizationId }, select: { name: true, ownerId: true } });
@@ -178,8 +182,8 @@ export class PushNotifier {
       kind: 'ticket',
       tag: `ticket:${organizationId}:${review.key}`,
       title: `${review.by} · ${org.name}`,
-      text: plainText(`Moved ${review.key} “${review.title}” to In review.`),
-      hidden: `Moved ${review.key} to In review.`,
+      text: plainText(`Moved ${review.key} “${review.title}” to ${review.state}.`),
+      hidden: plainText(`Moved ${review.key} to ${review.state}.`),
       url: `/tickets/${encodeURIComponent(review.key)}?org=${encodeURIComponent(organizationId)}`,
     });
   }

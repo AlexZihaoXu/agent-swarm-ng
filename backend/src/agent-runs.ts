@@ -219,10 +219,10 @@ export class AgentRuns {
     });
   }
   /**
-   * A ticket of an organization changed (docs/tickets.md): its board and detail refresh; `review` (moved to In review
-   * by someone other than the owner) shows a toast and may push the owner.
+   * A ticket of an organization changed (docs/tickets.md): its board and detail refresh (number 0: the whole board);
+   * `entered` (moved into a notifying state by someone other than the owner) shows a toast and may push the owner.
    */
-  ticketsChanged(organizationId: string, change: { number: number; deleted?: boolean; review?: object }) {
+  ticketsChanged(organizationId: string, change: { number: number; deleted?: boolean; entered?: object }) {
     this.broadcast({
       type: 'tickets_updated',
       organizationId,
