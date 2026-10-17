@@ -8,7 +8,15 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatSkeleton, EdgeSkeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { AgentAddIcon, ChatIcon, ComputerIcon, DashboardIcon, PlusIcon, SettingsIcon } from '@/components/ui/icons';
+import {
+  AgentAddIcon,
+  ChatIcon,
+  ComputerIcon,
+  DashboardIcon,
+  PlusIcon,
+  SettingsIcon,
+  TicketsIcon,
+} from '@/components/ui/icons';
 import { JumpToLatest } from '@/components/jump-to-latest';
 import { useMessageWindow } from '@/lib/use-message-window';
 import { AgentFormDialogs, AgentSettingsDialog } from '@/components/agent-dialogs';
@@ -79,6 +87,8 @@ import { AgentTodos } from '@/components/agent-todos';
 const AccessLog = lazy(() => import('@/components/access-log').then(module => ({ default: module.AccessLog })));
 const AuditLog = lazy(() => import('@/components/audit-log').then(module => ({ default: module.AuditLog })));
 const ComputersPanel = lazy(() => loadComputers().then(module => ({ default: module.ComputersPanel })));
+const loadTickets = () => import('@/components/tickets-panel');
+const TicketsPanel = lazy(() => loadTickets().then(module => ({ default: module.TicketsPanel })));
 const whenIdle = (task: () => void) => {
   if ('requestIdleCallback' in window) {
     const id = window.requestIdleCallback(task, { timeout: 3000 });
@@ -170,7 +180,10 @@ export function App() {
     compactions,
   } = useChat();
   // Organizations: the dashboard shows the chosen one's agents (docs/organizations.md).
-  const { inScope, setCurrent, current: organization, organizations } = useOrganizations();
+  const { inScope, setCurrent, current: organization, organizations, target } = useOrganizations();
+  // Tickets (docs/tickets.md): a tab of its own while the organization in view (or the only one) has them on.
+  const ticketOrganization = organizations.find(org => org.id === target);
+  const ticketsOn = Boolean(ticketOrganization?.tickets?.enabled);
   // Switching organization swaps the lists below the header: a short fade marks it (nothing remounts, so drafts and
   // scroll positions stay). Skipped on the first render and with reduced motion.
   const tabsRoot = useRef<HTMLDivElement>(null);
@@ -245,7 +258,7 @@ export function App() {
     if (activeTab === 'settings') setSettingsSeen(true);
   }, [activeTab]);
   // Tab content enters from the side its tab sits on (see .tab-enter).
-  const tabOrder = ['dashboard', 'chat', 'computers', 'settings'];
+  const tabOrder = ['dashboard', 'chat', 'computers', 'tickets', 'settings'];
   const previousTab = useRef(activeTab);
   const tabShift = useRef(0);
   if (previousTab.current !== activeTab) {
@@ -274,9 +287,11 @@ export function App() {
           : '/chat'
         : value === 'computers'
           ? '/computers'
-          : value === 'dashboard'
-            ? '/dashboard'
-            : '/settings';
+          : value === 'tickets'
+            ? '/tickets'
+            : value === 'dashboard'
+              ? '/dashboard'
+              : '/settings';
     // Compare with the address itself: navigation renders as a transition, so during a quick second click the
     // rendered tab can still be the old one and would swallow the click.
     const current = parseDashboardPath(window.location.pathname).tab;
@@ -561,7 +576,7 @@ export function App() {
     const observer = new ResizeObserver(measure);
     observer.observe(list);
     return () => observer.disconnect();
-  }, [activeTab, computerViewerOpen]);
+  }, [activeTab, computerViewerOpen, ticketsOn]);
   // Typing while focus rests elsewhere in a chat (a message, the list, the page) goes straight to the composer,
   // as in chat apps. Shortcuts, fields, dialogs and the space/enter that activate a focused control are left alone.
   useEffect(() => {
@@ -773,7 +788,10 @@ export function App() {
             <Tabs.List
               aria-label="Main navigation"
               ref={tabList}
-              className="relative isolate grid h-14 w-full grid-cols-4 items-center px-1.5 md:flex md:h-9 md:w-auto md:gap-0.5 md:rounded-lg md:bg-muted md:p-1"
+              className={cn(
+                'relative isolate grid h-14 w-full items-center px-1.5 md:flex md:h-9 md:w-auto md:gap-0.5 md:rounded-lg md:bg-muted md:p-1',
+                ticketsOn ? 'grid-cols-5' : 'grid-cols-4',
+              )}
             >
               <span
                 aria-hidden="true"
@@ -787,6 +805,7 @@ export function App() {
                   ['Dashboard', DashboardIcon],
                   ['Chat', ChatIcon],
                   ['Computers', ComputerIcon],
+                  ...(ticketsOn ? ([['Tickets', TicketsIcon]] as const) : []),
                   ['Settings', SettingsIcon],
                 ] as const
               ).map(([label, TabIcon]) => (
@@ -1339,6 +1358,19 @@ export function App() {
                 onOpen={id => navigate(computerPath(id))}
                 onNavigate={navigate}
                 onBack={() => navigate('/computers')}
+              />
+            </Suspense>
+          )}
+        </Tabs.Content>
+        <Tabs.Content value="tickets" className="tab-enter min-h-0 flex-1 outline-none data-[state=active]:flex">
+          {activeTab === 'tickets' && (
+            <Suspense fallback={loading}>
+              <TicketsPanel
+                route={route}
+                organization={ticketOrganization}
+                agents={agents.filter(item => item.real?.organizationId === ticketOrganization?.id)}
+                working={new Set(agents.filter(item => busy[item.channelId]).map(item => item.id))}
+                onNavigate={path => leave(() => navigate(path))}
               />
             </Suspense>
           )}

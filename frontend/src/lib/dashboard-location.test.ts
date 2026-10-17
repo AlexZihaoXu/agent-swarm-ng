@@ -10,6 +10,8 @@ import {
   computerTerminalPath,
   endpointPath,
   parseDashboardPath,
+  ticketNumber,
+  ticketPath,
 } from './dashboard-location';
 
 describe('dashboard paths', () => {
@@ -38,6 +40,12 @@ describe('dashboard paths', () => {
     expect(parseDashboardPath('/chat/agents/avery/discord/general')).toMatchObject({ kind: 'not-found' });
     expect(parseDashboardPath(chatGroupPath('team'))).toMatchObject({ kind: 'chat-group', groupId: 'team' });
     expect(parseDashboardPath(computerPath('c-1'))).toMatchObject({ kind: 'computer', computerId: 'c-1' });
+    // Tickets: the board, the list and one ticket by its key (or number).
+    expect(parseDashboardPath(ticketPath())).toMatchObject({ kind: 'tickets', tab: 'tickets' });
+    expect(parseDashboardPath('/tickets/list')).toMatchObject({ kind: 'tickets-list', tab: 'tickets' });
+    expect(parseDashboardPath(ticketPath('HOME-14'))).toMatchObject({ kind: 'ticket', ticketKey: 'HOME-14' });
+    expect(parseDashboardPath('/tickets/HOME-x')).toMatchObject({ kind: 'not-found' });
+    expect([ticketNumber('HOME-14'), ticketNumber('7'), ticketNumber('14-HOME')]).toEqual([14, 7, null]);
     expect(parseDashboardPath('/settings')).toMatchObject({ kind: 'settings' });
   });
   it('distinguishes named editor destinations from resource IDs', () => {

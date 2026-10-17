@@ -5,7 +5,15 @@ import { AgentAvatarArt } from '@/components/agent-avatar-art';
 import { defaultAvatar } from '@/lib/agent-avatar';
 import { onMessageAnnounced } from '@/lib/message-toasts';
 import { useOrganizations } from '@/lib/organizations';
-import { chatAgentPath, chatGroupPath, isAgentSettings, parseDashboardPath } from '@/lib/dashboard-location';
+import {
+  chatAgentPath,
+  chatGroupPath,
+  isAgentSettings,
+  parseDashboardPath,
+  ticketNumber,
+  ticketPath,
+} from '@/lib/dashboard-location';
+import { useSignedIn } from '@/lib/auth';
 import type { ChatAgent } from '@/use-chat';
 
 /** How long a toast stays (it pauses while hovered). */
@@ -27,12 +35,13 @@ export function MessageToasts({
 }) {
   const client = useQueryClient();
   const { organizations, inScope } = useOrganizations();
-  const latest = useRef({ agents, onNavigate, organizations, inScope });
-  latest.current = { agents, onNavigate, organizations, inScope };
+  const { name: me } = useSignedIn();
+  const latest = useRef({ agents, onNavigate, organizations, inScope, me });
+  latest.current = { agents, onNavigate, organizations, inScope, me };
   useEffect(
     () =>
       onMessageAnnounced(item => {
-        const { agents, onNavigate, organizations, inScope } = latest.current;
+        const { agents, onNavigate, organizations, inScope, me } = latest.current;
         // The address, not the last rendered page: navigation renders as a transition, so for a moment after a click
         // the screen still shows the page before.
         const route = parseDashboardPath(window.location.pathname);
@@ -96,6 +105,29 @@ export function MessageToasts({
             text: item.text,
             avatar: <AgentAvatarArt {...(agent.avatar ?? defaultAvatar(agent.id))} size={32} state="idle" />,
             path: chatAgentPath(agent.id),
+          });
+          return;
+        }
+        if (item.kind === 'ticket') {
+          // Not one's own move, nor the ticket already open.
+          const open =
+            route.kind === 'ticket' &&
+            ticketNumber(route.ticketKey) === ticketNumber(item.key) &&
+            inScope(item.organizationId);
+          if (item.by === me || open) return;
+          const agent = agents.find(
+            candidate => candidate.name === item.by && candidate.real?.organizationId === item.organizationId,
+          );
+          show({
+            title: item.by,
+            where: inScope(item.organizationId)
+              ? undefined
+              : `in ${organizations.find(org => org.id === item.organizationId)?.name ?? 'another organization'}`,
+            text: `Moved ${item.key} “${item.title}” to In review.`,
+            avatar: (
+              <AgentAvatarArt {...(agent?.avatar ?? defaultAvatar(agent?.id ?? item.by))} size={32} state="idle" />
+            ),
+            path: `${ticketPath(item.key)}?org=${encodeURIComponent(item.organizationId)}`,
           });
           return;
         }

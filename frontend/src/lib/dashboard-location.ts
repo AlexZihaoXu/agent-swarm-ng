@@ -1,5 +1,5 @@
 /** Agents have no tab of their own: their `/agents/...` pages open over Chat (agent settings as a modal). */
-export type DashboardTab = 'dashboard' | 'chat' | 'computers' | 'settings';
+export type DashboardTab = 'dashboard' | 'chat' | 'computers' | 'tickets' | 'settings';
 export type DashboardRoute = {
   tab: DashboardTab;
   kind:
@@ -25,6 +25,9 @@ export type DashboardRoute = {
     | 'computer-new'
     | 'computer-delete'
     | 'computer-settings'
+    | 'tickets'
+    | 'tickets-list'
+    | 'ticket'
     | 'settings'
     | 'knowledge'
     | 'audit'
@@ -42,6 +45,8 @@ export type DashboardRoute = {
   terminalId?: string;
   endpointId?: string;
   knowledgeId?: string;
+  /** A ticket as shown (HOME-14), or its number. */
+  ticketKey?: string;
   editorTab?: 'avatar' | 'settings';
   channelScreen?: 'channels' | 'swarm' | 'dm';
 };
@@ -61,6 +66,13 @@ export const computerPath = (id: string) => `/computers/${segment(id)}`;
 /** `/computers/:id/terminal[/:session]`. (`/computers/:id/desktop/` is the stream itself, not a dashboard view.) */
 export const computerTerminalPath = (id: string, session?: string | null) =>
   `${computerPath(id)}/terminal${session ? `/${segment(session)}` : ''}`;
+/** The organization's board; a ticket by its key (HOME-14). */
+export const ticketPath = (key?: string) => (key ? `/tickets/${segment(key)}` : '/tickets');
+/** The ticket number in a key such as HOME-14 (or a bare number), or null. */
+export const ticketNumber = (key: string | undefined) => {
+  const match = /^(?:[A-Za-z][A-Za-z0-9]*-)?(\d{1,9})$/.exec(key ?? '');
+  return match ? Number(match[1]) : null;
+};
 export const endpointPath = (id: string) => `/settings/endpoints/${segment(id)}`;
 export const knowledgePath = (id?: string) =>
   id ? `/settings/knowledge/${id.split('/').map(segment).join('/')}` : '/settings/knowledge';
@@ -134,6 +146,11 @@ export function parseDashboardPath(pathname: string): DashboardRoute {
       return { tab: 'computers', kind: 'computer', computerId: id, computerView: 'terminal', terminalId: fourth };
     if (parts.length === 3 && third === 'settings')
       return { tab: 'computers', kind: 'computer-settings', computerId: id };
+  }
+  if (section === 'tickets') {
+    if (parts.length === 1) return { tab: 'tickets', kind: 'tickets' };
+    if (parts.length === 2 && id === 'list') return { tab: 'tickets', kind: 'tickets-list' };
+    if (parts.length === 2 && ticketNumber(id) !== null) return { tab: 'tickets', kind: 'ticket', ticketKey: id };
   }
   if (section === 'settings') {
     if (parts.length === 1) return { tab: 'settings', kind: 'settings' };

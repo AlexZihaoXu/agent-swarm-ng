@@ -4,6 +4,7 @@ import { AccountSettings } from '@/components/account-settings';
 import { SecuritySettings } from '@/components/security-settings';
 import { SwarmSettings } from '@/components/swarm-settings';
 import { OrganizationSettings } from '@/components/organization-settings';
+import { TicketSettings } from '@/components/ticket-settings';
 import { ComputerStorageSettings } from '@/components/computer-storage-settings';
 import { useEffect, useId, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
@@ -581,6 +582,7 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
         {admin && <SecuritySettings onNavigate={onNavigate} />}
         <CodexConnection />
         <OrganizationSettings card={settingsCard} />
+        <TicketSettings card={settingsCard} />
         <section aria-labelledby="knowledge-title" className="space-y-4">
           <div>
             <h3 id="knowledge-title" className="text-lg font-semibold">

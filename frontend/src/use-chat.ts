@@ -1,5 +1,6 @@
 import { recordScratchActivity } from '@/lib/scratch-writers';
 import { announceMessage } from '@/lib/message-toasts';
+import { TICKETS_EVENT, type TicketsEventDetail } from '@/lib/tickets';
 import { recordTerminalActivity } from '@/lib/terminal-typists';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
@@ -353,6 +354,14 @@ export function useChat() {
           item.id === event.agentId && item.real ? { ...item, real: { ...item.real, todos } } : item,
         ),
       );
+      return;
+    }
+    // A ticket changed (docs/tickets.md): open boards reload; one moved to In review by someone else is toasted.
+    if (event.type === 'tickets_updated' && typeof event.organizationId === 'string') {
+      window.dispatchEvent(new CustomEvent(TICKETS_EVENT, { detail: event }));
+      const review = event.review as TicketsEventDetail['review'];
+      if (review && typeof review.key === 'string')
+        announceMessage({ kind: 'ticket', id: String(event.eventId), organizationId: event.organizationId, ...review });
       return;
     }
     // An agent's timers changed (it set or cancelled one, one fired, its owner edited them): the Timers section reloads.

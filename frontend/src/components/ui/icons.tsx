@@ -252,3 +252,10 @@ export const AlarmIcon = (props: ComponentProps<'svg'>) => (
     <path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3" />
   </Icon>
 );
+/** Tickets: a board of columns (Lucide square-kanban). */
+export const TicketsIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M8 7v7M12 7v4M16 7v9" />
+  </Icon>
+);
