@@ -123,7 +123,7 @@ export function MessageToasts({
             where: inScope(item.organizationId)
               ? undefined
               : `in ${organizations.find(org => org.id === item.organizationId)?.name ?? 'another organization'}`,
-            text: `Moved ${item.key} “${item.title}” to In review.`,
+            text: `Moved ${item.key} “${item.title}” to ${item.state}.`,
             avatar: (
               <AgentAvatarArt {...(agent?.avatar ?? defaultAvatar(agent?.id ?? item.by))} size={32} state="idle" />
             ),

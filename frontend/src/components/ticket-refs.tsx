@@ -5,7 +5,7 @@ import type { Root, RootContent, Parent, PhrasingContent } from 'mdast';
 import { api } from '@/api/client';
 import { ticketPath } from '@/lib/dashboard-location';
 import type { Organization } from '@/lib/organizations';
-import { statusOf, TICKETS_EVENT, type TicketRef, type TicketsEventDetail } from '@/lib/tickets';
+import { isClosed, stateColor, TICKETS_EVENT, type TicketRef, type TicketsEventDetail } from '@/lib/tickets';
 import { cn } from '@/lib/utils';
 
 /**
@@ -103,7 +103,7 @@ async function flush(organizationId: string) {
   }
 }
 
-/** A chip for HOME-14: its status dot, id and title; plain text until (and unless) it resolves. */
+/** A chip for HOME-14: its state's dot, id and title (and Archived); plain text until (and unless) it resolves. */
 export function TicketChip({ text, number }: { text: string; number: number }) {
   const scope = useTicketScope();
   const ref = useQuery({
@@ -113,25 +113,31 @@ export function TicketChip({ text, number }: { text: string; number: number }) {
     queryFn: () => lookup(scope!.organizationId, number),
   });
   if (!scope || !ref.data) return <>{text}</>;
-  const status = statusOf(ref.data.status);
+  const { state, archived } = ref.data;
+  const about = `${state.name}${archived ? ', archived' : ''}`;
   return (
     <button
       type="button"
       data-ticket-chip={ref.data.key}
-      title={`${ref.data.key} · ${status.label}: ${ref.data.title}`}
+      title={`${ref.data.key} · ${about}: ${ref.data.title}`}
       onClick={event => {
         event.stopPropagation();
         scope.open(ref.data!.key);
       }}
       className={cn(
         'mx-px inline-flex max-w-[min(18rem,100%)] cursor-pointer items-center gap-1 rounded-md border border-current/25 bg-background/40 px-1.5 align-baseline text-[0.85em] leading-snug no-underline outline-none transition-colors hover:bg-background/70 focus-visible:ring-1 focus-visible:ring-current',
-        (ref.data.status === 'done' || ref.data.status === 'cancelled') && 'opacity-75',
+        (isClosed(state.category) || archived) && 'opacity-75',
       )}
     >
-      <span aria-hidden="true" className={cn('size-1.5 shrink-0 rounded-full', status.dot)} />
+      <span
+        aria-hidden="true"
+        className="size-1.5 shrink-0 rounded-full"
+        style={{ backgroundColor: stateColor(state.color) }}
+      />
       <span className="shrink-0 font-mono">{ref.data.key}</span>
-      <span className={cn('truncate', ref.data.status === 'cancelled' && 'line-through')}>{ref.data.title}</span>
-      <span className="sr-only">({status.label})</span>
+      <span className={cn('truncate', state.category === 'canceled' && 'line-through')}>{ref.data.title}</span>
+      {archived && <span className="shrink-0 text-[0.85em] opacity-80">· archived</span>}
+      <span className="sr-only">({state.name})</span>
     </button>
   );
 }

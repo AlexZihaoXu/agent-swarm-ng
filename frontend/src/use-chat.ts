@@ -356,12 +356,18 @@ export function useChat() {
       );
       return;
     }
-    // A ticket changed (docs/tickets.md): open boards reload; one moved to In review by someone else is toasted.
+    // A ticket changed (docs/tickets.md): open boards reload; one moved into a notifying state by someone else is
+    // toasted.
     if (event.type === 'tickets_updated' && typeof event.organizationId === 'string') {
       window.dispatchEvent(new CustomEvent(TICKETS_EVENT, { detail: event }));
-      const review = event.review as TicketsEventDetail['review'];
-      if (review && typeof review.key === 'string')
-        announceMessage({ kind: 'ticket', id: String(event.eventId), organizationId: event.organizationId, ...review });
+      const entered = event.entered as TicketsEventDetail['entered'];
+      if (entered && typeof entered.key === 'string')
+        announceMessage({
+          kind: 'ticket',
+          id: String(event.eventId),
+          organizationId: event.organizationId,
+          ...entered,
+        });
       return;
     }
     // An agent's timers changed (it set or cancelled one, one fired, its owner edited them): the Timers section reloads.

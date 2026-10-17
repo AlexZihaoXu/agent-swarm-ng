@@ -8,7 +8,7 @@ import { ChevronLeftIcon, PencilIcon, PlusIcon, TrashIcon, XIcon } from '@/compo
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { MessageMarkdown } from '@/components/message-markdown';
 import { TicketScope } from '@/components/ticket-refs';
-import { BoardMarks } from '@/components/ticket-board';
+import { ArchivedMark, BoardMarks, StateDot } from '@/components/ticket-board';
 import { AssigneeAvatar, assigneeKey, assigneeOptions } from '@/components/ticket-assignee';
 import { useSignedIn } from '@/lib/auth';
 import { computersQuery } from '@/lib/computers-query';
@@ -21,8 +21,6 @@ import {
   dueState,
   PRIORITIES,
   RELATIONS,
-  STATUSES,
-  statusOf,
   todayIn,
   useTicket,
   useTicketActions,
@@ -32,7 +30,6 @@ import {
   type TicketEvent,
   type TicketLink,
   type TicketPriority,
-  type TicketStatus,
 } from '@/lib/tickets';
 import type { ChatAgent } from '@/use-chat';
 import { cn } from '@/lib/utils';
@@ -44,7 +41,9 @@ const card = 'space-y-2 rounded-lg border border-border bg-sidebar/30 ao-card p-
 const when = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 type Patch = {
-  status?: TicketStatus;
+  /** A state's id. */
+  status?: string;
+  archived?: boolean;
   priority?: TicketPriority;
   labels?: string[];
   assignee?: { owner: true } | { agentId: string } | null;
@@ -54,8 +53,8 @@ type Patch = {
 
 /**
  * One ticket (docs/tickets.md): its parent (a breadcrumb), text (Markdown), sub-issues, relations, links, activity
- * and comments, and its properties beside them (below on a phone): status, assignee (assigning an agent wakes it),
- * priority, due date, parent and labels. Every change saves at once. Its ids in text show as ticket chips.
+ * and comments, and its properties beside them (below on a phone): status (the board's states), assignee (assigning
+ * an agent wakes it), priority, due date, parent, labels, Archive / Restore. Every change saves at once. Its ids in text show as ticket chips.
  */
 export function TicketDetailView({
   organization,
@@ -120,7 +119,7 @@ export function TicketDetailView({
     );
   const { ticket, events } = query.data;
   const agent = ticket.assignee?.kind === 'agent' ? ticket.assignee : null;
-  const busyAgent = agent && working.has(agent.id) && ticket.status === 'progress';
+  const busyAgent = agent && working.has(agent.id) && ticket.state.category === 'started';
   const update = (patch: Parameters<typeof actions.update>[1]) => save(() => actions.update(number, patch));
   return (
     <TicketScope organization={organization}>
@@ -157,6 +156,7 @@ export function TicketDetailView({
                   </span>
                 </nav>
                 <CopyLink organizationId={organization.id} ticketKey={ticket.key} />
+                {ticket.archived && <ArchivedMark />}
                 {busyAgent && (
                   <span className="inline-flex items-center gap-1.5 text-xs text-teal-300">
                     <span aria-hidden="true" className="size-1.5 rounded-full bg-teal-300 motion-safe:animate-pulse" />
@@ -340,10 +340,6 @@ function TicketText({
   );
 }
 
-function StatusDot({ status }: { status: TicketStatus }) {
-  return <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', statusOf(status).dot)} />;
-}
-
 /** Sub-issues with done/total progress (Linear's), each opening its ticket; "+ Add sub-issue" opens New ticket. */
 function SubIssues({
   detail,
@@ -402,14 +398,17 @@ function SubIssues({
                 onClick={() => onNavigate(ticketPath(child.key))}
                 className="flex min-h-11 w-full cursor-pointer items-center gap-2.5 px-3 text-left text-sm transition-colors hover:bg-muted/60"
               >
-                <StatusDot status={child.status} />
+                <StateDot color={child.state.color} />
                 <span className="shrink-0 font-mono text-xs text-muted-foreground">{child.key}</span>
                 <span
-                  className={cn('min-w-0 flex-1 truncate', child.status === 'cancelled' && 'line-through opacity-70')}
+                  className={cn(
+                    'min-w-0 flex-1 truncate',
+                    child.state.category === 'canceled' && 'line-through opacity-70',
+                  )}
                 >
                   {child.title}
                 </span>
-                <span className="sr-only">{statusOf(child.status).label}</span>
+                <span className="sr-only">({child.state.name})</span>
                 <AssigneeAvatar assignee={child.assignee} agents={agents} />
               </button>
             </li>
@@ -476,7 +475,7 @@ function Relations({
                       className="flex min-h-9 max-w-64 cursor-pointer items-center gap-2 px-2.5 text-sm"
                       onClick={() => onNavigate(ticketPath(rel.key))}
                     >
-                      <StatusDot status={rel.status} />
+                      <StateDot color={rel.state.color} />
                       <span className="font-mono text-xs text-muted-foreground">{rel.key}</span>
                       <span className="truncate">{rel.title}</span>
                     </button>
@@ -879,7 +878,9 @@ function Properties({
       .filter(Boolean);
     if (next.join(',') !== ticket.labels.join(',')) onChange({ labels: next });
   };
-  const due = dueState(ticket.due, ticket.status, today);
+  const due = dueState(ticket.due, ticket.state.category, today);
+  // The board's states (the ticket's own until they load).
+  const states = board.data?.states ?? [ticket.state];
   const parents = (board.data?.tickets ?? [])
     .filter(item => item.number !== ticket.number)
     .map(item => ({ value: String(item.number), label: `${item.key} ${item.title}` }));
@@ -889,13 +890,13 @@ function Properties({
         <span className="block text-xs font-medium text-muted-foreground">Status</span>
         <ChoiceChips
           label="Status"
-          value={ticket.status}
+          value={ticket.state.id}
           disabled={busy}
           onChange={status => onChange({ status })}
-          options={STATUSES.map(status => ({
-            value: status.key,
-            label: status.label,
-            icon: <span aria-hidden="true" className={cn('size-2 rounded-full', status.dot)} />,
+          options={states.map(state => ({
+            value: state.id,
+            label: state.name,
+            icon: <StateDot color={state.color} />,
           }))}
         />
         {(ticket.blocked || ticket.subIssues.total > 0) && (
@@ -1035,6 +1036,22 @@ function Properties({
           type="button"
           variant="outline"
           size="sm"
+          className="w-full"
+          disabled={busy}
+          onClick={() => onChange({ archived: !ticket.archived })}
+        >
+          {ticket.archived ? 'Restore from the archive' : 'Archive ticket'}
+        </Button>
+        {ticket.archived && (
+          <p className="text-[11px] text-muted-foreground">
+            Archived {when(ticket.archived.at)} by {ticket.archived.by}: hidden from the board and from agents’ lists.
+            Changes keep it archived; Restore brings it back.
+          </p>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
           className="w-full text-red-400"
           disabled={busy}
           onClick={() => setDeleting(true)}
@@ -1051,7 +1068,7 @@ function Properties({
         open={deleting}
         onOpenChange={setDeleting}
         title={`Delete ${ticket.key}?`}
-        description="Its comments and activity go with it; its sub-issues stay, without a parent. To keep it, set it to Cancelled instead."
+        description="Its comments and activity go with it; its sub-issues stay, without a parent. To keep it out of the way, archive it instead."
         confirmLabel="Delete"
         busyLabel="Deleting…"
         onConfirm={onDelete}

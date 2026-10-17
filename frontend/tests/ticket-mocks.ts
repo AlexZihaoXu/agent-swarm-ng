@@ -8,17 +8,19 @@ const settings = (enabled: boolean) => ({
   wakeOnAssign: true,
   agentsCreate: true,
   agentsPickUp: false,
-  pushOnReview: true,
+  archiveAfterDays: 30,
 });
 
-const LABEL: Record<string, string> = {
-  backlog: 'Backlog',
-  todo: 'Todo',
-  progress: 'In progress',
-  review: 'In review',
-  done: 'Done',
-  cancelled: 'Cancelled',
-};
+/** The default workflow (docs/tickets.md#workflow); the mock's state ids are the old status keys. */
+export const defaultStates = () => [
+  { id: 'backlog', name: 'Backlog', color: 'gray', category: 'backlog', notifyOnEnter: false },
+  { id: 'todo', name: 'Todo', color: 'silver', category: 'unstarted', notifyOnEnter: false },
+  { id: 'progress', name: 'In progress', color: 'amber', category: 'started', notifyOnEnter: false },
+  { id: 'review', name: 'In review', color: 'sky', category: 'started', notifyOnEnter: true },
+  { id: 'done', name: 'Done', color: 'emerald', category: 'completed', notifyOnEnter: false },
+  { id: 'cancelled', name: 'Cancelled', color: 'slate', category: 'canceled', notifyOnEnter: false },
+];
+const CATEGORIES = ['backlog', 'unstarted', 'started', 'completed', 'canceled'];
 const INVERSE: Record<string, string> = {
   blocks: 'blocked_by',
   blocked_by: 'blocks',
@@ -26,9 +28,7 @@ const INVERSE: Record<string, string> = {
   duplicate_of: 'duplicated_by',
   duplicated_by: 'duplicate_of',
 };
-const closed = (status: string) => status === 'done' || status === 'cancelled';
-
-/** A ticket as the list route answers it (docs/tickets.md), with these fields set. */
+/** A ticket as the list route answers it (docs/tickets.md), with these fields set; `status` is its state's id. */
 export const ticketOf = (number: number, fields: Ticket = {}): Ticket => ({
   id: `ticket-${number}`,
   number,
@@ -42,6 +42,7 @@ export const ticketOf = (number: number, fields: Ticket = {}): Ticket => ({
   assignee: null,
   parent: null,
   due: null,
+  archived: null,
   writer: { kind: 'person', id: 'admin', name: 'Admin', trusted: true },
   createdBy: 'Admin',
   createdAt: '2030-01-01T10:00:00.000Z',
@@ -56,6 +57,7 @@ export const ticketOf = (number: number, fields: Ticket = {}): Ticket => ({
 export async function mockTickets(page: Page) {
   const state = {
     enabled: false,
+    states: defaultStates(),
     tickets: [] as Ticket[],
     events: new Map<number, Ticket[]>(),
     /** Relations as [from, kind, to] seen from `from`. */
@@ -81,6 +83,35 @@ export async function mockTickets(page: Page) {
     if (body.tickets?.enabled !== undefined) state.enabled = body.tickets.enabled;
     return route.fulfill({ json: { organizations: [organization()] } });
   });
+  // The workflow editor: add, change (a position is the index within its category) and delete states.
+  const ordered = () =>
+    [...state.states].sort((a, b) => CATEGORIES.indexOf(a.category) - CATEGORIES.indexOf(b.category));
+  await page.route(/\/api\/organizations\/personal\/ticket-states(\/[^/?]+)?(\?.*)?$/, route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const id = url.pathname.split('/')[5];
+    const body = request.method() === 'DELETE' ? {} : request.postDataJSON();
+    state.bodies.push({ [`${request.method()} state`]: id ?? null, ...body });
+    if (request.method() === 'POST')
+      state.states.push({ id: `state-${state.states.length + 1}`, color: 'amber', notifyOnEnter: false, ...body });
+    const found = state.states.find(item => item.id === id);
+    if (request.method() === 'PATCH' && found) {
+      const { position, ...rest } = body;
+      Object.assign(found, rest);
+      if (position !== undefined) {
+        const peers = ordered().filter(item => item.category === found.category && item !== found);
+        peers.splice(position, 0, found);
+        state.states = [...ordered().filter(item => item.category !== found.category), ...peers];
+      }
+    }
+    if (request.method() === 'DELETE' && found) {
+      const moveTo = url.searchParams.get('moveTo');
+      for (const ticket of state.tickets.filter(item => item.status === id)) ticket.status = moveTo;
+      state.states = state.states.filter(item => item !== found);
+    }
+    state.states = ordered();
+    return route.fulfill({ json: { states: state.states } });
+  });
   const event = (kind: string, text: string, author = { kind: 'person', id: 'admin', name: 'Admin' }) => ({
     sequence: Math.round(Math.random() * 1e6),
     id: crypto.randomUUID(),
@@ -91,25 +122,36 @@ export async function mockTickets(page: Page) {
     createdAt: '2030-01-01T10:00:00.000Z',
   });
   const find = (number: number) => state.tickets.find(item => item.number === number);
+  const stateOf = (id: string) => {
+    const { notifyOnEnter: _, ...view } = state.states.find(item => item.id === id) ?? state.states[1]!;
+    return view;
+  };
+  const closed = (id: string) => ['completed', 'canceled'].includes(stateOf(id).category);
   const brief = (ticket: Ticket) => ({
     number: ticket.number,
     key: ticket.key,
     title: ticket.title,
-    status: ticket.status,
+    state: stateOf(ticket.status),
+    archived: Boolean(ticket.archived),
   });
   const relationsOf = (number: number) =>
     state.relations.flatMap(([from, kind, to]) => {
       const other = find(from === number ? to : from);
       if (!other || (from !== number && to !== number)) return [];
-      return [{ kind: from === number ? kind : INVERSE[kind], ...brief(other) }];
+      return [{ kind: from === number ? kind : INVERSE[kind], ...brief(other), status: other.status }];
     });
   const summary = (ticket: Ticket) => {
     const children = state.tickets.filter(item => item.parent?.number === ticket.number);
-    const counted = children.filter(item => item.status !== 'cancelled');
+    const counted = children.filter(item => stateOf(item.status).category !== 'canceled');
+    const { status, ...rest } = ticket;
     return {
-      ...ticket,
+      ...rest,
+      state: stateOf(status),
       parent: ticket.parent ? brief(find(ticket.parent.number) ?? ticket.parent) : null,
-      subIssues: { done: counted.filter(item => item.status === 'done').length, total: counted.length },
+      subIssues: {
+        done: counted.filter(item => stateOf(item.status).category === 'completed').length,
+        total: counted.length,
+      },
       blocked: relationsOf(ticket.number).some(rel => rel.kind === 'blocked_by' && !closed(rel.status)),
     };
   };
@@ -118,7 +160,7 @@ export async function mockTickets(page: Page) {
     children: state.tickets
       .filter(item => item.parent?.number === ticket.number)
       .map(item => ({ ...brief(item), assignee: item.assignee })),
-    relations: relationsOf(ticket.number),
+    relations: relationsOf(ticket.number).map(({ status: _, ...rel }) => rel),
     events: state.events.get(ticket.number) ?? [],
     olderEvents: false,
   });
@@ -143,15 +185,22 @@ export async function mockTickets(page: Page) {
     if (request.method() === 'GET' && !number) {
       const q = (url.searchParams.get('q') ?? '').toLowerCase();
       if (q) state.queries.push(q);
+      const archived = url.searchParams.get('archived') === '1';
       const shown = state.tickets.filter(
         item =>
-          !q ||
-          item.title.toLowerCase().includes(q) ||
-          item.description.toLowerCase().includes(q) ||
-          item.key.toLowerCase() === q,
+          (archived || !item.archived) &&
+          (!q ||
+            item.title.toLowerCase().includes(q) ||
+            item.description.toLowerCase().includes(q) ||
+            item.key.toLowerCase() === q),
       );
       return route.fulfill({
-        json: { settings: settings(state.enabled), tickets: shown.map(summary), truncated: false },
+        json: {
+          settings: settings(state.enabled),
+          states: state.states,
+          tickets: shown.map(summary),
+          truncated: false,
+        },
       });
     }
     const ticket = find(number);
@@ -206,8 +255,21 @@ export async function mockTickets(page: Page) {
       return route.fulfill({ status: 409, json: { message: 'Tickets are off for this organization.' } });
     }
     if (body.status && body.status !== ticket.status) {
-      state.events.get(number)!.push(event('status', `moved it ${LABEL[ticket.status]} → ${LABEL[body.status]}`));
+      state.events
+        .get(number)!
+        .push(event('status', `moved it ${stateOf(ticket.status).name} → ${stateOf(body.status).name}`));
       ticket.status = body.status;
+    }
+    if (body.archived !== undefined) {
+      ticket.archived = body.archived ? { at: '2030-01-01T11:00:00.000Z', by: 'Admin' } : null;
+      state.events
+        .get(number)!
+        .push(
+          event(
+            body.archived ? 'archived' : 'restored',
+            body.archived ? 'archived it' : 'restored it from the archive',
+          ),
+        );
     }
     if (body.due !== undefined) ticket.due = body.due;
     for (const rel of body.addRelations ?? []) state.relations.push([number, rel.kind, rel.number]);

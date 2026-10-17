@@ -7,7 +7,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { PlusIcon, TicketsIcon } from '@/components/ui/icons';
 import { PageHeader } from '@/components/page-header';
 import { TicketDetailView } from '@/components/ticket-detail';
-import { Board, BoardMarks, isWorking, Labels, Working } from '@/components/ticket-board';
+import { Board, BoardMarks, isWorking, Labels, StateDot, Working } from '@/components/ticket-board';
 import { AssigneeAvatar } from '@/components/ticket-assignee';
 import { NewTicketDialog, type NewTicketStart } from '@/components/new-ticket-dialog';
 import { ShortcutsHelp, TicketToolbar } from '@/components/ticket-filters';
@@ -21,11 +21,11 @@ import {
   parseFilters,
   priorityOf,
   sortTickets,
-  STATUSES,
   todayIn,
   updatedLabel,
   useTicketActions,
   useTicketBoard,
+  type BoardState,
   type TicketFilters,
   type TicketSummary,
 } from '@/lib/tickets';
@@ -43,8 +43,8 @@ let lastBoard = { path: '/tickets', search: '' };
 const TYPING = 'input, textarea, select, [contenteditable], [data-keys-to-computer], [data-terminal-emulator], iframe';
 
 /**
- * The Tickets tab (docs/tickets.md): the board of the organization in view, as columns per status (Kibo
- * kanban's board/card composition, cards dragged between columns and places) or a list grouped by status in the
+ * The Tickets tab (docs/tickets.md): the board of the organization in view, as columns per workflow state (Kibo
+ * kanban's board/card composition, cards dragged between columns and places) or a list grouped by state in the
  * same order (Kibo list's groups), search and filters kept in the address, a ticket's detail, the New ticket dialog
  * (also opened from a chat message's menu) and the tab's keys: C new ticket, / search, Esc close or clear, ? help.
  * Shown only while the organization has tickets on.
@@ -69,8 +69,8 @@ export function TicketsPanel({
   const navigate = useNavigate();
   const filters = parseFilters(location.search);
   const enabled = Boolean(organization?.tickets?.enabled);
-  const board = useTicketBoard(enabled ? organization?.id : undefined, filters.q);
-  const actions = useTicketActions(enabled ? organization?.id : undefined, filters.q);
+  const board = useTicketBoard(enabled ? organization?.id : undefined, filters.q, filters.archived);
+  const actions = useTicketActions(enabled ? organization?.id : undefined, filters.q, filters.archived);
   const { name: me, timeZone } = useSignedIn();
   const [creating, setCreating] = useState<NewTicketStart | null>(null);
   const [help, setHelp] = useState(false);
@@ -155,6 +155,7 @@ export function TicketsPanel({
   const ownerName = organization.ownerName ?? me;
   const today = todayIn(timeZone);
   const all = board.data?.tickets ?? [];
+  const states = board.data?.states ?? [];
   const tickets = applyFilters(all, filters, today);
   const open = (ticket: TicketSummary) => onNavigate(ticketPath(ticket.key));
   const dialogs = (
@@ -222,6 +223,7 @@ export function TicketsPanel({
           onChange={setFilters}
           view={view}
           tickets={all}
+          states={states}
           agents={agents}
           searchRef={searchRef}
           onHelp={() => setHelp(true)}
@@ -247,16 +249,19 @@ export function TicketsPanel({
       ) : view === 'board' ? (
         <Board
           key="board"
+          // Canceled states are not columns unless the status filter asks for them.
+          states={states.filter(state => state.category !== 'canceled' || filters.status.includes(state.id))}
           tickets={tickets}
           agents={agents}
           working={working}
           today={today}
           onOpen={open}
-          onMove={(ticket, status, place) => actions.move(ticket.number, status, place)}
+          onMove={(ticket, state, place) => actions.move(ticket.number, state, place)}
         />
       ) : (
         <List
           key="list"
+          states={states}
           tickets={sortTickets(tickets, filters.sort)}
           agents={agents}
           working={working}
@@ -269,14 +274,16 @@ export function TicketsPanel({
   );
 }
 
-/** Kibo list: groups per status (Cancelled too, when there are any), one row per ticket. */
+/** Kibo list: groups per state in board order (canceled ones when they have tickets), one row per ticket. */
 function List({
+  states,
   tickets,
   agents,
   working,
   today,
   onOpen,
 }: {
+  states: BoardState[];
   tickets: TicketSummary[];
   agents: ChatAgent[];
   working: Set<string>;
@@ -286,18 +293,19 @@ function List({
   return (
     <ScrollArea label="Ticket list" className="min-h-0 flex-1">
       <div className={cn('space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pb-6', entering)}>
-        {STATUSES.filter(status => status.key !== 'cancelled' || tickets.some(item => item.status === 'cancelled')).map(
-          status => {
-            const rows = tickets.filter(ticket => ticket.status === status.key);
+        {states
+          .filter(state => state.category !== 'canceled' || tickets.some(item => item.state.id === state.id))
+          .map(state => {
+            const rows = tickets.filter(ticket => ticket.state.id === state.id);
             return (
               <section
-                key={status.key}
-                aria-label={status.label}
+                key={state.id}
+                aria-label={state.name}
                 className="overflow-hidden rounded-lg border border-border bg-sidebar/30 ao-card"
               >
                 <h3 className="flex items-center gap-2 bg-foreground/5 px-3 py-2 text-sm font-semibold">
-                  <span aria-hidden="true" className={cn('size-2 rounded-full', status.dot)} />
-                  {status.label}
+                  <StateDot color={state.color} />
+                  {state.name}
                   <span className="text-xs font-normal text-muted-foreground">{rows.length}</span>
                 </h3>
                 <ul className="divide-y divide-border">
@@ -336,8 +344,7 @@ function List({
                 </ul>
               </section>
             );
-          },
-        )}
+          })}
       </div>
     </ScrollArea>
   );

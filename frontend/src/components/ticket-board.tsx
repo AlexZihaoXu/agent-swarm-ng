@@ -34,29 +34,41 @@ import { createPortal } from 'react-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AssigneeAvatar } from '@/components/ticket-assignee';
 import {
-  BOARD_STATUSES,
   dueLabel,
   dueState,
   priorityOf,
-  statusOf,
+  stateColor,
+  type BoardState,
   type TicketPlace,
-  type TicketStatus,
+  type TicketState,
   type TicketSummary,
 } from '@/lib/tickets';
 import type { ChatAgent } from '@/use-chat';
 import { cn } from '@/lib/utils';
 
-type Columns = Record<TicketStatus, number[]>;
+/** Ticket numbers per column, by state id. */
+type Columns = Record<string, number[]>;
 const COLUMN = 'column:';
-const columnId = (status: TicketStatus) => `${COLUMN}${status}`;
+const columnId = (stateId: string) => `${COLUMN}${stateId}`;
 /** Clicks right after a drop are the drop's own (a mouse released on its card, a Space key's keyup), not "open". */
 const CLICK_AFTER_DROP_MS = 400;
 
-const group = (tickets: TicketSummary[]) => {
-  const columns = Object.fromEntries(BOARD_STATUSES.map(status => [status.key, [] as number[]])) as unknown as Columns;
-  for (const ticket of tickets) columns[ticket.status]?.push(ticket.number);
+const group = (tickets: TicketSummary[], states: BoardState[]) => {
+  const columns: Columns = Object.fromEntries(states.map(state => [state.id, [] as number[]]));
+  for (const ticket of tickets) columns[ticket.state.id]?.push(ticket.number);
   return columns;
 };
+
+/** A state's colour dot (its name is beside it, or read out). */
+export function StateDot({ color, className }: { color: string; className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn('size-2 shrink-0 rounded-full', className)}
+      style={{ backgroundColor: stateColor(color) }}
+    />
+  );
+}
 const reducedQuery = () => window.matchMedia('(prefers-reduced-motion: reduce)');
 function useReducedMotion() {
   return useSyncExternalStore(
@@ -78,7 +90,7 @@ export function Working() {
   );
 }
 export const isWorking = (ticket: TicketSummary, working: Set<string>) =>
-  ticket.status === 'progress' && ticket.assignee?.kind === 'agent' && working.has(ticket.assignee.id);
+  ticket.state.category === 'started' && ticket.assignee?.kind === 'agent' && working.has(ticket.assignee.id);
 export function Labels({ labels }: { labels: string[] }) {
   return labels.map(label => (
     <span key={label} className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">
@@ -88,14 +100,15 @@ export function Labels({ labels }: { labels: string[] }) {
 }
 
 /**
- * A ticket's marks on a card or a list row (docs/tickets.md): "Blocked" while an open ticket blocks it, its
- * sub-issues done of all, and its due date (amber today, red once overdue).
+ * A ticket's marks on a card or a list row (docs/tickets.md): "Archived", "Blocked" while an open ticket blocks it,
+ * its sub-issues done of all, and its due date (amber today, red once overdue).
  */
 export function BoardMarks({ ticket, today }: { ticket: TicketSummary; today: string }) {
-  const due = dueState(ticket.due, ticket.status, today);
+  const due = dueState(ticket.due, ticket.state.category, today);
   const { done, total } = ticket.subIssues;
   return (
     <>
+      {ticket.archived && <ArchivedMark />}
       {ticket.blocked && (
         <span
           title="An open ticket blocks it"
@@ -153,6 +166,18 @@ export function BoardMarks({ ticket, today }: { ticket: TicketSummary; today: st
         </span>
       )}
     </>
+  );
+}
+
+/** Shown on an archived ticket (its card, row, chip or detail). */
+export function ArchivedMark() {
+  return (
+    <span
+      title="Archived: hidden from the board unless Show archived is on"
+      className="inline-flex shrink-0 items-center rounded-md border border-border bg-muted px-1.5 text-[11px] font-medium text-muted-foreground"
+    >
+      Archived
+    </span>
   );
 }
 
@@ -235,19 +260,19 @@ function SortableCard({
 }
 
 function Column({
-  status,
+  state,
   count,
   active,
   children,
 }: {
-  status: TicketStatus;
+  state: BoardState;
   count: number;
   /** The dragged card is in this column now. */
   active: boolean;
   children: ReactNode;
 }) {
-  const { setNodeRef } = useDroppable({ id: columnId(status) });
-  const { label, dot } = statusOf(status);
+  const { setNodeRef } = useDroppable({ id: columnId(state.id) });
+  const label = state.name;
   return (
     <section
       ref={setNodeRef}
@@ -258,7 +283,7 @@ function Column({
       )}
     >
       <h3 className="flex shrink-0 items-center gap-2 p-3 text-sm font-semibold">
-        <span aria-hidden="true" className={cn('size-2 rounded-full', dot)} />
+        <StateDot color={state.color} />
         {label}
         <span className="text-xs font-normal text-muted-foreground">{count}</span>
       </h3>
@@ -270,12 +295,13 @@ function Column({
 }
 
 /**
- * Kibo kanban (docs/tickets.md#dragging): one column per status, cards that open the ticket and drag (dnd-kit, as
- * Kibo's kanban) to another column or place. A drop shows at once and saves as the detail's status change plus a
+ * Kibo kanban (docs/tickets.md#dragging): one column per workflow state, cards that open the ticket and drag (dnd-kit,
+ * as Kibo's kanban) to another column or place. A drop shows at once and saves as the detail's state change plus a
  * place; a failure puts it back with a message. While a card is held the board keeps the order it had when picked up
  * (live changes land after the drop). Phones scroll the columns sideways; a press-and-hold picks a card up.
  */
 export function Board({
+  states,
   tickets,
   agents,
   working,
@@ -283,20 +309,21 @@ export function Board({
   onOpen,
   onMove,
 }: {
+  /** The columns: the board's states in order (canceled ones only when the filter asks for them). */
+  states: BoardState[];
   tickets: TicketSummary[];
   agents: ChatAgent[];
   working: Set<string>;
   /** Today in the viewer's time zone (YYYY-MM-DD): due dates before it are overdue. */
   today: string;
   onOpen: (ticket: TicketSummary) => void;
-  onMove: (ticket: TicketSummary, status: TicketStatus, place: TicketPlace) => Promise<unknown>;
+  onMove: (ticket: TicketSummary, state: TicketState, place: TicketPlace) => Promise<unknown>;
 }) {
   const reduced = useReducedMotion();
-  const live = useMemo(() => group(tickets), [tickets]);
+  const live = useMemo(() => group(tickets, states), [tickets, states]);
   const byNumber = useMemo(() => new Map(tickets.map(ticket => [ticket.number, ticket])), [tickets]);
-  const [drag, setDrag] = useState<{ number: number; from: TicketStatus; start: Columns; columns: Columns } | null>(
-    null,
-  );
+  const byId = useMemo(() => new Map(states.map(state => [state.id, state])), [states]);
+  const [drag, setDrag] = useState<{ number: number; from: string; start: Columns; columns: Columns } | null>(null);
   const [error, setError] = useState('');
   const dropped = useRef(0);
   const release = () => {
@@ -318,9 +345,9 @@ export function Board({
       keyboardCodes: { start: ['Space'], cancel: ['Escape'], end: ['Space', 'Enter', 'Tab'] },
     }),
   );
-  function columnOf(id: UniqueIdentifier | undefined, from = current.current): TicketStatus | undefined {
-    if (typeof id === 'string' && id.startsWith(COLUMN)) return id.slice(COLUMN.length) as TicketStatus;
-    return BOARD_STATUSES.find(status => from[status.key].includes(id as number))?.key;
+  function columnOf(id: UniqueIdentifier | undefined, from = current.current): string | undefined {
+    if (typeof id === 'string' && id.startsWith(COLUMN)) return id.slice(COLUMN.length);
+    return states.find(state => from[state.id]?.includes(id as number))?.id;
   }
   // Up and down move within the column (dnd-kit's sortable keys); left and right go to the top of the next column.
   function keyboardCoordinates(...[event, args]: Parameters<KeyboardCoordinateGetter>) {
@@ -328,11 +355,11 @@ export function Board({
     if (!step) return sortableKeyboardCoordinates(event, args);
     event.preventDefault();
     const { active, droppableRects } = args.context;
-    const index = BOARD_STATUSES.findIndex(status => status.key === columnOf(active?.id));
-    const next = BOARD_STATUSES[index + step]?.key;
+    const index = states.findIndex(state => state.id === columnOf(active?.id));
+    const next = states[index + step]?.id;
     const column = next && droppableRects.get(columnId(next));
     if (!column) return undefined;
-    const first = droppableRects.get(current.current[next][0] ?? '');
+    const first = droppableRects.get(current.current[next]?.[0] ?? '');
     return {
       x: column.left + (column.width - (args.context.collisionRect?.width ?? 0)) / 2,
       y: first ? first.top - 4 : column.top + 48,
@@ -343,9 +370,9 @@ export function Board({
     const pointer = pointerWithin(args);
     const hits = pointer.length ? pointer : rectIntersection(args);
     const over = getFirstCollision(hits, 'id');
-    const status = typeof over === 'string' ? columnOf(over) : undefined;
-    if (status && current.current[status].length) {
-      const cards = new Set<UniqueIdentifier>(current.current[status]);
+    const column = typeof over === 'string' ? columnOf(over) : undefined;
+    if (column && current.current[column]?.length) {
+      const cards = new Set<UniqueIdentifier>(current.current[column]);
       const nearest = closestCenter({
         ...args,
         droppableContainers: args.droppableContainers.filter(container => cards.has(container.id)),
@@ -360,10 +387,10 @@ export function Board({
     return ticket ? `${ticket.key} “${ticket.title}”` : 'The ticket';
   };
   const spot = (number: UniqueIdentifier) => {
-    const status = columnOf(number);
-    if (!status) return '';
-    const items = current.current[status];
-    return `${statusOf(status).label}, position ${items.indexOf(number as number) + 1} of ${items.length}`;
+    const column = columnOf(number);
+    const items = column ? current.current[column] : undefined;
+    if (!column || !items) return '';
+    return `${byId.get(column)?.name ?? 'Column'}, position ${items.indexOf(number as number) + 1} of ${items.length}`;
   };
   // Only a new spot is announced (dnd-kit reports every change of what the card is over).
   const announced = useRef('');
@@ -389,7 +416,7 @@ export function Board({
     if (!over || !from || !to || from === to) return;
     setDrag(previous => {
       if (!previous) return previous;
-      const target = previous.columns[to];
+      const target = previous.columns[to] ?? [];
       const overIndex = target.indexOf(over.id as number);
       const translated = active.rect.current.translated;
       const below = overIndex >= 0 && translated && translated.top > over.rect.top + over.rect.height / 2;
@@ -399,7 +426,7 @@ export function Board({
         ...previous,
         columns: {
           ...previous.columns,
-          [from]: previous.columns[from].filter(item => item !== number),
+          [from]: (previous.columns[from] ?? []).filter(item => item !== number),
           [to]: [...target.slice(0, index), number, ...target.slice(index)],
         },
       };
@@ -408,24 +435,26 @@ export function Board({
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     const held = drag;
     release();
-    const status = held && over ? columnOf(active.id, held.columns) : undefined;
-    if (!held || !status) return;
-    let items = held.columns[status];
+    const column = held && over ? columnOf(active.id, held.columns) : undefined;
+    const state = column ? byId.get(column) : undefined;
+    if (!held || !column || !state) return;
+    let items = held.columns[column] ?? [];
     const from = items.indexOf(held.number);
     const to = items.indexOf(over!.id as number);
     if (to >= 0 && to !== from) items = arrayMove(items, from, to);
     const index = items.indexOf(held.number);
-    if (status === held.from && held.start[status].indexOf(held.number) === index) return;
+    if (column === held.from && held.start[column]?.indexOf(held.number) === index) return;
     const ticket = byNumber.get(held.number);
     if (!ticket) return;
     setError('');
     // The board shows where it landed until the save answers (no frame of the old order under the drop animation).
-    const token = { columns: { ...held.columns, [status]: items } };
+    const token = { columns: { ...held.columns, [column]: items } };
     setLanded(token);
-    onMove(ticket, status, { after: items[index - 1], before: items[index + 1] })
+    const { id, name, color, category } = state;
+    onMove(ticket, { id, name, color, category }, { after: items[index - 1], before: items[index + 1] })
       .catch((failure: unknown) =>
         setError(
-          `${ticket.key} could not be moved to ${statusOf(status).label}: ${(failure instanceof Error ? failure.message : 'the change was not saved').replace(/\.$/, '')}. It is back where it was.`,
+          `${ticket.key} could not be moved to ${state.name}: ${(failure instanceof Error ? failure.message : 'the change was not saved').replace(/\.$/, '')}. It is back where it was.`,
         ),
       )
       .finally(() => setLanded(current => (current === token ? null : current)));
@@ -482,14 +511,14 @@ export function Board({
             drag && 'snap-none',
           )}
         >
-          {BOARD_STATUSES.map(({ key }) => {
-            const cards = columns[key].flatMap(number => byNumber.get(number) ?? []);
+          {states.map(state => {
+            const cards = (columns[state.id] ?? []).flatMap(number => byNumber.get(number) ?? []);
             return (
               <Column
-                key={key}
-                status={key}
+                key={state.id}
+                state={state}
                 count={cards.length}
-                active={Boolean(drag) && columnOf(drag?.number) === key}
+                active={Boolean(drag) && columnOf(drag?.number) === state.id}
               >
                 <SortableContext items={cards.map(ticket => ticket.number)} strategy={verticalListSortingStrategy}>
                   {cards.map(ticket => (

@@ -15,8 +15,8 @@ export type MessageToast =
       authorAvatar?: AvatarAppearance | null;
       text: string;
     }
-  /** A ticket someone other than its organization's owner moved to In review (docs/tickets.md). */
-  | { kind: 'ticket'; id: string; organizationId: string; key: string; title: string; by: string };
+  /** A ticket someone other than its organization's owner moved into a state that notifies (docs/tickets.md). */
+  | { kind: 'ticket'; id: string; organizationId: string; key: string; title: string; by: string; state: string };
 
 const listeners = new Set<(toast: MessageToast) => void>();
 export function announceMessage(toast: MessageToast) {

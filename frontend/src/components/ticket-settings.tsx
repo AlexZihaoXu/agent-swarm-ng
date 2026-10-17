@@ -2,13 +2,19 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
+import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { TicketWorkflow } from '@/components/ticket-workflow';
 import { useOrganizations, type Organization } from '@/lib/organizations';
 import { settingsInput } from '@/lib/styles';
 import type { TicketSettings as Settings } from '@/lib/tickets';
 import { cn } from '@/lib/utils';
 
-const OPTIONS: { key: keyof Omit<Settings, 'enabled' | 'prefix'>; title: string; description: string }[] = [
+const OPTIONS: {
+  key: keyof Omit<Settings, 'enabled' | 'prefix' | 'archiveAfterDays'>;
+  title: string;
+  description: string;
+}[] = [
   {
     key: 'wakeOnAssign',
     title: 'Assigning an agent wakes it',
@@ -24,16 +30,14 @@ const OPTIONS: { key: keyof Omit<Settings, 'enabled' | 'prefix'>; title: string;
     title: 'Agents may pick up unassigned tickets',
     description: 'Off: agents change only tickets assigned to them. On: an agent can take an unassigned one.',
   },
-  {
-    key: 'pushOnReview',
-    title: 'Notify me when a ticket reaches In review',
-    description: 'A push (or a toast in the dashboard) when someone else moves a ticket to In review.',
-  },
 ];
+const ARCHIVE_DAYS = [0, 7, 14, 30, 60, 90, 180, 365];
+const daysLabel = (days: number) => (days ? `After ${days} days` : 'Never');
 
 /**
- * Organization → Tickets (docs/tickets.md): turn the board on for the organization in view (off by default) and
- * choose how agents may use it. Each switch saves at once, like the notification settings (Kibo switch-cards-3).
+ * Organization → Tickets (docs/tickets.md): turn the board on for the organization in view (off by default),
+ * choose how agents may use it and when closed tickets are archived, and edit its workflow states. Each switch saves
+ * at once, like the notification settings (Kibo switch-cards-3).
  */
 export function TicketSettings({ card, organization }: { card: string; organization: Organization }) {
   const id = useId();
@@ -120,6 +124,27 @@ export function TicketSettings({ card, organization }: { card: string; organizat
                   />
                 </div>
               ))}
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 p-3">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <label htmlFor={`${id}-archive`} className="text-sm font-medium">
+                    Archive closed tickets
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Tickets in a completed or canceled state for this long leave the board (Show archived finds them).
+                  </p>
+                </div>
+                <div className="w-40">
+                  <Select
+                    id={`${id}-archive`}
+                    value={String(settings.archiveAfterDays)}
+                    disabled={busy}
+                    options={[...new Set([...ARCHIVE_DAYS, settings.archiveAfterDays])]
+                      .sort((a, b) => (a || Infinity) - (b || Infinity))
+                      .map(days => ({ value: String(days), label: daysLabel(days) }))}
+                    onValueChange={value => void save({ archiveAfterDays: Number(value) }, 'Saved.')}
+                  />
+                </div>
+              </div>
             </div>
             <form
               className="flex flex-wrap items-end gap-2"
@@ -158,6 +183,7 @@ export function TicketSettings({ card, organization }: { card: string; organizat
           </p>
         )}
       </div>
+      {settings.enabled && <TicketWorkflow card={card} organizationId={organization.id} />}
     </section>
   );
 }

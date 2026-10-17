@@ -4,11 +4,13 @@ import * as Popover from '@radix-ui/react-popover';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { KeyboardIcon, SearchIcon, XIcon } from '@/components/ui/icons';
+import { StateDot } from '@/components/ticket-board';
 import { dialogMotion, dialogOverlay } from '@/lib/styles';
 import {
+  clearFilters,
   filterCount,
   PRIORITIES,
-  STATUSES,
+  type BoardState,
   type TicketFilters,
   type TicketSort,
   type TicketSummary,
@@ -60,6 +62,7 @@ export function TicketToolbar({
   onChange,
   view,
   tickets,
+  states,
   agents,
   searchRef,
   onHelp,
@@ -69,6 +72,8 @@ export function TicketToolbar({
   view: 'board' | 'list';
   /** The board's tickets: their labels are the label choices. */
   tickets: TicketSummary[];
+  /** The board's workflow states: the status choices (a canceled one also shows its column). */
+  states: BoardState[];
   agents: ChatAgent[];
   searchRef: RefObject<HTMLInputElement | null>;
   onHelp: () => void;
@@ -140,14 +145,14 @@ export function TicketToolbar({
           >
             <h4 className="text-sm font-semibold">Filter tickets</h4>
             <Facet label="Status">
-              {STATUSES.map(status => (
+              {states.map(state => (
                 <Toggle
-                  key={status.key}
-                  pressed={filters.status.includes(status.key)}
-                  onClick={() => set({ status: toggle(filters.status, status.key) })}
+                  key={state.id}
+                  pressed={filters.status.includes(state.id)}
+                  onClick={() => set({ status: toggle(filters.status, state.id) })}
                 >
-                  <span aria-hidden="true" className={cn('size-2 rounded-full', status.dot)} />
-                  {status.label}
+                  <StateDot color={state.color} />
+                  {state.name}
                 </Toggle>
               ))}
             </Facet>
@@ -202,13 +207,18 @@ export function TicketToolbar({
                 </Toggle>
               ))}
             </Facet>
+            <Facet label="Archive">
+              <Toggle pressed={filters.archived} onClick={() => set({ archived: !filters.archived })}>
+                Show archived
+              </Toggle>
+            </Facet>
             <div className="flex justify-between gap-2 border-t border-border pt-3">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 disabled={!count}
-                onClick={() => set({ status: [], assignee: [], priority: [], label: [], due: '' })}
+                onClick={() => onChange(clearFilters(filters))}
               >
                 Clear filters
               </Button>
@@ -240,7 +250,7 @@ export function TicketToolbar({
           className="min-h-11 gap-1 text-muted-foreground sm:min-h-8"
           onClick={() => {
             setText('');
-            onChange({ ...filters, q: '', status: [], assignee: [], priority: [], label: [], due: '' });
+            onChange({ ...clearFilters(filters), q: '' });
           }}
         >
           <XIcon className="size-3.5" />
