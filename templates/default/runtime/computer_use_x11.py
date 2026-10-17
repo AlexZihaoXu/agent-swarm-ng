@@ -55,21 +55,27 @@ class X11:
             raise RuntimeError('Guest input failed.')
         self.sync()
 
-    def spare_mapping(self):
+    def spare_mappings(self, limit):
+        """Up to `limit` unused keycodes (highest first), each with its current (empty) symbols."""
         low, high, count = C.c_int(), C.c_int(), C.c_int()
         self.lib.XDisplayKeycodes(self.display, C.byref(low), C.byref(high))
         size = high.value - low.value + 1
         mapping = self.lib.XGetKeyboardMapping(self.display, low.value, size, C.byref(count))
         if not mapping:
             raise RuntimeError('Cannot inspect guest key map.')
+        spares = []
         try:
             for code in range(high.value, low.value - 1, -1):
                 row = [int(mapping[(code - low.value)*count.value + j]) for j in range(count.value)]
                 if not any(row):
-                    return {'code': code, 'symbols': row}
+                    spares.append({'code': code, 'symbols': row})
+                    if len(spares) == limit:
+                        break
         finally:
             self.lib.XFree(mapping)
-        raise ValueError('No unused guest keycode is available for Unicode typing.')
+        if not spares:
+            raise ValueError('No unused guest keycode is available for Unicode typing.')
+        return spares
 
     def mapping(self, code, symbols):
         data = (C.c_ulong * len(symbols))(*symbols)

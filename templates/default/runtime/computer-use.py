@@ -22,6 +22,15 @@ from computer_use_x11 import X11
 from recording import journal
 
 ROOT = Path('/run/user/1000/swarm-computer-use')
+# Typing maps characters to unused keycodes: how many at once, and how long clients get to see a new map before the
+# first press and to read the last presses before the keys are restored.
+SPARE_KEYS = 32
+MAP_SETTLE = .02
+UNMAP_SETTLE = .15
+
+
+def keysym(char):
+    return 0xff0d if char == '\n' else 0xff09 if char == '\t' else ord(char) if ord(char) < 256 else 0x01000000 | ord(char)
 
 
 class Cancelled(Exception):
@@ -73,8 +82,10 @@ def cleanup(x11, ledger):
     for device in ('keys', 'buttons'):
         for code in ledger[device]:
             x11.transition(device, code, False)
-    if ledger['mapping']:
-        x11.mapping(ledger['mapping']['code'], ledger['mapping']['symbols'])
+    # A list of spare keys (one dict from before several keys were used).
+    mappings = ledger['mapping'] or []
+    for spare in [mappings] if isinstance(mappings, dict) else mappings:
+        x11.mapping(spare['code'], spare['symbols'])
     atomic(ROOT / 'held.json', json.dumps({'keys': [], 'buttons': [], 'mapping': None}))
 
 
@@ -96,8 +107,8 @@ def prepare(value, x11):
             held.add(codes[a['key']])
         elif a['type'] == 'keyboard.up':
             held.remove(codes[a['key']])
-    mapping = x11.spare_mapping() if any(a['type'] == 'keyboard.type' and a['text'] for a in value['actions']) else None
-    return state, plan, codes, mapping
+    spares = x11.spare_mappings(SPARE_KEYS) if any(a['type'] == 'keyboard.type' and a['text'] for a in value['actions']) else None
+    return state, plan, codes, spares
 
 
 def execute(value, x11):
@@ -132,7 +143,7 @@ def execute(value, x11):
         transition('buttons', code, False)
     try:
         check()
-        state, plan, codes, mapping = prepare(value, x11)
+        state, plan, codes, spares = prepare(value, x11)
         prior = ROOT / 'held.json'
         if prior.exists():
             residue = json.loads(prior.read_text())
@@ -173,21 +184,36 @@ def execute(value, x11):
                 transition('keys', codes[a['key']], kind.endswith('.down'))
             elif kind == 'keyboard.type':
                 period = 60 / a.get('cpm', 800)
-                for char in a['text']:
-                    check()
-                    start = time.monotonic()
-                    ledger['mapping'] = mapping
+                text = a['text']
+                # Clients read a key's symbol when they handle its press, maybe well after it was sent: a spare key
+                # remapped per character typed the one before ("theelazy"). So each run of text gets one spare key
+                # per distinct character, mapped before its first press and kept until clients have caught up.
+                while text:
+                    keys, run = {}, 0
+                    for char in text:
+                        if char not in keys:
+                            if len(keys) == len(spares):
+                                break
+                            keys[char] = spares[len(keys)]
+                        run += 1
+                    ledger['mapping'] = list(keys.values())
                     save()
-                    symbol = 0xff0d if char == '\n' else 0xff09 if char == '\t' else ord(char) if ord(char) < 256 else 0x01000000 | ord(char)
-                    x11.mapping(mapping['code'], [symbol] * len(mapping['symbols']))
-                    transition('keys', mapping['code'], True)
-                    # Let X11 clients handle MappingNotify/KeyPress before restoring the spare map.
-                    sleep(min(.01, period / 2))
-                    transition('keys', mapping['code'], False)
-                    sleep(max(0, start + period - time.monotonic()))
-                    x11.mapping(mapping['code'], mapping['symbols'])
+                    for char, spare in keys.items():
+                        x11.mapping(spare['code'], [keysym(char)] * len(spare['symbols']))
+                    sleep(MAP_SETTLE)
+                    for char in text[:run]:
+                        start = time.monotonic()
+                        code = keys[char]['code']
+                        transition('keys', code, True)
+                        sleep(min(.01, period / 2))
+                        transition('keys', code, False)
+                        sleep(max(0, start + period - time.monotonic()))
+                    sleep(UNMAP_SETTLE)
+                    for spare in keys.values():
+                        x11.mapping(spare['code'], spare['symbols'])
                     ledger['mapping'] = None
                     save()
+                    text = text[run:]
             result['completed'] = index + 1
             # Agent recordings (desktop source) clip around these: exact start and end of each action.
             journal('desktop', dict({key: a[key] for key in ('x', 'y', 'key', 'text', 'direction', 'amount', 'button') if key in a},

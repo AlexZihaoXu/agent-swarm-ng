@@ -18,8 +18,8 @@ STATE = (1920, 1080, 0, 0)
 
 
 class FakeX11:
-    def __init__(self, fail=False):
-        self.events, self.fail = [], fail
+    def __init__(self, fail=False, spares=3):
+        self.events, self.fail, self.spares = [], fail, spares
 
     def state(self):
         return STATE
@@ -27,8 +27,8 @@ class FakeX11:
     def keycode(self, key):
         return ord(key) if len(key) == 1 else 30
 
-    def spare_mapping(self):
-        return {'code': 200, 'symbols': [0, 0]}
+    def spare_mappings(self, limit):
+        return [{'code': 200 - i, 'symbols': [0, 0]} for i in range(min(limit, self.spares))]
 
     def mapping(self, code, symbols):
         self.events.append(('mapping', code, symbols))
@@ -168,6 +168,26 @@ class ExecutionTests(unittest.TestCase):
         self.assertIn('cancel-and-settle', result['error'])
         self.assertEqual(x11.events, [])
         self.assertEqual(json.loads((runtime.ROOT / 'held.json').read_text()), residue)
+
+    def test_typing_keeps_each_key_mapped_until_clients_caught_up(self):
+        # Remapping one key per character let a late client read the previous character ("theelazy").
+        x11 = FakeX11(spares=2)
+        result = runtime.execute({'validationToken': self.token, 'actions': [{'type': 'keyboard.type', 'text': 'aba中', 'cpm': 3200}]}, x11)
+        self.assertEqual(result['error'], None)
+        a, b, zh = ord('a'), ord('b'), 0x01000000 | ord('中')
+        self.assertEqual(x11.events, [
+            ('mapping', 200, [a, a]), ('mapping', 199, [b, b]),
+            ('keys', 200, True), ('keys', 200, False), ('keys', 199, True), ('keys', 199, False), ('keys', 200, True), ('keys', 200, False),
+            ('mapping', 200, [0, 0]), ('mapping', 199, [0, 0]),
+            ('mapping', 200, [zh, zh]), ('keys', 200, True), ('keys', 200, False), ('mapping', 200, [0, 0]),
+        ])
+        self.assertEqual(json.loads((runtime.ROOT / 'held.json').read_text())['mapping'], None)
+
+    def test_crash_ledger_restores_every_spare_key(self):
+        runtime.atomic(runtime.ROOT / 'held.json', json.dumps({'keys': [200], 'buttons': [], 'mapping': [{'code': 200, 'symbols': [0, 0]}, {'code': 199, 'symbols': [0, 0]}]}))
+        x11 = FakeX11()
+        runtime.repair(x11)
+        self.assertEqual(x11.events, [('keys', 200, False), ('mapping', 200, [0, 0]), ('mapping', 199, [0, 0])])
 
     def test_crash_ledger_repairs_held_input_and_mapping(self):
         runtime.atomic(runtime.ROOT / 'held.json', json.dumps({'keys': [42], 'buttons': [1], 'mapping': {'code': 200, 'symbols': [0, 0]}}))
