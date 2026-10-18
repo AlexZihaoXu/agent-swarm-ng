@@ -6063,6 +6063,10 @@ export interface operations {
                         number: number;
                     }[];
                     archived?: boolean;
+                    checklist?: {
+                        item: number;
+                        done: boolean;
+                    }[];
                     place?: {
                         after?: number;
                         before?: number;

@@ -151,3 +151,42 @@ it('splits work into sub-issues, relates tickets and shows a deleted comment as 
     await db.close();
   }
 });
+
+it('edits the description and ticks its checklist; only a rewrite makes the agent its writer', async () => {
+  const { db, tickets, agent, grant, toolsOf } = await setup();
+  try {
+    await tickets.updateSettings('personal', { enabled: true, prefix: 'HOME' });
+    const aether = await agent('Aether');
+    await grant(aether.id, TICKET_TOOLS);
+    const owner = { kind: 'person' as const, userId: 'admin', name: 'Admin' };
+    await tickets.create('personal', owner, {
+      title: 'Ship the demo',
+      description: 'Plan:\n- [ ] Build it\n- [ ] Test it\n  - [x] Old note\n\n```\n- [ ] not counted? it is\n```',
+      assignee: { agentId: aether.id },
+    });
+    const call = toolsOf(aether.id);
+    const ticked = await call('ticket_update', {
+      id: 'HOME-1',
+      checklist: [
+        { item: 1, done: true },
+        { item: 3, done: false },
+      ],
+    });
+    expect(ticked.isError).toBeUndefined();
+    let read = await call('ticket_read', { id: 'HOME-1' });
+    expect(read.description).toContain('- [x] Build it\n- [ ] Test it\n  - [ ] Old note');
+    // Only boxes changed: still the owner's request.
+    expect(read.writtenBy).toBe('your owner');
+    expect(read.events.at(-1)).toMatchObject({ kind: 'description', text: 'checked "Build it", unchecked "Old note"' });
+    expect(await call('ticket_update', { id: 'HOME-1', checklist: [{ item: 9, done: true }] })).toMatchObject({
+      isError: true,
+      error: /4 checklist items \(1–4\); there is no item 9/,
+    });
+    // A rewrite (or a new title) makes the agent its writer ("you" to itself; untrusted to everyone else).
+    await call('ticket_update', { id: 'HOME-1', title: 'Ship the 3D demo', description: 'Plan:\n- [x] Build it' });
+    read = await call('ticket_read', { id: 'HOME-1' });
+    expect(read).toMatchObject({ title: 'Ship the 3D demo', writtenBy: 'you' });
+  } finally {
+    await db.close();
+  }
+});

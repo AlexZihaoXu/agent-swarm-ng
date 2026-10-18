@@ -195,6 +195,8 @@ export type TicketPatch = Partial<Omit<TicketInput, 'links'>> & {
   place?: TicketPlace;
   /** Archive (true) or restore (false): people only. Other changes leave an archived ticket archived. */
   archived?: boolean;
+  /** Ticks or unticks the description's checklist items; the description keeps its writer (only boxes change). */
+  checklist?: ChecklistChange[];
 };
 /**
  * A change, for live dashboards and push: `entered` when someone other than the owner moved it into a state that
@@ -334,6 +336,33 @@ function cleanTitle(title: string) {
   if (!clean || clean.length > TITLE_MAX) throw new TicketError(`A title is 1–${TITLE_MAX} characters.`);
   return clean;
 }
+/** One checklist change: the item's number (Markdown task-list items "- [ ] …" in order, from 1) and its state. */
+export type ChecklistChange = { item: number; done: boolean };
+
+/**
+ * Ticks or unticks a description's Markdown task-list items, leaving every other character as it was. Returns the
+ * new text and what changed ("checked …"), or throws for an item the description does not have.
+ */
+export function setChecklist(text: string, changes: ChecklistChange[]) {
+  let index = 0;
+  const changed: string[] = [];
+  const next = text.replace(/^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\][ \t]*)(.*)$/gm, (line, open, mark, close, rest) => {
+    index++;
+    const change = changes.find(item => item.item === index);
+    if (!change || (mark !== ' ') === change.done) return line;
+    changed.push(`${change.done ? 'checked' : 'unchecked'} ${JSON.stringify(excerpt(rest.trim(), 80))}`);
+    return `${open}${change.done ? 'x' : ' '}${close}${rest}`;
+  });
+  const missing = changes.find(change => !Number.isInteger(change.item) || change.item < 1 || change.item > index);
+  if (missing)
+    throw new TicketError(
+      index
+        ? `The description has ${index} checklist item${index === 1 ? '' : 's'} (1–${index}); there is no item ${missing.item}.`
+        : 'The description has no checklist ("- [ ] …" items).',
+    );
+  return { text: next, changed };
+}
+
 function cleanDescription(text: string) {
   const clean = text.trim();
   if (clean.length > DESCRIPTION_MAX) throw new TicketError(`A description is at most ${DESCRIPTION_MAX} characters.`);
@@ -1254,6 +1283,16 @@ export class Tickets {
     }
     if (data.title !== undefined || data.description !== undefined)
       Object.assign(data, { writerKind: author.authorKind, writerId: author.authorId, writerName: actor.name });
+    if (patch.checklist?.length) {
+      const { text, changed } = setChecklist(
+        (data.description as string | undefined) ?? row.description,
+        patch.checklist,
+      );
+      if (changed.length) {
+        data.description = text;
+        events.push({ ...author, kind: 'description', text: changed.join(', ') });
+      }
+    }
     if (next && next.id !== previous.id) {
       Object.assign(data, { stateId: next.id, status: legacyStatus(next) });
       if (isClosed(next.category) !== isClosed(previous.category))

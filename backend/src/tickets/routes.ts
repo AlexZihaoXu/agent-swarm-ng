@@ -172,6 +172,13 @@ const Patch = Type.Object(
     removeRelations: Type.Optional(Type.Array(RelationInput, { maxItems: RELATIONS_MAX })),
     /** Archive (true) or restore (false); other changes leave an archived ticket archived. */
     archived: Type.Optional(Type.Boolean()),
+    /** Tick or untick the description's checklist items (from 1, in order); its writer stays. */
+    checklist: Type.Optional(
+      Type.Array(
+        Type.Object({ item: Type.Integer({ minimum: 1 }), done: Type.Boolean() }, { additionalProperties: false }),
+        { minItems: 1, maxItems: 50 },
+      ),
+    ),
     /**
      * Where it lands in its (new) state's column (dragging on the board): right below the ticket numbered `after`,
      * else right above `before`, else on top.

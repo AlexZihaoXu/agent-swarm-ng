@@ -13665,6 +13665,28 @@
                   "archived": {
                     "type": "boolean"
                   },
+                  "checklist": {
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "item",
+                        "done"
+                      ],
+                      "properties": {
+                        "item": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "done": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  },
                   "place": {
                     "additionalProperties": false,
                     "type": "object",
