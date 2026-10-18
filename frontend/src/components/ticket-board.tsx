@@ -288,7 +288,7 @@ function Column({
       ref={setNodeRef}
       aria-label={label}
       className={cn(
-        'flex max-h-full w-[min(18rem,82vw)] shrink-0 snap-start flex-col overflow-hidden rounded-lg border border-border bg-sidebar/30 ao-card ring-2 ring-transparent transition-[box-shadow,background-color,border-color] duration-200 md:w-auto md:min-w-56 md:flex-1',
+        'flex max-h-full w-[min(18rem,82vw)] shrink-0 snap-start flex-col overflow-hidden rounded-lg border border-border bg-sidebar ao-card ring-2 ring-transparent transition-[box-shadow,background-color,border-color] duration-200 md:w-auto md:min-w-56 md:flex-1',
         active && 'border-primary/40 bg-primary/5 ring-primary/40',
       )}
     >
@@ -519,7 +519,8 @@ export function Board({
       >
         <div
           className={cn(
-            'flex min-h-0 flex-1 snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4 motion-safe:animate-[view-in_260ms_cubic-bezier(0.22,1,0.36,1)] md:snap-none md:px-6 md:pb-6',
+            // A darker floor than the page, so the columns read as lanes on it.
+            'flex min-h-0 flex-1 snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain bg-black/50 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4 motion-safe:animate-[view-in_260ms_cubic-bezier(0.22,1,0.36,1)] md:snap-none md:px-6 md:pb-6',
             // Snapping would fight the auto-scroll near the edges while a card is held.
             drag && 'snap-none',
           )}

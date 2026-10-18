@@ -122,6 +122,24 @@ test('shows the model in use after a fallback and switches back to #1', async ({
   await expect(section.getByText('In use')).toHaveCount(0);
 });
 
+test('the chat header shows the model in use beside Activity, #2 in amber after a fallback', async ({ page }) => {
+  await mocks(page, { ...sampleAgents[0]!, models: [first, backup], activeModel: 1 });
+  await page.goto('/chat/agents/avery');
+  const chip = page.getByTestId('current-model');
+  await expect(chip).toHaveText(/#2.*gpt-5/);
+  await expect(chip).toHaveAttribute(
+    'title',
+    'On model #2 of 2 since #1 failed: gpt-5, ' +
+      (backup.thinkingLevel === 'off' ? 'no thinking' : `${backup.thinkingLevel} thinking`),
+  );
+  await expect(chip).toHaveClass(/amber/);
+  // Phones have no room beside the button: the Activity panel shows it.
+  await page.setViewportSize({ width: 390, height: 800 });
+  await expect(chip).toBeHidden();
+  await page.getByRole('button', { name: 'Agent activity' }).click();
+  await expect(page.getByRole('dialog', { name: 'Agent activity' }).getByTestId('current-model')).toBeVisible();
+});
+
 test('moving a row to the top from its open panel hands the focus to its grip', async ({ page }) => {
   await mocks(page, { ...sampleAgents[0]!, models: [first, backup] });
   await page.goto('/agents/avery');

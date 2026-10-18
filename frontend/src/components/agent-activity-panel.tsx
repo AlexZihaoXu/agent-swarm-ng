@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { surface } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { CurrentModel, currentModel } from '@/components/current-model';
 import { buildActivityRuns, toolStatus, type ActivityRun, type ActivityStep } from '@/lib/activity-timeline';
 import type { ActivityEntry, ChatAgent } from '@/use-chat';
 import type { useActivityHistory } from '@/use-activity-history';
@@ -501,205 +502,214 @@ export function AgentActivityPanel({
     }
   }, [open, hasOlder, loading, entries.length]);
   const runs = buildActivityRuns(entries);
+  const model = agent.real ? currentModel(agent.real) : null;
   const expand: Expand = entry => void expandActivity(agent.id, entry);
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange} modal={!wide}>
-      <Dialog.Trigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label="Agent activity"
-          title="Agent activity"
-          className="ml-auto size-11 border-0 p-0 sm:size-8"
-        >
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            className="size-4"
+    <>
+      {/* Pushed right with the button beside it; the button keeps that place when there is no model to show. */}
+      {model && <CurrentModel agent={agent.real!} className="ml-auto hidden sm:inline-flex" />}
+      <Dialog.Root open={open} onOpenChange={onOpenChange} modal={!wide}>
+        <Dialog.Trigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Agent activity"
+            title="Agent activity"
+            className={cn('size-11 border-0 p-0 sm:size-8', model ? 'max-sm:ml-auto' : 'ml-auto')}
           >
-            <rect x="3" y="3" width="18" height="18" rx="3" />
-            <path d="M15 3v18M18 8h1M18 12h1M18 16h1" strokeLinecap="round" />
-          </svg>
-        </Button>
-      </Dialog.Trigger>
-      {/* Kibo sheet/standard/sheet-standard-2; docked on desktop, modal on narrow screens. */}
-      <Dialog.Portal>
-        {!wide && (
-          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 motion-safe:data-[state=open]:animate-[fade-in_200ms_ease-out] motion-safe:data-[state=closed]:animate-[fade-out_160ms_ease-in]" />
-        )}
-        <Dialog.Content
-          style={activityWidth.style}
-          className={cn(
-            'fixed bottom-0 right-0 top-[calc(4rem+env(safe-area-inset-top))] flex w-full min-w-0 max-w-sm sm:top-14 md:w-[min(var(--panel-width),calc(100vw-24rem))] md:max-w-none flex-col border-l border-border bg-sidebar shadow-xl outline-none motion-safe:data-[state=open]:animate-[activity-in_180ms_ease-out] motion-safe:data-[state=closed]:animate-[activity-out_140ms_ease-in]',
-            // Docked beside the page on wide screens it is part of the page: floating windows (z-30 up) go over it.
-            wide ? 'z-20' : 'z-50',
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              className="size-4"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="3" />
+              <path d="M15 3v18M18 8h1M18 12h1M18 16h1" strokeLinecap="round" />
+            </svg>
+          </Button>
+        </Dialog.Trigger>
+        {/* Kibo sheet/standard/sheet-standard-2; docked on desktop, modal on narrow screens. */}
+        <Dialog.Portal>
+          {!wide && (
+            <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 motion-safe:data-[state=open]:animate-[fade-in_200ms_ease-out] motion-safe:data-[state=closed]:animate-[fade-out_160ms_ease-in]" />
           )}
-          onInteractOutside={event => {
-            if (wide) event.preventDefault();
-          }}
-          onOpenAutoFocus={event => {
-            if (wide) event.preventDefault();
-          }}
-        >
-          <header className="min-w-0 shrink-0 border-b border-border px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Dialog.Title className="text-sm font-semibold">Agent activity</Dialog.Title>
-              <Popover.Root>
-                <Popover.Trigger
-                  aria-label="About agent activity"
-                  className="flex size-6 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    className="size-3.5"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
-                  </svg>
-                </Popover.Trigger>
-                <Popover.Portal>
-                  <Popover.Content
-                    side="bottom"
-                    align="start"
-                    sideOffset={6}
-                    className="context-menu-content z-[60] max-w-72 rounded-lg border border-border bg-background p-3 text-xs leading-relaxed text-muted-foreground ao-top shadow-lg"
-                  >
-                    Saved runtime history for operators; none of it is sent to chat. Reasoning appears only when the
-                    model provides it, and credentials and hidden provider data are never stored here.
-                  </Popover.Content>
-                </Popover.Portal>
-              </Popover.Root>
-              <Dialog.Close asChild>
-                <Button
-                  variant="flat"
-                  size="sm"
-                  aria-label="Close activity"
-                  className="ml-auto size-11 border-0 p-0 sm:size-7"
-                >
-                  <span aria-hidden="true">×</span>
-                </Button>
-              </Dialog.Close>
-            </div>
-            <Dialog.Description className="mt-0.5 text-xs text-muted-foreground">{agent.name}</Dialog.Description>
-            <div className="mt-2" title={contextUsage?.text}>
-              <div className="flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground">
-                <span>Context</span>
-                <span aria-label="Context usage" className="tabular-nums">
-                  {usageLine ?? 'Waiting for a runtime update'}
-                </span>
-              </div>
-              <div className="mt-1 h-1 overflow-hidden rounded-full bg-foreground/10" aria-hidden="true">
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-[width] duration-500',
-                    percent > 85 ? 'bg-red-400' : percent > 60 ? 'bg-amber-300' : 'bg-teal-400',
-                  )}
-                  style={{ width: `${Number.isFinite(percent) ? Math.min(100, percent) : 0}%` }}
-                />
-              </div>
-            </div>
-            {requestError && (
-              <p role="alert" className="mt-2 text-xs text-destructive">
-                Dashboard request (not saved): {requestError}
-              </p>
+          <Dialog.Content
+            style={activityWidth.style}
+            className={cn(
+              'fixed bottom-0 right-0 top-[calc(4rem+env(safe-area-inset-top))] flex w-full min-w-0 max-w-sm sm:top-14 md:w-[min(var(--panel-width),calc(100vw-24rem))] md:max-w-none flex-col border-l border-border bg-sidebar shadow-xl outline-none motion-safe:data-[state=open]:animate-[activity-in_180ms_ease-out] motion-safe:data-[state=closed]:animate-[activity-out_140ms_ease-in]',
+              // Docked beside the page on wide screens it is part of the page: floating windows (z-30 up) go over it.
+              wide ? 'z-20' : 'z-50',
             )}
-          </header>
-          <ScrollArea
-            label="Agent activity history"
-            viewportRef={viewport}
-            className="min-h-0 min-w-0 flex-1"
-            viewportClassName="[overflow-anchor:none]"
-            onScroll={event => {
-              const element = event.currentTarget;
-              follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40;
-              measure();
-              if (element.scrollTop < 120) olderRef.current();
+            onInteractOutside={event => {
+              if (wide) event.preventDefault();
+            }}
+            onOpenAutoFocus={event => {
+              if (wide) event.preventDefault();
             }}
           >
-            <div className="w-full min-w-0 space-y-3 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
-              {hasOlder && (
-                <button
-                  type="button"
-                  onClick={loadOlder}
-                  disabled={loading}
-                  className="sr-only focus:not-sr-only focus:rounded-md focus:px-2 focus:py-1 focus:text-xs"
-                >
-                  Load older activity
-                </button>
-              )}
-              {/* Held in place whenever older activity exists, so starting a load never pushes the content. */}
-              {(loading || hasOlder) && (
-                <div
-                  role={loading ? 'status' : undefined}
-                  aria-label={loading ? 'Loading activity…' : undefined}
-                  aria-hidden={loading ? undefined : true}
-                  className="space-y-2"
-                >
-                  <Skeleton className="h-16 rounded-xl" />
-                  <Skeleton className="h-10 rounded-xl" />
-                </div>
-              )}
-              {failed && (
-                <div role="alert" className="text-xs text-muted-foreground">
-                  Could not load activity.{' '}
-                  <Button variant="outline" size="sm" disabled={loading} onClick={() => void retryActivity(agent.id)}>
-                    Retry activity
+            <header className="min-w-0 shrink-0 border-b border-border px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Dialog.Title className="text-sm font-semibold">Agent activity</Dialog.Title>
+                <Popover.Root>
+                  <Popover.Trigger
+                    aria-label="About agent activity"
+                    className="flex size-6 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      className="size-3.5"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
+                    </svg>
+                  </Popover.Trigger>
+                  <Popover.Portal>
+                    <Popover.Content
+                      side="bottom"
+                      align="start"
+                      sideOffset={6}
+                      className="context-menu-content z-[60] max-w-72 rounded-lg border border-border bg-background p-3 text-xs leading-relaxed text-muted-foreground ao-top shadow-lg"
+                    >
+                      Saved runtime history for operators; none of it is sent to chat. Reasoning appears only when the
+                      model provides it, and credentials and hidden provider data are never stored here.
+                    </Popover.Content>
+                  </Popover.Portal>
+                </Popover.Root>
+                <Dialog.Close asChild>
+                  <Button
+                    variant="flat"
+                    size="sm"
+                    aria-label="Close activity"
+                    className="ml-auto size-11 border-0 p-0 sm:size-7"
+                  >
+                    <span aria-hidden="true">×</span>
                   </Button>
+                </Dialog.Close>
+              </div>
+              <div className="mt-0.5 flex min-w-0 items-center gap-2">
+                <Dialog.Description className="text-xs text-muted-foreground">{agent.name}</Dialog.Description>
+                {/* Phones have no room for it beside the Activity button: it shows here instead. */}
+                {model && <CurrentModel agent={agent.real!} className="h-6 sm:hidden" />}
+              </div>
+              <div className="mt-2" title={contextUsage?.text}>
+                <div className="flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground">
+                  <span>Context</span>
+                  <span aria-label="Context usage" className="tabular-nums">
+                    {usageLine ?? 'Waiting for a runtime update'}
+                  </span>
                 </div>
-              )}
-              {!loading && !failed && entries.length === 0 && (
-                <p className="py-6 text-xs leading-relaxed text-muted-foreground">
-                  New activity will appear here when this agent runs.
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-foreground/10" aria-hidden="true">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-[width] duration-500',
+                      percent > 85 ? 'bg-red-400' : percent > 60 ? 'bg-amber-300' : 'bg-teal-400',
+                    )}
+                    style={{ width: `${Number.isFinite(percent) ? Math.min(100, percent) : 0}%` }}
+                  />
+                </div>
+              </div>
+              {requestError && (
+                <p role="alert" className="mt-2 text-xs text-destructive">
+                  Dashboard request (not saved): {requestError}
                 </p>
               )}
-              {runs.map((run, index) => (
-                <Run
-                  key={run.id}
-                  run={run}
-                  agentId={agent.id}
-                  latest={index === runs.length - 1}
-                  history={history}
-                  expand={expand}
-                />
-              ))}
-              {compaction && (
-                <section
-                  role="status"
-                  aria-label="Background compaction"
-                  className="card-enter rounded-xl border border-violet-400/30 bg-violet-400/5 p-3"
-                >
-                  <div className="flex min-w-0 items-center gap-2 text-xs">
-                    {compaction === 'sleeping' ? (
-                      <span aria-hidden="true" className="shrink-0 font-semibold text-violet-300">
-                        zzz
-                      </span>
-                    ) : (
-                      <span aria-hidden="true" className="relative size-3 shrink-0">
-                        <span className="compaction-ring absolute inset-0 rounded-full" />
-                      </span>
-                    )}
-                    <span className="font-medium">{compaction === 'sleeping' ? 'Sleeping…' : 'Compacting…'}</span>
-                    <span className="min-w-0 truncate text-muted-foreground">
-                      {compaction === 'sleeping'
-                        ? 'Context is full; continuing once the summary is ready'
-                        : 'Summarizing older context in the background'}
-                    </span>
+            </header>
+            <ScrollArea
+              label="Agent activity history"
+              viewportRef={viewport}
+              className="min-h-0 min-w-0 flex-1"
+              viewportClassName="[overflow-anchor:none]"
+              onScroll={event => {
+                const element = event.currentTarget;
+                follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40;
+                measure();
+                if (element.scrollTop < 120) olderRef.current();
+              }}
+            >
+              <div className="w-full min-w-0 space-y-3 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
+                {hasOlder && (
+                  <button
+                    type="button"
+                    onClick={loadOlder}
+                    disabled={loading}
+                    className="sr-only focus:not-sr-only focus:rounded-md focus:px-2 focus:py-1 focus:text-xs"
+                  >
+                    Load older activity
+                  </button>
+                )}
+                {/* Held in place whenever older activity exists, so starting a load never pushes the content. */}
+                {(loading || hasOlder) && (
+                  <div
+                    role={loading ? 'status' : undefined}
+                    aria-label={loading ? 'Loading activity…' : undefined}
+                    aria-hidden={loading ? undefined : true}
+                    className="space-y-2"
+                  >
+                    <Skeleton className="h-16 rounded-xl" />
+                    <Skeleton className="h-10 rounded-xl" />
                   </div>
-                </section>
-              )}
-            </div>
-          </ScrollArea>
-          <PanelResizeHandle panel={activityWidth} side="left" label="Resize the activity panel" />
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+                )}
+                {failed && (
+                  <div role="alert" className="text-xs text-muted-foreground">
+                    Could not load activity.{' '}
+                    <Button variant="outline" size="sm" disabled={loading} onClick={() => void retryActivity(agent.id)}>
+                      Retry activity
+                    </Button>
+                  </div>
+                )}
+                {!loading && !failed && entries.length === 0 && (
+                  <p className="py-6 text-xs leading-relaxed text-muted-foreground">
+                    New activity will appear here when this agent runs.
+                  </p>
+                )}
+                {runs.map((run, index) => (
+                  <Run
+                    key={run.id}
+                    run={run}
+                    agentId={agent.id}
+                    latest={index === runs.length - 1}
+                    history={history}
+                    expand={expand}
+                  />
+                ))}
+                {compaction && (
+                  <section
+                    role="status"
+                    aria-label="Background compaction"
+                    className="card-enter rounded-xl border border-violet-400/30 bg-violet-400/5 p-3"
+                  >
+                    <div className="flex min-w-0 items-center gap-2 text-xs">
+                      {compaction === 'sleeping' ? (
+                        <span aria-hidden="true" className="shrink-0 font-semibold text-violet-300">
+                          zzz
+                        </span>
+                      ) : (
+                        <span aria-hidden="true" className="relative size-3 shrink-0">
+                          <span className="compaction-ring absolute inset-0 rounded-full" />
+                        </span>
+                      )}
+                      <span className="font-medium">{compaction === 'sleeping' ? 'Sleeping…' : 'Compacting…'}</span>
+                      <span className="min-w-0 truncate text-muted-foreground">
+                        {compaction === 'sleeping'
+                          ? 'Context is full; continuing once the summary is ready'
+                          : 'Summarizing older context in the background'}
+                      </span>
+                    </div>
+                  </section>
+                )}
+              </div>
+            </ScrollArea>
+            <PanelResizeHandle panel={activityWidth} side="left" label="Resize the activity panel" />
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 }
