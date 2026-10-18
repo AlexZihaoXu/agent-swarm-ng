@@ -15,6 +15,7 @@ import { defaultAvatar } from '@/lib/agent-avatar';
 import type { ChatAgent } from '@/use-chat';
 import type { ChatMessage } from '@/chat-types';
 import { useMessageWindow } from '@/lib/use-message-window';
+import { useStickToBottom } from '@/lib/use-stick-to-bottom';
 import { ChatSkeleton, EdgeSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { JumpToLatest } from './jump-to-latest';
@@ -108,6 +109,8 @@ export function FloatingChat({
     loadOlder: () => chat.loadHistory(agent, true),
     reset: channel,
   });
+  // Images and previews that load late, and new messages, stay in view while the reader is at the bottom.
+  const follow = useStickToBottom(viewport, `${channel}:${box !== null}`);
   // Follow new messages only while the reader is near the bottom; older pages keep their place through the
   // window's anchor (as in the group chat).
   const nearBottom = useRef(true);
@@ -277,6 +280,7 @@ export function FloatingChat({
                 onSend={() => {
                   // Your own message always shows, even when you had scrolled back.
                   nearBottom.current = true;
+                  follow(0);
                   history.toLatest();
                   const sent = chat.send(agent, chat.drafts[channel] ?? '', attachments.ids);
                   if (sent && attachments.items.length) attachments.hold(sent);

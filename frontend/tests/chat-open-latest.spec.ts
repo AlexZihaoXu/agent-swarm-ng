@@ -89,3 +89,113 @@ test('an opened chat stays at its latest message while images below load', async
     .evaluate(root => root.scrollHeight - root.scrollTop - root.clientHeight);
   expect(fromBottom).toBeLessThan(8);
 });
+
+test('a new message from the agent scrolls into view when the reader is at the bottom', async ({ page }) => {
+  const messages = Array.from({ length: 30 }, (_, index) => ({
+    id: `m${index}`,
+    channelId: 'avery',
+    sequence: index + 1,
+    role: index % 2 ? 'assistant' : 'user',
+    text: `Message ${index}: ${'words '.repeat(12)}`,
+    timestamp: Date.now() - (30 - index) * 60_000,
+    replyTo: null,
+  }));
+  await page.route('**/api/channels/avery/messages*', route => route.fulfill({ json: { messages, nextCursor: null } }));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/chat/agents/avery');
+  const chat = page.getByRole('region', { name: 'Conversation with Avery' });
+  await expect(chat.getByText('Message 29:')).toBeVisible();
+  const history = chat.getByRole('region', { name: 'Chat history' });
+  const fromBottom = () => history.evaluate(root => root.scrollHeight - root.scrollTop - root.clientHeight);
+  await expect.poll(fromBottom).toBeLessThan(8);
+  for (const [index, text] of [
+    'A short reply.',
+    `A long reply.\n\n${'More detail here. '.repeat(40)}\n\n- one\n- two\n- three`,
+  ].entries()) {
+    await page.evaluate(
+      event => (window as unknown as { emitAgentEvent: (event: object) => void }).emitAgentEvent(event),
+      {
+        type: 'channel_message',
+        agentId: 'avery',
+        channelId: 'avery',
+        runId: `r${index}`,
+        id: `new-${index}`,
+        text,
+        timestamp: Date.now(),
+      },
+    );
+    await expect(chat.getByText(text.split('\n')[0]!)).toBeVisible();
+    await expect.poll(fromBottom, { timeout: 3000 }).toBeLessThan(8);
+  }
+});
+
+test('the floating chat follows a new message from the agent too', async ({ page }) => {
+  const messages = Array.from({ length: 30 }, (_, index) => ({
+    id: `g${index}`,
+    channelId: 'morgan',
+    sequence: index + 1,
+    role: index % 2 ? 'assistant' : 'user',
+    text: `Morgan message ${index}: ${'words '.repeat(12)}`,
+    timestamp: Date.now() - (30 - index) * 60_000,
+    replyTo: null,
+  }));
+  await page.route('**/api/channels/morgan/messages*', route =>
+    route.fulfill({ json: { messages, nextCursor: null } }),
+  );
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/chat/agents/avery');
+  await expect(page.getByRole('link', { name: 'Settings' }).first()).toBeVisible();
+  await page.keyboard.press('Control+k');
+  const portal = page.getByRole('dialog', { name: 'Portal' });
+  await portal.getByRole('combobox').fill('@morg');
+  await expect(portal.getByRole('option', { name: /Morgan/, selected: true })).toBeVisible();
+  await portal.getByRole('combobox').press('Enter');
+  const window_ = page.getByRole('region', { name: 'Chat with Morgan' });
+  const history = window_.getByRole('region', { name: 'Messages with Morgan' });
+  await expect(history.getByText('Morgan message 29:')).toBeVisible();
+  const fromBottom = () => history.evaluate(root => root.scrollHeight - root.scrollTop - root.clientHeight);
+  await expect.poll(fromBottom).toBeLessThan(8);
+  await page.evaluate(
+    event => (window as unknown as { emitAgentEvent: (event: object) => void }).emitAgentEvent(event),
+    {
+      type: 'channel_message',
+      agentId: 'morgan',
+      channelId: 'morgan',
+      runId: 'rf',
+      id: 'new-floating',
+      text: `Done.\n\n${'Here is what changed. '.repeat(30)}`,
+      timestamp: Date.now(),
+    },
+  );
+  await expect(history.getByText('Done.')).toBeVisible();
+  await expect.poll(fromBottom, { timeout: 3000 }).toBeLessThan(8);
+});
+
+test('sending a message scrolls to it even when the reader had scrolled up', async ({ page }) => {
+  const messages = Array.from({ length: 40 }, (_, index) => ({
+    id: `m${index}`,
+    channelId: 'avery',
+    sequence: index + 1,
+    role: index % 2 ? 'assistant' : 'user',
+    text: `Message ${index}: ${'words '.repeat(12)}`,
+    timestamp: Date.now() - (40 - index) * 60_000,
+    replyTo: null,
+  }));
+  await page.route('**/api/channels/avery/messages*', route => route.fulfill({ json: { messages, nextCursor: null } }));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/chat/agents/avery');
+  const chat = page.getByRole('region', { name: 'Conversation with Avery' });
+  await expect(chat.getByText('Message 39:')).toBeVisible();
+  const history = chat.getByRole('region', { name: 'Chat history' });
+  const fromBottom = () => history.evaluate(root => root.scrollHeight - root.scrollTop - root.clientHeight);
+  // Opening goes straight to the latest message (no scroll from the top).
+  expect(await fromBottom()).toBeLessThan(8);
+  await history.evaluate(root => {
+    root.scrollTop = 0;
+  });
+  await expect.poll(fromBottom).toBeGreaterThan(300);
+  await page.getByLabel('Message Avery').fill('Sent while scrolled up');
+  await page.getByLabel('Message Avery').press('Enter');
+  await expect(chat.getByText('Sent while scrolled up')).toBeVisible();
+  await expect.poll(fromBottom, { timeout: 3000 }).toBeLessThan(8);
+});

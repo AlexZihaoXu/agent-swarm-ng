@@ -4,6 +4,7 @@ import { computersQuery } from '@/lib/computers-query';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useLocation, useNavigate } from 'react-router';
 import { useAppUpdate } from '@/lib/pwa';
+import { useStickToBottom } from '@/lib/use-stick-to-bottom';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatSkeleton, EdgeSkeleton } from '@/components/ui/skeleton';
@@ -562,6 +563,8 @@ export function App() {
   const previousConversation = useRef({
     id: agent.id,
     viewport: null as HTMLDivElement | null,
+    /** Its history had loaded: a message added then is new, not the first page arriving. */
+    ready: false,
     count: timeline.length,
     first: timeline[0]?.id,
     last: timeline.at(-1)?.id,
@@ -669,33 +672,9 @@ export function App() {
     input.style.height = `${Math.min(input.scrollHeight, 128)}px`;
   }, [draft, agent.id, activeTab, mobileConversation, activityOpen, conversationPeer]);
 
-  const smoothFollow = useRef(0);
-  // Images, files and ticket chips finish loading after the chat opens and push the latest messages down: while
-  // the reader is at the bottom (not scrolled up to read), keep them there as the content grows.
-  useEffect(() => {
-    const scroller = scrollRef.current;
-    const content = scroller?.firstElementChild;
-    if (!scroller || !content) return;
-    let stuck = true;
-    const onScroll = () => {
-      stuck = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
-    };
-    let height = content.getBoundingClientRect().height;
-    const observer = new ResizeObserver(() => {
-      const next = content.getBoundingClientRect().height;
-      // Only growth: a shrinking window (older messages dropped while reading) is not new content below. A new
-      // message's own smooth follow is left to finish.
-      if (stuck && next > height && performance.now() > smoothFollow.current)
-        scroller.scrollTop = scroller.scrollHeight;
-      height = next;
-    });
-    scroller.addEventListener('scroll', onScroll, { passive: true });
-    observer.observe(content);
-    return () => {
-      observer.disconnect();
-      scroller.removeEventListener('scroll', onScroll);
-    };
-  }, [agent.id, conversationPeer, mobileConversation]);
+  // Images, files and ticket chips finish loading after the chat opens, and new messages arrive: while the reader
+  // is at the bottom, keep the latest message in view.
+  const smoothFollow = useStickToBottom(scrollRef, `${agent.id}:${conversationPeer}:${mobileConversation}`);
 
   useLayoutEffect(() => {
     if (conversationPeer !== 'you') return;
@@ -720,13 +699,15 @@ export function App() {
       newViewport ||
       (addedMessage && (Boolean(sentId) || previous.height - scroller.scrollTop - scroller.clientHeight < 80))
     ) {
-      const smooth = addedMessage && !newViewport && !reducedMotion;
-      if (smooth) smoothFollow.current = performance.now() + 600;
+      // The history's first page arriving is opening the chat, not a new message: straight to the latest.
+      const smooth = addedMessage && previous.ready && !newViewport && !reducedMotion;
+      if (smooth) smoothFollow();
       scroller.scrollTo({ top: scroller.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
     }
     previousConversation.current = {
       id: agent.id,
       viewport: scroller,
+      ready: Boolean(historyReady[agent.channelId]),
       count: timeline.length,
       first: timeline[0]?.id,
       last: timeline.at(-1)?.id,
@@ -767,6 +748,9 @@ export function App() {
     if (attachments.items.length) attachments.hold(messageId);
     if (target) pendingReplyAcks.current.set(messageId, { channelId: agent.channelId, targetId: target.id });
     pendingSend.current = messageId;
+    // Your own message always shows, even when you had scrolled back (newer pages offloaded included).
+    history.toLatest();
+    smoothFollow();
     inputRef.current?.focus();
   }
 

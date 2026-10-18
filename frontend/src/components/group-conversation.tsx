@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { JumpToLatest } from '@/components/jump-to-latest';
 import { useMessageWindow } from '@/lib/use-message-window';
+import { useStickToBottom } from '@/lib/use-stick-to-bottom';
 import { useMessageJump } from '@/lib/message-jump';
 import { ChatSkeleton, EdgeSkeleton } from '@/components/ui/skeleton';
 import { ChatComposer } from '@/components/chat-composer';
@@ -114,6 +115,8 @@ export function GroupConversation({
   });
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const previous = useRef({ first: '', last: '', height: 0 });
+  // Images and previews that load late, and new messages, stay in view while the reader is at the bottom.
+  const follow = useStickToBottom(viewport, groupId);
   const nearBottom = useRef(true);
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -165,7 +168,10 @@ export function GroupConversation({
       attachments.clear();
       setReplyTo(current => (current?.id === replyToId ? null : current));
       submission.current = null;
+      // Your own message always shows, even when you had scrolled back.
       nearBottom.current = true;
+      follow(0);
+      window_.toLatest();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Could not send the message.');
     } finally {
