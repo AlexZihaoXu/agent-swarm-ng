@@ -669,6 +669,34 @@ export function App() {
     input.style.height = `${Math.min(input.scrollHeight, 128)}px`;
   }, [draft, agent.id, activeTab, mobileConversation, activityOpen, conversationPeer]);
 
+  const smoothFollow = useRef(0);
+  // Images, files and ticket chips finish loading after the chat opens and push the latest messages down: while
+  // the reader is at the bottom (not scrolled up to read), keep them there as the content grows.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    const content = scroller?.firstElementChild;
+    if (!scroller || !content) return;
+    let stuck = true;
+    const onScroll = () => {
+      stuck = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
+    };
+    let height = content.getBoundingClientRect().height;
+    const observer = new ResizeObserver(() => {
+      const next = content.getBoundingClientRect().height;
+      // Only growth: a shrinking window (older messages dropped while reading) is not new content below. A new
+      // message's own smooth follow is left to finish.
+      if (stuck && next > height && performance.now() > smoothFollow.current)
+        scroller.scrollTop = scroller.scrollHeight;
+      height = next;
+    });
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+      scroller.removeEventListener('scroll', onScroll);
+    };
+  }, [agent.id, conversationPeer, mobileConversation]);
+
   useLayoutEffect(() => {
     if (conversationPeer !== 'you') return;
     const scroller = scrollRef.current;
@@ -692,10 +720,9 @@ export function App() {
       newViewport ||
       (addedMessage && (Boolean(sentId) || previous.height - scroller.scrollTop - scroller.clientHeight < 80))
     ) {
-      scroller.scrollTo({
-        top: scroller.scrollHeight,
-        behavior: addedMessage && !newViewport && !reducedMotion ? 'smooth' : 'instant',
-      });
+      const smooth = addedMessage && !newViewport && !reducedMotion;
+      if (smooth) smoothFollow.current = performance.now() + 600;
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
     }
     previousConversation.current = {
       id: agent.id,
