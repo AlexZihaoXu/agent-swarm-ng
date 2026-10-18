@@ -45,6 +45,8 @@ model Organization {
   ticketPrefix       String      @default("")
   /// Assigning an agent wakes it with a platform event.
   ticketWakeOnAssign Boolean     @default(true)
+  /// Moving a ticket assigned to an agent out of a backlog state wakes that agent with a platform event.
+  ticketWakeOnLeaveBacklog Boolean @default(true)
   /// Agents with ticket_create may file tickets.
   ticketAgentsCreate Boolean     @default(true)
   /// Agents may change unassigned tickets (and so pick one up), not only their own.

@@ -21,6 +21,12 @@ const OPTIONS: {
     description: 'It gets the ticket as a platform event, like a timer firing, and starts on it.',
   },
   {
+    key: 'wakeOnLeaveBacklog',
+    title: 'Moving a ticket out of the backlog wakes its agent',
+    description:
+      'When a ticket assigned to an agent leaves a backlog state for any other state, the agent gets it as a platform event and starts on it.',
+  },
+  {
     key: 'agentsCreate',
     title: 'Agents can create tickets',
     description: 'With ticket_create granted, an agent can file follow-ups and hand work to another agent here.',

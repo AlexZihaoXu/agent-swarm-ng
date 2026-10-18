@@ -14,12 +14,12 @@ const DAY = 86_400_000;
 
 async function setup() {
   const db = await prepareDatabase(join(process.env.SQLITE_TEST_ROOT!, `${crypto.randomUUID()}.db`));
-  const wakes: { agentId: string; text: string }[] = [];
+  const wakes: { agentId: string; text: string; human: boolean; eventId: string }[] = [];
   const changes: TicketChange[] = [];
   let now = Date.parse('2030-01-01T12:00:00.000Z');
   const tickets = new Tickets(db, {
-    wake: async (agentId, text) => {
-      wakes.push({ agentId, text });
+    wake: async (agentId, text, human, eventId) => {
+      wakes.push({ agentId, text, human, eventId });
       return true;
     },
     changed: (_organizationId, change) => changes.push(change),
@@ -154,6 +154,87 @@ it('applies the agents’ rules by category, also to custom states', async () =>
     await refused(tickets.update('personal', 1, as(aether), { status: 'QA' }), 'only your owner reopens it');
     // Open = not completed or canceled.
     expect((await tickets.list('personal', { open: true })).tickets.map(ticket => ticket.number)).toEqual([2]);
+  } finally {
+    await db.close();
+  }
+});
+
+it('wakes a ticket’s agent once when it leaves the backlog, not for its own move, an archived ticket or the option off', async () => {
+  const { db, tickets, wakes, owner, agent, as, stateId } = await setup();
+  try {
+    const [aether, morgan] = [await agent('Aether'), await agent('Morgan')];
+    expect(await tickets.settings('personal')).toMatchObject({ wakeOnLeaveBacklog: true });
+    await db.client.agent.update({ where: { id: aether.id }, data: { ticketTools: '["ticket_read"]' } });
+    await tickets.create('personal', owner, { title: 'Later', status: 'Backlog', assignee: { agentId: aether.id } });
+    wakes.length = 0;
+    // The owner moves it to Todo: one durable event with the owner's authority.
+    const moved = await tickets.update('personal', 1, owner, { status: 'Todo' });
+    expect(wakes).toHaveLength(1);
+    expect(wakes[0]).toMatchObject({ agentId: aether.id, human: true });
+    expect(wakes[0]!.text).toContain('[Tickets · Personal] Your owner moved HOME-1 "Later" from Backlog to Todo');
+    expect(wakes[0]!.text).toContain('ticket_read({"id":"HOME-1"}) and start on it');
+    expect(await db.client.pendingTimerEvent.findUnique({ where: { id: wakes[0]!.eventId } })).toMatchObject({
+      kind: 'ticket',
+      agentId: aether.id,
+    });
+    expect(moved.events.at(-1)).toMatchObject({ kind: 'woken', text: 'was woken: moved out of the backlog' });
+    // Not out of the backlog (Todo → In progress, Backlog → another backlog state), nor the agent's own move.
+    await tickets.update('personal', 1, owner, { status: 'In progress' });
+    await tickets.addState('personal', { name: 'Icebox', category: 'backlog' });
+    await tickets.create('personal', owner, { title: 'Mine', status: 'Backlog', assignee: { agentId: aether.id } });
+    wakes.length = 0;
+    await tickets.update('personal', 2, owner, { status: 'Icebox' });
+    await tickets.update('personal', 2, as(aether), { status: 'In progress' });
+    expect(wakes).toHaveLength(0);
+    // Assigned and moved out in one change: one event saying both.
+    await tickets.create('personal', owner, { title: 'Both', status: 'Backlog' });
+    await tickets.update('personal', 3, owner, { status: 'Todo', assignee: { agentId: morgan.id } });
+    expect(wakes.map(wake => wake.text)).toEqual([
+      expect.stringContaining('Your owner assigned you HOME-3 "Both" and moved it from Backlog to Todo'),
+    ]);
+    // Archived: no wake. The option off: no wake.
+    await tickets.create('personal', owner, { title: 'Shelved', status: 'Backlog', assignee: { agentId: morgan.id } });
+    await tickets.update('personal', 4, owner, { archived: true });
+    wakes.length = 0;
+    await tickets.update('personal', 4, owner, { status: 'Todo' });
+    expect(wakes).toHaveLength(0);
+    await tickets.create('personal', owner, { title: 'Off', status: 'Backlog', assignee: { agentId: morgan.id } });
+    await tickets.updateSettings('personal', { wakeOnLeaveBacklog: false });
+    wakes.length = 0;
+    await tickets.update('personal', 5, owner, { status: 'Todo' });
+    expect(wakes).toHaveLength(0);
+    // Deleting a backlog state wakes each agent once for the tickets it moved out (option on again).
+    await tickets.updateSettings('personal', { wakeOnLeaveBacklog: true });
+    await tickets.update('personal', 5, owner, { status: 'Icebox' });
+    await tickets.create('personal', owner, { title: 'Too', status: 'Icebox', assignee: { agentId: morgan.id } });
+    wakes.length = 0;
+    await tickets.deleteState('personal', await stateId('Icebox'), owner, await stateId('Todo'));
+    expect(wakes).toHaveLength(1);
+    expect(wakes[0]).toMatchObject({ agentId: morgan.id, human: true });
+    expect(wakes[0]!.text).toContain('deleted the Icebox state, moving your 2 tickets out of the backlog to Todo');
+    expect((await tickets.get('personal', 6)).events.at(-1)?.text).toBe('was woken: moved out of the backlog');
+  } finally {
+    await db.close();
+  }
+});
+
+it('counts an agent moving another agent’s ticket out of the backlog toward the hourly cap', async () => {
+  const { db, tickets, wakes, owner, agent, as } = await setup();
+  try {
+    const [aether, morgan] = [await agent('Aether'), await agent('Morgan')];
+    await tickets.updateSettings('personal', { wakeOnAssign: false });
+    await tickets.create('personal', owner, { title: 'Hand off', status: 'Backlog', assignee: { agentId: aether.id } });
+    for (let i = 0; i < 9; i++) await tickets.comment('personal', 1, as(aether), `@Morgan ping ${i}`);
+    wakes.length = 0;
+    // With waking on assignment off, the move still wakes Morgan, as untrusted (not the owner's).
+    await tickets.update('personal', 1, as(aether), { status: 'Todo', assignee: { agentId: morgan.id } });
+    expect(wakes).toEqual([expect.objectContaining({ agentId: morgan.id, human: false })]);
+    expect(wakes[0]!.text).toContain(
+      'Agent "Aether" (another agent, not your owner) moved HOME-1 "Hand off" from Backlog to Todo (assigned to you,',
+    );
+    // That was the tenth this hour: the next one wakes nobody.
+    const last = await tickets.comment('personal', 1, as(aether), '@Morgan once more');
+    expect(last.notWoken).toEqual(['Morgan']);
   } finally {
     await db.close();
   }

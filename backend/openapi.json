@@ -10085,6 +10085,7 @@
                         "enabled",
                         "prefix",
                         "wakeOnAssign",
+                        "wakeOnLeaveBacklog",
                         "agentsCreate",
                         "agentsPickUp",
                         "archiveAfterDays"
@@ -10097,6 +10098,9 @@
                           "type": "string"
                         },
                         "wakeOnAssign": {
+                          "type": "boolean"
+                        },
+                        "wakeOnLeaveBacklog": {
                           "type": "boolean"
                         },
                         "agentsCreate": {
@@ -17469,6 +17473,7 @@
                               "enabled",
                               "prefix",
                               "wakeOnAssign",
+                              "wakeOnLeaveBacklog",
                               "agentsCreate",
                               "agentsPickUp",
                               "archiveAfterDays"
@@ -17481,6 +17486,9 @@
                                 "type": "string"
                               },
                               "wakeOnAssign": {
+                                "type": "boolean"
+                              },
+                              "wakeOnLeaveBacklog": {
                                 "type": "boolean"
                               },
                               "agentsCreate": {
@@ -17586,6 +17594,7 @@
                               "enabled",
                               "prefix",
                               "wakeOnAssign",
+                              "wakeOnLeaveBacklog",
                               "agentsCreate",
                               "agentsPickUp",
                               "archiveAfterDays"
@@ -17598,6 +17607,9 @@
                                 "type": "string"
                               },
                               "wakeOnAssign": {
+                                "type": "boolean"
+                              },
+                              "wakeOnLeaveBacklog": {
                                 "type": "boolean"
                               },
                               "agentsCreate": {
@@ -17671,6 +17683,9 @@
                         "type": "string"
                       },
                       "wakeOnAssign": {
+                        "type": "boolean"
+                      },
+                      "wakeOnLeaveBacklog": {
                         "type": "boolean"
                       },
                       "agentsCreate": {
@@ -17760,6 +17775,7 @@
                               "enabled",
                               "prefix",
                               "wakeOnAssign",
+                              "wakeOnLeaveBacklog",
                               "agentsCreate",
                               "agentsPickUp",
                               "archiveAfterDays"
@@ -17772,6 +17788,9 @@
                                 "type": "string"
                               },
                               "wakeOnAssign": {
+                                "type": "boolean"
+                              },
+                              "wakeOnLeaveBacklog": {
                                 "type": "boolean"
                               },
                               "agentsCreate": {
@@ -17904,6 +17923,7 @@
                               "enabled",
                               "prefix",
                               "wakeOnAssign",
+                              "wakeOnLeaveBacklog",
                               "agentsCreate",
                               "agentsPickUp",
                               "archiveAfterDays"
@@ -17916,6 +17936,9 @@
                                 "type": "string"
                               },
                               "wakeOnAssign": {
+                                "type": "boolean"
+                              },
+                              "wakeOnLeaveBacklog": {
                                 "type": "boolean"
                               },
                               "agentsCreate": {

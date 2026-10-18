@@ -82,6 +82,17 @@ test('tickets: turned on for an organization, a ticket assigned to an agent, its
   await section.scrollIntoViewIfNeeded();
   await section.getByRole('switch', { name: 'Tickets for Home lab' }).click();
   await expect(section.getByRole('switch', { name: 'Assigning an agent wakes it' })).toBeChecked();
+  // Right after it: moving a ticket out of the backlog wakes its agent, on by default, saved at once.
+  const switches = section.getByRole('switch');
+  await expect(switches.nth(1)).toHaveAccessibleName('Assigning an agent wakes it');
+  await expect(switches.nth(2)).toHaveAccessibleName('Moving a ticket out of the backlog wakes its agent');
+  const backlog = section.getByRole('switch', { name: 'Moving a ticket out of the backlog wakes its agent' });
+  await expect(backlog).toBeChecked();
+  await backlog.click();
+  await expect(backlog).not.toBeChecked();
+  expect(state.settingsBodies.at(-1)).toEqual({ wakeOnLeaveBacklog: false });
+  await backlog.click();
+  await expect(backlog).toBeChecked();
   await nav.getByRole('tab', { name: 'Tickets' }).click();
   await expect(page).toHaveURL(/\/tickets/);
   const board = page.getByRole('region', { name: 'Tickets' });

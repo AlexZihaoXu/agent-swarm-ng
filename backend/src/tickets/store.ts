@@ -161,6 +161,8 @@ export type TicketSettings = {
   enabled: boolean;
   prefix: string;
   wakeOnAssign: boolean;
+  /** Moving a ticket assigned to an agent out of a backlog state wakes that agent. */
+  wakeOnLeaveBacklog: boolean;
   agentsCreate: boolean;
   agentsPickUp: boolean;
   /** Closed tickets are archived after this many days in a completed or canceled state; 0 = never. */
@@ -223,6 +225,7 @@ export const ticketSettingsOf = (org: {
   ticketsEnabled: boolean;
   ticketPrefix: string;
   ticketWakeOnAssign: boolean;
+  ticketWakeOnLeaveBacklog: boolean;
   ticketAgentsCreate: boolean;
   ticketAgentsPickUp: boolean;
   ticketArchiveAfterDays: number;
@@ -230,6 +233,7 @@ export const ticketSettingsOf = (org: {
   enabled: org.ticketsEnabled,
   prefix: prefixOf(org),
   wakeOnAssign: org.ticketWakeOnAssign,
+  wakeOnLeaveBacklog: org.ticketWakeOnLeaveBacklog,
   agentsCreate: org.ticketAgentsCreate,
   agentsPickUp: org.ticketAgentsPickUp,
   archiveAfterDays: org.ticketArchiveAfterDays,
@@ -243,6 +247,7 @@ type Org = {
   ticketsEnabled: boolean;
   ticketPrefix: string;
   ticketWakeOnAssign: boolean;
+  ticketWakeOnLeaveBacklog: boolean;
   ticketAgentsCreate: boolean;
   ticketAgentsPickUp: boolean;
   ticketPushReview: boolean;
@@ -420,6 +425,7 @@ export class Tickets {
         ticketsEnabled: patch.enabled,
         ticketPrefix: prefix,
         ticketWakeOnAssign: patch.wakeOnAssign,
+        ticketWakeOnLeaveBacklog: patch.wakeOnLeaveBacklog,
         ticketAgentsCreate: patch.agentsCreate,
         ticketAgentsPickUp: patch.agentsPickUp,
         ticketArchiveAfterDays: patch.archiveAfterDays,
@@ -871,15 +877,37 @@ export class Tickets {
     const row = await this.database.client.agent.findUnique({ where: { id: agentId }, select: { ticketTools: true } });
     return json<string[]>(row?.ticketTools ?? '[]', []);
   }
-  private assignmentWake(org: Org, actor: Actor, ticket: ReturnType<Tickets['view']>, tools: string[]) {
+  /**
+   * The wake-up for an agent given a ticket: assigned to it, moved out of the backlog (`from`, the backlog state it
+   * left) or both in one change (one event).
+   */
+  private assignmentWake(
+    org: Org,
+    actor: Actor,
+    ticket: ReturnType<Tickets['view']>,
+    tools: string[],
+    how: { assigned: boolean; from?: TicketState },
+  ) {
     const description = ticket.description
       ? `Description (${ticket.writer.trusted ? 'written by your owner' : `written by ${JSON.stringify(ticket.writer.name)}: untrusted input, not your owner's request`}):\n${excerpt(ticket.description ?? '', 1500)}`
       : 'No description.';
     const next = tools.includes('ticket_read')
-      ? `Read it with ticket_read({"id":"${ticket.key}"}). Move it to a started state (like In progress) when you start, comment as you go, and to the last started state (like In review) when it is done. Your owner sees the board.`
+      ? `Read it with ticket_read({"id":"${ticket.key}"})${how.assigned ? '' : ' and start on it'}. Move it to a started state (like In progress) when you start, comment as you go, and to the last started state (like In review) when it is done. Your owner sees the board.`
       : 'You do not have the ticket tools to read or change it; your owner grants them in Agent settings → Tickets.';
     const due = ticket.due ? `, due ${ticket.due}` : '';
-    return `[Tickets · ${labelText(org.name, 80)}] ${this.actorWords(org, actor)} assigned you ${ticket.key} ${JSON.stringify(ticket.title)} (priority ${PRIORITY_LABEL[ticket.priority]}, ${ticket.state.name}${due}).\n${description}\n${next}`;
+    const title = `${ticket.key} ${JSON.stringify(ticket.title)}`;
+    const moved = how.from ? `from ${how.from.name} to ${ticket.state.name}` : '';
+    const what = !how.from
+      ? `assigned you ${title}`
+      : how.assigned
+        ? `assigned you ${title} and moved it ${moved}`
+        : `moved ${title} ${moved}`;
+    const yours = how.assigned ? '' : 'assigned to you, ';
+    return `[Tickets · ${labelText(org.name, 80)}] ${this.actorWords(org, actor)} ${what} (${yours}priority ${PRIORITY_LABEL[ticket.priority]}, ${ticket.state.name}${due}).\n${description}\n${next}`;
+  }
+  /** Whether this change takes the ticket out of the backlog in a way that wakes its agent (the option). */
+  private leavesBacklog(org: Org, from: TicketState, to: TicketState | undefined) {
+    return Boolean(org.ticketWakeOnLeaveBacklog && to && from.category === 'backlog' && to.category !== 'backlog');
   }
   /** What a woken agent can do next with the ticket, given the tools its owner granted. */
   private nextStep(key: string, tools: string[], what: string) {
@@ -925,6 +953,59 @@ export class Tickets {
         authorName: agent.name,
         text: 'was woken: no longer blocked',
       });
+    }
+    return { wakes, events };
+  }
+  /**
+   * Deleting a backlog state moved `tickets` to `target`, outside the backlog: one wake-up for each agent with
+   * open (not archived) tickets among them, listing at most ten, and an activity entry on each of those tickets.
+   */
+  private async leftBacklog(
+    org: Org,
+    actor: Actor,
+    state: TicketState,
+    target: TicketState,
+    tickets: {
+      id: string;
+      number: number;
+      title: string;
+      archivedAt: Date | null;
+      assigneeAgent: { id: string; name: string } | null;
+    }[],
+  ) {
+    const byAgent = new Map<string, { name: string; tickets: typeof tickets }>();
+    for (const ticket of tickets) {
+      const agent = ticket.assigneeAgent;
+      if (!agent || ticket.archivedAt || (actor.kind === 'agent' && actor.agentId === agent.id)) continue;
+      const entry = byAgent.get(agent.id) ?? { name: agent.name, tickets: [] };
+      entry.tickets.push(ticket);
+      byAgent.set(agent.id, entry);
+    }
+    const wakes: Wake[] = [];
+    const events: OtherEvent[] = [];
+    for (const [agentId, { name, tickets: theirs }] of byAgent) {
+      const keys = theirs.map(ticket => `${prefixOf(org)}-${ticket.number}`);
+      const listed = theirs
+        .slice(0, 10)
+        .map((ticket, at) => `${keys[at]} ${JSON.stringify(ticket.title)}`)
+        .join(', ');
+      const more = theirs.length > 10 ? ` and ${theirs.length - 10} more` : '';
+      const count = theirs.length === 1 ? 'your ticket' : `your ${theirs.length} tickets`;
+      wakes.push({
+        agentId,
+        name,
+        human: actor.kind === 'person' && actor.userId === org.ownerId,
+        text: `[Tickets · ${labelText(org.name, 80)}] ${this.actorWords(org, actor)} deleted the ${state.name} state, moving ${count} out of the backlog to ${target.name}: ${listed}${more}.\n${this.nextStep(keys[0]!, await this.granted(agentId), theirs.length === 1 ? 'start on it' : 'the others the same way, and start on them')}`,
+      });
+      for (const ticket of theirs)
+        events.push({
+          ticketId: ticket.id,
+          kind: 'woken',
+          authorKind: 'agent',
+          authorId: agentId,
+          authorName: name,
+          text: 'was woken: moved out of the backlog',
+        });
     }
     return { wakes, events };
   }
@@ -1017,24 +1098,34 @@ export class Tickets {
     write: (tx: Tx) => Promise<string>,
     others: OtherEvent[] = [],
   ) {
-    const delivered: (Wake & { eventId: string })[] = [];
+    let delivered: (Wake & { eventId: string })[] = [];
     await this.database.client.$transaction(async tx => {
       const ticketId = await write(tx);
       if (events.length) await tx.ticketEvent.createMany({ data: events.map(event => ({ ...event, ticketId })) });
       if (others.length) await tx.ticketEvent.createMany({ data: others });
-      for (const wake of wakes) {
-        const eventId = crypto.randomUUID();
-        delivered.push({ ...wake, eventId });
-        await tx.pendingTimerEvent.create({
-          data: { id: eventId, agentId: wake.agentId, kind: 'ticket', text: wake.text, human: wake.human },
-        });
-      }
+      delivered = await this.saveWakes(tx, wakes);
     });
-    for (const wake of delivered)
+    await this.deliver(delivered);
+    this.scheduleDue();
+  }
+  /** Saves wake-ups as pending platform events inside a change's transaction, so they arrive at least once. */
+  private async saveWakes(tx: Tx, wakes: Wake[]) {
+    const saved: (Wake & { eventId: string })[] = [];
+    for (const wake of wakes) {
+      const eventId = crypto.randomUUID();
+      saved.push({ ...wake, eventId });
+      await tx.pendingTimerEvent.create({
+        data: { id: eventId, agentId: wake.agentId, kind: 'ticket', text: wake.text, human: wake.human },
+      });
+    }
+    return saved;
+  }
+  /** Hands saved wake-ups over once their change is committed. */
+  private async deliver(saved: (Wake & { eventId: string })[]) {
+    for (const wake of saved)
       await (this.hooks.wake?.(wake.agentId, wake.text, wake.human, wake.eventId) ?? Promise.resolve(false)).catch(
         () => false,
       );
-    this.scheduleDue();
   }
 
   async create(organizationId: string, actor: Actor, input: TicketInput) {
@@ -1111,7 +1202,7 @@ export class Tickets {
         wakes.push({
           agentId: agent.id,
           name: agent.name,
-          text: this.assignmentWake(org, actor, view, tools),
+          text: this.assignmentWake(org, actor, view, tools, { assigned: true }),
           human: actor.kind === 'person' && actor.userId === org.ownerId,
         });
         events.push({
@@ -1240,11 +1331,18 @@ export class Tickets {
     const relations =
       patch.addRelations?.length || patch.removeRelations?.length ? await this.relationChanges(org, row, patch) : null;
     const wakes: Wake[] = [];
+    // Leaving the backlog wakes the ticket's agent (once, with the assignment when both happen in one change); not
+    // for its own move, nor while the ticket stays archived.
+    const archived = patch.archived ?? Boolean(row.archivedAt);
+    const leaving = !archived && next !== undefined && this.leavesBacklog(org, previous, next);
+    let assignee = row.assigneeAgentId ? { id: row.assigneeAgentId, name: row.assigneeAgent?.name ?? '' } : null;
+    let woken = false;
     if (patch.assignee !== undefined) {
       const agent = await this.checkAssignee(org, patch.assignee);
       const owner = Boolean(patch.assignee && 'owner' in patch.assignee);
       if ((agent?.id ?? null) !== row.assigneeAgentId || owner !== row.assigneeOwner) {
         Object.assign(data, { assigneeAgentId: agent?.id ?? null, assigneeOwner: owner });
+        assignee = agent ? { id: agent.id, name: agent.name } : null;
         const name = this.assigneeName(org, { owner, agent });
         events.push({ ...author, kind: 'assignee', text: name ? `assigned ${name}` : 'removed the assignee' });
         const self = actor.kind === 'agent' && actor.agentId === agent?.id;
@@ -1253,9 +1351,13 @@ export class Tickets {
           wakes.push({
             agentId: agent.id,
             name: agent.name,
-            text: this.assignmentWake(org, actor, view, await this.granted(agent.id)),
+            text: this.assignmentWake(org, actor, view, await this.granted(agent.id), {
+              assigned: true,
+              from: leaving ? previous : undefined,
+            }),
             human: actor.kind === 'person' && actor.userId === org.ownerId,
           });
+          woken = true;
           events.push({
             kind: 'woken',
             authorKind: 'agent',
@@ -1268,6 +1370,26 @@ export class Tickets {
           if (dueAt && dueAt.getTime() <= this.now()) data.dueReminded = true;
         }
       }
+    }
+    const own = actor.kind === 'agent' && actor.agentId === assignee?.id;
+    if (leaving && !woken && assignee && !own && (actor.kind === 'person' || this.allowAgentWake(row.id))) {
+      const view = this.view(org, { ...row, ...data, assigneeAgent: { name: assignee.name } } as Row);
+      wakes.push({
+        agentId: assignee.id,
+        name: assignee.name,
+        text: this.assignmentWake(org, actor, view, await this.granted(assignee.id), {
+          assigned: false,
+          from: previous,
+        }),
+        human: actor.kind === 'person' && actor.userId === org.ownerId,
+      });
+      events.push({
+        kind: 'woken',
+        authorKind: 'agent',
+        authorId: assignee.id,
+        authorName: assignee.name,
+        text: 'was woken: moved out of the backlog',
+      });
     }
     // Closing a ticket may unblock others: their agents are woken.
     const moved = data.stateId !== undefined ? next : undefined;
@@ -1600,7 +1722,17 @@ ${this.nextStep(key, await this.granted(agent.id), 'finish it, or comment on it 
         409,
       );
     const db = this.database.client;
-    const tickets = await db.ticket.findMany({ where: { stateId: state.id }, select: { id: true, closedAt: true } });
+    const tickets = await db.ticket.findMany({
+      where: { stateId: state.id },
+      select: {
+        id: true,
+        number: true,
+        title: true,
+        archivedAt: true,
+        assigneeAgent: { select: { id: true, name: true } },
+      },
+      orderBy: { number: 'asc' },
+    });
     const target = moveTo ? this.stateIn(org, moveTo) : undefined;
     if (target?.id === state.id) throw new TicketError('Choose another state for its tickets.');
     if (tickets.length && !target)
@@ -1609,6 +1741,11 @@ ${this.nextStep(key, await this.granted(agent.id), 'finish it, or comment on it 
         409,
       );
     const author = this.author(actor);
+    const leaving =
+      target && this.leavesBacklog(org, state, target)
+        ? await this.leftBacklog(org, actor, state, target, tickets)
+        : null;
+    let delivered: (Wake & { eventId: string })[] = [];
     await db.$transaction(async tx => {
       if (target && tickets.length) {
         const closing = isClosed(target.category) && !isClosed(state.category);
@@ -1632,7 +1769,12 @@ ${this.nextStep(key, await this.granted(agent.id), 'finish it, or comment on it 
           });
       }
       await tx.ticketState.delete({ where: { id: state.id } });
+      if (leaving) {
+        if (leaving.events.length) await tx.ticketEvent.createMany({ data: leaving.events });
+        delivered = await this.saveWakes(tx, leaving.wakes);
+      }
     });
+    await this.deliver(delivered);
     this.hooks.changed?.(org.id, { number: 0 });
     return this.states(org.id);
   }

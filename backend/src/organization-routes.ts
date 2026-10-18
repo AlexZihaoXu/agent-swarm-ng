@@ -10,6 +10,7 @@ export const TicketSettings = Type.Object({
   enabled: Type.Boolean(),
   prefix: Type.String(),
   wakeOnAssign: Type.Boolean(),
+  wakeOnLeaveBacklog: Type.Boolean(),
   agentsCreate: Type.Boolean(),
   agentsPickUp: Type.Boolean(),
   /** Closed tickets are archived after this many days in a completed or canceled state; 0 = never. */

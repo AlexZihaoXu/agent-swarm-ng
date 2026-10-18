@@ -5300,6 +5300,7 @@ export interface operations {
                             enabled: boolean;
                             prefix: string;
                             wakeOnAssign: boolean;
+                            wakeOnLeaveBacklog: boolean;
                             agentsCreate: boolean;
                             agentsPickUp: boolean;
                             archiveAfterDays: number;
@@ -6796,6 +6797,7 @@ export interface operations {
                                 enabled: boolean;
                                 prefix: string;
                                 wakeOnAssign: boolean;
+                                wakeOnLeaveBacklog: boolean;
                                 agentsCreate: boolean;
                                 agentsPickUp: boolean;
                                 archiveAfterDays: number;
@@ -6841,6 +6843,7 @@ export interface operations {
                                 enabled: boolean;
                                 prefix: string;
                                 wakeOnAssign: boolean;
+                                wakeOnLeaveBacklog: boolean;
                                 agentsCreate: boolean;
                                 agentsPickUp: boolean;
                                 archiveAfterDays: number;
@@ -6893,6 +6896,7 @@ export interface operations {
                                 enabled: boolean;
                                 prefix: string;
                                 wakeOnAssign: boolean;
+                                wakeOnLeaveBacklog: boolean;
                                 agentsCreate: boolean;
                                 agentsPickUp: boolean;
                                 archiveAfterDays: number;
@@ -6942,6 +6946,7 @@ export interface operations {
                         enabled?: boolean;
                         prefix?: string;
                         wakeOnAssign?: boolean;
+                        wakeOnLeaveBacklog?: boolean;
                         agentsCreate?: boolean;
                         agentsPickUp?: boolean;
                         archiveAfterDays?: number;
@@ -6970,6 +6975,7 @@ export interface operations {
                                 enabled: boolean;
                                 prefix: string;
                                 wakeOnAssign: boolean;
+                                wakeOnLeaveBacklog: boolean;
                                 agentsCreate: boolean;
                                 agentsPickUp: boolean;
                                 archiveAfterDays: number;

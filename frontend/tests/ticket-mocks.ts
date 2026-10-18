@@ -6,6 +6,7 @@ const settings = (enabled: boolean) => ({
   enabled,
   prefix: 'HOME',
   wakeOnAssign: true,
+  wakeOnLeaveBacklog: true,
   agentsCreate: true,
   agentsPickUp: false,
   archiveAfterDays: 30,
@@ -57,6 +58,9 @@ export const ticketOf = (number: number, fields: Ticket = {}): Ticket => ({
 export async function mockTickets(page: Page) {
   const state = {
     enabled: false,
+    /** Ticket options saved through the organization route (besides `enabled`). */
+    options: {} as Record<string, unknown>,
+    settingsBodies: [] as unknown[],
     states: defaultStates(),
     tickets: [] as Ticket[],
     events: new Map<number, Ticket[]>(),
@@ -75,12 +79,17 @@ export async function mockTickets(page: Page) {
     agents: 4,
     computers: 0,
     groups: 0,
-    tickets: settings(state.enabled),
+    tickets: { ...settings(state.enabled), ...state.options },
   });
   await page.route(/\/api\/organizations$/, route => route.fulfill({ json: { organizations: [organization()] } }));
   await page.route(/\/api\/organizations\/personal$/, route => {
     const body = route.request().postDataJSON();
-    if (body.tickets?.enabled !== undefined) state.enabled = body.tickets.enabled;
+    if (body.tickets) {
+      state.settingsBodies.push(body.tickets);
+      const { enabled, ...options } = body.tickets;
+      if (enabled !== undefined) state.enabled = enabled;
+      Object.assign(state.options, options);
+    }
     return route.fulfill({ json: { organizations: [organization()] } });
   });
   // The workflow editor: add, change (a position is the index within its category) and delete states.

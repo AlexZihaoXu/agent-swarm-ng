@@ -59,8 +59,13 @@ describe('ticket routes', { timeout: 120_000 }, () => {
         enabled: true,
         prefix: 'SAM',
         agentsPickUp: false,
+        wakeOnLeaveBacklog: true,
       });
       expect((await call('PATCH', base, samCookie, { tickets: { prefix: '1x' } })).statusCode).toBe(400);
+      const quiet = await call('PATCH', base, samCookie, { tickets: { wakeOnLeaveBacklog: false } });
+      expect(quiet.json().organizations[0].tickets).toMatchObject({ wakeOnLeaveBacklog: false, wakeOnAssign: true });
+      expect((await call('PATCH', base, samCookie, { tickets: { wakeOnLeaveBacklog: 'yes' } })).statusCode).toBe(400);
+      await call('PATCH', base, samCookie, { tickets: { wakeOnLeaveBacklog: true } });
 
       const made = await call('POST', `${base}/tickets`, samCookie, {
         title: 'Clean the cache',
@@ -218,6 +223,23 @@ describe('ticket routes', { timeout: 120_000 }, () => {
       expect((await call('PATCH', `${base}/tickets/1`, samCookie, { place: { after: 0 } })).statusCode).toBe(400);
       const audit = await database.client.auditEvent.findMany({ where: { kind: 'ticket.update' } });
       expect(audit.map(event => JSON.parse(event.detail ?? '{}').fields)).toContainEqual(['status', 'place']);
+      // Dragging an agent's ticket out of the backlog wakes it: a second saved event after its assignment.
+      const bo = await database.createAgent({
+        name: 'Bo',
+        endpointId: 'm',
+        model: 'm',
+        thinkingLevel: 'off',
+        organizationId: samOrg,
+      });
+      const pending = () => database.client.pendingTimerEvent.count({ where: { agentId: bo.id, kind: 'ticket' } });
+      await call('POST', `${base}/tickets`, samCookie, {
+        title: 'Four',
+        status: 'Backlog',
+        assignee: { agentId: bo.id },
+      });
+      expect(await pending()).toBe(1);
+      await call('PATCH', `${base}/tickets/4`, samCookie, { status: 'Todo', place: { after: 1 } });
+      expect(await pending()).toBe(2);
     } finally {
       await app.close();
     }
