@@ -11,6 +11,7 @@ import { TicketScope } from '@/components/ticket-refs';
 import { ArchivedMark, BoardMarks, StateDot } from '@/components/ticket-board';
 import { TicketMoreMenu, ticketLink, type TicketCommands } from '@/components/ticket-menu';
 import { AssigneeAvatar, assigneeKey, assigneeOptions } from '@/components/ticket-assignee';
+import { MentionTextarea } from '@/components/mention-textarea';
 import { useSignedIn } from '@/lib/auth';
 import { computersQuery } from '@/lib/computers-query';
 import { chatAgentPath, chatGroupPath, computerPath, ticketPath } from '@/lib/dashboard-location';
@@ -837,13 +838,14 @@ function Activity({
         <label htmlFor={`${id}-comment`} className="block text-xs text-muted-foreground">
           Comment (Markdown; @name an agent to ask it something without reassigning it)
         </label>
-        <textarea
+        <MentionTextarea
           id={`${id}-comment`}
           rows={3}
           value={draft}
+          onValueChange={setDraft}
+          agents={agents}
           maxLength={4000}
           disabled={busy}
-          onChange={event => setDraft(event.target.value)}
           className={field}
         />
         <div className="flex justify-end">

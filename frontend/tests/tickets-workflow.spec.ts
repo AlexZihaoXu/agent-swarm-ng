@@ -190,3 +190,29 @@ test('tickets list: a row’s menu archives it too', async ({ page }) => {
   await expect.poll(() => state.bodies.at(-1)).toEqual({ archived: true });
   await expect(page.getByText('Archived HOME-1')).toBeVisible();
 });
+
+test('tickets: typing @ in a comment completes an agent’s name from a list', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  const { card } = await seededBoard(page);
+  await card(2).click();
+  const ticket = page.getByRole('region', { name: 'Ticket HOME-2' });
+  const field = ticket.getByRole('combobox', { name: /^Comment/ });
+  await field.fill('hey @mo');
+  const list = page.getByRole('listbox', { name: 'Mention an agent' });
+  await expect(list.getByRole('option')).toHaveText(['Morgan']);
+  await field.press('Enter');
+  await expect(field).toHaveValue('hey @Morgan ');
+  await expect(list).toHaveCount(0);
+  // ↓ moves through the matches; Esc closes the list and keeps the text.
+  await field.pressSequentially('and @');
+  await expect(list.getByRole('option')).toHaveCount(4);
+  await field.press('ArrowDown');
+  await expect(list.getByRole('option', { selected: true })).toHaveText('Morgan');
+  await field.press('Escape');
+  await expect(list).toHaveCount(0);
+  await expect(field).toHaveValue('hey @Morgan and @');
+  // A click picks one too.
+  await field.pressSequentially('r');
+  await list.getByRole('option', { name: 'Riley' }).click();
+  await expect(field).toHaveValue('hey @Morgan and @Riley ');
+});
