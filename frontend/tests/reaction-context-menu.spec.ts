@@ -165,7 +165,22 @@ test('right-clicking a bubble opens recent reactions, an emoji submenu, and Repl
   await bubble.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: 'Message actions' });
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole('group', { name: 'Recent reactions' })).toHaveCount(0);
+  // Before any reaction of yours, the quick row offers the common ones.
+  await expect
+    .poll(() =>
+      menu
+        .getByRole('group', { name: 'Quick reactions' })
+        .getByRole('menuitem')
+        .evaluateAll(items => items.map(item => item.getAttribute('aria-label'))),
+    )
+    .toEqual([
+      'React with Thumbs up',
+      'React with Heart',
+      'React with Laugh',
+      'React with Celebrate',
+      'React with Eyes',
+      'React with Check',
+    ]);
   await expect(menu.getByRole('menuitem', { name: 'Reply' })).not.toHaveAttribute('aria-disabled', 'true');
   const add = menu.getByRole('menuitem', { name: 'Add reaction' });
   await add.hover();
@@ -193,15 +208,21 @@ test('right-clicking a bubble opens recent reactions, an emoji submenu, and Repl
     await expect(row.getByRole('button', { name: `${label}: 1 reaction` })).toBeVisible();
   }
   await bubble.click({ button: 'right' });
-  const recents = menu.getByRole('group', { name: 'Recent reactions' });
+  const recents = menu.getByRole('group', { name: 'Quick reactions' });
+  // The first four are your recent ones; the common ones fill the rest of the row.
   const labels = () =>
-    recents.getByRole('menuitem').evaluateAll(items => items.map(item => item.getAttribute('aria-label')));
+    recents.getByRole('menuitem').evaluateAll(items => items.slice(0, 4).map(item => item.getAttribute('aria-label')));
   expect(await labels()).toEqual([
     'Remove Laugh reaction',
     'Remove Eyes reaction',
     'Remove Heart reaction',
     'Remove Fire reaction',
   ]);
+  expect(
+    await recents
+      .getByRole('menuitem')
+      .evaluateAll(items => items.slice(4).map(item => item.getAttribute('aria-label'))),
+  ).toEqual(['Remove Thumbs up reaction', 'React with Celebrate']);
   await recents.getByRole('menuitem', { name: 'Remove Fire reaction' }).click();
   await expect(row.getByRole('button', { name: 'Fire: 1 reaction' })).toHaveCount(0);
   await bubble.click({ button: 'right' });

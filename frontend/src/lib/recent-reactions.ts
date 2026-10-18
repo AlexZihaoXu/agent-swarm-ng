@@ -26,3 +26,8 @@ export function parseRecentReactions(raw: string | null): ReactionEmoji[] {
 export function rememberReaction(current: ReactionEmoji[], emoji: ReactionEmoji): ReactionEmoji[] {
   return [emoji, ...current.filter(value => value !== emoji)].slice(0, 4);
 }
+
+/** The quick row: your recent reactions first, then the common ones, six in all. */
+export function quickReactions(recent: ReactionEmoji[], size = 6): ReactionEmoji[] {
+  return [...new Set([...recent, ...reactionChoices.map(choice => choice.value)])].slice(0, size);
+}

@@ -16,6 +16,7 @@ import {
   recentReactionsKey,
   parseRecentReactions,
   rememberReaction,
+  quickReactions,
   type ReactionEmoji as Emoji,
 } from '@/lib/recent-reactions';
 
@@ -210,29 +211,26 @@ export function MessageReactions({
             }}
             className="context-menu-content phone-menu-targets z-50 max-h-[calc(100dvh-16px)] min-w-52 max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-border bg-background p-1 ao-top shadow-lg sm:max-h-none sm:overflow-visible"
           >
-            {recent.data.length > 0 && (
-              <>
-                <div role="group" aria-label="Recent reactions" className="flex flex-wrap gap-0.5 px-1 py-1">
-                  {recent.data.map(emoji => {
-                    const label = choices.find(choice => choice.value === emoji)?.label ?? emoji;
-                    const mine = reactions.some(reaction => reaction.emoji === emoji && reaction.mine);
-                    return (
-                      <ContextMenu.Item
-                        key={emoji}
-                        textValue={label}
-                        aria-label={mine ? `Remove ${label} reaction` : `React with ${label}`}
-                        disabled={pending}
-                        onSelect={() => void change(emoji)}
-                        className="flex size-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md text-2xl leading-none outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40 sm:size-9"
-                      >
-                        {emoji}
-                      </ContextMenu.Item>
-                    );
-                  })}
-                </div>
-                <ContextMenu.Separator className="my-1 h-px bg-border" />
-              </>
-            )}
+            {/* Your recent reactions first, then the common ones (👍 ❤️ 😂 🎉 👀 ✅): never an empty row. */}
+            <div role="group" aria-label="Quick reactions" className="flex flex-wrap gap-0.5 px-1 py-1">
+              {quickReactions(recent.data).map(emoji => {
+                const label = choices.find(choice => choice.value === emoji)?.label ?? emoji;
+                const mine = reactions.some(reaction => reaction.emoji === emoji && reaction.mine);
+                return (
+                  <ContextMenu.Item
+                    key={emoji}
+                    textValue={label}
+                    aria-label={mine ? `Remove ${label} reaction` : `React with ${label}`}
+                    disabled={pending}
+                    onSelect={() => void change(emoji)}
+                    className="flex size-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md text-2xl leading-none outline-none data-[highlighted]:bg-muted data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40 sm:size-9"
+                  >
+                    {emoji}
+                  </ContextMenu.Item>
+                );
+              })}
+            </div>
+            <ContextMenu.Separator className="my-1 h-px bg-border" />
             <ContextMenu.Item
               disabled={pending}
               aria-expanded={mobileChoices}
