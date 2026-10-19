@@ -292,3 +292,41 @@ test('a reply after you send, while the agent works with a to-do bar, ends fully
   });
   await expect.poll(fromBottom, { timeout: 3000 }).toBeLessThan(2);
 });
+
+test('switching to another tab and back returns to the latest message, without loading older pages forever', async ({
+  page,
+}) => {
+  const messages = Array.from({ length: 120 }, (_, index) => ({
+    id: `m${index}`,
+    channelId: 'avery',
+    sequence: index + 1000,
+    role: index % 2 ? 'assistant' : 'user',
+    text: `Message ${index}: ${'words '.repeat(25)}`,
+    timestamp: Date.now() - (120 - index) * 60_000,
+    replyTo: null,
+  }));
+  let older = 0;
+  await page.route('**/api/channels/avery/messages*', route => {
+    const url = new URL(route.request().url());
+    if ([...url.searchParams.keys()].some(key => key !== 'limit')) {
+      older++;
+      return route.fulfill({ json: { messages: [], nextCursor: null } });
+    }
+    return route.fulfill({ json: { messages, nextCursor: 'older' } });
+  });
+  await page.setViewportSize({ width: 1000, height: 560 });
+  await page.goto('/chat/agents/avery');
+  const chat = page.getByRole('region', { name: 'Conversation with Avery' });
+  const history = chat.getByRole('region', { name: 'Chat history' });
+  await expect(chat.getByText('Message 119:')).toBeVisible();
+  const fromBottom = () => history.evaluate(root => root.scrollHeight - root.scrollTop - root.clientHeight);
+  await expect.poll(fromBottom).toBeLessThan(2);
+  for (const tab of ['Computers', 'Tickets', 'Dashboard']) {
+    if ((await page.getByRole('tab', { name: tab }).count()) === 0) continue;
+    await page.getByRole('tab', { name: tab }).click();
+    await page.getByRole('tab', { name: 'Chat' }).click();
+    await expect(chat.getByText('Message 119:')).toBeInViewport();
+    await expect.poll(fromBottom).toBeLessThan(2);
+  }
+  expect(older).toBe(0);
+});

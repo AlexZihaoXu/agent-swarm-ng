@@ -37,9 +37,19 @@ export function useStickToBottom(viewport: RefObject<HTMLElement | null>, key: u
     let settle: ReturnType<typeof setTimeout> | undefined;
     let height = content.getBoundingClientRect().height;
     let view = root.clientHeight;
+    let first = true;
     const observer = new ResizeObserver(() => {
       const next = content.getBoundingClientRect().height;
       const nextView = root.clientHeight;
+      // A chat area that just appeared (a tab switched back, a window opened) starts at its latest message once it
+      // has a size: the app's own scroll may have run while it was still laid out at zero height.
+      if (first) {
+        first = false;
+        toBottom();
+        height = next;
+        view = nextView;
+        return;
+      }
       // Content growing below, or the chat getting shorter: the latest message would slip out of view. A shrinking
       // window (older messages dropped while reading) is neither.
       if ((next > height || nextView < view) && stuck.current) {
