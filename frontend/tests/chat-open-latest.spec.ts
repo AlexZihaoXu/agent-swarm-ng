@@ -240,3 +240,55 @@ test('a long chat (a full window of 150) shows a new message all the way down, a
   await page.setViewportSize({ width: 1280, height: 600 });
   await expect.poll(fromBottom, { timeout: 3000 }).toBeLessThan(2);
 });
+
+test('a reply after you send, while the agent works with a to-do bar, ends fully in view (agents loading late)', async ({
+  page,
+}) => {
+  const messages = Array.from({ length: 40 }, (_, index) => ({
+    id: `m${index}`,
+    channelId: 'avery',
+    sequence: index + 1,
+    role: index % 2 ? 'assistant' : 'user',
+    text: `Message ${index}: ${'words '.repeat(20)}\n\n\`code\` and more`,
+    timestamp: Date.now() - (40 - index) * 60_000,
+    replyTo: null,
+  }));
+  await page.route('**/api/channels/avery/messages*', route => route.fulfill({ json: { messages, nextCursor: null } }));
+  // The agent list arrives late (the app opened straight into this chat).
+  await page.route(/\/api\/agents(\?.*)?$/, async route => {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    await route.fallback();
+  });
+  await page.setViewportSize({ width: 1000, height: 580 });
+  await page.goto('/chat/agents/avery');
+  const chat = page.getByRole('region', { name: 'Conversation with Avery' });
+  await expect(chat.getByText('Message 39:')).toBeVisible();
+  const history = chat.getByRole('region', { name: 'Chat history' });
+  const fromBottom = () => history.evaluate(root => root.scrollHeight - root.scrollTop - root.clientHeight);
+  const emit = (event: object) =>
+    page.evaluate(e => (window as unknown as { emitAgentEvent: (event: object) => void }).emitAgentEvent(e), event);
+  await emit({
+    type: 'todos_updated',
+    eventId: 't1',
+    runId: 'platform',
+    agentId: 'avery',
+    channelId: 'platform',
+    todos: [{ content: 'LB-6: execute Rust WebRTC spike and track stages', status: 'in_progress' }],
+  });
+  await page.getByLabel('Message Avery').fill('which model were u on');
+  await page.getByLabel('Message Avery').press('Enter');
+  await expect(chat.getByText('which model were u on')).toBeVisible();
+  await expect.poll(fromBottom).toBeLessThan(2);
+  await emit({
+    type: 'channel_message',
+    agentId: 'avery',
+    channelId: 'avery',
+    runId: 'rx',
+    id: 'reply-x',
+    timestamp: Date.now(),
+    text: '**LB-6** is In progress. A separate Claude session was on `opus`.\n\n- one\n- two\n- three\n\nMore text here that wraps a few lines to make the bubble tall. '.repeat(
+      2,
+    ),
+  });
+  await expect.poll(fromBottom, { timeout: 3000 }).toBeLessThan(2);
+});

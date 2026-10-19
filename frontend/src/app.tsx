@@ -674,7 +674,10 @@ export function App() {
 
   // Images, files and ticket chips finish loading after the chat opens, and new messages arrive: while the reader
   // is at the bottom, keep the latest message in view.
-  const smoothFollow = useStickToBottom(scrollRef, `${agent.id}:${conversationPeer}:${mobileConversation}`);
+  const { follow: smoothFollow, following } = useStickToBottom(
+    scrollRef,
+    `${agent.id}:${conversationPeer}:${mobileConversation}`,
+  );
 
   useLayoutEffect(() => {
     if (conversationPeer !== 'you') return;
@@ -697,7 +700,8 @@ export function App() {
       /* anchored by useMessageWindow */
     } else if (
       newViewport ||
-      (addedMessage && (Boolean(sentId) || previous.height - scroller.scrollTop - scroller.clientHeight < 80))
+      (addedMessage &&
+        (Boolean(sentId) || following() || previous.height - scroller.scrollTop - scroller.clientHeight < 80))
     ) {
       // The history's first page arriving is opening the chat, not a new message: straight to the latest.
       const smooth = addedMessage && previous.ready && !newViewport && !reducedMotion;

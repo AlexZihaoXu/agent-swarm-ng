@@ -110,7 +110,7 @@ export function FloatingChat({
     reset: channel,
   });
   // Images and previews that load late, and new messages, stay in view while the reader is at the bottom.
-  const follow = useStickToBottom(viewport, `${channel}:${box !== null}`);
+  const { follow, following } = useStickToBottom(viewport, `${channel}:${box !== null}`);
   // Follow new messages only while the reader is near the bottom; older pages keep their place through the
   // window's anchor (as in the group chat).
   const nearBottom = useRef(true);
@@ -123,7 +123,8 @@ export function FloatingChat({
     const before = previous.current;
     if (before.first && before.first !== first && before.last === last) {
       /* anchored by useMessageWindow */
-    } else if (!before.last || nearBottom.current) root.scrollTo({ top: root.scrollHeight, behavior: 'instant' });
+    } else if (!before.last || nearBottom.current || following())
+      root.scrollTo({ top: root.scrollHeight, behavior: 'instant' });
     previous.current = { first, last };
   }, [messages.length, messages.at(-1)?.text, box !== null]);
   // Once the window is on the page: a short history that cannot scroll still pages in older messages.

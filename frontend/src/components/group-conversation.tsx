@@ -116,7 +116,7 @@ export function GroupConversation({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const previous = useRef({ first: '', last: '', height: 0 });
   // Images and previews that load late, and new messages, stay in view while the reader is at the bottom.
-  const follow = useStickToBottom(viewport, groupId);
+  const { follow } = useStickToBottom(viewport, groupId);
   const nearBottom = useRef(true);
   const draftRef = useRef(draft);
   draftRef.current = draft;
