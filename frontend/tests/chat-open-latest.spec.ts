@@ -199,3 +199,44 @@ test('sending a message scrolls to it even when the reader had scrolled up', asy
   await expect(chat.getByText('Sent while scrolled up')).toBeVisible();
   await expect.poll(fromBottom, { timeout: 3000 }).toBeLessThan(8);
 });
+
+test('a long chat (a full window of 150) shows a new message all the way down, and stays down as the chat gets shorter', async ({
+  page,
+}) => {
+  const messages = Array.from({ length: 200 }, (_, index) => ({
+    id: `m${index}`,
+    channelId: 'avery',
+    sequence: index + 1,
+    role: index % 2 ? 'assistant' : 'user',
+    text: `Message ${index}: ${'words '.repeat(8)}`,
+    timestamp: Date.now() - (200 - index) * 60_000,
+    replyTo: null,
+  }));
+  await page.route('**/api/channels/avery/messages*', route => route.fulfill({ json: { messages, nextCursor: null } }));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/chat/agents/avery');
+  const chat = page.getByRole('region', { name: 'Conversation with Avery' });
+  await expect(chat.getByText('Message 199:')).toBeVisible();
+  const history = chat.getByRole('region', { name: 'Chat history' });
+  const fromBottom = () => history.evaluate(root => root.scrollHeight - root.scrollTop - root.clientHeight);
+  await expect.poll(fromBottom).toBeLessThan(8);
+  for (let n = 0; n < 3; n++) {
+    await page.evaluate(
+      event => (window as unknown as { emitAgentEvent: (event: object) => void }).emitAgentEvent(event),
+      {
+        type: 'channel_message',
+        agentId: 'avery',
+        channelId: 'avery',
+        runId: `r${n}`,
+        id: `new-${n}`,
+        text: `Fresh reply ${n}`,
+        timestamp: Date.now(),
+      },
+    );
+    await expect(chat.getByText(`Fresh reply ${n}`)).toBeVisible({ timeout: 3000 });
+    await expect.poll(fromBottom, { timeout: 3000 }).toBeLessThan(2);
+  }
+  // The chat area gets shorter (here the window; a to-do list or a taller composer does the same): still at the end.
+  await page.setViewportSize({ width: 1280, height: 600 });
+  await expect.poll(fromBottom, { timeout: 3000 }).toBeLessThan(2);
+});

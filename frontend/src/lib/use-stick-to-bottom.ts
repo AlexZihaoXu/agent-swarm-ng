@@ -17,8 +17,10 @@ export function useStickToBottom(viewport: RefObject<HTMLElement | null>, key: u
     if (!root || !content) return;
     stuck.current = true;
     const near = () => root.scrollHeight - root.scrollTop - root.clientHeight < NEAR;
+    // All the way down: "near" only decides whether the reader is following, not where to stop.
     const toBottom = () => {
-      if (stuck.current && !near()) root.scrollTop = root.scrollHeight;
+      if (stuck.current && root.scrollHeight - root.scrollTop - root.clientHeight > 1)
+        root.scrollTop = root.scrollHeight;
     };
     const onScroll = () => {
       if (near()) stuck.current = true;
@@ -26,20 +28,25 @@ export function useStickToBottom(viewport: RefObject<HTMLElement | null>, key: u
     };
     let settle: ReturnType<typeof setTimeout> | undefined;
     let height = content.getBoundingClientRect().height;
+    let view = root.clientHeight;
     const observer = new ResizeObserver(() => {
       const next = content.getBoundingClientRect().height;
-      // Only growth: a shrinking window (older messages dropped while reading) is not new content below.
-      if (next > height && stuck.current) {
+      const nextView = root.clientHeight;
+      // Content growing below, or the chat getting shorter (a to-do list above it, a taller composer): the latest
+      // message would slip out of view. A shrinking window (older messages dropped while reading) is not either.
+      if ((next > height || nextView < view) && stuck.current) {
         const wait = smoothUntil.current - performance.now();
         clearTimeout(settle);
         // A smooth follow under way is left to finish, then checked: content may have grown past its target.
         if (wait > 0) settle = setTimeout(toBottom, wait);
-        else root.scrollTop = root.scrollHeight;
+        else toBottom();
       }
       height = next;
+      view = nextView;
     });
     root.addEventListener('scroll', onScroll, { passive: true });
     observer.observe(content);
+    observer.observe(root);
     return () => {
       clearTimeout(settle);
       observer.disconnect();
