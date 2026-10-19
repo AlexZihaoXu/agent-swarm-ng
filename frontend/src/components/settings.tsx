@@ -30,11 +30,14 @@ type TestResult =
 const inputClass = settingsInput;
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
+const ANTHROPIC_URL = 'https://api.anthropic.com';
 
 type Endpoint = {
   id: string;
   name: string;
   baseUrl: string;
+  /** OpenAI-compatible, or Anthropic's Messages API with an API key. */
+  kind: 'openai' | 'anthropic';
   hasApiKey: boolean;
   saved: boolean;
   contextWindow?: number;
@@ -78,10 +81,13 @@ function EndpointCard({
   const [reasoning, setReasoning] = useState(endpoint.reasoning);
   const request = useRef<AbortController | null>(null);
   const testing = result.state === 'testing';
-  const openrouter = baseUrl.trim().replace(/\/+$/, '') === OPENROUTER_URL;
+  const anthropic = endpoint.kind === 'anthropic';
+  const openrouter = !anthropic && baseUrl.trim().replace(/\/+$/, '') === OPENROUTER_URL;
+  // OpenRouter's catalog and Anthropic's model metadata set the limits; other servers' are set here.
+  const catalog = openrouter || anthropic;
   const parsedContext = parseTokens(contextWindow, CONTEXT_RANGE);
   const parsedReply = parseTokens(maxOutputTokens, REPLY_RANGE);
-  const limitsInvalid = !openrouter && (Number.isNaN(parsedContext) || Number.isNaN(parsedReply));
+  const limitsInvalid = !catalog && (Number.isNaN(parsedContext) || Number.isNaN(parsedReply));
   const limitsDirty =
     contextWindow !== limitText(endpoint.contextWindow) ||
     maxOutputTokens !== limitText(endpoint.maxOutputTokens) ||
@@ -108,6 +114,7 @@ function EndpointCard({
       const { data, error } = await api.POST('/api/model-endpoints/test', {
         body: {
           baseUrl: baseUrl.trim(),
+          kind: endpoint.kind,
           ...(keyChanged || !endpoint.saved ? { apiKey: apiKey.trim() } : { endpointId: endpoint.id }),
         },
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]),
@@ -134,9 +141,10 @@ function EndpointCard({
           id: endpoint.id,
           name: name.trim(),
           baseUrl: baseUrl.trim(),
+          kind: endpoint.kind,
           ...(keyChanged || !endpoint.saved ? { apiKey: apiKey.trim() } : {}),
-          // Empty clears a limit (null); OpenRouter's catalog sets its own, so its card leaves them as saved.
-          ...(openrouter
+          // Empty clears a limit (null); OpenRouter's catalog and Anthropic's metadata set their own, left as saved.
+          ...(catalog
             ? {}
             : {
                 contextWindow: parsedContext ?? null,
@@ -175,7 +183,7 @@ function EndpointCard({
             {name.trim() || 'New endpoint'}
           </h3>
           <p className="mt-1 truncate text-xs text-muted-foreground">
-            {openrouter ? 'OpenRouter · API credits' : 'OpenAI-compatible API'}
+            {anthropic ? 'Anthropic · API key' : openrouter ? 'OpenRouter · API credits' : 'OpenAI-compatible API'}
             {!editing && (
               <>
                 {' · '}
@@ -295,14 +303,16 @@ function EndpointCard({
                         setBaseUrl(event.target.value);
                         setResult({ state: 'idle' });
                       }}
-                      placeholder="https://api.openai.com/v1"
+                      placeholder={anthropic ? ANTHROPIC_URL : 'https://api.openai.com/v1'}
                       {...noAutofill}
                       spellCheck={false}
                       aria-describedby={`${id}-url-help`}
                       className={inputClass}
                     />
                     <p id={`${id}-url-help`} className="text-xs leading-relaxed text-muted-foreground">
-                      Include the API prefix, such as /v1. Local URLs are resolved from the backend.
+                      {anthropic
+                        ? 'The Anthropic API, or a gateway that serves its Messages API. Without /v1.'
+                        : 'Include the API prefix, such as /v1. Local URLs are resolved from the backend.'}
                     </p>
                   </div>
                   <div className="space-y-2">
@@ -321,9 +331,11 @@ function EndpointCard({
                       placeholder={
                         endpoint.hasApiKey && !keyChanged
                           ? 'Saved key — enter to replace'
-                          : openrouter
-                            ? 'OpenRouter API key'
-                            : 'Optional for local servers'
+                          : anthropic
+                            ? 'Anthropic API key'
+                            : openrouter
+                              ? 'OpenRouter API key'
+                              : 'Optional for local servers'
                       }
                       className={inputClass}
                     />
@@ -332,6 +344,12 @@ function EndpointCard({
                     <p className="text-xs leading-relaxed text-muted-foreground">
                       An OpenRouter API key is required for inference, billed by OpenRouter. Lists tool-capable
                       text/vision models; reasoning support depends on the model.
+                    </p>
+                  )}
+                  {anthropic && (
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      An API key from the Anthropic Console is required, billed by Anthropic per token. Claude
+                      subscription (OAuth) logins are not accepted. Lists the models the key can use.
                     </p>
                   )}
                   {endpoint.hasApiKey && !keyChanged && (
@@ -347,7 +365,7 @@ function EndpointCard({
                       Clear saved key
                     </button>
                   )}
-                  {!openrouter && (
+                  {!catalog && (
                     <fieldset className="min-w-0 space-y-4 border-t border-border pt-4">
                       <legend className="float-left mb-1 w-full text-sm font-medium">Model limits</legend>
                       <p className="clear-left text-xs leading-relaxed text-muted-foreground">
@@ -537,7 +555,10 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
     setEndpoints(current =>
       current.some(item => item.id === newEndpointId.current)
         ? current
-        : [...current, { id: newEndpointId.current, name: '', baseUrl: '', hasApiKey: false, saved: false }],
+        : [
+            ...current,
+            { id: newEndpointId.current, name: '', baseUrl: '', kind: 'openai', hasApiKey: false, saved: false },
+          ],
     );
   }, [loading, route.kind]);
   useEffect(() => {
@@ -545,9 +566,12 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
     document.getElementById(`endpoint-${route.endpointId}`)?.scrollIntoView({ block: 'nearest' });
   }, [loading, route.kind, route.endpointId, endpoints.length]);
 
-  function addEndpoint(name = '', baseUrl = '') {
+  function addEndpoint(name = '', baseUrl = '', kind: Endpoint['kind'] = 'openai') {
     newEndpointId.current = randomUuid();
-    setEndpoints(current => [...current, { id: newEndpointId.current, name, baseUrl, hasApiKey: false, saved: false }]);
+    setEndpoints(current => [
+      ...current,
+      { id: newEndpointId.current, name, baseUrl, kind, hasApiKey: false, saved: false },
+    ]);
     onNavigate('/settings/endpoints/new');
   }
 
@@ -635,10 +659,19 @@ export function Settings({ route, onNavigate }: { route: DashboardRoute; onNavig
                 API endpoints
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Connect OpenRouter, another OpenAI-compatible provider, or a local server.
+                Connect Anthropic, OpenRouter, another OpenAI-compatible provider, or a local server.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-11 sm:min-h-0"
+                disabled={loading}
+                onClick={() => addEndpoint('Anthropic', ANTHROPIC_URL, 'anthropic')}
+              >
+                Add Anthropic
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

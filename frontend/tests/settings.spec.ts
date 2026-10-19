@@ -15,7 +15,11 @@ async function openEndpoint(page: import('@playwright/test').Page) {
 
 test('unsaved endpoint form tests models and clears on refresh', async ({ page }) => {
   await page.route('**/api/model-endpoints/test', async route => {
-    expect(route.request().postDataJSON()).toEqual({ baseUrl: 'http://localhost:11434/v1', apiKey: 'test-only-key' });
+    expect(route.request().postDataJSON()).toEqual({
+      baseUrl: 'http://localhost:11434/v1',
+      kind: 'openai',
+      apiKey: 'test-only-key',
+    });
     await route.fulfill({ json: { models: ['local-chat', 'local-code'] } });
   });
   await openEndpoint(page);
