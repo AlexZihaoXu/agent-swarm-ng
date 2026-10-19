@@ -4,7 +4,7 @@ import { readModelCatalog } from './model-catalog';
 /**
  * Context sizes that OpenAI-compatible servers report in GET /models (docs/development.md#model-limits): vLLM's
  * max_model_len, OpenRouter-style context_length, context_window, LM Studio's max_context_length, llama.cpp's
- * meta.n_ctx (the size it runs with) or meta.n_ctx_train. Provider metadata is untrusted: only an integer in the
+ * meta.n_ctx (the size it runs with), meta.n_ctx_train, or Anthropic's max_input_tokens. Provider metadata is untrusted: only an integer in the
  * allowed range counts.
  */
 export function detectContextWindow(row: Record<string, unknown>): number | undefined {
@@ -15,6 +15,7 @@ export function detectContextWindow(row: Record<string, unknown>): number | unde
     row.context_length,
     row.context_window,
     row.max_context_length,
+    row.max_input_tokens,
     meta.n_ctx,
     meta.n_ctx_train,
   ]) {

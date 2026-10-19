@@ -2,7 +2,7 @@ import { estimateTokens, type AgentSession, type ModelRuntime } from '@earendil-
 import { getSupportedThinkingLevels, type Api, type AssistantMessage, type Model } from '@earendil-works/pi-ai';
 import { isContextOverflow, isRetryableAssistantError } from '@earendil-works/pi-ai/compat';
 import type { ChainEvent, ChainRun, ModelChains, ModelChoice } from './model-chain';
-import type { EndpointLimits } from './endpoint-store';
+import type { EndpointKind, EndpointLimits } from './endpoint-store';
 import { compactToFit } from './background-compaction';
 import { providerFailure } from './activity-safety';
 
@@ -15,6 +15,7 @@ export type PreparedChoice = {
     limits?: EndpointLimits;
     subscriptionRuntime?: ModelRuntime;
     publicOnly?: boolean;
+    kind?: EndpointKind;
   };
   unreachable?: string;
 };

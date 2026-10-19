@@ -81,7 +81,9 @@ export function providerFailure(message?: string) {
   } catch {
     /* Raw error text is intentionally not forwarded. */
   }
-  const category = /context[_ -]?(?:length|window)|too many tokens/i.test(message ?? '')
+  const category = /context[_ -]?(?:length|window)|too many tokens|prompt is too long|request_too_large/i.test(
+    message ?? '',
+  )
     ? 'context limit'
     : /insufficient[_ -]?quota|quota exceeded/i.test(message ?? '')
       ? 'quota'
@@ -89,13 +91,15 @@ export function providerFailure(message?: string) {
         ? 'usage limit'
         : /rate[_ -]?limit|too many requests/i.test(message ?? '') || status === '429'
           ? 'rate limit'
-          : /invalid[_ -]?(?:api[_ -]?)?key|invalid_grant|unauthorized|authentication|token.*expired|refresh.*failed/i.test(
-                message ?? '',
-              ) || status === '401'
-            ? 'authentication'
-            : status === '403'
-              ? 'access denied'
-              : 'provider request';
+          : /overloaded/i.test(message ?? '') || status === '529'
+            ? 'overloaded'
+            : /invalid[_ -]?(?:api[_ -]?)?key|invalid_grant|unauthorized|authentication|token.*expired|refresh.*failed/i.test(
+                  message ?? '',
+                ) || status === '401'
+              ? 'authentication'
+              : status === '403'
+                ? 'access denied'
+                : 'provider request';
   return {
     summary: 'The provider request failed. Check the model connection.',
     category,

@@ -36,7 +36,8 @@ import { accessOf, classify, type AgentTool } from './tool-access';
 import { createHelpTool } from './help-tool';
 import { memoryGuidance } from './memory/guidance';
 import { labelText, neutralizeLabels } from './message-text';
-import type { EndpointLimits } from './endpoint-store';
+import type { EndpointKind, EndpointLimits } from './endpoint-store';
+import { anthropicCapabilities, anthropicRuntime } from './anthropic';
 import { detectedLimits } from './endpoint-detection';
 import { publicFetch } from './web-fetch';
 import { prepareFallback, type SessionFallback } from './model-fallback';
@@ -86,6 +87,8 @@ export type ChatConfiguration = {
   thinkingLevel: ModelThinkingLevel;
   baseUrl: string;
   apiKey?: string;
+  /** The connection's API (OpenAI-compatible when unset). */
+  kind?: EndpointKind;
   /** The endpoint's own model settings (Settings → model connections); unused for the subscription and OpenRouter. */
   limits?: EndpointLimits;
   /** A user's endpoint: model calls go only to public addresses, pinned at connect time (web-fetch.ts publicFetch). */
@@ -123,7 +126,11 @@ export function modelCapabilities(id: string, provider: 'openai' | 'openai-codex
   return capabilitiesFor(getModels(provider).find(model => model.id === id));
 }
 /** A model on a saved endpoint: the endpoint's Reasoning setting, when set, decides whether it offers thinking levels. */
-export async function endpointCapabilities(id: string, endpoint?: { baseUrl: string } & EndpointLimits) {
+export async function endpointCapabilities(
+  id: string,
+  endpoint?: { baseUrl: string; kind?: EndpointKind } & EndpointLimits,
+) {
+  if (endpoint?.kind === 'anthropic') return anthropicCapabilities(id, endpoint.baseUrl);
   if (endpoint && isOpenRouter(endpoint.baseUrl)) return capabilitiesFor(await openRouterCatalog.model(id));
   const known = getModels('openai').find(model => model.id === id);
   return endpoint?.reasoning === undefined
@@ -304,6 +311,7 @@ export function withCaps(model: Model<Api>, { contextWindow, maxOutputTokens }: 
 }
 
 async function createEndpointRuntime(config: ChatConfiguration) {
+  if (config.kind === 'anthropic') return anthropicRuntime(config);
   const openrouter = isOpenRouter(config.baseUrl);
   if (openrouter && !config.apiKey?.trim()) throw new Error('Add an OpenRouter API key in Settings.');
   const known = openrouter
@@ -460,6 +468,7 @@ export async function createChatSession(
               apiKey: connection.apiKey,
               limits: connection.limits,
               publicOnly: connection.publicOnly,
+              kind: connection.kind,
               ...capsOf(choice),
             },
             connection.subscriptionRuntime,

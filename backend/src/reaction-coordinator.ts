@@ -161,6 +161,7 @@ export class ReactionCoordinator {
               apiKey: connection.apiKey,
               limits: connection.limits,
               publicOnly: connection.publicOnly,
+              kind: connection.kind,
               channel,
             },
             history,

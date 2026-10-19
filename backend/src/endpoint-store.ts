@@ -19,6 +19,12 @@ export const LIMIT_RANGES = {
 } as const;
 const LIMIT_FIELDS = ['contextWindow', 'maxOutputTokens', 'images', 'reasoning'] as const;
 
+/** How a connection talks to its models: an OpenAI-compatible API, or Anthropic's Messages API with an API key. */
+export const ENDPOINT_KINDS = ['openai', 'anthropic'] as const;
+export type EndpointKind = (typeof ENDPOINT_KINDS)[number];
+/** Rows written before connections had a kind are OpenAI-compatible. */
+export const kindOf = (row: { kind?: EndpointKind }): EndpointKind => row.kind ?? 'openai';
+
 /** A saved model connection. It belongs to a person (`ownerId`, admin for older rows); ids are unique per person. */
 export type SavedEndpoint = {
   id: string;
@@ -26,9 +32,11 @@ export type SavedEndpoint = {
   baseUrl: string;
   apiKey: string;
   ownerId?: string;
+  kind?: EndpointKind;
 } & EndpointLimits;
 export const endpointView = ({ apiKey, ownerId: _, ...endpoint }: SavedEndpoint) => ({
   ...endpoint,
+  kind: kindOf(endpoint),
   hasApiKey: Boolean(apiKey),
 });
 /** Only the limits an endpoint sets (rows written before they existed have none). */
@@ -60,6 +68,7 @@ export class EndpointStore {
             row &&
             ['id', 'name', 'baseUrl', 'apiKey'].every(key => typeof row[key] === 'string') &&
             (row.ownerId === undefined || typeof row.ownerId === 'string') &&
+            (row.kind === undefined || ENDPOINT_KINDS.includes(row.kind)) &&
             validLimits(row),
         )
       )
@@ -91,7 +100,7 @@ export class EndpointStore {
 
   /** Limits left out of `input` keep their saved value; `null` clears one (back to detected or default). */
   async save(
-    input: { id: string; name: string; baseUrl: string; apiKey?: string } & {
+    input: { id: string; name: string; baseUrl: string; apiKey?: string; kind?: EndpointKind } & {
       [key in keyof EndpointLimits]?: EndpointLimits[key] | null;
     },
     ownerId = 'admin',
@@ -99,13 +108,17 @@ export class EndpointStore {
     const mine = (row: SavedEndpoint) => row.id === input.id && ownerOf(row) === ownerId;
     const rows = await this.update(current => {
       const previous = current.find(mine);
+      const kind = input.kind ?? (previous ? kindOf(previous) : 'openai');
       const endpoint: SavedEndpoint = {
         id: input.id,
         name: input.name,
         baseUrl: input.baseUrl,
-        // Never silently carry a saved credential to a different URL.
-        apiKey: input.apiKey ?? (previous?.baseUrl === input.baseUrl ? previous.apiKey : ''),
+        // Never silently carry a saved credential to a different URL or another kind of API.
+        apiKey:
+          input.apiKey ?? (previous?.baseUrl === input.baseUrl && kindOf(previous) === kind ? previous.apiKey : ''),
         ownerId,
+        // OpenAI-compatible rows stay as they were before connections had a kind.
+        ...(kind === 'openai' ? {} : { kind }),
         ...limitsOf(
           Object.fromEntries(
             LIMIT_FIELDS.map(key => [key, input[key] === undefined ? previous?.[key] : (input[key] ?? undefined)]),

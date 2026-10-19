@@ -1,5 +1,13 @@
 /** Bounded, untrusted provider metadata. Never evaluate descriptions or forward raw provider bodies. */
 export async function readModelCatalog(response: Response, maxBytes = 1_048_576): Promise<Record<string, any>[]> {
+  return (await readModelPage(response, maxBytes)).data;
+}
+
+/** One page of a model list, its other fields (such as Anthropic's `has_more` and `last_id`) included. */
+export async function readModelPage(
+  response: Response,
+  maxBytes = 1_048_576,
+): Promise<Record<string, unknown> & { data: Record<string, any>[] }> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('Missing body');
   const chunks: Uint8Array[] = [];
@@ -24,5 +32,5 @@ export async function readModelCatalog(response: Response, maxBytes = 1_048_576)
     if (!model || typeof model.id !== 'string' || !model.id.trim() || model.id.length > 512)
       throw new Error('Invalid model identifier');
   }
-  return payload.data;
+  return payload;
 }

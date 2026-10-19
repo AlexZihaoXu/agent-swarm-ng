@@ -2404,6 +2404,7 @@
                       "id",
                       "name",
                       "baseUrl",
+                      "kind",
                       "hasApiKey"
                     ],
                     "properties": {
@@ -2415,6 +2416,22 @@
                       },
                       "baseUrl": {
                         "type": "string"
+                      },
+                      "kind": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "openai"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "anthropic"
+                            ]
+                          }
+                        ]
                       },
                       "hasApiKey": {
                         "type": "boolean"
@@ -2482,6 +2499,22 @@
                     "pattern": "^[^\\r\\n]*$",
                     "type": "string"
                   },
+                  "kind": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "openai"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "anthropic"
+                        ]
+                      }
+                    ]
+                  },
                   "contextWindow": {
                     "anyOf": [
                       {
@@ -2542,6 +2575,7 @@
                     "id",
                     "name",
                     "baseUrl",
+                    "kind",
                     "hasApiKey"
                   ],
                   "properties": {
@@ -2553,6 +2587,22 @@
                     },
                     "baseUrl": {
                       "type": "string"
+                    },
+                    "kind": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "openai"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "anthropic"
+                          ]
+                        }
+                      ]
                     },
                     "hasApiKey": {
                       "type": "boolean"
@@ -2678,6 +2728,22 @@
                     "maxLength": 4096,
                     "pattern": "^[^\\r\\n]*$",
                     "type": "string"
+                  },
+                  "kind": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "openai"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "anthropic"
+                        ]
+                      }
+                    ]
                   },
                   "endpointId": {
                     "maxLength": 100,

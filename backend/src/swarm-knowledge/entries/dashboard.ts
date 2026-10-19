@@ -161,7 +161,7 @@ Organizations (/settings#organizations): each organization's name (edit it, then
 
 Swarm Knowledge: "Browse Swarm Knowledge" (/settings/knowledge) opens this catalog read-only: topics with search on the left, the entry with its breadcrumb and related links on the right. It cannot be edited in the app.
 
-API endpoints: "Add OpenRouter" (prefills https://openrouter.ai/api/v1) or "+ Add endpoint" for another OpenAI-compatible provider or a local server: Name, Base URL, API key, then "Save endpoint". "Test connection" lists the models (no model request). Saved endpoints can be edited, or removed with × after a confirmation (not while an agent uses them). Agents choose an endpoint and model in their settings (Model section).
+API endpoints: "Add Anthropic" (an Anthropic API key, not a Claude subscription login; prefills https://api.anthropic.com), "Add OpenRouter" (prefills https://openrouter.ai/api/v1) or "+ Add endpoint" for another OpenAI-compatible provider or a local server: Name, Base URL, API key, then "Save endpoint". "Test connection" lists the models (no model request). Saved endpoints can be edited, or removed with × after a confirmation (not while an agent uses them). Agents choose an endpoint and model in their settings (Model section).
 
 Discord: "Your Discord accounts": User ID and Name rows ("Add account", "Remove", "Save changes"). Only these accounts carry the human's authority on Discord. How to copy a user ID: Discord → User Settings → Advanced → Developer Mode on, then right-click your name → Copy User ID.
 

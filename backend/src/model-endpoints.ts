@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Type, type Static } from '@sinclair/typebox';
-import { EndpointStore, endpointView, LIMIT_RANGES, type SavedEndpoint } from './endpoint-store';
+import { EndpointStore, endpointView, kindOf, LIMIT_RANGES, type SavedEndpoint } from './endpoint-store';
+import { AnthropicListError, isOAuthToken, listAnthropicModels, OAUTH_REFUSED } from './anthropic';
 import { detectedLimits } from './endpoint-detection';
 import { publicFetch } from './web-fetch';
 import { readModelCatalog } from './model-catalog';
@@ -10,10 +11,14 @@ import { connectionOwner, viewerOf, type Reach } from './users/reach';
 
 const INTERNAL_URL = 'Use a public address: endpoints of users cannot reach the platform or private networks.';
 
+/** The connection's API: OpenAI-compatible (default) or Anthropic's Messages API with an API key. */
+const Kind = Type.Union([Type.Literal('openai'), Type.Literal('anthropic')]);
 const ConnectionBody = Type.Object(
   {
     baseUrl: Type.String({ minLength: 1, maxLength: 2048 }),
     apiKey: Type.Optional(Type.String({ maxLength: 4096, pattern: '^[^\\r\\n]*$' })),
+    /** Default: the saved endpoint's (`endpointId`), else OpenAI-compatible. */
+    kind: Type.Optional(Kind),
     endpointId: Type.Optional(Type.String({ maxLength: 100 })),
     /** Whose saved endpoint `endpointId` is: this organization's owner's (default: your own). */
     organizationId: Type.Optional(Type.String({ maxLength: 64 })),
@@ -58,6 +63,7 @@ export function registerModelEndpoints(
     id: Type.String(),
     name: Type.String(),
     baseUrl: Type.String(),
+    kind: Kind,
     hasApiKey: Type.Boolean(),
     contextWindow: Type.Optional(Limits.contextWindow),
     maxOutputTokens: Type.Optional(Limits.maxOutputTokens),
@@ -76,6 +82,8 @@ export function registerModelEndpoints(
       name: Type.String({ minLength: 1, maxLength: 100 }),
       baseUrl: ConnectionBody.properties.baseUrl,
       apiKey: ConnectionBody.properties.apiKey,
+      /** Left out: the saved endpoint's, or OpenAI-compatible for a new one. */
+      kind: Type.Optional(Kind),
       // Left out: keeps the saved value; null: back to what the server reports, or the default.
       contextWindow: Type.Optional(Type.Union([Limits.contextWindow, Type.Null()])),
       maxOutputTokens: Type.Optional(Type.Union([Limits.maxOutputTokens, Type.Null()])),
@@ -118,6 +126,11 @@ export function registerModelEndpoints(
         return reply
           .code(400)
           .send({ message: 'Enter a valid HTTP(S) base URL without credentials, query parameters, or fragments.' });
+      }
+      if (isOAuthToken(request.body.apiKey)) {
+        const saved = (await store.readFor(viewerOf(request).userId)).find(row => row.id === request.body.id);
+        if ((request.body.kind ?? (saved ? kindOf(saved) : 'openai')) === 'anthropic')
+          return reply.code(400).send({ message: OAUTH_REFUSED });
       }
       return view(
         await store.save(
@@ -178,7 +191,6 @@ export function registerModelEndpoints(
       let url: URL;
       try {
         url = parseBaseUrl(request.body.baseUrl);
-        url.pathname = `${url.pathname.replace(/\/+$/, '')}/models`;
       } catch {
         return reply
           .code(400)
@@ -195,8 +207,18 @@ export function registerModelEndpoints(
           : undefined;
         const sameUrl =
           saved && parseBaseUrl(saved.baseUrl).toString() === parseBaseUrl(request.body.baseUrl).toString();
-        const apiKey = request.body.apiKey?.trim() ?? (sameUrl ? saved.apiKey : undefined);
-        const response = await (viewerOf(request).admin ? fetcher : publicFetcher)(url, {
+        const kind = request.body.kind ?? (saved ? kindOf(saved) : 'openai');
+        const apiKey = request.body.apiKey?.trim() ?? (sameUrl && kindOf(saved) === kind ? saved.apiKey : undefined);
+        const send = viewerOf(request).admin ? fetcher : publicFetcher;
+        if (kind === 'anthropic') {
+          if (isOAuthToken(apiKey)) return reply.code(400).send({ message: OAUTH_REFUSED });
+          const base = url.toString().replace(/\/+$/, '');
+          const rows = await listAnthropicModels(base, apiKey, send, signal);
+          const details = detectedLimits.remember(base, rows);
+          return { models: [...new Set(rows.map(row => row.id as string))], ...(details.length ? { details } : {}) };
+        }
+        url.pathname = `${url.pathname.replace(/\/+$/, '')}/models`;
+        const response = await send(url, {
           method: 'GET',
           redirect: 'error',
           signal,
@@ -215,13 +237,17 @@ export function registerModelEndpoints(
         const details = detectedLimits.remember(parseBaseUrl(request.body.baseUrl).toString(), rows);
         return { models: [...new Set(rows.map(row => row.id as string))], ...(details.length ? { details } : {}) };
       } catch (error) {
+        if (error instanceof AnthropicListError)
+          return reply
+            .code(502)
+            .send({ message: `Anthropic returned HTTP ${error.status}. Check the base URL and API key.` });
         if (signal.aborted || (error instanceof Error && error.name === 'TimeoutError')) {
           return reply.code(504).send({ message: 'Connection timed out after 10 seconds.' });
         }
         // Never return provider bodies, submitted credentials, or raw network errors.
         return reply.code(502).send({
           message:
-            'Could not read a valid model list. Check the endpoint is reachable from the backend and supports GET /models.',
+            'Could not read a valid model list. Check the endpoint is reachable from the backend and supports GET /models (GET /v1/models for Anthropic).',
         });
       }
     },

@@ -1,5 +1,5 @@
 import { codexAccountOf, type CodexProvider } from './codex-provider';
-import { limitsOf, type SavedEndpoint } from './endpoint-store';
+import { kindOf, limitsOf, type SavedEndpoint } from './endpoint-store';
 export class ConnectionError extends Error {
   constructor(
     readonly status: 400 | 404,
@@ -40,6 +40,7 @@ export async function resolveChatConnection(
   // The endpoint's model settings travel with it into every turn's configuration (chat-runtime.ts).
   return {
     ...endpoint,
+    kind: subscription ? undefined : kindOf(endpoint as SavedEndpoint),
     limits: subscription ? {} : limitsOf(endpoint as SavedEndpoint),
     subscriptionRuntime,
     accessKey: accessKey ?? '',

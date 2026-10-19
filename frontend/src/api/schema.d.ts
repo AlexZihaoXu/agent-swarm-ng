@@ -2838,6 +2838,7 @@ export interface operations {
                         id: string;
                         name: string;
                         baseUrl: string;
+                        kind: "openai" | "anthropic";
                         hasApiKey: boolean;
                         contextWindow?: number;
                         maxOutputTokens?: number;
@@ -2863,6 +2864,7 @@ export interface operations {
                     name: string;
                     baseUrl: string;
                     apiKey?: string;
+                    kind?: "openai" | "anthropic";
                     contextWindow?: number | null;
                     maxOutputTokens?: number | null;
                     images?: boolean | null;
@@ -2881,6 +2883,7 @@ export interface operations {
                         id: string;
                         name: string;
                         baseUrl: string;
+                        kind: "openai" | "anthropic";
                         hasApiKey: boolean;
                         contextWindow?: number;
                         maxOutputTokens?: number;
@@ -2950,6 +2953,7 @@ export interface operations {
                 "application/json": {
                     baseUrl: string;
                     apiKey?: string;
+                    kind?: "openai" | "anthropic";
                     endpointId?: string;
                     organizationId?: string;
                 };
