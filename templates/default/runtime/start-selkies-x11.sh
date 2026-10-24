@@ -21,6 +21,11 @@ encoder_menu="$encoder"
 for encoder_candidate in h264enc h265enc vp8enc vp9enc av1enc h264enc-striped jpeg; do
     [ "$encoder_candidate" = "$encoder" ] || encoder_menu="$encoder_menu,$encoder_candidate"
 done
+# Selkies' own self-signed pair in the agent's state directory, never the system's ssl-cert-snakeoil default:
+# installing ssl-cert (PostgreSQL pulls it in) creates a snakeoil key only root can read, and Selkies would then
+# fail to start on every attempt. It writes the pair here on first start and reuses it after.
+tls="${HOME:?}/.local/state/selkies"
+mkdir -p "$tls"
 child=''
 cleanup() {
     [ -z "$child" ] || { kill "$child" 2>/dev/null || true; wait "$child" 2>/dev/null || true; }
@@ -32,7 +37,7 @@ while :; do
     # advertising controls that cannot work (or bypassing the media allowlist).
     DISPLAY=:1 selkies --wayland=false \
         --addr=0.0.0.0 --port=8080 --subfolder="/computers/$id/desktop" \
-        --enable-https=true --enable-basic-auth=false --enable-dual-mode=false --enable-resize=false --scaling-dpi=96 \
+        --enable-https=true --https-cert="$tls/selkies.pem" --https-key="$tls/selkies.key" --enable-basic-auth=false --enable-dual-mode=false --enable-resize=false --scaling-dpi=96 \
         --audio-enabled=true --audio-on-start=false --microphone-enabled=false --audio-device-name=swarm-output.monitor --gamepad-enabled=false --webcam-enabled=false \
         --enable-clipboard=false --file-transfers=none --printing-enabled=false \
         --ui-sidebar-show-audio-settings=false --ui-sidebar-show-gamepads=false \
