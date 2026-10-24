@@ -462,8 +462,13 @@ export class HarnessListeners {
     void handled
       .catch(() => undefined)
       .then(() => {
+        // The follower may have been restarted meanwhile (a listener changed), carrying the pause over: resume the
+        // one that is current, or it would wait forever and no event would reach the agent again.
         current.paused = false;
-        if (current.pending.length && this.followers.get(current.key) === current) this.schedule(current);
+        const live = this.followers.get(current.key);
+        if (!live) return;
+        live.paused = false;
+        if (live.pending.length) this.schedule(live);
       });
   }
 

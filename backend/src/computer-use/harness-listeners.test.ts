@@ -272,3 +272,28 @@ it('caps every kind of wake-up an hour, and drops lines with an implausible time
     await f.db.close();
   }
 });
+
+it('keeps waking after a listener changes while the agent handles a wake-up (the restarted follower is not stuck paused)', async () => {
+  const f = await fixture();
+  try {
+    await f.listeners.add(f.ada.id, { terminal: 'cc-api', human: true });
+    f.opened[0].push(f.line('message', 'Started.'));
+    await vi.waitFor(() => expect(f.woken).toHaveLength(1));
+    // The agent is still handling that wake-up when it changes its listener: the follower restarts.
+    await f.listeners.add(f.ada.id, { terminal: 't1', events: ['finished', 'message'], human: true });
+    expect(f.opened).toHaveLength(2);
+    f.opened[1].push(f.line('finished', 'All done.'));
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(f.woken).toHaveLength(1); // still busy with the first
+    f.release();
+    await vi.waitFor(() => expect(f.woken).toHaveLength(2));
+    expect(f.woken[1]).toContain('finished its turn: "All done."');
+    // And later events still arrive.
+    f.release();
+    f.opened[1].push(f.line('finished', 'Again.'));
+    await vi.waitFor(() => expect(f.woken).toHaveLength(3));
+  } finally {
+    f.listeners.close();
+    await f.db.close();
+  }
+});
