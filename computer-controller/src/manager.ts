@@ -72,6 +72,24 @@ export function displayServerOf(row: Pick<ListedContainer, 'Image' | 'Labels'>):
   if (labelled === 'x11' || labelled === 'wayland') return labelled;
   return /(^|[-:_])(x11|xorg\d*)([-_]|$)/i.test(row.Image ?? '') ? 'x11' : 'wayland';
 }
+/** Selkies' in-computer port on images from before `swarm.ng.stream-port`; such computers keep it until rebuilt. */
+export const LEGACY_STREAM_PORT = 8080;
+const STREAM_PORT_ENV = 'COMPUTER_STREAM_PORT=';
+/** The desktop stream port a computer image declares (`swarm.ng.stream-port`), strictly an unprivileged port. */
+export function streamPortOf(labels: Record<string, string> | null | undefined): number {
+  const value = labels?.['swarm.ng.stream-port'];
+  if (value === undefined) return LEGACY_STREAM_PORT;
+  const port = /^[1-9]\d{3,4}$/.test(value) ? Number(value) : NaN;
+  if (!(port >= 1024 && port <= 65535)) throw new ResourceError(503, 'Computer image declares an invalid stream port.');
+  return port;
+}
+/** The port a relay forwards to: its env value, or the legacy port for relays made before the env existed. */
+export function relayStreamPortOf(env: string[] | undefined): number | null {
+  const values = (env ?? []).filter(entry => entry.startsWith(STREAM_PORT_ENV));
+  if (values.length === 0) return LEGACY_STREAM_PORT;
+  const value = values.length === 1 ? values[0].slice(STREAM_PORT_ENV.length) : '';
+  return /^[1-9]\d{3,4}$/.test(value) && Number(value) <= 65535 ? Number(value) : null;
+}
 type Network = {
   Id: string;
   Driver: string;
@@ -649,10 +667,17 @@ export class ComputerManager {
     if (!subnet || !/^\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}$/.test(subnet))
       throw new ResourceError(503, 'Media bridge subnet is unavailable.');
     const mediaName = this.names.media(id);
+    const streamPort = await this.streamPort(computer);
     let relay = await this.container(mediaName, id, 'media', name);
     // A relay made before forwarding was turned off in it: replaced while stopped (it holds no state).
     if (relay && !relay.State.Running && relay.HostConfig?.Sysctls?.['net.ipv4.ip_forward'] !== '0') {
       await this.docker.request('DELETE', `${this.path('containers', relay.Id)}?v=false`);
+      relay = null;
+    }
+    // A relay aimed at another port of this same computer (e.g. made before its image moved off 8080) can only
+    // fail to connect; it holds no state, so it is replaced, running or not.
+    if (relay && relayStreamPortOf(relay.Config.Env) !== streamPort) {
+      await this.docker.request('DELETE', `${this.path('containers', relay.Id)}?force=true&v=false`);
       relay = null;
     }
     if (!relay) {
@@ -660,7 +685,7 @@ export class ComputerManager {
       await this.docker.request('POST', `/containers/create?name=${encodeURIComponent(mediaName)}`, {
         Image: this.mediaImage,
         Labels: this.names.labels(id, 'media', name),
-        Env: [`COMPUTER_PRIVATE_IP=${target}`, `COMPUTER_MEDIA_SUBNET=${subnet}`],
+        Env: [`COMPUTER_PRIVATE_IP=${target}`, `COMPUTER_MEDIA_SUBNET=${subnet}`, `${STREAM_PORT_ENV}${streamPort}`],
         HostConfig: {
           NetworkMode: this.names.mediaNetwork,
           CapDrop: ['ALL'],
@@ -707,6 +732,16 @@ export class ComputerManager {
       await this.docker.request('POST', `${this.path('networks', privateOwned.Id)}/connect`, { Container: mediaName });
     }
     if (!relay.State.Running) await this.docker.request('POST', `${this.path('containers', mediaName)}/start`);
+  }
+
+  /** Read from the image this computer actually runs, so computers on older images keep their port until rebuilt. */
+  private async streamPort(computer: Container) {
+    if (!computer.Image) return LEGACY_STREAM_PORT;
+    const image = await this.docker.optional<{ Config?: { Labels?: Record<string, string> | null } }>(
+      `${this.path('images', computer.Image)}/json`,
+    );
+    if (!image) throw new ResourceError(503, 'Computer image is unavailable.');
+    return streamPortOf(image.Config?.Labels);
   }
 
   private async createOwned(

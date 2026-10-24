@@ -8,6 +8,11 @@ case "$target" in
     *[!0-9.]*|'') echo 'Invalid computer address' >&2; exit 1;;
 esac
 [ "$(printf '%s' "$target" | tr -cd '.' | wc -c)" -eq 3 ] || exit 1
+# Selkies' port inside the computer, from its image label (via the controller). Relays made before the variable
+# existed, and computers on images from before the label, use 8080. The media-bridge listener stays on 8080.
+port=${COMPUTER_STREAM_PORT:-8080}
+case "$port" in [1-9][0-9][0-9][0-9]|[1-9][0-9][0-9][0-9][0-9]) ;; *) echo 'Invalid stream port' >&2; exit 1;; esac
+[ "$port" -ge 1024 ] && [ "$port" -le 65535 ] || { echo 'Invalid stream port' >&2; exit 1; }
 subnet=${COMPUTER_MEDIA_SUBNET:?An isolated media subnet is required}
 network=${subnet%/*}
 prefix=${subnet#*/}
@@ -25,4 +30,4 @@ done
 [ -n "$media" ] || { echo 'Media bridge has no matching IPv4 address' >&2; exit 1; }
 # TLS stays end-to-end between dashboard Caddy and Selkies; this process
 # merely copies encrypted TCP bytes and cannot be an HTTP forward proxy.
-exec socat "TCP4-LISTEN:8080,bind=$media,reuseaddr,fork" "TCP4:$target:8080"
+exec socat "TCP4-LISTEN:8080,bind=$media,reuseaddr,fork" "TCP4:$target:$port"

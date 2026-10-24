@@ -92,6 +92,11 @@ assert 'computer-'+relay['Config']['Labels']['swarm.ng.id'] in (relay['NetworkSe
 print('No media relay host ports; only its own private and isolated dashboard bridges')
 PY
 test -n "$(docker exec "${namespace}-caddy-dev-1" getent hosts "computer-$id")"
+# Selkies listens inside the computer on its image's declared port (8080 on images from before the label);
+# the relay must aim there while still listening on the media bridge at 8080.
+stream_port=$(docker inspect "$(docker inspect "$computer" --format '{{.Image}}')" --format '{{index .Config.Labels "swarm.ng.stream-port"}}')
+case "$stream_port" in ''|'<no value>') stream_port=8080;; esac
+docker inspect "$media" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -qx "COMPUTER_STREAM_PORT=$stream_port"
 media_ip=$(docker inspect "$media" --format "{{(index .NetworkSettings.Networks \"${namespace}-computer-media\").IPAddress}}")
 relay_private_ip=$(docker inspect "$media" --format "{{(index .NetworkSettings.Networks \"${computer}-private\").IPAddress}}")
 if docker exec -u agent "$computer" curl -kfsS --connect-timeout 2 --max-time 3 "https://$media_ip:8080/computers/$id/desktop/" >/dev/null 2>&1; then echo 'Computer reached the media bridge!' >&2; exit 1; fi
@@ -111,7 +116,7 @@ until curl -fsS --max-time 6 "$viewer" -o .scratch/computer-api-e2e-viewer.html 
         docker logs "$media" --tail 20 >&2 || true
         docker exec "$media" ip -o -4 addr show >&2 || true
         docker inspect "$media" --format '{{json .NetworkSettings.Networks}}' >&2 || true
-        docker exec "$computer" curl -kfsS --max-time 3 "https://127.0.0.1:8080/computers/$id/desktop/" -o /dev/null >&2 || true
+        docker exec "$computer" curl -kfsS --max-time 3 "https://127.0.0.1:$stream_port/computers/$id/desktop/" -o /dev/null >&2 || true
         echo 'Same-port computer viewer did not proxy Selkies' >&2; exit 1
     fi
     sleep 1

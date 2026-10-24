@@ -208,6 +208,15 @@ else
 fi
 media_ip=$(docker inspect "${container}-media" --format "{{(index .NetworkSettings.Networks \"${project}-computer-media\").IPAddress}}")
 [ -n "$media_ip" ]
+# Selkies listens on the image's declared port, so the relay aims there and 8080 stays free for the guest's own servers.
+stream_port=$(docker inspect "$(docker inspect "$container" --format '{{.Image}}')" --format '{{index .Config.Labels "swarm.ng.stream-port"}}')
+case "$stream_port" in ''|'<no value>') stream_port=8080;; esac
+docker inspect "${container}-media" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -qx "COMPUTER_STREAM_PORT=$stream_port"
+docker exec -u agent "$container" curl -kfsS --max-time 3 "https://127.0.0.1:$stream_port/computers/$id/desktop/api/health" >/dev/null
+if [ "$stream_port" != 8080 ]; then
+    docker exec -u agent "$container" python3 -c 'import socket; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("0.0.0.0", 8080)); s.listen(); s.close()'
+    echo "Selkies listens on $stream_port; a guest dev server can bind 8080."
+fi
 if docker exec -u agent "$container" curl -kfsS --connect-timeout 2 --max-time 3 "https://$media_ip:8080/computers/$id/desktop/" >/dev/null 2>&1; then
     echo 'X11 desktop reached forbidden dashboard media bridge!' >&2; exit 1
 fi

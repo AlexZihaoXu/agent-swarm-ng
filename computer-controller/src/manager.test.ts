@@ -1,6 +1,13 @@
 import { expect, it, vi } from 'vitest';
 import { Readable } from 'node:stream';
-import { ComputerManager, computerHostname, desktopCreateBody, desktopEnvironment } from './manager';
+import {
+  ComputerManager,
+  computerHostname,
+  desktopCreateBody,
+  desktopEnvironment,
+  relayStreamPortOf,
+  streamPortOf,
+} from './manager';
 import { DockerApi } from './docker-api';
 import type { LxcfsBinder } from './lxcfs';
 
@@ -299,6 +306,98 @@ it('replaces a stopped relay made before forwarding was turned off in it', async
   // Deleted rather than reused or refused; recreating it then needs the approved media image (absent here).
   await expect(manager.create(id, name)).rejects.toThrow();
   expect(request).toHaveBeenCalledWith('DELETE', expect.stringMatching(/\/containers\/relay\?v=false$/));
+});
+
+it('reads the stream port from the image label, 8080 when absent, and refuses anything but one unprivileged port', () => {
+  expect(streamPortOf(undefined)).toBe(8080);
+  expect(streamPortOf(null)).toBe(8080);
+  expect(streamPortOf({ 'swarm.ng.display-server': 'x11' })).toBe(8080);
+  expect(streamPortOf({ 'swarm.ng.stream-port': '47613' })).toBe(47613);
+  expect(streamPortOf({ 'swarm.ng.stream-port': '1024' })).toBe(1024);
+  for (const value of ['', '80', '1023', '65536', '99999', '047613', '4761a', ' 47613', '47613 ', '4.7e4', '-47613'])
+    expect(() => streamPortOf({ 'swarm.ng.stream-port': value })).toThrow(
+      expect.objectContaining({ code: 503 }) as unknown as Error,
+    );
+  expect(relayStreamPortOf(undefined)).toBe(8080);
+  expect(relayStreamPortOf(['COMPUTER_PRIVATE_IP=172.25.10.2'])).toBe(8080);
+  expect(relayStreamPortOf(['COMPUTER_STREAM_PORT=47613'])).toBe(47613);
+  expect(relayStreamPortOf(['COMPUTER_STREAM_PORT=47613', 'COMPUTER_STREAM_PORT=8080'])).toBeNull();
+  expect(relayStreamPortOf(['COMPUTER_STREAM_PORT=x'])).toBeNull();
+});
+
+function relayFixture(imageLabels: Record<string, string>, relayEnv?: string[]) {
+  const context = fixture();
+  const { manager, resources, request } = context;
+  existingRunning(manager, resources);
+  (resources.get(`/containers/${manager.names.desktop(id)}/json`) as Record<string, unknown>).Image = 'sha256:desktop';
+  resources.set('/images/sha256%3Adesktop/json', { Config: { Labels: imageLabels } });
+  resources.set('/images/agent-swarm-computer-media%3Astage2/json', { Config: { Labels: {} } });
+  resources.set(`/networks/${manager.names.mediaNetwork}`, {
+    Id: 'media',
+    Driver: 'bridge',
+    Internal: true,
+    EnableIPv6: false,
+    Labels: { 'com.docker.compose.project': manager.names.namespace },
+    Options: { 'com.docker.network.bridge.gateway_mode_ipv4': 'isolated' },
+    IPAM: { Config: [{ Subnet: '172.25.7.0/24', Gateway: '' }] },
+  });
+  const relayPath = `/containers/${manager.names.media(id)}/json`;
+  const relay = (env: string[]) => ({
+    Id: 'relay',
+    State: { Running: false },
+    HostConfig: { Sysctls: { 'net.ipv4.ip_forward': '0' } },
+    Config: { Labels: manager.names.labels(id, 'media', name), Env: env },
+    NetworkSettings: {
+      Networks: {
+        [manager.names.mediaNetwork]: { IPAddress: '172.25.7.3', DNSNames: [manager.names.mediaAlias(id)] },
+        [manager.names.privateNetwork(id)]: { IPAddress: '172.25.10.3' },
+      },
+    },
+  });
+  if (relayEnv) resources.set(relayPath, relay(relayEnv));
+  request.mockImplementation(async (method: unknown, path: unknown, body?: unknown) => {
+    if (method === 'DELETE' && String(path).startsWith('/containers/relay?')) resources.delete(relayPath);
+    if (method === 'POST' && String(path).startsWith('/containers/create?name='))
+      resources.set(relayPath, relay((body as { Env: string[] }).Env));
+    return Buffer.alloc(0);
+  });
+  return context;
+}
+const oldRelayEnv = ['COMPUTER_PRIVATE_IP=172.25.10.2', 'COMPUTER_MEDIA_SUBNET=172.25.7.0/24'];
+
+it("aims a new relay at the stream port its computer's image declares", async () => {
+  const { manager, request } = relayFixture({ 'swarm.ng.stream-port': '47613' });
+  await manager.create(id, name);
+  expect(request).toHaveBeenCalledWith(
+    'POST',
+    expect.stringMatching(/^\/containers\/create\?name=/),
+    expect.objectContaining({ Env: [...oldRelayEnv, 'COMPUTER_STREAM_PORT=47613'] }),
+  );
+  expect(request).toHaveBeenCalledWith('POST', `/containers/${manager.names.media(id)}/start`);
+});
+
+it('keeps 8080 for a computer on an image from before the label, reusing a relay made before the variable', async () => {
+  const { manager, request } = relayFixture({}, oldRelayEnv);
+  await manager.create(id, name);
+  expect(request).not.toHaveBeenCalledWith('DELETE', expect.anything());
+  expect(request).toHaveBeenCalledWith('POST', `/containers/${manager.names.media(id)}/start`);
+});
+
+it('replaces a relay aimed at another port once its computer moved to a labelled image', async () => {
+  const { manager, request } = relayFixture({ 'swarm.ng.stream-port': '47613' }, oldRelayEnv);
+  await manager.create(id, name);
+  expect(request).toHaveBeenCalledWith('DELETE', '/containers/relay?force=true&v=false');
+  expect(request).toHaveBeenCalledWith(
+    'POST',
+    expect.stringMatching(/^\/containers\/create\?name=/),
+    expect.objectContaining({ Env: [...oldRelayEnv, 'COMPUTER_STREAM_PORT=47613'] }),
+  );
+});
+
+it('refuses to start a relay for a computer image with an invalid stream port label', async () => {
+  const { manager, request } = relayFixture({ 'swarm.ng.stream-port': '22' });
+  await expect(manager.create(id, name)).rejects.toMatchObject({ code: 503 });
+  expect(request).not.toHaveBeenCalled();
 });
 
 it('stops a running owned desktop on controller restart if its GPU grant was revoked', async () => {

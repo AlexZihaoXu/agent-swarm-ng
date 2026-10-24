@@ -31,12 +31,13 @@ cleanup() {
     [ -z "$child" ] || { kill "$child" 2>/dev/null || true; wait "$child" 2>/dev/null || true; }
 }
 trap 'cleanup; exit 0' INT TERM
+# 47613 must match the image's swarm.ng.stream-port label: it leaves 8080 free for agents' dev servers.
 while :; do
     # The dashboard deliberately proxies no file browser, share/token or
     # upload endpoints. Hide and disable those upstream features rather than
     # advertising controls that cannot work (or bypassing the media allowlist).
     DISPLAY=:1 selkies --wayland=false \
-        --addr=0.0.0.0 --port=8080 --subfolder="/computers/$id/desktop" \
+        --addr=0.0.0.0 --port=47613 --subfolder="/computers/$id/desktop" \
         --enable-https=true --https-cert="$tls/selkies.pem" --https-key="$tls/selkies.key" --enable-basic-auth=false --enable-dual-mode=false --enable-resize=false --scaling-dpi=96 \
         --audio-enabled=true --audio-on-start=false --microphone-enabled=false --audio-device-name=swarm-output.monitor --gamepad-enabled=false --webcam-enabled=false \
         --enable-clipboard=false --file-transfers=none --printing-enabled=false \

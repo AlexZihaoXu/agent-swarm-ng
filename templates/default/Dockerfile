@@ -187,5 +187,9 @@ RUN chown agent:agent /workspace && /opt/swarm/computer-storage-baseline.sh
 ENV HOME=/home/agent DONT_PROMPT_WSL_INSTALL=1
 USER agent
 
+# Selkies' in-computer port (start-selkies*.sh), off the 8080 agents' dev servers commonly use. The controller
+# aims this computer's media relay at it; images without the label listened on 8080.
+LABEL swarm.ng.stream-port="47613"
+
 # The standalone image remains idle until the managed controller starts it.
 CMD ["sleep", "infinity"]
