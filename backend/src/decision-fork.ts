@@ -1,17 +1,17 @@
 import {
   createAgentSession,
   defineTool,
-  SessionManager,
-  SettingsManager,
   type ModelRuntime,
   type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
+import { piSettings } from './pi-settings';
 import { getSupportedThinkingLevels, Type } from '@earendil-works/pi-ai';
 import { chatResources, createChatSession, type ChatConfiguration, type ChannelMessage } from './chat-runtime';
 import { runTriageTurns, TRIAGE_MAX_TOKENS, TRIAGE_TIMEOUT_MS } from './triage-turns';
 import type { ActivityTrace } from './activity-events';
 import { accessOf, type AgentTool } from './tool-access';
 import { meterSession } from './usage/meter';
+import { forkSessionManager } from './interruption-triage';
 import type { UsagePurpose } from './usage/recorder';
 
 export type DecisionFork<A extends string> = {
@@ -95,8 +95,8 @@ export async function runDecisionFork<A extends string>(
       tools: [tool.name, ...(fork.tools ?? []).map(item => item.name)],
       customTools: [tool, ...(fork.tools ?? [])],
       resourceLoader: resources,
-      sessionManager: SessionManager.inMemory(),
-      settingsManager: SettingsManager.inMemory({
+      sessionManager: forkSessionManager(structuredClone(base.messages)),
+      settingsManager: piSettings({
         compaction: { enabled: false },
         retry: { enabled: false },
         transport: 'sse',
@@ -109,7 +109,6 @@ export async function runDecisionFork<A extends string>(
       !session.agent.state.tools.some(item => item.name === tool.name)
     )
       throw new Error(`Unsafe ${fork.label} grant`);
-    session.agent.state.messages = structuredClone(base.messages);
     meterSession(session, { agentId: config.channel.agentId, purpose: fork.purpose ?? 'triage' });
     detach = trace?.attach(session) ?? detach;
     combined.addEventListener('abort', abort, { once: true });

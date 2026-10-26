@@ -81,8 +81,16 @@ afterAll(async () => {
 
 async function testApp() {
   const store = new EndpointStore(join(folder, `${crypto.randomUUID()}.json`));
-  await store.save({ id: 'a', name: 'A', baseUrl: `${origin}/a/v1`, apiKey: 'secret-key-a' });
-  await store.save({ id: 'b', name: 'B', baseUrl: `${origin}/b/v1`, apiKey: 'secret-key-b' });
+  // Pi counts the system prompt and tool declarations (about 25,000 tokens here) in every model's context.
+  await store.save({
+    id: 'a',
+    name: 'A',
+    baseUrl: `${origin}/a/v1`,
+    apiKey: 'secret-key-a',
+    contextWindow: 200_000,
+    maxOutputTokens: 8192,
+  });
+  await store.save({ id: 'b', name: 'B', baseUrl: `${origin}/b/v1`, apiKey: 'secret-key-b', contextWindow: 200_000 });
   // A model far too small for any conversation.
   await store.save({ id: 'c', name: 'C', baseUrl: `${origin}/c/v1`, apiKey: 'secret-key-c', contextWindow: 1024 });
   // One a long message alone is too big for: it cannot even be compacted into.
@@ -308,7 +316,7 @@ describe('fallback models', () => {
       ]);
       expect(published((await chat(app, agent.id)).body)).toEqual(['From b']);
       expect(JSON.parse(bodies.b!)).toMatchObject({ max_tokens: 1234 });
-      // A window cap alone never raises the reply length above the model's own (8,192 on this endpoint by default).
+      // A window cap alone never raises the reply length above the model's own (8,192 on this endpoint).
       expect(JSON.parse(bodies.a!)).toMatchObject({ max_tokens: 8192 });
     } finally {
       await app.close();

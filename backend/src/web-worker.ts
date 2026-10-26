@@ -6,9 +6,9 @@ import {
   DefaultResourceLoader,
   ModelRuntime,
   SessionManager,
-  SettingsManager,
   type ExtensionFactory,
 } from '@earendil-works/pi-coding-agent';
+import { piSettings } from './pi-settings';
 import { InMemoryCredentialStore, InMemoryModelsStore } from '@earendil-works/pi-ai';
 import { getModels } from '@earendil-works/pi-ai/compat';
 import { createPublicFetch } from './web-fetch';
@@ -21,7 +21,7 @@ globalThis.fetch = createPublicFetch() as typeof fetch;
 const require = createRequire(import.meta.url);
 const entry = pathToFileURL(join(dirname(require.resolve('pi-web-access/package.json')), 'dist/index.js')).href;
 const webAccess = (await import(entry)).default as ExtensionFactory;
-const settingsManager = SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false } });
+const settingsManager = piSettings({ compaction: { enabled: false }, retry: { enabled: false } });
 const resourceLoader = new DefaultResourceLoader({
   cwd: process.cwd(),
   agentDir: process.cwd(),

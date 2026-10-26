@@ -1,12 +1,8 @@
-import {
-  createAgentSession,
-  SessionManager,
-  SettingsManager,
-  type AgentSession,
-} from '@earendil-works/pi-coding-agent';
+import { createAgentSession, type AgentSession } from '@earendil-works/pi-coding-agent';
+import { piSettings } from './pi-settings';
 import { getSupportedThinkingLevels } from '@earendil-works/pi-ai';
 import { chatResources } from './chat-runtime';
-import { forkContext } from './interruption-triage';
+import { forkContext, forkSessionManager, forkTool } from './interruption-triage';
 import { TRIAGE_MAX_TOKENS } from './triage-turns';
 import type { ActivityTrace } from './activity-events';
 import { meterSession } from './usage/meter';
@@ -71,9 +67,11 @@ export async function checkTodos(input: {
   const abort = () => void session?.abort();
   try {
     combined.throwIfAborted();
-    const systemPrompt = main.agent.state.systemPrompt;
+    // The main session's own prompt and tools: Pi builds the same system prompt and declarations as the transcript's.
+    const systemPrompt = main.resourceLoader.getSystemPrompt();
     const resources = chatResources('Todo check', input.channelId, false, false);
     resources.getSystemPrompt = () => systemPrompt;
+    const tools = main.agent.state.tools;
     const model = main.model!;
     const levels: string[] = model.reasoning ? getSupportedThinkingLevels(model) : ['off'];
     ({ session } = await createAgentSession({
@@ -82,11 +80,11 @@ export async function checkTodos(input: {
       modelRuntime: main.modelRuntime,
       thinkingLevel: (levels.includes(input.thinkingLevel) ? input.thinkingLevel : 'off') as never,
       noTools: 'all',
-      tools: [],
-      customTools: [],
+      tools: tools.map(tool => tool.name),
+      customTools: tools.map(tool => forkTool(tool)),
       resourceLoader: resources,
-      sessionManager: SessionManager.inMemory(),
-      settingsManager: SettingsManager.inMemory({
+      sessionManager: forkSessionManager(forkContext(main)),
+      settingsManager: piSettings({
         compaction: { enabled: false },
         retry: { enabled: false },
         transport: 'sse',
@@ -95,14 +93,6 @@ export async function checkTodos(input: {
     if (session.sessionFile) throw new Error('Unsafe todo check session');
     meterSession(session, { agentId: input.agentId, purpose: 'todo' });
     const agent = session.agent;
-    agent.state.systemPrompt = systemPrompt;
-    const prepare = agent.prepareNextTurnWithContext;
-    agent.prepareNextTurnWithContext = async (turn, signal) => {
-      const next = await prepare?.(turn, signal);
-      return next?.context ? { ...next, context: { ...next.context, systemPrompt } } : next;
-    };
-    agent.state.tools = main.agent.state.tools;
-    agent.state.messages = forkContext(main);
     agent.sessionId = main.sessionId;
     agent.beforeToolCall = async ({ toolCall }) =>
       input.reads.has(toolCall.name)
@@ -112,25 +102,22 @@ export async function checkTodos(input: {
             reason: `This is a read-only todo check, not your real turn: ${toolCall.name} changes something and is refused here. Look with read-only tools, then answer STOP: or CONTINUE:.`,
           };
     let turns = 0;
-    const counting = agent.subscribe(event => {
-      if (event.type === 'turn_end') turns++;
-    });
-    agent.shouldStopAfterTurn = () => turns >= TODO_CHECK_MAX_TURNS;
+    const finish = agent.finishTurn;
+    agent.finishTurn = async (turn, signal) => {
+      const decision = await finish?.(turn, signal);
+      return ++turns >= TODO_CHECK_MAX_TURNS ? { action: 'end' } : (decision ?? undefined);
+    };
     detach = input.trace?.attach(session) ?? detach;
     combined.addEventListener('abort', abort, { once: true });
-    try {
-      let text = todoCheckPrompt(input.todos);
-      while (!combined.aborted && turns < TODO_CHECK_MAX_TURNS) {
-        await agent.prompt({ role: 'user', content: [{ type: 'text', text }], timestamp: Date.now() });
-        combined.throwIfAborted();
-        const last = [...agent.state.messages].reverse().find(message => message.role === 'assistant');
-        if (last?.role === 'assistant' && last.stopReason === 'error') break;
-        const decision = parseTodoDecision(assistantText(last));
-        if (decision) return decision;
-        text = 'Automatic feedback: no decision was recorded. Answer with one line starting STOP: or CONTINUE:.';
-      }
-    } finally {
-      counting();
+    let text = todoCheckPrompt(input.todos);
+    while (!combined.aborted && turns < TODO_CHECK_MAX_TURNS) {
+      await session.prompt(text, { expandPromptTemplates: false });
+      combined.throwIfAborted();
+      const last = [...session.messages].reverse().find(message => message.role === 'assistant');
+      if (last?.role === 'assistant' && last.stopReason === 'error') break;
+      const decision = parseTodoDecision(assistantText(last));
+      if (decision) return decision;
+      text = 'Automatic feedback: no decision was recorded. Answer with one line starting STOP: or CONTINUE:.';
     }
     return { action: 'stop', note: 'The todo check reached no decision.', failed: true };
   } catch {

@@ -219,7 +219,14 @@ afterAll(async () => {
 
 async function testApp(database?: PlatformStore, codex?: CodexProvider) {
   const store = new EndpointStore(join(folder, `${crypto.randomUUID()}.json`));
-  await store.save({ id: 'endpoint', name: 'Mock', baseUrl, apiKey: '!literal-key-$NOT_AN_ENV_LOOKUP' });
+  // A window with room for the system prompt and tool declarations (which Pi counts) without compacting.
+  await store.save({
+    id: 'endpoint',
+    name: 'Mock',
+    baseUrl,
+    apiKey: '!literal-key-$NOT_AN_ENV_LOOKUP',
+    contextWindow: 128_000,
+  });
   return buildApp({
     requireLogin: false,
     codex,
@@ -379,7 +386,7 @@ describe('Pi chat and platform channel boundary', () => {
       const usage = events.filter(e => e.type === 'activity' && e.entry.label === 'Context usage');
       expect(usage.length).toBeGreaterThan(1);
       expect(new Set(usage.map(e => e.entry.id)).size).toBe(1);
-      expect(usage.at(-1).entry.text).toMatch(/≈ [\d,]+ \/ 32,768 tokens · [\d.]+%/);
+      expect(usage.at(-1).entry.text).toMatch(/≈ [\d,]+ \/ 128,000 tokens · [\d.]+%/);
       expect(usage.at(-1).entry.text).toContain('not cumulative billing');
       expect(events.some(e => e.type === 'error')).toBe(false);
     } finally {
@@ -820,10 +827,8 @@ describe('Pi chat and platform channel boundary', () => {
     try {
       expect(session.sessionFile).toBeUndefined();
       expect(session.agent.state.tools.map(tool => tool.name)).toEqual(['send_message', 'help']);
-      expect(session.agent.state.systemPrompt).toContain(
-        'Your private Pi working session is not the dashboard chat app',
-      );
-      expect(session.agent.state.systemPrompt).toContain('Assistant text in your session may be internal');
+      expect(session.systemPrompt).toContain('Your private Pi working session is not the dashboard chat app');
+      expect(session.systemPrompt).toContain('Assistant text in your session may be internal');
       await session.prompt('!pwd /skill:private @/etc/passwd', { expandPromptTemplates: false });
       expect(published).toEqual(['Published hello']);
       expect(captured).toHaveLength(1);
@@ -865,7 +870,7 @@ describe('Pi chat and platform channel boundary', () => {
       const result = await tool.execute('result', { channelId: 'test-channel', text: 'Done', final: true });
       expect(result.terminate).toBe(true);
       expect(published).toEqual(['On it', 'Done']);
-      expect(session.agent.state.systemPrompt).toContain('Acknowledge');
+      expect(session.systemPrompt).toContain('Acknowledge');
       expect(JSON.stringify(session.messages[0])).toContain('test-channel');
     } finally {
       session.dispose();
@@ -1150,8 +1155,11 @@ describe('Pi chat and platform channel boundary', () => {
       try {
         const agent = (await app.inject({ method: 'POST', url: '/api/agents', payload: configuration })).json();
         const response = await app.inject({ method: 'POST', url: '/api/chat', payload: chatPayload(agent) });
-        // A failure is tried again (the model request only) up to the model's attempts, then reported.
-        expect(captured).toHaveLength(mode === 'http-error' ? DEFAULT_OPTIONS.attempts : 1);
+        // A failure is tried again (the model request only) up to the model's attempts, then reported. A response
+        // cut off below the model's output limit is Pi's to recover (it compacts once, here without success).
+        expect(captured.filter(body => body.tools?.length)).toHaveLength(
+          mode === 'http-error' ? DEFAULT_OPTIONS.attempts : 1,
+        );
         expect(response.body).toContain('"type":"error"');
         expect(JSON.stringify(channelEvents(response.body))).not.toContain('PRIVATE');
         expect(response.body).not.toContain('!literal-key-$NOT_AN_ENV_LOOKUP');

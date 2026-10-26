@@ -117,7 +117,10 @@ export async function prepareFallback(
       : (session.getContextUsage()?.tokens ??
         session.agent.state.messages.reduce(
           (total, message) => total + estimateTokens(message),
-          estimateTokens({ role: 'user', content: session.agent.state.systemPrompt, timestamp: 0 }),
+          // The transcript carries the prompt once a request was made; before that it is estimated.
+          session.agent.state.messages.some(message => message.role === 'system')
+            ? 0
+            : estimateTokens({ role: 'user', content: session.systemPrompt, timestamp: 0 }),
         ));
     return tokens <= entry.model.contextWindow - reserveFor(entry.model.contextWindow);
   };
@@ -152,6 +155,9 @@ type RetryInternals = {
   _isRetryableError(message: AssistantMessage): boolean;
   _prepareRetry(message: AssistantMessage): Promise<boolean>;
   _willRetryAfterAgentEnd(event: { messages: { role: string }[] }): boolean;
+  /** Pi's own step of a retry: leaves the failed response (and its tool results) out of the model's context. */
+  _omitRecoveryAttempt(message: AssistantMessage): void;
+  _agentRunAbortRequested?: boolean;
   _retryAbortController?: AbortController;
 };
 
@@ -170,7 +176,7 @@ const sleep = (ms: number, signal: AbortSignal) =>
   });
 
 /**
- * The chain takes over Pi's retry (pinned Pi 0.85.1 private methods, like afterToolCall elsewhere): a failed model call
+ * The chain takes over Pi's retry (pinned Pi 1.4.0 private methods, like afterToolCall elsewhere): a failed model call
  * is tried again on the same choice, or the session moves to the next choice and continues, or the run fails. A
  * context overflow stays Pi's (it compacts). Before each model call within a run, a higher choice that is due gets
  * its one try. Every successful response makes its choice the agent's active one.
@@ -188,6 +194,7 @@ function installFallback(
   internals._isRetryableError = handled;
   // Only says whether the run goes on (the activity's "will retry"); the decision itself is made once, below.
   internals._willRetryAfterAgentEnd = event => {
+    if (internals._agentRunAbortRequested) return false;
     const last = [...event.messages].reverse().find(message => message.role === 'assistant') as
       AssistantMessage | undefined;
     return Boolean(last && handled(last) && run.wouldContinue(isRetryableAssistantError(last)));
@@ -215,8 +222,7 @@ function installFallback(
     let decision = run.failure(isRetryableAssistantError(message), message.errorMessage || 'Unknown error');
     if (decision.action === 'fail') return false;
     // The failed response leaves the working context (it stays in the session's history).
-    const messages = session.agent.state.messages;
-    if (messages.at(-1)?.role === 'assistant') session.agent.state.messages = messages.slice(0, -1);
+    internals._omitRecoveryAttempt(message);
     const controller = new AbortController();
     internals._retryAbortController = controller;
     try {

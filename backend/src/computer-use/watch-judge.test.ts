@@ -111,9 +111,11 @@ it("a fork sends the main agent's exact system prompt and tools, and runs only t
   });
   expect(verdict).toEqual({ notify: false, summary: 'Claude is still thinking' });
   const [first, second] = requests;
-  expect(first.messages[0]).toEqual({ role: 'system', content: basis.systemPrompt });
+  expect(first.messages[0]).toMatchObject({ role: 'system', content: expect.stringContaining(basis.systemPrompt) });
   // Every turn, not just the first, carries the main request's prompt (the session would otherwise rebuild it).
-  expect(second.messages[0]).toEqual({ role: 'system', content: basis.systemPrompt });
+  expect(second.messages[0]).toEqual(first.messages[0]);
+  // The fork declares nothing beyond the main prompt and tools (no prompt or tool change message).
+  expect(second.messages.filter(message => message.role === 'system')).toHaveLength(1);
   expect(first.tools?.map(item => item.function.name)).toEqual(['send_message', 'terminal_view']);
   expect(JSON.stringify(first.messages)).toContain('Earlier: start Claude and wait for it');
   expect(JSON.stringify(first.messages)).toContain('temporary fork of your own conversation');

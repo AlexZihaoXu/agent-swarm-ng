@@ -78,7 +78,7 @@ export class AgentSessionStore {
       const entry = JSON.parse(row.payload) as SessionEntry;
       if (entry.id !== row.entryId || entry.parentId !== parent || typeof entry.type !== 'string')
         throw new Error('Private agent session is invalid.');
-      // Pi 0.85.1 follows parent links. Re-root only the loaded active tail;
+      // Pi follows parent links. Re-root only the loaded active tail;
       // original parent links and older entries remain archived in SQLite.
       entries.push(index === 0 && record.activeStart ? { ...entry, parentId: null } : entry);
       parent = entry.id;

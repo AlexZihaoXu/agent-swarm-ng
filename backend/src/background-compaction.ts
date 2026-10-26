@@ -1,9 +1,10 @@
+import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
-  buildSessionContext,
   compact,
   estimateTokens,
-  findCutPoint,
-  sessionEntryToContextMessages,
   type AgentSession,
   type CompactionResult,
   type SessionEntry,
@@ -46,57 +47,30 @@ const latestCompactionId = (entries: SessionEntry[]) =>
   [...entries].reverse().find(entry => entry.type === 'compaction')?.id ?? null;
 
 /**
- * The SDK's prepareCompaction (not exported in Pi 0.85.1), for a snapshot of the branch: what to summarize, and the
- * first entry kept verbatim (never a tool result; the SDK's own cut rule keeps a recent tail).
+ * The SDK's own prepareCompaction for a snapshot of the branch: what to summarize, and the first entry kept verbatim
+ * (never a tool result; the SDK's own cut rule keeps a recent tail). It reads the session's model context as Pi does
+ * (context edits applied, system messages left out). Pi 1.4.0 does not export it from the package entry, so it is
+ * loaded from the installed package's own module (background-compaction.test.ts guards this on upgrades).
  */
+const sdkCompaction = (await import(
+  pathToFileURL(
+    join(
+      dirname(
+        createRequire(import.meta.url)
+          .resolve.paths('@earendil-works/pi-coding-agent')!
+          .map(folder => join(folder, '@earendil-works/pi-coding-agent/package.json'))
+          .find(file => existsSync(file))!,
+      ),
+      'dist/core/compaction/compaction.js',
+    ),
+  ).href
+)) as { prepareCompaction(entries: SessionEntry[], settings: CompactionSettings): Preparation | undefined };
+
 export function prepareBackgroundCompaction(
   entries: SessionEntry[],
   settings: CompactionSettings,
 ): Preparation | undefined {
-  if (!entries.length || entries.at(-1)!.type === 'compaction') return undefined;
-  let previousIndex = -1;
-  for (let index = entries.length - 1; index >= 0; index--)
-    if (entries[index].type === 'compaction') {
-      previousIndex = index;
-      break;
-    }
-  let previousSummary: string | undefined;
-  let start = 0;
-  let details: { readFiles?: string[]; modifiedFiles?: string[] } | undefined;
-  if (previousIndex >= 0) {
-    const previous = entries[previousIndex] as Extract<SessionEntry, { type: 'compaction' }>;
-    previousSummary = previous.summary;
-    const kept = entries.findIndex(entry => entry.id === previous.firstKeptEntryId);
-    start = kept >= 0 ? kept : previousIndex + 1;
-    details = previous.details as typeof details;
-  }
-  const message = (entry: SessionEntry) =>
-    entry.type === 'compaction' ? undefined : sessionEntryToContextMessages(entry)[0];
-  const tokensBefore = buildSessionContext(entries).messages.reduce((total, item) => total + estimateTokens(item), 0);
-  const cut = findCutPoint(entries, start, entries.length, settings.keepRecentTokens);
-  const firstKept = entries[cut.firstKeptEntryIndex];
-  if (!firstKept?.id) return undefined;
-  const historyEnd = cut.isSplitTurn ? cut.turnStartIndex : cut.firstKeptEntryIndex;
-  const messagesToSummarize = entries.slice(start, historyEnd).flatMap(entry => message(entry) ?? []);
-  const turnPrefixMessages = cut.isSplitTurn
-    ? entries.slice(cut.turnStartIndex, cut.firstKeptEntryIndex).flatMap(entry => message(entry) ?? [])
-    : [];
-  if (!messagesToSummarize.length && !turnPrefixMessages.length) return undefined;
-  return {
-    firstKeptEntryId: firstKept.id,
-    messagesToSummarize,
-    turnPrefixMessages,
-    isSplitTurn: cut.isSplitTurn,
-    tokensBefore,
-    previousSummary,
-    // Files read/changed carry over from the previous summary (our tools are not the SDK's file tools).
-    fileOps: {
-      read: new Set(details?.readFiles ?? []),
-      written: new Set<string>(),
-      edited: new Set(details?.modifiedFiles ?? []),
-    },
-    settings,
-  };
+  return sdkCompaction.prepareCompaction(entries, settings);
 }
 
 /**
@@ -147,7 +121,7 @@ export class BackgroundCompactor {
       controller,
       settled: Promise.resolve(),
     };
-    // The SDK's own summaries authenticate this way (a private method in Pi 0.85.1; pinned and tested).
+    // The SDK's own summaries authenticate this way (a private method in Pi 1.4.0; pinned and tested).
     const auth = (
       session as unknown as {
         _getSummarizationRequestAuth(model: NonNullable<AgentSession['model']>): Promise<{
@@ -198,7 +172,10 @@ export class BackgroundCompactor {
    * Applies a finished summary to this session (its branch must still contain the snapshot): appends the compaction
    * entry and rebuilds the agent's working messages. Returns 'spliced', 'stale' (discarded) or null (nothing ready).
    */
-  splice(agentId: string, session: Pick<AgentSession, 'sessionManager' | 'agent'>): 'spliced' | 'stale' | null {
+  splice(
+    agentId: string,
+    session: Pick<AgentSession, 'sessionManager' | 'refreshContext'>,
+  ): 'spliced' | 'stale' | null {
     const job = this.jobs.get(agentId);
     if (!job?.result) return null;
     this.jobs.delete(agentId);
@@ -214,7 +191,7 @@ export class BackgroundCompactor {
       return 'stale';
     const { summary, firstKeptEntryId, tokensBefore, details, usage } = job.result;
     manager.appendCompaction(summary, firstKeptEntryId, tokensBefore, details, false, usage);
-    session.agent.state.messages = manager.buildSessionContext().messages;
+    session.refreshContext();
     return 'spliced';
   }
 
@@ -319,11 +296,8 @@ export async function compactToFit(session: AgentSession, agentId: string, signa
   if (!result) return false;
   const { summary, tokensBefore, details, usage } = result;
   manager.appendCompaction(summary, preparation.firstKeptEntryId, tokensBefore, details, false, usage);
-  const messages = manager.buildSessionContext().messages;
-  // The failed response stays in the session's history, not in what the model reads next.
-  const last = messages.at(-1) as { role?: string; stopReason?: string } | undefined;
-  session.agent.state.messages =
-    last?.role === 'assistant' && last.stopReason === 'error' ? messages.slice(0, -1) : messages;
+  // The failed response stays in the session's history; the retry already left it out of what the model reads next.
+  session.refreshContext();
   return true;
 }
 

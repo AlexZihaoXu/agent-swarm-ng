@@ -1,11 +1,6 @@
 import { capsOf } from '../model-chain';
-import {
-  createAgentSession,
-  SessionManager,
-  SettingsManager,
-  type AgentSession,
-  type ModelRuntime,
-} from '@earendil-works/pi-coding-agent';
+import { createAgentSession, type AgentSession, type ModelRuntime } from '@earendil-works/pi-coding-agent';
+import { piSettings } from '../pi-settings';
 import { getSupportedThinkingLevels, type ImageContent, type Model, type Api } from '@earendil-works/pi-ai';
 import { chatResources, resolveChatModel } from '../chat-runtime';
 import { resolveChatConnection } from '../chat-connection';
@@ -15,7 +10,7 @@ import type { PlatformStore } from '../platform-store';
 import type { EndpointStore } from '../endpoint-store';
 import type { Connections } from '../users/connections';
 import { WatchEnd, type Judge } from './watches';
-import { forkContext } from '../interruption-triage';
+import { forkContext, forkSessionManager, forkTool } from '../interruption-triage';
 import { TRIAGE_MAX_TOKENS } from '../triage-turns';
 import type { ActivityTrace } from '../activity-events';
 import { meterSession } from '../usage/meter';
@@ -36,6 +31,7 @@ export const WATCH_SUMMARY_MAX = 1000;
  */
 export type ForkBasis = {
   sessionId: string;
+  /** The session's own system prompt (its resource loader's): Pi builds the request's prompt from it. */
   systemPrompt: string;
   tools: AgentTool[];
   messages: AgentMessage[];
@@ -44,7 +40,7 @@ export type ForkBasis = {
 export function forkBasis(session: AgentSession): ForkBasis {
   return {
     sessionId: session.sessionId,
-    systemPrompt: session.agent.state.systemPrompt,
+    systemPrompt: session.resourceLoader.getSystemPrompt() ?? '',
     tools: session.agent.state.tools,
     messages: session.messages,
     streamingMessage: session.agent.state.streamingMessage,
@@ -110,6 +106,9 @@ export async function judgeWatch(input: JudgeInput): Promise<Verdict> {
   try {
     combined.throwIfAborted();
     const systemPrompt = fork?.systemPrompt ?? WATCHER_PROMPT;
+    const own = new Map(input.tools.map(tool => [tool.name, tool]));
+    // A fork keeps each main tool as declared (schema, description) and only swaps what runs.
+    const tools = fork?.tools ?? input.tools;
     const resources = chatResources('Computer watch', input.channelId, false, false);
     resources.getSystemPrompt = () => systemPrompt;
     const levels: string[] = model.reasoning ? getSupportedThinkingLevels(model) : ['off'];
@@ -126,11 +125,11 @@ export async function judgeWatch(input: JudgeInput): Promise<Verdict> {
       modelRuntime: input.modelRuntime,
       thinkingLevel: thinkingLevel as never,
       noTools: 'all',
-      tools: [],
-      customTools: [],
+      tools: tools.map(tool => tool.name),
+      customTools: tools.map(tool => forkTool(tool, own.get(tool.name)?.execute)),
       resourceLoader: resources,
-      sessionManager: SessionManager.inMemory(),
-      settingsManager: SettingsManager.inMemory({
+      sessionManager: forkSessionManager(fork ? forkContext({ messages: fork.messages, agent: { state: fork } }) : []),
+      settingsManager: piSettings({
         compaction: { enabled: false },
         retry: { enabled: false },
         transport: 'sse',
@@ -138,24 +137,7 @@ export async function judgeWatch(input: JudgeInput): Promise<Verdict> {
     }));
     if (session.sessionFile) throw new Error('Unsafe watch session');
     if (input.agentId) meterSession(session, { agentId: input.agentId, purpose: 'watch' });
-    const own = new Map(input.tools.map(tool => [tool.name, tool]));
     const agent = session.agent;
-    // The loop is driven on the agent itself: AgentSession.prompt would rebuild the system prompt.
-    agent.state.systemPrompt = systemPrompt;
-    // The session re-derives its own prompt before every later turn; keep this one on every turn.
-    const prepare = agent.prepareNextTurnWithContext;
-    agent.prepareNextTurnWithContext = async (turn, signal) => {
-      const next = await prepare?.(turn, signal);
-      return next?.context ? { ...next, context: { ...next.context, systemPrompt } } : next;
-    };
-    // A fork keeps each main tool object as sent (schema, description) and only swaps what runs.
-    agent.state.tools = fork
-      ? fork.tools.map(tool => {
-          const read = own.get(tool.name);
-          return read ? { ...tool, execute: read.execute } : tool;
-        })
-      : input.tools;
-    agent.state.messages = fork ? forkContext({ messages: fork.messages, agent: { state: fork } }) : [];
     if (fork) agent.sessionId = fork.sessionId;
     const reads = [...own.keys()].join(', ');
     agent.beforeToolCall = async ({ toolCall }) =>
@@ -166,39 +148,31 @@ export async function judgeWatch(input: JudgeInput): Promise<Verdict> {
             reason: `This is a watch check, not your normal turn: only ${reads} can run here. Answer NOTIFY: or KEEP_WATCHING: instead.`,
           };
     let turns = 0;
-    const counting = agent.subscribe(event => {
-      if (event.type === 'turn_end') turns++;
-    });
-    agent.shouldStopAfterTurn = () => turns >= WATCH_MAX_TURNS;
+    const finish = agent.finishTurn;
+    agent.finishTurn = async (turn, turnSignal) => {
+      const decision = await finish?.(turn, turnSignal);
+      return ++turns >= WATCH_MAX_TURNS ? { action: 'end' } : (decision ?? undefined);
+    };
     detach = input.trace?.attach(session) ?? detach;
     combined.addEventListener('abort', abort, { once: true });
     const heading = fork
       ? `${WATCHER_PROMPT}\n\nThis is a temporary fork of your own conversation, made only for this check. Do not continue your earlier work or call other tools here; they are refused.\n\n`
       : '';
-    try {
-      let text = heading + input.text;
-      let images = input.images;
-      while (!combined.aborted) {
-        await agent.prompt({
-          role: 'user',
-          content: [{ type: 'text', text }, ...images],
-          timestamp: Date.now(),
-        });
-        combined.throwIfAborted();
-        const last = [...agent.state.messages].reverse().find(message => message.role === 'assistant');
-        if (last?.role === 'assistant' && last.stopReason === 'error')
-          throw new Error('The watcher model request failed.');
-        const verdict = parseVerdict(assistantText(last));
-        if (verdict) return verdict;
-        if (turns >= WATCH_MAX_TURNS) throw new Error(`No decision within ${WATCH_MAX_TURNS} model turns.`);
-        text =
-          'Automatic feedback: no decision was recorded. Answer with plain text starting NOTIFY: or KEEP_WATCHING:.';
-        images = [];
-      }
-      throw new Error('The watch check was cancelled or timed out.');
-    } finally {
-      counting();
+    let text = heading + input.text;
+    let images = input.images;
+    while (!combined.aborted) {
+      await session.prompt(text, { expandPromptTemplates: false, images });
+      combined.throwIfAborted();
+      const last = [...session.messages].reverse().find(message => message.role === 'assistant');
+      if (last?.role === 'assistant' && last.stopReason === 'error')
+        throw new Error('The watcher model request failed.');
+      const verdict = parseVerdict(assistantText(last));
+      if (verdict) return verdict;
+      if (turns >= WATCH_MAX_TURNS) throw new Error(`No decision within ${WATCH_MAX_TURNS} model turns.`);
+      text = 'Automatic feedback: no decision was recorded. Answer with plain text starting NOTIFY: or KEEP_WATCHING:.';
+      images = [];
     }
+    throw new Error('The watch check was cancelled or timed out.');
   } finally {
     clearTimeout(timer);
     combined.removeEventListener('abort', abort);

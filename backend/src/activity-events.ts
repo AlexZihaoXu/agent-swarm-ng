@@ -441,7 +441,7 @@ export function createActivityEvents(record: ActivityWrite) {
   };
   const attach = (session: AgentSession) => {
     const model = session.model;
-    record('system', 'System prompt', session.agent.state.systemPrompt, undefined, false, 'complete');
+    record('system', 'System prompt', session.systemPrompt, undefined, false, 'complete');
     meta('Runtime configuration', {
       provider: model?.provider,
       api: model?.api,

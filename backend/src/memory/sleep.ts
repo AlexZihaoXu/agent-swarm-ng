@@ -1,9 +1,5 @@
-import {
-  createAgentSession,
-  SessionManager,
-  SettingsManager,
-  type ModelRuntime,
-} from '@earendil-works/pi-coding-agent';
+import { createAgentSession, SessionManager, type ModelRuntime } from '@earendil-works/pi-coding-agent';
+import { piSettings } from '../pi-settings';
 import { chatResources, resolveChatModel, MODEL_RETRY, type ChatConfiguration } from '../chat-runtime';
 import { inHours } from '../heartbeat';
 import type { PlatformStore } from '../platform-store';
@@ -202,7 +198,7 @@ export async function sleepOnce({ database, memory, deep, config, subscriptionRu
     customTools: tools,
     resourceLoader: resources,
     sessionManager: SessionManager.inMemory(),
-    settingsManager: SettingsManager.inMemory({
+    settingsManager: piSettings({
       compaction: { enabled: false },
       retry: { enabled: true, ...MODEL_RETRY },
       transport: 'sse',

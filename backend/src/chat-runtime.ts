@@ -10,10 +10,10 @@ import {
   estimateTokens,
   ModelRuntime,
   SessionManager,
-  SettingsManager,
   type ResourceLoader,
   type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
+import { piSettings } from './pi-settings';
 import {
   createProvider,
   getSupportedThinkingLevels,
@@ -473,14 +473,16 @@ export async function createChatSession(
             },
             connection.subscriptionRuntime,
           ),
-        // Before the session exists: its saved context (or the bootstrap history), plus the prompt and tool schemas.
-        () =>
-          PROMPT_AND_TOOLS_TOKENS +
-          (restoredManager
-            ? restoredManager
-                .buildSessionContext()
-                .messages.reduce((total, message) => total + estimateTokens(message), 0)
-            : history.reduce((total, message) => total + Math.ceil(message.text.length / 4), 0)),
+        // Before the session exists: its saved context (or the bootstrap history), plus the prompt and tool schemas
+        // (a saved transcript already carries them in its system messages).
+        () => {
+          const saved = restoredManager?.buildSessionContext().messages;
+          return saved
+            ? saved.reduce((total, message) => total + estimateTokens(message), 0) +
+                (saved.some(message => message.role === 'system') ? 0 : PROMPT_AND_TOOLS_TOKENS)
+            : PROMPT_AND_TOOLS_TOKENS +
+                history.reduce((total, message) => total + Math.ceil(message.text.length / 4), 0);
+        },
       )
     : undefined;
   const { model, modelRuntime } = chain ?? (await resolveChatModel(config, subscriptionRuntime));
@@ -647,7 +649,7 @@ export async function createChatSession(
     customTools: [...granted, help],
     resourceLoader: resources,
     sessionManager: manager,
-    settingsManager: SettingsManager.inMemory({
+    settingsManager: piSettings({
       compaction: { enabled: Boolean(restoredManager), reserveTokens, keepRecentTokens },
       retry: { enabled: true, ...MODEL_RETRY },
       transport: 'sse',

@@ -8,5 +8,5 @@ export function formatContextUsage(usage: ReturnType<AgentSession['getContextUsa
   const amount = known
     ? `≈ ${number(usage.tokens!)} / ${number(usage.contextWindow)} tokens · ${((usage.tokens! / usage.contextWindow) * 100).toFixed(1)}%`
     : `Context tokens unknown / ${number(usage.contextWindow)}`;
-  return `${amount}\nMain session estimate · configured context limit, not cumulative billing.\nUses provider usage when available plus estimated trailing messages; without provider usage, system-prompt/tool-schema overhead may be missing. Triage forks are separate and are not included.`;
+  return `${amount}\nMain session estimate · configured context limit, not cumulative billing.\nUses provider usage when available plus estimated trailing messages (the system prompt and tool declarations included). Triage forks are separate and are not included.`;
 }

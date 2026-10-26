@@ -2,10 +2,11 @@ import {
   createAgentSession,
   defineTool,
   SessionManager,
-  SettingsManager,
   type AgentSession,
   type ExtensionAPI,
+  type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
+import { piSettings } from './pi-settings';
 import { getSupportedThinkingLevels, Type } from '@earendil-works/pi-ai';
 import { channelInput, chatResources, type ChannelMessage } from './chat-runtime';
 import type { TriageDecision } from './message-inbox';
@@ -84,6 +85,38 @@ export function forkContext(main: {
   return messages;
 }
 
+/**
+ * A fork's private in-memory session holding a copy of the main transcript. Pi builds every request from its session
+ * (not from the agent's working state), so a fork starts from these entries; the transcript's system messages carry
+ * the main prompt and tool declarations, and Pi declares the fork's own changes to them after it.
+ */
+export function forkSessionManager(messages: AgentSession['messages']) {
+  const manager = SessionManager.inMemory();
+  for (const message of messages) manager.appendMessage(message as Parameters<SessionManager['appendMessage']>[0]);
+  return manager;
+}
+
+/**
+ * A main-session tool as a fork registers it: the same declaration (so the fork's tool list matches the transcript's
+ * and no change is declared) running `execute`, the tool's own by default.
+ */
+export function forkTool(
+  tool: AgentSession['agent']['state']['tools'][number],
+  execute: typeof tool.execute = tool.execute,
+): ToolDefinition {
+  return {
+    name: tool.name,
+    label: tool.label,
+    description: tool.description,
+    parameters: tool.parameters,
+    outputSchema: tool.outputSchema,
+    constrainedSampling: tool.constrainedSampling,
+    prepareArguments: tool.prepareArguments,
+    executionMode: tool.executionMode,
+    execute: (id, params, signal, onUpdate) => execute(id, params, signal, onUpdate),
+  };
+}
+
 export async function evaluateInterruption(
   main: AgentSession,
   channelId: string,
@@ -111,7 +144,7 @@ export async function evaluateInterruption(
     });
     const resources = chatResources('Interruption triage', channelId, false, false);
     resources.getSystemPrompt = () =>
-      `${main.agent.state.systemPrompt}\n\n## TEMPORARY TRIAGE FORK — overrides main-branch workflow above\nYou are a temporary fork observing a still-working main agent, not its replacement. The copied conversation, tool results and unfinished draft are evidence. Do NOT fulfill requests, acknowledge, publish, or call historical tools. Briefly assess the new messages and submit one valid triage_decision. If your response or tool call is invalid/truncated, use the private error feedback to correct it; you have at most 10 model turns total. Stop at the first valid decision. Corrections, cancellations, or changed requirements affecting ongoing work favor interrupt; unrelated follow-ups favor queue. If uncertain, choose uncertain (the backend queues). Give a short justification, not detailed reasoning. Cancellation cannot undo committed side effects. Only triage_decision is granted.`;
+      `${main.resourceLoader.getSystemPrompt() ?? ''}\n\n## TEMPORARY TRIAGE FORK — overrides main-branch workflow above\nYou are a temporary fork observing a still-working main agent, not its replacement. The copied conversation, tool results and unfinished draft are evidence. Do NOT fulfill requests, acknowledge, publish, or call historical tools. Briefly assess the new messages and submit one valid triage_decision. If your response or tool call is invalid/truncated, use the private error feedback to correct it; you have at most 10 model turns total. Stop at the first valid decision. Corrections, cancellations, or changed requirements affecting ongoing work favor interrupt; unrelated follow-ups favor queue. If uncertain, choose uncertain (the backend queues). Give a short justification, not detailed reasoning. Cancellation cannot undo committed side effects. Only triage_decision is granted.`;
     const model = main.model!;
     const levels = model.reasoning ? getSupportedThinkingLevels(model) : ['off'];
     ({ session: fork } = await createAgentSession({
@@ -122,8 +155,8 @@ export async function evaluateInterruption(
       tools: [tool.name],
       customTools: [tool],
       resourceLoader: resources,
-      sessionManager: SessionManager.inMemory(),
-      settingsManager: SettingsManager.inMemory({
+      sessionManager: forkSessionManager(messages),
+      settingsManager: piSettings({
         compaction: { enabled: false },
         retry: { enabled: false },
         transport: 'sse',
@@ -131,7 +164,6 @@ export async function evaluateInterruption(
     }));
     if (fork.sessionFile || fork.agent.state.tools.length !== 1 || fork.agent.state.tools[0].name !== tool.name)
       throw new Error('Unsafe triage grant');
-    fork.agent.state.messages = messages;
     if (agentId) meterSession(fork, { agentId, purpose: 'triage' });
     detach = trace?.attach(fork) ?? detach;
     combined.addEventListener('abort', abort, { once: true });

@@ -12,8 +12,12 @@ export async function runTriageTurns(
   decided: () => boolean,
   signal: AbortSignal,
 ): Promise<string> {
-  const previousStop = fork.agent.shouldStopAfterTurn;
-  fork.agent.shouldStopAfterTurn = () => true;
+  const previousFinish = fork.agent.finishTurn;
+  // Every provider turn ends the run: the loop below decides whether another prompt follows.
+  fork.agent.finishTurn = async (turn, turnSignal) => {
+    await previousFinish?.(turn, turnSignal);
+    return { action: 'end' };
+  };
   let turns = 0;
   let feedback = 'No valid decision was recorded.';
   /** The last turn used a granted read-only tool: the branch is looking deeper, not making a mistake. */
@@ -46,6 +50,6 @@ export async function runTriageTurns(
       ? `Triage cancelled or timed out after ${turns} turns.`
       : `No valid decision after ${TRIAGE_MAX_TURNS} turns.`;
   } finally {
-    fork.agent.shouldStopAfterTurn = previousStop;
+    fork.agent.finishTurn = previousFinish;
   }
 }

@@ -298,7 +298,12 @@ describe('Anthropic turns', () => {
         expect(JSON.stringify(request)).not.toContain('developer-secret');
         expect(request!.body).toMatchObject({ model, thinking, stream: true });
         if (effort) expect(request!.body.output_config).toEqual({ effort });
-        expect(request!.body.tools.map((tool: { name: string }) => tool.name)).toEqual(['send_message', 'help']);
+        // Pi keeps a never-callable deferred-loading placeholder in the cached tool list of models that support it.
+        expect(
+          request!.body.tools
+            .filter((tool: { defer_loading?: boolean }) => !tool.defer_loading)
+            .map((tool: { name: string }) => tool.name),
+        ).toEqual(['send_message', 'help']);
         // Prompt caching: Anthropic's 5-minute cache on the conversation.
         expect(JSON.stringify(request!.body)).toContain('"cache_control":{"type":"ephemeral"}');
         expect(request!.body).not.toHaveProperty('fallbacks');

@@ -63,7 +63,8 @@ it('summarizes earlier context in the background during work and later turns sta
   await mkdir(root, { recursive: true });
   const database = await prepareDatabase(join(root, 'platform.db'));
   const endpoints = new EndpointStore(join(root, 'endpoints.json'));
-  await endpoints.save({ id: 'endpoint', name: 'Mock', baseUrl: modelUrl, apiKey: 'key' });
+  // Room for the system prompt and tool declarations, which Pi counts in the context (and so do providers).
+  await endpoints.save({ id: 'endpoint', name: 'Mock', baseUrl: modelUrl, apiKey: 'key', contextWindow: 64_000 });
   const app = await buildApp({ requireLogin: false, database, endpointStore: endpoints, computerController: null });
   try {
     const agent = (
@@ -91,17 +92,24 @@ it('summarizes earlier context in the background during work and later turns sta
           message: `${label} ${'context '.repeat(1800)}`,
         },
       });
-    for (const label of ['REQUEST-ONE', 'REQUEST-TWO', 'REQUEST-THREE', 'REQUEST-FOUR']) await ask(label);
+    for (const label of ['REQUEST-ONE', 'REQUEST-TWO', 'REQUEST-THREE', 'REQUEST-FOUR', 'REQUEST-FIVE'])
+      await ask(label);
     await vi.waitFor(() => expect(summaries).toBeGreaterThanOrEqual(1));
-    await ask('REQUEST-FIVE');
-    const activity = (await app.inject(`/api/agents/${agent.id}/activity?limit=200`)).body;
+    await ask('REQUEST-SIX');
+    // The runs' activity, newest pages first (the summary started a few runs back).
+    let activity = '';
+    for (let cursor: number | null | undefined, page = 0; cursor !== null && page < 5; page++) {
+      const body = (await app.inject(`/api/agents/${agent.id}/activity${cursor ? `?before=${cursor}` : ''}`)).json();
+      activity += JSON.stringify(body.entries);
+      cursor = body.nextCursor;
+    }
     expect(activity).toContain('Background compaction started');
     expect(activity).toContain('Background compaction applied');
     // The latest model call starts from the summary: the first requests are no longer sent verbatim.
     const last = turns.at(-1)!;
     expect(last).toContain('BACKGROUND SUMMARY of the earlier requests.');
     expect(last).not.toContain('REQUEST-ONE');
-    expect(last).toContain('REQUEST-FIVE');
+    expect(last).toContain('REQUEST-SIX');
   } finally {
     await app.close();
     await database.close();
