@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { AuthInteraction } from '@earendil-works/pi-ai';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { InMemoryCredentialStore, InMemoryModelsStore, getSupportedThinkingLevels } from '@earendil-works/pi-ai';
@@ -186,20 +185,4 @@ describe('ChatGPT subscription connection', () => {
       await app.close();
     }
   });
-});
-
-it('offers the ChatGPT models Pi does not list yet (codex-extra-models.json), with their thinking levels', async () => {
-  const root = await mkdtemp(join(process.env.SQLITE_TEST_ROOT!, 'codex-extra-'));
-  const extra = new URL('./codex-extra-models.json', import.meta.url);
-  const runtime = await ModelRuntime.create({
-    authPath: join(root, 'auth.json'),
-    modelsPath: fileURLToPath(extra),
-    modelsStorePath: join(root, 'models.json'),
-    allowModelNetwork: false,
-  });
-  const terra = runtime.getModel('openai-codex', 'gpt-6.1-terra');
-  expect(terra).toMatchObject({ id: 'gpt-6.1-terra', reasoning: true, api: 'openai-codex-responses' });
-  expect(getSupportedThinkingLevels(terra!)).toContain('high');
-  // Pi's own models stay.
-  expect(runtime.getModel('openai-codex', 'gpt-6-astra')).toBeTruthy();
 });

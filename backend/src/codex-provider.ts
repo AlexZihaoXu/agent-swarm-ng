@@ -1,6 +1,5 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { CredentialSynchronizationError, ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { getSupportedThinkingLevels } from '@earendil-works/pi-ai';
 import { databaseFile } from './database-location';
@@ -61,8 +60,6 @@ export function identityOf(accessToken: string | undefined): CodexIdentity {
   }
 }
 
-const EXTRA_MODELS = fileURLToPath(new URL('./codex-extra-models.json', import.meta.url));
-
 export class CodexProvider {
   private runtimePromise?: Promise<ModelRuntime>;
   private login: CodexLogin = { state: 'idle' };
@@ -78,9 +75,7 @@ export class CodexProvider {
       await mkdir(directory, { recursive: true, mode: 0o700 });
       return ModelRuntime.create({
         authPath: join(directory, files.auth),
-        // ChatGPT models Pi's catalog does not list yet (gpt-6.1-terra, 2026-10-26), copied from their nearest
-        // sibling; an entry is removed once Pi lists the model itself (a custom entry would replace Pi's).
-        modelsPath: EXTRA_MODELS,
+        modelsPath: null,
         modelsStorePath: join(directory, files.models),
         allowModelNetwork: false,
       });
