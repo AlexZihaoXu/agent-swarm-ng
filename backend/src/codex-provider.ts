@@ -102,11 +102,19 @@ export class CodexProvider {
   }
 
   runtime() {
-    return (this.runtimePromise ??= this.factory());
+    // The first use after a start also loads Pi's remote catalog (bounded by its 5 s timeout): a turn must find the
+    // models only that catalog lists (gpt-6.1-terra), and the dashboard's Settings used to be the only refresher.
+    return (this.runtimePromise ??= this.factory().then(async runtime => {
+      await this.refreshWith(runtime, false);
+      return runtime;
+    }));
   }
 
   async refreshModels(force = false) {
-    const runtime = await this.runtime();
+    return this.refreshWith(await this.runtime(), force);
+  }
+
+  private async refreshWith(runtime: ModelRuntime, force: boolean) {
     if (this.refreshing) return this.refreshing;
     if (this.disconnecting || (!force && Date.now() < this.refreshAfter)) return;
     this.refreshAfter = Date.now() + 5 * 60_000;

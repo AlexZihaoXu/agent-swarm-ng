@@ -186,3 +186,15 @@ describe('ChatGPT subscription connection', () => {
     }
   });
 });
+
+it('loads the remote model catalog on first use, so a turn after a restart finds catalog-only models', async () => {
+  const refresh = vi.fn(async (_options: object) => ({ aborted: false, errors: new Map() }));
+  const runtime = { refresh } as unknown as ModelRuntime;
+  const codex = new CodexProvider(async () => runtime);
+  expect(await codex.runtime()).toBe(runtime);
+  expect(refresh).toHaveBeenCalledTimes(1);
+  expect(refresh.mock.calls[0]![0]).toMatchObject({ providers: ['openai-codex'], allowNetwork: true });
+  // Later uses do not refresh again (the dashboard's status does, at most every few minutes).
+  await codex.runtime();
+  expect(refresh).toHaveBeenCalledTimes(1);
+});
