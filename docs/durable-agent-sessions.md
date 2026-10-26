@@ -12,7 +12,12 @@ Status: implemented and deployed to the trusted Tailnet instance from `feat/dura
 
 ## Pi format and checkpoint boundaries
 
-- The pinned Pi SDK (`0.85.1`) supports `SessionManager.inMemory(cwd, options, entries)` and returns an append-only header/entry tree. Rehydration reconstructs the active leaf and its compaction-aware model context. Keep the entry order and session ID; validate version, agent ownership, parent links, and sizes before loading untrusted/corrupt records.
+- The pinned Pi SDK (`1.4.0`) supports `SessionManager.inMemory(cwd, options, entries)` and returns an append-only header/entry tree. Rehydration reconstructs the active leaf and its compaction-aware model context. Keep the entry order and session ID; validate version, agent ownership, parent links, and sizes before loading untrusted/corrupt records.
+- Since Pi 0.87 the session manager is canonical: every request is built from the session's entries, never from
+  the agent's working state, so forks (triage, decision forks, todo checks, watch checks) start from a session holding
+  a copy of the main transcript. Since Pi 0.86 the system prompt and tool declarations are system messages in the
+  transcript (a later change is appended as a patch); sessions saved before then have none, and their first request
+  declares the current prompt. Both load unchanged.
 - Pi appends completed `message_end` entries and compaction entries to its manager. Freeze a private snapshot at each complete turn/tool-result or completed compaction boundary **before** scheduling its SQLite write; a later model turn cannot contaminate that queued checkpoint. If interrupted mid-generation, load the last committed checkpoint and reconcile already published chat without treating partial text as an answer.
 - The pinned SDK's compaction entry names `firstKeptEntryId` rather than embedding `retainedTail`. Keep the referenced entries so restore remains possible. The database records the active start position: on load it reads only the latest retained tail, its compaction entry and newer entries, re-rooting that in-memory tail while preserving original parent links and older private entries in indexed archive rows. The model receives the latest summary plus the kept tail, never the full archive. A failed compaction leaves the preceding checkpoint usable.
 - Store checkpoints incrementally as ordered records, not by rewriting one unbounded JSONL or database field. Use short transactions and enforce per-entry/transaction bounds. Compaction, the active-start pointer and append update in one transaction. The archive remains available for future private retrieval/retention policies, not channel publication.
@@ -57,6 +62,7 @@ snapshot is off-branch) is discarded. Applying a summary queues a checkpoint sav
 - **Events:** `compaction` events (`running`, `sleeping`, null) and a `compactions` map in the events snapshot drive the
   avatar indicators; activity records "Background compaction started/applied/discarded", "Sleeping" and "Idle
   compaction".
-- **SDK coupling (Pi 0.85.1):** `prepareCompaction` is mirrored (not exported) and the private
-  `_getSummarizationRequestAuth` supplies credentials; `background-compaction*.test.ts` guard both on upgrades.
+- **SDK coupling (Pi 1.4.0):** the SDK's own `prepareCompaction` (not exported from the package entry) is loaded from
+  the installed package's module, and the private `_getSummarizationRequestAuth` supplies credentials;
+  `background-compaction*.test.ts` guard both on upgrades.
 
