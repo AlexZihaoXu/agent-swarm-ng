@@ -30,7 +30,7 @@ export type AuditEventView = {
 export const AUDIT_CATEGORIES = {
   signin: ['auth.login', 'auth.setup', 'auth.logout', 'auth.password', 'auth.lockdown', 'auth.unlock', 'auth.address'],
   agents: ['agent.create', 'agent.update', 'agent.delete', 'agent.export', 'agent.import'],
-  computers: ['computer.create', 'computer.update', 'computer.delete'],
+  computers: ['computer.create', 'computer.update', 'computer.delete', 'computer.files'],
   organizations: [
     'organization.create',
     'organization.update',

@@ -32,6 +32,10 @@ const RULES: Record<string, Rule> = {
   'PUT /api/computers/:id/name': { kind: 'computer.update', target: 'computer', section: 'name' },
   'POST /api/computers/:id/settings/replacement': { kind: 'computer.update', target: 'computer', section: 'rebuilt' },
   'DELETE /api/computers/:id': { kind: 'computer.delete', target: 'computer' },
+  // The operator file browser's writes (downloads, listings and previews are reads, not audited): the size and the
+  // conflict choice, never file names or contents.
+  'PUT /api/computers/:id/upload': { kind: 'computer.files', target: 'computer', section: 'uploaded' },
+  'POST /api/computers/:id/folders': { kind: 'computer.files', target: 'computer', section: 'folder created' },
   'POST /api/agents': { kind: 'agent.create', target: 'agent' },
   'PATCH /api/agents/:id': { kind: 'agent.update', target: 'agent', section: 'agent' },
   'DELETE /api/agents/:id': { kind: 'agent.delete', target: 'agent' },
@@ -54,7 +58,14 @@ const RULES: Record<string, Rule> = {
 
 declare module 'fastify' {
   interface FastifyRequest {
-    audit?: { rule: Rule; targetName?: string; movedName?: string; response?: unknown };
+    audit?: {
+      rule: Rule;
+      targetName?: string;
+      movedName?: string;
+      response?: unknown;
+      /** Set by the handler: extra field values that are safe to keep (sizes, choices; never names or secrets). */
+      detail?: Record<string, string | number | boolean>;
+    };
   }
   interface FastifyInstance {
     audit: AuditLog;
@@ -153,6 +164,7 @@ export function registerAudit(
         targetName: created?.name ?? entry.targetName ?? null,
         detail: {
           ...(rule.section ? { section: rule.section } : {}),
+          ...entry.detail,
           ...(rule.kind.endsWith('.update') || rule.kind === 'organization.move' ? { fields: bodyFields(body) } : {}),
           ...(rule.kind === 'organization.move'
             ? { moved: `${String(body?.kind)} ${entry.movedName ? `“${entry.movedName}”` : String(body?.id)}` }

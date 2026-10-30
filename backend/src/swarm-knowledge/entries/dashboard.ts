@@ -37,7 +37,7 @@ Topics:
 - practices/dashboard/chat: private chat, stopping an agent, viewing agent DMs and Discord channels, groups, reactions and replies.
 - practices/dashboard/settings: the Organization tab (name, tickets, delete); global Settings: organizations, ChatGPT/Codex subscription, OpenRouter and other endpoints, the Knowledge browser.
 
-Not in the app: any view of agents' timers, reminders or watches (agents list them with list_timers; reminder records can appear in a run's collapsed "Details" in the activity log); per-tool switches or system-prompt editing; theme, notification or user-account settings; uploading or deleting files through the file browser; editing Knowledge.`,
+Not in the app: any view of agents' timers, reminders or watches (agents list them with list_timers; reminder records can appear in a run's collapsed "Details" in the activity log); per-tool switches or system-prompt editing; theme, notification or user-account settings; deleting, renaming or editing files through the file browser; editing Knowledge.`,
 } satisfies KnowledgeEntry;
 
 export const dashboardAgents = {
@@ -99,7 +99,7 @@ Settings: ⋯ → Settings. Organization: "In <organization>" and "Move to…" w
 
 Delete: ⋯ → Remove → type the name into "Confirm computer name" → "Delete computer".
 
-Files: ⋯ → File browser: browse, preview text and download (no upload or delete).
+Files: ⋯ → File browser: browse, preview text, download, and upload into the folder being viewed (Upload button, or drop files and folders onto it; any size, each file with progress, speed, time left and cancel; a name already there asks Replace, Keep both or Skip). No delete, rename or edit.
 
 Desktop viewer (click a running card, or Open; /computers/<id>): the header has
 - "Computers / <name>" breadcrumb (back),

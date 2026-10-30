@@ -1,5 +1,16 @@
 import { controllerHeaders } from './controller-auth';
-import { fetchComputerFile, type FileOperation, type FileQuery, type FileResult } from './computer-files';
+import {
+  fetchComputerCancel,
+  fetchComputerFile,
+  fetchComputerFolder,
+  fetchComputerPiece,
+  fetchComputerUpload,
+  type FileOperation,
+  type FileQuery,
+  type FileResult,
+  type GuestPiece,
+  type UploadQuery,
+} from './computer-files';
 import type { ComputerSettings, ComputerStorage } from './computer-store';
 import { HttpComputerRuntime } from './computer-use/runtime-client';
 import type { ComputerRuntime } from './computer-use/service';
@@ -32,6 +43,20 @@ export type ComputerLimits = {
 export interface ComputerController {
   readonly runtime?: ComputerRuntime;
   files?(id: string, mode: FileOperation, query: FileQuery): Promise<FileResult>;
+  /** Operator transfers (the file browser), in bounded pieces: no file size limit. */
+  download?(
+    id: string,
+    query: { path: string; start: number; end: number; match?: string },
+    signal: AbortSignal,
+  ): Promise<GuestPiece>;
+  upload?(
+    id: string,
+    query: UploadQuery,
+    body: ReadableStream<Uint8Array>,
+    signal: AbortSignal,
+  ): Promise<{ name: string; path: string; size: number } | { received: number }>;
+  cancelUpload?(id: string, query: { path: string; name: string; upload: string }): Promise<void>;
+  folder?(id: string, path: string, name: string): Promise<{ path: string; created: boolean }>;
   terminalSocket?(id: string, session: string): WebSocket;
   /** Streams one guest file out, at most `maxBytes` (agent file copies). */
   exportFile?(id: string, path: string, maxBytes: number, signal?: AbortSignal): Promise<GuestFile>;
@@ -207,6 +232,18 @@ export class HttpComputerController implements ComputerController {
   }
   async files(id: string, mode: FileOperation, query: FileQuery) {
     return fetchComputerFile(this.fetcher, this.baseUrl, id, mode, query);
+  }
+  async download(id: string, query: { path: string; start: number; end: number; match?: string }, signal: AbortSignal) {
+    return fetchComputerPiece(this.fetcher, this.baseUrl, id, query, signal);
+  }
+  async cancelUpload(id: string, query: { path: string; name: string; upload: string }) {
+    return fetchComputerCancel(this.fetcher, this.baseUrl, id, query);
+  }
+  async upload(id: string, query: UploadQuery, body: ReadableStream<Uint8Array>, signal: AbortSignal) {
+    return fetchComputerUpload(this.fetcher, this.baseUrl, id, query, body, signal);
+  }
+  async folder(id: string, path: string, name: string) {
+    return fetchComputerFolder(this.fetcher, this.baseUrl, id, path, name);
   }
   async limits(): Promise<ComputerLimits> {
     const response = await this.request('/computers/settings-limits');
