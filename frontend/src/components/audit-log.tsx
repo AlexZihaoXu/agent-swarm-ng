@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ChoiceChips } from '@/components/ui/choice-chips';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { fileSize } from '@/lib/computer-files';
 
 type Category = 'all' | 'signin' | 'users' | 'agents' | 'computers' | 'organizations' | 'system';
 type AuditEvent = {
@@ -48,6 +49,7 @@ const EVENTS: Record<string, string> = {
   'computer.create': 'Computer created',
   'computer.update': 'Computer settings changed',
   'computer.delete': 'Computer deleted',
+  'computer.files': 'Computer files changed',
   'organization.create': 'Organization created',
   'organization.update': 'Organization edited',
   'organization.delete': 'Organization deleted',
@@ -92,6 +94,9 @@ function describe(event: AuditEvent) {
   if (typeof detail.moved === 'string') parts.push(detail.moved);
   if (typeof detail.memory === 'string') parts.push(`memory “${detail.memory}”`);
   if (typeof detail.ticket === 'number') parts.push(`ticket ${detail.ticket}`);
+  if (typeof detail.size === 'number') parts.push(fileSize(detail.size));
+  if (detail.mode === 'overwrite') parts.push('replaced a file');
+  if (detail.renamed === true) parts.push('kept both (renamed)');
   if (typeof detail.signal === 'string') parts.push(detail.signal);
   if (typeof detail.change === 'string') parts.push(`${detail.change}${detail.trusted ? ' (trusted)' : ''}`);
   if (typeof detail.addresses === 'string') parts.push(`from ${detail.addresses}`);

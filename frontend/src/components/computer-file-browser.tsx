@@ -10,14 +10,16 @@ import { FolderIcon } from '@/components/ui/icons';
 import { FileIcon } from '@/components/ui/file-icon';
 import {
   downloadComputerFile,
-  FILE_DOWNLOAD_LIMIT,
   fileBreadcrumbs,
   fileSize,
   listComputerFiles,
   previewComputerFile,
   type ComputerFile,
 } from '@/lib/computer-files';
+import { droppedFiles } from '@/lib/computer-uploads';
 import type { Computer } from './computer-card';
+import { plural, useDropZone } from './file-drop-zone';
+import { UploadList, useComputerUploads } from './computer-uploads';
 
 // Agents keep their work in the home folder (the Desktop and its projects), so the browser opens there.
 const home = '/home/agent';
@@ -51,7 +53,12 @@ export function ComputerFileBrowser({
     [downloadError, setDownloadError] = useState('');
   const [downloadNotice, setDownloadNotice] = useState('');
   const download = useRef<AbortController | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  const [confirmClose, setConfirmClose] = useState(false);
   const available = connected && computer.state === 'running';
+  const uploads = useComputerUploads(computer.id, () => {
+    void client.invalidateQueries({ queryKey: ['computer-files', computer.id, 'list'] });
+  });
   const listing = useQuery({
     queryKey: ['computer-files', computer.id, 'list', location.path, location.offset, appliedFilter],
     queryFn: ({ signal }) => listComputerFiles(computer.id, location.path, location.offset, appliedFilter, signal),
@@ -70,6 +77,26 @@ export function ComputerFileBrowser({
   const busy = listing.isFetching || preview.isFetching || downloading !== null;
   const path = listing.data?.path ?? location.path;
   const crumbs = fileBreadcrumbs(path);
+  // Uploads go into the folder being viewed (also while one of its files is previewed).
+  const drop = useDropZone(
+    available
+      ? event => {
+          const target = path;
+          void droppedFiles(event.dataTransfer).then(
+            picked => uploads.add(picked, target),
+            () => setDownloadError('Could not read what was dropped. Try the Upload button.'),
+          );
+        }
+      : undefined,
+    dragged => ({
+      title: dragged.count ? `Drop ${plural(dragged.count, 'item')} to upload` : 'Drop files to upload',
+      note: `Into ${path}. Folders are uploaded with everything in them.`,
+    }),
+  );
+  const requestClose = (next: boolean) => {
+    if (!next && uploads.active) setConfirmClose(true);
+    else onOpenChange(next);
+  };
   useEffect(() => {
     if (filter === appliedFilter || busy) return;
     const timer = setTimeout(() => {
@@ -88,6 +115,8 @@ export function ComputerFileBrowser({
     if (!open || !available) {
       void client.cancelQueries({ queryKey: ['computer-files', computer.id] });
       download.current?.abort();
+      uploads.cancelAll();
+      setConfirmClose(false);
       setSelected(null);
       setDownloading(null);
       setDownloadNotice('');
@@ -96,7 +125,7 @@ export function ComputerFileBrowser({
     return () => {
       download.current?.abort();
     };
-  }, [open, available, computer.id, client]);
+  }, [open, available, computer.id, client, uploads.cancelAll]);
   const navigate = (next: string) => {
     setSelected(null);
     setEditingPath(false);
@@ -131,12 +160,8 @@ export function ComputerFileBrowser({
       size="sm"
       variant="outline"
       aria-label={`Download ${file.name}`}
-      disabled={!available || busy || (file.size !== null && file.size > FILE_DOWNLOAD_LIMIT)}
-      title={
-        file.size !== null && file.size > FILE_DOWNLOAD_LIMIT
-          ? 'Maximum download size is 64 MiB'
-          : `Download ${file.name}`
-      }
+      disabled={!available || busy}
+      title={`Download ${file.name}`}
       className="min-h-10 shrink-0"
       onClick={() => void startDownload(file)}
     >
@@ -157,7 +182,7 @@ export function ComputerFileBrowser({
     </Button>
   );
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={requestClose}>
       <Dialog.Portal>
         <Dialog.Overlay className={dialogOverlay} />
         <Dialog.Content
@@ -169,6 +194,7 @@ export function ComputerFileBrowser({
               )
               ?.focus();
           }}
+          {...drop.handlers}
           className="fixed left-1/2 top-1/2 z-50 flex h-[min(85dvh,48rem)] max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] min-w-0 max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background ao-card shadow-xl motion-safe:data-[state=open]:animate-[dialog-in_200ms_cubic-bezier(0.22,1,0.36,1)] motion-safe:data-[state=closed]:animate-[dialog-out_130ms_ease-in] sm:w-[calc(100%-2rem)]"
         >
           <header className="shrink-0 border-b border-border px-3 py-3 sm:px-5">
@@ -183,7 +209,7 @@ export function ComputerFileBrowser({
               </Dialog.Close>
             </div>
             <Dialog.Description className="mt-1 text-xs text-muted-foreground">
-              Files on this computer. Browse, preview text and download.
+              Files on this computer. Browse, preview text, download, and upload into the folder you are viewing.
             </Dialog.Description>
           </header>
           <div className="shrink-0 space-y-2 border-b border-border px-3 py-2 sm:px-5">
@@ -450,26 +476,90 @@ export function ComputerFileBrowser({
               </div>
             </ScrollArea>
           </div>
-          <footer className="flex min-w-0 shrink-0 items-center gap-3 border-t border-border px-3 py-3 sm:px-5">
-            <div className="min-w-0 flex-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+          <UploadList queue={uploads} />
+          <footer className="flex min-w-0 shrink-0 flex-wrap items-center gap-3 border-t border-border px-3 py-3 sm:px-5">
+            <div className="min-w-0 flex-1 basis-48 text-xs text-muted-foreground [overflow-wrap:anywhere]">
               {downloadError && (
                 <p role="alert" className="mb-1 text-red-400">
                   {downloadError}
                 </p>
               )}
               <p role="status">
-                {downloading
-                  ? `Preparing download: ${downloading}`
-                  : downloadNotice || `${listing.data?.entries.length ?? 0} items on this page`}
+                {confirmClose
+                  ? 'Uploads are still running. Closing cancels them.'
+                  : downloading
+                    ? `Preparing download: ${downloading}`
+                    : downloadNotice || `${listing.data?.entries.length ?? 0} items on this page`}
               </p>
-              <p className="mt-1 text-[10px]">Downloads ≤64 MiB · Files may change while in use.</p>
+              <p className="mt-1 text-[10px]">
+                No size limit · Drop files or folders here · Files may change while in use.
+              </p>
             </div>
-            <Dialog.Close asChild>
-              <Button size="sm" variant="outline" className="min-h-10 shrink-0">
-                Close
-              </Button>
-            </Dialog.Close>
+            {confirmClose ? (
+              <div className="flex shrink-0 gap-2">
+                <Button size="sm" variant="outline" className="min-h-10" onClick={() => setConfirmClose(false)}>
+                  Keep uploading
+                </Button>
+                <Button
+                  size="sm"
+                  className="min-h-10"
+                  onClick={() => {
+                    uploads.cancelAll();
+                    setConfirmClose(false);
+                    onOpenChange(false);
+                  }}
+                >
+                  Cancel uploads and close
+                </Button>
+              </div>
+            ) : (
+              <div className="flex shrink-0 gap-2">
+                <input
+                  ref={picker}
+                  type="file"
+                  multiple
+                  hidden
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  onChange={event => {
+                    const files = [...(event.target.files ?? [])];
+                    event.target.value = '';
+                    if (files.length)
+                      uploads.add(
+                        files.map(file => ({ file, folders: [] })),
+                        path,
+                      );
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="min-h-10 gap-1.5"
+                  disabled={!available}
+                  title={`Upload files into ${path}`}
+                  onClick={() => picker.current?.click()}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    className="size-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+                  </svg>
+                  Upload
+                </Button>
+                <Button size="sm" variant="outline" className="min-h-10" onClick={() => requestClose(false)}>
+                  Close
+                </Button>
+              </div>
+            )}
           </footer>
+          {drop.overlay}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

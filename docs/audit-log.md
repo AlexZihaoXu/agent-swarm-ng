@@ -16,6 +16,7 @@
 | `ticket.create` / `update` / `delete` | a person creating, editing or deleting a ticket ([tickets](tickets.md); comments are not audited) | the organization | the ticket's number; changed field names |
 | `ticket.state.create` / `update` / `delete` | a person adding, changing or deleting a workflow state ([tickets](tickets.md#workflow)) | the organization | changed field names |
 | `computer.create` / `update` / `delete` | a computer made (not a retried request), its settings changed or rebuilt, deleted | the computer | changed fields |
+| `computer.files` | a person uploading a file through the [file browser](computers.md#operator-file-browser) (once per file, when its last part lands or a part is refused) or creating a folder there; downloads, listings and previews are reads and are not logged | the computer | `uploaded` or `folder created`; the file's size and conflict choice (`refuse`, `overwrite`, `rename`) and whether it was renamed; never file names, paths or contents |
 | `agent.create` / `update` / `delete` | an agent made, edited, deleted | the agent (its name before a rename or delete) | which part (agent, settings, computers, Discord, bot connected/removed, memory edited/removed/restored/cleared, sleep window), changed field names, a new name |
 | `system.start` / `system.stop` | the backend starting (after it listens) and stopping on a signal | `system` | runtime and start-up time, signal |
 
