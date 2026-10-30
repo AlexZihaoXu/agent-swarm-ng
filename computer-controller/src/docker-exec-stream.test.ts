@@ -116,3 +116,50 @@ it('pipes input to a command, ends its input, and yields its output to the end',
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+it('can leave the input open (a sized upload) and writes a large chunk in pieces', async () => {
+  const dir = await mkdtemp(join(process.env.SQLITE_TEST_ROOT!, 'pipe-open-')),
+    path = join(dir, 'docker.sock');
+  const server = http.createServer((req, res) => {
+    req.resume();
+    req.on('end', () => res.end('{"Id":"pipe-exec"}'));
+  });
+  let ended = false;
+  const pieces: number[] = [];
+  server.on('upgrade', (_req, socket) => {
+    socket.write('HTTP/1.1 101 UPGRADED\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n');
+    let received = 0;
+    socket.on('end', () => (ended = true));
+    // The command reads exactly the announced 3 MiB, answers, and exits: it never needs the end of its input.
+    socket.on('data', data => {
+      pieces.push(data.length);
+      received += data.length;
+      if (received < 3 * 1024 * 1024) return;
+      const answer = Buffer.from(`${received}\n`);
+      const header = Buffer.alloc(8);
+      header[0] = 1;
+      header.writeUInt32BE(answer.length, 4);
+      socket.end(Buffer.concat([header, answer]));
+    });
+  });
+  await new Promise<void>(resolve => server.listen(path, resolve));
+  try {
+    const run = await new DockerApi(path).pipe(
+      'guest',
+      ['upload'],
+      '1000:1000',
+      (async function* () {
+        yield Buffer.alloc(3 * 1024 * 1024, 7);
+      })(),
+      { keepStdinOpen: true },
+    );
+    const output: Buffer[] = [];
+    for await (const chunk of run.output) output.push(chunk);
+    expect(Buffer.concat(output).toString()).toBe(`${3 * 1024 * 1024}\n`);
+    expect(ended).toBe(false);
+    expect(Math.max(...pieces)).toBeLessThanOrEqual(262_144 * 2);
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    await rm(dir, { recursive: true, force: true });
+  }
+});

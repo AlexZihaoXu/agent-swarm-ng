@@ -99,7 +99,15 @@ export function attachExec(
 export async function* pipeExec(
   socketPath: string,
   id: string,
-  options: { stdin?: AsyncIterable<Uint8Array>; idleTimeoutMs?: number } = {},
+  options: {
+    stdin?: AsyncIterable<Uint8Array>;
+    idleTimeoutMs?: number;
+    /**
+     * Leave the input open after `stdin` ends. Bun's sockets cannot half-close (end() also stops the output, which
+     * Docker then drops), so a command that knows how much input to read (a sized upload) is better told nothing.
+     */
+    keepStdinOpen?: boolean;
+  } = {},
 ): AsyncGenerator<Buffer> {
   const socket = net.createConnection({ path: socketPath, allowHalfOpen: true });
   const queue: Buffer[] = [];
@@ -137,10 +145,15 @@ export async function* pipeExec(
   const send = async () => {
     try {
       for await (const chunk of options.stdin!) {
-        if (failure || ended) return;
-        if (!socket.write(chunk)) await new Promise(done => socket.once('drain', done));
+        // Written in pieces of at most 256 KiB: this Bun writes one very large buffer (a request body it gathered
+        // while busy) many times slower than the same bytes in pieces.
+        for (let offset = 0; offset < chunk.byteLength; offset += 262_144) {
+          if (failure || ended) return;
+          const piece = chunk.subarray(offset, offset + 262_144);
+          if (!socket.write(piece)) await new Promise(done => socket.once('drain', done));
+        }
       }
-      socket.end();
+      if (!options.keepStdinOpen) socket.end();
     } catch (error) {
       fail(error instanceof Error ? error.message : 'Could not send the input.');
     }

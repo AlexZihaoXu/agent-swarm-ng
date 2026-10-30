@@ -15,8 +15,10 @@ const NAMESPACE = /^[a-z0-9][a-z0-9-]{0,29}$/;
 
 export class ResourceError extends Error {
   constructor(
-    readonly code: 400 | 403 | 404 | 409 | 413 | 429 | 503 | 504,
+    readonly code: 400 | 403 | 404 | 409 | 412 | 413 | 416 | 429 | 503 | 504 | 507,
     message: string,
+    /** A refused byte range: the file's size, for Content-Range. */
+    readonly size?: number,
   ) {
     super(message);
   }

@@ -6,7 +6,7 @@ import { ComputerUseService } from './computer-use-service';
 import { MAX_USE_BODY } from './computer-use';
 import { ComputerCoreService } from './computer-core-service';
 import type { RecordingOp } from './recording';
-import { fileAttachment, type FileOperation } from './operator-files';
+import { fileAttachment, type FileOperation, type UploadMode } from './operator-files';
 import { terminalSockets, type TerminalSocket } from './terminal-stream';
 import { authorized } from './auth';
 import { parseExtraDisks, validateRequestedPaths } from './disks';
@@ -44,9 +44,14 @@ const computerCore = new ComputerCoreService((id, mode, input) => manager.comput
 const computerUse = new ComputerUseService((id, mode, input) => manager.computerUseExec(id, mode, input));
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 
-/** A request body as chunks (this Bun's async iteration of a streaming request body is broken). */
-async function* chunks(stream: ReadableStream<Uint8Array>) {
+/**
+ * A request body as chunks (this Bun's async iteration of a streaming request body is broken). With `signal`, a
+ * sender that goes away ends the chunks early (this Bun's body reader does not always fail then).
+ */
+async function* chunks(stream: ReadableStream<Uint8Array>, signal?: AbortSignal) {
   const reader = stream.getReader();
+  const stop = () => void reader.cancel().catch(() => {});
+  signal?.addEventListener('abort', stop, { once: true });
   try {
     while (true) {
       const { value, done } = await reader.read();
@@ -54,6 +59,7 @@ async function* chunks(stream: ReadableStream<Uint8Array>) {
       yield value;
     }
   } finally {
+    signal?.removeEventListener('abort', stop);
     try {
       reader.releaseLock();
     } catch {
@@ -90,7 +96,7 @@ Bun.serve<TerminalSocket>({
   hostname: '0.0.0.0',
   port: Number(process.env.COMPUTER_CONTROLLER_PORT ?? 3101),
   idleTimeout: 150,
-  // Agent file copies stream up to the 1 GiB transfer bound.
+  // Agent file copies stream up to the 1 GiB transfer bound; operator uploads come in parts of at most 64 MiB.
   maxRequestBodySize: 1025 * 1024 * 1024,
   async fetch(request, server) {
     try {
@@ -282,7 +288,7 @@ Bun.serve<TerminalSocket>({
           ),
         );
       }
-      const fileMatch = /^\/computers\/([^/]+)\/(files|file-preview|download)$/.exec(pathname);
+      const fileMatch = /^\/computers\/([^/]+)\/(files|file-preview)$/.exec(pathname);
       if (fileMatch) {
         if (request.method !== 'GET') return json({ message: 'Method not allowed.' }, 405);
         const mode = fileMatch[2] as FileOperation;
@@ -291,16 +297,91 @@ Bun.serve<TerminalSocket>({
           offset: searchParams.has('offset') ? Number(searchParams.get('offset')) : undefined,
           filter: searchParams.get('filter') ?? undefined,
         });
-        if (output.bytes !== null)
-          return new Response(new Uint8Array(output.bytes), {
+        return json(output.result);
+      }
+      // Operator transfers (the file browser), in bounded pieces: download byte ranges and upload parts.
+      const operatorMatch = /^\/computers\/([^/]+)\/(download|upload|folder)$/.exec(pathname);
+      if (operatorMatch) {
+        const id = decodeURIComponent(operatorMatch[1]);
+        const integer = (name: string) => (searchParams.has(name) ? Number(searchParams.get(name)) : undefined);
+        if (operatorMatch[2] === 'folder') {
+          if (request.method !== 'POST') return json({ message: 'Method not allowed.' }, 405);
+          const input = await body(request);
+          if (!input || typeof input !== 'object' || !('path' in input) || !('name' in input))
+            throw new ResourceError(400, 'Invalid folder request.');
+          return json(await manager.operatorFolder(id, input.path, input.name));
+        }
+        if (operatorMatch[2] === 'upload') {
+          if (request.method === 'DELETE')
+            return json(
+              await manager.operatorCancelUpload(
+                id,
+                searchParams.get('path') ?? '',
+                searchParams.get('name') ?? '',
+                searchParams.get('upload') ?? '',
+              ),
+            );
+          if (request.method !== 'PUT') return json({ message: 'Method not allowed.' }, 405);
+          // A large upload's final flush can be quiet; the Docker stream has its own idle limit.
+          server.timeout(request, 0);
+          return json(
+            await manager.operatorUpload(
+              id,
+              {
+                path: searchParams.get('path') ?? '',
+                name: searchParams.get('name') ?? '',
+                size: Number(searchParams.get('size') ?? NaN),
+                offset: Number(searchParams.get('offset') ?? NaN),
+                // The backend's streamed body may arrive chunked: the part's length is in the query.
+                length: Number(searchParams.get('length') ?? NaN),
+                upload: searchParams.get('upload') ?? '',
+                mode: (searchParams.get('mode') ?? 'refuse') as UploadMode,
+              },
+              request.body ? chunks(request.body, request.signal) : (async function* () {})(),
+            ),
+          );
+        }
+        if (request.method !== 'GET') return json({ message: 'Method not allowed.' }, 405);
+        server.timeout(request, 0);
+        const file = await manager.operatorDownload(id, {
+          path: searchParams.get('path') ?? '',
+          start: integer('start'),
+          end: integer('end'),
+          match: searchParams.get('match') ?? undefined,
+        });
+        const { result } = file;
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            async pull(controller) {
+              try {
+                const next = await file.stream.next();
+                if (next.done) controller.close();
+                else controller.enqueue(next.value);
+              } catch (error) {
+                controller.error(error);
+              }
+            },
+            async cancel() {
+              file.close();
+              await file.stream.return(undefined);
+            },
+          }),
+          {
             headers: {
               'Content-Type': 'application/octet-stream',
-              'Content-Disposition': fileAttachment(output.result.name),
+              'Content-Disposition': fileAttachment(result.name),
+              'Content-Length': String(result.length),
+              // Bun may send a streamed body chunked, so the backend reads the piece from these.
+              'X-File-Size': String(result.size),
+              'X-Range-Start': String(result.start),
+              'X-Range-Length': String(result.length),
+              ETag: result.etag,
+              'Last-Modified': result.modified,
               'Cache-Control': 'no-store',
               'X-Content-Type-Options': 'nosniff',
             },
-          });
-        return json(output.result);
+          },
+        );
       }
       const recordingMatch = /^\/computers\/([^/]+)\/recording\/(start|mark|update|stop|list|terminals)$/.exec(
         pathname,
@@ -455,7 +536,10 @@ Bun.serve<TerminalSocket>({
       // Docker's raw errors may include host paths; never return them to the API/browser.
       const message = error instanceof ResourceError ? error.message : 'Computer operation failed.';
       console.error('computer-controller:', error instanceof Error ? error.message : String(error));
-      return json({ message }, status);
+      const response = json({ message }, status);
+      if (error instanceof ResourceError && error.size !== undefined)
+        response.headers.set('X-File-Size', String(error.size));
+      return response;
     }
   },
 });

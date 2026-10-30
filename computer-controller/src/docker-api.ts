@@ -190,7 +190,13 @@ export class DockerApi {
    * Runs a command with `stdin` streamed in (optional) and its stdout streamed out (docker-exec-stream pipeExec);
    * `exitCode` is read once the output has ended.
    */
-  async pipe(container: string, command: string[], user: string, stdin?: AsyncIterable<Uint8Array>) {
+  async pipe(
+    container: string,
+    command: string[],
+    user: string,
+    stdin?: AsyncIterable<Uint8Array>,
+    options: { idleTimeoutMs?: number; keepStdinOpen?: boolean } = {},
+  ) {
     const created = await this.json<{ Id: string }>('POST', `/containers/${encodeURIComponent(container)}/exec`, {
       AttachStdin: Boolean(stdin),
       AttachStdout: true,
@@ -200,7 +206,7 @@ export class DockerApi {
       User: user,
     });
     return {
-      output: pipeExec(this.socketPath, created.Id, { stdin }),
+      output: pipeExec(this.socketPath, created.Id, { stdin, ...options }),
       exitCode: async () => {
         // The output can end a moment before Docker records the exit.
         for (let attempt = 0; ; attempt++) {

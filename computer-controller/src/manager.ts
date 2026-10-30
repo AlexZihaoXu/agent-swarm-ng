@@ -5,11 +5,19 @@ import { validateRecording, type RecordingOp } from './recording';
 import { MAX_TRANSFER, regularFile, tarOneFile, transferPath, untarFirstFile } from './file-transfer';
 import {
   decodeFileResult,
-  MAX_DOWNLOAD,
+  downloadResult,
+  headerResult,
   operatorFilesScript,
+  readStatusLine,
+  validateDownloadQuery,
   validateFileQuery,
+  validateUploadQuery,
+  validName,
+  validUpload,
+  type DownloadQuery,
   type FileOperation,
   type FileQuery,
+  type UploadQuery,
 } from './operator-files';
 import {
   diskScript,
@@ -206,6 +214,8 @@ export class ComputerManager {
   private detectedLimits: ComputerLimits | null = null;
   private fileOperations = new Set<string>();
   private transfers = new Map<string, number>();
+  /** Operator uploads/downloads in flight: their own pool, so a long transfer never blocks listings or previews. */
+  private operatorTransfers = new Map<string, number>();
   constructor(
     private readonly docker: DockerApi,
     namespace: string,
@@ -1513,39 +1523,188 @@ export class ComputerManager {
       throw error;
     }
   }
-  /** Operator reads neither acquire nor release agent control. One per guest, two globally. */
+  /** The inspected immutable ID of a managed, running guest. */
+  private async operatorGuest(id: string) {
+    const computer = await this.container(this.names.desktop(id), id, 'desktop');
+    if (!computer) throw new ResourceError(404, 'Computer not found.');
+    if (!computer.State.Running) throw new ResourceError(409, 'Computer is not running.');
+    return computer.Id;
+  }
+  private operatorCommand(mode: string, request: object) {
+    return ['/usr/bin/python3', '-I', '-c', operatorFilesScript, mode, JSON.stringify(request)];
+  }
+  /** Operator reads neither acquire nor release agent control. One per guest, two globally (transfers excluded). */
   async operatorFiles(idRaw: string, mode: FileOperation, query: FileQuery) {
     const id = validateId(idRaw);
     validateFileQuery(mode, query);
+    return this.operatorExclusive(id, async guest =>
+      decodeFileResult(await this.operatorExec(guest, mode, query), mode),
+    );
+  }
+  /** A new folder in an existing guest folder (an existing folder of that name is fine), as the guest user. */
+  async operatorFolder(idRaw: string, path: unknown, name: unknown) {
+    const id = validateId(idRaw);
+    if (!validName(name)) throw new ResourceError(400, 'Use a folder name without slashes, of at most 255 bytes.');
+    validateFileQuery('files', { path: path as string });
+    return this.operatorExclusive(id, async guest => {
+      const { result } = decodeFileResult(await this.operatorExec(guest, 'folder', { path, name }), 'files');
+      if (typeof result?.path !== 'string' || typeof result.created !== 'boolean')
+        throw new ResourceError(503, 'Invalid guest file response.');
+      return result as { path: string; created: boolean };
+    });
+  }
+  private async operatorExclusive<T>(id: string, work: (guest: string) => Promise<T>) {
     if (this.fileOperations.has(id) || this.fileOperations.size >= 2)
       throw new ResourceError(429, 'File operations are busy. Retry shortly.');
     this.fileOperations.add(id);
     try {
-      const computer = await this.container(this.names.desktop(id), id, 'desktop');
-      if (!computer) throw new ResourceError(404, 'Computer not found.');
-      if (!computer.State.Running) throw new ResourceError(409, 'Computer is not running.');
-      const raw = await this.docker.exec(
-        computer.Id,
-        [
-          '/usr/bin/timeout',
-          '--signal=TERM',
-          '--kill-after=2s',
-          '18s',
-          '/usr/bin/python3',
-          '-I',
-          '-c',
-          operatorFilesScript,
-          mode,
-          JSON.stringify(query),
-        ],
-        '1000:1000',
-        23_000,
-        mode === 'download' ? MAX_DOWNLOAD + 1024 * 1024 : 2 * 1024 * 1024,
-      );
-      return decodeFileResult(raw, mode);
+      return await work(await this.operatorGuest(id));
     } finally {
       this.fileOperations.delete(id);
     }
+  }
+  private operatorExec(guest: string, mode: string, request: object) {
+    return this.docker.exec(
+      guest,
+      ['/usr/bin/timeout', '--signal=TERM', '--kill-after=2s', '18s', ...this.operatorCommand(mode, request)],
+      '1000:1000',
+      23_000,
+      2 * 1024 * 1024,
+    );
+  }
+  /** A transfer slot (one download piece or upload part): six per guest and sixteen overall; an idempotent release. */
+  private operatorTransferSlot(id: string) {
+    let total = 0;
+    for (const count of this.operatorTransfers.values()) total += count;
+    if ((this.operatorTransfers.get(id) ?? 0) >= 6 || total >= 16)
+      throw new ResourceError(429, 'Too many transfers are running. Retry when one finishes.');
+    this.operatorTransfers.set(id, (this.operatorTransfers.get(id) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const left = (this.operatorTransfers.get(id) ?? 1) - 1;
+      if (left > 0) this.operatorTransfers.set(id, left);
+      else this.operatorTransfers.delete(id);
+    };
+  }
+  /**
+   * Streams one piece (byte range) of a regular guest file out, read by the guest user through the descriptor-safe
+   * walk. The caller bounds the piece (this runtime reads the guest's output as fast as it comes). `close` (or ending
+   * the stream) stops the guest reader.
+   */
+  async operatorDownload(idRaw: string, query: DownloadQuery) {
+    const id = validateId(idRaw);
+    validateDownloadQuery(query);
+    const release = this.operatorTransferSlot(id);
+    let iterator: AsyncIterator<Buffer> | undefined;
+    try {
+      const guest = await this.operatorGuest(id);
+      // The guest stays quiet only while the reader is slow (back-pressure); a stalled reader times out.
+      const run = await this.docker.pipe(guest, this.operatorCommand('download', query), '1000:1000', undefined, {
+        idleTimeoutMs: 300_000,
+      });
+      iterator = run.output[Symbol.asyncIterator]();
+      const { line, rest } = await readStatusLine(iterator);
+      const result = downloadResult(headerResult(line));
+      const source = iterator;
+      let closed = false;
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        void source.return?.(undefined)?.catch(() => {});
+        release();
+      };
+      const stream = (async function* () {
+        try {
+          let left = result.length;
+          let chunk: Buffer | undefined = rest.length ? rest : undefined;
+          while (left > 0) {
+            if (!chunk) {
+              const next = await source.next();
+              if (next.done) throw new ResourceError(503, 'The file changed while it was read.');
+              chunk = next.value;
+            }
+            const part = chunk.length > left ? chunk.subarray(0, left) : chunk;
+            left -= part.length;
+            chunk = undefined;
+            yield part;
+          }
+        } finally {
+          close();
+        }
+      })();
+      return { result, stream, close };
+    } catch (error) {
+      await iterator?.return?.(undefined)?.catch(() => {});
+      release();
+      throw error;
+    }
+  }
+  /**
+   * Streams one part of an upload (`length` bytes of `body`) into the guest, written by the guest user to a hidden
+   * file beside the target; the last part renames it into place (never a half file). `mode` decides a name that is
+   * taken: refused (409), replaced, or kept as "name (1).ext".
+   */
+  async operatorUpload(idRaw: string, query: UploadQuery, body: AsyncIterable<Uint8Array>) {
+    const id = validateId(idRaw);
+    validateUploadQuery(query);
+    const release = this.operatorTransferSlot(id);
+    try {
+      const guest = await this.operatorGuest(id);
+      let sent = 0;
+      const counted = (async function* () {
+        for await (const chunk of body) {
+          sent += chunk.byteLength;
+          if (sent > query.length) throw new ResourceError(400, 'The upload part is larger than announced.');
+          yield chunk;
+        }
+        // Ended short (the sender went away): failing here closes the stream, so the guest sees the end and cleans up.
+        if (sent !== query.length) throw new ResourceError(400, 'The upload did not finish.');
+      })();
+      const run = await this.docker.pipe(guest, this.operatorCommand('upload', query), '1000:1000', counted, {
+        // The final flush to disk of a large file can be quiet for a while.
+        idleTimeoutMs: 600_000,
+        // The guest reads exactly `length` bytes; the stream closes when it answered (or the sender went away).
+        keepStdinOpen: true,
+      });
+      let output = Buffer.alloc(0);
+      try {
+        for await (const chunk of run.output) {
+          output = Buffer.concat([output, chunk]);
+          if (output.length > 65536) throw new ResourceError(503, 'Invalid guest file response.');
+        }
+      } catch (error) {
+        // The guest may have answered (a conflict, a full disk) before the rest of the body was sent.
+        if (output.indexOf(10) < 0) {
+          if (error instanceof ResourceError) throw error;
+          throw new ResourceError(400, 'The upload did not finish.');
+        }
+      }
+      const newline = output.indexOf(10);
+      if (newline < 0) throw new ResourceError(503, 'Invalid guest file response.');
+      const result = headerResult(output.subarray(0, newline));
+      if (query.offset + query.length < query.size) {
+        if (result?.received !== query.offset + query.length)
+          throw new ResourceError(503, 'Invalid guest file response.');
+        return { received: query.offset + query.length };
+      }
+      if (typeof result?.name !== 'string' || result.size !== query.size)
+        throw new ResourceError(503, 'Invalid guest file response.');
+      const directory = query.path.replace(/\/+$/, '');
+      return { name: result.name, size: query.size, path: `${directory}/${result.name}` };
+    } finally {
+      release();
+    }
+  }
+  /** Removes an unfinished upload's hidden file (the person cancelled it). */
+  async operatorCancelUpload(idRaw: string, path: unknown, name: unknown, upload: unknown) {
+    const id = validateId(idRaw);
+    validateFileQuery('files', { path: path as string });
+    if (!validName(name) || !validUpload(upload)) throw new ResourceError(400, 'Invalid guest file request.');
+    const guest = await this.operatorGuest(id);
+    decodeFileResult(await this.operatorExec(guest, 'cancel', { path, name, upload }), 'files');
+    return { cancelled: true };
   }
 
   /** Fixed guest program only, addressed by inspected immutable ID after label/running checks. */
