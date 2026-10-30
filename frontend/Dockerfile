@@ -36,7 +36,15 @@ RUN mkdir -p /srv/selkies
 
 FROM trusted-selkies-client-${COMPUTER_VIEWER} AS trusted-selkies-client
 
-FROM caddy:2-alpine AS production
+# Caddy is rebuilt from source: the official release binary of v2.11.7 was compiled with Go 1.26.8 and x/net v0.59.0,
+# which predate the October 2026 Go security fixes (Go 1.26.9/1.27.2: HTTP/2 and HTTP/1 server DoS and smuggling;
+# Go 1.26.10/1.27.3: crypto/x509 distrust of compromised intermediates, GO-2026-6809; x/net v0.60.0/v0.62.0). The
+# builder image's toolchain is at least Go 1.27.3. Bump the pins together and re-run `govulncheck -mode=binary`.
+FROM caddy:2.11.7-builder-alpine@sha256:95a5e7e2692b5eb9545aadc5b90a39f6f509bee59c9508a493f83ee902eaef63 AS caddy-build
+RUN xcaddy build v2.11.7 --replace golang.org/x/net=golang.org/x/net@v0.62.0 --output /usr/bin/caddy
+
+FROM caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5 AS production
+COPY --from=caddy-build /usr/bin/caddy /usr/bin/caddy
 COPY frontend/Caddyfile /etc/caddy/Caddyfile
 COPY frontend/Caddyfile.computers /etc/caddy/ComputerRoutes
 COPY --from=build /app/frontend/dist /srv
