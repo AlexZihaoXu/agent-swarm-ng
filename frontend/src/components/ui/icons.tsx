@@ -204,6 +204,13 @@ export const KeyboardIcon = (props: ComponentProps<'svg'>) => (
     <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" />
   </Icon>
 );
+/** Mouse (Lucide mouse): the terminal's mouse-forwarding toggle. */
+export const MouseIcon = (props: ComponentProps<'svg'>) => (
+  <Icon {...props}>
+    <rect x="5" y="2" width="14" height="20" rx="7" />
+    <path d="M12 6v4" />
+  </Icon>
+);
 export const ChevronDownIcon = (props: ComponentProps<'svg'>) => (
   <Icon {...props}>
     <path d="m6 9 6 6 6-6" />

@@ -2,15 +2,17 @@ import { test, expect, type Page } from './fixtures';
 import type { WebSocketRoute } from '@playwright/test';
 const id = 'c4a5f16d-0042-4b70-a232-dd65591a2c4c',
   sid = '12345678-1234-1234-1234-123456789abc';
-async function setup(page: Page, state = 'running') {
+async function setup(page: Page, state = 'running', alive = true) {
   const requests: any[] = [],
     input: string[] = [],
+    // The same input byte for byte (latin1), for legacy mouse reports that are not UTF-8.
+    raw: string[] = [],
     sockets: WebSocketRoute[] = [];
   let sessions = [
     {
       id: sid,
       name: 'build',
-      alive: true,
+      alive,
       exitCode: null,
       createdAt: 1,
       columns: 120,
@@ -23,8 +25,10 @@ async function setup(page: Page, state = 'running') {
     sockets.push(ws);
     ws.onMessage(message => {
       const frame = JSON.parse(String(message));
-      if (frame.type === 'input') input.push(Buffer.from(frame.data, 'base64').toString());
-      else expect(frame.type).toBe('ping');
+      if (frame.type === 'input') {
+        input.push(Buffer.from(frame.data, 'base64').toString());
+        raw.push(Buffer.from(frame.data, 'base64').toString('latin1'));
+      } else expect(frame.type).toBe('ping');
     });
     ws.send(JSON.stringify({ type: 'ready', columns: 120, rows: 36 }));
     ws.send(
@@ -75,10 +79,10 @@ async function setup(page: Page, state = 'running') {
   });
   await page.goto('/computers');
   await page.getByRole('button', { name: 'Actions for Terminal desk' }).click();
-  return { requests, input, sockets };
+  return { requests, input, raw, sockets };
 }
-async function open(page: Page) {
-  const state = await setup(page);
+async function open(page: Page, alive = true) {
+  const state = await setup(page, 'running', alive);
   await page.getByRole('menuitem', { name: 'Terminals', exact: true }).click();
   const panel = page.getByRole('dialog', { name: 'Terminals · Terminal desk' });
   await expect(panel.locator('.xterm-rows')).toContainText('REAL TERMINAL');
@@ -126,6 +130,7 @@ test('mouse/focus reports and guest clipboard escapes never become input or brow
       data: Buffer.from('\x1b[?1003h\x1b[?1006h\x1b[?1004h\x1b]52;c;dW50cnVzdGVk\x07').toString('base64'),
     }),
   );
+  await expect(panel.getByRole('button', { name: 'Mouse', exact: true })).toHaveAttribute('aria-pressed', 'false');
   await panel.getByTestId('terminal-viewport').click({ position: { x: 20, y: 20 } });
   const box = await panel.getByTestId('terminal-viewport').boundingBox();
   await page.mouse.move(box!.x + 50, box!.y + 50);
@@ -315,4 +320,99 @@ test('an agent typing into a terminal shows its avatar there, which leaves a mom
   await expect(typist.locator('svg[data-avatar-shape]')).toHaveAttribute('data-avatar-state', 'idle');
   await expect(typist).toBeVisible(); // lingers briefly between combos
   await expect(typist).toHaveCount(0, { timeout: 6000 });
+});
+
+/** Feeds the terminal program output, as if the guest wrote it. */
+const output = (socket: WebSocketRoute, text: string) =>
+  socket.send(JSON.stringify({ type: 'output', data: Buffer.from(text).toString('base64') }));
+/** The page position of a grid cell's centre (1-based), whatever the grid's scale. */
+async function cell(panel: ReturnType<Page['getByRole']>, column: number, row: number) {
+  const screen = (await panel.locator('.xterm-screen').boundingBox())!;
+  return { x: screen.x + ((column - 0.5) * screen.width) / 120, y: screen.y + ((row - 0.5) * screen.height) / 36 };
+}
+
+test.describe('mouse toggle', () => {
+  test('on, a mouse-tracking program gets the wheel, clicks and drags in SGR at the cell under the pointer', async ({
+    page,
+  }) => {
+    const { panel, input, sockets } = await open(page);
+    const toggle = panel.getByRole('button', { name: 'Mouse', exact: true });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(panel).toContainText('Keyboard and mouse');
+    await expect(panel.locator('.xterm-helper-textarea')).toBeFocused();
+    output(sockets.at(-1)!, '\x1b[?1002h\x1b[?1006hMOUSE_ON');
+    await expect(panel.locator('.xterm-rows')).toContainText('MOUSE_ON');
+    // The grid is drawn scaled; the reports must still name the cell under the pointer.
+    expect(
+      await panel
+        .locator('.xterm-screen')
+        .evaluate(node => node.getBoundingClientRect().width / (node as HTMLElement).offsetWidth),
+    ).not.toBeCloseTo(1, 2);
+    const start = await cell(panel, 10, 5);
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.wheel(0, -120);
+    await expect.poll(() => input.join('')).toBe('\x1b[<64;10;5M');
+    await page.mouse.wheel(0, 120);
+    await expect.poll(() => input.join('')).toBe('\x1b[<64;10;5M\x1b[<65;10;5M');
+    input.length = 0;
+    await page.mouse.down();
+    const end = await cell(panel, 20, 8);
+    await page.mouse.move(end.x, end.y);
+    await page.mouse.up();
+    await expect.poll(() => input.join('')).toBe('\x1b[<0;10;5M\x1b[<32;20;8M\x1b[<0;20;8m');
+    // Keyboard focus stays in the terminal.
+    await page.keyboard.type('k');
+    await expect.poll(() => input.join('')).toContain('m' + 'k');
+  });
+
+  test('on, a program that has not asked for the mouse gets nothing; off again stops reports', async ({ page }) => {
+    const { panel, input, sockets } = await open(page);
+    await panel.getByRole('button', { name: 'Mouse', exact: true }).click();
+    const point = await cell(panel, 30, 10);
+    await page.mouse.click(point.x, point.y);
+    await page.mouse.wheel(0, 120);
+    await page.mouse.wheel(0, -120);
+    output(sockets.at(-1)!, '\x1b[?1000h\x1b[?1006hTRACKING');
+    await expect(panel.locator('.xterm-rows')).toContainText('TRACKING');
+    await panel.getByRole('button', { name: 'Mouse', exact: true }).click();
+    await expect(panel).toContainText('Keyboard only');
+    await page.mouse.click(point.x, point.y);
+    await page.mouse.wheel(0, 120);
+    await page.keyboard.type('x');
+    await expect.poll(() => input.join('')).toBe('x');
+  });
+
+  test('legacy X10 reports arrive byte for byte, and the choice is remembered', async ({ page }) => {
+    const { panel, raw, sockets } = await open(page);
+    await panel.getByRole('button', { name: 'Mouse', exact: true }).click();
+    await page.reload();
+    await page.getByRole('button', { name: 'Actions for Terminal desk' }).click();
+    await page.getByRole('menuitem', { name: 'Terminals', exact: true }).click();
+    const again = page.getByRole('dialog', { name: 'Terminals · Terminal desk' });
+    await expect(again.getByRole('button', { name: 'Mouse', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(again).toContainText('Keyboard and mouse');
+    output(sockets.at(-1)!, '\x1b[?1000hX10');
+    await expect(again.locator('.xterm-rows')).toContainText('X10');
+    // Column 110 encodes as byte 142, past ASCII: xterm.js hands it over as binary.
+    const point = await cell(again, 110, 3);
+    await page.mouse.click(point.x, point.y);
+    await expect
+      .poll(() => raw.join(''))
+      .toBe('\x1b[M ' + String.fromCharCode(32 + 110, 32 + 3) + '\x1b[M#' + String.fromCharCode(32 + 110, 32 + 3));
+  });
+
+  test('a terminal that cannot take input stays mouse-free', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('terminal-mouse', 'on'));
+    const { panel, input, sockets } = await open(page, false);
+    await expect(panel.getByRole('button', { name: 'Mouse', exact: true })).toBeDisabled();
+    output(sockets.at(-1)!, '\x1b[?1003h\x1b[?1006hREAD_ONLY');
+    await expect(panel.locator('.xterm-rows')).toContainText('READ_ONLY');
+    const point = await cell(panel, 30, 10);
+    await page.mouse.click(point.x, point.y);
+    await page.mouse.wheel(0, 120);
+    await page.keyboard.type('x');
+    await page.waitForTimeout(200);
+    expect(input).toEqual([]);
+  });
 });

@@ -9,6 +9,8 @@ import {
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { Button } from '@/components/ui/button';
+import { MouseIcon } from '@/components/ui/icons';
+import { setTerminalMouse, useTerminalMouse } from '@/lib/terminal-mouse';
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 const ctrl = (letter: string) => String.fromCharCode(letter.charCodeAt(0) & 0x1f);
 
@@ -115,6 +117,9 @@ export function TerminalEmulator({
   const closed = useRef(onClosed);
   closed.current = onClosed;
   inputAllowed.current = interactive;
+  const mouse = useTerminalMouse();
+  const mouseWanted = useRef(mouse);
+  mouseWanted.current = mouse;
   useEffect(() => {
     const change = () => setVisible(!document.hidden);
     document.addEventListener('visibilitychange', change);
@@ -150,8 +155,19 @@ export function TerminalEmulator({
       event.stopPropagation();
       return true;
     });
-    // Mouse is local focus/scroll only. Even a guest enabling mouse reporting or alternate-scroll
-    // cannot turn clicks/wheel/touches into guest input. onBinary (legacy mouse) is never attached.
+    // The mouse stays local (clicks only focus) unless this viewer turned Mouse on, the person may type here, and
+    // the program itself asked for mouse reports. Then xterm.js encodes clicks, drags and the wheel (onData, or
+    // onBinary for the legacy X10 encoding) and they travel like keystrokes. Touch never becomes input.
+    const tracking = () => term.modes.mouseTrackingMode;
+    const forwarding = () =>
+      mouseWanted.current && connected.current && !term.options.disableStdin && tracking() !== 'none';
+    // X10 mode reports presses only; without a wheel report xterm.js would turn the wheel into arrow keys.
+    const forwards = (event: Event) =>
+      forwarding() &&
+      (event.type === 'wheel'
+        ? tracking() !== 'x10'
+        : !event.type.startsWith('touch') && !event.type.startsWith('pointer'));
+    term.attachCustomWheelEventHandler(() => forwarding() && tracking() !== 'x10');
     const stopMouse = (event: Event) => {
       // The grid is not itself focusable, so the browser's default mousedown would blur the terminal right after
       // we focus it. Keep the default from running, then focus.
@@ -159,6 +175,13 @@ export function TerminalEmulator({
         event.preventDefault();
         term.focus();
       }
+      // A forwarded right click goes to the program, not the browser's menu.
+      if (event.type === 'contextmenu') {
+        if (forwards(event)) event.preventDefault();
+        return;
+      }
+      // Our own rescaled copies (below) were already checked.
+      if (!event.isTrusted || forwards(event)) return;
       event.stopPropagation();
     };
     const mouseEvents = [
@@ -166,6 +189,7 @@ export function TerminalEmulator({
       'mouseup',
       'mousemove',
       'wheel',
+      'contextmenu',
       'pointerdown',
       'pointerup',
       'pointermove',
@@ -174,7 +198,54 @@ export function TerminalEmulator({
       'touchend',
     ];
     const element = host.current;
-    for (const name of mouseEvents) element.addEventListener(name, stopMouse, { capture: true });
+    for (const name of mouseEvents) element.addEventListener(name, stopMouse, { capture: true, passive: false });
+    // The grid is drawn scaled, but xterm.js measures cells unscaled: re-dispatch forwarded events with the pointer
+    // position in grid space so reports name the cell under the pointer. A drag keeps reporting outside the grid.
+    let dragging = false;
+    const rescale = (event: Event) => {
+      if (!event.isTrusted || !(event instanceof MouseEvent) || !(event.target instanceof Node)) return;
+      const inside = element.contains(event.target);
+      if (event.type === 'mousedown' && inside) dragging = forwards(event);
+      const outsideDrag = dragging && !inside && (event.type === 'mousemove' || event.type === 'mouseup');
+      if (event.type === 'mouseup' && !event.buttons) dragging = false;
+      const screen = element.querySelector<HTMLElement>('.xterm-screen');
+      if (!screen || !(inside || outsideDrag) || !forwards(event)) return;
+      const rect = screen.getBoundingClientRect(),
+        scale = rect.width / (screen.offsetWidth || rect.width);
+      if (Math.abs(scale - 1) < 0.001) return;
+      event.stopImmediatePropagation();
+      event.preventDefault();
+      const init: WheelEventInit = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: window,
+        detail: event.detail,
+        screenX: event.screenX,
+        screenY: event.screenY,
+        clientX: rect.left + (event.clientX - rect.left) / scale,
+        clientY: rect.top + (event.clientY - rect.top) / scale,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey,
+        button: event.button,
+        buttons: event.buttons,
+      };
+      event.target.dispatchEvent(
+        event instanceof WheelEvent
+          ? new WheelEvent(event.type, {
+              ...init,
+              deltaX: event.deltaX,
+              deltaY: event.deltaY,
+              deltaZ: event.deltaZ,
+              deltaMode: event.deltaMode,
+            })
+          : new MouseEvent(event.type, init),
+      );
+    };
+    const rescaled = ['mousedown', 'mouseup', 'mousemove', 'wheel'];
+    for (const name of rescaled) document.addEventListener(name, rescale, { capture: true, passive: false });
     const url = new URL(
       `/api/computers/${encodeURIComponent(computerId)}/terminals/${encodeURIComponent(sessionId)}/stream`,
       location.href,
@@ -221,11 +292,13 @@ export function TerminalEmulator({
         end();
       }
     };
-    const queueInput = (value: string) => {
+    const queueInput = (value: string, binary = false) => {
       if (!ready || disposed) return;
-      // Focus reports are not keyboard input. Defence in depth for mouse protocols as well.
-      if (/^\x1b\[(?:I|O)$/.test(value) || /^\x1b\[(?:<\d+;\d+;\d+[Mm]|M[\s\S]{3}|\d+;\d+;\d+M)$/.test(value)) return;
-      const bytes = new TextEncoder().encode(value);
+      // Focus reports are not keyboard input. Mouse reports only while forwarding (defence in depth).
+      if (/^\x1b\[(?:I|O)$/.test(value)) return;
+      if (!forwarding() && /^\x1b\[(?:<\d+;\d+;\d+[Mm]|M[\s\S]{3}|\d+;\d+;\d+M)$/.test(value)) return;
+      // onBinary carries one byte per character (X10 mouse reports past column/row 95).
+      const bytes = binary ? Uint8Array.from(value, c => c.charCodeAt(0) & 0xff) : new TextEncoder().encode(value);
       pending += bytes.length;
       if (pending > 65536) {
         end();
@@ -241,6 +314,9 @@ export function TerminalEmulator({
         setCtrlLatched(false);
       }
       queueInput(value);
+    });
+    const binary = term.onBinary(value => {
+      if (forwarding()) queueInput(value, true);
     });
     send.current = value => {
       if (!term.options.disableStdin) queueInput(value);
@@ -258,7 +334,7 @@ export function TerminalEmulator({
           connected.current = true;
           clearTimeout(timeout);
           term.options.disableStdin = !inputAllowed.current;
-          setStatus(`Connected · ${columns} × ${rows} · Keyboard only`);
+          setStatus(`Connected · ${columns} × ${rows}`);
           term.focus();
           return;
         }
@@ -287,9 +363,11 @@ export function TerminalEmulator({
       clearInterval(heartbeat);
       socket.close();
       data.dispose();
+      binary.dispose();
       send.current = null;
       clipboard.dispose();
       for (const name of mouseEvents) element.removeEventListener(name, stopMouse, true);
+      for (const name of rescaled) document.removeEventListener(name, rescale, true);
       term.dispose();
       terminal.current = null;
     };
@@ -383,7 +461,9 @@ export function TerminalEmulator({
               aria-hidden="true"
               className={`size-1.5 rounded-full ${connectedNow ? 'bg-teal-400' : status.startsWith('Disconnected') ? 'bg-red-400' : 'bg-muted-foreground'}`}
             />
-            <span className="sr-only md:not-sr-only">{status}</span>
+            <span className="sr-only md:not-sr-only">
+              {connectedNow ? `${status} · ${mouse && interactive ? 'Keyboard and mouse' : 'Keyboard only'}` : status}
+            </span>
           </span>
         </div>
         <div
@@ -452,6 +532,26 @@ export function TerminalEmulator({
                 </button>
               ))}
           </div>
+          {/* Per viewer, off by default: programs that ask for the mouse get clicks, drags and the wheel. */}
+          <button
+            type="button"
+            aria-pressed={mouse}
+            title={
+              mouse
+                ? 'Mouse on: programs that ask for it get clicks, drags and the wheel'
+                : 'Mouse off: clicks only focus the terminal'
+            }
+            disabled={!interactive}
+            onPointerDown={event => event.preventDefault()}
+            onClick={() => {
+              setTerminalMouse(!mouse);
+              terminal.current?.focus();
+            }}
+            className={`${keyClass(mouse)} gap-1.5 font-sans`}
+          >
+            <MouseIcon className="size-3.5" />
+            Mouse
+          </button>
           {status.startsWith('Disconnected') && (
             <Button
               size="sm"
