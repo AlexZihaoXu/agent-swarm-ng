@@ -38,3 +38,5 @@ networks:
     ipam:
       config:
         - subnet: 172.30.250.0/29
+          # Docker hands out .4-.7 by itself, so cloudflared's fixed .2 is never already taken.
+          ip_range: 172.30.250.4/30
