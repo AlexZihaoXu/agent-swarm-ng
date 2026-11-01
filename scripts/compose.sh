@@ -16,6 +16,7 @@ tailnet-xorg120  tailnet-x11 + compose.tailscale-http-jpeg-xorg120.yaml
 tailnet-dual     tailnet-xorg120 + compose.tailscale-https-19091.yaml   HTTP 19090 and self-signed HTTPS 19091
 tailnet-https    compose.yaml + compose.tailscale.yaml + compose.tailscale-https.yaml   trusted certificate on 19090
 Tailnet stacks need TAILSCALE_IP (tailnet-https needs TAILSCALE_DNS_NAME).
+Any stack also gets compose.cloudflare-tunnel.yaml once .local/cloudflared/token exists (README.md#cloudflare-tunnel).
 STACKS
 }
 case "${1:-}" in ''|--list|-l|-h|--help) list; exit 0;; esac
@@ -33,6 +34,8 @@ case "$stack" in
   tailnet-https) files="-f compose.yaml -f compose.tailscale.yaml -f compose.tailscale-https.yaml";;
   *) echo "Unknown stack '$stack'." >&2; list >&2; exit 2;;
 esac
+# The Cloudflare Tunnel joins whichever stack runs, so a redeploy never drops the frontend off the tunnel's network.
+[ -f .local/cloudflared/token ] && files="$files -f compose.cloudflare-tunnel.yaml"
 # shellcheck disable=SC2086
 # Images are stamped with the commit they were built from: the Swarm tells people when it is updated (docs/notifications.md).
 if [ -z "${APP_VERSION:-}" ] && git rev-parse --short HEAD >/dev/null 2>&1; then

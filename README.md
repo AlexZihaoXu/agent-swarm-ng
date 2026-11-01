@@ -105,6 +105,17 @@ To install it as an app, use the browser's install button (Chrome, Edge) or **Ad
 
 Behind a reverse proxy (for example Nginx Proxy Manager, optionally behind Cloudflare) on your LAN or tailnet: forward to the **HTTPS** port 19091, turn on WebSockets, raise the read timeout to an hour, and add the domain to `ALLOWED_HOSTS`. Caddy takes the visitor's address from proxies on private and Tailscale addresses, so sign-in limits apply per visitor; set `TRUSTED_PROXIES` in `.env` to your proxy's address alone so no other device can claim another visitor's address ([details](docs/login.md#known-addresses-and-lockdown)). The dashboard then sits on the internet behind its passwords; consider the proxy's access list or basic auth as a second lock.
 
+### Cloudflare Tunnel
+
+Instead of a reverse proxy with an open port, a Cloudflare Tunnel can carry the domain: `cloudflared` runs beside the stack and dials out to Cloudflare, so nothing accepts connections from the internet.
+
+1. In Cloudflare Zero Trust, create a tunnel (Networks → Tunnels → Cloudflared, Docker) and copy its token. Add a public hostname for your domain with service **HTTPS** `frontend:19091` and **No TLS Verify** on (the certificate is self-signed). Remove any older DNS record for that name first.
+2. Save the token as `.local/cloudflared/token`, mode 600, owned by the user that runs the stack (`CLOUDFLARED_USER`, default `1000:1000`).
+3. Set `TRUSTED_PROXIES=172.30.250.2/32` in `.env` (cloudflared's fixed address on its own bridge), so Caddy believes only its `CF-Connecting-IP`. Keep the domain in `ALLOWED_HOSTS`.
+4. `scripts/compose.sh <stack> up -d frontend cloudflared`. From then on `scripts/compose.sh` adds `compose.cloudflare-tunnel.yaml` to every stack by itself, so later deploys keep the frontend on the tunnel's network.
+
+Uploads go in 32 MiB parts, under Cloudflare's 100 MB request limit.
+
 ## Operating it
 
 - **Update:** `git pull`, rebuild the images that changed (step 2 for computers), then `scripts/compose.sh tailnet-dual up -d --build`. A restart stops agent runs in progress (they end as incomplete); existing computers keep their image until you update them in their settings. When the `lxcfs` service is rebuilt, `free` and `top` fail in running computers for a few seconds until the controller restores them.

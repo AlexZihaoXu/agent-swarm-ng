@@ -1,0 +1,40 @@
+# Cloudflare Tunnel in front of the dashboard: cloudflared dials out to Cloudflare, so no port on any machine accepts
+# connections from the internet. scripts/compose.sh adds this file to every stack once the tunnel's token is saved
+# in .local/cloudflared/token (README.md#cloudflare-tunnel). The tunnel's public hostname is configured in
+# Cloudflare's dashboard and points at https://frontend:19091 (No TLS Verify: that certificate is self-signed).
+#
+# cloudflared has a fixed address on its own small bridge, so TRUSTED_PROXIES can name exactly it: Caddy then
+# believes only its CF-Connecting-IP (the visitor's address for sign-in limits and the access log).
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
+    command: ["tunnel", "--no-autoupdate", "--metrics", "127.0.0.1:20241", "run", "--token-file", "/run/tunnel-token"]
+    # The token file is the operator's (mode 600); reading it as that user keeps it private on the host.
+    user: "${CLOUDFLARED_USER:-1000:1000}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    volumes:
+      - ./.local/cloudflared/token:/run/tunnel-token:ro
+    networks:
+      tunnel:
+        ipv4_address: 172.30.250.2
+    depends_on:
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:20241", "ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+  frontend:
+    networks:
+      - tunnel
+networks:
+  tunnel:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.250.0/29
